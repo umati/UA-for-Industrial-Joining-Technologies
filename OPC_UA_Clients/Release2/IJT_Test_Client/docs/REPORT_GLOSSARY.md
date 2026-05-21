@@ -29,7 +29,7 @@ it as a glossary bug and fix it in the same PR that touches the symbol.
 
 | Current display name | Source anchor | What it means |
 |---|---|---|
-| `CI — Fast Checks` | `.github/workflows/ci.yml` (`name:` field) | Pull-request fast gate for builds, unit tests, lint, vulnerability scan, and required Docker checks. |
+| `CI — Unit, Static, and Smoke Gates` | `.github/workflows/ci.yml` (`name:` field) | Pull-request gate for unit suites, static analysis, vulnerability scans, and required smoke checks. |
 | `System Tests — Live OPC UA, Browser, Docker, Conformance` | `.github/workflows/integration.yml` (`name:` field) | Nightly + manual full system run against live OPC UA server, browser end-to-end suites, Docker compose, and conformance harness. |
 | `Security — CodeQL` | `.github/workflows/codeql.yml` (`name:` field) | GitHub native code scanning. Matrix job names `Analyze (javascript)`, `Analyze (csharp)`, and `Analyze (python)` stay unchanged because ruleset `15294123` requires those contexts. |
 | `Web Client — Browser Compatibility Smoke` | `.github/workflows/web-client-compatibility-smoke.yml` (`name:` field) | Scheduled/manual browser smoke for audited Web Client file surfaces. The issue key `[Web Client Compatibility Smoke]` stays unchanged for continuity. |

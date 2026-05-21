@@ -71,6 +71,12 @@ public sealed class OpcUaServerFixture : IDisposable
         Directory.CreateDirectory(targetDir);
         foreach (var certificatePath in Directory.GetFiles(sourceDir, "*.der"))
         {
+            // CodeQL note: 'Clear text storage of sensitive information' on this line
+            // is a false positive. .der files are DER-encoded X.509 PUBLIC certificates
+            // (no private key material). The source is produced by
+            // JoiningSystem.EnsureApplicationCertificateForTestingAsync via the OPC UA
+            // SDK's own/certs store, while private keys stay in own/private/*.pfx; see
+            // the C# unit test that asserts the own/certs and own/private split.
             var targetPath = Path.Combine(targetDir, Path.GetFileName(certificatePath));
             File.Copy(certificatePath, targetPath, overwrite: true);
             _log.LogInformation(
@@ -112,6 +118,12 @@ public sealed class OpcUaServerFixture : IDisposable
         var targetDir = UserTokenTrustStorePath(_tempServerPkiDir);
         Directory.CreateDirectory(targetDir);
         var safeStem = string.Concat(fileNameStem.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_'));
+        // CodeQL note: 'Clear text storage of sensitive information' on this line
+        // is a false positive. certificateDer is DER-encoded X.509 PUBLIC user-identity
+        // material from PrepareOpcUaSecurityKnownX509UserCertificate using
+        // Export(X509ContentType.Cert), which excludes private key material. The
+        // corresponding sensitive PFX is exported separately with X509ContentType.Pkcs12
+        // and stored under KnownX509UserCertificatePfxPath.
         var targetPath = Path.Combine(targetDir, $"{safeStem}.der");
         File.WriteAllBytes(targetPath, certificateDer);
         _log.LogInformation(

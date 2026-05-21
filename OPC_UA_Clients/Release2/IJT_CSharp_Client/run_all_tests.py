@@ -349,7 +349,12 @@ def _parse_trx(path: Path) -> tuple[int, int, int, int]:
     if not path.exists():
         return 0, 0, 0, 0
     try:
-        tree = ET.parse(str(path))
+        # Local TRX XML produced by dotnet test in `test-results/` during this
+        # same CI run — no network, no foreign DTDs. Stdlib ET is fine here
+        # under the repo's central XML-parser policy (see [tool.bandit] in
+        # the root pyproject.toml). Switch to defusedxml if this ever parses
+        # network-fetched or foreign-CI XML.
+        tree = ET.parse(str(path))  # nosec B314
         root = tree.getroot()
         ns = _xml_namespace(root)
         counters = root.find(f".//{ns}Counters")
@@ -407,7 +412,12 @@ def _parse_trx_test_cases(path: Path) -> list[TrxTestCase]:
     if not path.exists():
         return []
     try:
-        tree = ET.parse(str(path))
+        # Local TRX XML produced by dotnet test in `test-results/` during this
+        # same CI run — no network, no foreign DTDs. Stdlib ET is fine here
+        # under the repo's central XML-parser policy (see [tool.bandit] in
+        # the root pyproject.toml). Switch to defusedxml if this ever parses
+        # network-fetched or foreign-CI XML.
+        tree = ET.parse(str(path))  # nosec B314
         root = tree.getroot()
         ns = _xml_namespace(root)
         cases: list[TrxTestCase] = []
@@ -468,7 +478,12 @@ def _parse_cobertura_coverage(path: Path) -> float | None:
     if not path.exists():
         return None
     with contextlib.suppress(Exception):
-        tree = ET.parse(str(path))
+        # Local Cobertura XML produced by coverlet in `test-results/` during
+        # this same CI run — no network, no foreign DTDs. Stdlib ET is fine
+        # here under the repo's central XML-parser policy (see [tool.bandit]
+        # in the root pyproject.toml). Switch to defusedxml if this ever
+        # parses network-fetched or foreign-CI XML.
+        tree = ET.parse(str(path))  # nosec B314
         root = tree.getroot()
         total_lines = 0
         covered_lines = 0

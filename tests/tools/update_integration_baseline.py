@@ -12,8 +12,9 @@ import json
 import shutil
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
+
+from defusedxml import ElementTree as ET
 
 REPO = "umati/UA-for-Industrial-Joining-Technologies"
 REPO_ROOT = Path(__file__).resolve().parents[2]

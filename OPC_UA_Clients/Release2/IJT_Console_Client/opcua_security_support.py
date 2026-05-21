@@ -10,11 +10,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
-
 
 def preserve_test_artifacts() -> bool:
     return os.environ.get("IJT_PRESERVE_TEST_ARTIFACTS", "0").strip().lower() in {"1", "true", "yes", "on"}
@@ -93,6 +88,11 @@ def write_self_signed_certificate(
     *,
     application_uri: str | None = None,
 ) -> GeneratedCertificate:
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+
     output_dir.mkdir(parents=True, exist_ok=True)
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = issuer = x509.Name(
@@ -184,7 +184,9 @@ def trust_user_token_certificate(server_pki_root: Path, certificate_der: Path) -
 
 
 def sha1_thumbprint_hex(certificate_der: Path) -> str:
-    return hashlib.sha1(certificate_der.read_bytes()).hexdigest()  # nosec B324 - OPC UA user-token thumbprints are SHA-1.
+    # OPC UA user-token thumbprints are protocol-defined SHA-1 identifiers,
+    # not a cryptographic integrity check.
+    return hashlib.sha1(certificate_der.read_bytes()).hexdigest()  # nosec B324
 
 
 def write_simulator_user_identity_configuration(

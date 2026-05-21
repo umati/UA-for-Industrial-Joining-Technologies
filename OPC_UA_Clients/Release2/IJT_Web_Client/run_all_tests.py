@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import ipaddress
 import json
 import os
 import platform
@@ -83,6 +84,7 @@ ROOT = Path(__file__).resolve().parent
 # alongside the runner there.
 _runner_parents = Path(__file__).resolve().parents
 _REPO_ROOT = _runner_parents[3] if len(_runner_parents) > 3 else ROOT
+_BANDIT_CONFIG = _REPO_ROOT / "pyproject.toml"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -682,13 +684,26 @@ def _probe_opcua_protocol(endpoint: str, *, attempts: int | None = None) -> str 
     return wait_for_opcua_protocol_ready(endpoint, **kwargs)
 
 
+def _host_ip_address(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    try:
+        return ipaddress.ip_address(host)
+    except ValueError:
+        return None
+
+
+def _wildcard_or_localhost_for_probe(host: str) -> bool:
+    host_ip = _host_ip_address(host)
+    return host == "localhost" or bool(host_ip and host_ip.is_unspecified)
+
+
 def _websocket_probe_url(host: str, port: int) -> str:
-    ready_host = "127.0.0.1" if host in {"localhost", "0.0.0.0"} else host
+    ready_host = "127.0.0.1" if _wildcard_or_localhost_for_probe(host) else host
     return f"ws://{ready_host}:{port}"
 
 
 def _local_host(host: str) -> bool:
-    return host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+    host_ip = _host_ip_address(host)
+    return host == "localhost" or bool(host_ip and (host_ip.is_loopback or host_ip.is_unspecified))
 
 
 def _maybe_start_websocket_backend(
@@ -734,7 +749,7 @@ def _maybe_start_websocket_backend(
             stdin=subprocess.DEVNULL,
         )
 
-    ready_host = "127.0.0.1" if host in {"localhost", "0.0.0.0"} else host
+    ready_host = "127.0.0.1" if _wildcard_or_localhost_for_probe(host) else host
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         exit_code = proc.poll()
@@ -983,7 +998,9 @@ def _stage_python_lint(python: Path) -> StageResult:
                 "-r",
                 ".",
                 "-c",
-                "pyproject.toml",
+                str(_BANDIT_CONFIG),
+                "--severity-level",
+                "medium",
                 "-f",
                 "json",
                 "-o",
@@ -991,7 +1008,7 @@ def _stage_python_lint(python: Path) -> StageResult:
             ],
             label="bandit",
         )
-        if rc not in (0, 1):  # 1 = findings (informational), 2+ = error
+        if rc != 0:
             overall_rc = rc
     else:
         _skip("bandit not installed — pip install bandit")

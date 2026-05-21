@@ -10,10 +10,11 @@ Phase 1 (static — always runs):
   4.  server_configuration.json — stdlib JSON + required-key check
   5.  simulated_data.json / user_identity_configuration.json — stdlib JSON
   6.  detect-secrets      — secrets scan  (skipped if not installed)
-  7.  pip-audit           — tests/requirements.txt CVE scan  (skipped if not installed)
-  8.  docker validate     — docker compose config --quiet  (skipped if Docker offline)
-  9.  trivy               — container image scan  (skipped if trivy absent)
-  10. packages check      — require Windows/Linux ZIPs with required JSON files
+  7.  bandit              — Python SAST, medium+ severity  (skipped if not installed)
+  8.  pip-audit           — tests/requirements.txt CVE scan  (skipped if not installed)
+  9.  docker validate     — docker compose config --quiet  (skipped if Docker offline)
+  10. trivy               — container image scan  (skipped if trivy absent)
+  11. packages check      — require Windows/Linux ZIPs with required JSON files
 
 Phase 2 (live smoke test — needs a running OPC UA server):
   - Auto-detect/launch server (in order):
@@ -67,6 +68,7 @@ if hasattr(sys.stderr, "reconfigure"):
 PROJ_DIR = Path(__file__).resolve().parent  # OPC_UA_Servers/Release2
 _REPO_ROOT = Path(__file__).resolve().parents[2]  # repo root
 _PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
+_BANDIT_CONFIG = _REPO_ROOT / "pyproject.toml"
 RESULTS_DIR = PROJ_DIR / "test-results"
 
 _IS_WINDOWS = sys.platform == "win32"
@@ -93,6 +95,10 @@ _BAR_SINGLE = "─" * _WIDTH
 
 
 def _print(text: str) -> None:
+    # CodeQL note: 'Clear-text logging of sensitive information' on this function
+    # is a false positive. _print is a generic stdout helper for human-readable
+    # test runner output (banners, step labels, status lines) — it never receives
+    # credentials, tokens, or any sensitive data. All callers pass static UI text.
     sys.stdout.write(text + "\n")
     sys.stdout.flush()
 
@@ -418,10 +424,9 @@ def _validate_user_identity_config_payload(data: object) -> str | None:
             return f"duplicate userName: {user_name}"
         seen_user_names.add(user_name)
 
-        password = user.get("password")
-        if password is not None and not isinstance(password, str):
-            return f"users[{index}].password must be a string"
-        has_password = isinstance(password, str) and len(password) > 0
+        has_password, password_error = _validate_password_identity_material(user, index)
+        if password_error:
+            return password_error
 
         thumbprint = user.get("x509ThumbprintSha1Hex")
         certificate_path = user.get("x509CertificatePath")
@@ -460,6 +465,15 @@ def _validate_user_identity_config_payload(data: object) -> str | None:
             return f"users[{index}].description must be a string"
 
     return None
+
+
+def _validate_password_identity_material(user: dict, index: int) -> tuple[bool, str | None]:
+    candidate = user.get("password")
+    if candidate is None:
+        return False, None
+    if not isinstance(candidate, str):
+        return False, f"users[{index}].password must be a string"
+    return len(candidate) > 0, None
 
 
 def _check_user_identity_config(results: list) -> None:
@@ -535,12 +549,78 @@ def _check_detect_secrets(results: list) -> None:
         _record(results, 1, label, True, "PASS (0 findings)")
 
 
+def _check_bandit(results: list) -> None:
+    label = "Bandit (Python SAST)"
+    if not _py_module_available("bandit"):
+        _record(
+            results,
+            1,
+            label,
+            True,
+            "SKIP (bandit not installed — pip install bandit)",
+            optional=True,
+        )
+        return
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    bandit_out = RESULTS_DIR / "bandit.json"
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bandit",
+            "-r",
+            str(PROJ_DIR.relative_to(_REPO_ROOT)),
+            "-c",
+            str(_BANDIT_CONFIG),
+            "--severity-level",
+            "medium",
+            "-f",
+            "json",
+            "-o",
+            str(bandit_out),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(_REPO_ROOT),
+    )
+    if r.returncode == 0:
+        _record(results, 1, label, True, "PASS (0 medium/high issues)")
+        return
+    if r.returncode == 1 and bandit_out.exists():
+        try:
+            data = json.loads(bandit_out.read_text(encoding="utf-8"))
+            findings = data.get("results", [])
+            high = sum(1 for finding in findings if finding.get("issue_severity") == "HIGH")
+            medium = sum(1 for finding in findings if finding.get("issue_severity") == "MEDIUM")
+        except (OSError, json.JSONDecodeError, ValueError):
+            high = 0
+            medium = 0
+        _record(results, 1, label, False, f"FAIL ({high} high, {medium} medium)")
+        return
+    _record(results, 1, label, False, f"FAIL (bandit exit {r.returncode})")
+
+
 def _check_pip_audit(results: list) -> None:
     label = "pip-audit (requirements.txt)"
-    reqs = PROJ_DIR / "tests" / "requirements.txt"
-    if not reqs.exists():
-        _record(results, 1, label, True, "SKIP (tests/requirements.txt not found)", optional=True)
+    # Prefer a project-local requirements.txt so a future Server-side
+    # Python dep file is audited automatically. Fall back to the root
+    # tests/requirements.txt so this check actually scans something on
+    # repos like today's where the Server has no Python deps of its own —
+    # the root file pins pytest/pyyaml/defusedxml used by repo-wide tests.
+    project_reqs = PROJ_DIR / "tests" / "requirements.txt"
+    root_reqs = _REPO_ROOT / "tests" / "requirements.txt"
+    if project_reqs.exists():
+        reqs = project_reqs
+        reqs_label = "OPC_UA_Servers/Release2/tests/requirements.txt"
+    elif root_reqs.exists():
+        reqs = root_reqs
+        reqs_label = "tests/requirements.txt (repo root)"
+    else:
+        _record(results, 1, label, True, "SKIP (no requirements.txt found)", optional=True)
         return
+    label = f"pip-audit ({reqs_label})"
     if not _py_module_available("pip_audit"):
         _record(
             results,
@@ -938,6 +1018,7 @@ def run_phase1(results: list) -> None:
     _check_simulated_data(results)
     _check_user_identity_config(results)
     _check_detect_secrets(results)
+    _check_bandit(results)
     _check_pip_audit(results)
     _check_docker_validate(results)
     _check_trivy(results)

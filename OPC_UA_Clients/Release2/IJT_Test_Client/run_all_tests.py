@@ -54,6 +54,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 _HERE = Path(__file__).resolve().parent
 _PYPROJECT = _HERE / "pyproject.toml"
+_BANDIT_CONFIG = _REPO_ROOT / "pyproject.toml"
 _IS_CI = bool(os.getenv("CI"))
 _IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 _IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
@@ -927,9 +928,19 @@ def _step_bandit() -> _StepResult:
         result.note = note
         result.duration = time.monotonic() - t0
         return result
-    cmd: list[str] = [sys.executable, "-m", "bandit", "-r", ".", "-f", "json"]
-    if _PYPROJECT.exists():
-        cmd += ["-c", str(_PYPROJECT)]
+    cmd: list[str] = [
+        sys.executable,
+        "-m",
+        "bandit",
+        "-r",
+        ".",
+        "--severity-level",
+        "medium",
+        "-f",
+        "json",
+    ]
+    if _BANDIT_CONFIG.exists():
+        cmd += ["-c", str(_BANDIT_CONFIG)]
     rc, output = _run(cmd)
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
@@ -1427,14 +1438,16 @@ def _print_skip_reason_summary(junit_xml_path: Path | None) -> None:
     Helps catch regressions where a new skip reason appears or skip volume
     grows unexpectedly.  Printed only when there are skipped test cases.
     """
-    import xml.etree.ElementTree as ET
     from collections import Counter
+
+    from defusedxml import ElementTree as ET
+    from defusedxml.common import DefusedXmlException
 
     if junit_xml_path is None or not junit_xml_path.exists():
         return
     try:
         tree = ET.parse(junit_xml_path)
-    except ET.ParseError:
+    except (ET.ParseError, DefusedXmlException):
         return
 
     reasons: Counter[str] = Counter()

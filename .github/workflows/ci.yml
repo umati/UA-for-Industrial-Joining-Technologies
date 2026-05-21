@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# CI — IJT OPC UA Fast Test Suite
+# CI — IJT OPC UA Unit, Static, and Smoke Gates
 #
 # TIER: ci (blocking) — must pass on every push / PR to main.
 # See docs/TEST_TIERS.md for tier policy, skip budget rules, and the full list
@@ -30,7 +30,7 @@
 #   Summary table   : $GITHUB_STEP_SUMMARY (Actions Summary tab)
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: "CI — Fast Checks"
+name: "CI — Unit, Static, and Smoke Gates"
 
 on:
   push:
@@ -310,7 +310,7 @@ jobs:
       - name: Bandit (Python Security)
         id: bandit
         continue-on-error: true
-        run: python -m bandit -r . -c pyproject.toml --severity-level medium -f json -o test-results/bandit.json
+        run: python -m bandit -r . -c "${{ github.workspace }}/pyproject.toml" --severity-level medium -f json -o test-results/bandit.json
 
       - name: pip-audit (Python Dependency Audit Report)
         id: pip_audit
@@ -792,7 +792,7 @@ jobs:
       - name: Bandit (Python Security)
         id: bandit
         continue-on-error: true
-        run: python -m bandit -r . -c pyproject.toml --severity-level medium -f json -o test-results/bandit.json
+        run: python -m bandit -r . -c "${{ github.workspace }}/pyproject.toml" --severity-level medium -f json -o test-results/bandit.json
 
       - name: pip-audit (Python Dependency Audit Report)
         id: pip_audit
@@ -947,6 +947,13 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Install reporting dependencies
+        # Install reporting/* requirements (defusedxml etc) so the summary
+        # script imports succeed in this lean report-only job.
+        run: |
+          python3 -m pip install --quiet --upgrade pip
+          python3 -m pip install --quiet -c "${{ github.workspace }}/constraints.txt" -r reporting/requirements.txt
+
       - name: Download All Test Artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
@@ -1079,7 +1086,7 @@ jobs:
       - name: Collect Timing JSON
         if: always()
         env:
-          TIMING_WORKFLOW_NAME: "CI — Fast Checks"
+          TIMING_WORKFLOW_NAME: "CI — Unit, Static, and Smoke Gates"
           TIMING_OUTPUT_DIR: timing-results
           GH_REPOSITORY:  ${{ github.repository }}
           GH_RUN_ID:      ${{ github.run_id }}
@@ -1183,8 +1190,10 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Install pre-commit and root test dependency
-        run: python -m pip install --upgrade -c "${{ github.workspace }}/constraints.txt" "pre-commit==4.5.1" "pytest~=9.0"
+      - name: Install pre-commit and root test dependencies
+        run: |
+          python -m pip install --upgrade -c "${{ github.workspace }}/constraints.txt" "pre-commit==4.5.1"
+          python -m pip install -c "${{ github.workspace }}/constraints.txt" -r "${{ github.workspace }}/tests/requirements.txt"
 
       - name: Run pre-commit on all files
         run: pre-commit run --all-files --show-diff-on-failure --color=always

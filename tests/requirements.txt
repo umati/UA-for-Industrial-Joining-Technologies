@@ -1,0 +1,22 @@
+# Test dependencies for the repo-root test suite (tests/).
+# Install with: pip install -c <repo>/constraints.txt -r tests/requirements.txt
+# constraints.txt enforces repo-wide transitive dependency security floors.
+#
+# Single source of truth for what tests/ needs at import time. Consumed by:
+#   - .github/workflows/ci.yml - pre-commit job (workflow-policy-guard hook
+#     runs tests/test_root_runner.py, tests/test_image_pin.py, tests/reporting)
+#   - developer machines
+#
+# Sub-project test suites (Console/Web/Test client, server smoke) keep their
+# own requirements*.txt next to the code they cover. Heavy deps like
+# cryptography or asyncua belong in those files, not here; tests/ must stay
+# light enough that the pre-commit gate runs in any environment.
+#
+# Rule of thumb when adding a dep here: if `python -m pytest tests/` would
+# fail at import without it, add it. Otherwise add it to the sub-project
+# requirements file that actually uses it.
+pytest~=9.0
+pyyaml>=6.0
+# Root tests import reporting modules and test XML contracts, so inherit the
+# reporting parser dependency rather than duplicating it here.
+-r ../reporting/requirements.txt

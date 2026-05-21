@@ -20,7 +20,13 @@ from asyncua import ua
 from asyncua.crypto import security_policies
 from asyncua.ua.uaerrors import UaError
 
-from opcua_client import OPCUAClient, validate_username_user_token_policy, validate_x509_user_token_policy
+from opcua_client import (
+    OPCUAClient,
+    OPCUASecurityConfig,
+    _load_ijt_type_definitions,
+    validate_username_user_token_policy,
+    validate_x509_user_token_policy,
+)
 
 
 def _preserve_test_artifacts() -> bool:
@@ -51,6 +57,196 @@ def _endpoint_with_username_token(token_security_policy_uri: str) -> ua.Endpoint
     endpoint.SecurityMode = ua.MessageSecurityMode.SignAndEncrypt
     endpoint.UserIdentityTokens = [token]
     return endpoint
+
+
+@pytest.mark.asyncio
+async def test_load_ijt_type_definitions_continues_after_legacy_loader_failure():
+    client = AsyncMock()
+    client.load_type_definitions = AsyncMock(side_effect=RuntimeError("legacy unavailable"))
+    client.load_data_type_definitions = AsyncMock()
+
+    with patch("opcua_client.ijt_log") as mock_log:
+        await _load_ijt_type_definitions(client, "unit")
+
+    client.load_data_type_definitions.assert_awaited_once()
+    assert "legacy unavailable" in str(mock_log.warning.call_args)
+
+
+@pytest.mark.asyncio
+async def test_configure_security_is_idempotent_when_already_configured():
+    with patch("opcua_client.Client"):
+        client = OPCUAClient("opc.tcp://localhost:4840")
+    client._security_configured = True
+    client.client = AsyncMock()
+
+    await client.configure_security()
+
+    client.client.set_security.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_configure_security_rejects_unknown_secure_policy():
+    config = OPCUASecurityConfig(security_policy_uri="urn:unsupported-policy")
+    with patch("opcua_client.Client"):
+        client = OPCUAClient("opc.tcp://localhost:4840", config)
+
+    with pytest.raises(ValueError, match="Unsupported OPC UA security policy"):
+        await client.configure_security()
+
+
+@pytest.mark.asyncio
+async def test_configure_security_requires_client_certificate_for_secure_endpoint():
+    config = OPCUASecurityConfig(security_policy_uri=security_policies.SecurityPolicyBasic256Sha256.URI)
+    with patch("opcua_client.Client"):
+        client = OPCUAClient("opc.tcp://localhost:4840", config)
+
+    with pytest.raises(ValueError, match="client certificate and private key"):
+        await client.configure_security()
+
+
+@pytest.mark.asyncio
+async def test_configure_security_sets_transport_security_for_secure_anonymous_client(tmp_path: Path):
+    cert = tmp_path / "client.der"
+    key = tmp_path / "client.pem"
+    cert.write_text("cert")
+    key.write_text("key")
+    config = OPCUASecurityConfig(
+        security_policy_uri=security_policies.SecurityPolicyBasic256Sha256.URI,
+        client_certificate_path=cert,
+        client_private_key_path=key,
+    )
+    with patch("opcua_client.Client"):
+        client = OPCUAClient("opc.tcp://localhost:4840", config)
+    client.client = AsyncMock()
+
+    await client.configure_security()
+
+    client.client.set_security.assert_awaited_once()
+    args, kwargs = client.client.set_security.call_args
+    assert args[1:] == (str(cert), str(key))
+    assert kwargs["mode"] == ua.MessageSecurityMode.SignAndEncrypt
+    assert client._security_configured is True
+
+
+@pytest.mark.asyncio
+async def test_configure_security_requires_username_credentials():
+    config = OPCUASecurityConfig(user_identity="username", username="user1")
+    with patch("opcua_client.Client"):
+        client = OPCUAClient("opc.tcp://localhost:4840", config)
+
+    with pytest.raises(ValueError, match="UserName identity requires"):
+        await client.configure_security()
+
+
+@pytest.mark.asyncio
+async def test_configure_security_sets_username_identity(tmp_path: Path):
+    client_cert = tmp_path / "client.der"
+    client_key = tmp_path / "client.pem"
+    client_cert.write_text("cert")
+    client_key.write_text("key")
+    config = OPCUASecurityConfig(
+        security_policy_uri=security_policies.SecurityPolicyBasic256Sha256.URI,
+        client_certificate_path=client_cert,
+        client_private_key_path=client_key,
+        user_identity="username",
+        username="user1",
+        password="pw",
+    )
+    with patch("opcua_client.Client"):
+        client = OPCUAClient("opc.tcp://localhost:4840", config)
+    client.client = MagicMock()
+    client.client.set_security = AsyncMock()
+
+    with patch.object(client, "validate_configured_user_token_policy", new_callable=AsyncMock) as validate_policy:
+        await client.configure_security()
+
+    validate_policy.assert_awaited_once_with(
+        config,
+        ua.UserTokenType.UserName,
+        "UserName",
+    )
+    client.client.set_user.assert_called_once_with("user1")
+    client.client.set_password.assert_called_once_with("pw")
+
+
+@pytest.mark.asyncio
+async def test_configure_security_requires_x509_identity_material():
+    config = OPCUASecurityConfig(user_identity="x509")
+    with patch("opcua_client.Client"):
+        client = OPCUAClient("opc.tcp://localhost:4840", config)
+
+    with pytest.raises(ValueError, match="X509 identity requires"):
+        await client.configure_security()
+
+
+@pytest.mark.asyncio
+async def test_configure_security_loads_x509_identity_material(tmp_path: Path):
+    client_cert = tmp_path / "client.der"
+    client_key = tmp_path / "client.pem"
+    cert = tmp_path / "user.der"
+    key = tmp_path / "user.pem"
+    client_cert.write_text("cert")
+    client_key.write_text("key")
+    cert.write_text("cert")
+    key.write_text("key")
+    config = OPCUASecurityConfig(
+        security_policy_uri=security_policies.SecurityPolicyBasic256Sha256.URI,
+        client_certificate_path=client_cert,
+        client_private_key_path=client_key,
+        user_identity="x509",
+        x509_certificate_path=cert,
+        x509_private_key_path=key,
+    )
+    with patch("opcua_client.Client"):
+        client = OPCUAClient("opc.tcp://localhost:4840", config)
+    client.client = AsyncMock()
+
+    with patch.object(client, "validate_configured_user_token_policy", new_callable=AsyncMock) as validate_policy:
+        await client.configure_security()
+
+    client.client.load_client_certificate.assert_awaited_once_with(str(cert))
+    client.client.load_private_key.assert_awaited_once_with(key)
+    validate_policy.assert_awaited_once_with(
+        config,
+        ua.UserTokenType.Certificate,
+        "X509 Certificate",
+    )
+
+
+@pytest.mark.asyncio
+async def test_configure_security_rejects_unknown_identity_kind():
+    config = OPCUASecurityConfig(user_identity="issued-token")  # type: ignore[arg-type]
+    with patch("opcua_client.Client"):
+        client = OPCUAClient("opc.tcp://localhost:4840", config)
+
+    with pytest.raises(ValueError, match="Unsupported user identity kind"):
+        await client.configure_security()
+
+
+@pytest.mark.asyncio
+async def test_validate_configured_user_token_policy_accepts_matching_endpoint():
+    config = OPCUASecurityConfig(security_policy_uri=security_policies.SecurityPolicyBasic256Sha256.URI)
+    endpoint = _endpoint_with_username_token(security_policies.SecurityPolicyBasic256Sha256.URI)
+    probe = AsyncMock()
+    probe.connect_and_get_server_endpoints = AsyncMock(return_value=[endpoint])
+
+    with patch("opcua_client.Client", return_value=probe):
+        client = OPCUAClient("opc.tcp://localhost:4840")
+        await client.validate_configured_user_token_policy(config, ua.UserTokenType.UserName, "UserName")
+
+
+@pytest.mark.asyncio
+async def test_validate_configured_user_token_policy_rejects_missing_endpoint():
+    config = OPCUASecurityConfig(security_policy_uri=security_policies.SecurityPolicyBasic256Sha256.URI)
+    wrong_endpoint = _endpoint_with_username_token(security_policies.SecurityPolicyBasic256Sha256.URI)
+    wrong_endpoint.SecurityMode = ua.MessageSecurityMode.Sign
+    probe = AsyncMock()
+    probe.connect_and_get_server_endpoints = AsyncMock(return_value=[wrong_endpoint])
+
+    with patch("opcua_client.Client", return_value=probe):
+        client = OPCUAClient("opc.tcp://localhost:4840")
+        with pytest.raises(ValueError, match="Endpoint not found"):
+            await client.validate_configured_user_token_policy(config, ua.UserTokenType.UserName, "UserName")
 
 
 # ── connect() — retry then success ──

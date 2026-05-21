@@ -124,7 +124,7 @@ def test_job_durations_filters_incomplete_jobs(monkeypatch):
         )
         return FakeResponse(payload)
 
-    monkeypatch.setattr(module.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(module, "_urlopen", fake_urlopen)
 
     rows = module.job_durations("repos/org/repo/actions/runs/123/jobs")
     assert len(rows) == 1

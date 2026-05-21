@@ -31,7 +31,6 @@ import time
 import uuid
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -58,6 +57,7 @@ _OPCUA_PORT = 40451
 
 sys.path.insert(0, str(_CONSOLE_ROOT))
 
+from docker_freshness import is_image_stale  # noqa: E402
 from opcua_security_support import (  # noqa: E402
     console_application_uri,
     console_opcua_security_common_name,
@@ -467,58 +467,12 @@ def _should_build_docker_image(docker: str) -> bool:
         "on",
     }:
         return True
-    if not _SERVER_LINUX_ZIP.exists():
-        return False
-
-    image_created = _docker_image_created_timestamp(docker)
-    if image_created is None:
-        return True
-
-    return _SERVER_LINUX_ZIP.stat().st_mtime > image_created
-
-
-def _docker_image_created_timestamp(docker: str) -> float | None:
-    result = subprocess.run(
-        [docker, "image", "inspect", _SERVER_DOCKER_IMAGE, "--format", "{{.Created}}"],
-        cwd=str(_SERVER_RELEASE2),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        check=False,
+    return is_image_stale(
+        docker,
+        _SERVER_DOCKER_IMAGE,
+        _SERVER_LINUX_ZIP,
+        cwd=_SERVER_RELEASE2,
     )
-    if result.returncode != 0:
-        return None
-
-    return _parse_docker_created_timestamp(result.stdout)
-
-
-def _parse_docker_created_timestamp(value: str) -> float | None:
-    text = value.strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    if "." in text:
-        head, tail = text.split(".", 1)
-        zone_pos = min(
-            [idx for idx in (tail.find("+"), tail.find("-")) if idx >= 0],
-            default=-1,
-        )
-        if zone_pos >= 0:
-            fraction = tail[:zone_pos]
-            zone = tail[zone_pos:]
-        else:
-            fraction = tail
-            zone = ""
-        text = f"{head}.{fraction[:6].ljust(6, '0')}{zone}"
-
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.timestamp()
 
 
 def _start_opcua_server(port: int) -> StartedServer | None:

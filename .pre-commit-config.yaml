@@ -87,18 +87,17 @@ repos:
       # except (A, B): clauses does not trigger with py313.
       - id: ruff-format
 
-  # Bandit SAST scan — Console Client only, MEDIUM+ severity (-ll).
+  # Bandit SAST — single repo-wide hook (Medium+ severity).
   #
-  # This hook is intentionally narrow: it mirrors the actual blocking CI gate
-  # that caught the B310 regression. The Console Client has two pytest tests
-  # that both enforce a directory-wide `bandit -r . -ll --exclude ...` scan.
-  # To match that behavior, this hook disables filename passing and runs the
-  # same recursive scan over the entire Console Client tree.
+  # Configuration is centralized in <repo-root>/pyproject.toml [tool.bandit]:
+  #   exclude_dirs : venv variants, caches, generated dirs, vendored blobs
+  #   skips        : B101 (matches ruff's S101 ignore — pytest assert idiom)
   #
-  # Web Client is intentionally excluded here. Its pytest bandit check uses
-  # `--exit-zero`, so findings do not currently block CI. Adding a blocking
-  # pre-commit hook there would be stricter than CI and would reintroduce the
-  # local-vs-CI mismatch this config is meant to remove.
+  # Adding a new Python sub-project = ZERO edits here. The `files` regex
+  # below catches any .py file repo-wide; the central exclude_dirs filters
+  # out venv/test/generated noise. Adding a new exclude or skip = ONE edit
+  # in root pyproject.toml; this hook and every project's run_all_tests.py
+  # bandit step inherit automatically.
   #
   # When this hook blocks your commit:
   #   1. Read the bandit output — it shows the file, line, rule ID (e.g. B310),
@@ -113,15 +112,19 @@ repos:
     rev: 1.9.4
     hooks:
       - id: bandit
-        name: Bandit — Console Client (Medium+)
+        name: Bandit (Python SAST, Medium+)
         args:
           - "-r"
-          - "OPC_UA_Clients/Release2/IJT_Console_Client"
-          - "-ll"
-          - "--exclude"
-          - "OPC_UA_Clients/Release2/IJT_Console_Client/tests,OPC_UA_Clients/Release2/IJT_Console_Client/.state,OPC_UA_Clients/Release2/IJT_Console_Client/venv,OPC_UA_Clients/Release2/IJT_Console_Client/venv_test,OPC_UA_Clients/Release2/IJT_Console_Client/.venv,OPC_UA_Clients/Release2/IJT_Console_Client/.venv_test,OPC_UA_Clients/Release2/IJT_Console_Client/.venv_ci,OPC_UA_Clients/Release2/IJT_Console_Client/.venv_wsl,OPC_UA_Clients/Release2/IJT_Console_Client/.venv_wsl_backup,OPC_UA_Clients/Release2/IJT_Console_Client/env,OPC_UA_Clients/Release2/IJT_Console_Client/ENV"
+          - "."
+          - "-c"
+          - "pyproject.toml"
+          - "--severity-level"
+          - "medium"
         pass_filenames: false
-        files: '^OPC_UA_Clients/Release2/IJT_Console_Client/.*\.py$'
+        # Trigger when any .py changes; bandit then scans the whole repo
+        # using the central [tool.bandit] config. Fast in practice because
+        # exclude_dirs prunes the venv/cache/test forests.
+        files: '(\.py$|^pyproject\.toml$|^\.pre-commit-config\.yaml$)'
 
   # JS linting for the Node Client (ESLint + custom CSS checker).
   # Both hooks use `npm --prefix` so they run with the project's own node_modules
@@ -186,7 +189,7 @@ repos:
         entry: python
         args: ['-m', 'pytest', 'tests/test_root_runner.py', 'tests/test_image_pin.py', 'tests/reporting', '-q']
         pass_filenames: false
-        files: '(^\.github/workflows/.*\.ya?ml$|^\.github/docker/ijt-browser-ci/.*$|^\.github/scripts/update_browser_ci_image_pin\.py$|^reporting/.*\.py$|^tests/reporting/.*$|^tests/test_image_pin\.py$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
+        files: '(^\.pre-commit-config\.yaml$|^\.github/workflows/.*\.ya?ml$|^\.github/docker/ijt-browser-ci/.*$|^\.github/scripts/update_browser_ci_image_pin\.py$|^reporting/.*\.py$|^tests/requirements\.txt$|^tests/reporting/.*$|^tests/test_image_pin\.py$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
 
       # Lightweight static guard for optional imports that are known to trip
       # mypy when packages are installed without stubs. Full mypy stays in

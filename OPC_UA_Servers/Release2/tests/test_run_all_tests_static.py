@@ -188,6 +188,26 @@ def test_validate_user_identity_config_payload(payload: object, expected: str | 
         assert expected in error
 
 
+def test_validate_user_identity_config_payload_does_not_echo_password_values() -> None:
+    payload = {
+        "userIdentityData": {
+            "enabled": True,
+            "users": [
+                {
+                    "userName": "user1",
+                    "password": "do-not-log-this-secret",
+                    "roles": [True],
+                }
+            ],
+        },
+    }
+
+    error = runner._validate_user_identity_config_payload(payload)
+
+    assert error is not None
+    assert "do-not-log-this-secret" not in error
+
+
 def test_check_binaries_accepts_required_json_files(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

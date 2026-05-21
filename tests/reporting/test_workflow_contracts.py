@@ -74,7 +74,7 @@ def test_ci_timing_artifacts_are_collected_from_report_job() -> None:
     upload_step = _report_step("ci.yml", "Upload Timing Artifacts")
 
     assert collect_step["run"].strip() == "python3 scripts/reporting/collect_timing.py"
-    assert collect_step["env"]["TIMING_WORKFLOW_NAME"] == "CI — Fast Checks"
+    assert collect_step["env"]["TIMING_WORKFLOW_NAME"] == "CI — Unit, Static, and Smoke Gates"
     assert collect_step["env"]["TIMING_OUTPUT_DIR"] == "timing-results"
     assert collect_step["env"]["REPORT_JOB_NAME"] == "📋 Test Report"
     assert upload_step["with"]["name"] == "timing-ci"

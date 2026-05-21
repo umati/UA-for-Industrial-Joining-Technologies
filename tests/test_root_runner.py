@@ -8,10 +8,10 @@ import shutil
 import subprocess
 import sys
 import tomllib
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
+from defusedxml import ElementTree as ET
 
 
 def _load_root_runner():
@@ -293,6 +293,9 @@ def test_opcua_security_docker_rebuilds_when_linux_zip_is_newer() -> None:
     console_fixture = (_runner.CONSOLE_DIR / "tests" / "live" / "conftest.py").read_text(
         encoding="utf-8"
     )
+    docker_freshness_source = (_runner.CONSOLE_DIR / "docker_freshness.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "ShouldBuildDockerImage(dockerExe, composeDir)" in csharp_fixture
     assert "DockerImageIsMissingOrOlderThanSimulatorZip" in csharp_fixture
@@ -302,26 +305,35 @@ def test_opcua_security_docker_rebuilds_when_linux_zip_is_newer() -> None:
     assert 'inspect.StartInfo.ArgumentList.Add("inspect");' in csharp_fixture
     assert "File.GetLastWriteTimeUtc(zipPath) > imageCreatedUtc.Value.UtcDateTime" in csharp_fixture
 
+    # Console fixture delegates to the shared, dependency-free helper module
+    # so this regression test never has to import cryptography / asyncua.
     assert "_should_build_docker_image(docker)" in console_fixture
     assert "_SERVER_LINUX_ZIP = _SERVER_RELEASE2 /" in console_fixture
     assert '"OPC_UA_IJT_Server_Simulator_Linux.zip"' in console_fixture
-    assert '[docker, "image", "inspect", _SERVER_DOCKER_IMAGE' in console_fixture
-    assert "_SERVER_LINUX_ZIP.stat().st_mtime > image_created" in console_fixture
-    assert "def _parse_docker_created_timestamp(value: str)" in console_fixture
+    assert "from docker_freshness import is_image_stale" in console_fixture
+    assert "is_image_stale(" in console_fixture
+
+    # Helper module owns the actual Docker freshness contract.
+    assert "def parse_docker_created_timestamp(value: str)" in docker_freshness_source
+    assert "def is_image_stale(" in docker_freshness_source
+    assert "reference_path.stat().st_mtime > image_created" in docker_freshness_source
+    assert '[docker_exe, "image", "inspect", image, "--format", "{{.Created}}"]' in (
+        docker_freshness_source
+    )
 
 
 def test_console_docker_created_timestamp_parses_nanosecond_precision() -> None:
     module = _load_runner_at(
-        "OPC_UA_Clients/Release2/IJT_Console_Client/tests/live/conftest.py",
-        "ijt_console_live_conftest_timestamp",
+        "OPC_UA_Clients/Release2/IJT_Console_Client/docker_freshness.py",
+        "ijt_console_docker_freshness",
     )
 
-    timestamp = module._parse_docker_created_timestamp("2026-05-21T13:41:19.204798168Z")
+    timestamp = module.parse_docker_created_timestamp("2026-05-21T13:41:19.204798168Z")
 
     assert timestamp is not None
     assert timestamp > 0
-    assert module._parse_docker_created_timestamp("") is None
-    assert module._parse_docker_created_timestamp("not-a-timestamp") is None
+    assert module.parse_docker_created_timestamp("") is None
+    assert module.parse_docker_created_timestamp("not-a-timestamp") is None
 
 
 def test_managed_console_opcua_security_does_not_reuse_stale_server_port() -> None:
@@ -2262,12 +2274,20 @@ def test_ci_pre_commit_gate_is_required_and_reported() -> None:
     install_steps = [
         step
         for step in workflow["jobs"]["pre-commit"]["steps"]
-        if step.get("name") == "Install pre-commit and root test dependency"
+        if step.get("name") == "Install pre-commit and root test dependencies"
     ]
     assert install_steps
-    assert '"pre-commit==4.5.1" "pytest~=9.0"' in install_steps[0]["run"]
+    install_run = install_steps[0]["run"]
+    assert '"pre-commit==4.5.1"' in install_run
+    assert "-r" in install_run and "tests/requirements.txt" in install_run
     pre_commit_steps = workflow["jobs"]["pre-commit"]["steps"]
     assert not any(step.get("uses", "").startswith("actions/cache") for step in pre_commit_steps)
+    config_path = _runner.REPO_ROOT / ".pre-commit-config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    local_hooks = next(repo for repo in config["repos"] if repo["repo"] == "local")["hooks"]
+    workflow_guard = next(hook for hook in local_hooks if hook["id"] == "workflow-policy-guard")
+    assert "^\\.pre-commit-config\\.yaml$" in workflow_guard["files"]
+    assert "^tests/requirements\\.txt$" in workflow_guard["files"]
     assert "PC_RESULT:       ${{ needs.pre-commit.result }}" in workflow_text
     assert 'pc_r = E("PC_RESULT"' in report_script
     assert "Pre-commit Hooks" in report_script
@@ -2275,6 +2295,88 @@ def test_ci_pre_commit_gate_is_required_and_reported() -> None:
         "${{ needs.pre-commit.result }}"
         in workflow["jobs"]["all-required"]["steps"][0]["env"]["RESULTS"]
     )
+
+
+def test_pre_commit_bandit_covers_python_surfaces() -> None:
+    import yaml
+
+    config_path = _runner.REPO_ROOT / ".pre-commit-config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    bandit_repo = next(
+        repo for repo in config["repos"] if repo["repo"] == "https://github.com/PyCQA/bandit"
+    )
+    hooks = bandit_repo["hooks"]
+    assert len(hooks) == 1
+    hook = hooks[0]
+    args = hook["args"]
+
+    assert hook["name"] == "Bandit (Python SAST, Medium+)"
+    assert hook["pass_filenames"] is False
+    assert hook["files"] == r"(\.py$|^pyproject\.toml$|^\.pre-commit-config\.yaml$)"
+    assert "-r" in args and "." in args
+    assert "-c" in args and "pyproject.toml" in args
+    assert "--severity-level" in args and "medium" in args
+
+    root_pyproject = tomllib.loads((_runner.REPO_ROOT / "pyproject.toml").read_text())
+    bandit_config = root_pyproject["tool"]["bandit"]
+    exclude_dirs = set(bandit_config["exclude_dirs"])
+    expected_globs = {
+        "*/.venv/*",
+        "*\\.venv\\*",
+        "*/node_modules/*",
+        "*\\node_modules\\*",
+        "*/tmp/*",
+        "*\\tmp\\*",
+        "*/test-results/*",
+        "*\\test-results\\*",
+        "*OPC_UA_Clients/Release2/IJT_CSharp_Client/Types/*",
+        "*OPC_UA_Clients\\Release2\\IJT_CSharp_Client\\Types\\*",
+        "*OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/*",
+        "*OPC_UA_Servers\\Release2\\OPC_UA_IJT_Server_Simulator\\*",
+        "*OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_Linux/*",
+        "*OPC_UA_Servers\\Release2\\OPC_UA_IJT_Server_Simulator_Linux\\*",
+    }
+    assert expected_globs <= exclude_dirs
+    assert not any(path == "tests" for path in exclude_dirs)
+    assert bandit_config["skips"] == ["B101"]
+
+
+def test_report_jobs_install_reporting_requirements() -> None:
+    import yaml
+
+    workflow_paths = [
+        _runner.REPO_ROOT / ".github" / "workflows" / "ci.yml",
+        _runner.REPO_ROOT / ".github" / "workflows" / "integration.yml",
+    ]
+    for workflow_path in workflow_paths:
+        workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+        report_job = workflow["jobs"]["report"]
+        install_step = next(
+            step
+            for step in report_job["steps"]
+            if step.get("name") == "Install reporting dependencies"
+        )
+        install_run = install_step["run"]
+        assert "constraints.txt" in install_run
+        assert "-r reporting/requirements.txt" in install_run
+
+
+def test_phase1_bandit_gates_are_medium_plus() -> None:
+    console_runner = (_runner.CONSOLE_DIR / "run_all_tests.py").read_text(encoding="utf-8")
+    test_client_runner = (_runner.TEST_CLIENT_DIR / "run_all_tests.py").read_text(encoding="utf-8")
+    web_runner = (_runner.WEB_CLIENT_DIR / "run_all_tests.py").read_text(encoding="utf-8")
+    server_runner = (_runner.SERVER_DIR / "run_all_tests.py").read_text(encoding="utf-8")
+
+    for runner_text in (console_runner, test_client_runner, web_runner, server_runner):
+        assert '"bandit"' in runner_text
+        assert '"--severity-level"' in runner_text
+        assert '"medium"' in runner_text
+        assert "_BANDIT_CONFIG" in runner_text
+        assert '/ "pyproject.toml"' in runner_text
+
+    assert "if rc != 0:" in web_runner
+    assert "def _check_bandit(results: list) -> None:" in server_runner
+    assert "_check_bandit(results)" in server_runner
 
 
 def test_workflows_do_not_depend_on_actions_cache_or_setup_caches() -> None:

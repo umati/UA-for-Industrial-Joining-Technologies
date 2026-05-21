@@ -1,0 +1,17 @@
+# Dependencies for reporting/* scripts (CI summaries + timing helpers).
+# Install with: pip install -c <repo>/constraints.txt -r reporting/requirements.txt
+#
+# Consumed by:
+#   - .github/workflows/ci.yml          (📋 Test Report job)
+#   - .github/workflows/integration.yml (📋 System Tests Summary job)
+#   - tests/requirements.txt            (root test suite imports reporting.*)
+#
+# Single source of truth for what reporting/ needs at import time. Keep this
+# tight: these scripts run in lean CI containers and should not pull in heavy
+# deps. Add a new entry only if `python3 reporting/<script>.py` would fail at
+# import without it.
+
+# defusedxml hardens xml.etree.ElementTree.fromstring against XXE / billion-laughs
+# even though the underlying expat parser does not fetch external DTDs by default.
+# Used by ci_run_summary.py and system_tests_run_summary.py for JUnit/coverage XML.
+defusedxml>=0.7.1

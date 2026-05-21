@@ -1252,6 +1252,13 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Install reporting dependencies
+        # Install reporting/* requirements (defusedxml etc) so the summary
+        # script imports succeed in this lean report-only job.
+        run: |
+          python3 -m pip install --quiet --upgrade pip
+          python3 -m pip install --quiet -c "${{ github.workspace }}/constraints.txt" -r reporting/requirements.txt
+
       - name: Download All Test Artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:

@@ -99,7 +99,7 @@ reviewed digest:
    `.github/scripts/update_browser_ci_image_pin.py`.
 3. Open a normal PR that touches **only**
    `.github/docker/ijt-browser-ci/image-pin.json`.
-4. Wait for CI Fast Checks, CodeQL, and Integration to pass. Integration
+4. Wait for CI Unit, Static, and Smoke Gates, CodeQL, and Integration to pass. Integration
    includes `image-pin.json` in both `push.paths` and `pull_request.paths`,
    so browser suites validate the new digest before and after merge.
 5. A new digest with no Dockerfile change is normal. Docker rebuilds are not

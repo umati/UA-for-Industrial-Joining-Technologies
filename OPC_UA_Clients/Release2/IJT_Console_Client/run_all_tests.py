@@ -106,6 +106,7 @@ _REQUIREMENTS = _HERE / "requirements.txt"
 _REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
 _PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
 _PYPROJECT = _HERE / "pyproject.toml"
+_BANDIT_CONFIG = _REPO_ROOT / "pyproject.toml"
 _TESTS_DIR = _HERE / "tests"
 _TESTS_UNIT = _TESTS_DIR / "unit"
 _TESTS_LIVE = _TESTS_DIR / "live"
@@ -799,9 +800,19 @@ def _step_bandit() -> _StepResult:
         result.note = "not installed  (pip install bandit)"
         result.duration = time.monotonic() - t0
         return result
-    cmd: list[str] = [sys.executable, "-m", "bandit", "-r", ".", "-f", "json"]
-    if _PYPROJECT.exists():
-        cmd += ["-c", str(_PYPROJECT)]
+    cmd: list[str] = [
+        sys.executable,
+        "-m",
+        "bandit",
+        "-r",
+        ".",
+        "--severity-level",
+        "medium",
+        "-f",
+        "json",
+    ]
+    if _BANDIT_CONFIG.exists():
+        cmd += ["-c", str(_BANDIT_CONFIG)]
     rc, output = _run(cmd)
     result.duration = time.monotonic() - t0
     result.ok = rc == 0

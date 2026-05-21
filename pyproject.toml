@@ -46,3 +46,135 @@ ignore = ["S101"]  # allow assert in tests
 "**/tests/**" = ["S603", "S314"]
 # _STATUS_PASS is a display string, not a credential — S105 is a false positive.
 "**/smoke_test.py" = ["S105"]
+# reporting/* uses urllib.request.Request (a passive data struct, no I/O) and
+# dispatches via reporting._http.https_only_opener — an OpenerDirector with
+# only HTTPSHandler registered, so any non-https URL raises URLError before
+# I/O. ruff S310 / bandit B310 cannot see that the opener has no http/file
+# handler; the DEFENSE is real (architectural, not a comment).
+"reporting/*.py" = ["S310"]
+
+# ── Repo-wide Python static-analysis policy ────────────────────────────────
+# DRY rule: tool configs that apply to ALL Python code in this monorepo live
+# here. Sub-project pyproject.toml files MUST NOT duplicate the sections
+# below. They may override only the genuinely project-specific values
+# (e.g. interrogate fail-under). Adding a new sub-project = add the project
+# to the central exclude lists below — no per-project [tool.bandit] /
+# [tool.vulture] needed.
+
+[tool.bandit]
+# Single source of truth for bandit policy across the entire repo.
+# Consumed by:
+#   • .pre-commit-config.yaml (one generic hook scans all *.py)
+#   • each project's run_all_tests.py via `bandit -c <repo-root>/pyproject.toml`
+# Adding a new exclude path or skip = ONE edit here, all consumers inherit.
+exclude_dirs = [
+    # Path-component globs, not naked names. Bandit also checks exclusions as
+    # substrings; a naked "tests" would skip run_all_tests.py.
+    "*/.venv/*",
+    "*\\.venv\\*",
+    "*/.venv_test/*",
+    "*\\.venv_test\\*",
+    "*/.venv_ci/*",
+    "*\\.venv_ci\\*",
+    "*/.venv_wsl/*",
+    "*\\.venv_wsl\\*",
+    "*/.venv_wsl_backup/*",
+    "*\\.venv_wsl_backup\\*",
+    "*/venv/*",
+    "*\\venv\\*",
+    "*/venv_test/*",
+    "*\\venv_test\\*",
+    "*/env/*",
+    "*\\env\\*",
+    "*/ENV/*",
+    "*\\ENV\\*",
+    # caches / generated / vendored
+    "*/__pycache__/*",
+    "*\\__pycache__\\*",
+    "*/.git/*",
+    "*\\.git\\*",
+    "*/.state/*",
+    "*\\.state\\*",
+    "*/node_modules/*",
+    "*\\node_modules\\*",
+    "*/tmp/*",
+    "*\\tmp\\*",
+    "*/test-results/*",
+    "*\\test-results\\*",
+    "*/logs/*",
+    "*\\logs\\*",
+    # auto-generated UA types
+    "*OPC_UA_Clients/Release2/IJT_CSharp_Client/Types/*",
+    "*OPC_UA_Clients\\Release2\\IJT_CSharp_Client\\Types\\*",
+    # simulator binary blobs (decompressed ZIPs)
+    "*OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/*",
+    "*OPC_UA_Servers\\Release2\\OPC_UA_IJT_Server_Simulator\\*",
+    "*OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_Linux/*",
+    "*OPC_UA_Servers\\Release2\\OPC_UA_IJT_Server_Simulator_Linux\\*",
+]
+# B101 = assert; matches ruff's repo-wide S101 ignore. Keep tests in scope
+# for every other medium/high security rule so fixtures and runners do not
+# become a blind spot.
+skips = ["B101"]
+# ── XML-parser policy (B314 / B405 / B408) ────────────────────────────────
+# Single source of truth for how this repo handles XML parsing under bandit:
+#
+#  • Code that parses XML obtained from outside the current CI run
+#    (network, partially-trusted artifacts, foreign-CI inputs) MUST use
+#    `defusedxml` (drop-in replacement for `xml.etree.ElementTree`).
+#    Examples: `reporting/*.py`, `tests/test_root_runner.py`,
+#    `tests/tools/update_integration_baseline.py`, the IJT_Test_Client
+#    runner's `_print_skip_reason_summary` (parses JUnit XML produced by
+#    pytest in the current run, but routed through the same hardening for
+#    consistency with reporting).
+#
+#  • Code that parses XML produced by a tool we just invoked in the same
+#    process tree (Vitest junit.xml, dotnet test TRX, coverlet Cobertura)
+#    may keep the stdlib `xml.etree.ElementTree.parse` call with a
+#    `# nosec B314` marker AND a one-line rationale documenting the
+#    local-only data flow. These artifacts live under `test-results/` for
+#    the duration of the run; an attacker able to write into that path
+#    would already control the runner.
+#
+# When a runner gains a network-fetched XML input, switch it to defusedxml
+# rather than extending the local-only nosec policy.
+
+[tool.vulture]
+# Dead-code finder. Tests are excluded because pytest fixture injection
+# makes parameter names look "unused" when they are wired by name.
+exclude = [
+    "tests/",
+    "conftest.py",
+    ".venv/",
+    ".venv_test/",
+    ".venv_ci/",
+    "tmp/",
+    "test-results/",
+    "logs/",
+    "node_modules/",
+]
+ignore_decorators = [
+    "@pytest_asyncio.fixture",
+    "@pytest.fixture",
+    "@pytest.fixture(scope='session')",
+    "@pytest.fixture(scope='function')",
+]
+
+[tool.interrogate]
+# Common docstring-coverage knobs. The fail-under floor is project-specific
+# and stays in each sub-project's pyproject.toml — that's the only legit
+# per-project value for this tool.
+exclude = [
+    ".venv/*",
+    ".venv_test/*",
+    ".venv_ci/*",
+    "tmp/*",
+    "test-results/*",
+    ".state/*",
+    "node_modules/*",
+]
+ignore-init-method = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+verbose = 0

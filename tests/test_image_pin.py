@@ -528,6 +528,24 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "IMAGE_INPUTS_FINGERPRINT=${{ steps.fingerprint.outputs.inputs_fingerprint }}" in str(
         build_job
     )
+    phase0_metadata_step = next(
+        step
+        for step in build_job["steps"]
+        if step.get("name") == "Phase 0 smoke - metadata + tool versions"
+    )
+    assert (
+        phase0_metadata_step["env"]["EXPECTED_FINGERPRINT"]
+        == "${{ steps.fingerprint.outputs.inputs_fingerprint }}"
+    )
+    assert '"$EXPECTED_FINGERPRINT"' in phase0_metadata_step["run"]
+    assert "${{ steps.fingerprint.outputs.inputs_fingerprint }}" not in phase0_metadata_step["run"]
+    summary_step = next(step for step in build_job["steps"] if step.get("name") == "Job summary")
+    assert (
+        summary_step["env"]["INPUTS_FINGERPRINT"]
+        == "${{ steps.fingerprint.outputs.inputs_fingerprint }}"
+    )
+    assert "\\`${INPUTS_FINGERPRINT}\\`" in summary_step["run"]
+    assert "${{ steps.fingerprint.outputs.inputs_fingerprint }}" not in summary_step["run"]
     assert "web-client-e2e-regression" not in build_body, (
         "The image publish gate must validate image integrity only. Full browser "
         "behavior belongs in the post-publish offline-e2e job so product "

@@ -13,6 +13,17 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+try:
+    from reporting._http import https_only_opener
+except ImportError:  # pragma: no cover - standalone: python3 reporting/X.py
+    from _http import https_only_opener  # type: ignore[no-redef]
+
+
+def _urlopen(request, timeout):
+    """HTTPS-only urlopen wrapper; tests can monkeypatch this seam."""
+    return https_only_opener().open(request, timeout=timeout)
+
+
 SCHEMA_VERSION = 1
 
 
@@ -188,8 +199,12 @@ def github_actions_timing_payload(
             parsed_url = urllib.parse.urlparse(url)
             if parsed_url.scheme != "https":
                 raise ValueError(f"GitHub API URL must use https: {url}")
-            request = urllib.request.Request(url, headers=headers)  # noqa: S310
-            with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+            # Request is a passive struct (no I/O). `_urlopen` dispatches
+            # via https_only_opener() so any non-https URL raises URLError
+            # at the protocol layer before any byte is sent. ruff S310 is
+            # suppressed centrally via per-file-ignore in root pyproject.toml.
+            request = urllib.request.Request(url, headers=headers)
+            with _urlopen(request, timeout=20) as response:
                 payload = json.load(response)
                 jobs.extend(job for job in payload.get("jobs", []) if isinstance(job, dict))
                 url = next_link(response.headers.get("Link"))

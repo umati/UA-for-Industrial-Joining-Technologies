@@ -209,6 +209,7 @@ jobs:
       - name: Phase 0 smoke - metadata + tool versions
         env:
           SHORT_SHA: ${{ steps.decide.outputs.short_sha }}
+          EXPECTED_FINGERPRINT: ${{ steps.fingerprint.outputs.inputs_fingerprint }}
         run: |
           set -euo pipefail
           IMG="${IMAGE_NAME}:phase0-${SHORT_SHA}"
@@ -219,9 +220,9 @@ jobs:
             docker run --rm --network=none "$IMG" \
               python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('inputs_fingerprint',''))"
           )"
-          if [[ "$actual_fingerprint" != "${{ steps.fingerprint.outputs.inputs_fingerprint }}" ]]; then
+          if [[ "$actual_fingerprint" != "$EXPECTED_FINGERPRINT" ]]; then
             echo "::error::Phase 0 image metadata inputs_fingerprint does not match the source checkout." >&2
-            echo "::error::  expected: ${{ steps.fingerprint.outputs.inputs_fingerprint }}" >&2
+            echo "::error::  expected: $EXPECTED_FINGERPRINT" >&2
             echo "::error::  actual:   ${actual_fingerprint}" >&2
             exit 1
           fi
@@ -328,6 +329,7 @@ jobs:
           WILL_PUBLISH: ${{ steps.decide.outputs.push }}
           PUBLISH_MODE: ${{ steps.decide.outputs.publish_mode }}
           PR_IMAGE_TAG: ${{ steps.decide.outputs.pr_image_tag }}
+          INPUTS_FINGERPRINT: ${{ steps.fingerprint.outputs.inputs_fingerprint }}
         run: |
           set -euo pipefail
           {
@@ -338,7 +340,7 @@ jobs:
             echo "- Short SHA: \`${SHORT_SHA}\`"
             echo "- Will publish: \`${WILL_PUBLISH}\`"
             echo "- Publish mode: \`${PUBLISH_MODE}\`"
-            echo "- Inputs fingerprint: \`${{ steps.fingerprint.outputs.inputs_fingerprint }}\`"
+            echo "- Inputs fingerprint: \`${INPUTS_FINGERPRINT}\`"
             if [[ -n "${PR_IMAGE_TAG}" ]]; then
               echo "- PR-scoped image tag: \`${PR_IMAGE_TAG}\`"
             fi

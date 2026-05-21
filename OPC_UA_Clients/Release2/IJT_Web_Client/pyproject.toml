@@ -22,33 +22,14 @@ markers = [
 ]
 
 [tool.bandit]
-exclude_dirs = [".venv", ".venv_test", ".venv_ci", ".venv_wsl", ".venv_wsl_backup", "tests", "node_modules", "__pycache__", ".git", ".state"]
+# Inherits from <repo-root>/pyproject.toml [tool.bandit].
 
 [tool.vulture]
-# Vulture finds dead code in source. Tests are excluded because pytest fixture
-# injection makes parameter names appear "unused" — they are not; pytest wires
-# them by name. Scanning tests adds only false positives with no value.
-exclude = ["tests/", ".venv/", ".venv_test/", ".venv_ci/", "tmp/", "test-results/", "logs/"]
-ignore_decorators = ["@pytest_asyncio.fixture", "@pytest.fixture", "@pytest.fixture(scope='session')", "@pytest.fixture(scope='function')"]
+# Inherits from <repo-root>/pyproject.toml [tool.vulture].
 
 [tool.interrogate]
-# Calibrated floor based on real in-repo coverage after excluding venv/cache
-# artefacts. Keep tests included for an honest signal and ratchet upward over time.
+# Per-project floor; common knobs in <repo-root>/pyproject.toml.
 fail-under = 42
-exclude = [
-    "node_modules/*",
-    ".venv/*",
-    ".venv_test/*",
-    ".venv_ci/*",
-    "tmp/*",
-    "test-results/*",
-    ".state/*",
-]
-ignore-init-method = true
-ignore-magic = true
-ignore-semiprivate = true
-ignore-private = true
-verbose = 0
 
 [tool.ruff]
 # Intentionally overrides root pyproject.toml: line-length=120 (matches existing code style)

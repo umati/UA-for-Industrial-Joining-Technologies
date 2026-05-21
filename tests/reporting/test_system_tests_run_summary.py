@@ -37,7 +37,7 @@ def test_job_durations_uses_github_token_and_api_url_fallbacks(monkeypatch) -> N
         )
         return FakeResponse(payload)
 
-    monkeypatch.setattr(module.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(module, "_urlopen", fake_urlopen)
 
     rows = module.job_durations("repos/example/project/actions/runs/84/jobs")
 

@@ -7,8 +7,28 @@ import os
 import sys
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
 from collections import Counter
+
+# defusedxml hardens xml.etree.ElementTree against XXE / billion-laughs even
+# though stdlib expat does not fetch external DTDs by default. parse_xml_root
+# below ALSO performs a manual byte-level DOCTYPE/entity rejection — defense
+# in depth, validated by tests/reporting/test_xml_parser_xxe_guard.py.
+from defusedxml import ElementTree as ET
+
+try:
+    from reporting._http import https_only_opener
+except ImportError:  # pragma: no cover - standalone: python3 reporting/X.py
+    from _http import https_only_opener  # type: ignore[no-redef]
+
+
+def _urlopen(request, timeout):
+    """HTTPS-only urlopen wrapper; tests can monkeypatch this seam.
+
+    Goes through ``https_only_opener()`` so any non-https URL raises
+    ``urllib.error.URLError`` at the protocol layer (no http/file handler).
+    """
+    return https_only_opener().open(request, timeout=timeout)
+
 
 # ── Parsers ──────────────────────────────────────────────────────
 
@@ -41,8 +61,10 @@ def parse_xml_root(path):
         if bracket_index != -1 and (end_index == -1 or bracket_index < end_index):
             raise ValueError("DTD/entity declarations are not supported in CI XML artifacts")
         doctype_index = lowered_payload.find(b"<!doctype", end_index + 1)
-    # safe: local CI artifact parser rejects entity declarations before parsing.
-    return ET.fromstring(payload)  # noqa: S314
+    # defusedxml's fromstring rejects entity declarations and external DTD
+    # refs at the parser level; the byte-level guard above catches them
+    # before parsing for an unambiguous error message and as a second layer.
+    return ET.fromstring(payload)
 
 
 def iter_suites(root):
@@ -299,10 +321,12 @@ def job_durations(path):
             parsed_url = urllib.parse.urlparse(url)
             if parsed_url.scheme != "https":
                 raise ValueError(f"GitHub API URL must use https: {url}")
-            # safe: GitHub Actions supplies api_url; HTTPS is enforced above.
-            request = urllib.request.Request(url, headers=headers)  # noqa: S310
-            # safe: GitHub Actions supplies api_url; HTTPS is enforced above.
-            with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+            # Request is a passive struct (no I/O). `_urlopen` dispatches
+            # via https_only_opener() so any non-https URL raises URLError
+            # at the protocol layer before any byte is sent. ruff S310 is
+            # suppressed centrally via per-file-ignore in root pyproject.toml.
+            request = urllib.request.Request(url, headers=headers)
+            with _urlopen(request, timeout=20) as response:
                 payload = json.load(response)
                 for job in payload.get("jobs", []):
                     name = str(job.get("name") or "unknown")

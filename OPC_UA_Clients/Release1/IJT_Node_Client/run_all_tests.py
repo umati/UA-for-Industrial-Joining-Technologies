@@ -223,7 +223,12 @@ def _parse_junit_xml(path: Path) -> tuple[int, int, int]:
     if not path.exists():
         return 0, 0, 0
     try:
-        tree = ET.parse(str(path))
+        # Local JUnit XML produced by Vitest in `test-results/` during this
+        # same CI run — no network, no foreign DTDs. Stdlib ET is fine here
+        # under the repo's central XML-parser policy (see [tool.bandit] in
+        # the root pyproject.toml). Switch to defusedxml if this ever parses
+        # network-fetched or foreign-CI XML.
+        tree = ET.parse(str(path))  # nosec B314
         root = tree.getroot()
         suites = root.findall(".//testsuite") or [root]
         total = failed = 0
