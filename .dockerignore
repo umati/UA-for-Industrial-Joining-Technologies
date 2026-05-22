@@ -16,6 +16,13 @@ OPC_UA_Clients/*
 OPC_UA_Clients/Release2/*
 !OPC_UA_Clients/Release2/IJT_Web_Client/**
 
+# Allow the shared readiness module to be vendored into the Web Client
+# Docker test image (see OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile,
+# test stage). tests/python/_live_server_readiness.py imports it at runtime.
+!scripts/
+scripts/*
+!scripts/ijt_live_readiness.py
+
 **/__pycache__/
 **/*.py[cod]
 **/.venv/

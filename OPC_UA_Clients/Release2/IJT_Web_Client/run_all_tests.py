@@ -1749,6 +1749,42 @@ def _stage_infra_lint() -> StageResult:
 # ---------------------------------------------------------------------------
 _SERVER_COMPOSE_DIR = ROOT.parent.parent.parent / "OPC_UA_Servers" / "Release2"
 
+
+def _capture_compose_failure_logs(
+    compose_dir: Path,
+    *,
+    service: str,
+    docker: str,
+    label: str,
+) -> None:
+    """Best-effort capture of compose logs into ``test-results/readiness/``.
+
+    Delegates to :func:`ijt_live_readiness.capture_compose_logs_on_failure`
+    so every IJT compose-up callsite captures failure logs identically. The
+    diagnostics file lands under the Web Client's ``test-results/`` tree,
+    which is already covered by the integration workflow upload step.
+    """
+    try:
+        # The shared readiness module is stdlib-only at module scope, but
+        # importing it here defers any sys.path manipulation until we
+        # actually need the helper.
+        scripts_dir = _REPO_ROOT / "scripts"
+        if scripts_dir.is_dir() and str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        from ijt_live_readiness import (  # noqa: PLC0415 — deferred import
+            capture_compose_logs_on_failure,
+        )
+    except ImportError:  # pragma: no cover — defensive only
+        return
+    diag_dir = ROOT / "test-results" / "readiness"
+    capture_compose_logs_on_failure(
+        diag_dir,
+        compose_dir,
+        f"{service}-{label}",
+        docker_executable=docker,
+    )
+
+
 _WINDOWS_SIMULATOR_EXE = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe"
 _LINUX_SIMULATOR_EXE = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
 _WINDOWS_SIMULATOR_ZIP = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator.zip"
@@ -2240,28 +2276,46 @@ def _maybe_start_opcua_server() -> tuple[bool, bool, subprocess.Popen | None]:
         return False, False, None
 
     _info(f"Launching OPC UA Docker server from {compose_dir}")
-    rc = _run([docker, "compose", "up", "-d"], cwd=compose_dir, label="docker compose up -d  (OPC UA server)")
+    rc = _run(
+        [
+            docker,
+            "compose",
+            "up",
+            "-d",
+            "--wait",
+            "--wait-timeout",
+            "120",
+        ],
+        cwd=compose_dir,
+        label="docker compose up -d --wait  (OPC UA server)",
+        # Outer timeout = compose --wait-timeout budget (120s) + 60s slack
+        # for docker CLI / daemon / image pull I/O. ``--wait-timeout`` only
+        # bounds the healthcheck poll itself, not the docker engine.
+        timeout=120 + 60,
+    )
     if rc != 0:
         _warn("docker compose up failed for OPC UA server")
+        _capture_compose_failure_logs(
+            compose_dir,
+            service="opcua-server",
+            docker=docker,
+            label="opcua-server-compose-up",
+        )
         return True, False, None
 
-    _info(f"Waiting up to 60s for OPC UA port {port} ...")
-    for _ in range(30):
-        if _port_open("localhost", port, timeout=1.0):
-            endpoint = _default_opcua_endpoint(port)
-            probe_error = _probe_opcua_protocol(endpoint)
-            if probe_error is not None:
-                _warn(f"OPC UA Docker server port {port} opened, but protocol readiness failed: {probe_error}")
-                _stop_opcua_server(None)
-                return True, False, None
-            _ok(f"OPC UA server ready on :{port}")
-            _set_opcua_test_endpoint(port)
-            _set_opcua_prestarted_port(port)
-            return True, True, None
-        time.sleep(2)
-
-    _warn(f"OPC UA server not ready after 60s (port {port})")
-    return True, False, None
+    # docker compose --wait blocked until the OPC UA server compose healthcheck
+    # (nc -z on the OPC UA port) passed. Re-verify protocol readiness because
+    # the healthcheck only proves TCP-port liveness, not OPC UA handshake.
+    endpoint = _default_opcua_endpoint(port)
+    probe_error = _probe_opcua_protocol(endpoint)
+    if probe_error is not None:
+        _warn(f"OPC UA Docker server port {port} healthchecked, but protocol readiness failed: {probe_error}")
+        _stop_opcua_server(None)
+        return True, False, None
+    _ok(f"OPC UA server ready on :{port}")
+    _set_opcua_test_endpoint(port)
+    _set_opcua_prestarted_port(port)
+    return True, True, None
 
 
 def _stop_opcua_server(proc: subprocess.Popen | None = None) -> None:
@@ -2522,18 +2576,28 @@ def _stage_docker_smoke() -> StageResult:
     if rc != 0:
         return StageResult("docker-smoke", rc, duration=time.monotonic() - t0, notes=["docker build failed"])
 
-    rc = _run(compose_cmd + ["up", "-d"], label="docker compose up -d")
+    rc = _run(
+        compose_cmd + ["up", "-d", "--wait", "--wait-timeout", "120"],
+        label="docker compose up -d --wait",
+        # Outer subprocess timeout: see _start_opcua_docker_server above. We
+        # bound the whole compose-up call to (--wait-timeout + 60s docker
+        # slack) so a hung daemon or pull cannot freeze docker-smoke.
+        timeout=120 + 60,
+    )
     if rc != 0:
+        _capture_compose_failure_logs(
+            ROOT,
+            service="ijt_web_client",
+            docker=compose_cmd[0],
+            label="ijt-web-compose-up",
+        )
         return StageResult("docker-smoke", rc, duration=time.monotonic() - t0, notes=["docker compose up failed"])
 
-    # Wait up to _DOCKER_TIMEOUT seconds for HTTP readiness (1 poll per second).
-    _info(f"Waiting up to {_DOCKER_TIMEOUT} s for http://127.0.0.1:3000 ...")
-    ready = False
-    for _ in range(_DOCKER_TIMEOUT):
-        if _port_open("127.0.0.1", 3000, timeout=1.0):
-            ready = True
-            break
-        time.sleep(1)
+    # docker compose --wait blocked until the Web Client compose healthcheck
+    # (curl -f http://localhost:3000) reported healthy, so HTTP readiness is
+    # already proven by the time we get here. Probe the WebSocket port only;
+    # the backend's WS readiness is not part of the compose healthcheck.
+    ready = _port_open("127.0.0.1", 3000, timeout=2.0)
 
     ws_ready = _port_open("127.0.0.1", 8001, timeout=2.0)
 

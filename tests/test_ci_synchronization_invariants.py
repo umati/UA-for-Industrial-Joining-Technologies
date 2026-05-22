@@ -1,4 +1,4 @@
-"""CI synchronization invariants for the Browser CI image path.
+"""Browser CI image synchronization contract checks.
 
 These tests guard the architectural contract that fixed the producer/consumer
 race documented in run 26257538245 (PR #394). The principle:
@@ -8,8 +8,8 @@ race documented in run 26257538245 (PR #394). The principle:
     output. Cache identity is `inputs_fingerprint`. Runtime identity is
     `digest`. `GITHUB_SHA` is provenance, never validation.
 
-If any of these invariants regress, the fix is structural, not a snapshot
-update. Read the comments before relaxing an assertion.
+If any of these checks regress, the fix is structural, not a snapshot update.
+Read the comments before relaxing an assertion.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def _load(path: Path) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Invariant 1: no workflow step couples `docker pull` to a long polling loop.
+# No workflow step may couple `docker pull` to a long polling loop.
 # ---------------------------------------------------------------------------
 # The historical failure was a `docker pull "$tag"` inside a `for attempt in
 # $(seq 1 30); do ... sleep 20; done` budget (10 minutes) used as the
@@ -86,7 +86,7 @@ def test_no_docker_pull_polling_loop_with_long_budget(workflow_path: Path) -> No
 
 
 # ---------------------------------------------------------------------------
-# Invariant 2: live-webclient-browser reaches resolve-browser-image via needs:
+# live-webclient-browser must reach resolve-browser-image via needs.
 # ---------------------------------------------------------------------------
 # The Browser matrix must depend on the resolver job. If someone reintroduces
 # a parallel matrix that resolves identity inside its own steps, the race
@@ -106,13 +106,13 @@ def test_live_webclient_browser_needs_resolve_browser_image() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Invariant 3: IJT_BROWSER_CI_IMAGE comes from a job-output expression.
+# IJT_BROWSER_CI_IMAGE must come from a job-output expression.
 # ---------------------------------------------------------------------------
 # Steps that run the browser image must source the image reference from
 # `${{ needs.resolve-browser-image.outputs.image_ref }}`, never from a
 # step-output written by an in-job `docker pull`. The historical resolver
 # wrote `image_ref` into a step output AFTER polling for a tag — that is
-# precisely the inferred-identity pattern this commit eliminates.
+# precisely the inferred-identity pattern this contract forbids.
 
 _JOB_OUTPUT_REF = re.compile(r"\$\{\{\s*needs\.resolve-browser-image\.outputs\.image_ref\s*\}\}")
 _STEP_OUTPUT_REF = re.compile(r"\$\{\{\s*steps\.[A-Za-z0-9_]+\.outputs\.image_ref\s*\}\}")
@@ -141,7 +141,7 @@ def test_browser_matrix_image_ref_comes_from_job_output_not_step_output() -> Non
 
 
 # ---------------------------------------------------------------------------
-# Invariant 4: cache identity is fingerprint; runtime identity is digest.
+# Cache identity is the fingerprint; runtime identity is the digest.
 # ---------------------------------------------------------------------------
 # The resolver's metadata-check step must compare image.inputs_fingerprint
 # against the planner's CURRENT_FINGERPRINT. It must NOT require build_sha
@@ -180,7 +180,7 @@ def test_resolve_step_uses_fingerprint_equality_not_build_sha() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Invariant 5: producer exposes workflow_call with the planner's contract.
+# The producer exposes workflow_call with the planner's contract.
 # ---------------------------------------------------------------------------
 # The producer's PR-time entry point is workflow_call from integration.yml.
 # It must accept an `expected_fingerprint` input and emit `digest`,
@@ -207,7 +207,7 @@ def test_producer_exposes_workflow_call_with_fingerprint_contract() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Invariant 6: producer publishes a fingerprint-keyed cache tag.
+# The producer publishes a fingerprint-keyed cache tag.
 # ---------------------------------------------------------------------------
 # Repeated Renovate-style PRs with identical Browser CI image inputs must be
 # able to short-circuit at the planner via a GHCR tag lookup. That requires
@@ -245,20 +245,19 @@ def test_planner_decision_table_emits_three_plans() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Invariant 7: planner discriminates pin / cached / build deterministically
-# (handled above by test_planner_decision_table_emits_three_plans).
+# The planner must discriminate pin / cached / build deterministically.
 # ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
-# Invariant 8: reusable workflow call must NOT use `secrets: inherit`.
+# The reusable workflow call must not use `secrets: inherit`.
 # ---------------------------------------------------------------------------
 # The reusable build-browser-ci-image workflow only needs the auto-provided
 # GITHUB_TOKEN for GHCR login (available without inheritance) plus the
 # packages: write capability granted via job permissions. `secrets: inherit`
 # would broaden the secret surface to every caller secret unnecessarily —
-# zizmor flags it as `secrets-inherit` and Codex blocked Commit A on this
-# during read-only review.
+# zizmor flags it as `secrets-inherit`, and the least-privilege contract keeps
+# the call site from inheriting unrelated caller secrets.
 
 
 def test_build_browser_image_call_does_not_inherit_all_secrets() -> None:
@@ -273,7 +272,7 @@ def test_build_browser_image_call_does_not_inherit_all_secrets() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Invariant 9: live-webclient-browser overrides the default success() check.
+# live-webclient-browser must override GitHub's default success() check.
 # ---------------------------------------------------------------------------
 # resolve-browser-image uses `if: always() && ...` so it runs even when
 # build-browser-image is skipped (the common pin/cache path). GitHub's

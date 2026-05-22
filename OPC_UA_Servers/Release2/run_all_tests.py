@@ -47,7 +47,6 @@ import datetime
 import json
 import os
 import shutil
-import socket
 import subprocess
 import sys
 import time
@@ -71,6 +70,15 @@ _PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
 _BANDIT_CONFIG = _REPO_ROOT / "pyproject.toml"
 RESULTS_DIR = PROJ_DIR / "test-results"
 
+# Shared readiness module: used here for compose-log capture on failure and
+# for the stdlib-only OPC UA HELLO readiness probe.
+# The module's top-level imports are stdlib-only by contract, so importing it
+# from the Phase-1 / Phase-2 runner does NOT add any third-party dependency.
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if _SCRIPTS_DIR.is_dir() and str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+from ijt_live_readiness import wait_for_opcua_hello as _shared_wait_for_opcua_hello  # noqa: E402
+
 _IS_WINDOWS = sys.platform == "win32"
 
 _LINUX_BINARY = PROJ_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
@@ -78,6 +86,29 @@ _LINUX_ZIP = PROJ_DIR / "OPC_UA_IJT_Server_Simulator_Linux.zip"
 _WINDOWS_ZIP = PROJ_DIR / "OPC_UA_IJT_Server_Simulator.zip"
 
 _DEFAULT_PORT = 40451
+
+
+def _capture_server_compose_failure_logs(label: str) -> None:
+    """Best-effort capture of compose logs into ``test-results/readiness/``.
+
+    Uses the shared :func:`ijt_live_readiness.capture_compose_logs_on_failure`
+    helper so the failure-diagnostic format matches the rest of the IJT
+    readiness contract (no per-caller log-tail re-implementations).
+    """
+    try:
+        from ijt_live_readiness import (  # noqa: PLC0415 — deferred import
+            capture_compose_logs_on_failure,
+        )
+    except ImportError:  # pragma: no cover — defensive only
+        return
+    diag_dir = RESULTS_DIR / "readiness"
+    capture_compose_logs_on_failure(
+        diag_dir,
+        PROJ_DIR,
+        f"opcua-server-{label}",
+    )
+
+
 _DEFAULT_URL = f"opc.tcp://localhost:{_DEFAULT_PORT}"
 
 
@@ -955,21 +986,10 @@ def _parse_opcua_url(url: str) -> tuple[str, int]:
     return host, port
 
 
-def _is_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
+def _wait_for_opcua_hello(host: str, port: int, timeout: float = 60.0) -> bool:
+    """Return True only after the server answers an OPC UA Binary HELLO."""
 
-
-def _wait_for_port(host: str, port: int, timeout: float = 60.0) -> bool:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if _is_reachable(host, port):
-            return True
-        time.sleep(1.0)
-    return False
+    return _shared_wait_for_opcua_hello(host, port, timeout=timeout).ok
 
 
 def _run_smoke_test(venv_py: Path, server_url: str) -> tuple[bool, str, int]:
@@ -1038,7 +1058,7 @@ def run_phase2(results: list) -> None:
         _record(results, 2, "OPC UA Smoke", False, f"FAIL (bad URL: {exc})")
         return
 
-    already_up = _is_reachable(host, port)
+    already_up = _wait_for_opcua_hello(host, port, timeout=3.0)
     launched_proc = None
     launched_docker = False
 
@@ -1076,15 +1096,42 @@ def run_phase2(results: list) -> None:
                     return
 
             elif _is_docker_running() and (PROJ_DIR / "docker-compose.yml").exists():
-                _print("  Launching via: docker compose up -d --build ...")
-                r = subprocess.run(
-                    ["docker", "compose", "up", "-d", "--build"],
-                    check=False,
-                    cwd=str(PROJ_DIR),
-                    capture_output=True,
-                    text=True,
-                )
+                _print("  Launching via: docker compose up -d --build --wait ...")
+                # --wait-timeout 300s covers cold-build + start_period 20s +
+                # interval 10s × retries 6 healthcheck budget with margin.
+                # Outer subprocess.run timeout adds 60s slack for the docker
+                # CLI / daemon / image pull itself (--wait-timeout only bounds
+                # the healthcheck poll, not docker build or registry I/O).
+                try:
+                    r = subprocess.run(
+                        [
+                            "docker",
+                            "compose",
+                            "up",
+                            "-d",
+                            "--build",
+                            "--wait",
+                            "--wait-timeout",
+                            "300",
+                        ],
+                        check=False,
+                        cwd=str(PROJ_DIR),
+                        capture_output=True,
+                        text=True,
+                        timeout=300 + 60,
+                    )
+                except subprocess.TimeoutExpired as exc:
+                    _capture_server_compose_failure_logs("server-compose-up-timeout")
+                    _record(
+                        results,
+                        2,
+                        "OPC UA Smoke",
+                        False,
+                        f"FAIL (docker compose up outer timeout after {exc.timeout:.0f}s)",
+                    )
+                    return
                 if r.returncode != 0:
+                    _capture_server_compose_failure_logs("server-compose-up-failed")
                     _record(
                         results,
                         2,
@@ -1104,17 +1151,19 @@ def run_phase2(results: list) -> None:
                 _record(results, 2, "OPC UA Smoke", True, "SKIP (no server available)")
                 return
 
-        # Wait for the port to open after launch
+        # Wait for protocol readiness after launch. TCP-open alone is not
+        # sufficient: the simulator can bind its socket before the OPC UA stack
+        # is ready to answer a binary HELLO.
         if launched_proc is not None or launched_docker:
-            _print(f"  Waiting for OPC UA port {port} ...")
+            _print(f"  Waiting for OPC UA HELLO on port {port} ...")
             t_launch = time.monotonic()
-            if not _wait_for_port(host, port, timeout=60.0):
+            if not _wait_for_opcua_hello(host, port, timeout=60.0):
                 _record(
                     results,
                     2,
                     "OPC UA Smoke",
                     False,
-                    f"FAIL (server did not open port {port} within 60 s)",
+                    f"FAIL (server did not answer OPC UA HELLO on port {port} within 60 s)",
                 )
                 return
             response_time = time.monotonic() - t_launch

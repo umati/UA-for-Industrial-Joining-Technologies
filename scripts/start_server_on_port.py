@@ -11,9 +11,15 @@ Start mode (default)
     2. Patches ``serverEndpointTCPPort`` in the copy's
        ``server_configuration.json``
     3. Starts the executable from the copied directory
-    4. Waits up to ``--timeout`` seconds for the port to open
+    4. Waits up to ``--timeout`` seconds for the OPC UA HELLO handshake to
+       succeed on the patched port (via the shared
+       :func:`ijt_live_readiness.wait_for_opcua_hello` probe — TCP-port
+       liveness alone is NOT sufficient)
     5. Exports ``SERVER_PID``, ``OPCUA_SERVER_PORT``, and
        ``OPCUA_SERVER_URL`` to ``GITHUB_ENV`` (no-op outside CI)
+    6. On readiness failure, writes a JSON manifest plus the last lines of
+       the simulator's stdout/stderr to ``--diagnostics-dir`` (when set) so
+       the calling CI job's upload-artifact step can attach them.
 
 Stop mode (``--stop``)
     Reads ``SERVER_PID`` from the environment to terminate the server process.
@@ -27,7 +33,8 @@ Examples (CI YAML)::
 
     - name: Start OPC UA server on port 40464
       working-directory: ${{ github.workspace }}
-      run: python scripts/start_server_on_port.py --port 40464
+      run: python scripts/start_server_on_port.py --port 40464 \\
+             --diagnostics-dir test-results/readiness
 
     - name: Stop OPC UA server
       if: always()
@@ -41,19 +48,36 @@ Examples (local dev, from repo root)::
 """
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import tempfile
-import time
+import threading
 from pathlib import Path
+
+# The shared readiness module is a sibling file. Adding the script's directory
+# to sys.path is automatic when this file is invoked as ``python scripts/...``;
+# the explicit insert here keeps both ``python -m`` and direct invocation
+# working from any cwd.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+# Stdlib-only sibling: this import MUST NOT pull in any third-party package
+# because this script runs in CI before ``pip install`` (notably C# Live).
+from ijt_live_readiness import (  # noqa: E402
+    capture_process_log_tail,
+    wait_for_opcua_hello,
+    write_diagnostic_manifest,
+)
 
 DEFAULT_SERVER_DIR = Path("OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator")
 DEFAULT_TIMEOUT = 60
+_PROCESS_LOG_BUFFER_LIMIT = 400
 
 
 def _write_github_env(key: str, value: str) -> None:
@@ -63,17 +87,31 @@ def _write_github_env(key: str, value: str) -> None:
             f.write(f"{key}={value}\n")
 
 
-def _wait_for_port(port: int, timeout: int) -> float:
-    """Return seconds elapsed, or -1 on timeout."""
-    start = time.monotonic()
-    deadline = start + timeout
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection(("localhost", port), timeout=2):
-                return time.monotonic() - start
-        except OSError:
-            time.sleep(2)
-    return -1.0
+def _spawn_log_pump(stream, buffer: list[str], stream_name: str) -> threading.Thread:
+    """Drain ``stream`` line-by-line into ``buffer`` (rolling) on a daemon thread.
+
+    Replaces the previous ``stdout=DEVNULL`` so that, on a readiness failure,
+    we can dump the simulator's last few lines into the job-scoped diagnostics
+    directory. The buffer is bounded; old lines are dropped.
+    """
+
+    def _pump() -> None:
+        with contextlib.suppress(Exception):
+            try:
+                for raw in iter(stream.readline, b""):
+                    if not raw:
+                        break
+                    line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                    buffer.append(f"{stream_name}: {line}")
+                    if len(buffer) > _PROCESS_LOG_BUFFER_LIMIT:
+                        del buffer[: len(buffer) - _PROCESS_LOG_BUFFER_LIMIT]
+            finally:
+                with contextlib.suppress(Exception):
+                    stream.close()
+
+    thread = threading.Thread(target=_pump, name=f"ijt-sim-{stream_name}", daemon=True)
+    thread.start()
+    return thread
 
 
 def _default_tmp_base() -> Path:
@@ -82,7 +120,13 @@ def _default_tmp_base() -> Path:
     return Path(base) / "ijt-sim"
 
 
-def start_server(port: int, server_dir: Path, tmp_base: Path, timeout: int) -> None:
+def start_server(
+    port: int,
+    server_dir: Path,
+    tmp_base: Path,
+    timeout: int,
+    diagnostics_dir: Path | None = None,
+) -> None:
     dst_dir = tmp_base / f"server_{port}"
     cfg_name = "server_configuration.json"
 
@@ -125,21 +169,45 @@ def start_server(port: int, server_dir: Path, tmp_base: Path, timeout: int) -> N
     proc = subprocess.Popen(  # noqa: S603
         [str(exe_path)],
         cwd=str(dst_dir),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     print(f"    Server started (PID {proc.pid})")
 
-    elapsed = _wait_for_port(port, timeout)
-    if elapsed < 0:
+    # Drain stdout/stderr into a rolling buffer so we can emit a tail on
+    # failure. Without this, simulator startup output is silently lost and
+    # CI diagnostics show only "port did not open".
+    log_buffer: list[str] = []
+    _spawn_log_pump(proc.stdout, log_buffer, "stdout")
+    _spawn_log_pump(proc.stderr, log_buffer, "stderr")
+
+    # Protocol-level readiness wait. We do not gate on raw TCP-port open
+    # because the OPC UA stack may be initialising after the port becomes
+    # reachable. wait_for_opcua_hello returns success only when the server
+    # replies to a binary HELLO with ACK or ERR, either of which proves the
+    # OPC UA stack is alive.
+    result = wait_for_opcua_hello("localhost", port, timeout=float(timeout))
+    write_diagnostic_manifest(
+        diagnostics_dir,
+        result,
+        caller=f"start_server_on_port-{port}",
+        extra={"server_dir": str(dst_dir), "exe": exe_path.name, "pid": proc.pid},
+    )
+    if not result.ok:
+        capture_process_log_tail(
+            diagnostics_dir,
+            name=f"opcua-server-{port}",
+            lines=log_buffer,
+        )
         print(
-            f"ERROR: OPC UA server did not open port {port} within {timeout}s.",
+            f"ERROR: OPC UA server did not respond to HELLO on port {port} "
+            f"within {timeout}s ({result.error}).",
             file=sys.stderr,
         )
         proc.kill()
         sys.exit(1)
 
-    print(f"    Port {port} open after {elapsed:.1f}s — server ready.")
+    print(f"    Port {port} ready after {result.elapsed_seconds:.1f}s — server ready.")
 
     _write_github_env("SERVER_PID", str(proc.pid))
     _write_github_env("OPCUA_SERVER_PORT", str(port))
@@ -211,7 +279,19 @@ def main() -> None:
         "--timeout",
         type=int,
         default=DEFAULT_TIMEOUT,
-        help=f"Seconds to wait for port to open (default: {DEFAULT_TIMEOUT})",
+        help=f"Seconds to wait for OPC UA HELLO/ACK (default: {DEFAULT_TIMEOUT})",
+    )
+    parser.add_argument(
+        "--diagnostics-dir",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help=(
+            "Directory to write the readiness diagnostic manifest "
+            "(readiness-diagnostic-start_server_on_port-<port>.json) and, on "
+            "failure, the simulator stdout/stderr tail. The directory is "
+            "created if it does not exist."
+        ),
     )
 
     args = parser.parse_args()
@@ -223,7 +303,13 @@ def main() -> None:
     if args.stop:
         stop_server(args.port, args.tmp_base or _default_tmp_base())
     else:
-        start_server(args.port, args.server_dir, args.tmp_base or _default_tmp_base(), args.timeout)
+        start_server(
+            args.port,
+            args.server_dir,
+            args.tmp_base or _default_tmp_base(),
+            args.timeout,
+            diagnostics_dir=args.diagnostics_dir,
+        )
 
 
 if __name__ == "__main__":

@@ -13,10 +13,10 @@ Writes: $GITHUB_STEP_SUMMARY      (GitHub markdown step summary, if env var is s
 
 Called automatically by the CI workflow after the test run. Safe to run locally too.
 
-Phase 1 of the IJT CI / System Tests reporting overhaul moved the entire
-Markdown rendering pipeline into ``scripts/reporting/conformance_summary.py``
-so it can be tested independently. This module is now the CLI shim that
-parses arguments, reads test artifacts, calls
+The Markdown rendering pipeline lives in
+``scripts/reporting/conformance_summary.py`` so it can be tested
+independently. This module is the CLI shim that parses arguments, reads test
+artifacts, calls
 ``render_conformance_summary(...)``, and writes the result to disk and to the
 GitHub step summary. The shim re-exports a ``_render`` symbol that delegates
 to the new renderer purely for backward compatibility with any historical

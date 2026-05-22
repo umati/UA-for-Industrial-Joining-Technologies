@@ -48,31 +48,19 @@ def test_write_github_env_appends_key_value(monkeypatch: pytest.MonkeyPatch) -> 
         shutil.rmtree(workdir, ignore_errors=True)
 
 
-def test_wait_for_port_returns_elapsed_seconds(monkeypatch: pytest.MonkeyPatch) -> None:
-    times = iter([100.0, 100.6, 100.6])
-    monkeypatch.setattr(_mod.time, "monotonic", lambda: next(times))
-    monkeypatch.setattr(_mod.socket, "create_connection", lambda *args, **kwargs: _DummySocket())
+def test_wait_for_opcua_hello_is_delegated_to_shared_module() -> None:
+    """The script must import the shared HELLO probe; it must not reintroduce
+    a private TCP-only ``_wait_for_port`` loop."""
 
-    elapsed = _mod._wait_for_port(40464, 5)
-
-    assert elapsed == pytest.approx(0.6)
-
-
-def test_wait_for_port_returns_minus_one_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    times = iter([200.0, 201.0, 202.1])
-    sleeps: list[float] = []
-
-    def _raise_oserror(*args, **kwargs):
-        raise OSError("not ready")
-
-    monkeypatch.setattr(_mod.time, "monotonic", lambda: next(times))
-    monkeypatch.setattr(_mod.time, "sleep", lambda seconds: sleeps.append(seconds))
-    monkeypatch.setattr(_mod.socket, "create_connection", _raise_oserror)
-
-    elapsed = _mod._wait_for_port(40464, 2)
-
-    assert elapsed == -1.0
-    assert sleeps == [2]
+    assert hasattr(_mod, "wait_for_opcua_hello"), (
+        "start_server_on_port.py must import wait_for_opcua_hello from "
+        "ijt_live_readiness so the OPC UA HELLO probe is the readiness "
+        "contract."
+    )
+    assert not hasattr(_mod, "_wait_for_port"), (
+        "Readiness must go through ijt_live_readiness.wait_for_opcua_hello. Do not reintroduce "
+        "a TCP-only poll loop in start_server_on_port.py."
+    )
 
 
 def test_default_tmp_base_uses_runner_temp(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -91,6 +79,42 @@ def test_default_tmp_base_falls_back_to_system_temp(monkeypatch: pytest.MonkeyPa
     assert _mod._default_tmp_base() == Path(r"C:\Temp") / "ijt-sim"
 
 
+def _ok_readiness(port: int, *, elapsed: float = 1.25, attempts: int = 1):
+    """Return a ReadinessResult-shaped success object suitable for monkeypatching."""
+
+    import ijt_live_readiness  # type: ignore[import-not-found]
+
+    return ijt_live_readiness.ReadinessResult(
+        ok=True,
+        probe="opcua_hello",
+        host="localhost",
+        port=port,
+        elapsed_seconds=elapsed,
+        attempts=attempts,
+        started_at="2026-05-22T00:00:00.000+00:00",
+        finished_at="2026-05-22T00:00:01.250+00:00",
+        error=None,
+        endpoint=f"opc.tcp://localhost:{port}",
+    )
+
+
+def _fail_readiness(port: int):
+    import ijt_live_readiness  # type: ignore[import-not-found]
+
+    return ijt_live_readiness.ReadinessResult(
+        ok=False,
+        probe="opcua_hello",
+        host="localhost",
+        port=port,
+        elapsed_seconds=30.0,
+        attempts=10,
+        started_at="2026-05-22T00:00:00.000+00:00",
+        finished_at="2026-05-22T00:00:30.000+00:00",
+        error=f"OPC UA HELLO probe to localhost:{port} did not get ACK/ERR within 30.0s",
+        endpoint=f"opc.tcp://localhost:{port}",
+    )
+
+
 def test_start_server_patches_config_and_exports_env(monkeypatch: pytest.MonkeyPatch) -> None:
     workdir = _make_repo_temp_dir()
     try:
@@ -106,10 +130,14 @@ def test_start_server_patches_config_and_exports_env(monkeypatch: pytest.MonkeyP
 
         proc = Mock()
         proc.pid = 4321
+        proc.stdout = Mock()
+        proc.stderr = Mock()
         export = Mock()
 
         monkeypatch.setattr(_mod.subprocess, "Popen", lambda *args, **kwargs: proc)
-        monkeypatch.setattr(_mod, "_wait_for_port", lambda port, timeout: 1.25)
+        monkeypatch.setattr(_mod, "wait_for_opcua_hello", lambda *a, **kw: _ok_readiness(40464))
+        monkeypatch.setattr(_mod, "_spawn_log_pump", lambda *a, **kw: Mock())
+        monkeypatch.setattr(_mod, "write_diagnostic_manifest", lambda *a, **kw: None)
         monkeypatch.setattr(_mod, "_write_github_env", export)
 
         _mod.start_server(40464, server_dir, workdir / "tmp", 30)
@@ -156,8 +184,13 @@ def test_start_server_timeout_kills_process_and_exits(monkeypatch: pytest.Monkey
 
         proc = Mock()
         proc.pid = 9876
+        proc.stdout = Mock()
+        proc.stderr = Mock()
         monkeypatch.setattr(_mod.subprocess, "Popen", lambda *args, **kwargs: proc)
-        monkeypatch.setattr(_mod, "_wait_for_port", lambda port, timeout: -1.0)
+        monkeypatch.setattr(_mod, "wait_for_opcua_hello", lambda *a, **kw: _fail_readiness(40464))
+        monkeypatch.setattr(_mod, "_spawn_log_pump", lambda *a, **kw: Mock())
+        monkeypatch.setattr(_mod, "write_diagnostic_manifest", lambda *a, **kw: None)
+        monkeypatch.setattr(_mod, "capture_process_log_tail", lambda *a, **kw: None)
 
         with pytest.raises(SystemExit) as excinfo:
             _mod.start_server(40464, server_dir, workdir / "tmp", 30)

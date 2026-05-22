@@ -84,7 +84,7 @@ env:
 
 jobs:
   build:
-    name: Build & Phase-0 smoke
+    name: Build and image smoke
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -205,7 +205,7 @@ jobs:
           file: .github/docker/ijt-browser-ci/Dockerfile
           load: true
           push: false
-          tags: ${{ env.IMAGE_NAME }}:phase0-${{ steps.decide.outputs.short_sha }}
+          tags: ${{ env.IMAGE_NAME }}:image-smoke-${{ steps.decide.outputs.short_sha }}
           build-args: |
             IMAGE_BUILD_REF=${{ github.ref }}
             IMAGE_BUILD_SHA=${{ steps.decide.outputs.source_sha }}
@@ -213,13 +213,13 @@ jobs:
           cache-from: type=gha,scope=ijt-browser-ci
           cache-to: type=gha,scope=ijt-browser-ci,mode=max
 
-      - name: Phase 0 smoke - metadata + tool versions
+      - name: Image smoke - metadata and tool versions
         env:
           SHORT_SHA: ${{ steps.decide.outputs.short_sha }}
           EXPECTED_FINGERPRINT: ${{ steps.fingerprint.outputs.inputs_fingerprint }}
         run: |
           set -euo pipefail
-          IMG="${IMAGE_NAME}:phase0-${SHORT_SHA}"
+          IMG="${IMAGE_NAME}:image-smoke-${SHORT_SHA}"
           docker run --rm --network=none "$IMG" cat /opt/ijt-browser-ci/metadata.json
           docker run --rm --network=none "$IMG" bash -c 'python --version | grep -E "^Python 3\.14\."'
           docker run --rm --network=none "$IMG" bash -c 'node --version | grep -E "^v24\."'
@@ -228,18 +228,18 @@ jobs:
               python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('inputs_fingerprint',''))"
           )"
           if [[ "$actual_fingerprint" != "$EXPECTED_FINGERPRINT" ]]; then
-            echo "::error::Phase 0 image metadata inputs_fingerprint does not match the source checkout." >&2
+            echo "::error::Image metadata inputs_fingerprint does not match the source checkout." >&2
             echo "::error::  expected: $EXPECTED_FINGERPRINT" >&2
             echo "::error::  actual:   ${actual_fingerprint}" >&2
             exit 1
           fi
 
-      - name: Phase 0 smoke - cache & permissions probe (non-root UID)
+      - name: Image smoke - cache and permissions probe (non-root UID)
         env:
           SHORT_SHA: ${{ steps.decide.outputs.short_sha }}
         run: |
           set -euo pipefail
-          IMG="${IMAGE_NAME}:phase0-${SHORT_SHA}"
+          IMG="${IMAGE_NAME}:image-smoke-${SHORT_SHA}"
           UID_GID="$(id -u):$(id -g)"
           docker run --rm --network=none --user "$UID_GID" "$IMG" bash -c '
             set -euo pipefail
@@ -251,7 +251,7 @@ jobs:
             python -m venv /tmp/v && /tmp/v/bin/python -m pip --version
           '
 
-      - name: Phase 0 smoke - offline dependency closure probe
+      - name: Image smoke - offline dependency closure probe
         # Image-integrity gate only: prove the baked pip wheelhouse, npm cache,
         # Chromium install, and non-root permissions are usable with
         # --network=none. Full browser behavior stays in the post-publish
@@ -263,7 +263,7 @@ jobs:
           SHORT_SHA: ${{ steps.decide.outputs.short_sha }}
         run: |
           set -euo pipefail
-          IMG="${IMAGE_NAME}:phase0-${SHORT_SHA}"
+          IMG="${IMAGE_NAME}:image-smoke-${SHORT_SHA}"
           UID_GID="$(id -u):$(id -g)"
           docker run --rm \
             --network=none \
@@ -303,28 +303,28 @@ jobs:
               test -d /ms-playwright
             '
 
-      - name: Stage Phase 0 artifacts
+      - name: Stage image smoke artifacts
         if: always()
         run: |
           set -euxo pipefail
-          mkdir -p "${GITHUB_WORKSPACE}/.phase0-artifacts"
+          mkdir -p "${GITHUB_WORKSPACE}/.image-smoke-artifacts"
           for src in \
             "${GITHUB_WORKSPACE}/OPC_UA_Clients/Release2/IJT_Web_Client/test-results" \
             "${GITHUB_WORKSPACE}/test-results"; do
             if [[ -d "$src" ]]; then
-              dest="${GITHUB_WORKSPACE}/.phase0-artifacts/$(basename "$(dirname "$src")")-$(basename "$src")"
+              dest="${GITHUB_WORKSPACE}/.image-smoke-artifacts/$(basename "$(dirname "$src")")-$(basename "$src")"
               cp -r "$src" "$dest" || true
             fi
           done
-          ls -la "${GITHUB_WORKSPACE}/.phase0-artifacts" || true
+          ls -la "${GITHUB_WORKSPACE}/.image-smoke-artifacts" || true
 
-      - name: Upload Phase 0 artifacts
+      - name: Upload image smoke artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
-          name: phase0-${{ steps.decide.outputs.short_sha }}
+          name: image-smoke-${{ steps.decide.outputs.short_sha }}
           path: |
-            .phase0-artifacts/**
+            .image-smoke-artifacts/**
             OPC_UA_Clients/Release2/IJT_Web_Client/test-results/**
             test-results/**
           if-no-files-found: ignore
@@ -342,7 +342,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo "## IJT Browser CI image - Phase 0 build"
+            echo "## IJT Browser CI image - build and smoke"
             echo ""
             echo "- Event: \`${EVENT_NAME}\`"
             echo "- Ref: \`${REF}\`"

@@ -7,54 +7,55 @@ Supports two workflows:
 Only terminates the simulator process if this manager started it.
 """
 
-import asyncio
 import logging
 import os
-import socket
 import subprocess  # nosec B404
 import sys
-import time
 from pathlib import Path
 from typing import Optional
 
 # Bandit B404/B603 suppressions are limited to controlled simulator process launch paths.
 
+# The shared readiness module lives at ``<repo>/scripts/ijt_live_readiness.py``.
+# Add the repo's ``scripts`` directory to sys.path explicitly so the import
+# works from the Test Client's run_all_tests.py and pytest entry points
+# regardless of caller cwd.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if _SCRIPTS_DIR.is_dir() and str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from ijt_live_readiness import (  # noqa: E402
+    wait_for_opcua_session,
+    wait_for_tcp,
+)
+
 logger = logging.getLogger(__name__)
 
 
 def is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
-    """Return True if a TCP connection to host:port succeeds within *timeout* seconds."""
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except (socket.timeout, ConnectionRefusedError, OSError):  # fmt: skip
-        return False
+    """Return True if a TCP connection to host:port succeeds within *timeout* seconds.
+
+    Delegates to the shared readiness module so all live-test callers share a
+    single TCP-open implementation. Single-shot semantics preserved by passing
+    ``timeout`` as both the connect timeout AND the wait budget.
+    """
+
+    result = wait_for_tcp(host, port, timeout=timeout, interval=timeout, connect_timeout=timeout)
+    return result.ok
 
 
 def wait_for_port(host: str, port: int, timeout_s: float = 30.0) -> bool:
     """
     Poll host:port until it accepts connections or *timeout_s* elapses.
     Returns True if the port opened within the timeout, False otherwise.
+
+    Thin wrapper around the shared ``wait_for_tcp`` to preserve the existing
+    boolean API used by ``ServerManager.ensure_running``. New callers should
+    use ``wait_for_tcp`` directly to access the structured ReadinessResult.
     """
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        if is_port_open(host, port):
-            return True
-        time.sleep(0.5)
-    return False
 
-
-async def _opcua_probe(url: str, timeout: float) -> bool:
-    """Attempt a real OPC UA connect/disconnect with a short timeout."""
-    from asyncua import Client
-
-    client = Client(url, timeout=timeout)
-    try:
-        await asyncio.wait_for(client.connect(), timeout=timeout)
-        await client.disconnect()
-        return True
-    except Exception:
-        return False
+    return wait_for_tcp(host, port, timeout=timeout_s, interval=0.5).ok
 
 
 def wait_for_opcua_ready(url: str, timeout_s: float = 30.0) -> bool:
@@ -64,19 +65,14 @@ def wait_for_opcua_ready(url: str, timeout_s: float = 30.0) -> bool:
     stack may still be initialising after the port becomes reachable.
     Returns True if the server accepted an OPC UA connection within the
     timeout, False otherwise.
+
+    Implementation note: delegates to the shared asyncua session probe
+    so the connect/disconnect contract matches the Web Client live conftest
+    and the Console Client live conftest's HELLO probe; "ready" means the
+    same thing for every IJT client.
     """
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        remaining = deadline - time.monotonic()
-        probe_timeout = min(3.0, max(0.5, remaining))
-        try:
-            ready = asyncio.run(_opcua_probe(url, probe_timeout))
-            if ready:
-                return True
-        except Exception as exc:
-            logger.debug("OPC UA probe attempt failed: %s", exc)
-        time.sleep(0.5)
-    return False
+
+    return wait_for_opcua_session(url, timeout=timeout_s, interval=0.5).ok
 
 
 def _find_server_executable() -> Optional[str]:

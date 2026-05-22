@@ -1,14 +1,60 @@
-"""Shared live-test startup diagnostics and protocol readiness probes."""
+"""Shared live-test startup diagnostics and protocol readiness probes.
+
+Web Client adapter over the repository-wide readiness module at
+``scripts/ijt_live_readiness.py``. The functions ``wait_for_opcua_protocol_ready``
+and ``wait_for_websocket_protocol_ready`` keep their existing call signatures
+(returning ``str | None`` so they compose with existing callers) and own the
+per-attempt retry policy; the inner per-attempt probe (one
+asyncua connect+disconnect, one WebSocket handshake) is delegated to the
+shared probe-once helpers so the protocol-readiness contract is identical
+across all IJT clients. This file remains the home for Web-specific helpers
+(log paths, failure-signature extraction, ``start_process_with_opcua_logs``)
+that are not generally useful outside the Web Client tree.
+"""
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
+
+
+# Locate the shared readiness module robustly. In a normal repo checkout the
+# repo root is five ``parents`` up, but Docker test images flatten the tree
+# (the Web Client subtree alone is copied into /app), so we walk ancestors
+# looking for ``scripts/ijt_live_readiness.py`` and fall back to a vendored
+# copy at ``/app/scripts/ijt_live_readiness.py`` for the Docker test target.
+def _find_shared_readiness_scripts_dir() -> Path | None:
+    here = Path(__file__).resolve()
+    for ancestor in (here, *here.parents):
+        candidate = ancestor / "scripts" / "ijt_live_readiness.py"
+        if candidate.is_file():
+            return candidate.parent
+    # Docker test image layout: Web Client subtree is copied to /app, and
+    # the shared script is copied alongside as /app/scripts/...
+    docker_candidate = Path("/app/scripts/ijt_live_readiness.py")
+    if docker_candidate.is_file():
+        return docker_candidate.parent
+    return None
+
+
+_SCRIPTS_DIR = _find_shared_readiness_scripts_dir()
+if _SCRIPTS_DIR is not None and str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from ijt_live_readiness import (  # noqa: E402
+    opcua_session_probe_once,
+    websocket_probe_once,
+)
+
+# Module-level sleep indirection so tests can monkeypatch retry pacing without
+# stubbing the global ``time`` module. The retry loop below must call
+# ``_sleep`` rather than ``time.sleep`` directly so unit tests can assert on
+# inter-attempt waits.
+_sleep = time.sleep
 
 OPCUA_PRESTARTED_PORT_ENV = "IJT_OPCUA_PRESTARTED_PORT"
 MAX_SIMULATOR_LAUNCH_ATTEMPTS = 2
@@ -26,6 +72,16 @@ DEFAULT_PROTOCOL_READY_TIMEOUT = 2.5
 DEFAULT_WEBSOCKET_READY_ATTEMPTS = 1
 DEFAULT_WEBSOCKET_READY_INTERVAL = 1.0
 DEFAULT_WEBSOCKET_READY_RESPONSE_TIMEOUT = 5.0
+
+# The Web Client backend's readiness-probe handshake. ``get connectionpoints``
+# is a stateless, side-effect-free command handled directly by
+# ``handle_get_connection_points`` in ``src/python/ijt_interface.py``. What we
+# are checking is that the WS plumbing reaches the backend dispatcher and the
+# reply carries our ``uniqueid``.
+_WEB_BACKEND_READINESS_COMMAND = "get connectionpoints"
+_WEB_BACKEND_READINESS_ENDPOINT = "common"
+_WEB_BACKEND_READINESS_UNIQUEID = "readiness-probe"
+
 _KNOWN_FAILURE_SIGNATURES: tuple[str, ...] = (
     "0x80010000",
     "CoInitialize",
@@ -36,7 +92,6 @@ _KNOWN_FAILURE_SIGNATURES: tuple[str, ...] = (
 )
 _FAILURE_SIGNATURE_TAIL_LINES = 40
 _FAILURE_SIGNATURE_TAIL_BYTES = 8192
-_sleep = time.sleep
 
 
 def _tail_log_lines(path: Path, *, max_lines: int, max_bytes: int) -> list[str]:
@@ -114,17 +169,6 @@ def start_process_with_opcua_logs(
         err_file.close()
 
 
-async def _probe_opcua_protocol(endpoint: str, connect_timeout: float) -> None:
-    from asyncua import Client
-
-    client = Client(endpoint, timeout=connect_timeout)
-    try:
-        await client.connect()
-    finally:
-        with contextlib.suppress(Exception):
-            await client.disconnect()
-
-
 def wait_for_opcua_protocol_ready(
     endpoint: str,
     *,
@@ -132,57 +176,25 @@ def wait_for_opcua_protocol_ready(
     interval: float = DEFAULT_PROTOCOL_READY_INTERVAL,
     connect_timeout: float = DEFAULT_PROTOCOL_READY_TIMEOUT,
 ) -> str | None:
-    last_error = "no OPC UA protocol probe attempted"
-    for attempt in range(attempts):
-        try:
-            asyncio.run(_probe_opcua_protocol(endpoint, connect_timeout))
+    """Wait until ``endpoint`` accepts an asyncua connect+disconnect.
+
+    Returns ``None`` on success, a single-line error string on failure (kept
+    for backwards compatibility with callers that distinguish probe types by
+    error-string substring matching). Each attempt delegates to
+    :func:`ijt_live_readiness.opcua_session_probe_once` so the per-attempt
+    contract is shared with the rest of the IJT clients; this wrapper owns
+    the retry loop (``attempts`` × ``interval``) so its tests can monkeypatch
+    ``_sleep``.
+    """
+
+    last_error: str | None = None
+    for index in range(attempts):
+        last_error = opcua_session_probe_once(endpoint, connect_timeout=connect_timeout)
+        if last_error is None:
             return None
-        except Exception as exc:  # pragma: no cover - exact asyncua exception type varies by version
-            last_error = f"{type(exc).__name__}: {exc}"
-            if attempt < attempts - 1:
-                _sleep(interval)
+        if index < attempts - 1:
+            _sleep(interval)
     return last_error
-
-
-async def _probe_websocket_protocol(ws_url: str, response_timeout: float) -> None:
-    import websockets
-
-    async with websockets.connect(ws_url, open_timeout=min(5.0, response_timeout), close_timeout=0.5) as websocket:
-        uniqueid = "readiness-probe"
-        await websocket.send(
-            json.dumps(
-                {
-                    "command": "get connectionpoints",
-                    "endpoint": "common",
-                    "uniqueid": uniqueid,
-                }
-            )
-        )
-        deadline = asyncio.get_running_loop().time() + response_timeout
-        last_response = "no response received"
-        unmatched_count = 0
-        while True:
-            remaining = deadline - asyncio.get_running_loop().time()
-            if remaining <= 0:
-                raise TimeoutError(f"no matching readiness response received; last response: {last_response}")
-            try:
-                raw = await asyncio.wait_for(websocket.recv(), timeout=remaining)
-            except TimeoutError as exc:
-                raise TimeoutError(
-                    f"no matching readiness response received within {response_timeout:.1f}s; "
-                    f"last response: {last_response}"
-                ) from exc
-            last_response = str(raw)
-            try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError as exc:
-                raise RuntimeError(f"invalid readiness response JSON: {exc.msg}") from exc
-            if payload.get("uniqueid") != uniqueid:
-                unmatched_count += 1
-                if unmatched_count >= 5:
-                    raise RuntimeError(f"no matching readiness response received; last response: {last_response}")
-                continue
-            return
 
 
 def wait_for_websocket_protocol_ready(
@@ -193,13 +205,44 @@ def wait_for_websocket_protocol_ready(
     interval: float = DEFAULT_WEBSOCKET_READY_INTERVAL,
     response_timeout: float = DEFAULT_WEBSOCKET_READY_RESPONSE_TIMEOUT,
 ) -> str | None:
-    last_error = "no WebSocket protocol probe attempted"
-    for attempt in range(attempts):
-        try:
-            asyncio.run(_probe_websocket_protocol(ws_url, response_timeout))
+    """Wait until the WebSocket backend completes the IJT readiness handshake.
+
+    Returns ``None`` on success, an error string on failure. Sends the
+    legacy IJT readiness payload
+    ``{"command": "get connectionpoints", "endpoint": "common", "uniqueid":
+    "readiness-probe"}`` and treats any reply carrying ``uniqueid =
+    "readiness-probe"`` as success (the backend may answer with normal data
+    or with ``{"exception": "..."}``; both prove the WS plumbing works).
+    The per-attempt probe is delegated to
+    :func:`ijt_live_readiness.websocket_probe_once`; this wrapper owns the
+    retry loop so its tests can monkeypatch ``_sleep``.
+
+    ``opcua_endpoint`` is accepted for backwards-compatibility with older
+    callers; the readiness probe itself does not address a specific OPC UA
+    endpoint (it asks the backend for its connection-points table, which is
+    OPC-UA-independent).
+    """
+
+    del opcua_endpoint  # kept in the signature for backwards compatibility
+    payload_json = json.dumps(
+        {
+            "command": _WEB_BACKEND_READINESS_COMMAND,
+            "endpoint": _WEB_BACKEND_READINESS_ENDPOINT,
+            "uniqueid": _WEB_BACKEND_READINESS_UNIQUEID,
+        }
+    )
+    last_error: str | None = None
+    for index in range(attempts):
+        last_error = websocket_probe_once(
+            ws_url,
+            payload_json=payload_json,
+            handshake_id=_WEB_BACKEND_READINESS_UNIQUEID,
+            open_timeout=response_timeout,
+            close_timeout=0.5,
+            response_timeout=response_timeout,
+        )
+        if last_error is None:
             return None
-        except Exception as exc:  # pragma: no cover - exact backend/websocket error type varies by version
-            last_error = f"{type(exc).__name__}: {exc}"
-            if attempt < attempts - 1:
-                _sleep(interval)
+        if index < attempts - 1:
+            _sleep(interval)
     return last_error

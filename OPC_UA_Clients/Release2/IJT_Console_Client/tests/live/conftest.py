@@ -24,7 +24,6 @@ import json
 import os
 import platform
 import shutil
-import socket
 import subprocess
 import sys
 import time
@@ -44,6 +43,20 @@ _CONSOLE_ROOT = _LIVE_DIR.parents[1]
 _REPO_ROOT = _LIVE_DIR.parents[4]
 _SERVER_RELEASE2 = _REPO_ROOT / "OPC_UA_Servers" / "Release2"
 _SERVER_DOCKER_IMAGE = "opcua-ijt-server:latest"
+
+# The shared readiness module lives at ``<repo>/scripts/ijt_live_readiness.py``.
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if _SCRIPTS_DIR.is_dir() and str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from ijt_live_readiness import (  # noqa: E402
+    COMPOSE_WAIT_TIMEOUT_COLD_SECONDS,
+    COMPOSE_WAIT_TIMEOUT_WARM_SECONDS,
+    capture_compose_logs_on_failure,
+    wait_for_opcua_hello,
+    wait_for_tcp,
+)
+
 _SERVER_LINUX_ZIP = _SERVER_RELEASE2 / "OPC_UA_IJT_Server_Simulator_Linux.zip"
 _SERVER_ZIP = _SERVER_RELEASE2 / "OPC_UA_IJT_Server_Simulator.zip"
 _SERVER_DIR = _SERVER_RELEASE2 / "OPC_UA_IJT_Server_Simulator"
@@ -54,6 +67,18 @@ _CLIENT_PKI_ROOT = _CONSOLE_ROOT / "tmp" / "client-pki"
 _DOCKER_OVERRIDE_ROOT = _CONSOLE_ROOT / "tmp" / "docker-overrides"
 
 _OPCUA_PORT = 40451
+
+# Readiness diagnostics (compose-log capture on failure) are written next to
+# pytest test-results so the Console Live integration job's
+# ``upload-artifact: test-results/`` step picks them up automatically.
+_READINESS_DIAGNOSTICS_DIR = _CONSOLE_ROOT / "test-results" / "readiness"
+
+
+def _console_readiness_diagnostics_dir() -> Path:
+    """Return the directory under ``test-results/`` where compose-log capture
+    and any future readiness diagnostics should land."""
+    return _READINESS_DIAGNOSTICS_DIR
+
 
 sys.path.insert(0, str(_CONSOLE_ROOT))
 
@@ -98,11 +123,7 @@ def _resolve_server_host_port() -> tuple[str, int]:
 
 
 def _port_open(host: str, port: int, timeout: float = 1.5) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
+    return wait_for_tcp(host, port, timeout=timeout, interval=timeout, connect_timeout=timeout).ok
 
 
 def _isolated_server_requested() -> bool:
@@ -202,49 +223,15 @@ def _kill_process_on_port(port: int) -> None:
             )
 
 
-def _wait_for_port(host: str, port: int, timeout: float, interval: float = 1.0) -> bool:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if _port_open(host, port):
-            return True
-        time.sleep(interval)
-    return False
-
-
 def _wait_for_opcua_hello(host: str, port: int, timeout: float) -> bool:
     """Confirm an OPC UA server (not just an open TCP port) is reachable.
 
-    Sends a minimal OPC UA HELLO message and waits for ACK / ERR. This guards
-    against the docker-proxy race where the published TCP port opens before
-    the in-container server is ready to respond to UA HELLO, which previously
-    caused the first matrix test to time out in ``send_hello``.
+    Delegates to the shared readiness module so the Console fixture, the C#
+    fixture, ``scripts/start_server_on_port.py``, and the Web Client all use
+    one binary-protocol HELLO probe.
     """
 
-    endpoint_url = f"opc.tcp://{host}:{port}".encode("ascii")
-    url_len = len(endpoint_url)
-    total_len = 32 + url_len
-    hello = b"HELF" + total_len.to_bytes(4, "little")
-    hello += (0).to_bytes(4, "little")  # protocol version
-    hello += (65536).to_bytes(4, "little")  # receive buffer size
-    hello += (65536).to_bytes(4, "little")  # send buffer size
-    hello += (0).to_bytes(4, "little")  # max message size
-    hello += (0).to_bytes(4, "little")  # max chunk count
-    hello += url_len.to_bytes(4, "little")
-    hello += endpoint_url
-
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection((host, port), timeout=3) as sock:
-                sock.settimeout(3)
-                sock.sendall(hello)
-                header = sock.recv(8)
-                if len(header) >= 4 and header[:3] in (b"ACK", b"ERR"):
-                    return True
-        except (OSError, socket.timeout):
-            pass
-        time.sleep(1.0)
-    return False
+    return wait_for_opcua_hello(host, port, timeout=timeout).ok
 
 
 # ── Server launcher ───────────────────────────────────────────────────────────
@@ -434,18 +421,49 @@ def _start_docker_server(port: int) -> StartedServer | None:
         _allow_container_write(pki_dir)
         override_file = _write_docker_compose_override(override_dir, pki_dir)
         compose_args.extend(["-f", str(compose_file), "-f", str(override_file)])
-    compose_args.extend(["up", "-d"])
+    compose_args.extend(["up", "-d", "--wait", "--wait-timeout", str(COMPOSE_WAIT_TIMEOUT_WARM_SECONDS)])
+    wait_budget_seconds = COMPOSE_WAIT_TIMEOUT_WARM_SECONDS
     if _should_build_docker_image(docker):
         compose_args.append("--build")
-    result = subprocess.run(
-        compose_args,
-        cwd=str(_SERVER_RELEASE2),
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
+        # Cold build path: replace the warm budget with the cold budget.
+        idx = compose_args.index("--wait-timeout")
+        compose_args[idx + 1] = str(COMPOSE_WAIT_TIMEOUT_COLD_SECONDS)
+        wait_budget_seconds = COMPOSE_WAIT_TIMEOUT_COLD_SECONDS
+    # Outer subprocess timeout = compose --wait-timeout budget + 60s slack for
+    # the docker CLI / daemon / image pull itself (--wait-timeout only bounds
+    # the healthcheck poll, not docker build or registry I/O).
+    outer_timeout = wait_budget_seconds + 60
+    diagnostics_dir = _console_readiness_diagnostics_dir()
+    try:
+        result = subprocess.run(
+            compose_args,
+            cwd=str(_SERVER_RELEASE2),
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=outer_timeout,
+        )
+    except subprocess.TimeoutExpired:
+        # Compose itself hung past the outer ceiling — capture logs and abort
+        # the auto-start path so live tests fail loudly instead of silently
+        # waiting forever.
+        capture_compose_logs_on_failure(
+            diagnostics_dir,
+            _SERVER_RELEASE2,
+            "opcua-server",
+            project=project,
+            docker_executable=docker,
+        )
+        return None
     if result.returncode != 0:
+        capture_compose_logs_on_failure(
+            diagnostics_dir,
+            _SERVER_RELEASE2,
+            "opcua-server",
+            project=project,
+            docker_executable=docker,
+        )
         if not preserve_test_artifacts():
             for path in (override_dir, pki_dir):
                 if path is not None:
@@ -534,18 +552,12 @@ def ensure_opcua_server():
         server = _start_opcua_server(port)
         if server:
             started_server = server
-            if not _wait_for_port(host, port, timeout=60):
+            if not _wait_for_opcua_hello(host, port, timeout=60):
                 _stop_opcua_server(server)
                 pytest.fail(
-                    f"OPC UA server process started but port {port} did not open within 60 s. "
-                    f"Check opcua_ijt_demo_application.exe output."
-                )
-            if not _wait_for_opcua_hello(host, port, timeout=30):
-                _stop_opcua_server(server)
-                pytest.fail(
-                    f"OPC UA TCP port {port} is open but the server did not respond to a "
-                    f"HELLO handshake within 30 s. The container/process may still be "
-                    f"warming up."
+                    f"OPC UA server process/container started but did not respond to a "
+                    f"HELLO handshake on {host}:{port} within 60 s. Check server output "
+                    f"or readiness diagnostics."
                 )
         else:
             pytest.fail(
@@ -555,6 +567,12 @@ def ensure_opcua_server():
             )
     elif isolated_server:
         pytest.fail(f"OPC UA port {port} is already in use and could not be cleared for an isolated managed run.")
+    elif not _wait_for_opcua_hello(host, port, timeout=30):
+        pytest.fail(
+            f"OPC UA TCP port {port} is open, but the server did not answer a "
+            f"HELLO handshake within 30 s. Start a real OPC UA simulator or "
+            f"free the stale port before running live tests."
+        )
 
     os.environ.setdefault("OPCUA_SERVER_URL", f"opc.tcp://{host}:{port}")
 
