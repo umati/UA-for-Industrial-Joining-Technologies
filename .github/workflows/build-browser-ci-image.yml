@@ -14,29 +14,19 @@ name: Build Browser CI Image
 #                  NO packages: write.
 #   - publish:     depends on build; only runs when push == true. Main/
 #                  scheduled/manual publishes refresh the reviewed pin path;
-#                  same-repo PRs that change browser image inputs publish a
-#                  PR-scoped source-SHA tag consumed by integration.yml.
+#                  same-repo PRs that change browser image inputs reach us via
+#                  workflow_call from integration.yml and publish a fingerprint-
+#                  keyed cache tag plus a PR-scoped tag for provenance/debug.
+#                  The synchronization path is the workflow_call digest output,
+#                  not a tag lookup.
 #   - offline-e2e: depends on publish and runs the full offline browser
-#                  regression contract. It fails the workflow/required check
-#                  without blocking image publication.
+#                  regression contract. Skipped on the workflow_call path
+#                  because the calling Integration run's live-webclient-browser
+#                  matrix verifies against the same digest.
 
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/docker/ijt-browser-ci/**'
-      - '!.github/docker/ijt-browser-ci/image-pin.json'
-      - '!.github/docker/ijt-browser-ci/README.md'
-      - '.github/scripts/update_browser_ci_image_pin.py'
-      - '.github/scripts/compute_browser_image_fingerprint.py'
-      - '.github/workflows/build-browser-ci-image.yml'
-      - '.dockerignore'
-      - 'constraints.txt'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/package.json'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt'
-  pull_request:
     paths:
       - '.github/docker/ijt-browser-ci/**'
       - '!.github/docker/ijt-browser-ci/image-pin.json'
@@ -60,6 +50,26 @@ on:
         default: 'false'
         type: choice
         options: [ 'true', 'false' ]
+  # PR path reaches this workflow only via workflow_call from integration.yml's
+  # prepare-browser-image-plan -> build-browser-image chain. That chain decides
+  # whether to invoke us at all (planner short-circuits on pin/cache match) and
+  # passes the expected inputs_fingerprint as an explicit, YAML-visible contract.
+  workflow_call:
+    inputs:
+      expected_fingerprint:
+        description: 'Inputs fingerprint the caller computed; the build step asserts equality and fails fast if drift occurred between caller checkout and this run.'
+        required: true
+        type: string
+    outputs:
+      digest:
+        description: 'Digest of the published image (sha256:<64hex>).'
+        value: ${{ jobs.publish.outputs.digest }}
+      source_sha:
+        description: 'GITHUB_SHA the publish job built from (provenance only, not a runtime trust check).'
+        value: ${{ jobs.build.outputs.source_sha }}
+      inputs_fingerprint:
+        description: 'Inputs fingerprint baked into the published image metadata.'
+        value: ${{ jobs.build.outputs.inputs_fingerprint }}
 
 # Workflow-level: read-only. packages: write is granted only on the publish job.
 permissions:
@@ -103,16 +113,36 @@ jobs:
           python .github/scripts/compute_browser_image_fingerprint.py --format github-output >> "$GITHUB_OUTPUT"
           python .github/scripts/compute_browser_image_fingerprint.py --format json
 
+      - name: Assert caller's expected fingerprint matches this checkout
+        # Runs only on the workflow_call path (integration.yml planner -> build).
+        # Standalone push/schedule/dispatch invocations pass through untouched.
+        # Failure here is a contract violation: the caller computed a fingerprint
+        # at planner time and this build sees a different one, i.e. the source
+        # tree drifted between planner and build. Fail fast with a diagnostic
+        # rather than silently publishing a mismatched image.
+        if: ${{ inputs.expected_fingerprint != '' }}
+        env:
+          EXPECTED_FINGERPRINT: ${{ inputs.expected_fingerprint }}
+          COMPUTED_FINGERPRINT: ${{ steps.fingerprint.outputs.inputs_fingerprint }}
+        run: |
+          set -euo pipefail
+          if [[ "$COMPUTED_FINGERPRINT" != "$EXPECTED_FINGERPRINT" ]]; then
+            echo "::error::Browser CI image input fingerprint drifted between planner and build." >&2
+            echo "::error::  expected (planner): ${EXPECTED_FINGERPRINT}" >&2
+            echo "::error::  computed (build):   ${COMPUTED_FINGERPRINT}" >&2
+            echo "::error::  action: rerun integration.yml so the planner recomputes against the current source tree." >&2
+            exit 1
+          fi
+
       - name: Decide whether to push (carry to publish job)
         id: decide
         env:
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           DISPATCH_PUSH: ${{ inputs.push }}
+          EXPECTED_FINGERPRINT: ${{ inputs.expected_fingerprint }}
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
           PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
         run: |
           set -euo pipefail
           SOURCE_SHA="$GITHUB_SHA"
@@ -120,53 +150,34 @@ jobs:
           PUBLISH_MODE="none"
           PR_IMAGE_TAG=""
           PUSH_OUTPUT="false"
-          browser_image_inputs_changed=false
 
-          if [[ "$EVENT_NAME" == "pull_request" && "$PR_HEAD_REPO" == "$GITHUB_REPOSITORY" ]]; then
-            git fetch --no-tags --depth=1 origin "$PR_BASE_SHA" "$PR_HEAD_SHA"
-            changed_files="$(git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA")"
-            while IFS= read -r changed; do
-              [[ -n "$changed" ]] || continue
-              case "$changed" in
-                .dockerignore)
-                  browser_image_inputs_changed=true
-                  ;;
-                constraints.txt)
-                  browser_image_inputs_changed=true
-                  ;;
-                OPC_UA_Clients/Release2/IJT_Web_Client/package.json)
-                  browser_image_inputs_changed=true
-                  ;;
-                OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json)
-                  browser_image_inputs_changed=true
-                  ;;
-                OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt)
-                  browser_image_inputs_changed=true
-                  ;;
-                OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt)
-                  browser_image_inputs_changed=true
-                  ;;
-                .github/docker/ijt-browser-ci/image-pin.json)
-                  ;;
-                .github/docker/ijt-browser-ci/README.md)
-                  ;;
-                .github/docker/ijt-browser-ci/*)
-                  browser_image_inputs_changed=true
-                  ;;
-                .github/scripts/update_browser_ci_image_pin.py)
-                  browser_image_inputs_changed=true
-                  ;;
-                .github/scripts/compute_browser_image_fingerprint.py)
-                  browser_image_inputs_changed=true
-                  ;;
-                .github/workflows/build-browser-ci-image.yml)
-                  browser_image_inputs_changed=true
-                  ;;
-              esac
-            done <<< "$changed_files"
-          fi
-
-          if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" ]]; then
+          # workflow_call path (called from integration.yml). The planner only
+          # invokes us when a build is actually needed (no pin/cache match), so
+          # we always publish. The publish mode follows the caller's event:
+          # pull_request -> pr-scoped image (consumed by the calling Integration
+          # run via digest output, not by tag polling); main/schedule/dispatch
+          # -> pin-refresh image (operator opens a reviewed image-pin.json PR
+          # afterwards).
+          if [[ -n "$EXPECTED_FINGERPRINT" ]]; then
+            PUSH_OUTPUT="true"
+            if [[ "$EVENT_NAME" == "pull_request" && "$PR_HEAD_REPO" == "$GITHUB_REPOSITORY" ]]; then
+              PUBLISH_MODE="pr"
+              PR_IMAGE_TAG="${IMAGE_NAME}:pr-${PR_NUMBER}-${SHORT_SHA}"
+            elif [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" ]]; then
+              PUBLISH_MODE="pin"
+            elif [[ "$EVENT_NAME" == "schedule" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+              PUBLISH_MODE="pin"
+            else
+              # Untrusted PR (fork) reaching workflow_call should have been
+              # blocked at the planner; defend in depth here too.
+              echo "::error::workflow_call invoked from unsupported event ($EVENT_NAME, head_repo=$PR_HEAD_REPO)." >&2
+              exit 1
+            fi
+          # Standalone path: push to main, weekly schedule, or manual dispatch.
+          # These refresh the reviewed image-pin.json digest. The pull_request
+          # trigger no longer exists on this workflow; PR builds reach us only
+          # through the workflow_call branch above.
+          elif [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" ]]; then
             PUSH_OUTPUT="true"
             PUBLISH_MODE="pin"
           elif [[ "$EVENT_NAME" == "schedule" ]]; then
@@ -177,10 +188,6 @@ jobs:
             if [[ "$DISPATCH_PUSH" == "true" ]]; then
               PUBLISH_MODE="pin"
             fi
-          elif [[ "$browser_image_inputs_changed" == "true" ]]; then
-            PUSH_OUTPUT="true"
-            PUBLISH_MODE="pr"
-            PR_IMAGE_TAG="${IMAGE_NAME}:pr-${PR_NUMBER}-${SHORT_SHA}"
           fi
           {
             echo "source_sha=${SOURCE_SHA}"
@@ -248,8 +255,10 @@ jobs:
         # Image-integrity gate only: prove the baked pip wheelhouse, npm cache,
         # Chromium install, and non-root permissions are usable with
         # --network=none. Full browser behavior stays in the post-publish
-        # offline-e2e job so product regressions do not prevent publishing the
-        # PR/SHA image that Integration needs for diagnostics.
+        # offline-e2e job (standalone path) or in the calling Integration
+        # run's live-webclient-browser matrix (workflow_call path), so product
+        # regressions do not prevent publishing the digest those consumers
+        # need.
         env:
           SHORT_SHA: ${{ steps.decide.outputs.short_sha }}
         run: |
@@ -385,9 +394,16 @@ jobs:
           BUILD_SHORT_SHA: ${{ needs.build.outputs.short_sha }}
           PUBLISH_MODE: ${{ needs.build.outputs.publish_mode }}
           PR_IMAGE_TAG: ${{ needs.build.outputs.pr_image_tag }}
+          INPUTS_FINGERPRINT: ${{ needs.build.outputs.inputs_fingerprint }}
         run: |
           set -euo pipefail
           TAGS="${IMAGE_NAME}:sha-${BUILD_SHORT_SHA}"
+          # Fingerprint-keyed tag is the cache identity used by the consumer's
+          # planner. Any future PR/push with the same inputs_fingerprint resolves
+          # this tag to the existing digest and skips building entirely.
+          # build_sha is only provenance; it MUST NOT participate in cache
+          # identity or in the consumer's runtime trust check.
+          TAGS="${TAGS}"$'\n'"${IMAGE_NAME}:fingerprint-${INPUTS_FINGERPRINT}"
           if [[ "$PUBLISH_MODE" == "pr" ]]; then
             TAGS="${TAGS}"$'\n'"${PR_IMAGE_TAG}"
           fi
@@ -474,14 +490,20 @@ jobs:
               echo '```'
             elif [[ "$PUBLISH_MODE" == "pr" ]]; then
               echo ""
-              echo "_Integration resolves the PR-scoped tag above to this digest before running browser suites._"
+              echo "_Integration consumes this digest directly via the workflow_call output; the PR-scoped tag above is for provenance and manual debugging only._"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   offline-e2e:
     name: Required Offline Browser E2E
     needs: [build, publish]
-    if: needs.build.outputs.should_push == 'true' && needs.publish.result == 'success'
+    # On the standalone path (push to main, weekly schedule, manual dispatch)
+    # this job is the verification gate before the reviewed image-pin.json is
+    # refreshed. On the workflow_call path (integration.yml planner -> build)
+    # the calling Integration run's live-webclient-browser matrix is the
+    # verification, against the same digest we just published, so we skip
+    # offline-e2e here to avoid paying for the full browser regression twice.
+    if: needs.build.outputs.should_push == 'true' && needs.publish.result == 'success' && inputs.expected_fingerprint == ''
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

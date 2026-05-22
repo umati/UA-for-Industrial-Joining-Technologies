@@ -564,10 +564,226 @@ jobs:
   #   bulk browser logic suite does not depend on Windows-hosted Chromium
   #   process stability.
   # ───────────────────────────────────────────────────────────────────────────
+  # ───────────────────────────────────────────────────────────────────────────
+  # Browser CI image preparation DAG
+  #
+  # Replaces the previous "consumer polls GHCR for a tag the producer hasn't
+  # pushed yet" race with three explicit jobs:
+  #
+  #   prepare-browser-image-plan
+  #     Computes the current inputs_fingerprint over the canonical input set
+  #     (.github/docker/ijt-browser-ci/inputs-manifest.json). Compares against
+  #     image-pin.json.inputs_fingerprint, then against the GHCR
+  #     fingerprint-<hex> cache tag, then falls through to "build".
+  #
+  #   build-browser-image
+  #     Reusable workflow_call invocation of build-browser-ci-image.yml. Only
+  #     runs when prepare-browser-image-plan decides plan=build. Receives the
+  #     planner's fingerprint as an explicit, YAML-visible input contract.
+  #
+  #   resolve-browser-image
+  #     Single source of truth for the final digest-qualified image_ref.
+  #     Performs the SINGLE runtime trust check:
+  #       image.metadata.inputs_fingerprint == planner.current_fingerprint
+  #     build_sha is provenance only; same-fingerprint cache hits are accepted
+  #     even when their build_sha differs from $GITHUB_SHA.
+  #
+  # Only live-webclient-browser depends on this DAG. All other Integration jobs
+  # stay parallel; the planner/resolve overhead is ~20-30s on the pin/cache
+  # path, ~12 min on a true cold build (Browser CI inputs newly changed, no
+  # prior cache hit).
+  # ───────────────────────────────────────────────────────────────────────────
+  prepare-browser-image-plan:
+    name: "Browser CI image - resolve plan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      plan: ${{ steps.decide.outputs.plan }}
+      image_name: ${{ steps.decide.outputs.image_name }}
+      candidate_digest: ${{ steps.decide.outputs.candidate_digest }}
+      current_fingerprint: ${{ steps.decide.outputs.current_fingerprint }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide image plan (pin -> cached -> build)
+        id: decide
+        env:
+          PIN_PATH: .github/docker/ijt-browser-ci/image-pin.json
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          IMG="$(jq -r .image "$PIN_PATH")"
+          PIN_DIGEST="$(jq -r .digest "$PIN_PATH")"
+          PIN_FP="$(jq -r '.inputs_fingerprint // empty' "$PIN_PATH")"
+          CUR_FP="$(python .github/scripts/compute_browser_image_fingerprint.py --format value)"
+
+          if ! [[ "$PIN_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error file=${PIN_PATH}::digest must match ^sha256:[0-9a-f]{64}\$, got: ${PIN_DIGEST}" >&2
+            exit 1
+          fi
+          if ! [[ "$CUR_FP" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::computed inputs_fingerprint is not 64 lowercase hex chars: ${CUR_FP}" >&2
+            exit 1
+          fi
+
+          echo "image_name=${IMG}" >> "$GITHUB_OUTPUT"
+          echo "current_fingerprint=${CUR_FP}" >> "$GITHUB_OUTPUT"
+
+          # Plan 1: reviewed pin is current. Use it. This is the common path
+          # for PRs that do NOT touch Browser CI image inputs.
+          if [[ "$PIN_FP" == "$CUR_FP" ]]; then
+            echo "plan=pin" >> "$GITHUB_OUTPUT"
+            echo "candidate_digest=${PIN_DIGEST}" >> "$GITHUB_OUTPUT"
+            echo "Plan: pin (image-pin.json matches current inputs_fingerprint)"
+            exit 0
+          fi
+
+          # Plan 2: GHCR has a fingerprint-keyed image from a prior build of
+          # the same inputs. Reuse it. Cache identity is fingerprint, not SHA;
+          # the digest emitted from this path may have been built from a
+          # different GITHUB_SHA, which is fine - the runtime trust check in
+          # resolve-browser-image verifies fingerprint equality.
+          cache_tag="${IMG}:fingerprint-${CUR_FP}"
+          if cached_digest="$(docker buildx imagetools inspect "$cache_tag" --format '{{json .Manifest.Digest}}' 2>/dev/null | tr -d '"')" \
+             && [[ "$cached_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "plan=cached" >> "$GITHUB_OUTPUT"
+            echo "candidate_digest=${cached_digest}" >> "$GITHUB_OUTPUT"
+            echo "Plan: cached (resolved ${cache_tag} -> ${cached_digest})"
+            exit 0
+          fi
+
+          # Plan 3: cold build. Fork PRs cannot publish to GHCR (no
+          # packages: write on the calling job for forks), so fail fast here
+          # with a maintainer-facing diagnostic instead of starting a build
+          # job that would crash at the push step.
+          if [[ "$EVENT_NAME" == "pull_request" && -n "$PR_HEAD_REPO" && "$PR_HEAD_REPO" != "$GH_REPO" ]]; then
+            echo "::error file=${PIN_PATH}::Untrusted fork PR changed Browser CI image inputs and no fingerprint cache match was found." >&2
+            echo "::error::  current inputs_fingerprint: ${CUR_FP}" >&2
+            echo "::error::  action: a maintainer must re-run the PR from a same-repo branch, or refresh image-pin.json on main to pre-build the matching image." >&2
+            exit 1
+          fi
+
+          echo "plan=build" >> "$GITHUB_OUTPUT"
+          echo "Plan: build (no pin match, no cache hit; reusable workflow will publish)"
+
+  build-browser-image:
+    name: "Browser CI image - build (cold path)"
+    needs: prepare-browser-image-plan
+    if: needs.prepare-browser-image-plan.outputs.plan == 'build'
+    uses: ./.github/workflows/build-browser-ci-image.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    # No `secrets: inherit`: the reusable workflow only needs the auto-
+    # provided GITHUB_TOKEN for GHCR login (always available in called
+    # workflows without inheritance), and packages: write above is the
+    # capability that actually matters. Inheriting would broaden the secret
+    # surface unnecessarily — flagged by zizmor as secrets-inherit.
+    with:
+      expected_fingerprint: ${{ needs.prepare-browser-image-plan.outputs.current_fingerprint }}
+
+  resolve-browser-image:
+    name: "Browser CI image - resolve digest"
+    needs: [prepare-browser-image-plan, build-browser-image]
+    if: always() && needs.prepare-browser-image-plan.result == 'success' && (needs.build-browser-image.result == 'success' || needs.build-browser-image.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      image_ref: ${{ steps.pick.outputs.image_ref }}
+      plan: ${{ needs.prepare-browser-image-plan.outputs.plan }}
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pick final image_ref and validate metadata fingerprint
+        id: pick
+        env:
+          PLAN: ${{ needs.prepare-browser-image-plan.outputs.plan }}
+          IMG: ${{ needs.prepare-browser-image-plan.outputs.image_name }}
+          CANDIDATE_DIGEST: ${{ needs.prepare-browser-image-plan.outputs.candidate_digest }}
+          BUILD_DIGEST: ${{ needs.build-browser-image.outputs.digest }}
+          CURRENT_FINGERPRINT: ${{ needs.prepare-browser-image-plan.outputs.current_fingerprint }}
+        run: |
+          set -euo pipefail
+          case "$PLAN" in
+            pin|cached) DIGEST="$CANDIDATE_DIGEST" ;;
+            build)      DIGEST="$BUILD_DIGEST" ;;
+            *) echo "::error::invalid plan value: ${PLAN}" >&2; exit 1 ;;
+          esac
+          if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::resolved digest is not sha256:<64hex>: ${DIGEST} (plan=${PLAN})" >&2
+            exit 1
+          fi
+          REF="${IMG}@${DIGEST}"
+
+          # SINGLE runtime trust check. inputs_fingerprint baked into the
+          # image at build time must equal the planner's fingerprint over the
+          # current source tree. Same-fingerprint cache hits are accepted
+          # regardless of which GITHUB_SHA produced the image; build_sha is
+          # provenance only and intentionally NOT checked here.
+          docker pull "$REF"
+          actual_fp="$(docker run --rm --network=none "$REF" \
+            python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('inputs_fingerprint',''))")"
+          if [[ "$actual_fp" != "$CURRENT_FINGERPRINT" ]]; then
+            echo "::error::Image metadata inputs_fingerprint does not match the planner's fingerprint." >&2
+            echo "::error::  expected (planner): ${CURRENT_FINGERPRINT}" >&2
+            echo "::error::  actual   (image):   ${actual_fp}" >&2
+            echo "::error::  image:              ${REF}" >&2
+            echo "::error::  plan:               ${PLAN}" >&2
+            exit 1
+          fi
+          echo "image_ref=${REF}" >> "$GITHUB_OUTPUT"
+          {
+            echo "## IJT Browser CI image resolved"
+            echo ""
+            echo "- Plan: \`${PLAN}\`"
+            echo "- Image ref: \`${REF}\`"
+            echo "- Inputs fingerprint: \`${CURRENT_FINGERPRINT}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Resolved IJT_BROWSER_CI_IMAGE=${REF} (plan=${PLAN})"
+
+  # ───────────────────────────────────────────────────────────────────────────
   live-webclient-browser:
     name: "Web Client Browser - ${{ matrix.label }}"
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    needs: resolve-browser-image
+    # Explicit status-check function is REQUIRED here. resolve-browser-image
+    # transitively depends on build-browser-image, which is intentionally
+    # skipped when the planner picks the reviewed pin or a fingerprint cache
+    # hit. GitHub's default success() evaluates the entire transitive needs
+    # graph, so without this if: the Browser matrix would be implicitly
+    # skipped on every PR that does not need a cold image build (the common
+    # case). The !cancelled() check ensures we still respect workflow
+    # cancellation. See invariant
+    # test_live_webclient_browser_job_overrides_default_success_check.
+    if: ${{ !cancelled() && needs.resolve-browser-image.result == 'success' }}
     permissions:
       contents: read
       packages: read
@@ -604,230 +820,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve IJT Browser CI image reference (digest-qualified)
-        id: image
+      - name: Pull IJT Browser CI image (digest from resolve-browser-image)
         env:
-          PIN_PATH: .github/docker/ijt-browser-ci/image-pin.json
-          EVENT_NAME: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-          BEFORE_SHA: ${{ github.event.before || '' }}
-          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          IMG: ${{ needs.resolve-browser-image.outputs.image_ref }}
         run: |
           set -euo pipefail
-          IMG="$(jq -r .image "$PIN_PATH")"
-          DIG="$(jq -r .digest "$PIN_PATH")"
-          CURRENT_INPUTS_FINGERPRINT="$(python .github/scripts/compute_browser_image_fingerprint.py --format value)"
-          PIN_INPUTS_FINGERPRINT="$(jq -r '.inputs_fingerprint // empty' "$PIN_PATH")"
-
-          browser_image_inputs_changed() {
-            local base_sha="$1"
-            local head_sha="$2"
-            local changed_browser_image_input=false
-
-            git fetch --no-tags --depth=1 origin "$base_sha" "$head_sha"
-            changed_files="$(git diff --name-only "$base_sha" "$head_sha")"
-            while IFS= read -r changed; do
-              [[ -n "$changed" ]] || continue
-              case "$changed" in
-                .dockerignore)
-                  changed_browser_image_input=true
-                  ;;
-                constraints.txt)
-                  changed_browser_image_input=true
-                  ;;
-                OPC_UA_Clients/Release2/IJT_Web_Client/package.json)
-                  changed_browser_image_input=true
-                  ;;
-                OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json)
-                  changed_browser_image_input=true
-                  ;;
-                OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt)
-                  changed_browser_image_input=true
-                  ;;
-                OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt)
-                  changed_browser_image_input=true
-                  ;;
-                .github/docker/ijt-browser-ci/image-pin.json)
-                  ;;
-                .github/docker/ijt-browser-ci/README.md)
-                  ;;
-                .github/docker/ijt-browser-ci/*)
-                  changed_browser_image_input=true
-                  ;;
-                .github/scripts/update_browser_ci_image_pin.py)
-                  changed_browser_image_input=true
-                  ;;
-                .github/scripts/compute_browser_image_fingerprint.py)
-                  changed_browser_image_input=true
-                  ;;
-                .github/workflows/build-browser-ci-image.yml)
-                  changed_browser_image_input=true
-                  ;;
-              esac
-            done <<< "$changed_files"
-
-            [[ "$changed_browser_image_input" == "true" ]]
-          }
-
-          pull_tag_and_resolve_digest() {
-            local tag="$1"
-            local source="$2"
-            local expected_sha="$3"
-            local attempt=0
-            local max_attempts=30
-            local delay=20
-
-            echo "Waiting for ${source}: ${tag}"
-            until docker pull "$tag"; do
-              attempt=$((attempt + 1))
-              if [ "$attempt" -ge "$max_attempts" ]; then
-                echo "::error file=${PIN_PATH}::Timed out waiting for ${source}." >&2
-                echo "::error::  tag:      ${tag}" >&2
-                echo "::error::  workflow: .github/workflows/build-browser-ci-image.yml" >&2
-                echo "::error::  reason:   browser image input changed, but no matching PR/SHA image was published." >&2
-                exit 1
-              fi
-              echo "image tag not ready (${attempt}/${max_attempts}); retrying in ${delay}s..." >&2
-              sleep "$delay"
-            done
-
-            resolved_ref="$(
-              docker image inspect "$tag" --format '{{range .RepoDigests}}{{println .}}{{end}}' \
-                | grep -F "${IMG}@sha256:" \
-                | head -n 1 || true
-            )"
-            if [[ -z "$resolved_ref" ]]; then
-              echo "::error file=${PIN_PATH}::Pulled ${tag}, but Docker did not report a ${IMG}@sha256 digest." >&2
-              exit 1
-            fi
-            DIG="${resolved_ref##*@}"
-            echo "Resolved ${source} to ${IMG}@${DIG}"
-
-            actual_sha="$(
-              docker run --rm --network=none "${IMG}@${DIG}" \
-                python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('build_sha',''))"
-            )"
-            if [[ "$actual_sha" != "$expected_sha" ]]; then
-              echo "::error file=${PIN_PATH}::Resolved ${source}, but image metadata does not match the expected source SHA." >&2
-              echo "::error::  expected: ${expected_sha}" >&2
-              echo "::error::  actual:   ${actual_sha}" >&2
-              echo "::error::  image:    ${IMG}@${DIG}" >&2
-              exit 1
-            fi
-
-            actual_fingerprint="$(
-              docker run --rm --network=none "${IMG}@${DIG}" \
-                python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('inputs_fingerprint',''))"
-            )"
-            if [[ "$actual_fingerprint" != "$CURRENT_INPUTS_FINGERPRINT" ]]; then
-              echo "::error file=${PIN_PATH}::Resolved ${source}, but image metadata does not match the current Browser CI input fingerprint." >&2
-              echo "::error::  expected: ${CURRENT_INPUTS_FINGERPRINT}" >&2
-              echo "::error::  actual:   ${actual_fingerprint}" >&2
-              echo "::error::  image:    ${IMG}@${DIG}" >&2
-              echo "::error::  manifest: .github/docker/ijt-browser-ci/inputs-manifest.json" >&2
-              exit 1
-            fi
-          }
-
-          image_source="reviewed image-pin.json"
-          null_sha="0000000000000000000000000000000000000000"
-          if [[ "$EVENT_NAME" == "pull_request" && "$PR_HEAD_REPO" == "$GITHUB_REPOSITORY" ]]; then
-            if browser_image_inputs_changed "$PR_BASE_SHA" "$PR_HEAD_SHA"; then
-              short_sha="${GITHUB_SHA::7}"
-              pull_tag_and_resolve_digest "${IMG}:pr-${PR_NUMBER}-${short_sha}" "PR-scoped browser image" "$GITHUB_SHA"
-              image_source="PR-scoped browser image"
-            fi
-          elif [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" && -n "$BEFORE_SHA" && "$BEFORE_SHA" != "$null_sha" ]]; then
-            if browser_image_inputs_changed "$BEFORE_SHA" "$GITHUB_SHA"; then
-              short_sha="${GITHUB_SHA::7}"
-              pull_tag_and_resolve_digest "${IMG}:sha-${short_sha}" "main SHA browser image" "$GITHUB_SHA"
-              image_source="main SHA browser image"
-            fi
-          fi
-
-          if [[ "$image_source" == "reviewed image-pin.json" ]]; then
-            if ! [[ "$PIN_INPUTS_FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]; then
-              echo "::error file=${PIN_PATH}::Reviewed Browser CI image pin is missing inputs_fingerprint." >&2
-              echo "::error::  current:  ${CURRENT_INPUTS_FINGERPRINT}" >&2
-              echo "::error::  manifest: .github/docker/ijt-browser-ci/inputs-manifest.json" >&2
-              echo "::error::  action:   rebuild/publish ijt-browser-ci and refresh image-pin.json through the reviewed pin flow." >&2
-              exit 1
-            fi
-            if [[ "$PIN_INPUTS_FINGERPRINT" != "$CURRENT_INPUTS_FINGERPRINT" ]]; then
-              echo "::error file=${PIN_PATH}::Browser CI image pin is stale for the current dependency inputs." >&2
-              echo "::error::  pinned:   ${PIN_INPUTS_FINGERPRINT}" >&2
-              echo "::error::  current:  ${CURRENT_INPUTS_FINGERPRINT}" >&2
-              echo "::error::  image:    ${IMG}@${DIG}" >&2
-              echo "::error::  manifest: .github/docker/ijt-browser-ci/inputs-manifest.json" >&2
-              echo "::error::  action:   rebuild/publish ijt-browser-ci and refresh image-pin.json through the reviewed pin flow." >&2
-              exit 1
-            fi
-            actual_fingerprint="$(
-              docker run --rm --network=none "${IMG}@${DIG}" \
-                python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('inputs_fingerprint',''))"
-            )"
-            if [[ "$actual_fingerprint" != "$CURRENT_INPUTS_FINGERPRINT" ]]; then
-              echo "::error file=${PIN_PATH}::Reviewed Browser CI image metadata does not match the current input fingerprint." >&2
-              echo "::error::  pinned:   ${PIN_INPUTS_FINGERPRINT}" >&2
-              echo "::error::  current:  ${CURRENT_INPUTS_FINGERPRINT}" >&2
-              echo "::error::  actual:   ${actual_fingerprint}" >&2
-              echo "::error::  image:    ${IMG}@${DIG}" >&2
-              echo "::error::  manifest: .github/docker/ijt-browser-ci/inputs-manifest.json" >&2
-              echo "::error::  action:   rebuild/publish ijt-browser-ci and refresh image-pin.json through the reviewed pin flow." >&2
-              exit 1
-            fi
-          fi
-
-          if ! [[ "$DIG" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error file=$PIN_PATH::digest is not a valid sha256:<64hex> reference: $DIG" >&2
+          # No tag polling, no inferred identity. resolve-browser-image already
+          # pulled this digest on its runner and validated its metadata
+          # fingerprint; this pull is a per-runner cache warm-up so the
+          # subsequent docker run is local.
+          if ! [[ "$IMG" =~ @sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::IJT_BROWSER_CI_IMAGE is not digest-qualified: ${IMG}" >&2
             exit 1
           fi
-          REF="${IMG}@${DIG}"
-          if ! [[ "$REF" =~ @sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error file=$PIN_PATH::Resolved IJT_BROWSER_CI_IMAGE is not digest-qualified: $REF" >&2
-            exit 1
-          fi
-          echo "ijt_browser_ci_image=$REF" >> "$GITHUB_OUTPUT"
-          echo "image_source=${image_source}" >> "$GITHUB_OUTPUT"
-          echo "Resolved IJT_BROWSER_CI_IMAGE=$REF (${image_source}; inputs=${CURRENT_INPUTS_FINGERPRINT})"
-
-      - name: Pull IJT Browser CI image (3-attempt retry)
-        env:
-          IMG: ${{ steps.image.outputs.ijt_browser_ci_image }}
-          IMAGE_SOURCE: ${{ steps.image.outputs.image_source }}
-          PIN_PATH: .github/docker/ijt-browser-ci/image-pin.json
-        run: |
-          set -euo pipefail
-          # Retry 3x with backoff. GHCR is the SPOF this job depends on; if all
-          # three attempts fail the diagnostic must name the digest, the
-          # registry, and the image-build workflow so the operator can decide
-          # whether to re-run the publish workflow or wait out a GHCR incident.
-          attempt=0
-          max_attempts=3
-          delay=5
-          until docker pull "$IMG"; do
-            attempt=$((attempt + 1))
-            if [ "$attempt" -ge "$max_attempts" ]; then
-              echo "::error file=${PIN_PATH}::Failed to pull IJT Browser CI image after ${max_attempts} attempts." >&2
-              echo "::error::  image:    ${IMG}" >&2
-              echo "::error::  source:   ${IMAGE_SOURCE}" >&2
-              echo "::error::  registry: ghcr.io (GHCR)" >&2
-              echo "::error::  pin file: ${PIN_PATH}" >&2
-              echo "::error::  republish: re-run .github/workflows/build-browser-ci-image.yml to regenerate the matching image, then re-run Integration." >&2
-              exit 1
-            fi
-            echo "docker pull attempt ${attempt}/${max_attempts} failed; retrying in ${delay}s..." >&2
-            sleep "$delay"
-            delay=$((delay * 2))
-          done
+          docker pull "$IMG"
           docker image inspect "$IMG" --format 'id={{.Id}} created={{.Created}}'
 
       - name: Run Web Client browser e2e suite (offline, --network=none)
         env:
-          IMG: ${{ steps.image.outputs.ijt_browser_ci_image }}
+          IMG: ${{ needs.resolve-browser-image.outputs.image_ref }}
           SUITE: ${{ matrix.suite }}
           SHARD: ${{ matrix.feature_shard || '' }}
         run: |

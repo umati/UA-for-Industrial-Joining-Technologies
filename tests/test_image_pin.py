@@ -152,16 +152,25 @@ def test_build_workflow_path_filters_cover_browser_ci_inputs_manifest() -> None:
     workflow = yaml.safe_load(_IMAGE_BUILD_WORKFLOW.read_text(encoding="utf-8"))
     triggers = workflow.get("on", workflow.get(True, {}))
     manifest_paths = _load_inputs_manifest()["paths"]
-    for event_name in ("push", "pull_request"):
-        paths = triggers[event_name]["paths"]
-        missing = [path for path in manifest_paths if not _workflow_path_includes(path, paths)]
-        assert not missing, (
-            f"build-browser-ci-image.yml {event_name} paths must cover every "
-            "Browser CI image input manifest path: " + ", ".join(missing)
-        )
+    # Producer is triggered directly on push to main / schedule / workflow_dispatch /
+    # workflow_call. There is intentionally no pull_request trigger: PR-time
+    # builds go through integration.yml's prepare-browser-image-plan -> build-
+    # browser-image (workflow_call) DAG, so producer and consumer share a
+    # single execution graph instead of synchronising through GHCR tag polling.
+    assert "pull_request" not in triggers, (
+        "build-browser-ci-image.yml must not declare a pull_request trigger; "
+        "PR builds go through integration.yml workflow_call so producer and "
+        "consumer are one execution graph."
+    )
+    paths = triggers["push"]["paths"]
+    missing = [path for path in manifest_paths if not _workflow_path_includes(path, paths)]
+    assert not missing, (
+        "build-browser-ci-image.yml push paths must cover every "
+        "Browser CI image input manifest path: " + ", ".join(missing)
+    )
 
-        assert not _workflow_path_includes(".github/docker/ijt-browser-ci/image-pin.json", paths)
-        assert not _workflow_path_includes(".github/docker/ijt-browser-ci/README.md", paths)
+    assert not _workflow_path_includes(".github/docker/ijt-browser-ci/image-pin.json", paths)
+    assert not _workflow_path_includes(".github/docker/ijt-browser-ci/README.md", paths)
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +248,7 @@ def test_ijt_browser_ci_image_env_var_is_workflow_or_image_config_only() -> None
     allowed_exact = {
         Path(".github/scripts/update_browser_ci_image_pin.py"),
         Path("tests/test_image_pin.py"),
+        Path("tests/test_ci_synchronization_invariants.py"),
     }
     offenders: list[str] = []
 
@@ -466,19 +476,38 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     workflow_text = _IMAGE_BUILD_WORKFLOW.read_text(encoding="utf-8")
     workflow = yaml.safe_load(workflow_text)
     triggers = workflow.get("on", workflow.get(True, {}))
-    for event_name in ("push", "pull_request"):
-        paths = triggers[event_name]["paths"]
-        docker_glob_index = paths.index(".github/docker/ijt-browser-ci/**")
-        pin_exclude_index = paths.index("!.github/docker/ijt-browser-ci/image-pin.json")
-        readme_exclude_index = paths.index("!.github/docker/ijt-browser-ci/README.md")
-        assert docker_glob_index < pin_exclude_index, (
-            "image-pin.json must be excluded after the docker directory include; "
-            "otherwise the automation branch can publish a fresh image and loop."
-        )
-        assert docker_glob_index < readme_exclude_index, (
-            "README.md must be excluded after the docker directory include; "
-            "documentation-only edits must not rebuild and republish the browser image."
-        )
+    paths = triggers["push"]["paths"]
+    docker_glob_index = paths.index(".github/docker/ijt-browser-ci/**")
+    pin_exclude_index = paths.index("!.github/docker/ijt-browser-ci/image-pin.json")
+    readme_exclude_index = paths.index("!.github/docker/ijt-browser-ci/README.md")
+    assert docker_glob_index < pin_exclude_index, (
+        "image-pin.json must be excluded after the docker directory include; "
+        "otherwise the automation branch can publish a fresh image and loop."
+    )
+    assert docker_glob_index < readme_exclude_index, (
+        "README.md must be excluded after the docker directory include; "
+        "documentation-only edits must not rebuild and republish the browser image."
+    )
+
+    # workflow_call is the producer's PR-time entry point, invoked from
+    # integration.yml's build-browser-image job. The expected_fingerprint
+    # input is the YAML-visible cache identity contract: planner computes a
+    # fingerprint, build job asserts equality, and the published image
+    # metadata carries the same fingerprint so the consumer can do a single
+    # runtime trust check (fingerprint equality) instead of polling.
+    assert "workflow_call" in triggers, (
+        "build-browser-ci-image.yml must expose workflow_call so integration.yml "
+        "can invoke it as part of one execution graph."
+    )
+    wc = triggers["workflow_call"]
+    assert wc["inputs"]["expected_fingerprint"]["required"] is True
+    assert wc["inputs"]["expected_fingerprint"]["type"] == "string"
+    wc_outputs = wc["outputs"]
+    assert wc_outputs["digest"]["value"] == "${{ jobs.publish.outputs.digest }}"
+    assert wc_outputs["source_sha"]["value"] == "${{ jobs.build.outputs.source_sha }}"
+    assert (
+        wc_outputs["inputs_fingerprint"]["value"] == "${{ jobs.build.outputs.inputs_fingerprint }}"
+    )
 
     assert workflow["permissions"] == {"contents": "read"}
     jobs = workflow["jobs"]
@@ -498,6 +527,19 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
         "workflow checkout SHA."
     )
 
+    # Fingerprint guard: when invoked via workflow_call the build step must
+    # assert the planner's expected_fingerprint matches what this checkout
+    # computes. Drift between planner and build is a hard failure.
+    fingerprint_guard = next(
+        step
+        for step in build_job["steps"]
+        if step.get("name") == "Assert caller's expected fingerprint matches this checkout"
+    )
+    assert "inputs.expected_fingerprint" in (fingerprint_guard.get("if") or "")
+    fp_guard_body = fingerprint_guard["run"]
+    assert "EXPECTED_FINGERPRINT" in fp_guard_body
+    assert "COMPUTED_FINGERPRINT" in fp_guard_body
+
     decide_step = next(
         step
         for step in build_job["steps"]
@@ -505,23 +547,21 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     )
     decide_body = decide_step["run"]
     assert "PR_HEAD_REPO" in decide_step["env"]
-    assert "PR_HEAD_SHA" in decide_step["env"]
+    assert "EXPECTED_FINGERPRINT" in decide_step["env"]
     assert 'SOURCE_SHA="$GITHUB_SHA"' in decide_body
     assert "trusted_dependency_bot" not in decide_body
-    assert "browser_image_inputs_changed=false" in decide_body
-    assert "OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json" in decide_body
-    assert ".github/docker/ijt-browser-ci/*" in decide_body
-    assert ".github/scripts/compute_browser_image_fingerprint.py" in decide_body
-    assert ".github/docker/ijt-browser-ci/image-pin.json)" in decide_body
-    assert ".github/docker/ijt-browser-ci/README.md)" in decide_body
-    assert decide_body.index(".github/docker/ijt-browser-ci/image-pin.json)") < decide_body.index(
-        ".github/docker/ijt-browser-ci/*)"
-    )
-    assert decide_body.index(".github/docker/ijt-browser-ci/README.md)") < decide_body.index(
-        ".github/docker/ijt-browser-ci/*)"
-    )
     assert 'PUBLISH_MODE="pr"' in decide_body
     assert 'PR_IMAGE_TAG="${IMAGE_NAME}:pr-${PR_NUMBER}-${SHORT_SHA}"' in decide_body
+    # The producer no longer inlines a `browser_image_inputs_changed` shell
+    # function; integration.yml's planner owns "did inputs change?" via the
+    # compute_browser_image_fingerprint.py contract, and only invokes
+    # workflow_call when a build is actually needed.
+    assert "browser_image_inputs_changed" not in decide_body, (
+        "Producer must not re-derive whether inputs changed; the planner in "
+        "integration.yml is the single source of truth via inputs-manifest.json + "
+        "compute_browser_image_fingerprint.py."
+    )
+
     build_body = "\n".join(str(step.get("run", "")) for step in build_job["steps"])
     assert "compute_browser_image_fingerprint.py --format github-output" in build_body
     assert "inputs_fingerprint" in build_body
@@ -548,8 +588,10 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "${{ steps.fingerprint.outputs.inputs_fingerprint }}" not in summary_step["run"]
     assert "web-client-e2e-regression" not in build_body, (
         "The image publish gate must validate image integrity only. Full browser "
-        "behavior belongs in the post-publish offline-e2e job so product "
-        "regressions do not prevent publishing the PR/SHA image Integration needs."
+        "behavior belongs in the post-publish offline-e2e job (standalone path) "
+        "or in the calling Integration run's live-webclient-browser matrix "
+        "(workflow_call path), so product regressions do not prevent publishing "
+        "the digest those consumers need."
     )
     assert "npm ci --legacy-peer-deps --offline --no-audit --no-fund" in build_body
     assert "--find-links /opt/ijt-browser-ci/pip-wheelhouse" in build_body
@@ -577,9 +619,17 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "pull-requests: write" not in workflow_text
     offline_job = jobs["offline-e2e"]
     assert offline_job["needs"] == ["build", "publish"]
-    assert (
-        offline_job["if"]
-        == "needs.build.outputs.should_push == 'true' && needs.publish.result == 'success'"
+    # The offline-e2e gate runs on the standalone path only (push to main,
+    # schedule, workflow_dispatch). When invoked via workflow_call from
+    # integration.yml, the calling run's live-webclient-browser matrix is
+    # the verification against the same digest, so paying for the full
+    # browser regression twice would be redundant.
+    offline_if = offline_job["if"]
+    assert "needs.build.outputs.should_push == 'true'" in offline_if
+    assert "needs.publish.result == 'success'" in offline_if
+    assert "inputs.expected_fingerprint == ''" in offline_if, (
+        "offline-e2e must be skipped on the workflow_call path; integration.yml's "
+        "live-webclient-browser matrix is the verification for that path."
     )
     assert offline_job["permissions"] == {"contents": "read", "packages": "read"}
     assert offline_job["timeout-minutes"] == 45
@@ -611,7 +661,15 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     )
     assert "PUBLISH_MODE" in publish_tags_step["env"]
     assert "PR_IMAGE_TAG" in publish_tags_step["env"]
+    assert "INPUTS_FINGERPRINT" in publish_tags_step["env"]
     assert "${PR_IMAGE_TAG}" in publish_tags_step["run"]
+    # The fingerprint-<hex> tag is the cache identity used by integration.yml's
+    # planner. Repeated Renovate PRs with identical Browser CI image inputs
+    # resolve this tag to an existing digest and skip the build entirely.
+    assert "${IMAGE_NAME}:fingerprint-${INPUTS_FINGERPRINT}" in publish_tags_step["run"], (
+        "Publish must include a fingerprint-<hex> tag so future same-input "
+        "builds can short-circuit at the planner."
+    )
     publish_verify_step = next(
         step
         for step in publish_job["steps"]
@@ -653,7 +711,10 @@ def test_browser_ci_phase0_runtime_probe_uses_writable_home_paths() -> None:
 
 
 def test_integration_workflow_runs_for_image_pin_updates() -> None:
-    """Pin PRs and merges must exercise the browser Integration workflow."""
+    """Pin PRs and merges must exercise the browser Integration workflow, and the
+    planner (prepare-browser-image-plan) must read image-pin.json + compute the
+    current fingerprint to decide pin / cached / build.
+    """
     import yaml
 
     workflow = yaml.safe_load(_INTEGRATION_WORKFLOW.read_text(encoding="utf-8"))
@@ -668,30 +729,68 @@ def test_integration_workflow_runs_for_image_pin_updates() -> None:
         "main-branch run for the reviewed digest."
     )
 
-    resolve_step = next(
+    # The legacy in-job resolver step in live-webclient-browser is gone.
+    # Image identity now flows through three explicit jobs: planner (reads
+    # pin + computes fingerprint), conditional reusable-workflow build, and
+    # resolver (picks pin / cached / build digest and runs the single
+    # fingerprint-equality runtime trust check).
+    planner_job = workflow["jobs"]["prepare-browser-image-plan"]
+    decide_step = next(
         step
-        for step in workflow["jobs"]["live-webclient-browser"]["steps"]
-        if step.get("name") == "Resolve IJT Browser CI image reference (digest-qualified)"
+        for step in planner_job["steps"]
+        if step.get("name") == "Decide image plan (pin -> cached -> build)"
     )
-    resolve_body = resolve_step["run"]
-    assert ".github/docker/ijt-browser-ci/image-pin.json)" in resolve_body
-    assert ".github/docker/ijt-browser-ci/README.md)" in resolve_body
-    assert resolve_body.index(".github/docker/ijt-browser-ci/image-pin.json)") < resolve_body.index(
-        ".github/docker/ijt-browser-ci/*)"
+    assert (
+        decide_step.get("env", {}).get("PIN_PATH") == ".github/docker/ijt-browser-ci/image-pin.json"
     )
-    assert resolve_body.index(".github/docker/ijt-browser-ci/README.md)") < resolve_body.index(
-        ".github/docker/ijt-browser-ci/*)"
+    decide_body = decide_step["run"]
+    assert "compute_browser_image_fingerprint.py --format value" in decide_body
+    assert "PIN_FP" in decide_body and "CUR_FP" in decide_body
+    assert "plan=pin" in decide_body
+    assert "plan=cached" in decide_body
+    assert "plan=build" in decide_body
+    assert "fingerprint-${CUR_FP}" in decide_body, (
+        "Planner must look up the fingerprint-<hex> GHCR tag as the cache "
+        "identity before falling through to a cold build."
     )
-    assert "compute_browser_image_fingerprint.py --format value" in resolve_body
-    assert "CURRENT_INPUTS_FINGERPRINT" in resolve_body
-    assert "PIN_INPUTS_FINGERPRINT" in resolve_body
-    assert ".github/scripts/compute_browser_image_fingerprint.py" in resolve_body
-    assert "Browser CI image pin is stale for the current dependency inputs" in resolve_body
-    assert "Reviewed Browser CI image metadata does not match the current input fingerprint" in (
-        resolve_body
+
+    # live-webclient-browser must consume the planner+resolver chain via
+    # needs:, not by re-resolving the image inside its own steps.
+    browser_job = workflow["jobs"]["live-webclient-browser"]
+    needs = browser_job.get("needs")
+    if isinstance(needs, str):
+        needs = [needs]
+    assert "resolve-browser-image" in (needs or []), (
+        "live-webclient-browser must declare `needs: resolve-browser-image` so "
+        "image identity is a passed-forward job output, not a tag poll."
     )
-    assert "inputs_fingerprint" in resolve_body
-    assert "actual_fingerprint" in resolve_body
+
+    # Resolver pick step performs the SINGLE runtime trust check:
+    # image.metadata.inputs_fingerprint == planner.current_fingerprint.
+    # build_sha is provenance only; cached cross-PR images with identical
+    # fingerprints but different build SHAs are accepted.
+    resolve_job = workflow["jobs"]["resolve-browser-image"]
+    pick_step = next(
+        step
+        for step in resolve_job["steps"]
+        if step.get("name") == "Pick final image_ref and validate metadata fingerprint"
+    )
+    pick_body = pick_step["run"]
+    assert "CURRENT_FINGERPRINT" in pick_step["env"]
+    assert "/opt/ijt-browser-ci/metadata.json" in pick_body
+    assert "inputs_fingerprint" in pick_body
+    assert "actual_fp" in pick_body
+    # No build_sha equality check on the consumer side. Cache hits may have
+    # been built from a different GITHUB_SHA with identical inputs. Strip
+    # comment lines so a documenting comment can't trip the negative.
+    pick_code_only = "\n".join(
+        line for line in pick_body.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "build_sha" not in pick_code_only, (
+        "Resolver code must NOT compare image build_sha to current GITHUB_SHA. "
+        "build_sha is provenance only; fingerprint equality is the runtime "
+        "trust check for cache reuse to work."
+    )
 
 
 def test_browser_ci_dockerfile_derives_asyncua_runtime_constraint_from_wheel() -> None:
