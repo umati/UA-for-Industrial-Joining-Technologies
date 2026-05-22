@@ -1,65 +1,81 @@
 ## IJT OPC UA — System Tests
 
-> ✅ **All 7 / 7 jobs passed &nbsp;·&nbsp; 2,586 tests &nbsp;·&nbsp; 0 failed &nbsp;·&nbsp; 154 skipped**
+> ✅ **All 7 / 7 jobs passed**
 > **Branch:** `c2-phase-1b` &nbsp;·&nbsp; **Commit:** `abcdef12` &nbsp;·&nbsp; **Run:** [#84](https://github.example/ijt/actions/runs/84)
 > Nightly and manual system tests — live OPC UA server behavior, browser E2E suites, Docker packaging, and conformance verification.
 
 ---
 
-<a id="system-validation-overview"></a>
+<a id="system-outcome-overview"></a>
 
-### Validation Overview
+### 📊 Outcome Overview
+
+> ✅ **Status:** 0 failed jobs &nbsp;·&nbsp; 0 drift warnings &nbsp;·&nbsp; 0 skip-policy failures &nbsp;·&nbsp; 0 artifact warnings
+
+| 🚦  | Outcome | Count |
+| :-: | :------ | ----: |
+| ✅  | Passed  | 2,432 |
+| ❌  | Failed  |     0 |
+| ⏭️  | Skipped |   154 |
+| 🧮  | Total   | 2,586 |
+| 🛠️  | Jobs    | 7 / 7 |
+
+---
+
+<a id="system-lane-results"></a>
+
+### 🧪 Lane Results — 9 lanes
 
 | Lane | Result | Test Results |
 |:-----|:-------|:---------|
-| OPC UA Server Docker smoke | ✅ success | ✅ 10, 0 skipped |
-| Web Client Docker tests | ✅ success | Python: ✅ 680, 0 skipped<br>JavaScript: ✅ 522, 0 skipped |
-| Test Client conformance | ✅ success | ✅ 1,043, 154 skipped |
-| Web Client live suites | ✅ success | ✅ 127, 0 skipped |
-| Browser E2E suites | ✅ success | ✅ 66, 0 skipped |
-| Console Client live | ✅ success | ✅ 18, 0 skipped |
-| Console Client OPC UA security | ⏭️ skipped | Not reported |
-| C# Client live | ✅ success | ✅ 110, 0 skipped |
-| C# Client OPC UA security | ⏭️ skipped | Not reported |
+| OPC UA Server Docker smoke | success ✅ | 10 ✅, 0 skipped |
+| Web Client Docker tests | success ✅ | Python: 680 ✅, 0 skipped<br>JavaScript: 522 ✅, 0 skipped |
+| Test Client conformance | success ✅ | 1,043 ✅, 154 skipped |
+| Web Client live suites | success ✅ | 127 ✅, 0 skipped |
+| Browser E2E suites | success ✅ | 66 ✅, 0 skipped |
+| Console Client live | success ✅ | 18 ✅, 0 skipped |
+| Console Client OPC UA security | skipped ⏭️ | Not reported |
+| C# Client live | success ✅ | 110 ✅, 0 skipped |
+| C# Client OPC UA security | skipped ⏭️ | Not reported |
 
 ---
 
 <a id="system-component-test-results"></a>
 
-### Component Test Results
+### 🧬 Component Test Results — 5 components
 
 | Component | Validation Scope | Container Test Results | Live/System Test Results | Notes |
 |:----------|:-----------------|:-------------------|:---------------------|:------|
-| OPC UA Server | Linux container plus Windows live server processes | ✅ 10, 0 skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
-| Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | Python: ✅ 680, 0 skipped<br>JavaScript: ✅ 522, 0 skipped | Python/WebSocket live: ✅ 127, 0 skipped<br>Browser E2E: ✅ 66, 0 skipped | Headless Chromium baked into the IJT Browser CI image |
-| Test Client | Live conformance harness against OPC UA server | Not applicable | Smoke: ✅ 10, 0 skipped<br>Conformance: ✅ 1,043, 154 skipped | Not Implemented fixture marker |
-| Console Client | Live Python client behavior and OPC UA security coverage against OPC UA server | Not reported | ✅ 18, 0 skipped | No additional notes |
-| C# Client | Nightly xUnit live behavior and OPC UA security coverage against OPC UA server | Not reported | ✅ 110, 0 skipped | Nightly drift detection |
+| OPC UA Server | Linux container plus Windows live server processes | 10 ✅, 0 skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
+| Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | Python: 680 ✅, 0 skipped<br>JavaScript: 522 ✅, 0 skipped | Python/WebSocket live: 127 ✅, 0 skipped<br>Browser E2E: 66 ✅, 0 skipped | Headless Chromium baked into the IJT Browser CI image |
+| Test Client | Live conformance harness against OPC UA server | Not applicable | Smoke: 10 ✅, 0 skipped<br>Conformance: 1,043 ✅, 154 skipped | Not Implemented fixture marker |
+| Console Client | Live Python client behavior and OPC UA security coverage against OPC UA server | Not reported | 18 ✅, 0 skipped | No additional notes |
+| C# Client | Nightly xUnit live behavior and OPC UA security coverage against OPC UA server | Not reported | 110 ✅, 0 skipped | Nightly drift detection |
 
 ---
 
 <a id="system-conformance-overview"></a>
 
-### Conformance Overview
+### 📑 Conformance Overview — 2 suites
 
 | Suite | Port | Live Tests | Skipped | Notes |
 |:------|-----:|----------:|--------:|:------|
-| Test Client — Smoke sanity | 40462 | ✅ 10 | 0 | Server and namespace reachability |
-| Test Client — Conformance | 40462 | ✅ 1,043 | 154 | Not Implemented fixture marker |
+| Test Client — Smoke sanity | 40462 | 10 ✅ | 0 | Server and namespace reachability |
+| Test Client — Conformance | 40462 | 1,043 ✅ | 154 | Not Implemented fixture marker |
 
 ---
 
 <a id="system-performance-hotspots"></a>
 
-### Performance Hotspots
+### ⏱️ Performance Hotspots
 
 > Source order: current workflow run jobs API first, then Web Client timing JSON, C# TRX artifacts, and Test Client JUnit durations when available. Missing timing data is omitted rather than estimated.
 
 | Source | Item | Duration | Status |
 |:-------|:-----|---------:|:-------|
-| Browser timing artifact | 🏁 Browser Features (1/2) | 2.1 min | 📊 recorded |
-| C# TRX class | C# Live — SlowTests | 1.2 min | 📊 recorded |
-| C# TRX class | C# Live — FastTests | 5.5 s | 📊 recorded |
+| Browser timing artifact | 🏁 Browser Features (1/2) | 2.1 min | recorded 📊 |
+| C# TRX class | C# Live — SlowTests | 1.2 min | recorded 📊 |
+| C# TRX class | C# Live — FastTests | 5.5 s | recorded 📊 |
 
 #### Bottleneck Spotlight
 
@@ -99,13 +115,13 @@ Per-test durations are not available in the current JUnit artifact.
 
 <a id="system-warnings-drift"></a>
 
-### Warnings and Drift
+### ⚠️ Warnings and Drift
 
 No skip policy failures, test-count drift warnings, or artifact warnings.
 
 ---
 
-### Artifacts and Drilldown
+### 📎 Artifacts and Drilldown
 
 > 📦 **Artifacts** — JUnit XML &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down
 > 🔒 Security audit (zizmor) results are in **CI** → Security → Code Scanning
@@ -125,12 +141,12 @@ No skip policy failures, test-count drift warnings, or artifact warnings.
 
 <a id="system-per-client-quick-index"></a>
 
-### Per-Client Quick Index
+### 📚 Per-Client Quick Index — 5 clients
 
 | Client / Component | Appears In |
 |:-------------------|:-----------|
-| OPC UA Server | [Validation Overview](#system-validation-overview); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
-| Web Client | [Validation Overview](#system-validation-overview); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
-| Test Client | [Validation Overview](#system-validation-overview); [Component Test Results](#system-component-test-results); [Conformance Overview](#system-conformance-overview); [Performance Hotspots](#system-performance-hotspots) |
-| Console Client | [Validation Overview](#system-validation-overview); [Component Test Results](#system-component-test-results) |
-| C# Client | [Validation Overview](#system-validation-overview); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
+| OPC UA Server | [Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
+| Web Client | [Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
+| Test Client | [Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Conformance Overview](#system-conformance-overview); [Performance Hotspots](#system-performance-hotspots) |
+| Console Client | [Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results) |
+| C# Client | [Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |

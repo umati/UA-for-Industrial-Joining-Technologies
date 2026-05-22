@@ -127,6 +127,63 @@ def _md_cell(text: str) -> str:
     return re.sub(r"\|", "\\|", text)
 
 
+def _cell_width(s: str) -> int:
+    """Approximate display width. VS-16 = 0; known emoji ranges = 2; else 1."""
+    w = 0
+    for ch in s:
+        if ch == "\ufe0f":
+            continue
+        cp = ord(ch)
+        if cp >= 0x1F300:
+            w += 2
+        elif 0x2300 <= cp <= 0x23FF:
+            w += 2
+        elif 0x2600 <= cp <= 0x27BF:
+            w += 2
+        elif cp == 0x2139:
+            w += 2
+        else:
+            w += 1
+    return w
+
+
+def _pad_cell(cell: str, width: int, align: str) -> str:
+    pad = width - _cell_width(cell)
+    if pad <= 0:
+        return cell
+    if align == "right":
+        return " " * pad + cell
+    if align == "center":
+        left = pad // 2
+        right = pad - left
+        return " " * left + cell + " " * right
+    return cell + " " * pad
+
+
+def pad_table_rows(headers: list[str], rows: list[list[str]], aligns: list[str]) -> list[str]:
+    """Render padded Markdown table lines (header + separator + data rows)."""
+    all_data = [headers] + rows
+    # Min width 3 so the GFM separator always contains >=1 hyphen between
+    # optional colons; otherwise center-align on a 2-cell icon column would
+    # emit "::" which is invalid GFM.
+    widths = [max(3, max(_cell_width(r[i]) for r in all_data)) for i in range(len(headers))]
+    out = []
+    out.append("| " + " | ".join(_pad_cell(h, widths[i], aligns[i]) for i, h in enumerate(headers)) + " |")
+    sep_parts = []
+    for i, a in enumerate(aligns):
+        dashes = "-" * widths[i]
+        if a == "right":
+            sep_parts.append(dashes[:-1] + ":")
+        elif a == "center":
+            sep_parts.append(":" + dashes[1:-1] + ":")
+        else:
+            sep_parts.append(":" + dashes[1:])
+    out.append("| " + " | ".join(sep_parts) + " |")
+    for r in rows:
+        out.append("| " + " | ".join(_pad_cell(r[i], widths[i], aligns[i]) for i in range(len(headers))) + " |")
+    return out
+
+
 def _status_badge(passed: int, failed: int, errors: int) -> str:
     if failed + errors > 0:
         return f"{_RUN_RESULT_ICONS['failed']} **FAILED**"
@@ -713,7 +770,15 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
         description = str(facet.get("description") or "").strip().replace("\n", " ")
         rows.append((rank, name, icon, label, description))
     rows.sort(key=lambda item: (item[0], item[1]))
-    lines = ["## Capability Support", ""]
+    summary_counts = Counter(label for _rank, _name, _icon, label, _description in rows)
+    support_chip = (
+        f"{summary_counts['Supported']} supported · "
+        f"{summary_counts['Partially Supported']} partial · "
+        f"{summary_counts['Not Supported']} not supported"
+    )
+    lines = [f"## 🧩 Capability Support — {support_chip}", ""]
+    lines.append("> 🚦 Support: ✅ Supported · ⚠️ Partially Supported · ⚪ Not Supported")
+    lines.append("")
     lines.append(
         "_Auto-generated from the server profile and conformance outcomes. Full detail is in Facet and CU Coverage._"
     )
@@ -721,7 +786,6 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
     for _rank, name, icon, label, description in rows[:limit]:
         lines.append(f"- {icon} **{_md_cell(name)}** — {label}. {_md_cell(description)}")
     if len(rows) > limit:
-        summary_counts = Counter(label for _rank, _name, _icon, label, _description in rows)
         lines.append("")
         lines.append(
             "_Capability area counts: "
@@ -733,10 +797,16 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
         lines.append("<details open>")
         lines.append("<summary><b>All capability areas</b></summary>")
         lines.append("")
-        lines.append("| Capability Area | Support | Scope |")
-        lines.append("|---|---|---|")
-        for _rank, name, icon, label, description in rows:
-            lines.append(f"| {_md_cell(name)} | {icon} {label} | {_md_cell(description)} |")
+        table_rows = [
+            [_md_cell(name), icon, label, _md_cell(description)] for _rank, name, icon, label, description in rows
+        ]
+        lines.extend(
+            pad_table_rows(
+                ["Capability Area", "🚦", "Support", "Scope"],
+                table_rows,
+                ["left", "center", "left", "left"],
+            )
+        )
         lines.append("")
         lines.append("</details>")
     lines.append("")
@@ -785,8 +855,12 @@ def _render_review_sections(context: dict[str, Any], limit: int = 10) -> list[st
     capability_notes = [item for item in findings if str(item["status"]) in _CAPABILITY_NOTE_LABELS]
     show_action_change = any(str(item.get("change") or "") for item in action_items)
     show_note_change = any(str(item.get("change") or "") for item in capability_notes)
+    ai_counts = Counter(str(item["status"]) for item in action_items)
+    notes_counts = Counter(str(item["status"]) for item in capability_notes)
+    action_chip = f"{ai_counts['Failed']} failed · {ai_counts['Blocked']} blocked"
+    notes_chip = f"{notes_counts['Not Supported']} not supported · {notes_counts['With Notes']} with notes"
 
-    lines = ["## Action Items", ""]
+    lines = [f"## 📌 Action Items — {action_chip}", ""]
     lines.append(f"**{_format_status_counts(_ACTION_ITEM_LABEL_ORDER, counts)}**")
     lines.append("")
     if not action_items:
@@ -795,7 +869,7 @@ def _render_review_sections(context: dict[str, Any], limit: int = 10) -> list[st
         _append_review_table(lines, action_items, limit, "Conformance Status", show_change=show_action_change)
     lines.append("")
 
-    lines.append("## Informational Notes")
+    lines.append(f"## 📝 Informational Notes — {notes_chip}")
     lines.append("")
     lines.append("<details open>")
     lines.append("<summary><b>Show informational notes</b></summary>")
@@ -1122,12 +1196,11 @@ def render_conformance_summary(
         total_active = len(context["active_cus"])
         validated = _supported_cus_validated_count(context["active_cus"], context["by_cu"], context["supported"])
         findings_count: Counter[str] = context["findings_count"]
-        lines.append("## Conformance Overview")
+        lines.append("## 📊 Conformance Overview")
         lines.append("")
-        lines.append(
-            f"| Server Support Coverage | {_TEST_RESULT_ICONS['passed']} Validation Health | "
-            "Action Items | Informational Notes |"
-        )
+        lines.append("> 🚦 Review: 🔴 Failed · 🟠 Blocked · ⚪ Not Supported · ℹ️ With Notes")
+        lines.append("")
+        lines.append("| Server Support Coverage | Validation Health | Action Items | Informational Notes |")
         lines.append("|:---:|:---:|:---:|:---:|")
         lines.append(
             f"| **{_fmt_pct(context['spec_coverage_value'])}** | "

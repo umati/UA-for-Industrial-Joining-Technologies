@@ -128,8 +128,8 @@ def test_ci_outcome_pie_chart_removed_q11() -> None:
     assert '"pie2"' not in report_script
     assert '"pie3"' not in report_script
     assert "pie showData" not in report_script
-    assert "✅ Passed:" in report_script
-    assert "⏭️ Skipped:" in report_script
+    assert '["✅", "Passed"' in report_script
+    assert '["⏭️", "Skipped"' in report_script
 
 
 def test_ci_expected_summary_has_no_dash_only_cells() -> None:
@@ -177,10 +177,10 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
     step = _summary_step("integration.yml")
 
     assert workflow["name"] == "System Tests — Live OPC UA, Browser, Docker, Conformance"
-    assert workflow["jobs"]["report"]["name"] == "📋 System Tests Summary"
+    assert workflow["jobs"]["report"]["name"] == "📋 System Test Report"
     assert step["run"].strip() == "python3 reporting/system_tests_run_summary.py"
     assert "PYEOF" not in step["run"]
-    assert step["env"]["REPORT_JOB_NAME"] == "📋 System Tests Summary"
+    assert step["env"]["REPORT_JOB_NAME"] == "📋 System Test Report"
     assert set(step["env"]) == {
         "SD_RESULT",
         "WD_RESULT",
@@ -213,7 +213,7 @@ def test_integration_timing_artifacts_are_collected_from_report_job() -> None:
         == "System Tests — Live OPC UA, Browser, Docker, Conformance"
     )
     assert collect_step["env"]["TIMING_OUTPUT_DIR"] == "timing-results"
-    assert collect_step["env"]["REPORT_JOB_NAME"] == "📋 System Tests Summary"
+    assert collect_step["env"]["REPORT_JOB_NAME"] == "📋 System Test Report"
     assert upload_step["with"]["name"] == "timing-system-tests"
     assert upload_step["with"]["path"] == "timing-results/"
 

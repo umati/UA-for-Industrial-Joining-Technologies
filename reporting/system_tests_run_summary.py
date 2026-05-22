@@ -17,8 +17,10 @@ from defusedxml import ElementTree as ET
 
 try:
     from reporting._http import https_only_opener
+    from reporting._table_padding import pad_table_rows
 except ImportError:  # pragma: no cover - standalone: python3 reporting/X.py
     from _http import https_only_opener  # type: ignore[no-redef]
+    from _table_padding import pad_table_rows  # type: ignore[no-redef]
 
 
 def _urlopen(request, timeout):
@@ -115,6 +117,39 @@ def md_cell(value):
     """Escape text for a GitHub markdown table cell."""
     text = str(value or "").replace("\r", " ").replace("\n", " ")
     return text.replace("|", "\\|").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def lane_status_fmt(status: str) -> str:
+    """Render lane status as text followed by an icon."""
+    if status == "success":
+        return "success ✅"
+    if status == "failure":
+        return "failure ❌"
+    if status == "skipped":
+        return "skipped ⏭️"
+    return "unknown ⚠️"
+
+
+def perf_status_fmt(status: str) -> str:
+    """Render performance timing status as text followed by an icon.
+
+    Accepts both GitHub workflow-job conclusions (``success``, ``failure``,
+    ``skipped``, ``cancelled``) and synthetic markers used for non-job timing
+    sources (``recorded``, ``missing``).
+    """
+    if status == "success":
+        return "passed ✅"
+    if status == "failure":
+        return "failed ❌"
+    if status == "cancelled":
+        return "cancelled ⚪"
+    if status == "skipped":
+        return "skipped ⏭️"
+    if status == "recorded":
+        return "recorded 📊"
+    if status == "missing":
+        return "missing ⚠️"
+    return "unknown ⚠️"
 
 
 def format_skip_section(label, skips_list, skip_count=None):
@@ -519,8 +554,8 @@ def tests(total, passed, failed, skipped=0, baseline=None):
         return "—"
     delta = format_count_delta(total, baseline)
     if failed == 0:
-        return f"✅ {total:,}{delta}"
-    return f"❌ {passed:,} / {total:,}{delta}"
+        return f"{total:,}{delta} ✅"
+    return f"{passed:,} / {total:,}{delta} ❌"
 
 
 def tests_cell(counts, baseline=None):
@@ -713,12 +748,7 @@ def main() -> None:
     total_t = sum(s[0] for s in all_suites_data if s[0] is not None)
     total_f = sum(s[2] for s in all_suites_data if s[2] is not None)
     total_sk = sum(s[3] for s in all_suites_data if s[3] is not None)
-    if total_t > 0:
-        totals_str = (
-            f"{total_t:,} tests &nbsp;·&nbsp; {total_f} failed &nbsp;·&nbsp; {total_sk} skipped"
-        )
-    else:
-        totals_str = "no test data"
+    total_passed = max(total_t - total_f - total_sk, 0)
 
     core_jobs = [
         result
@@ -739,18 +769,26 @@ def main() -> None:
     n_fail = sum(1 for r in core_jobs if r != "success")
     n_total = len(core_jobs)
 
+    status_clean = (
+        n_fail == 0 and not skip_policy_failures and not report_warnings and not artifact_warnings
+    )
+    status_emoji = "✅" if status_clean else "⚠️"
+    status_summary = (
+        f"{status_emoji} **Status:** {n_fail} failed jobs &nbsp;·&nbsp; "
+        f"{len(report_warnings)} drift warnings &nbsp;·&nbsp; "
+        f"{len(skip_policy_failures)} skip-policy failures &nbsp;·&nbsp; "
+        f"{len(artifact_warnings)} artifact warnings"
+    )
+
     if n_fail == 0 and not skip_policy_failures:
         status_icon = "✅"
-        status_msg = f"All {n_pass} / {n_total} jobs passed &nbsp;·&nbsp; {totals_str}"
+        status_msg = f"All {n_pass} / {n_total} jobs passed"
     else:
         status_icon = "❌"
         if skip_policy_failures and n_fail == 0:
-            status_msg = f"Skip policy gate failed &nbsp;·&nbsp; {totals_str}"
+            status_msg = "Skip policy gate failed"
         else:
-            status_msg = (
-                f"{n_fail} / {n_total} jobs failed &nbsp;·&nbsp; {n_pass} passed "
-                f"&nbsp;·&nbsp; {totals_str}"
-            )
+            status_msg = f"{n_fail} / {n_total} jobs failed &nbsp;·&nbsp; {n_pass} passed"
 
     run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
     sha_str = f"`{sha}`" if sha else "—"
@@ -798,6 +836,29 @@ def main() -> None:
         (cs_live[3] or 0) + (csharp_opcua_security[3] or 0),
         "Nightly drift detection",
     )
+    all_lane_results = [
+        sd_r,
+        wd_r,
+        tc_r,
+        wc_r,
+        wb_r,
+        con_r,
+        console_opcua_security_r,
+        cs_r,
+        cs_opcua_security_r,
+    ]
+    lane_result_count = len(all_lane_results)
+    component_result_count = len(
+        [
+            "OPC UA Server",
+            "Web Client",
+            "Test Client",
+            "Console Client",
+            "C# Client",
+        ]
+    )
+    conformance_suite_count = len([tc_smoke, tc_tests])
+    quick_index_client_count = component_result_count
 
     # ── Build report ──────────────────────────────────────────────────
 
@@ -816,37 +877,57 @@ def main() -> None:
         "",
         "---",
         "",
-        '<a id="system-validation-overview"></a>',
+        '<a id="system-outcome-overview"></a>',
         "",
-        "### Validation Overview",
+        "### 📊 Outcome Overview",
+        "",
+        f"> {status_summary}",
+        "",
+        *pad_table_rows(
+            ["🚦", "Outcome", "Count"],
+            [
+                ["✅", "Passed", f"{total_passed:,}"],
+                ["❌", "Failed", f"{total_f:,}"],
+                ["⏭️", "Skipped", f"{total_sk:,}"],
+                ["🧮", "Total", f"{total_t:,}"],
+                ["🛠️", "Jobs", f"{n_pass} / {n_total}"],
+            ],
+            ["center", "left", "right"],
+        ),
+        "",
+        "---",
+        "",
+        '<a id="system-lane-results"></a>',
+        "",
+        f"### 🧪 Lane Results — {lane_result_count} lanes",
         "",
         "| Lane | Result | Test Results |",
         "|:-----|:-------|:---------|",
-        f"| OPC UA Server Docker smoke | {job_icon(sd_r)} {md_cell(sd_r)} | "
+        f"| OPC UA Server Docker smoke | {lane_status_fmt(str(sd_r))} | "
         f"{count_test_results(sd_smoke, sd_smoke_base)} |",
-        f"| Web Client Docker tests | {job_icon(wd_r)} {md_cell(wd_r)} | {web_docker_results} |",
-        f"| Test Client conformance | {job_icon(tc_r)} {md_cell(tc_r)} | "
+        f"| Web Client Docker tests | {lane_status_fmt(str(wd_r))} | {web_docker_results} |",
+        f"| Test Client conformance | {lane_status_fmt(str(tc_r))} | "
         f"{count_test_results(tc_tests, tc_tests_base)} |",
-        f"| Web Client live suites | {job_icon(wc_r)} {md_cell(wc_r)} | "
+        f"| Web Client live suites | {lane_status_fmt(str(wc_r))} | "
         f"{count_test_results(wc_live, wc_live_base)} |",
-        f"| Browser E2E suites | {job_icon(wb_r)} {md_cell(wb_r)} | "
+        f"| Browser E2E suites | {lane_status_fmt(str(wb_r))} | "
         f"{count_test_results(wc_browser, wc_browser_base)} |",
-        f"| Console Client live | {job_icon(con_r)} {md_cell(con_r)} | "
+        f"| Console Client live | {lane_status_fmt(str(con_r))} | "
         f"{count_test_results(con_live, con_live_base)} |",
         f"| Console Client OPC UA security | "
-        f"{job_icon(console_opcua_security_r)} {md_cell(console_opcua_security_r)} | "
+        f"{lane_status_fmt(str(console_opcua_security_r))} | "
         f"{count_test_results(console_opcua_security, console_opcua_security_base)} |",
-        f"| C# Client live | {job_icon(cs_r)} {md_cell(cs_r)} | "
+        f"| C# Client live | {lane_status_fmt(str(cs_r))} | "
         f"{count_test_results(cs_live, cs_live_base)} |",
         f"| C# Client OPC UA security | "
-        f"{job_icon(cs_opcua_security_r)} {md_cell(cs_opcua_security_r)} | "
+        f"{lane_status_fmt(str(cs_opcua_security_r))} | "
         f"{count_test_results(csharp_opcua_security, csharp_opcua_security_base)} |",
         "",
         "---",
         "",
         '<a id="system-component-test-results"></a>',
         "",
-        "### Component Test Results",
+        f"### 🧬 Component Test Results — {component_result_count} components",
         "",
         (
             "| Component | Validation Scope | Container Test Results | "
@@ -889,7 +970,7 @@ def main() -> None:
         "",
         '<a id="system-conformance-overview"></a>',
         "",
-        "### Conformance Overview",
+        f"### 📑 Conformance Overview — {conformance_suite_count} suites",
         "",
         "| Suite | Port | Live Tests | Skipped | Notes |",
         "|:------|-----:|----------:|--------:|:------|",
@@ -912,7 +993,7 @@ def main() -> None:
         "",
         '<a id="system-performance-hotspots"></a>',
         "",
-        "### Performance Hotspots",
+        "### ⏱️ Performance Hotspots",
         "",
     ]
     if timing_rows:
@@ -930,7 +1011,7 @@ def main() -> None:
             marker = "🏁 " if index == 0 else ""
             out.append(
                 f"| {md_cell(source)} | {marker}{md_cell(name)} | "
-                f"{format_duration(duration)} | {job_icon(conclusion)} {md_cell(conclusion)} |"
+                f"{format_duration(duration)} | {perf_status_fmt(str(conclusion))} |"
             )
         source, name, duration, _conclusion = timing_rows[0]
         out += [
@@ -1026,7 +1107,7 @@ def main() -> None:
             "</details>",
         ]
 
-    out += ["", "---", "", '<a id="system-warnings-drift"></a>', "", "### Warnings and Drift", ""]
+    out += ["", "---", "", '<a id="system-warnings-drift"></a>', "", "### ⚠️ Warnings and Drift", ""]
     if skip_policy_failures:
         out += ["#### Skip Policy Failures", ""]
         out += skip_policy_failures
@@ -1075,7 +1156,7 @@ def main() -> None:
         "",
         "---",
         "",
-        "### Artifacts and Drilldown",
+        "### 📎 Artifacts and Drilldown",
         "",
         "> 📦 **Artifacts** — JUnit XML &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down",
         "> 🔒 Security audit (zizmor) results are in **CI** → Security → Code Scanning",
@@ -1091,38 +1172,40 @@ def main() -> None:
         "",
         '<a id="system-per-client-quick-index"></a>',
         "",
-        "### Per-Client Quick Index",
+        f"### 📚 Per-Client Quick Index — {quick_index_client_count} clients",
         "",
         "| Client / Component | Appears In |",
         "|:-------------------|:-----------|",
         (
-            "| OPC UA Server | [Validation Overview](#system-validation-overview); "
+            "| OPC UA Server | [Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results); "
             "[Performance Hotspots](#system-performance-hotspots) |"
         ),
         (
-            "| Web Client | [Validation Overview](#system-validation-overview); "
+            "| Web Client | [Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results); "
             "[Performance Hotspots](#system-performance-hotspots) |"
         ),
         (
-            "| Test Client | [Validation Overview](#system-validation-overview); "
+            "| Test Client | [Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results); "
             "[Conformance Overview](#system-conformance-overview); "
             "[Performance Hotspots](#system-performance-hotspots) |"
         ),
         (
-            "| Console Client | [Validation Overview](#system-validation-overview); "
+            "| Console Client | [Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results) |"
         ),
         (
-            "| C# Client | [Validation Overview](#system-validation-overview); "
+            "| C# Client | [Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results); "
             "[Performance Hotspots](#system-performance-hotspots) |"
         ),
     ]
 
-    with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8") as fh:
+    with open(
+        os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8", newline="\n"
+    ) as fh:
         fh.write("\n".join(out) + "\n")
     print("Summary written.")
     if skip_policy_failures:

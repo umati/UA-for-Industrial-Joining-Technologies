@@ -299,17 +299,17 @@ def test_tests_formatter_none_returns_not_reported():
 
 def test_tests_formatter_no_failures():
     """tests formatter returns checkmark and total when no failures."""
-    assert ci_run_summary.tests(100, 100, 0) == "✅ 100 passed"
+    assert ci_run_summary.tests(100, 100, 0) == "100 passed ✅"
 
 
 def test_tests_formatter_with_failures():
     """tests formatter shows passed/total with X when failures exist."""
-    assert ci_run_summary.tests(100, 90, 10) == "❌ 90 / 100 passed"
+    assert ci_run_summary.tests(100, 90, 10) == "90 / 100 passed ❌"
 
 
 def test_tests_formatter_includes_thousands_separator():
     """tests formatter includes comma separators for large numbers."""
-    assert ci_run_summary.tests(1000, 1000, 0) == "✅ 1,000 passed"
+    assert ci_run_summary.tests(1000, 1000, 0) == "1,000 passed ✅"
 
 
 def test_skips_formatter_none_returns_not_reported():
@@ -377,9 +377,9 @@ def test_cov_formatter_meets_threshold():
 
 def test_tool_formatter_empty_returns_not_reported():
     """tool formatter explains empty, unknown, and skipped results."""
-    assert ci_run_summary.tool("", "mypy") == "mypy ⏭️ not reported"
-    assert ci_run_summary.tool("unknown", "ruff") == "ruff ⏭️ not reported"
-    assert ci_run_summary.tool("", "ruff", "skipped") == "ruff ⏭️ not run"
+    assert ci_run_summary.tool("", "mypy") == "mypy (not reported) ⏭️"
+    assert ci_run_summary.tool("unknown", "ruff") == "ruff (not reported) ⏭️"
+    assert ci_run_summary.tool("", "ruff", "skipped") == "ruff (not run) ⏭️"
 
 
 def test_tool_formatter_known_result():
@@ -391,7 +391,7 @@ def test_tool_formatter_known_result():
 
 def test_bandit_fmt_no_issues():
     """bandit_fmt returns success message when no issues."""
-    assert ci_run_summary.bandit_fmt(0, 0) == "bandit ✅ 0 issues"
+    assert ci_run_summary.bandit_fmt(0, 0) == "bandit (0 issues) ✅"
 
 
 def test_bandit_fmt_with_issues():
@@ -404,27 +404,27 @@ def test_bandit_fmt_with_issues():
 
 def test_bandit_fmt_none_returns_not_reported():
     """bandit_fmt explains missing artifacts without implying scan failure."""
-    assert ci_run_summary.bandit_fmt(None, None) == "bandit ⏭️ not reported"
+    assert ci_run_summary.bandit_fmt(None, None) == "bandit (not reported) ⏭️"
 
 
 def test_bandit_fmt_skipped_lane_is_explicit():
     """bandit_fmt distinguishes skipped lanes from missing artifacts."""
-    assert ci_run_summary.bandit_fmt(None, None, "skipped") == "bandit ⏭️ not run"
+    assert ci_run_summary.bandit_fmt(None, None, "skipped") == "bandit (not run) ⏭️"
 
 
 def test_npm_fmt_none_returns_not_reported():
     """npm_fmt explains missing artifacts without implying audit failure."""
-    assert ci_run_summary.npm_fmt(None, None) == "npm-audit ⏭️ not reported"
+    assert ci_run_summary.npm_fmt(None, None) == "npm-audit (not reported) ⏭️"
 
 
 def test_npm_fmt_skipped_lane_is_explicit():
     """npm_fmt distinguishes skipped lanes from missing artifacts."""
-    assert ci_run_summary.npm_fmt(None, None, "skipped") == "npm-audit ⏭️ not run"
+    assert ci_run_summary.npm_fmt(None, None, "skipped") == "npm-audit (not run) ⏭️"
 
 
 def test_npm_fmt_no_issues():
     """npm_fmt returns success message when no issues."""
-    assert ci_run_summary.npm_fmt(0, 0) == "npm-audit ✅ 0 critical"
+    assert ci_run_summary.npm_fmt(0, 0) == "npm-audit (0 critical) ✅"
 
 
 def test_npm_fmt_with_issues():
@@ -460,17 +460,17 @@ def test_parse_pip_audit_counts_fixable_and_advisory(tmp_path):
 
 
 def test_pip_audit_fmt_states():
-    assert ci_run_summary.pip_audit_fmt(0, 0, True) == "pip-audit ✅ 0 CVEs"
-    assert ci_run_summary.pip_audit_fmt(2, 1, True) == "pip-audit ❌ 1 fixable CVE"
-    assert ci_run_summary.pip_audit_fmt(2, 0, True) == "pip-audit ⚠️ 2 advisory CVEs"
-    assert ci_run_summary.pip_audit_fmt(None, None, False) == "pip-audit ⏭️ not reported"
-    assert ci_run_summary.pip_audit_fmt(None, None, False, "skipped") == "pip-audit ⏭️ not run"
+    assert ci_run_summary.pip_audit_fmt(0, 0, True) == "pip-audit (0 CVEs) ✅"
+    assert ci_run_summary.pip_audit_fmt(2, 1, True) == "pip-audit (1 fixable CVE) ❌"
+    assert ci_run_summary.pip_audit_fmt(2, 0, True) == "pip-audit (2 advisory CVEs) ⚠️"
+    assert ci_run_summary.pip_audit_fmt(None, None, False) == "pip-audit (not reported) ⏭️"
+    assert ci_run_summary.pip_audit_fmt(None, None, False, "skipped") == "pip-audit (not run) ⏭️"
 
 
 def test_nuget_fmt_uses_countless_failure():
-    assert ci_run_summary.nuget_fmt("success") == "nuget ✅ 0 vulnerable"
-    assert ci_run_summary.nuget_fmt("failure") == "nuget ❌ vulnerable packages detected"
-    assert ci_run_summary.nuget_fmt("skipped") == "nuget ⏭️ not run"
+    assert ci_run_summary.nuget_fmt("success") == "nuget (0 vulnerable) ✅"
+    assert ci_run_summary.nuget_fmt("failure") == "nuget (vulnerable packages detected) ❌"
+    assert ci_run_summary.nuget_fmt("skipped") == "nuget (not run) ⏭️"
 
 
 def test_eslint_fmt_none_uses_step_result():
@@ -519,3 +519,19 @@ def test_lint_all_dashes_returns_not_reported():
 def test_lint_no_items_returns_not_reported():
     """lint does not emit dash-only report cells."""
     assert ci_run_summary.lint() == "Not reported"
+
+
+def test_timing_status_fmt_success():
+    assert ci_run_summary.timing_status_fmt("success") == "success ✅"
+
+
+def test_timing_status_fmt_failure():
+    assert ci_run_summary.timing_status_fmt("failure") == "failure ❌"
+
+
+def test_timing_status_fmt_skipped():
+    assert ci_run_summary.timing_status_fmt("skipped") == "skipped ⏭️"
+
+
+def test_timing_status_fmt_unknown():
+    assert "⚠️" in ci_run_summary.timing_status_fmt("bogus")

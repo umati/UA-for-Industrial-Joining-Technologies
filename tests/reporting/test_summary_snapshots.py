@@ -9,6 +9,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
+_ICON_SIGNAL = "\U0001f6a6"
+_ICON_PASSED = "\u2705"
+_ICON_FAILED = "\u274c"
+_ICON_SKIPPED = "\u23ed\ufe0f"
+_ICON_TOTAL = "\U0001f9ee"
+_ICON_JOBS = "\U0001f6e0\ufe0f"
+
 
 CI_ENV = {
     "WEB_PY_RESULT": "success",
@@ -65,7 +72,7 @@ INTEGRATION_ENV = {
     "GH_API_URL": "https://api.github.example",
     "GH_TOKEN": "",
     "GITHUB_TOKEN": "",
-    "REPORT_JOB_NAME": "📋 System Tests Summary",
+    "REPORT_JOB_NAME": "📋 System Test Report",
 }
 
 
@@ -113,3 +120,37 @@ def test_integration_summary_snapshot_matches_fixed_artifacts(tmp_path: Path) ->
     )
     expected = (FIXTURES / "expected" / "integration_summary.md").read_text(encoding="utf-8")
     assert actual == expected
+
+
+def test_ci_outcome_overview_exact_block() -> None:
+    text = (FIXTURES / "expected" / "ci_summary.md").read_text(encoding="utf-8")
+    expected = (
+        f"| {_ICON_SIGNAL}  | Outcome |   Count |\n"
+        "| :-: | :------ | ------: |\n"
+        f"| {_ICON_PASSED}  | Passed  |      21 |\n"
+        f"| {_ICON_FAILED}  | Failed  |       0 |\n"
+        f"| {_ICON_SKIPPED}  | Skipped |      18 |\n"
+        f"| {_ICON_TOTAL}  | Total   |      39 |\n"
+        f"| {_ICON_JOBS}  | Jobs    | 12 / 12 |\n"
+    )
+    assert expected in text, (
+        "CI Outcome Overview pin mismatch.\n"
+        f"Expected:\n{expected}\nFixture contains:\n{text[:1500]}"
+    )
+
+
+def test_integration_outcome_overview_exact_block() -> None:
+    text = (FIXTURES / "expected" / "integration_summary.md").read_text(encoding="utf-8")
+    expected = (
+        f"| {_ICON_SIGNAL}  | Outcome | Count |\n"
+        "| :-: | :------ | ----: |\n"
+        f"| {_ICON_PASSED}  | Passed  | 2,432 |\n"
+        f"| {_ICON_FAILED}  | Failed  |     0 |\n"
+        f"| {_ICON_SKIPPED}  | Skipped |   154 |\n"
+        f"| {_ICON_TOTAL}  | Total   | 2,586 |\n"
+        f"| {_ICON_JOBS}  | Jobs    | 7 / 7 |\n"
+    )
+    assert expected in text, (
+        "Integration Outcome Overview pin mismatch.\n"
+        f"Expected:\n{expected}\nFixture contains:\n{text[:1500]}"
+    )

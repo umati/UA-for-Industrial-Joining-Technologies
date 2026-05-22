@@ -400,9 +400,9 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
     assert context["score"] == 90
     assert "### Change Since Last Run" not in rendered
     assert "this run becomes the baseline" not in rendered
-    assert "## Capability Support" in rendered
-    assert "## Action Items" in rendered
-    assert "## Informational Notes" in rendered
+    assert "## 🧩 Capability Support" in rendered
+    assert "## 📌 Action Items" in rendered
+    assert "## 📝 Informational Notes" in rendered
     assert "_No action items — server validation passed cleanly._" in rendered
     assert "<summary><b>Coverage Overview</b></summary>" in rendered
     assert "<summary><b>Facet and CU Coverage</b></summary>" in rendered
@@ -480,10 +480,10 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
     lines = rendered.splitlines()
 
     assert lines.count("# IJT Conformance Test Report") == 1
-    assert "## Conformance Overview" in lines
-    assert "## Capability Support" in lines
-    assert "## Action Items" in lines
-    assert "## Informational Notes" in lines
+    assert any(line.startswith("## 📊 Conformance Overview") for line in lines)
+    assert any(line.startswith("## 🧩 Capability Support") for line in lines)
+    assert any(line.startswith("## 📌 Action Items") for line in lines)
+    assert any(line.startswith("## 📝 Informational Notes") for line in lines)
     assert "Action Items" in rendered
     assert "Informational Notes" in rendered
     assert (

@@ -51,16 +51,18 @@ it as a glossary bug and fix it in the same PR that touches the symbol.
 
 ## 2. Conformance report top-level terms
 
-### 2.1 `Conformance Overview` 👔 🛠️ 🧪 📦
-Source: `scripts/reporting/conformance_summary.py` (`## Conformance Overview` heading and KPI table emitted in `render_conformance_summary()`).
-Rendered as a **four-column KPI strip** (`Server Support Coverage` | `Validation Health` | `Action Items` | `Informational Notes`) **plus a four-cell context row** beneath it.
+### 2.1 `📊 Conformance Overview` 👔 🛠️ 🧪 📦
+Source: `scripts/reporting/conformance_summary.py` (`## 📊 Conformance Overview` heading and KPI table emitted in `render_conformance_summary()`).
+Rendered as a **four-column KPI strip** (`Server Support Coverage` | `Validation Health` | `Action Items` | `Informational Notes`) **plus a four-cell context row** beneath it. The previous `✅` decoration was removed from the `Validation Health` header so all KPI labels are plain text.
 
 `Action Items` renders **`Failed` · `Blocked`** and means work to investigate or fix. `Informational Notes` renders **`Not Supported` · `With Notes`** and means capability gaps or caveats for context.
 
 **Why renamed:** the old "At a Glance" wording was informal; non-IJT readers (management, customers) parsed it as "look here for everything," not "high-level KPIs." `Conformance Overview` says exactly what the block contains.
 
+**v4.8.2 polish:** the Capability Support full table now splits the support icon into its own `🚦` column, and the Capability Support / Conformance Overview sections include one-line legends for support and review icon meanings.
+
 ### 2.2 `Server Support Coverage` 👔 🛠️ 📦
-Source: `scripts/reporting/conformance_summary.py` — `Server Support Coverage` column header in the `## Conformance Overview` KPI table; value is the local `spec_coverage_value` computed in `render_conformance_summary()`.
+Source: `scripts/reporting/conformance_summary.py` — `Server Support Coverage` column header in the `## 📊 Conformance Overview` KPI table; value is the local `spec_coverage_value` computed in `render_conformance_summary()`.
 The share of OPC 40100 Joining Test Result CUs (Conformance Units) that the **server under test claims to support** in its capability file.
 - **Numerator:** CUs the server lists as supported.
 - **Denominator:** CUs in the active profile (facet or full set).
@@ -68,7 +70,7 @@ The share of OPC 40100 Joining Test Result CUs (Conformance Units) that the **se
 **Why renamed:** "Spec Coverage" suggested test coverage of the spec, which it is not. The value is about **what the server says it supports**, not what the tests cover.
 
 ### 2.3 `Validation Health` 👔 🛠️ 🧪 📦
-Source: `scripts/reporting/conformance_summary.py` — `Validation Health` column header in the `## Conformance Overview` KPI table; value is the local `validation_health_value` computed in `render_conformance_summary()` via `_supported_cus_validated_pct_value()`.
+Source: `scripts/reporting/conformance_summary.py` — `Validation Health` column header in the `## 📊 Conformance Overview` KPI table; value is the local `validation_health_value` computed in `render_conformance_summary()` via `_supported_cus_validated_pct_value()`.
 The share of server-supported CUs that this run validated as **Supported** or **Supported with Notes**.
 - **Numerator:** CUs validated as Supported or Supported with Notes.
 - **Denominator:** CUs the server says it supports.
@@ -76,7 +78,7 @@ The share of server-supported CUs that this run validated as **Supported** or **
 **Note:** Formula stays as-is. Any future weighting change requires a separate proposal document and PR.
 
 ### 2.4 `Action Items` and `Informational Notes` 👔 🛠️ 🧪 📦
-Source: `scripts/reporting/conformance_summary.py` — `Action Items` and `Informational Notes` column headers in the `## Conformance Overview` KPI table; cells rendered via `_format_status_counts(...)` from `helpers/report_scoring.py` (the `findings_count` Counter is built in `render_conformance_summary()`).
+Source: `scripts/reporting/conformance_summary.py` — `Action Items` and `Informational Notes` column headers in the `## 📊 Conformance Overview` KPI table; cells rendered via `_format_status_counts(...)` from `helpers/report_scoring.py` (the `findings_count` Counter is built in `render_conformance_summary()`).
 Compressed status counts across all CUs. The split renders the four KPI labels from `KPI_LABELS` in `helpers/report_scoring.py` as two reader layers:
 
 ```
@@ -135,7 +137,7 @@ The table of facet-level rows that breaks down validation by facet of the OPC 40
 **Why renamed:** the table contains both facets and CU-level rows; the old name hid the CU rows.
 
 ### 4.2 `Informational Notes` 🛠️ 🧪
-Source: `scripts/reporting/conformance_summary.py` — `## Informational Notes` section in `_render_review_sections()`; filter uses `_CAPABILITY_NOTE_LABELS` (= {Not Supported, Supported with Notes}, imported from `helpers/report_scoring.py`).
+Source: `scripts/reporting/conformance_summary.py` — `## 📝 Informational Notes` section in `_render_review_sections()`; filter uses `_CAPABILITY_NOTE_LABELS` (= {Not Supported, Supported with Notes}, imported from `helpers/report_scoring.py`).
 Per-CU notes about CUs that are **not** action items (no failure, no block) but still need explanation.
 **Why not `Exceptions`:** "Exception" has a specific meaning in the OPC UA spec (StatusCode-bearing condition); reusing that term in the report would be confusing.
 
@@ -173,7 +175,7 @@ When no baseline exists, the block is **hidden**, not shown with an empty messag
 ## 6. Timing diagnostics terms
 
 ### 6.1 `Bottleneck Spotlight` (new in Phase 3) 🛠️ 🧪
-Auto-detects the slowest current job/suite and appears inside the System Tests `Performance Hotspots` section. Replaces the former hardcoded C# live-test spotlight.
+Auto-detects the slowest current job/suite and appears inside the System Tests `⏱️ Performance Hotspots` section. Replaces the former hardcoded C# live-test spotlight.
 **Why auto:** the longest pole changes over time (Phase 3 Q15). Hardcoding "C# Live Tests" hid Web Client regressions when they became slower than C#.
 
 ### 6.2 Timing layers (Phase 8) 🛠️ 🧪

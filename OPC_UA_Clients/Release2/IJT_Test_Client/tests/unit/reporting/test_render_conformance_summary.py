@@ -219,3 +219,23 @@ def test_runtime_report_environment_reads_live_state(monkeypatch: pytest.MonkeyP
     assert env.run_logs_url == "https://example.test/owner/repo/actions/runs/42"
     assert env.now_utc == fixed_now
     assert env.repro_command == "python run_all_tests.py"
+
+
+def test_cell_width_handles_report_icons() -> None:
+    assert _ci_summary._cell_width("⏭️") == 2
+    assert _ci_summary._cell_width("✅") == 2
+    assert _ci_summary._cell_width("❌") == 2
+    assert _ci_summary._cell_width("⚠️") == 2
+    assert _ci_summary._cell_width("⚪") == 2
+    assert _ci_summary._cell_width("⚙️") == 2
+    assert _ci_summary._cell_width("⏱️") == 2
+    assert _ci_summary._cell_width("ℹ️") == 2
+    assert _ci_summary._cell_width("🚦") == 2
+    assert _ci_summary._cell_width("🧮") == 2
+    assert _ci_summary._cell_width("🛠️") == 2
+    assert _ci_summary._cell_width("🟢") == 2
+    assert _ci_summary._cell_width("🔴") == 2
+    assert _ci_summary._cell_width("🟠") == 2
+    assert _ci_summary._cell_width("abc") == 3
+    assert _ci_summary._cell_width("Passed") == 6
+    assert _ci_summary._cell_width("Partially Supported") == 19

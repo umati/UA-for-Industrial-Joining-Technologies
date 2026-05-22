@@ -9,39 +9,41 @@
 
 ### 📊 Outcome Overview
 
-✅ Passed: 21 · ❌ Failed: 0 · ⏭️ Skipped: 18
+> ✅ **Status:** 0 failed jobs &nbsp;·&nbsp; 0 coverage warnings &nbsp;·&nbsp; 0 skip-budget warnings &nbsp;·&nbsp; 0 artifact warnings
 
-| Outcome | Count |
-|:--------|------:|
-| Passed | 21 |
-| Failed | 0 |
-| Skipped | 18 |
+| 🚦  | Outcome |   Count |
+| :-: | :------ | ------: |
+| ✅  | Passed  |      21 |
+| ❌  | Failed  |       0 |
+| ⏭️  | Skipped |      18 |
+| 🧮  | Total   |      39 |
+| 🛠️  | Jobs    | 12 / 12 |
 
 ---
 
 <a id="ci-validation-results"></a>
 
-### 🧪 Validation Results
+### 🧪 Validation Results — 7 lanes
 
 | Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |
 |:----------|:-----------------|----------:|--------:|:---------------------:|
-| Web Client — Python | Ubuntu Release 2 Python unit lane | ✅ 4 passed | 2 skipped | 97.0% / 95% ✅ |
-| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | ✅ 3 passed | 0 skipped | 96.0% / 95% ✅ |
-| Console Client — Python | Ubuntu Python unit lane | ✅ 2 passed | 0 skipped | 99.0% / 95% ✅ |
-| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | ✅ 2 passed | 1 skipped | 95.0% / 95% ✅ |
-| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | ✅ 16 passed | 15 skipped | 95.0% / 95% ✅ |
-| Test Client — Python (Unit) | Ubuntu Python unit lane | ✅ 2 passed | 0 skipped | 98.0% / 95% ✅ |
-| OPC UA Server — Smoke | Windows native server smoke lane | ✅ 10 passed | 0 skipped | Not measured (smoke) |
+| Web Client — Python | Ubuntu Release 2 Python unit lane | 4 passed ✅ | 2 skipped | 97.0% / 95% ✅ |
+| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | 3 passed ✅ | 0 skipped | 96.0% / 95% ✅ |
+| Console Client — Python | Ubuntu Python unit lane | 2 passed ✅ | 0 skipped | 99.0% / 95% ✅ |
+| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | 2 passed ✅ | 1 skipped | 95.0% / 95% ✅ |
+| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | 16 passed ✅ | 15 skipped | 95.0% / 95% ✅ |
+| Test Client — Python (Unit) | Ubuntu Python unit lane | 2 passed ✅ | 0 skipped | 98.0% / 95% ✅ |
+| OPC UA Server — Smoke | Windows native server smoke lane | 10 passed ✅ | 0 skipped | Not measured (smoke) |
 
 ---
 
 <a id="ci-code-quality-checks"></a>
 
-### 🧹 Code Quality Checks
+### 🧹 Code Quality Checks — 5 components
 
 | Component | Validation Scope | Lint / Format | Type Check / Build |
 |:----------|:-----------------|:--------------|:-------------------|
-| Web Client | Python and JavaScript static quality | ruff ✅ · eslint ⚠️ (1 warnings) | mypy ✅ |
+| Web Client | Python and JavaScript static quality | ruff ✅ · eslint (1 warnings) ⚠️ | mypy ✅ |
 | Console Client | Python static quality | ruff ✅ | mypy ✅ |
 | Node Client — Legacy JavaScript | JavaScript static quality | eslint ✅ | Not Applicable |
 | C# Client | Build and formatting quality | build ✅ · format ✅ | Not Applicable |
@@ -51,7 +53,7 @@
 
 <a id="ci-source-dependency-security"></a>
 
-### 🔒 Source and Dependency Security
+### 🔒 Source and Dependency Security — 5 components scanned
 
 Static source analysis (bandit) and dependency vulnerability audit (pip-audit, npm-audit, nuget).
 
@@ -59,17 +61,17 @@ For workflow security see CI Infrastructure → zizmor; for secret scanning see 
 
 | Component | Security Scan | Dependency Audit |
 |:----------|:--------------|:-----------------|
-| Web Client | bandit ✅ 0 issues | pip-audit ✅ 0 CVEs · npm-audit ✅ 0 critical |
-| Console Client | bandit ✅ 0 issues | pip-audit ✅ 0 CVEs |
-| Node Client — Legacy JavaScript | Not Configured (no eslint-plugin-security) | npm-audit ✅ 0 critical |
-| C# Client | CodeQL source scan runs in Security workflow | nuget ✅ 0 vulnerable |
-| Test Client | bandit ✅ 0 issues | pip-audit ✅ 0 CVEs |
+| Web Client | bandit (0 issues) ✅ | pip-audit (0 CVEs) ✅ · npm-audit (0 critical) ✅ |
+| Console Client | bandit (0 issues) ✅ | pip-audit (0 CVEs) ✅ |
+| Node Client — Legacy JavaScript | Not Configured (no eslint-plugin-security) | npm-audit (0 critical) ✅ |
+| C# Client | CodeQL source scan runs in Security workflow | nuget (0 vulnerable) ✅ |
+| Test Client | bandit (0 issues) ✅ | pip-audit (0 CVEs) ✅ |
 
 ---
 
 <a id="ci-infrastructure"></a>
 
-### ⚙️ CI Infrastructure
+### ⚙️ CI Infrastructure — 4 checks
 
 | Check | Status |
 |:------|:------:|
@@ -113,7 +115,7 @@ Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage 
 
 ---
 
-### ⏭️ Skip Details
+### ⏭️ Skip Details — 3 lanes, 18 skips
 
 <details><summary>⏭️ <b>Web Client — Python</b> — 2 skipped</summary>
 
@@ -145,7 +147,7 @@ Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage 
 
 <a id="ci-per-client-quick-index"></a>
 
-### Per-Client Quick Index
+### 📚 Per-Client Quick Index — 6 entries
 
 | Client / Component | Appears In |
 |:-------------------|:-----------|

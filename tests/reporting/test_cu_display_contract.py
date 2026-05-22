@@ -32,8 +32,8 @@ def test_primary_cu_columns_use_public_display_names() -> None:
     rendered = EXPECTED_CONFORMANCE.read_text(encoding="utf-8")
     primary_sections = "\n".join(
         [
-            _section(rendered, "## Action Items"),
-            _section(rendered, "## Informational Notes"),
+            _section(rendered, "## 📌 Action Items"),
+            _section(rendered, "## 📝 Informational Notes"),
         ]
     )
 

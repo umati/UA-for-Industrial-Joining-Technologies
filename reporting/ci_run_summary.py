@@ -17,8 +17,10 @@ from defusedxml import ElementTree as ET
 
 try:
     from reporting._http import https_only_opener
+    from reporting._table_padding import pad_table_rows
 except ImportError:  # pragma: no cover - standalone: python3 reporting/X.py
     from _http import https_only_opener  # type: ignore[no-redef]
+    from _table_padding import pad_table_rows  # type: ignore[no-redef]
 
 
 def _urlopen(request, timeout):
@@ -109,6 +111,17 @@ def md_cell(value):
     """Escape text for a GitHub markdown table cell."""
     text = str(value or "").replace("\r", " ").replace("\n", " ")
     return text.replace("|", "\\|").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def timing_status_fmt(status: str) -> str:
+    """Render CI timing status as text followed by an icon."""
+    if status == "success":
+        return "success ✅"
+    if status == "failure":
+        return "failure ❌"
+    if status == "skipped":
+        return "skipped ⏭️"
+    return "unknown ⚠️"
 
 
 def seconds(value):
@@ -298,8 +311,8 @@ def tests(total, passed, failed, skipped=0, job_result=None):
     if total is None:
         return missing_cell(job_result)
     if failed == 0:
-        return f"✅ {total:,} passed"
-    return f"❌ {passed:,} / {total:,} passed"
+        return f"{total:,} passed ✅"
+    return f"{passed:,} / {total:,} passed ❌"
 
 
 def tests_cell(counts, job_result=None):
@@ -322,58 +335,58 @@ def cov(pct, threshold=None, job_result=None):
 
 def tool(r, label, job_result=None):
     if job_result == "skipped":
-        return f"{label} ⏭️ not run"
+        return f"{label} (not run) ⏭️"
     if not r or r in ("", "unknown"):
-        return f"{label} ⏭️ not reported"
+        return f"{label} (not reported) ⏭️"
     if r == "skipped":
-        return f"{label} ⏭️ not run"
+        return f"{label} (not run) ⏭️"
     icon = {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
     return f"{label} {icon}"
 
 
 def bandit_fmt(high, medium, job_result=None):
     if job_result == "skipped":
-        return "bandit ⏭️ not run"
+        return "bandit (not run) ⏭️"
     if high is None:
-        return "bandit ⏭️ not reported"
+        return "bandit (not reported) ⏭️"
     if high == 0 and medium == 0:
-        return "bandit ✅ 0 issues"
-    return f"bandit ❌ {high} high, {medium} medium"
+        return "bandit (0 issues) ✅"
+    return f"bandit ({high} high, {medium} medium) ❌"
 
 
 def pip_audit_fmt(total, fixable, available, job_result=None):
     if job_result == "skipped":
-        return "pip-audit ⏭️ not run"
+        return "pip-audit (not run) ⏭️"
     if not available:
-        return "pip-audit ⏭️ not reported"
+        return "pip-audit (not reported) ⏭️"
     if total is None or fixable is None:
-        return "pip-audit ⏭️ not reported"
+        return "pip-audit (not reported) ⏭️"
     if total == 0:
-        return "pip-audit ✅ 0 CVEs"
+        return "pip-audit (0 CVEs) ✅"
     if fixable > 0:
-        return f"pip-audit ❌ {fixable} fixable CVE{'s' if fixable != 1 else ''}"
-    return f"pip-audit ⚠️ {total} advisory CVE{'s' if total != 1 else ''}"
+        return f"pip-audit ({fixable} fixable CVE{'s' if fixable != 1 else ''}) ❌"
+    return f"pip-audit ({total} advisory CVE{'s' if total != 1 else ''}) ⚠️"
 
 
 def npm_fmt(crit, high, job_result=None):
     if job_result == "skipped":
-        return "npm-audit ⏭️ not run"
+        return "npm-audit (not run) ⏭️"
     if crit is None:
-        return "npm-audit ⏭️ not reported"
+        return "npm-audit (not reported) ⏭️"
     if crit == 0 and high == 0:
-        return "npm-audit ✅ 0 critical"
-    return f"npm-audit ❌ {crit} critical, {high} high"
+        return "npm-audit (0 critical) ✅"
+    return f"npm-audit ({crit} critical, {high} high) ❌"
 
 
 def nuget_fmt(result):
     if result == "success":
-        return "nuget ✅ 0 vulnerable"
+        return "nuget (0 vulnerable) ✅"
     if result == "failure":
-        return "nuget ❌ vulnerable packages detected"
+        return "nuget (vulnerable packages detected) ❌"
     if result == "skipped":
-        return "nuget ⏭️ not run"
+        return "nuget (not run) ⏭️"
     if not result or result == "unknown":
-        return "nuget ⏭️ not reported"
+        return "nuget (not reported) ⏭️"
     return tool(result, "nuget")
 
 
@@ -384,8 +397,8 @@ def eslint_fmt(step_r, esl_tuple, job_result=None):
         if errors == 0 and warn_count == 0:
             return "eslint ✅"
         if errors == 0:
-            return f"eslint ⚠️ ({warn_count} warnings)"
-        return f"eslint ❌ ({errors} errors, {warn_count} warnings)"
+            return f"eslint ({warn_count} warnings) ⚠️"
+        return f"eslint ({errors} errors, {warn_count} warnings) ❌"
     if job_result == "skipped":
         return tool("skipped", "eslint")
     return tool(step_r, "eslint")
@@ -519,274 +532,7 @@ def main() -> None:
                 f"{threshold:.0f}% threshold."
             )
 
-    # ── Overall status ────────────────────────────────────────────────────
-
-    all_jobs = [
-        web_py_r,
-        web_js_r,
-        con_r,
-        nod_r,
-        dck_r,
-        cs_u_r,
-        cs_v_r,
-        tc_r,
-        ss_r,
-        al_r,
-        zz_r,
-        pc_r,
-    ]
-    n_pass = sum(1 for r in all_jobs if r == "success")
-    n_fail = sum(1 for r in all_jobs if r == "failure")
-    n_skipped = sum(1 for r in all_jobs if r == "skipped")
-    n_total = len(all_jobs)
-
-    if n_fail == 0:
-        if n_pass == n_total:
-            status_icon = "✅"
-            status_msg = f"All {n_pass} / {n_total} jobs passed"
-        elif n_pass == 0 and n_skipped == n_total:
-            status_icon = "⏭️"
-            status_msg = f"No CI jobs ran · {n_skipped} skipped"
-        else:
-            status_icon = "✅"
-            status_msg = f"{n_pass} / {n_total} jobs passed · {n_skipped} skipped"
-    else:
-        status_icon = "❌"
-        status_msg = f"{n_fail} / {n_total} jobs failed  ·  {n_pass} passed"
-
-    suites = [web_py_t, web_js_t, con_py_t, nod_js_t, cs_unit_t, tc_py_t, ss_smoke]
-    total_t = sum(s[0] for s in suites if s[0] is not None)
-    total_f = sum(s[2] for s in suites if s[2] is not None)
-    total_sk = sum(s[3] for s in suites if s[3] is not None)
-    total_passed = max(total_t - total_f - total_sk, 0)
-
-    run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
-    sha_str = f"`{sha}`" if sha else "Not reported"
-    web_quality = lint(
-        tool(web_ruff, "ruff", web_py_r),
-        eslint_fmt(web_eslint, web_esl, web_js_r),
-    )
-    web_dep_audit = lint(
-        pip_audit_fmt(web_pip[0], web_pip[1], web_pip[2], web_py_r),
-        npm_fmt(web_npm[0], web_npm[1], web_js_r),
-    )
-    cs_quality = lint(tool(cs_build, "build", cs_u_r), tool(cs_format, "format", cs_u_r))
-
-    # ── Build report ──────────────────────────────────────────────────────
-
-    out = [
-        "## IJT OPC UA — CI",
-        "",
-        f"> {status_icon} **{status_msg}**",
-        (
-            f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} "
-            f"&nbsp;·&nbsp; **Run:** {run_link}"
-        ),
-        "",
-        "---",
-        "",
-        '<a id="ci-outcome-overview"></a>',
-        "",
-        "### 📊 Outcome Overview",
-        "",
-        f"✅ Passed: {total_passed:,} · ❌ Failed: {total_f:,} · ⏭️ Skipped: {total_sk:,}",
-        "",
-        "| Outcome | Count |",
-        "|:--------|------:|",
-        f"| Passed | {total_passed} |",
-        f"| Failed | {total_f} |",
-        f"| Skipped | {total_sk} |",
-        "",
-        "---",
-        "",
-        '<a id="ci-validation-results"></a>',
-        "",
-        "### 🧪 Validation Results",
-        "",
-        "| Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |",
-        "|:----------|:-----------------|----------:|--------:|:---------------------:|",
-        (
-            f"| Web Client — Python | Ubuntu Release 2 Python unit lane | "
-            f"{tests_cell(web_py_t, web_py_r)} | "
-            f"{skips(web_py_t[3], web_py_r)} | {cov(web_cov, 95, web_py_r)} |"
-        ),
-        (
-            "| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | "
-            f"{tests_cell(web_js_t, web_js_r)} | "
-            f"{skips(web_js_t[3], web_js_r)} | {cov(web_js_cov, 95, web_js_r)} |"
-        ),
-        (
-            f"| Console Client — Python | Ubuntu Python unit lane | "
-            f"{tests_cell(con_py_t, con_r)} | "
-            f"{skips(con_py_t[3], con_r)} | {cov(con_cov, 95, con_r)} |"
-        ),
-        (
-            "| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | "
-            f"{tests_cell(nod_js_t, nod_r)} | "
-            f"{skips(nod_js_t[3], nod_r)} | {cov(nod_cov, 95, nod_r)} |"
-        ),
-        (
-            f"| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | "
-            f"{tests_cell(cs_unit_t, cs_u_r)} | "
-            f"{skips(cs_unit_t[3], cs_u_r)} | {cov(cs_cov, 95, cs_u_r)} |"
-        ),
-        (
-            f"| Test Client — Python (Unit) | Ubuntu Python unit lane | "
-            f"{tests_cell(tc_py_t, tc_r)} | "
-            f"{skips(tc_py_t[3], tc_r)} | {cov(tc_cov, 95, tc_r)} |"
-        ),
-        (
-            f"| OPC UA Server — Smoke | Windows native server smoke lane | "
-            f"{tests_cell(ss_smoke, ss_r)} | "
-            f"{skips(ss_smoke[3], ss_r)} | "
-            "Not measured (smoke) |"
-        ),
-        "",
-        "---",
-        "",
-        '<a id="ci-code-quality-checks"></a>',
-        "",
-        "### 🧹 Code Quality Checks",
-        "",
-        "| Component | Validation Scope | Lint / Format | Type Check / Build |",
-        "|:----------|:-----------------|:--------------|:-------------------|",
-        (
-            "| Web Client | Python and JavaScript static quality | "
-            f"{web_quality} | {tool(web_mypy, 'mypy', web_py_r)} |"
-        ),
-        (
-            f"| Console Client | Python static quality | {tool(con_ruff, 'ruff', con_r)} | "
-            f"{tool(con_mypy, 'mypy', con_r)} |"
-        ),
-        (
-            f"| Node Client — Legacy JavaScript | JavaScript static quality | "
-            f"{eslint_fmt(nod_eslint, nod_esl, nod_r)} | Not Applicable |"
-        ),
-        (f"| C# Client | Build and formatting quality | {cs_quality} | Not Applicable |"),
-        (
-            f"| Test Client | Python static quality | {tool(tc_ruff, 'ruff', tc_r)} | "
-            f"{tool(tc_mypy, 'mypy', tc_r)} |"
-        ),
-        "",
-        "---",
-        "",
-        '<a id="ci-source-dependency-security"></a>',
-        "",
-        "### 🔒 Source and Dependency Security",
-        "",
-        (
-            "Static source analysis (bandit) and dependency vulnerability audit "
-            "(pip-audit, npm-audit, nuget)."
-        ),
-        "",
-        (
-            "For workflow security see CI Infrastructure → zizmor; for secret scanning see "
-            "Pre-commit Hooks → detect-secrets; for deep semantic analysis see "
-            "the Security — CodeQL workflow."
-        ),
-        "",
-        "| Component | Security Scan | Dependency Audit |",
-        "|:----------|:--------------|:-----------------|",
-        (f"| Web Client | {bandit_fmt(web_ban[0], web_ban[1], web_py_r)} | {web_dep_audit} |"),
-        (
-            f"| Console Client | {bandit_fmt(con_ban[0], con_ban[1], con_r)} | "
-            f"{pip_audit_fmt(con_pip[0], con_pip[1], con_pip[2], con_r)} |"
-        ),
-        (
-            "| Node Client — Legacy JavaScript | Not Configured "
-            f"(no eslint-plugin-security) | {npm_fmt(nod_npm[0], nod_npm[1], nod_r)} |"
-        ),
-        f"| C# Client | CodeQL source scan runs in Security workflow | {nuget_fmt(cs_vuln)} |",
-        (
-            f"| Test Client | {bandit_fmt(tc_ban[0], tc_ban[1], tc_r)} | "
-            f"{pip_audit_fmt(tc_pip[0], tc_pip[1], tc_pip[2], tc_r)} |"
-        ),
-        "",
-        "---",
-        "",
-        '<a id="ci-infrastructure"></a>',
-        "",
-        "### ⚙️ CI Infrastructure",
-        "",
-        "| Check | Status |",
-        "|:------|:------:|",
-        f"| Web Client — Docker Smoke (HTTP + WebSocket) | {job_icon(dck_r)} |",
-        f"| GHA Workflow Lint (actionlint)               | {job_icon(al_r)} |",
-        f"| GHA Security Audit (zizmor)                  | {job_icon(zz_r)} |",
-        f"| Pre-commit Hooks                             | {job_icon(pc_r)} |",
-        "",
-        "---",
-        "",
-        '<a id="ci-performance-timings"></a>',
-        "",
-        "### ⏱️ Timing",
-        "",
-    ]
-    if job_timings:
-        out += [
-            "| Job | Duration | Status |",
-            "|:----|---------:|:-------|",
-        ]
-        for name, duration, conclusion in job_timings[:10]:
-            out.append(
-                f"| {md_cell(name)} | {format_duration(duration)} | "
-                f"{job_icon(conclusion)} {md_cell(conclusion)} |"
-            )
-    else:
-        out += [
-            (
-                "No reliable job duration source was available. Job durations require "
-                "the current-run Jobs API."
-            ),
-        ]
-    out += [
-        "",
-        "---",
-        "",
-        '<a id="ci-raw-data"></a>',
-        "",
-        "### Where to find raw data",
-        "",
-        "- JUnit XML",
-        "- Coverage XML",
-        "- ESLint JSON",
-        "- Bandit JSON",
-        "- pip-audit / npm-audit JSON",
-        "- Per-test drill-down: Checks tab",
-        "",
-        '<a id="ci-coverage-legend"></a>',
-        "",
-        "### Coverage Legend",
-        "",
-        "| Icon | Meaning |",
-        "|:-----|:--------|",
-        "| ✅ | Meets the declared threshold |",
-        "| ⚠️ | Below threshold but at least 80% |",
-        "| ❌ | Below 80% |",
-        "",
-        "Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage gate.",
-    ]
-
-    # ── Inline skip details (collapsible) ─────────────────────────────
-
-    skip_sections = []
-    skip_sections += format_skip_section("Web Client — Python", web_py_skips, web_py_t[3])
-    skip_sections += format_skip_section("Web Client — JavaScript", web_js_skips, web_js_t[3])
-    skip_sections += format_skip_section("Console Client — Python", con_py_skips, con_py_t[3])
-    skip_sections += format_skip_section(
-        "Node Client — Legacy JavaScript",
-        nod_js_skips,
-        nod_js_t[3],
-    )
-    skip_sections += format_skip_section("C# Client — Unit", cs_unit_skips, cs_unit_t[3])
-    skip_sections += format_skip_section("Test Client — Python", tc_py_skips, tc_py_t[3])
-    skip_sections += format_skip_section("OPC UA Server — Smoke", ss_smoke_skips, ss_smoke[3])
-
-    if skip_sections:
-        out += ["", "---", "", "### ⏭️ Skip Details"]
-        out += skip_sections
-
-    # ── Skip budget check ─────────────────────────────────────────────────
+    # ── Skip budget check (computed early so status line can report it) ─
     # Known expected skips per TEST_TIERS.md; any extra skip is a warning.
     skip_budget = {
         "web-client (Python)": 2,  # Split Python lane delegates JS/npm checks to web-client-js
@@ -850,6 +596,316 @@ def main() -> None:
             budget_warnings.append(
                 f"⚠️ **{suite}**: {actual} skips (budget: {budget}) — unexpected skips detected"
             )
+
+    # ── Overall status ────────────────────────────────────────────────────
+
+    all_jobs = [
+        web_py_r,
+        web_js_r,
+        con_r,
+        nod_r,
+        dck_r,
+        cs_u_r,
+        cs_v_r,
+        tc_r,
+        ss_r,
+        al_r,
+        zz_r,
+        pc_r,
+    ]
+    n_pass = sum(1 for r in all_jobs if r == "success")
+    n_fail = sum(1 for r in all_jobs if r == "failure")
+    n_skipped = sum(1 for r in all_jobs if r == "skipped")
+    n_total = len(all_jobs)
+
+    if n_fail == 0:
+        if n_pass == n_total:
+            status_icon = "✅"
+            status_msg = f"All {n_pass} / {n_total} jobs passed"
+        elif n_pass == 0 and n_skipped == n_total:
+            status_icon = "⏭️"
+            status_msg = f"No CI jobs ran · {n_skipped} skipped"
+        else:
+            status_icon = "✅"
+            status_msg = f"{n_pass} / {n_total} jobs passed · {n_skipped} skipped"
+    else:
+        status_icon = "❌"
+        status_msg = f"{n_fail} / {n_total} jobs failed  ·  {n_pass} passed"
+
+    suites = [web_py_t, web_js_t, con_py_t, nod_js_t, cs_unit_t, tc_py_t, ss_smoke]
+    total_t = sum(s[0] for s in suites if s[0] is not None)
+    total_f = sum(s[2] for s in suites if s[2] is not None)
+    total_sk = sum(s[3] for s in suites if s[3] is not None)
+    total_passed = max(total_t - total_f - total_sk, 0)
+
+    status_clean = (
+        n_fail == 0 and not coverage_warnings and not budget_warnings and not artifact_warnings
+    )
+    status_emoji = "✅" if status_clean else "⚠️"
+    status_summary = (
+        f"{status_emoji} **Status:** {n_fail} failed jobs &nbsp;·&nbsp; "
+        f"{len(coverage_warnings)} coverage warnings &nbsp;·&nbsp; "
+        f"{len(budget_warnings)} skip-budget warnings &nbsp;·&nbsp; "
+        f"{len(artifact_warnings)} artifact warnings"
+    )
+
+    run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
+    sha_str = f"`{sha}`" if sha else "Not reported"
+    web_quality = lint(
+        tool(web_ruff, "ruff", web_py_r),
+        eslint_fmt(web_eslint, web_esl, web_js_r),
+    )
+    web_dep_audit = lint(
+        pip_audit_fmt(web_pip[0], web_pip[1], web_pip[2], web_py_r),
+        npm_fmt(web_npm[0], web_npm[1], web_js_r),
+    )
+    cs_quality = lint(tool(cs_build, "build", cs_u_r), tool(cs_format, "format", cs_u_r))
+    validation_lane_count = len(suites)
+    quality_component_count = len([web_quality, con_ruff, nod_eslint, cs_quality, tc_ruff])
+    security_component_count = len([web_dep_audit, con_pip, nod_npm, cs_vuln, tc_pip])
+    infrastructure_check_count = len([dck_r, al_r, zz_r, pc_r])
+    quick_index_entry_count = len(
+        [
+            "Web Client",
+            "Console Client",
+            "Node Client — Legacy JavaScript",
+            "C# Client",
+            "Test Client",
+            "OPC UA Server",
+        ]
+    )
+
+    # ── Build report ──────────────────────────────────────────────────────
+
+    out = [
+        "## IJT OPC UA — CI",
+        "",
+        f"> {status_icon} **{status_msg}**",
+        (
+            f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} "
+            f"&nbsp;·&nbsp; **Run:** {run_link}"
+        ),
+        "",
+        "---",
+        "",
+        '<a id="ci-outcome-overview"></a>',
+        "",
+        "### 📊 Outcome Overview",
+        "",
+        f"> {status_summary}",
+        "",
+        *pad_table_rows(
+            ["🚦", "Outcome", "Count"],
+            [
+                ["✅", "Passed", f"{total_passed:,}"],
+                ["❌", "Failed", f"{total_f:,}"],
+                ["⏭️", "Skipped", f"{total_sk:,}"],
+                ["🧮", "Total", f"{total_t:,}"],
+                ["🛠️", "Jobs", f"{n_pass} / {n_total}"],
+            ],
+            ["center", "left", "right"],
+        ),
+        "",
+        "---",
+        "",
+        '<a id="ci-validation-results"></a>',
+        "",
+        f"### 🧪 Validation Results — {validation_lane_count} lanes",
+        "",
+        "| Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |",
+        "|:----------|:-----------------|----------:|--------:|:---------------------:|",
+        (
+            f"| Web Client — Python | Ubuntu Release 2 Python unit lane | "
+            f"{tests_cell(web_py_t, web_py_r)} | "
+            f"{skips(web_py_t[3], web_py_r)} | {cov(web_cov, 95, web_py_r)} |"
+        ),
+        (
+            "| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | "
+            f"{tests_cell(web_js_t, web_js_r)} | "
+            f"{skips(web_js_t[3], web_js_r)} | {cov(web_js_cov, 95, web_js_r)} |"
+        ),
+        (
+            f"| Console Client — Python | Ubuntu Python unit lane | "
+            f"{tests_cell(con_py_t, con_r)} | "
+            f"{skips(con_py_t[3], con_r)} | {cov(con_cov, 95, con_r)} |"
+        ),
+        (
+            "| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | "
+            f"{tests_cell(nod_js_t, nod_r)} | "
+            f"{skips(nod_js_t[3], nod_r)} | {cov(nod_cov, 95, nod_r)} |"
+        ),
+        (
+            f"| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | "
+            f"{tests_cell(cs_unit_t, cs_u_r)} | "
+            f"{skips(cs_unit_t[3], cs_u_r)} | {cov(cs_cov, 95, cs_u_r)} |"
+        ),
+        (
+            f"| Test Client — Python (Unit) | Ubuntu Python unit lane | "
+            f"{tests_cell(tc_py_t, tc_r)} | "
+            f"{skips(tc_py_t[3], tc_r)} | {cov(tc_cov, 95, tc_r)} |"
+        ),
+        (
+            f"| OPC UA Server — Smoke | Windows native server smoke lane | "
+            f"{tests_cell(ss_smoke, ss_r)} | "
+            f"{skips(ss_smoke[3], ss_r)} | "
+            "Not measured (smoke) |"
+        ),
+        "",
+        "---",
+        "",
+        '<a id="ci-code-quality-checks"></a>',
+        "",
+        f"### 🧹 Code Quality Checks — {quality_component_count} components",
+        "",
+        "| Component | Validation Scope | Lint / Format | Type Check / Build |",
+        "|:----------|:-----------------|:--------------|:-------------------|",
+        (
+            "| Web Client | Python and JavaScript static quality | "
+            f"{web_quality} | {tool(web_mypy, 'mypy', web_py_r)} |"
+        ),
+        (
+            f"| Console Client | Python static quality | {tool(con_ruff, 'ruff', con_r)} | "
+            f"{tool(con_mypy, 'mypy', con_r)} |"
+        ),
+        (
+            f"| Node Client — Legacy JavaScript | JavaScript static quality | "
+            f"{eslint_fmt(nod_eslint, nod_esl, nod_r)} | Not Applicable |"
+        ),
+        (f"| C# Client | Build and formatting quality | {cs_quality} | Not Applicable |"),
+        (
+            f"| Test Client | Python static quality | {tool(tc_ruff, 'ruff', tc_r)} | "
+            f"{tool(tc_mypy, 'mypy', tc_r)} |"
+        ),
+        "",
+        "---",
+        "",
+        '<a id="ci-source-dependency-security"></a>',
+        "",
+        f"### 🔒 Source and Dependency Security — {security_component_count} components scanned",
+        "",
+        (
+            "Static source analysis (bandit) and dependency vulnerability audit "
+            "(pip-audit, npm-audit, nuget)."
+        ),
+        "",
+        (
+            "For workflow security see CI Infrastructure → zizmor; for secret scanning see "
+            "Pre-commit Hooks → detect-secrets; for deep semantic analysis see "
+            "the Security — CodeQL workflow."
+        ),
+        "",
+        "| Component | Security Scan | Dependency Audit |",
+        "|:----------|:--------------|:-----------------|",
+        (f"| Web Client | {bandit_fmt(web_ban[0], web_ban[1], web_py_r)} | {web_dep_audit} |"),
+        (
+            f"| Console Client | {bandit_fmt(con_ban[0], con_ban[1], con_r)} | "
+            f"{pip_audit_fmt(con_pip[0], con_pip[1], con_pip[2], con_r)} |"
+        ),
+        (
+            "| Node Client — Legacy JavaScript | Not Configured "
+            f"(no eslint-plugin-security) | {npm_fmt(nod_npm[0], nod_npm[1], nod_r)} |"
+        ),
+        f"| C# Client | CodeQL source scan runs in Security workflow | {nuget_fmt(cs_vuln)} |",
+        (
+            f"| Test Client | {bandit_fmt(tc_ban[0], tc_ban[1], tc_r)} | "
+            f"{pip_audit_fmt(tc_pip[0], tc_pip[1], tc_pip[2], tc_r)} |"
+        ),
+        "",
+        "---",
+        "",
+        '<a id="ci-infrastructure"></a>',
+        "",
+        f"### ⚙️ CI Infrastructure — {infrastructure_check_count} checks",
+        "",
+        "| Check | Status |",
+        "|:------|:------:|",
+        f"| Web Client — Docker Smoke (HTTP + WebSocket) | {job_icon(dck_r)} |",
+        f"| GHA Workflow Lint (actionlint)               | {job_icon(al_r)} |",
+        f"| GHA Security Audit (zizmor)                  | {job_icon(zz_r)} |",
+        f"| Pre-commit Hooks                             | {job_icon(pc_r)} |",
+        "",
+        "---",
+        "",
+        '<a id="ci-performance-timings"></a>',
+        "",
+        "### ⏱️ Timing",
+        "",
+    ]
+    if job_timings:
+        out += [
+            "| Job | Duration | Status |",
+            "|:----|---------:|:-------|",
+        ]
+        for name, duration, conclusion in job_timings[:10]:
+            out.append(
+                f"| {md_cell(name)} | {format_duration(duration)} | "
+                f"{timing_status_fmt(str(conclusion))} |"
+            )
+    else:
+        out += [
+            (
+                "No reliable job duration source was available. Job durations require "
+                "the current-run Jobs API."
+            ),
+        ]
+    out += [
+        "",
+        "---",
+        "",
+        '<a id="ci-raw-data"></a>',
+        "",
+        "### Where to find raw data",
+        "",
+        "- JUnit XML",
+        "- Coverage XML",
+        "- ESLint JSON",
+        "- Bandit JSON",
+        "- pip-audit / npm-audit JSON",
+        "- Per-test drill-down: Checks tab",
+        "",
+        '<a id="ci-coverage-legend"></a>',
+        "",
+        "### Coverage Legend",
+        "",
+        "| Icon | Meaning |",
+        "|:-----|:--------|",
+        "| ✅ | Meets the declared threshold |",
+        "| ⚠️ | Below threshold but at least 80% |",
+        "| ❌ | Below 80% |",
+        "",
+        "Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage gate.",
+    ]
+
+    # ── Inline skip details (collapsible) ─────────────────────────────
+
+    skip_suite_counts = [
+        ("Web Client — Python", web_py_skips, web_py_t[3]),
+        ("Web Client — JavaScript", web_js_skips, web_js_t[3]),
+        ("Console Client — Python", con_py_skips, con_py_t[3]),
+        ("Node Client — Legacy JavaScript", nod_js_skips, nod_js_t[3]),
+        ("C# Client — Unit", cs_unit_skips, cs_unit_t[3]),
+        ("Test Client — Python", tc_py_skips, tc_py_t[3]),
+        ("OPC UA Server — Smoke", ss_smoke_skips, ss_smoke[3]),
+    ]
+    skip_sections = []
+    for label, skips_list, suite_skip_count in skip_suite_counts:
+        skip_sections += format_skip_section(label, skips_list, suite_skip_count)
+
+    if skip_sections:
+        skip_count = sum(
+            max(suite_skip_count or 0, len(skips_list))
+            for _, skips_list, suite_skip_count in skip_suite_counts
+            if (suite_skip_count or 0) > 0 or skips_list
+        )
+        lane_count = sum(
+            1
+            for _, skips_list, suite_skip_count in skip_suite_counts
+            if (suite_skip_count or 0) > 0 or skips_list
+        )
+        out += ["", "---", "", f"### ⏭️ Skip Details — {lane_count} lanes, {skip_count} skips"]
+        out += skip_sections
+
+    # ── Skip budget check (computed earlier; render here) ───────────────
     if budget_warnings:
         out += ["", "---", "", "### ⏭️ Skip Budget Exceeded", ""]
         out += budget_warnings
@@ -868,7 +924,7 @@ def main() -> None:
         "",
         '<a id="ci-per-client-quick-index"></a>',
         "",
-        "### Per-Client Quick Index",
+        f"### 📚 Per-Client Quick Index — {quick_index_entry_count} entries",
         "",
         "| Client / Component | Appears In |",
         "|:-------------------|:-----------|",
@@ -908,7 +964,9 @@ def main() -> None:
         ),
     ]
 
-    with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8") as fh:
+    with open(
+        os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8", newline="\n"
+    ) as fh:
         fh.write("\n".join(out) + "\n")
     print("Summary written.")
 

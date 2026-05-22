@@ -505,21 +505,17 @@ def test_job_icon_all_states():
 def test_tests_formatter_with_baseline():
     """tests formatter includes delta when baseline provided."""
     baseline = {"tests": 100}
-    result = system_tests_run_summary.tests(105, 105, 0, 0, baseline)
-    assert "105" in result
-    assert "(+5)" in result
+    assert system_tests_run_summary.tests(105, 105, 0, 0, baseline) == "105 (+5) ✅"
 
 
 def test_tests_formatter_no_failures():
     """tests formatter shows checkmark when no failures."""
-    assert "✅" in system_tests_run_summary.tests(100, 100, 0)
+    assert system_tests_run_summary.tests(100, 100, 0) == "100 ✅"
 
 
 def test_tests_formatter_with_failures():
     """tests formatter shows X and ratio when failures exist."""
-    result = system_tests_run_summary.tests(100, 90, 10)
-    assert "❌" in result
-    assert "90 / 100" in result
+    assert system_tests_run_summary.tests(100, 90, 10) == "90 / 100 ❌"
 
 
 def test_skips_formatter():
@@ -587,3 +583,36 @@ def test_module_bootstrap_runs_main_via_runpy(tmp_path, monkeypatch):
 
     assert summary_file.exists()
     assert summary_file.stat().st_size > 0
+
+
+def test_lane_status_fmt_success():
+    assert system_tests_run_summary.lane_status_fmt("success") == "success ✅"
+
+
+def test_lane_status_fmt_failure():
+    assert system_tests_run_summary.lane_status_fmt("failure") == "failure ❌"
+
+
+def test_lane_status_fmt_skipped():
+    assert system_tests_run_summary.lane_status_fmt("skipped") == "skipped ⏭️"
+
+
+def test_perf_status_fmt_recorded():
+    assert system_tests_run_summary.perf_status_fmt("recorded") == "recorded 📊"
+
+
+def test_perf_status_fmt_missing():
+    assert system_tests_run_summary.perf_status_fmt("missing") == "missing ⚠️"
+
+
+def test_perf_status_fmt_workflow_job_conclusions():
+    assert system_tests_run_summary.perf_status_fmt("success") == "passed ✅"
+    assert system_tests_run_summary.perf_status_fmt("failure") == "failed ❌"
+    assert system_tests_run_summary.perf_status_fmt("cancelled") == "cancelled ⚪"
+    assert system_tests_run_summary.perf_status_fmt("skipped") == "skipped ⏭️"
+
+
+def test_perf_status_fmt_unknown_fallback():
+    assert system_tests_run_summary.perf_status_fmt("") == "unknown ⚠️"
+    assert system_tests_run_summary.perf_status_fmt("None") == "unknown ⚠️"
+    assert system_tests_run_summary.perf_status_fmt("weird") == "unknown ⚠️"
