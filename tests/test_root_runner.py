@@ -237,8 +237,8 @@ def test_live_clients_do_not_duplicate_modern_loader_calls() -> None:
     the same client adds avoidable CI latency.  After the IJT compatibility
     bridge (``_load_ijt_type_definitions``) loads types once per client,
     subsequent standalone ``load_data_type_definitions()`` calls must be
-    removed.  This contract prevents a regression to the previous duplicate-
-    call pattern that Codex flagged.
+    removed. This contract prevents a regression to the previous duplicate-call
+    pattern.
     """
     console_client = (_runner.CONSOLE_DIR / "opcua_client.py").read_text(encoding="utf-8")
     web_connection = (_runner.WEB_CLIENT_DIR / "src" / "python" / "connection.py").read_text(
@@ -324,17 +324,30 @@ def test_opcua_security_docker_rebuilds_when_linux_zip_is_newer() -> None:
     assert 'inspect.StartInfo.ArgumentList.Add("inspect");' in csharp_fixture
     assert "File.GetLastWriteTimeUtc(zipPath) > imageCreatedUtc.Value.UtcDateTime" in csharp_fixture
 
-    # C# must scale compose launch timeout when freshness asks Docker to build.
-    # The previous 30s-only launch path timed out cold CI builds, ignored
-    # WaitForExit's bool return, then read ExitCode from a still-running process.
-    assert "DockerComposeCachedUpTimeoutMs = 30_000" in csharp_fixture
-    assert "DockerComposeBuildUpTimeoutMs = 300_000" in csharp_fixture
+    # C# scales compose launch timeout when freshness asks Docker to build.
+    # Compose launch timeouts use two named ``--wait-timeout`` budgets
+    # (120s warm / 300s cold), so the constants are derived rather than
+    # literal magic numbers. The earlier 30s warm WaitForExit was unsafe
+    # because the server compose healthcheck alone needs roughly 80s.
+    assert "DockerComposeWarmWaitTimeoutSeconds = 120" in csharp_fixture
+    assert "DockerComposeColdWaitTimeoutSeconds = 300" in csharp_fixture
+    assert (
+        "DockerComposeCachedUpTimeoutMs = (DockerComposeWarmWaitTimeoutSeconds + 30) * 1000"
+        in csharp_fixture
+    )
+    assert (
+        "DockerComposeBuildUpTimeoutMs = (DockerComposeColdWaitTimeoutSeconds + 60) * 1000"
+        in csharp_fixture
+    )
     assert "var timeoutMs = DockerComposeUpTimeoutMs(wantsBuild);" in csharp_fixture
     assert "if (!r.WaitForExit(timeoutMs))" in csharp_fixture
     assert "KillProcessTree(r);" in csharp_fixture
     assert "r.BeginOutputReadLine();" in csharp_fixture
     assert "r.BeginErrorReadLine();" in csharp_fixture
+    # The unsafe 30s WaitForExit happy-path is forbidden.
     assert "r.WaitForExit(30_000);\n            if (r.ExitCode == 0)" not in csharp_fixture
+    # Compose ``--wait`` must be wired into the launch invocation.
+    assert 'startInfo.ArgumentList.Add("--wait");' in csharp_fixture
 
     # Console fixture delegates to the shared, dependency-free helper module
     # so this regression test never has to import cryptography / asyncua.

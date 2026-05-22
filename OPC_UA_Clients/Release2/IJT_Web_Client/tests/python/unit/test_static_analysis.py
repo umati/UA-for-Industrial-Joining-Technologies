@@ -26,14 +26,23 @@ _SRC_PYTHON = _PROJECT_ROOT / "src" / "python"
 
 _SKIP_DIRS = {"__pycache__", "node_modules", ".git", ".state"}
 
+# Files vendored into the Docker test image from outside the Web Client tree.
+# These are owned and tested by their canonical location (repo-root
+# ``scripts/`` and ``tests/``) and must not be re-analyzed under the Web
+# Client's project-scoped static-analysis sweep. Outside Docker the
+# Web Client _PROJECT_ROOT does not contain ``scripts/ijt_live_readiness.py``
+# at all, so this exclusion is a no-op there.
+_VENDORED_PATHS: tuple[Path, ...] = (_PROJECT_ROOT / "scripts" / "ijt_live_readiness.py",)
+
 
 def _all_py_files(root: Path) -> list[Path]:
-    """All .py files in the project, excluding generated/dependency dirs."""
+    """All .py files in the project, excluding generated/dependency dirs and
+    files vendored from outside the Web Client tree."""
 
     def _skip(part: str) -> bool:
         return part in _SKIP_DIRS or part.startswith(".venv") or part.startswith("venv")
 
-    return [f for f in root.rglob("*.py") if not any(_skip(part) for part in f.parts)]
+    return [f for f in root.rglob("*.py") if not any(_skip(part) for part in f.parts) and f not in _VENDORED_PATHS]
 
 
 def _tool_available(name: str) -> bool:

@@ -486,26 +486,17 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Start Compose Stack
-        run: docker compose up -d --no-build
-
-      - name: Wait for HTTP Readiness
-        shell: bash
-        run: |
-          set -euo pipefail
-          for _i in {1..60}; do
-            if curl -fsS http://127.0.0.1:3000 >/dev/null; then
-              echo "HTTP endpoint is ready."
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Timed out waiting for http://127.0.0.1:3000"
-          docker ps
-          docker logs ijt_web_client || true
-          exit 1
+        # ``--wait --wait-timeout 120`` makes compose itself the synchronization
+        # primitive: the step exits success only after the ijt_web_client
+        # compose healthcheck (curl -f http://localhost:3000) reports healthy.
+        # 120s covers start_period 20s + interval 30s × retries 3 ≈ 110s budget
+        # with margin. Replaces the previous "up -d" + manual curl loop.
+        run: docker compose up -d --no-build --wait --wait-timeout 120
 
       - name: Verify WebSocket Port
         shell: bash
+        # The compose healthcheck only proves HTTP :3000 readiness. WebSocket
+        # :8001 is still gated separately until the healthcheck is expanded.
         run: |
           timeout 30 bash -c \
             'until (echo > /dev/tcp/127.0.0.1/8001) >/dev/null 2>&1; do sleep 1; done'
@@ -868,34 +859,16 @@ jobs:
           Write-Host "Extracted ZIP contents:"
           Get-ChildItem "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\" | Select-Object Name
 
-      - name: Start OPC UA Server (background)
-        run: |
-          $proc = Start-Process `
-            -FilePath "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe" `
-            -WorkingDirectory "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\" `
-            -PassThru -WindowStyle Hidden
-          Write-Host "Server PID: $($proc.Id)"
-          echo "SERVER_PID=$($proc.Id)" >> $env:GITHUB_ENV
-
-      - name: Wait for OPC UA port 40451
-        run: |
-          $timeout = 60
-          $start   = Get-Date
-          while (((Get-Date) - $start).TotalSeconds -lt $timeout) {
-            if (Test-NetConnection -ComputerName localhost -Port 40451 `
-                  -InformationLevel Quiet -WarningAction SilentlyContinue) {
-              Write-Host "Port 40451 is open"
-              exit 0
-            }
-            Write-Host "Waiting for server..."
-            Start-Sleep -Seconds 3
-          }
-          Write-Host "ERROR: Timeout waiting for port 40451"
-          exit 1
-
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.14"
+
+      - name: Start OPC UA Server with HELLO readiness
+        working-directory: ${{ github.workspace }}
+        run: |
+          python scripts/start_server_on_port.py `
+            --port 40451 `
+            --diagnostics-dir test-results/readiness
 
       - name: Install smoke test dependencies
         run: pip install -c "${{ github.workspace }}/constraints.txt" -r OPC_UA_Servers/Release2/tests/requirements.txt
@@ -912,16 +885,15 @@ jobs:
         if: always()
         with:
           name: results-server-smoke
-          path: test-results/smoke.xml
+          path: |
+            test-results/smoke.xml
+            test-results/readiness/**
           retention-days: 14
 
       - name: Stop OPC UA Server
         if: always()
-        run: |
-          if ($env:SERVER_PID) {
-            Stop-Process -Id $env:SERVER_PID -Force -ErrorAction SilentlyContinue
-            Write-Host "OPC UA server stopped"
-          }
+        working-directory: ${{ github.workspace }}
+        run: python scripts/start_server_on_port.py --port 40451 --stop
 
   # ───────────────────────────────────────────────────────────────────────────
   # Combined Report — always runs after all jobs.

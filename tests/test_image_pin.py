@@ -568,17 +568,20 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "IMAGE_INPUTS_FINGERPRINT=${{ steps.fingerprint.outputs.inputs_fingerprint }}" in str(
         build_job
     )
-    phase0_metadata_step = next(
+    image_smoke_metadata_step = next(
         step
         for step in build_job["steps"]
-        if step.get("name") == "Phase 0 smoke - metadata + tool versions"
+        if step.get("name") == "Image smoke - metadata and tool versions"
     )
     assert (
-        phase0_metadata_step["env"]["EXPECTED_FINGERPRINT"]
+        image_smoke_metadata_step["env"]["EXPECTED_FINGERPRINT"]
         == "${{ steps.fingerprint.outputs.inputs_fingerprint }}"
     )
-    assert '"$EXPECTED_FINGERPRINT"' in phase0_metadata_step["run"]
-    assert "${{ steps.fingerprint.outputs.inputs_fingerprint }}" not in phase0_metadata_step["run"]
+    assert '"$EXPECTED_FINGERPRINT"' in image_smoke_metadata_step["run"]
+    assert (
+        "${{ steps.fingerprint.outputs.inputs_fingerprint }}"
+        not in image_smoke_metadata_step["run"]
+    )
     summary_step = next(step for step in build_job["steps"] if step.get("name") == "Job summary")
     assert (
         summary_step["env"]["INPUTS_FINGERPRINT"]
@@ -686,7 +689,7 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "actual_fingerprint" in publish_verify_step["run"]
 
 
-def test_browser_ci_phase0_runtime_probe_uses_writable_home_paths() -> None:
+def test_browser_ci_image_smoke_runtime_probe_uses_writable_home_paths() -> None:
     """The non-root runtime probe must not overwrite root-owned /tmp build files."""
     import yaml
 
@@ -695,7 +698,7 @@ def test_browser_ci_phase0_runtime_probe_uses_writable_home_paths() -> None:
     probe_step = next(
         step
         for step in build_job["steps"]
-        if step.get("name") == "Phase 0 smoke - offline dependency closure probe"
+        if step.get("name") == "Image smoke - offline dependency closure probe"
     )
     body = probe_step["run"]
 

@@ -241,19 +241,40 @@ jobs:
           echo "Container started"
 
       - name: Wait for OPC UA port 40451
-        # Linux binary starts in ~3 s; allow up to 60 s total.
+        # This job uses ``docker run -d`` rather than ``docker compose up``,
+        # and the opcua-ijt-server image is built just above without the
+        # compose-level healthcheck definition used by live-test jobs. The
+        # HELLO-handshake check below is the protocol readiness contract for
+        # this container path, so this step is stricter than TCP-port liveness
+        # alone.
         run: |
+          # First wait up to 60s for the TCP port to open (binary boot).
           for i in $(seq 1 12); do
             if nc -z localhost 40451 2>/dev/null; then
               echo "Port 40451 open after $((i * 5)) s"
-              exit 0
+              break
             fi
             echo "Waiting... attempt $i/12"
             sleep 5
+            if [ "$i" -eq 12 ]; then
+              echo "ERROR: TCP-port timeout — dumping container logs:"
+              docker logs opcua-server --tail 60
+              exit 1
+            fi
           done
-          echo "ERROR: Timeout — dumping container logs:"
-          docker logs opcua-server --tail 60
-          exit 1
+          # Then assert real OPC UA HELLO readiness via the shared probe so
+          # the smoke job benefits from the same readiness contract as the
+          # compose-driven live-test jobs.
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          from ijt_live_readiness import wait_for_opcua_hello
+          result = wait_for_opcua_hello("localhost", 40451, timeout=30.0)
+          if not result.ok:
+              print(f"ERROR: OPC UA HELLO probe failed: {result.error}")
+              sys.exit(1)
+          print(f"OPC UA HELLO ack in {result.elapsed_seconds}s (attempts={result.attempts})")
+          PY
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
@@ -368,6 +389,11 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Start production container and verify HTTP health
+        # This job uses ``docker run -d`` rather than ``docker compose up``,
+        # and the production Web Client image is built just above without the
+        # compose-level healthcheck definition. The HTTP probe below is the
+        # readiness contract for this container path, and it is an
+        # application-protocol check rather than a TCP-port check.
         run: |
           docker run -d --name ijt-web-prod \
             -p 3000:3000 \
@@ -430,7 +456,10 @@ jobs:
 
       - name: Start OPC UA server on port 40462
         working-directory: ${{ github.workspace }}
-        run: python scripts/start_server_on_port.py --port 40462
+        run: |
+          python scripts/start_server_on_port.py `
+            --port 40462 `
+            --diagnostics-dir test-results/readiness
 
       - name: Run smoke test (quick server sanity check)
         env:
@@ -488,6 +517,7 @@ jobs:
             test-results/report.html
             test-results/report.xlsx
             test-results/summary.md
+            test-results/readiness/**
           retention-days: 14
 
       - name: Stop OPC UA server
@@ -916,7 +946,10 @@ jobs:
 
       - name: Start OPC UA server on port 40461
         working-directory: ${{ github.workspace }}
-        run: python scripts/start_server_on_port.py --port 40461
+        run: |
+          python scripts/start_server_on_port.py `
+            --port 40461 `
+            --diagnostics-dir OPC_UA_Clients/Release2/IJT_Console_Client/test-results/readiness
 
       - name: Run Console Client live tests
         working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
@@ -973,7 +1006,10 @@ jobs:
 
       - name: Start OPC UA server on port 40464
         working-directory: ${{ github.workspace }}
-        run: python scripts/start_server_on_port.py --port 40464
+        run: |
+          python scripts/start_server_on_port.py `
+            --port 40464 `
+            --diagnostics-dir OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/readiness
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7  # v5
         with:

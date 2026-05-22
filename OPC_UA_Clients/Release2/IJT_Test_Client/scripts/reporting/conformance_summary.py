@@ -1,10 +1,9 @@
 """Conformance summary renderer for the IJT Test Client.
 
 This module owns the Markdown rendering pipeline that produces the
-`IJT Conformance Test Report` written by `make_conformance_summary.py`. It was
-extracted from that script (then named `make_ci_summary.py`) in Phase 1 of the IJT CI / System
-Tests reporting overhaul to keep the rendering logic separately
-testable (`tests/unit/reporting/test_render_conformance_summary.py`).
+`IJT Conformance Test Report` written by `make_conformance_summary.py`. The
+rendering logic lives here so it can be tested separately by
+`tests/unit/reporting/test_render_conformance_summary.py`.
 
 The public entry point is `render_conformance_summary(...)`. Its
 signature mirrors the original `_render(...)` so the surrounding CLI

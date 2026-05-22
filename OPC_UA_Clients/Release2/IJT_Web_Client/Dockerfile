@@ -45,6 +45,13 @@ ENV NODE_ENV=development
 RUN pip install --no-cache-dir -c /tmp/constraints.txt -r requirements-dev.txt && \
     (npm ci --no-audit --no-fund || npm install --legacy-peer-deps --no-audit --no-fund)
 
+# Vendor the shared readiness module so tests/python/_live_server_readiness.py
+# can import ``ijt_live_readiness`` inside the Docker test container. The
+# build context is the repo root (see CI step), so the source path is
+# scripts/ijt_live_readiness.py and the target matches the helper's Docker
+# fallback path at /app/scripts/ijt_live_readiness.py.
+COPY scripts/ijt_live_readiness.py /app/scripts/ijt_live_readiness.py
+
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/. .
 
 CMD ["python", "-m", "pytest", "tests/python/unit/", "-v", "--tb=short", "--no-header"]

@@ -38,8 +38,15 @@ public sealed class OpcUaServerFixture : IDisposable
 {
     private const string DockerImageName = "opcua-ijt-server:latest";
     private const string LinuxSimulatorZipName = "OPC_UA_IJT_Server_Simulator_Linux.zip";
-    private const int DockerComposeCachedUpTimeoutMs = 30_000;
-    private const int DockerComposeBuildUpTimeoutMs = 300_000;
+    // Compose --wait-timeout budgets. The 120s warm value covers the OPC UA
+    // server compose healthcheck (nc -z, start_period 20s + interval 10s ×
+    // retries 6 ≈ 80s) with margin. The 300s cold value adds image build.
+    // These two are the only allowed compose --wait-timeout values for this
+    // test fixture.
+    private const int DockerComposeWarmWaitTimeoutSeconds = 120;
+    private const int DockerComposeColdWaitTimeoutSeconds = 300;
+    private const int DockerComposeCachedUpTimeoutMs = (DockerComposeWarmWaitTimeoutSeconds + 30) * 1000;
+    private const int DockerComposeBuildUpTimeoutMs = (DockerComposeColdWaitTimeoutSeconds + 60) * 1000;
     private const int DockerComposeOutputTailLimit = 80;
 
     private static readonly ILogger _log = IjtLog.ForCategory("IJT.Tests.ServerFixture");
@@ -221,8 +228,11 @@ public sealed class OpcUaServerFixture : IDisposable
         {
             if (TryLaunchViaDocker(knownX509UserCertificateDer))
             {
-                IsAvailable = WaitForPort(_port, timeoutSeconds: 60)
-                    && ProbeOpcUaReady(_port, maxAttempts: ProbeMaxAttempts(), delayMs: 1000);
+                // ``docker compose up --wait`` already blocked on the OPC UA
+                // server compose healthcheck (nc -z on the OPC UA port), so a
+                // raw TCP probe here would be redundant. The protocol probe
+                // alone is the readiness contract.
+                IsAvailable = ProbeOpcUaReady(_port, maxAttempts: ProbeMaxAttempts(), delayMs: 1000);
                 if (!IsAvailable)
                 {
                     var msg = $"[OpcUaServerFixture] Docker OPC UA server did not become ready on port {_port}.";
@@ -262,8 +272,10 @@ public sealed class OpcUaServerFixture : IDisposable
             // No native binary — try Docker fallback
             if (TryLaunchViaDocker(knownX509UserCertificateDer))
             {
-                IsAvailable = WaitForPort(_port, timeoutSeconds: 60)
-                    && ProbeOpcUaReady(_port, maxAttempts: ProbeMaxAttempts(), delayMs: 1000);
+                // ``docker compose up --wait`` already proved port-open via the
+                // compose healthcheck. Protocol probe is the single readiness
+                // invariant; do not gate it behind a redundant TCP probe.
+                IsAvailable = ProbeOpcUaReady(_port, maxAttempts: ProbeMaxAttempts(), delayMs: 1000);
                 if (!IsAvailable)
                 {
                     var msg = $"[OpcUaServerFixture] Docker OPC UA server did not become ready on port {_port}. Live tests will be skipped.";
@@ -333,24 +345,16 @@ public sealed class OpcUaServerFixture : IDisposable
             _serverProcess.BeginOutputReadLine();
             _serverProcess.BeginErrorReadLine();
 
-            // Step 3: wait for TCP port to open
-            var portOpen = WaitForPort(_port, timeoutSeconds: 30);
-            if (!portOpen)
-            {
-                _log.LogWarning("OPC UA server did not open TCP port {Port} within 30 s. Live tests will be skipped.", _port);
-                IsAvailable = false;
-                return;
-            }
-
-            // Step 4: OPC UA readiness probe — verify the process is alive and the OPC UA
+            // Step 3: OPC UA readiness probe — verify the process is alive and the OPC UA
             // service layer is accepting connections (not just TCP).  The server opens the
             // TCP listener before the OPC UA stack is fully initialised, so we retry with
-            // back-off rather than using a fixed sleep.
+            // back-off rather than using a fixed sleep. ProbeOpcUaReady includes its own
+            // attempts × delay budget, so a separate TCP-port wait would be redundant.
             var attempts = ProbeMaxAttempts();
             IsAvailable = ProbeOpcUaReady(_port, maxAttempts: attempts, delayMs: 1000);
             if (!IsAvailable)
             {
-                var probeMsg = $"[OpcUaServerFixture] Server on port {_port} opened TCP but did not accept OPC UA connections within timeout. Live tests will be skipped.";
+                var probeMsg = $"[OpcUaServerFixture] Server on port {_port} did not accept OPC UA connections within timeout. Live tests will be skipped.";
                 _log.LogWarning("{Message}", probeMsg);
                 Console.Error.WriteLine(probeMsg);
             }
@@ -570,6 +574,17 @@ public sealed class OpcUaServerFixture : IDisposable
             var wantsBuild = ShouldBuildDockerImage(dockerExe, composeDir);
             if (wantsBuild)
                 startInfo.ArgumentList.Add("--build");
+            // compose --wait makes Docker itself the synchronization primitive:
+            // the invocation blocks until the OPC UA server compose
+            // healthcheck (nc -z on the OPC UA port) reports healthy. Without
+            // this, "up -d" returned as soon as the container started and the
+            // caller had to poll, producing flaky readiness behaviour.
+            startInfo.ArgumentList.Add("--wait");
+            startInfo.ArgumentList.Add("--wait-timeout");
+            startInfo.ArgumentList.Add(
+                (wantsBuild
+                    ? DockerComposeColdWaitTimeoutSeconds
+                    : DockerComposeWarmWaitTimeoutSeconds).ToString(CultureInfo.InvariantCulture));
             var timeoutMs = DockerComposeUpTimeoutMs(wantsBuild);
 
             using var r = new Process
@@ -1219,16 +1234,12 @@ public sealed class OpcUaServerFixture : IDisposable
     }
 
 
-    private static bool WaitForPort(int port, int timeoutSeconds)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (IsPortOpen(port)) return true;
-            Thread.Sleep(500);
-        }
-        return false;
-    }
+    // NOTE: Do not reintroduce a TCP-only ``WaitForPort`` readiness gate.
+    // After ``docker compose up --wait`` the compose healthcheck already
+    // proves the OPC UA TCP port is open; for the native-EXE path, the
+    // ProbeOpcUaReady retry loop spans the same window and is a strictly
+    // stronger guarantee. The live readiness contract forbids re-introducing
+    // a Thread.Sleep-based port wait alongside the protocol probe.
 
     private static bool WaitForPortClosed(int port, int timeoutSeconds)
     {

@@ -1,5 +1,5 @@
 # ruff: noqa: E402
-"""Phase 5 coverage push — targeted tests for remaining gaps.
+"""Targeted coverage tests for remaining gaps.
 
 Targets:
 - event_handler.py:122-123 (CancelledError pass)
