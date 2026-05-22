@@ -1758,19 +1758,42 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
             "to authenticate against GHCR for the ijt-browser-ci pull."
         )
 
+        # Image identity is provided by the resolve-browser-image job via
+        # `needs:` + an explicit output expression. The legacy in-job resolver
+        # step (which polled GHCR tags with a 10-minute blind budget and
+        # raced the producer workflow) is intentionally gone.
+        needs = job.get("needs")
+        if isinstance(needs, str):
+            needs = [needs]
+        assert "resolve-browser-image" in (needs or []), (
+            "live-webclient-browser must declare `needs: resolve-browser-image` "
+            "so image identity flows through one execution DAG, not through "
+            "cross-workflow tag polling."
+        )
+
         steps = job["steps"]
         step_names = [step.get("name") or step.get("uses", "") for step in steps]
-        resolve_index = step_names.index(
-            "Resolve IJT Browser CI image reference (digest-qualified)"
+        assert "Resolve IJT Browser CI image reference (digest-qualified)" not in step_names, (
+            "The in-job resolver step was deleted in the Browser CI "
+            "synchronization commit. Image identity now comes from "
+            "needs.resolve-browser-image.outputs.image_ref."
         )
+        assert "Pull IJT Browser CI image (3-attempt retry)" not in step_names, (
+            "The 3-attempt retry pull step is deleted; resolve-browser-image "
+            "already pulled and validated the digest on its runner, so the "
+            "matrix job only needs a per-runner cache warm-up pull."
+        )
+
         login_index = next(
             index
             for index, step in enumerate(steps)
             if step.get("uses", "").startswith("docker/login-action@")
         )
-        assert login_index < resolve_index, (
-            "Resolve step may pull the reviewed GHCR image digest; docker login "
-            "must happen before resolving the browser image reference."
+        pull_index = step_names.index(
+            "Pull IJT Browser CI image (digest from resolve-browser-image)"
+        )
+        assert login_index < pull_index, (
+            "docker login must happen before the per-runner cache warm-up pull."
         )
 
         assert not any(
@@ -1784,68 +1807,38 @@ def test_integration_web_client_e2e_jobs_run_on_stock_ubuntu_runner() -> None:
             "runner must not install its own Node."
         )
 
-        resolve_step = next(
-            step
-            for step in steps
-            if step.get("name") == "Resolve IJT Browser CI image reference (digest-qualified)"
-        )
+        pull_step = steps[pull_index]
+        pull_body = pull_step["run"]
+        # Cache warm-up pull must consume the resolver's digest-qualified
+        # image_ref via env, never re-derive it from a tag.
         assert (
-            resolve_step.get("env", {}).get("PIN_PATH")
-            == ".github/docker/ijt-browser-ci/image-pin.json"
+            pull_step.get("env", {}).get("IMG")
+            == "${{ needs.resolve-browser-image.outputs.image_ref }}"
+        ), "Pull step must source IMG from the resolve-browser-image job output."
+        assert "@sha256:[0-9a-f]{64}" in pull_body, (
+            "Pull step must guard that IMG is digest-qualified."
         )
-        assert "^sha256:[0-9a-f]{64}$" in resolve_step["run"], (
-            "Resolve step must guard that the digest is sha256:<64hex>."
-        )
-        assert "PR_HEAD_SHA" in resolve_step["env"], (
-            "Resolve step must know the PR head SHA so browser-image-input PRs "
-            "can detect whether browser image inputs changed."
-        )
-        assert 'short_sha="${GITHUB_SHA::7}"' in resolve_step["run"]
-        assert '"$GITHUB_SHA"' in resolve_step["run"]
-        assert "trusted_dependency_bot" not in resolve_step["run"]
-        assert "browser_image_inputs_changed" in resolve_step["run"]
-        assert ".github/docker/ijt-browser-ci/*" in resolve_step["run"]
-        assert "OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json" in resolve_step["run"]
-        assert "PR-scoped browser image" in resolve_step["run"]
-        assert "main SHA browser image" in resolve_step["run"]
-        assert 'docker pull "$tag"' in resolve_step["run"]
-        assert "/opt/ijt-browser-ci/metadata.json" in resolve_step["run"]
-        assert "actual_sha" in resolve_step["run"]
-        assert "image_source=${image_source}" in resolve_step["run"]
+        assert 'docker pull "$IMG"' in pull_body
 
         login_step = next(
             step for step in steps if step.get("uses", "").startswith("docker/login-action@")
         )
         assert login_step.get("with", {}).get("registry") == "ghcr.io"
 
-        pull_step = next(
-            step
-            for step in steps
-            if step.get("name") == "Pull IJT Browser CI image (3-attempt retry)"
-        )
-        pull_body = pull_step["run"]
-        assert "docker pull" in pull_body
-        assert "source:   ${IMAGE_SOURCE}" in pull_body
-        assert "max_attempts=3" in pull_body, (
-            "Pull step must retry 3x; transient GHCR errors must not fail "
-            "the job on a single attempt."
-        )
-        assert "build-browser-ci-image.yml" in pull_body, (
-            "Pull step diagnostic must name the image-build workflow so operators can republish."
-        )
-        # Match the precise diagnostic phrase from integration.yml so this
-        # assertion can't be misread as URL-substring sanitization (CodeQL
-        # py/incomplete-url-substring-sanitization false-positive on the
-        # bare "ghcr.io" substring).
-        assert "ghcr.io (GHCR)" in pull_body, (
-            "Pull step diagnostic must name the registry as `ghcr.io (GHCR)` "
-            "so the operator immediately knows which registry failed."
-        )
-
         run_step = next(
             step
             for step in steps
             if step.get("name") == "Run Web Client browser e2e suite (offline, --network=none)"
+        )
+        # The image fed to docker run is the resolver's job output. Critical
+        # invariant: it does not come from a step-output produced inside this
+        # job (which is what enabled the historical race).
+        assert (
+            run_step.get("env", {}).get("IMG")
+            == "${{ needs.resolve-browser-image.outputs.image_ref }}"
+        ), (
+            "Run step's IMG must come from needs.resolve-browser-image.outputs.image_ref, "
+            "not from a step-output side effect."
         )
         run_body = run_step["run"]
         assert "docker run" in run_body
