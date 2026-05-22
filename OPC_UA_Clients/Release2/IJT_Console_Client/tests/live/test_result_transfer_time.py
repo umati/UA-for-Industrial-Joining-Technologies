@@ -1,33 +1,37 @@
 """
 Single-Result Transfer Time — end-to-end latency benchmark (Console Client).
 
-Measures how long it takes for a completed tightening result to travel from
-the controller (ProcessingTimes.EndTime) through the OPC UA server and across
-the network/transport to the client subscription callback.
+Measures how long it takes for a completed joining result to travel from the
+controller (ProcessingTimes.EndTime) through the OPC UA server and across the
+network to the client subscription callback.
 
-Timing pipeline (per sample):
-  ①  ProcessingTimes.StartTime  — tightening begins  (controller clock)
-  ②  ProcessingTimes.EndTime    — tightening ends    (controller clock)
-  ③  event.Time  (EventTime)    — ResultReadyEvent generated on the server
-  ④  client_received_time       — asyncua subscription callback fires on client
+Five timestamps / durations per sample:
+  StartTime           ProcessingTimes.StartTime          (controller clock)
+  EndTime             ProcessingTimes.EndTime            (controller clock)
+  AcquisitionDuration ProcessingTimes.AcquisitionDuration (reported by server, ms)
+  ProcessingDuration  ProcessingTimes.ProcessingDuration  (reported by server, ms)
+  EventTime           event.Time (ResultReadyEvent generated on the server)
+  ClientReceived      datetime.now(UTC) at subscription callback
 
-Measured intervals:
-  Tightening duration  : ② − ①   how long the physical join took
-  Server dispatch      : ③ − ②   server processing + event-emission latency
-  Wire transfer        : ④ − ③   network + OPC UA transport latency
-  Total transfer time  : ④ − ②   end-of-tightening → client  ← primary SLA metric
+Measured intervals (all in ms):
+  Joining duration            EndTime − StartTime         informational (not gated)
+  Result acquisition          AcquisitionDuration         informational sub-component
+  Result processing           ProcessingDuration          informational sub-component
+  Time on server              EventTime − EndTime         wall-clock on the server
+  OPC UA + Wire               ClientReceived − EventTime  network + transport
+  TOTAL — Result Transfer     ClientReceived − EndTime    ← primary gated metric
 
 Test parameters:
-  _SAMPLE_COUNT consecutive ONE_STEP_OK_RESULT results with full trace data.
+  _SAMPLE_COUNT consecutive MULTI_STEP_OK_RESULT results with full trace data.
   _INTER_RESULT_DELAY_S pause between triggers simulates realistic tool-press cadence.
 
 Prerequisite:
   Client and server clocks must be synchronised to millisecond accuracy and share
   the same timezone.  On a single host (simulator) this is automatically satisfied.
 
-Pass/fail criteria (aggregate over all samples):
-  mean(total_transfer_ms)  ≤  _THRESHOLD_MEAN_MS
-  p90(total_transfer_ms)   ≤  _THRESHOLD_P90_MS
+Performance target (aggregate over all samples):
+  mean(total_transfer_ms)  <  _THRESHOLD_MEAN_MS
+  p90(total_transfer_ms)   <  _THRESHOLD_P90_MS
 
 Note:
   This test requires the IJT simulator's SimulateSingleResult method.
@@ -71,8 +75,8 @@ _RESULT_READY_EVENT_TYPE_ID = 1007
 _SAMPLE_COUNT = 20
 _INTER_RESULT_DELAY_S = 1.0  # realistic gap between tool trigger presses
 _COLLECT_TIMEOUT_S = 30.0  # max time to wait for each ResultReadyEvent
-_THRESHOLD_MEAN_MS = 500.0  # mean total transfer time must be ≤ this
-_THRESHOLD_P90_MS = 1000.0  # p90  total transfer time must be ≤ this
+_THRESHOLD_MEAN_MS = 500.0  # mean total transfer time must be < this
+_THRESHOLD_P90_MS = 500.0  # p90  total transfer time must be < this
 
 
 # ---------------------------------------------------------------------------
@@ -291,12 +295,26 @@ def _delta_ms(dt_from: datetime | None, dt_to: datetime | None) -> float | None:
     return (b - a).total_seconds() * 1000.0
 
 
+def _duration_ms(value) -> float | None:
+    """Convert an OPC UA Duration value (float ms or timedelta-like) to milliseconds."""
+    if value is None:
+        return None
+    if hasattr(value, "total_seconds"):
+        return value.total_seconds() * 1000.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _extract_sample(event, received_time: datetime, index: int) -> dict:
-    """Pull all four timestamps from a ResultReadyEvent and compute latencies."""
+    """Pull all timestamps + reported durations from a ResultReadyEvent and compute latencies."""
     meta = getattr(getattr(event, "Result", None), "ResultMetaData", None)
     pt = getattr(meta, "ProcessingTimes", None)
     start = _ensure_utc(getattr(pt, "StartTime", None))
     end = _ensure_utc(getattr(pt, "EndTime", None))
+    acquisition_ms = _duration_ms(getattr(pt, "AcquisitionDuration", None))
+    processing_ms = _duration_ms(getattr(pt, "ProcessingDuration", None))
     event_time = _ensure_utc(getattr(event, "Time", None))
     client_time = _ensure_utc(received_time)
     return {
@@ -305,8 +323,10 @@ def _extract_sample(event, received_time: datetime, index: int) -> dict:
         "end_time": end,
         "event_time": event_time,
         "client_time": client_time,
-        "tightening_ms": _delta_ms(start, end),
-        "server_dispatch_ms": _delta_ms(end, event_time),
+        "joining_ms": _delta_ms(start, end),
+        "acquisition_ms": acquisition_ms,
+        "processing_ms": processing_ms,
+        "time_on_server_ms": _delta_ms(end, event_time),
         "wire_ms": _delta_ms(event_time, client_time),
         "total_ms": _delta_ms(end, client_time),
     }
@@ -336,47 +356,49 @@ def _col_stats(samples: list, key: str):
 
 def _log_report(samples: list) -> None:
     """Write a structured per-sample table and aggregate statistics to the log."""
-    eq = "=" * 92
-    sep = "-" * 92
+    eq = "=" * 110
+    sep = "-" * 110
     logger.info(eq)
     logger.info(
-        "  SINGLE RESULT TRANSFER TIME  |  %d samples  |  ONE_STEP_OK_RESULT + full traces",
+        "  RESULT TRANSFER TIME  |  %d samples  |  MULTI_STEP_OK_RESULT + full traces",
         len(samples),
     )
     logger.info(
-        "  Thresholds: mean ≤ %.0f ms,  p90 ≤ %.0f ms",
+        "  Performance target: mean < %.0f ms AND p90 < %.0f ms",
         _THRESHOLD_MEAN_MS,
         _THRESHOLD_P90_MS,
     )
     logger.info(eq)
     logger.info(
-        "  %4s  %16s  %18s  %16s  %14s",
+        "  %4s  %14s  %14s  %14s  %14s  %14s  %14s",
         "#",
-        "Tightening (①②)",
-        "Server Dispatch (②③)",
-        "Wire Transfer (③④)",
-        "TOTAL (②④)",
+        "Joining",
+        "Acquisition",
+        "Processing",
+        "On-server",
+        "OPC UA+Wire",
+        "TOTAL",
     )
     logger.info(sep)
 
+    def _f(v):
+        return f"{v:10.2f} ms" if v is not None else f"{'N/A':>12}"
+
     for s in samples:
-
-        def _f(v):
-            return f"{v:10.2f} ms" if v is not None else f"{'N/A':>12}"
-
         logger.info(
-            "  %4d  %s      %s      %s    %s",
+            "  %4d  %s  %s  %s  %s  %s  %s",
             s["index"],
-            _f(s["tightening_ms"]),
-            _f(s["server_dispatch_ms"]),
+            _f(s["joining_ms"]),
+            _f(s["acquisition_ms"]),
+            _f(s["processing_ms"]),
+            _f(s["time_on_server_ms"]),
             _f(s["wire_ms"]),
             _f(s["total_ms"]),
         )
 
     logger.info(sep)
     logger.info(
-        "  %4s  %-20s  %10s  %10s  %10s  %10s  %10s  %10s",
-        "",
+        "  %-22s  %10s  %10s  %10s  %10s  %10s  %10s",
         "STATISTICS (ms)",
         "min",
         "mean",
@@ -388,16 +410,17 @@ def _log_report(samples: list) -> None:
     logger.info(eq)
 
     for label, key in [
-        ("Tightening (①②)", "tightening_ms"),
-        ("Server Dispatch (②③)", "server_dispatch_ms"),
-        ("Wire Transfer (③④)", "wire_ms"),
-        ("TOTAL (②④)", "total_ms"),
+        ("Joining duration", "joining_ms"),
+        ("Result acquisition", "acquisition_ms"),
+        ("Result processing", "processing_ms"),
+        ("Time on server", "time_on_server_ms"),
+        ("OPC UA + Wire", "wire_ms"),
+        ("TOTAL — Result Transfer", "total_ms"),
     ]:
         st = _col_stats(samples, key)
         if st:
             logger.info(
-                "  %4s  %-20s  %10.2f  %10.2f  %10.2f  %10.2f  %10.2f  %10.2f",
-                "",
+                "  %-22s  %10.2f  %10.2f  %10.2f  %10.2f  %10.2f  %10.2f",
                 label,
                 st["min"],
                 st["mean"],
@@ -448,8 +471,10 @@ def _write_ci_report(
     if not gh_summary:
         return
 
-    st_tight = _col_stats(samples, "tightening_ms")
-    st_disp = _col_stats(samples, "server_dispatch_ms")
+    st_joining = _col_stats(samples, "joining_ms")
+    st_acq = _col_stats(samples, "acquisition_ms")
+    st_proc = _col_stats(samples, "processing_ms")
+    st_server = _col_stats(samples, "time_on_server_ms")
     st_wire = _col_stats(samples, "wire_ms")
     st_total = _col_stats(samples, "total_ms")
 
@@ -461,23 +486,49 @@ def _write_ci_report(
             f"{st['median']:.2f} | {st['p90']:.2f} | {st['max']:.2f} |\n"
         )
 
-    pass_fail = "✅ PASS" if mean_ms <= _THRESHOLD_MEAN_MS and p90_ms <= _THRESHOLD_P90_MS else "❌ FAIL"
+    target_met = mean_ms < _THRESHOLD_MEAN_MS and p90_ms < _THRESHOLD_P90_MS
+    pass_fail = "✅ PASS" if target_met else "❌ FAIL"
+
+    ends = sorted(s["end_time"] for s in samples if s.get("end_time"))
+    receives = sorted(s["client_time"] for s in samples if s.get("client_time"))
+    if ends and receives:
+        window = f"{ends[0].strftime('%H:%M:%S')} → {receives[-1].strftime('%H:%M:%S')} UTC"
+    else:
+        window = "Not reported"
 
     try:
         with open(gh_summary, "a", encoding="utf-8") as fh:
-            fh.write(f"\n## 🏎  Result Transfer Time ({n} samples)\n\n")
+            fh.write(f"\n## ⏱️ Result Transfer Time ({n} samples)\n\n")
             fh.write(
-                f"> `ONE_STEP_OK_RESULT` + full traces &nbsp;|&nbsp; "
-                f"Thresholds: mean ≤ {_THRESHOLD_MEAN_MS:.0f} ms, "
-                f"p90 ≤ {_THRESHOLD_P90_MS:.0f} ms\n\n"
+                f"> `MULTI_STEP_OK_RESULT` + full traces &nbsp;·&nbsp; "
+                f"Run window: {window}\n>\n"
+                f"> **Performance target:** mean &lt; {_THRESHOLD_MEAN_MS:.0f} ms "
+                f"**AND** p90 &lt; {_THRESHOLD_P90_MS:.0f} ms\n\n"
             )
-            fh.write("| Interval | min (ms) | mean (ms) | median (ms) | p90 (ms) | max (ms) |\n")
-            fh.write("|---|---|---|---|---|---|\n")
-            fh.write(_row("Tightening ①②", st_tight))
-            fh.write(_row("Server Dispatch ②③", st_disp))
-            fh.write(_row("Wire Transfer ③④", st_wire))
-            fh.write(_row("**TOTAL ②④**", st_total))
-            fh.write(f"\n**{pass_fail}** &nbsp;—&nbsp; mean {mean_ms:.2f} ms &nbsp;|&nbsp; p90 {p90_ms:.2f} ms\n")
+            fh.write("| Phase | min (ms) | mean (ms) | median (ms) | p90 (ms) | max (ms) |\n")
+            fh.write("|---|---:|---:|---:|---:|---:|\n")
+            fh.write(_row("🔧 Joining duration *(informational)*", st_joining))
+            fh.write(_row("📥 Result acquisition *(server, informational)*", st_acq))
+            fh.write(_row("⚙️ Result processing *(server, informational)*", st_proc))
+            fh.write(_row("🖥️ Time on server", st_server))
+            fh.write(_row("📶 OPC UA + Wire", st_wire))
+            fh.write(_row("🏁 **TOTAL — Result Transfer Time**", st_total))
+            fh.write(
+                f"\n**{pass_fail}** &nbsp;—&nbsp; mean {mean_ms:.2f} ms &nbsp;·&nbsp; "
+                f"p90 {p90_ms:.2f} ms &nbsp;·&nbsp; target both &lt; "
+                f"{_THRESHOLD_MEAN_MS:.0f} ms\n\n"
+            )
+            fh.write(
+                "> **Reading the table.** *Joining duration* is the physical "
+                "operation itself — shown for context, not gated. *Result "
+                "acquisition* and *result processing* are durations the server "
+                "reports inside the *Time on server* wall-clock; they are "
+                "informational sub-components. *Time on server* covers everything "
+                "between end-of-join and the moment the server fires the event. "
+                "*OPC UA + Wire* covers transport from server event to client "
+                "callback. The **TOTAL** is end-of-join → client callback and is "
+                "the gated metric.\n"
+            )
     except OSError as exc:
         logger.warning("Could not write to GITHUB_STEP_SUMMARY: %s", exc)
 
@@ -495,9 +546,10 @@ async def test_result_transfer_time(
 ):
     """Measure single-result end-to-end transfer time over _SAMPLE_COUNT samples.
 
-    Triggers ONE_STEP_OK_RESULT with full trace data, waits for the
+    Triggers MULTI_STEP_OK_RESULT with full trace data, waits for the
     ResultReadyEvent on a dedicated subscription client, and records the
-    four-stage timing pipeline per result.
+    timing pipeline (joining → acquisition → processing → server → wire → client)
+    per result.
 
     A _INTER_RESULT_DELAY_S pause between triggers simulates the cadence of
     realistic tool-trigger presses from an operator.
@@ -533,7 +585,7 @@ async def test_result_transfer_time(
                 await asyncio.wait_for(
                     sim_results_node.call_method(
                         method_node.nodeid,
-                        ua.Variant(1, ua.VariantType.UInt32),  # ONE_STEP_OK_RESULT
+                        ua.Variant(2, ua.VariantType.UInt32),  # MULTI_STEP_OK_RESULT
                         ua.Variant(True, ua.VariantType.Boolean),  # include_traces
                     ),
                     timeout=30.0,
@@ -553,12 +605,12 @@ async def test_result_transfer_time(
             samples.append(s)
 
             logger.info(
-                "Sample %2d/%d:  total=%s  |  tightening=%s  dispatch=%s  wire=%s",
+                "Sample %2d/%d:  total=%s  |  joining=%s  on-server=%s  wire=%s",
                 i,
                 _SAMPLE_COUNT,
                 f"{s['total_ms']:.2f} ms" if s["total_ms"] is not None else "N/A",
-                f"{s['tightening_ms']:.2f} ms" if s["tightening_ms"] is not None else "N/A",
-                f"{s['server_dispatch_ms']:.2f} ms" if s["server_dispatch_ms"] is not None else "N/A",
+                f"{s['joining_ms']:.2f} ms" if s["joining_ms"] is not None else "N/A",
+                f"{s['time_on_server_ms']:.2f} ms" if s["time_on_server_ms"] is not None else "N/A",
                 f"{s['wire_ms']:.2f} ms" if s["wire_ms"] is not None else "N/A",
             )
 
@@ -584,16 +636,16 @@ async def test_result_transfer_time(
         len(valid_totals),
     )
 
-    assert mean_ms <= _THRESHOLD_MEAN_MS, (
+    assert mean_ms < _THRESHOLD_MEAN_MS, (
         f"Mean result transfer time {mean_ms:.1f} ms exceeds "
-        f"{_THRESHOLD_MEAN_MS:.0f} ms threshold.\n"
+        f"{_THRESHOLD_MEAN_MS:.0f} ms target.\n"
         f"  n={len(valid_totals)},  min={valid_totals[0]:.1f},  "
         f"max={valid_totals[-1]:.1f},  p90={p90_ms:.1f} ms\n"
         "  Prerequisite: client and server clocks synchronised to ms accuracy, "
         "same timezone."
     )
-    assert p90_ms <= _THRESHOLD_P90_MS, (
+    assert p90_ms < _THRESHOLD_P90_MS, (
         f"p90 result transfer time {p90_ms:.1f} ms exceeds "
-        f"{_THRESHOLD_P90_MS:.0f} ms threshold.\n"
+        f"{_THRESHOLD_P90_MS:.0f} ms target.\n"
         f"  n={len(valid_totals)},  mean={mean_ms:.1f},  max={valid_totals[-1]:.1f} ms"
     )

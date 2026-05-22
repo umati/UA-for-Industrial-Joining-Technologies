@@ -120,7 +120,7 @@ def md_cell(value):
 
 
 def lane_status_fmt(status: str) -> str:
-    """Render lane status as text followed by an icon."""
+    """Render lane status as text followed by an icon (legacy callers)."""
     if status == "success":
         return "success ✅"
     if status == "failure":
@@ -128,6 +128,74 @@ def lane_status_fmt(status: str) -> str:
     if status == "skipped":
         return "skipped ⏭️"
     return "unknown ⚠️"
+
+
+# Reusable cell constants for "not relevant for this lane" semantics.
+_CELL_NOT_APPLICABLE_INT = "➖ Not applicable"
+
+
+def lane_status_icon(status: str) -> str:
+    """Lane status icon for the leading status column of Lane Results."""
+    return {
+        "success": "✅",
+        "failure": "❌",
+        "skipped": "⏭️",
+        "cancelled": "🚫",
+    }.get(status, "⚠️")
+
+
+def lane_status_text(status: str) -> str:
+    """Plain-text lane outcome (no icon) for the Result column of Lane Results."""
+    return status if status in {"success", "failure", "skipped", "cancelled"} else "unknown"
+
+
+def component_row_icon(*sources) -> str:
+    """Derive the leading status icon for a Component Test Results row.
+
+    Priority: ❌ failures > 🚫 cancelled > ⚠️ explicit gap flag in notes > ⏭️ any skips > ✅.
+
+    A row that ran cleanly with no skips gets ✅. Any skipped sub-tests
+    demote the row to ⏭️ so the reader sees the gap at a glance; the
+    Skipped/Notes columns carry the detail. ⚠️ is reserved for explicit
+    gap flags inside a notes string (e.g., missing artifact, advisory).
+
+    Accepted sources:
+      * counts tuple ``(total, passed, failed, skipped)``
+      * notes string — substring ``❌`` ⇒ ❌, ``🚫`` ⇒ 🚫, ``⚠️`` ⇒ ⚠️, ``⏭️`` ⇒ ⏭️
+      * ``None`` — ignored (no data point in this column)
+    """
+    has_fail = False
+    has_cancel = False
+    has_warn = False
+    has_skip = False
+    for src in sources:
+        if src is None:
+            continue
+        if isinstance(src, (tuple, list)) and len(src) >= 4:
+            failed = src[2]
+            skipped = src[3]
+            if failed and failed > 0:
+                has_fail = True
+            if skipped and skipped > 0:
+                has_skip = True
+        elif isinstance(src, str):
+            if "❌" in src:
+                has_fail = True
+            elif "🚫" in src:
+                has_cancel = True
+            elif "⚠️" in src:
+                has_warn = True
+            elif "⏭️" in src:
+                has_skip = True
+    if has_fail:
+        return "❌"
+    if has_cancel:
+        return "🚫"
+    if has_warn:
+        return "⚠️"
+    if has_skip:
+        return "⏭️"
+    return "✅"
 
 
 def perf_status_fmt(status: str) -> str:
@@ -553,9 +621,9 @@ def tests(total, passed, failed, skipped=0, baseline=None):
     if total is None:
         return "—"
     delta = format_count_delta(total, baseline)
-    if failed == 0:
-        return f"{total:,}{delta} ✅"
-    return f"{passed:,} / {total:,}{delta} ❌"
+    if failed:
+        return f"{passed:,} / {total:,}{delta} ❌"
+    return f"{passed:,}{delta} ✅"
 
 
 def tests_cell(counts, baseline=None):
@@ -567,10 +635,20 @@ def skips(sk):
 
 
 def count_test_results(counts, baseline=None):
-    """Compact test-results cell for a suite's tests and skips."""
+    """Plain-text test-results cell for Lane Results and Component Test Results.
+
+    No trailing pass/fail icon — the leading status icon column carries that
+    signal so the cells stay tidy and left-aligned.
+    """
     if counts[0] is None:
         return "Not reported"
-    return f"{tests_cell(counts, baseline)}, {skips(counts[3])} skipped"
+    total = counts[0]
+    passed = counts[1] or 0
+    failed = counts[2] or 0
+    skipped = counts[3] if counts[3] is not None else 0
+    delta = format_count_delta(total, baseline)
+    body = f"{passed:,} / {total:,}{delta} passed" if failed else f"{passed:,}{delta} passed"
+    return f"{body}, {skipped:,} skipped"
 
 
 def labeled_test_results(label, counts, baseline=None):
@@ -870,10 +948,6 @@ def main() -> None:
             f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} "
             f"&nbsp;·&nbsp; **Run:** {run_link}"
         ),
-        (
-            "> Nightly and manual system tests — live OPC UA server behavior, browser "
-            "E2E suites, Docker packaging, and conformance verification."
-        ),
         "",
         "---",
         "",
@@ -901,26 +975,33 @@ def main() -> None:
         "",
         f"### 🧪 Lane Results — {lane_result_count} lanes",
         "",
-        "| Lane | Result | Test Results |",
-        "|:-----|:-------|:---------|",
-        f"| OPC UA Server Docker smoke | {lane_status_fmt(str(sd_r))} | "
-        f"{count_test_results(sd_smoke, sd_smoke_base)} |",
-        f"| Web Client Docker tests | {lane_status_fmt(str(wd_r))} | {web_docker_results} |",
-        f"| Test Client conformance | {lane_status_fmt(str(tc_r))} | "
-        f"{count_test_results(tc_tests, tc_tests_base)} |",
-        f"| Web Client live suites | {lane_status_fmt(str(wc_r))} | "
-        f"{count_test_results(wc_live, wc_live_base)} |",
-        f"| Browser E2E suites | {lane_status_fmt(str(wb_r))} | "
-        f"{count_test_results(wc_browser, wc_browser_base)} |",
-        f"| Console Client live | {lane_status_fmt(str(con_r))} | "
-        f"{count_test_results(con_live, con_live_base)} |",
-        f"| Console Client OPC UA security | "
-        f"{lane_status_fmt(str(console_opcua_security_r))} | "
+        "| 🚦 | Lane | Result | Test Results |",
+        "|:--:|:-----|:-------|:-------------|",
+        f"| {lane_status_icon(str(sd_r))} | OPC UA Server Docker smoke "
+        f"| {lane_status_text(str(sd_r))} "
+        f"| {count_test_results(sd_smoke, sd_smoke_base)} |",
+        f"| {lane_status_icon(str(wd_r))} | Web Client Docker tests "
+        f"| {lane_status_text(str(wd_r))} | {web_docker_results} |",
+        f"| {lane_status_icon(str(tc_r))} | Test Client conformance "
+        f"| {lane_status_text(str(tc_r))} "
+        f"| {count_test_results(tc_tests, tc_tests_base)} |",
+        f"| {lane_status_icon(str(wc_r))} | Web Client live suites "
+        f"| {lane_status_text(str(wc_r))} "
+        f"| {count_test_results(wc_live, wc_live_base)} |",
+        f"| {lane_status_icon(str(wb_r))} | Browser E2E suites "
+        f"| {lane_status_text(str(wb_r))} "
+        f"| {count_test_results(wc_browser, wc_browser_base)} |",
+        f"| {lane_status_icon(str(con_r))} | Console Client live "
+        f"| {lane_status_text(str(con_r))} "
+        f"| {count_test_results(con_live, con_live_base)} |",
+        f"| {lane_status_icon(str(console_opcua_security_r))} | Console Client OPC UA security | "
+        f"{lane_status_text(str(console_opcua_security_r))} | "
         f"{count_test_results(console_opcua_security, console_opcua_security_base)} |",
-        f"| C# Client live | {lane_status_fmt(str(cs_r))} | "
-        f"{count_test_results(cs_live, cs_live_base)} |",
-        f"| C# Client OPC UA security | "
-        f"{lane_status_fmt(str(cs_opcua_security_r))} | "
+        f"| {lane_status_icon(str(cs_r))} | C# Client live "
+        f"| {lane_status_text(str(cs_r))} "
+        f"| {count_test_results(cs_live, cs_live_base)} |",
+        f"| {lane_status_icon(str(cs_opcua_security_r))} | C# Client OPC UA security | "
+        f"{lane_status_text(str(cs_opcua_security_r))} | "
         f"{count_test_results(csharp_opcua_security, csharp_opcua_security_base)} |",
         "",
         "---",
@@ -930,28 +1011,33 @@ def main() -> None:
         f"### 🧬 Component Test Results — {component_result_count} components",
         "",
         (
-            "| Component | Validation Scope | Container Test Results | "
+            "| 🚦 | Component | Validation Scope | Container Test Results | "
             "Live/System Test Results | Notes |"
         ),
-        "|:----------|:-----------------|:-------------------|:---------------------|:------|",
+        "|:--:|:----------|:-----------------|:-------------------|:---------------------|:------|",
         (
+            f"| {component_row_icon(sd_smoke)} "
             "| OPC UA Server | Linux container plus Windows live server processes | "
             f"{count_test_results(sd_smoke, sd_smoke_base)} | "
             "Dedicated Windows ports 40461/40462/40464 feed client live suites | "
             "Docker smoke proves packaged Linux startup and namespace reachability |"
         ),
         (
+            f"| {component_row_icon(wd_py, wd_js, wc_live, wc_browser, wc_browser_note)} "
             "| Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | "
             f"{web_docker_results} | "
             f"{web_live_results} | "
             f"{wc_browser_note} |"
         ),
         (
-            "| Test Client | Live conformance harness against OPC UA server | Not applicable | "
+            f"| {component_row_icon(tc_tests, skip_note_inline(tc_conf_skips, tc_tests[3]))} "
+            "| Test Client | Live conformance harness against OPC UA server "
+            f"| {_CELL_NOT_APPLICABLE_INT} | "
             f"{test_client_live_results} | "
             f"{skip_note_inline(tc_conf_skips, tc_tests[3])} |"
         ),
         (
+            f"| {component_row_icon(console_opcua_security, con_live, console_security_note)} "
             "| Console Client | Live Python client behavior and OPC UA security coverage "
             "against OPC UA server | "
             f"{count_test_results(console_opcua_security, console_opcua_security_base)} | "
@@ -959,6 +1045,7 @@ def main() -> None:
             f"{console_security_note} |"
         ),
         (
+            f"| {component_row_icon(csharp_opcua_security, cs_live, csharp_security_note)} "
             "| C# Client | Nightly xUnit live behavior and OPC UA security coverage "
             "against OPC UA server | "
             f"{count_test_results(csharp_opcua_security, csharp_opcua_security_base)} | "

@@ -538,6 +538,29 @@ def test_count_test_results_with_baseline():
     assert "(+2)" in result
 
 
+def test_count_test_results_zero_fail_with_skips_uses_passed_count():
+    """When there are skipped tests but no failures, the cell must report the
+    *passed* count (not the total) so the math is honest. Regression for the
+    bug that reported (1043 total, 889 passed, 0 failed, 154 skipped) as
+    "1,043 passed, 154 skipped" — which double-counts the 154 skips."""
+    result = system_tests_run_summary.count_test_results((1043, 889, 0, 154))
+    assert result == "889 passed, 154 skipped"
+
+
+def test_count_test_results_all_pass_no_skip():
+    """Clean all-passed lane prints just the passed count."""
+    result = system_tests_run_summary.count_test_results((50, 50, 0, 0))
+    assert result == "50 passed, 0 skipped"
+
+
+def test_tests_cell_zero_fail_with_skips_uses_passed_count():
+    """tests_cell mirror of the same regression — used by Conformance Overview."""
+    result = system_tests_run_summary.tests_cell((1043, 889, 0, 154))
+    assert "889" in result
+    assert "1,043" not in result
+    assert "✅" in result
+
+
 def test_bottleneck_candidates_sorts_by_duration():
     """bottleneck_candidates sorts timing sources by duration descending."""
     job_timings = [("job1", 100.0, "success"), ("job2", 200.0, "success")]

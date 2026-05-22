@@ -89,7 +89,7 @@ def test_ci_timing_artifacts_are_collected_from_report_job() -> None:
     assert collect_step["run"].strip() == "python3 scripts/reporting/collect_timing.py"
     assert collect_step["env"]["TIMING_WORKFLOW_NAME"] == "CI — Unit, Static, and Smoke Gates"
     assert collect_step["env"]["TIMING_OUTPUT_DIR"] == "timing-results"
-    assert collect_step["env"]["REPORT_JOB_NAME"] == "📋 Test Report"
+    assert collect_step["env"]["REPORT_JOB_NAME"] == "📋 CI Report"
     assert upload_step["with"]["name"] == "timing-ci"
     assert upload_step["with"]["path"] == "timing-results/"
 
@@ -177,10 +177,10 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
     step = _summary_step("integration.yml")
 
     assert workflow["name"] == "System Tests — Live OPC UA, Browser, Docker, Conformance"
-    assert workflow["jobs"]["report"]["name"] == "📋 System Test Report"
+    assert workflow["jobs"]["report"]["name"] == "📋 System Tests Report"
     assert step["run"].strip() == "python3 reporting/system_tests_run_summary.py"
     assert "PYEOF" not in step["run"]
-    assert step["env"]["REPORT_JOB_NAME"] == "📋 System Test Report"
+    assert step["env"]["REPORT_JOB_NAME"] == "📋 System Tests Report"
     assert set(step["env"]) == {
         "SD_RESULT",
         "WD_RESULT",
@@ -213,7 +213,7 @@ def test_integration_timing_artifacts_are_collected_from_report_job() -> None:
         == "System Tests — Live OPC UA, Browser, Docker, Conformance"
     )
     assert collect_step["env"]["TIMING_OUTPUT_DIR"] == "timing-results"
-    assert collect_step["env"]["REPORT_JOB_NAME"] == "📋 System Test Report"
+    assert collect_step["env"]["REPORT_JOB_NAME"] == "📋 System Tests Report"
     assert upload_step["with"]["name"] == "timing-system-tests"
     assert upload_step["with"]["path"] == "timing-results/"
 

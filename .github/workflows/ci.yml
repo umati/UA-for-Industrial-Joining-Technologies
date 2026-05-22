@@ -900,7 +900,7 @@ jobs:
   # Writes the root-level summary table to the Actions Summary page.
   # ───────────────────────────────────────────────────────────────────────────
   report:
-    name: "📋 Test Report"
+    name: "📋 CI Report"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [changes, web-client-python, web-client-js, console-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor, pre-commit]
@@ -1051,7 +1051,7 @@ jobs:
           GH_RUN_ID:       ${{ github.run_id }}
           GH_API_URL:      ${{ github.api_url }}
           GH_TOKEN:        ${{ github.token }}
-          REPORT_JOB_NAME: "📋 Test Report"
+          REPORT_JOB_NAME: "📋 CI Report"
         run: |
           python3 reporting/ci_run_summary.py
 
@@ -1068,7 +1068,7 @@ jobs:
           GH_RUN_URL:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_API_URL:     ${{ github.api_url }}
           GH_TOKEN:       ${{ github.token }}
-          REPORT_JOB_NAME: "📋 Test Report"
+          REPORT_JOB_NAME: "📋 CI Report"
         run: |
           python3 scripts/reporting/collect_timing.py
 

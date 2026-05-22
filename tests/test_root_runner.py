@@ -2117,7 +2117,7 @@ def test_integration_report_surfaces_job_durations() -> None:
     assert "GH_REPOSITORY:  ${{ github.repository }}" in workflow
     assert "GH_RUN_ID:      ${{ github.run_id }}" in workflow
     assert "GH_TOKEN:       ${{ github.token }}" in workflow
-    assert 'REPORT_JOB_NAME: "📋 System Test Report"' in workflow
+    assert 'REPORT_JOB_NAME: "📋 System Tests Report"' in workflow
     assert "def job_durations(path):" in report_script
     assert "excluding this report job" in report_script
     assert "name == report_job_name" in report_script

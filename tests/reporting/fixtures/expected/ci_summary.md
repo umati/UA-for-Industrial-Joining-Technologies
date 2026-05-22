@@ -27,13 +27,13 @@
 
 | Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |
 |:----------|:-----------------|----------:|--------:|:---------------------:|
-| Web Client — Python | Ubuntu Release 2 Python unit lane | 4 passed ✅ | 2 skipped | 97.0% / 95% ✅ |
+| Web Client — Python | Ubuntu Release 2 Python unit lane | 2 passed ✅ | 2 skipped | 97.0% / 95% ✅ |
 | Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | 3 passed ✅ | 0 skipped | 96.0% / 95% ✅ |
 | Console Client — Python | Ubuntu Python unit lane | 2 passed ✅ | 0 skipped | 99.0% / 95% ✅ |
-| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | 2 passed ✅ | 1 skipped | 95.0% / 95% ✅ |
-| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | 16 passed ✅ | 15 skipped | 95.0% / 95% ✅ |
+| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | 1 passed ✅ | 1 skipped | 95.0% / 95% ✅ |
+| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | 1 passed ✅ | 15 skipped | 95.0% / 95% ✅ |
 | Test Client — Python (Unit) | Ubuntu Python unit lane | 2 passed ✅ | 0 skipped | 98.0% / 95% ✅ |
-| OPC UA Server — Smoke | Windows native server smoke lane | 10 passed ✅ | 0 skipped | Not measured (smoke) |
+| OPC UA Server — Smoke | Windows native server smoke lane | 10 passed ✅ | 0 skipped | ➖ Not measured (smoke) |
 
 ---
 
@@ -41,13 +41,13 @@
 
 ### 🧹 Code Quality Checks — 5 components
 
-| Component | Validation Scope | Lint / Format | Type Check / Build |
-|:----------|:-----------------|:--------------|:-------------------|
-| Web Client | Python and JavaScript static quality | ruff ✅ · eslint (1 warnings) ⚠️ | mypy ✅ |
-| Console Client | Python static quality | ruff ✅ | mypy ✅ |
-| Node Client — Legacy JavaScript | JavaScript static quality | eslint ✅ | Not Applicable |
-| C# Client | Build and formatting quality | build ✅ · format ✅ | Not Applicable |
-| Test Client | Python static quality | ruff ✅ | mypy ✅ |
+| 🚦 | Component | Validation Scope | Lint / Format | Type Check / Build |
+|:--:|:----------|:-----------------|:--------------|:-------------------|
+| ⚠️ | Web Client | Python and JavaScript static quality | ✅ ruff<br>⚠️ eslint (1 warnings) | ✅ mypy |
+| ✅ | Console Client | Python static quality | ✅ ruff | ✅ mypy |
+| ✅ | Node Client — Legacy JavaScript | JavaScript static quality | ✅ eslint | ➖ Not Applicable |
+| ✅ | C# Client | Build and formatting quality | ✅ build<br>✅ format | ➖ Not Applicable |
+| ✅ | Test Client | Python static quality | ✅ ruff | ✅ mypy |
 
 ---
 
@@ -59,13 +59,13 @@ Static source analysis (bandit) and dependency vulnerability audit (pip-audit, n
 
 For workflow security see CI Infrastructure → zizmor; for secret scanning see Pre-commit Hooks → detect-secrets; for deep semantic analysis see the Security — CodeQL workflow.
 
-| Component | Security Scan | Dependency Audit |
-|:----------|:--------------|:-----------------|
-| Web Client | bandit (0 issues) ✅ | pip-audit (0 CVEs) ✅ · npm-audit (0 critical) ✅ |
-| Console Client | bandit (0 issues) ✅ | pip-audit (0 CVEs) ✅ |
-| Node Client — Legacy JavaScript | Not Configured (no eslint-plugin-security) | npm-audit (0 critical) ✅ |
-| C# Client | CodeQL source scan runs in Security workflow | nuget (0 vulnerable) ✅ |
-| Test Client | bandit (0 issues) ✅ | pip-audit (0 CVEs) ✅ |
+| 🚦 | Component | Security Scan | Dependency Audit |
+|:--:|:----------|:--------------|:-----------------|
+| ✅ | Web Client | ✅ bandit (0 issues) | ✅ pip-audit (0 CVEs)<br>✅ npm-audit (0 critical) |
+| ✅ | Console Client | ✅ bandit (0 issues) | ✅ pip-audit (0 CVEs) |
+| ✅ | Node Client — Legacy JavaScript | ➖ Out of scope — legacy lane | ✅ npm-audit (0 critical) |
+| ✅ | C# Client | ℹ️ CodeQL source scan runs in Security workflow | ✅ nuget (0 vulnerable) |
+| ✅ | Test Client | ✅ bandit (0 issues) | ✅ pip-audit (0 CVEs) |
 
 ---
 

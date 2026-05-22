@@ -49,7 +49,7 @@ CI_ENV = {
     "GH_RUN_ID": "42",
     "GH_API_URL": "https://api.github.example",
     "GH_TOKEN": "",
-    "REPORT_JOB_NAME": "📋 Test Report",
+    "REPORT_JOB_NAME": "📋 CI Report",
 }
 
 
@@ -72,7 +72,7 @@ INTEGRATION_ENV = {
     "GH_API_URL": "https://api.github.example",
     "GH_TOKEN": "",
     "GITHUB_TOKEN": "",
-    "REPORT_JOB_NAME": "📋 System Test Report",
+    "REPORT_JOB_NAME": "📋 System Tests Report",
 }
 
 

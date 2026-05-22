@@ -310,9 +310,9 @@ def missing_cell(job_result=None):
 def tests(total, passed, failed, skipped=0, job_result=None):
     if total is None:
         return missing_cell(job_result)
-    if failed == 0:
-        return f"{total:,} passed ✅"
-    return f"{passed:,} / {total:,} passed ❌"
+    if failed:
+        return f"{passed:,} / {total:,} passed ❌"
+    return f"{passed:,} passed ✅"
 
 
 def tests_cell(counts, job_result=None):
@@ -333,60 +333,95 @@ def cov(pct, threshold=None, job_result=None):
     return f"{pct:.1f}% / {threshold:.0f}% {icon}"
 
 
+# ── Cell-status helpers ──────────────────────────────────────────────
+# Cells in the Code Quality / Security tables lead with a status icon so that
+# multi-tool cells (joined with <br>) stay visually aligned at the cell's left
+# edge.  The row-level status icon column is derived from cell contents by
+# scanning for these icons in priority order.
+
+_CELL_NOT_APPLICABLE = "➖ Not Applicable"
+_CELL_NOT_MEASURED_SMOKE = "➖ Not measured (smoke)"
+_CELL_CSHARP_CODEQL_NOTE = "ℹ️ CodeQL source scan runs in Security workflow"
+_CELL_ESLINT_SEC_OUT_OF_SCOPE = "➖ Out of scope — legacy lane"
+
+
+def row_status_icon(*cells: str) -> str:
+    """Pick the row-level status icon by scanning cell contents.
+
+    Priority: ❌ failure > 🚫 cancelled > ⚠️ warning/gap > ⏭️ not run / not reported > ✅ pass.
+    ``ℹ️`` (informational deflection) and ``➖`` (not applicable / not measured)
+    are ignored — they must never demote a passing row.
+    """
+    text = " ".join(c for c in cells if c)
+    if "❌" in text:
+        return "❌"
+    if "🚫" in text:
+        return "🚫"
+    if "⚠️" in text:
+        return "⚠️"
+    if "⏭️" in text:
+        return "⏭️"
+    return "✅"
+
+
+def _wrap(icon: str, text: str) -> str:
+    return f"{icon} {text}"
+
+
 def tool(r, label, job_result=None):
     if job_result == "skipped":
-        return f"{label} (not run) ⏭️"
+        return _wrap("⏭️", f"{label} (not run)")
     if not r or r in ("", "unknown"):
-        return f"{label} (not reported) ⏭️"
+        return _wrap("⏭️", f"{label} (not reported)")
     if r == "skipped":
-        return f"{label} (not run) ⏭️"
+        return _wrap("⏭️", f"{label} (not run)")
     icon = {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
-    return f"{label} {icon}"
+    return _wrap(icon, label)
 
 
 def bandit_fmt(high, medium, job_result=None):
     if job_result == "skipped":
-        return "bandit (not run) ⏭️"
+        return _wrap("⏭️", "bandit (not run)")
     if high is None:
-        return "bandit (not reported) ⏭️"
+        return _wrap("⏭️", "bandit (not reported)")
     if high == 0 and medium == 0:
-        return "bandit (0 issues) ✅"
-    return f"bandit ({high} high, {medium} medium) ❌"
+        return _wrap("✅", "bandit (0 issues)")
+    return _wrap("❌", f"bandit ({high} high, {medium} medium)")
 
 
 def pip_audit_fmt(total, fixable, available, job_result=None):
     if job_result == "skipped":
-        return "pip-audit (not run) ⏭️"
+        return _wrap("⏭️", "pip-audit (not run)")
     if not available:
-        return "pip-audit (not reported) ⏭️"
+        return _wrap("⏭️", "pip-audit (not reported)")
     if total is None or fixable is None:
-        return "pip-audit (not reported) ⏭️"
+        return _wrap("⏭️", "pip-audit (not reported)")
     if total == 0:
-        return "pip-audit (0 CVEs) ✅"
+        return _wrap("✅", "pip-audit (0 CVEs)")
     if fixable > 0:
-        return f"pip-audit ({fixable} fixable CVE{'s' if fixable != 1 else ''}) ❌"
-    return f"pip-audit ({total} advisory CVE{'s' if total != 1 else ''}) ⚠️"
+        return _wrap("❌", f"pip-audit ({fixable} fixable CVE{'s' if fixable != 1 else ''})")
+    return _wrap("⚠️", f"pip-audit ({total} advisory CVE{'s' if total != 1 else ''})")
 
 
 def npm_fmt(crit, high, job_result=None):
     if job_result == "skipped":
-        return "npm-audit (not run) ⏭️"
+        return _wrap("⏭️", "npm-audit (not run)")
     if crit is None:
-        return "npm-audit (not reported) ⏭️"
+        return _wrap("⏭️", "npm-audit (not reported)")
     if crit == 0 and high == 0:
-        return "npm-audit (0 critical) ✅"
-    return f"npm-audit ({crit} critical, {high} high) ❌"
+        return _wrap("✅", "npm-audit (0 critical)")
+    return _wrap("❌", f"npm-audit ({crit} critical, {high} high)")
 
 
 def nuget_fmt(result):
     if result == "success":
-        return "nuget (0 vulnerable) ✅"
+        return _wrap("✅", "nuget (0 vulnerable)")
     if result == "failure":
-        return "nuget (vulnerable packages detected) ❌"
+        return _wrap("❌", "nuget (vulnerable packages detected)")
     if result == "skipped":
-        return "nuget (not run) ⏭️"
+        return _wrap("⏭️", "nuget (not run)")
     if not result or result == "unknown":
-        return "nuget (not reported) ⏭️"
+        return _wrap("⏭️", "nuget (not reported)")
     return tool(result, "nuget")
 
 
@@ -395,18 +430,19 @@ def eslint_fmt(step_r, esl_tuple, job_result=None):
     warn_count = warnings or 0
     if errors is not None:
         if errors == 0 and warn_count == 0:
-            return "eslint ✅"
+            return _wrap("✅", "eslint")
         if errors == 0:
-            return f"eslint ({warn_count} warnings) ⚠️"
-        return f"eslint ({errors} errors, {warn_count} warnings) ❌"
+            return _wrap("⚠️", f"eslint ({warn_count} warnings)")
+        return _wrap("❌", f"eslint ({errors} errors, {warn_count} warnings)")
     if job_result == "skipped":
         return tool("skipped", "eslint")
     return tool(step_r, "eslint")
 
 
 def lint(*items):
+    """Join icon-leading cell tokens with ``<br>`` so each tool keeps its own line."""
     parts = [p for p in items if p and p != "—"]
-    return " · ".join(parts) or "Not reported"
+    return "<br>".join(parts) or _wrap("⏭️", "Not reported")
 
 
 def main() -> None:
@@ -660,6 +696,26 @@ def main() -> None:
         npm_fmt(web_npm[0], web_npm[1], web_js_r),
     )
     cs_quality = lint(tool(cs_build, "build", cs_u_r), tool(cs_format, "format", cs_u_r))
+
+    # Pre-render Code Quality cells so the leading status column can be derived.
+    cq_web_lint = web_quality
+    cq_web_type = tool(web_mypy, "mypy", web_py_r)
+    cq_con_lint = tool(con_ruff, "ruff", con_r)
+    cq_con_type = tool(con_mypy, "mypy", con_r)
+    cq_nod_lint = eslint_fmt(nod_eslint, nod_esl, nod_r)
+    cq_cs_lint = cs_quality
+    cq_tc_lint = tool(tc_ruff, "ruff", tc_r)
+    cq_tc_type = tool(tc_mypy, "mypy", tc_r)
+
+    # Pre-render Security cells so the leading status column can be derived.
+    sec_web_scan = bandit_fmt(web_ban[0], web_ban[1], web_py_r)
+    sec_web_dep = web_dep_audit
+    sec_con_scan = bandit_fmt(con_ban[0], con_ban[1], con_r)
+    sec_con_dep = pip_audit_fmt(con_pip[0], con_pip[1], con_pip[2], con_r)
+    sec_nod_dep = npm_fmt(nod_npm[0], nod_npm[1], nod_r)
+    sec_cs_dep = nuget_fmt(cs_vuln)
+    sec_tc_scan = bandit_fmt(tc_ban[0], tc_ban[1], tc_r)
+    sec_tc_dep = pip_audit_fmt(tc_pip[0], tc_pip[1], tc_pip[2], tc_r)
     validation_lane_count = len(suites)
     quality_component_count = len([web_quality, con_ruff, nod_eslint, cs_quality, tc_ruff])
     security_component_count = len([web_dep_audit, con_pip, nod_npm, cs_vuln, tc_pip])
@@ -748,7 +804,7 @@ def main() -> None:
             f"| OPC UA Server — Smoke | Windows native server smoke lane | "
             f"{tests_cell(ss_smoke, ss_r)} | "
             f"{skips(ss_smoke[3], ss_r)} | "
-            "Not measured (smoke) |"
+            f"{_CELL_NOT_MEASURED_SMOKE} |"
         ),
         "",
         "---",
@@ -757,24 +813,32 @@ def main() -> None:
         "",
         f"### 🧹 Code Quality Checks — {quality_component_count} components",
         "",
-        "| Component | Validation Scope | Lint / Format | Type Check / Build |",
-        "|:----------|:-----------------|:--------------|:-------------------|",
+        "| 🚦 | Component | Validation Scope | Lint / Format | Type Check / Build |",
+        "|:--:|:----------|:-----------------|:--------------|:-------------------|",
         (
-            "| Web Client | Python and JavaScript static quality | "
-            f"{web_quality} | {tool(web_mypy, 'mypy', web_py_r)} |"
+            f"| {row_status_icon(cq_web_lint, cq_web_type)} "
+            f"| Web Client | Python and JavaScript static quality "
+            f"| {cq_web_lint} | {cq_web_type} |"
         ),
         (
-            f"| Console Client | Python static quality | {tool(con_ruff, 'ruff', con_r)} | "
-            f"{tool(con_mypy, 'mypy', con_r)} |"
+            f"| {row_status_icon(cq_con_lint, cq_con_type)} "
+            f"| Console Client | Python static quality "
+            f"| {cq_con_lint} | {cq_con_type} |"
         ),
         (
-            f"| Node Client — Legacy JavaScript | JavaScript static quality | "
-            f"{eslint_fmt(nod_eslint, nod_esl, nod_r)} | Not Applicable |"
+            f"| {row_status_icon(cq_nod_lint)} "
+            f"| Node Client — Legacy JavaScript | JavaScript static quality "
+            f"| {cq_nod_lint} | {_CELL_NOT_APPLICABLE} |"
         ),
-        (f"| C# Client | Build and formatting quality | {cs_quality} | Not Applicable |"),
         (
-            f"| Test Client | Python static quality | {tool(tc_ruff, 'ruff', tc_r)} | "
-            f"{tool(tc_mypy, 'mypy', tc_r)} |"
+            f"| {row_status_icon(cq_cs_lint)} "
+            f"| C# Client | Build and formatting quality "
+            f"| {cq_cs_lint} | {_CELL_NOT_APPLICABLE} |"
+        ),
+        (
+            f"| {row_status_icon(cq_tc_lint, cq_tc_type)} "
+            f"| Test Client | Python static quality "
+            f"| {cq_tc_lint} | {cq_tc_type} |"
         ),
         "",
         "---",
@@ -794,21 +858,28 @@ def main() -> None:
             "the Security — CodeQL workflow."
         ),
         "",
-        "| Component | Security Scan | Dependency Audit |",
-        "|:----------|:--------------|:-----------------|",
-        (f"| Web Client | {bandit_fmt(web_ban[0], web_ban[1], web_py_r)} | {web_dep_audit} |"),
+        "| 🚦 | Component | Security Scan | Dependency Audit |",
+        "|:--:|:----------|:--------------|:-----------------|",
         (
-            f"| Console Client | {bandit_fmt(con_ban[0], con_ban[1], con_r)} | "
-            f"{pip_audit_fmt(con_pip[0], con_pip[1], con_pip[2], con_r)} |"
+            f"| {row_status_icon(sec_web_scan, sec_web_dep)} "
+            f"| Web Client | {sec_web_scan} | {sec_web_dep} |"
         ),
         (
-            "| Node Client — Legacy JavaScript | Not Configured "
-            f"(no eslint-plugin-security) | {npm_fmt(nod_npm[0], nod_npm[1], nod_r)} |"
+            f"| {row_status_icon(sec_con_scan, sec_con_dep)} "
+            f"| Console Client | {sec_con_scan} | {sec_con_dep} |"
         ),
-        f"| C# Client | CodeQL source scan runs in Security workflow | {nuget_fmt(cs_vuln)} |",
         (
-            f"| Test Client | {bandit_fmt(tc_ban[0], tc_ban[1], tc_r)} | "
-            f"{pip_audit_fmt(tc_pip[0], tc_pip[1], tc_pip[2], tc_r)} |"
+            f"| {row_status_icon(_CELL_ESLINT_SEC_OUT_OF_SCOPE, sec_nod_dep)} "
+            f"| Node Client — Legacy JavaScript "
+            f"| {_CELL_ESLINT_SEC_OUT_OF_SCOPE} | {sec_nod_dep} |"
+        ),
+        (
+            f"| {row_status_icon(sec_cs_dep)} "
+            f"| C# Client | {_CELL_CSHARP_CODEQL_NOTE} | {sec_cs_dep} |"
+        ),
+        (
+            f"| {row_status_icon(sec_tc_scan, sec_tc_dep)} "
+            f"| Test Client | {sec_tc_scan} | {sec_tc_dep} |"
         ),
         "",
         "---",

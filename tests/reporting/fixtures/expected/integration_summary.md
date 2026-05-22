@@ -2,7 +2,6 @@
 
 > ✅ **All 7 / 7 jobs passed**
 > **Branch:** `c2-phase-1b` &nbsp;·&nbsp; **Commit:** `abcdef12` &nbsp;·&nbsp; **Run:** [#84](https://github.example/ijt/actions/runs/84)
-> Nightly and manual system tests — live OPC UA server behavior, browser E2E suites, Docker packaging, and conformance verification.
 
 ---
 
@@ -26,17 +25,17 @@
 
 ### 🧪 Lane Results — 9 lanes
 
-| Lane | Result | Test Results |
-|:-----|:-------|:---------|
-| OPC UA Server Docker smoke | success ✅ | 10 ✅, 0 skipped |
-| Web Client Docker tests | success ✅ | Python: 680 ✅, 0 skipped<br>JavaScript: 522 ✅, 0 skipped |
-| Test Client conformance | success ✅ | 1,043 ✅, 154 skipped |
-| Web Client live suites | success ✅ | 127 ✅, 0 skipped |
-| Browser E2E suites | success ✅ | 66 ✅, 0 skipped |
-| Console Client live | success ✅ | 18 ✅, 0 skipped |
-| Console Client OPC UA security | skipped ⏭️ | Not reported |
-| C# Client live | success ✅ | 110 ✅, 0 skipped |
-| C# Client OPC UA security | skipped ⏭️ | Not reported |
+| 🚦 | Lane | Result | Test Results |
+|:--:|:-----|:-------|:-------------|
+| ✅ | OPC UA Server Docker smoke | success | 10 passed, 0 skipped |
+| ✅ | Web Client Docker tests | success | Python: 680 passed, 0 skipped<br>JavaScript: 522 passed, 0 skipped |
+| ✅ | Test Client conformance | success | 889 passed, 154 skipped |
+| ✅ | Web Client live suites | success | 127 passed, 0 skipped |
+| ✅ | Browser E2E suites | success | 66 passed, 0 skipped |
+| ✅ | Console Client live | success | 18 passed, 0 skipped |
+| ⏭️ | Console Client OPC UA security | skipped | Not reported |
+| ✅ | C# Client live | success | 110 passed, 0 skipped |
+| ⏭️ | C# Client OPC UA security | skipped | Not reported |
 
 ---
 
@@ -44,13 +43,13 @@
 
 ### 🧬 Component Test Results — 5 components
 
-| Component | Validation Scope | Container Test Results | Live/System Test Results | Notes |
-|:----------|:-----------------|:-------------------|:---------------------|:------|
-| OPC UA Server | Linux container plus Windows live server processes | 10 ✅, 0 skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
-| Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | Python: 680 ✅, 0 skipped<br>JavaScript: 522 ✅, 0 skipped | Python/WebSocket live: 127 ✅, 0 skipped<br>Browser E2E: 66 ✅, 0 skipped | Headless Chromium baked into the IJT Browser CI image |
-| Test Client | Live conformance harness against OPC UA server | Not applicable | Smoke: 10 ✅, 0 skipped<br>Conformance: 1,043 ✅, 154 skipped | Not Implemented fixture marker |
-| Console Client | Live Python client behavior and OPC UA security coverage against OPC UA server | Not reported | 18 ✅, 0 skipped | No additional notes |
-| C# Client | Nightly xUnit live behavior and OPC UA security coverage against OPC UA server | Not reported | 110 ✅, 0 skipped | Nightly drift detection |
+| 🚦 | Component | Validation Scope | Container Test Results | Live/System Test Results | Notes |
+|:--:|:----------|:-----------------|:-------------------|:---------------------|:------|
+| ✅ | OPC UA Server | Linux container plus Windows live server processes | 10 passed, 0 skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
+| ✅ | Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | Python: 680 passed, 0 skipped<br>JavaScript: 522 passed, 0 skipped | Python/WebSocket live: 127 passed, 0 skipped<br>Browser E2E: 66 passed, 0 skipped | Headless Chromium baked into the IJT Browser CI image |
+| ⏭️ | Test Client | Live conformance harness against OPC UA server | ➖ Not applicable | Smoke: 10 passed, 0 skipped<br>Conformance: 889 passed, 154 skipped | Not Implemented fixture marker |
+| ✅ | Console Client | Live Python client behavior and OPC UA security coverage against OPC UA server | Not reported | 18 passed, 0 skipped | No additional notes |
+| ✅ | C# Client | Nightly xUnit live behavior and OPC UA security coverage against OPC UA server | Not reported | 110 passed, 0 skipped | Nightly drift detection |
 
 ---
 
@@ -61,7 +60,7 @@
 | Suite | Port | Live Tests | Skipped | Notes |
 |:------|-----:|----------:|--------:|:------|
 | Test Client — Smoke sanity | 40462 | 10 ✅ | 0 | Server and namespace reachability |
-| Test Client — Conformance | 40462 | 1,043 ✅ | 154 | Not Implemented fixture marker |
+| Test Client — Conformance | 40462 | 889 ✅ | 154 | Not Implemented fixture marker |
 
 ---
 
