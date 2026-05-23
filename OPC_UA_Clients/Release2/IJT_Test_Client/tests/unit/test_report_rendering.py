@@ -287,8 +287,8 @@ def test_markdown_and_excel_share_report_scoring_helpers():
     assert _excel_report._conformance_score is _report_scoring.conformance_score
     assert _ci_summary._status_for is _report_scoring.status_for
     assert _excel_report._status_for is _report_scoring.status_for
-    assert _ci_summary._delta_symbol is _report_scoring.delta_symbol
-    assert _excel_report._delta_symbol is _report_scoring.delta_symbol
+    assert _ci_summary._is_healthy is _report_scoring.is_healthy
+    assert _excel_report._is_healthy is _report_scoring.is_healthy
 
 
 def test_markdown_and_excel_use_same_status_count_formatter():
@@ -347,23 +347,6 @@ def test_format_status_count_and_label_use_shared_icons():
     assert _report_scoring.format_status_label(supported) == f"{_report_scoring.NON_KPI_ICONS[supported]} {supported}"
 
 
-def test_format_delta_summary_uses_shared_separator_and_distinct_icons():
-    rendered = _report_scoring.format_delta_summary({"new": 1, "resolved": 2, "regressed": 3})
-
-    assert _report_scoring.KPI_SEPARATOR in rendered
-    assert _report_scoring.DELTA_ICONS["new"] in rendered
-    assert _report_scoring.KPI_ICONS[ACTION_NEEDED] not in rendered
-
-
-def test_delta_symbol_marks_new_cus_only_with_prior_baseline():
-    assert _ci_summary._delta_symbol("new_cu", "supported", None) == ""
-    assert _ci_summary._delta_symbol("new_cu", "supported", {"cu_outcomes": {}}) == ""
-    assert _ci_summary._delta_symbol("new_cu", "supported", {"cu_outcomes": {"old_cu": "supported"}}) == "New"
-    assert _ci_summary._delta_symbol("stable_cu", "supported", {"cu_outcomes": {"stable_cu": "supported"}}) == "✓"
-    assert _ci_summary._delta_symbol("better_cu", "supported", {"cu_outcomes": {"better_cu": "partial"}}) == "↑"
-    assert _ci_summary._delta_symbol("worse_cu", "blocked", {"cu_outcomes": {"worse_cu": "supported"}}) == "↓"
-
-
 def test_status_mapping():
     active = {"in_profile"}
 
@@ -393,28 +376,30 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
     _patch_ci_metadata(monkeypatch)
     payload = _sample_payload()
 
-    lines, context = _ci_summary._render_profile_facet_summary(payload, baseline=None)
+    lines, context = _ci_summary._render_profile_facet_summary(payload)
     rendered = "\n".join(lines)
 
     assert context is not None
     assert context["score"] == 90
     assert "### Change Since Last Run" not in rendered
-    assert "this run becomes the baseline" not in rendered
-    assert "## 🧩 Capability Support" in rendered
-    assert "## 📌 Action Items" in rendered
-    assert "## 📝 Informational Notes" in rendered
-    assert "_No action items — server validation passed cleanly._" in rendered
-    assert "<summary><b>Coverage Overview</b></summary>" in rendered
-    assert "<summary><b>Facet and CU Coverage</b></summary>" in rendered
-    assert "<details open>\n<summary><b>Show informational notes</b></summary>" in rendered
-    assert "<summary><b>Conformance Status</b></summary>" in rendered
-    assert "<summary><b>Full CU Coverage</b></summary>" in rendered
-    assert "<summary><b>Test Environment</b></summary>" in rendered
-    assert "<summary><b>Glossary and Reading Guide</b></summary>" in rendered
+    assert "Review Items" not in rendered
+    assert "🆕" not in rendered
+    assert " resolved " not in rendered
+    assert " regressed " not in rendered
+    assert "## 🧩 IJT Facet Support" in rendered
+    assert "## 📌 Conformance Action Items" not in rendered
+    assert "## 📝 Server Scope Notes" in rendered
+    assert "Information only; review scope and caveats. See Conformance Unit Details below." in rendered
+    assert "## 📐 IJT Facet Breakdown" in rendered
+    assert "## 📋 Conformance Unit Details" in rendered
+    assert "<summary><b>2 rows needing review · 4 total CUs</b></summary>" in rendered
+    assert "<summary><b>Coverage Overview</b></summary>" not in rendered
+    assert "<summary><b>Conformance Status</b></summary>" not in rendered
+    assert "<summary><b>Full CU Coverage</b></summary>" not in rendered
+    assert "<summary><b>Test Client Environment</b></summary>" in rendered
+    assert "<summary><b>Glossary and Reading Guide</b></summary>" not in rendered
     assert rendered.count("# IJT Conformance Test Report") == 0
     assert "## Coverage Overview" not in rendered
-    assert "Purpose" in rendered
-    assert "Reference IJT facet" in rendered
     assert "Server Supported CUs" in rendered
     assert "Server Support %" in rendered
     assert "Supported CUs Validated %" in rendered
@@ -440,19 +425,21 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
     assert "Primary Reason" in rendered
     assert "OptionalFeature: Not Supported" in rendered
     assert not_supported_status in rendered
-    assert _report_scoring.format_status_count(WITH_NOTES, context["findings_count"]["with_notes"]) in rendered
+    assert f"{context['findings_count']['with_notes']} with notes" in rendered
     assert (
-        "| Full Conformance | Server capability profile | 1 | 3 | 2 | 66.7% | 100.0% | "
-        f"2 {supported_label}<br>0 {WITH_NOTES}<br>1 {NOT_SUPPORTED}<br>"
-        f"0 {BLOCKED}<br>0 {ACTION_NEEDED} | "
-        f"{supported_with_notes_status} |" in rendered
+        "| Basic Facet | Facet | 3 | 2 | 66.7% | 100.0% | "
+        f"2 {supported_label}<br>0 {WITH_NOTES}<br>1 {NOT_SUPPORTED}<br>0 {BLOCKED}<br>"
+        f"0 {ACTION_NEEDED} | {supported_with_notes_status} |" in rendered
     )
     assert (
         "| IJT Joining System Base | Basic Facet, Basic Joining System Server Facet "
-        f"| Yes | {supported_status} | 2 | 2 | 0 | 0 | 0 | 3 |"
+        f"| Yes | {supported_status} |  | 2 | 2 | 0 | 0 | 0 | 3 |"
     ) in rendered
-    assert f"| IJT State Policy Note | Basic Facet | Yes | {supported_status} | 2 | 1 | 0 | 0 | 0 | 1 |" in rendered
-    assert f"| IJT Optional Feature | Basic Facet | No | {not_supported_status} | 1 | 0 | 1 | 0 | 0 | 2 |" in rendered
+    assert f"| IJT State Policy Note | Basic Facet | Yes | {supported_status} |  | 2 | 1 | 0 | 0 | 0 | 1 |" in rendered
+    assert (
+        f"| ⚪ Not Supported | IJT Optional Feature | Basic Facet | No | {not_supported_status} | "
+        "OptionalFeature: Not Supported — cannot run optional feature | 1 | 0 | 1 | 0 | 0 | 2 |" in rendered
+    )
     assert "Accepted Policy: ACCEPTED POLICY - Method: SelectJoiningProcess - state not ready" not in rendered
 
 
@@ -481,11 +468,11 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
 
     assert lines.count("# IJT Conformance Test Report") == 1
     assert any(line.startswith("## 📊 Conformance Overview") for line in lines)
-    assert any(line.startswith("## 🧩 Capability Support") for line in lines)
-    assert any(line.startswith("## 📌 Action Items") for line in lines)
-    assert any(line.startswith("## 📝 Informational Notes") for line in lines)
-    assert "Action Items" in rendered
-    assert "Informational Notes" in rendered
+    assert any(line.startswith("## 🧩 IJT Facet Support") for line in lines)
+    assert not any(line.startswith("## 📌 Conformance Action Items") for line in lines)
+    assert any(line.startswith("## 📝 Server Scope Notes") for line in lines)
+    assert "Conformance Action Items" in rendered
+    assert "Server Scope Notes" in rendered
     assert (
         _report_scoring.format_status_counts(_report_scoring.ACTION_ITEM_LABEL_ORDER, _context["findings_count"])
         in rendered
@@ -494,9 +481,11 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
         _report_scoring.format_status_counts(_report_scoring.CAPABILITY_NOTE_LABEL_ORDER, _context["findings_count"])
         in rendered
     )
-    assert "<summary><b>Full CU Coverage</b></summary>" in rendered
-    assert "<summary><b>Test Environment</b></summary>" in rendered
-    assert "<summary><b>Skip Diagnostics</b></summary>" not in rendered
+    assert "## 📋 Conformance Unit Details" in rendered
+    # When skip_reasons and xfail_reasons are both empty, Diagnostics bundle is omitted entirely.
+    assert "<summary><b>Skip &amp; Expected-Failure Diagnostics</b></summary>" not in rendered
+    assert "_No diagnostic skips on this run._" not in rendered
+    assert "**Diagnostic Skips**" not in rendered
 
 
 def test_review_items_sort_order(monkeypatch):
@@ -505,7 +494,7 @@ def test_review_items_sort_order(monkeypatch):
     payload["by_cu"]["joining_system_base"] = {"failed": 1, "test_count": 1}
     payload["by_cu"]["state_policy_note"] = {"blocked": 1, "test_count": 1}
 
-    _lines, context = _ci_summary._render_profile_facet_summary(payload, baseline=None)
+    _lines, context = _ci_summary._render_profile_facet_summary(payload)
 
     assert [finding["status"] for finding in context["findings"][:3]] == [
         ACTION_NEEDED,
@@ -514,7 +503,8 @@ def test_review_items_sort_order(monkeypatch):
     ]
 
 
-def test_delta_block_present_when_baseline_exists(monkeypatch):
+def test_baseline_kwarg_is_silently_ignored_by_renderer(monkeypatch):
+    """``render_conformance_summary`` accepts ``baseline`` for backwards compatibility but never uses it."""
     _patch_ci_metadata(monkeypatch)
     baseline = {
         "run_ts": "2026-05-09T14:21:00Z",
@@ -528,14 +518,33 @@ def test_delta_block_present_when_baseline_exists(monkeypatch):
             "optional_feature": "supported",
         },
     }
+    data = {
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "xfailed": 0,
+        "total": 0,
+        "duration_s": 0,
+        "failures": [],
+        "skip_reasons": {},
+        "xfail_reasons": {},
+    }
 
-    lines, _context = _ci_summary._render_profile_facet_summary(_sample_payload(), baseline=baseline)
-    rendered = "\n".join(lines)
+    rendered, _ctx = _ci_summary.render_conformance_summary(
+        data,
+        "opc.tcp://fixture.test:40451",
+        "2026-05-10 15:46 UTC",
+        _sample_payload(),
+        baseline,
+    )
 
-    assert "### Change Since Last Run (commit `abc123e`" in rendered
-    assert "Score **80 → 90**" in rendered
-    assert "1 resolved" in rendered
-    assert "1 regressed" in rendered
+    assert "Change Since Last Run" not in rendered
+    assert "Review Items" not in rendered
+    assert "🆕" not in rendered
+    assert " resolved " not in rendered
+    assert " regressed " not in rendered
+    assert "abc123e" not in rendered
 
 
 def test_baseline_written_after_render():
@@ -569,64 +578,173 @@ def test_baseline_written_after_render():
 def test_excel_cover_sheet_exists_and_first():
     profiles, facets, capabilities = _excel_metadata()
     payload = _sample_payload()
-    context = _excel_report._build_report_context(payload, profiles, facets, capabilities, baseline=None)
+    context = _excel_report._build_report_context(payload, profiles, facets, capabilities)
     wb = _excel_report.openpyxl.Workbook()
     wb.remove(wb.active)
 
-    _excel_report._build_cover(wb, [], "2026-05-10 15:46:00", "passed", context, None, facets)
+    _excel_report._build_cover(wb, [], "2026-05-10 15:46:00", "passed", context, facets)
 
-    assert wb.sheetnames[0] == "Cover"
-    assert wb["Cover"]["A1"].value == "PASSED - Score 90 / 100"
-    assert wb["Cover"]["A8"].value == "Action Items"
-    assert wb["Cover"]["B8"].value == _report_scoring.format_status_counts(
-        _report_scoring.ACTION_ITEM_LABEL_ORDER, context["findings_count"]
+    assert wb.sheetnames[0] == "Conformance Overview"
+    assert wb["Conformance Overview"]["A1"].value == (
+        "🟢 PASSED · 0 action items · Validation 100.0% (2/2) · Server support 66.7% (2/3)"
     )
-    assert wb["Cover"]["A9"].value == "Informational Notes"
-    assert wb["Cover"]["B9"].value == _report_scoring.format_status_counts(
+    assert wb["Conformance Overview"]["A8"].value == "Server Scope Notes"
+    assert wb["Conformance Overview"]["B8"].value == _report_scoring.format_status_counts(
         _report_scoring.CAPABILITY_NOTE_LABEL_ORDER, context["findings_count"]
     )
+    values = [cell.value for row in wb["Conformance Overview"].iter_rows() for cell in row]
+    assert "Conformance Action Items" not in values
 
 
 def test_excel_cover_status_counts_use_separator():
     profiles, facets, capabilities = _excel_metadata()
-    context = _excel_report._build_report_context(_sample_payload(), profiles, facets, capabilities, baseline=None)
+    context = _excel_report._build_report_context(_sample_payload(), profiles, facets, capabilities)
     wb = _excel_report.openpyxl.Workbook()
     wb.remove(wb.active)
 
-    _excel_report._build_cover(wb, [], "2026-05-10 15:46:00", "passed", context, None, facets)
+    _excel_report._build_cover(wb, [], "2026-05-10 15:46:00", "passed", context, facets)
 
-    rendered = str(wb["Cover"]["B8"].value)
+    rendered = str(wb["Conformance Overview"]["B8"].value)
     assert _report_scoring.KPI_SEPARATOR in rendered
     assert "/" not in rendered
 
 
-def test_excel_cover_hides_delta_section_when_baseline_is_absent():
+def test_excel_cover_has_no_change_since_last_run_section():
     profiles, facets, capabilities = _excel_metadata()
-    context = _excel_report._build_report_context(_sample_payload(), profiles, facets, capabilities, baseline=None)
+    context = _excel_report._build_report_context(_sample_payload(), profiles, facets, capabilities)
     wb = _excel_report.openpyxl.Workbook()
     wb.remove(wb.active)
 
-    _excel_report._build_cover(wb, [], "2026-05-10 15:46:00", "passed", context, None, facets)
+    _excel_report._build_cover(wb, [], "2026-05-10 15:46:00", "passed", context, facets)
 
-    values = [str(cell.value) for row in wb["Cover"].iter_rows() for cell in row if cell.value is not None]
+    values = [
+        str(cell.value) for row in wb["Conformance Overview"].iter_rows() for cell in row if cell.value is not None
+    ]
     assert "Change Since Last Run" not in values
-    assert all("this run becomes the baseline" not in value for value in values)
-    assert "Capability Support" in values
+    assert "Review Items" not in values
+    assert "IJT Facet Support" in values
 
 
-def test_excel_cu_status_and_change_columns_present():
+def test_excel_cu_coverage_has_no_change_column():
     profiles, facets, capabilities = _excel_metadata()
     payload = _sample_payload()
-    baseline = {"cu_outcomes": {"optional_feature": "supported"}}
-    context = _excel_report._build_report_context(payload, profiles, facets, capabilities, baseline=baseline)
+    context = _excel_report._build_report_context(payload, profiles, facets, capabilities)
     wb = _excel_report.openpyxl.Workbook()
     wb.remove(wb.active)
 
-    _excel_report._build_cu_coverage(wb, payload, facets, capabilities, context, baseline)
-    ws = wb["CU Coverage"]
+    _excel_report._build_cu_coverage(wb, payload, facets, capabilities, context)
+    ws = wb["Conformance Unit Details"]
 
+    headers = [ws.cell(row=1, column=col).value for col in range(1, 19)]
+    assert "Change" not in headers
     assert ws["A1"].value == "Review Status"
-    assert ws["B1"].value == "Change"
-    assert ws["A4"].value == _report_scoring.format_status_label(NOT_SUPPORTED)
-    assert ws["A4"].fill.fgColor.rgb == _report_scoring.STATUS_COLORS_EXCEL[NOT_SUPPORTED]
-    assert ws["B4"].value == "↓"
+    assert ws["B1"].value == "CU"
+
+
+def test_skip_diagnostics_filters_not_supported_prefix_in_markdown(monkeypatch):
+    """Spec: 'Not Supported:' reasons are filtered from the markdown Diagnostic Skips table,
+    but the raw data['skip_reasons'] input is left untouched for Excel/baseline consumers.
+    """
+    _patch_ci_metadata(monkeypatch)
+    raw_skips = {
+        "Not Supported: missing precondition": 4,
+        "Server unavailable": 2,
+    }
+    data = {
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 6,
+        "xfailed": 0,
+        "total": 6,
+        "duration_s": 1,
+        "failures": [],
+        "skip_reasons": raw_skips,
+        "xfail_reasons": {},
+    }
+
+    rendered, _ctx = _ci_summary.render_conformance_summary(
+        data, "opc.tcp://localhost:40462", "2026-05-10 15:46 UTC", _sample_payload()
+    )
+
+    # Markdown Diagnostic Skips table omits the 'Not Supported:' bucket.
+    assert "Not Supported: missing precondition" not in rendered
+    assert "Server unavailable" in rendered
+    # The raw input dict the caller passes is not mutated by the renderer.
+    assert raw_skips == {
+        "Not Supported: missing precondition": 4,
+        "Server unavailable": 2,
+    }
+
+
+def test_github_summary_never_does_not_touch_step_summary(tmp_path, monkeypatch):
+    """Spec: --github-summary=never must not write to GITHUB_STEP_SUMMARY even when set."""
+    import subprocess
+
+    fixt = Path(__file__).parent / "reporting" / "fixtures" / "ci_unit_no_cu_payload"
+    step_summary = tmp_path / "step_summary.md"
+    step_summary.write_text("PRE-EXISTING\n", encoding="utf-8")
+
+    out_md = tmp_path / "summary.md"
+    baseline_path = tmp_path / "baseline.json"
+    env = {
+        **dict(__import__("os").environ),
+        "GITHUB_STEP_SUMMARY": str(step_summary),
+    }
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(_SCRIPTS / "make_conformance_summary.py"),
+            "--xml",
+            str(fixt / "pytest.xml"),
+            "--out",
+            str(out_md),
+            "--baseline",
+            str(baseline_path),
+            "--cu-json",
+            str(fixt / "cu_results.json"),
+            "--github-summary=never",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert out_md.exists()
+    # Step summary file is untouched.
+    assert step_summary.read_text(encoding="utf-8") == "PRE-EXISTING\n"
+
+
+def test_is_conformance_skip_reason_helper():
+    """Helper filters reasons that display as 'Not Supported:' (after normalization)."""
+    assert _ci_summary._is_conformance_skip_reason("Not Supported: missing precondition") is True
+    # Display normalization is case-insensitive on the prefix, so lower-case variants are also filtered.
+    assert _ci_summary._is_conformance_skip_reason("not supported: lower") is True
+    assert _ci_summary._is_conformance_skip_reason("Server unavailable") is False
+    assert _ci_summary._is_conformance_skip_reason("") is False
+
+
+def test_glossary_url_absolute_when_github_env_set(monkeypatch):
+    """When GITHUB_SERVER_URL, GITHUB_REPOSITORY, and GITHUB_SHA are all set,
+    _glossary_url() returns an absolute blob URL pinned to the run's commit."""
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "OPCFoundation/UA-for-Industrial-Joining-Technologies")
+    monkeypatch.setenv("GITHUB_SHA", "abc1234deadbeef")
+    url = _ci_summary._glossary_url()
+    assert url == (
+        "https://github.com/OPCFoundation/UA-for-Industrial-Joining-Technologies/blob/"
+        "abc1234deadbeef/OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md"
+    )
+
+
+def test_glossary_url_relative_when_github_env_unset(monkeypatch):
+    """When any of the GITHUB_* env vars are missing, _glossary_url() falls
+    back to the repo-relative path so local IDE previews keep working."""
+    for key in ("GITHUB_SERVER_URL", "GITHUB_REPOSITORY", "GITHUB_SHA"):
+        monkeypatch.delenv(key, raising=False)
+    assert _ci_summary._glossary_url() == ("OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md")
+    # Partial env (only two of three set) must also fall back to relative.
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
+    assert _ci_summary._glossary_url() == ("OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md")

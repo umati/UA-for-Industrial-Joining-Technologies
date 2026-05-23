@@ -6,14 +6,15 @@ Reads:  test-results/pytest.xml   (or path given via --xml=FILE)
 Writes: test-results/report.xlsx  (or path given via --out=FILE)
 
 Sheets produced:
-  Summary          — headline counts (passed / failed / skipped / xfailed) by test area
-  All Tests        — every test: name, file, status, duration, skip/fail reason
-  Failures         — only failed tests with full message
-  Skipped          — only skipped tests with reason
-  Expected Fail    — xfailed and xpassed tests with reason
-  Profile Coverage — IJT coverage overview, when CU JSON is present
-  Facet and CU Coverage — IJT facet coverage, when CU JSON is present
-  CU Coverage      — one row per conformance unit, when CU JSON is present
+  Conformance Overview        — banner, run metadata, KPI grid mirroring the markdown report
+  Test Outcome Counts         — headline counts (passed / failed / skipped / xfailed) by test area
+  IJT Facet Breakdown         — IJT facet coverage, when CU JSON is present
+  Conformance Unit Details    — one row per conformance unit, when CU JSON is present
+  Profile Coverage Comparison — IJT coverage overview, when CU JSON is present
+  All Test Cases              — every test: name, file, status, duration, skip/fail reason
+  Test Failures               — only failed tests with full message
+  Skipped Test Cases          — only skipped tests with reason
+  Expected Failures           — xfailed and xpassed tests with reason
 
 Usage:
   python scripts/make_excel_report.py
@@ -115,25 +116,13 @@ from helpers.report_scoring import (
     CAPABILITY_SUPPORT_ICONS as _CAPABILITY_SUPPORT_ICONS,
 )
 from helpers.report_scoring import (
-    OUTCOME_RANK as _OUTCOME_RANK,
-)
-from helpers.report_scoring import (
     STATUS_ORDER as _STATUS_ORDER,
 )
 from helpers.report_scoring import (
     action_items_context as _action_items_context,
 )
 from helpers.report_scoring import (
-    change_marker as _change_marker,
-)
-from helpers.report_scoring import (
     conformance_score as _conformance_score,
-)
-from helpers.report_scoring import (
-    delta_symbol as _delta_symbol,
-)
-from helpers.report_scoring import (
-    format_delta_summary as _format_delta_summary,
 )
 from helpers.report_scoring import (
     format_pct as _fmt_pct,
@@ -143,6 +132,9 @@ from helpers.report_scoring import (
 )
 from helpers.report_scoring import (
     informational_notes_context as _informational_notes_context,
+)
+from helpers.report_scoring import (
+    is_healthy as _is_healthy,
 )
 from helpers.report_scoring import (
     outcome_label as _outcome_label,
@@ -418,14 +410,6 @@ def _package_version(package: str) -> str:
         return "not installed"
 
 
-def _load_baseline(path: Path) -> dict[str, Any] | None:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return None
-    return data if isinstance(data, dict) else None
-
-
 def _write_baseline(path: Path, baseline: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -587,7 +571,6 @@ def _build_report_context(
     profiles: dict[str, ProfileInfo],
     facets: dict[str, FacetInfo],
     capabilities: CapabilitiesInfo | None,
-    baseline: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     if not cu_payload:
         return None
@@ -628,11 +611,17 @@ def _build_report_context(
                 "reason": _cu_note_summary(cu_key, tests_by_cu),
                 "status": status,
                 "status_icon": status_icon,
-                "delta": _delta_symbol(cu_key, outcome, baseline),
-                "change": _change_marker(cu_key, outcome, baseline),
             }
         )
     findings.sort(key=lambda item: (_STATUS_ORDER.get(str(item["status"]), 99), str(item["cu_key"])))
+    findings_count = Counter(_status_count_key(str(item["status"])) for item in findings)
+    is_healthy = _is_healthy(
+        context_present=True,
+        server_supported_count=server_supported_count,
+        active_cus_len=len(active_cus),
+        failed_count=int(findings_count.get("action_needed", 0) or 0),
+        blocked_count=int(findings_count.get("blocked", 0) or 0),
+    )
     return {
         "by_cu": by_cu,
         "supported": supported,
@@ -645,7 +634,8 @@ def _build_report_context(
         "validation_health_value": validation_health_value,
         "spec_coverage_value": spec_coverage_value,
         "findings": findings,
-        "findings_count": Counter(_status_count_key(str(item["status"])) for item in findings),
+        "findings_count": findings_count,
+        "is_healthy": is_healthy,
         "cu_outcomes": cu_outcomes,
     }
 
@@ -660,26 +650,6 @@ def _baseline_payload(context: dict[str, Any], run_ts_iso: str) -> dict[str, Any
         "findings_count": dict(context["findings_count"]),
         "cu_outcomes": context["cu_outcomes"],
     }
-
-
-def _delta_summary(context: dict[str, Any], baseline: dict[str, Any] | None) -> dict[str, int]:
-    if not baseline:
-        return {"new": 0, "resolved": 0, "regressed": 0}
-    raw_previous_outcomes = baseline.get("cu_outcomes")
-    previous_outcomes: dict[str, Any] = raw_previous_outcomes if isinstance(raw_previous_outcomes, dict) else {}
-    current_outcomes: dict[str, str] = context["cu_outcomes"]
-    new = resolved = regressed = 0
-    for cu_key, current in current_outcomes.items():
-        previous = str(previous_outcomes.get(cu_key) or "")
-        if current in _FINDING_OUTCOMES and previous not in _FINDING_OUTCOMES:
-            new += 1
-        if previous in _FINDING_OUTCOMES and current not in _FINDING_OUTCOMES:
-            resolved += 1
-        current_rank = _OUTCOME_RANK.get(current)
-        previous_rank = _OUTCOME_RANK.get(previous)
-        if current_rank is not None and previous_rank is not None and current_rank < previous_rank:
-            regressed += 1
-    return {"new": new, "resolved": resolved, "regressed": regressed}
 
 
 def _support_rows(context: dict[str, Any], facets: dict[str, FacetInfo], limit: int = 12) -> list[tuple[str, str]]:
@@ -770,6 +740,47 @@ def _header_font() -> Font:
     return Font(bold=True, color="FF000000")
 
 
+def _apply_print_setup(ws, *, repeat_header_row: int | None = 1) -> None:
+    """Apply uniform landscape / A4 / fit-to-width print settings to *ws*.
+
+    ``repeat_header_row`` is the 1-based spreadsheet row to repeat as a print
+    title on every page. Pass ``None`` for layout sheets without a single
+    repeating table header row (e.g. Conformance Overview).
+    """
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0  # unbounded height; only width fits to 1 page
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_options.horizontalCentered = True
+    ws.page_margins.top = 0.5
+    ws.page_margins.bottom = 0.5
+    ws.page_margins.left = 0.3
+    ws.page_margins.right = 0.3
+    ws.page_margins.header = 0.3
+    ws.page_margins.footer = 0.3
+    if repeat_header_row is not None and ws.max_row >= repeat_header_row:
+        ws.print_title_rows = f"{repeat_header_row}:{repeat_header_row}"
+    ws.oddHeader.center.text = "IJT Conformance Test Report"
+    ws.oddHeader.center.size = 12
+    ws.oddHeader.center.color = "24292E"
+    ws.oddFooter.center.text = "Page &P of &N"
+    ws.oddFooter.center.size = 10
+
+
+def _apply_autofilter(ws, *, start_row: int = 1) -> None:
+    """Set auto-filter from ``start_row`` (the table header) through the last data row.
+
+    ``start_row`` is the 1-based spreadsheet row holding the real table header.
+    Skipped when the sheet has no data rows below the header.
+    """
+    if ws.max_row <= start_row:
+        return
+    last_col_letter = openpyxl.utils.get_column_letter(ws.max_column)
+    last_row = ws.max_row
+    ws.auto_filter.ref = f"A{start_row}:{last_col_letter}{last_row}"
+
+
 def _apply_header(ws, row: int, headers: list[str], col_widths: list[int]) -> None:
     for col, (hdr, width) in enumerate(zip(headers, col_widths), start=1):
         cell = ws.cell(row=row, column=col, value=hdr)
@@ -815,10 +826,9 @@ def _build_cover(
     run_ts: str,
     run_result: str,
     context: dict[str, Any] | None,
-    baseline: dict[str, Any] | None,
     facets: dict[str, FacetInfo],
 ) -> None:
-    ws = wb.create_sheet("Cover")
+    ws = wb.create_sheet("Conformance Overview")
     ws.sheet_view.showGridLines = False
     for col in range(1, 8):
         ws.column_dimensions[get_column_letter(col)].width = 22
@@ -826,10 +836,23 @@ def _build_cover(
     statuses = [case.status for case in cases]
     failed = statuses.count("failed") + statuses.count("error")
     status = "PASSED" if failed == 0 and run_result != "failed" else "FAILED"
-    score = context["score"] if context else "n/a"
+    _status_emoji = "🟢" if status == "PASSED" else "🔴"
     ws.merge_cells("A1:G1")
     title = ws["A1"]
-    title.value = f"{status} - Score {score} / 100"
+    if context:
+        supported = context["server_supported_count"]
+        total_active = len(context["active_cus"])
+        validated = _supported_cus_validated_count(context["active_cus"], context["by_cu"], context["supported"])
+        findings_count: Counter[str] = context["findings_count"]
+        action_total = int(findings_count.get("action_needed", 0) or 0) + int(findings_count.get("blocked", 0) or 0)
+        action_label = "action item" if action_total == 1 else "action items"
+        title.value = (
+            f"{_status_emoji} {status} · {action_total} {action_label} · "
+            f"Validation {_fmt_pct(context['validation_health_value'])} ({validated}/{supported}) · "
+            f"Server support {_fmt_pct(context['spec_coverage_value'])} ({supported}/{total_active})"
+        )
+    else:
+        title.value = f"{_status_emoji} {status} · conformance profile unavailable"
     title.font = Font(bold=True, size=24)
     title.fill = _fill(_LIGHT_GREEN if status == "PASSED" else _LIGHT_RED)
     title.alignment = Alignment(horizontal="center")
@@ -843,7 +866,7 @@ def _build_cover(
         supported = context["server_supported_count"]
         total_active = len(context["active_cus"])
         validated = _supported_cus_validated_count(context["active_cus"], context["by_cu"], context["supported"])
-        findings_count: Counter[str] = context["findings_count"]
+        findings_count = context["findings_count"]
         metrics = [
             (
                 "Server Support Coverage",
@@ -855,17 +878,22 @@ def _build_cover(
                 _fmt_pct(context["validation_health_value"]),
                 f"{validated} / {supported} server-supported CUs validated",
             ),
+        ]
+        if not bool(context.get("is_healthy")):
+            metrics.append(
+                (
+                    "Conformance Action Items",
+                    _format_status_counts(_ACTION_ITEM_LABEL_ORDER, findings_count),
+                    _action_items_context(findings_count),
+                )
+            )
+        metrics.append(
             (
-                "Action Items",
-                _format_status_counts(_ACTION_ITEM_LABEL_ORDER, findings_count),
-                _action_items_context(findings_count),
-            ),
-            (
-                "Informational Notes",
+                "Server Scope Notes",
                 _format_status_counts(_CAPABILITY_NOTE_LABEL_ORDER, findings_count),
                 _informational_notes_context(findings_count),
-            ),
-        ]
+            )
+        )
         for offset, (metric, value, note) in enumerate(metrics, start=1):
             ws.cell(row=row + offset, column=1, value=metric).font = Font(bold=True)
             value_cell = ws.cell(row=row + offset, column=2, value=value)
@@ -877,36 +905,15 @@ def _build_cover(
             ws.cell(row=row + offset, column=3, value=note).alignment = Alignment(wrap_text=True, vertical="top")
 
     row = 10
-    if context and baseline:
-        ws.cell(row=row, column=1, value="Change Since Last Run").font = Font(bold=True, size=14)
-        delta = _delta_summary(context, baseline)
-        rows = [
-            ("Score", f"{baseline.get('score', 'n/a')} -> {context['score']}"),
-            (
-                "Validation Health",
-                f"{_fmt_pct(baseline.get('validation_health_pct'))} -> {_fmt_pct(context['validation_health_value'])}",
-            ),
-            (
-                "Server Support Coverage",
-                f"{_fmt_pct(baseline.get('spec_coverage_pct'))} -> {_fmt_pct(context['spec_coverage_value'])}",
-            ),
-            ("Review Items", _format_delta_summary(delta)),
-        ]
-        _apply_header(ws, row + 1, ["Item", "Change"], [28, 50])
-        for offset, (item, value) in enumerate(rows, start=2):
-            ws.cell(row=row + offset, column=1, value=item).font = Font(bold=True)
-            ws.cell(row=row + offset, column=2, value=value)
-        row = row + max(6, len(rows) + 4)
-
-    ws.cell(row=row, column=1, value="Capability Support").font = Font(bold=True, size=14)
-    _apply_header(ws, row + 1, ["Capability Area", "Status"], [34, 90])
+    ws.cell(row=row, column=1, value="IJT Facet Support").font = Font(bold=True, size=14)
+    _apply_header(ws, row + 1, ["IJT Facet", "Status"], [34, 90])
     if context:
         for offset, (area, status_text) in enumerate(_support_rows(context, facets), start=2):
             ws.cell(row=row + offset, column=1, value=area).font = Font(bold=True)
             ws.cell(row=row + offset, column=2, value=status_text).alignment = Alignment(wrap_text=True, vertical="top")
 
     row = row + 16
-    ws.cell(row=row, column=1, value="Test environment").font = Font(bold=True, size=14)
+    ws.cell(row=row, column=1, value="Test Client Environment").font = Font(bold=True, size=14)
     env_rows = [
         ("Generated", run_ts),
         ("Commit", _short_git_sha(_PROJECT_ROOT)),
@@ -920,9 +927,12 @@ def _build_cover(
         ws.cell(row=row + offset, column=1, value=item).font = Font(bold=True)
         ws.cell(row=row + offset, column=2, value=value).alignment = Alignment(wrap_text=True, vertical="top")
 
+    _apply_print_setup(ws, repeat_header_row=None)  # layout sheet — no single repeating header row
+    ws.freeze_panes = "A3"
+
 
 def _build_summary(wb: openpyxl.Workbook, cases: list[TestCase], run_ts: str, run_result: str) -> None:
-    ws = wb.create_sheet("Summary")
+    ws = wb.create_sheet("Test Outcome Counts")
     ws.sheet_view.showGridLines = False
 
     # Title
@@ -986,9 +996,12 @@ def _build_summary(wb: openpyxl.Workbook, cases: list[TestCase], run_ts: str, ru
     ws.column_dimensions["A"].width = 22
     ws.column_dimensions["B"].width = 8
 
+    _apply_print_setup(ws, repeat_header_row=12)  # real table header (`By Test Area`) lives at row 12
+    _apply_autofilter(ws, start_row=12)
+
 
 def _build_all_tests(wb: openpyxl.Workbook, cases: list[TestCase]) -> None:
-    ws = wb.create_sheet("All Tests")
+    ws = wb.create_sheet("All Test Cases")
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = "A2"
 
@@ -1014,6 +1027,9 @@ def _build_all_tests(wb: openpyxl.Workbook, cases: list[TestCase]) -> None:
 
     ws.row_dimensions[1].height = 20
 
+    _apply_print_setup(ws)
+    _apply_autofilter(ws)
+
 
 def _build_filtered(
     wb: openpyxl.Workbook, cases: list[TestCase], sheet_name: str, statuses: list[str], colour: str
@@ -1025,6 +1041,8 @@ def _build_filtered(
 
     if not filtered:
         ws["A1"] = f"No {sheet_name.lower()} tests."
+        _apply_print_setup(ws)
+        _apply_autofilter(ws)  # skipped automatically — max_row == 1
         return
 
     headers = ["Area", "File", "Test Name", "Duration (s)", "Reason / Message"]
@@ -1036,6 +1054,9 @@ def _build_filtered(
             cell = ws.cell(row=row_idx, column=col, value=val)
             cell.fill = _fill(colour)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+    _apply_print_setup(ws)
+    _apply_autofilter(ws)
 
 
 def _write_metric_block(ws, start_row: int, rows: list[tuple[str, object]]) -> int:
@@ -1054,7 +1075,7 @@ def _build_profile_coverage(
     capabilities: CapabilitiesInfo | None,
     run_result: str,
 ) -> None:
-    ws = wb.create_sheet("Profile Coverage")
+    ws = wb.create_sheet("Profile Coverage Comparison")
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = "A10"
 
@@ -1067,10 +1088,11 @@ def _build_profile_coverage(
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = (
         "This sheet maps the current test run to IJT coverage views, facets, and conformance units. "
+        "Primary reader view: see IJT Facet Breakdown. This sheet retains the active profile and three reference views. "
         "Start with the Server Capability Profile row; Reference IJT Facet and Reference Full CU Set rows are comparison views only, not extra pass/fail requirements. "
         "Server Supported CUs comes from the server capability file. Outcome and validated counts come from this test run. "
         "Supported CUs Validated % is the main health signal and is color-coded; Server Support % is informational and is not color-coded. "
-        "Skip diagnostics may overlap with conformance status items."
+        "Skip diagnostics may overlap with Conformance Action Items."
     )
     ws["A2"].alignment = Alignment(wrap_text=True)
     if run_result == "failed":
@@ -1189,7 +1211,8 @@ def _build_profile_coverage(
                 cell.font = Font(bold=True)
         row += 1
 
-    ws.auto_filter.ref = f"A{next_row}:O{row - 1}"
+    _apply_print_setup(ws, repeat_header_row=next_row)  # real table header lives below the metric block
+    _apply_autofilter(ws, start_row=next_row)
 
 
 def _build_facet_coverage(
@@ -1198,7 +1221,7 @@ def _build_facet_coverage(
     facets: dict[str, FacetInfo],
     capabilities: CapabilitiesInfo | None,
 ) -> None:
-    ws = wb.create_sheet("Facet and CU Coverage")
+    ws = wb.create_sheet("IJT Facet Breakdown")
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = "A2"
 
@@ -1262,7 +1285,8 @@ def _build_facet_coverage(
                 cell.fill = _status_fill(str(value))
                 cell.font = Font(bold=True)
 
-    ws.auto_filter.ref = f"A1:O{max(1, len(facets) + 1)}"
+    _apply_print_setup(ws)
+    _apply_autofilter(ws)
 
 
 def _build_cu_coverage(
@@ -1271,9 +1295,8 @@ def _build_cu_coverage(
     facets: dict[str, FacetInfo],
     capabilities: CapabilitiesInfo | None,
     context: dict[str, Any] | None,
-    baseline: dict[str, Any] | None,
 ) -> None:
-    ws = wb.create_sheet("CU Coverage")
+    ws = wb.create_sheet("Conformance Unit Details")
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = "A2"
 
@@ -1284,40 +1307,28 @@ def _build_cu_coverage(
     ordered_keys = _ordered_cu_keys(by_cu, facets)
     tests_by_cu = _cu_test_index(cu_payload)
     active_cus = set(context["active_cus"]) if context else set()
-    row_change_by_cu: dict[str, str] = {}
-    for cu_key in ordered_keys:
-        data_raw = by_cu.get(cu_key)
-        data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
-        row_change_by_cu[cu_key] = _change_marker(cu_key, _cu_compliance_key(data), baseline)
-    show_change = any(row_change_by_cu.values())
 
-    headers = ["Review Status"]
-    if show_change:
-        headers.append("Change")
-    headers.extend(
-        [
-            "CU",
-            "CU Key",
-            "Facet(s)",
-            "Server Supported",
-            "Outcome",
-            "Tests",
-            "Passed",
-            _outcome_label("not_supported"),
-            _outcome_label("blocked"),
-            "Failures",
-            "Workbook Cases",
-            "Positive",
-            "Negative",
-            "Override",
-            "Notes",
-            "Example Test",
-        ]
-    )
-    widths = [18]
-    if show_change:
-        widths.append(10)
-    widths.extend([34, 34, 44, 18, 16, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80, 80])
+    headers = [
+        "Review Status",
+        "CU",
+        "CU Key",
+        "Facet(s)",
+        "Server Supported",
+        "Outcome",
+        "Primary Reason",
+        "Tests",
+        "Passed",
+        _outcome_label("not_supported"),
+        _outcome_label("blocked"),
+        "Failures",
+        "Workbook Cases",
+        "Positive",
+        "Negative",
+        "Override",
+        "Notes",
+        "Example Test",
+    ]
+    widths = [18, 34, 34, 44, 18, 16, 60, 8, 8, 14, 9, 12, 14, 9, 9, 14, 80, 80]
     _apply_header(ws, 1, headers, widths)
 
     for row, cu_key in enumerate(ordered_keys, start=2):
@@ -1328,29 +1339,26 @@ def _build_cu_coverage(
         tests = data.get("tests") if isinstance(data.get("tests"), list) else []
         support = _in_server_profile(cu_key, supported)
         status, status_icon = _status_for(cu_key, compliance, active_cus)
-        values: list[Any] = [f"{status_icon} {status}"]
-        if show_change:
-            values.append(row_change_by_cu[cu_key])
-        values.extend(
-            [
-                cu_display_name(cu_key),
-                cu_key,
-                ", ".join(facet_map.get(cu_key, [])),
-                support,
-                _cu_compliance_label(compliance),
-                int(data.get("test_count", 0) or 0),
-                int(data.get("passed", 0) or 0),
-                int(data.get("not_supported", 0) or 0),
-                int(data.get("blocked", 0) or 0),
-                failed,
-                int(data.get("workbook_case_count", 0) or 0),
-                int(data.get("workbook_positive_case_count", 0) or 0),
-                int(data.get("workbook_negative_case_count", 0) or 0),
-                overrides.get(cu_key, ""),
-                _cu_note_summary(cu_key, tests_by_cu),
-                str(tests[0]) if tests else "",
-            ]
-        )
+        values: list[Any] = [
+            f"{status_icon} {status}",
+            cu_display_name(cu_key),
+            cu_key,
+            ", ".join(facet_map.get(cu_key, [])),
+            support,
+            _cu_compliance_label(compliance),
+            _cu_note_summary(cu_key, tests_by_cu),
+            int(data.get("test_count", 0) or 0),
+            int(data.get("passed", 0) or 0),
+            int(data.get("not_supported", 0) or 0),
+            int(data.get("blocked", 0) or 0),
+            failed,
+            int(data.get("workbook_case_count", 0) or 0),
+            int(data.get("workbook_positive_case_count", 0) or 0),
+            int(data.get("workbook_negative_case_count", 0) or 0),
+            overrides.get(cu_key, ""),
+            _cu_note_summary(cu_key, tests_by_cu),
+            str(tests[0]) if tests else "",
+        ]
         for col, value in enumerate(values, start=1):
             cell = ws.cell(row=row, column=col, value=value)
             header = headers[col - 1]
@@ -1364,7 +1372,8 @@ def _build_cu_coverage(
                 cell.fill = _fill(_CU_STATUS_COLOUR.get(compliance, _WHITE))
                 cell.font = Font(bold=True)
 
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{max(1, len(ordered_keys) + 1)}"
+    _apply_print_setup(ws)
+    _apply_autofilter(ws)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -1421,8 +1430,7 @@ def main() -> int:
     facets = _load_facets()
     profiles = _load_profiles()
     baseline_path = Path(args.baseline)
-    baseline = _load_baseline(baseline_path)
-    context = _build_report_context(cu_payload, profiles, facets, capabilities, baseline)
+    context = _build_report_context(cu_payload, profiles, facets, capabilities)
 
     run_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     run_ts_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -1430,16 +1438,16 @@ def main() -> int:
     wb = openpyxl.Workbook()
     wb.remove(wb.active)  # remove default empty sheet
 
-    _build_cover(wb, cases, run_ts, args.run_result, context, baseline, facets)
+    _build_cover(wb, cases, run_ts, args.run_result, context, facets)
     _build_summary(wb, cases, run_ts, args.run_result)
-    _build_all_tests(wb, cases)
-    _build_filtered(wb, cases, "Failures", ["failed", "error"], _RED)
-    _build_filtered(wb, cases, "Skipped", ["skipped"], _YELLOW)
-    _build_filtered(wb, cases, "Expected Fail", ["xfailed", "xpassed"], _ORANGE)
     if cu_payload and facets:
-        _build_profile_coverage(wb, cu_payload, profiles, facets, capabilities, args.run_result)
         _build_facet_coverage(wb, cu_payload, facets, capabilities)
-        _build_cu_coverage(wb, cu_payload, facets, capabilities, context, baseline)
+        _build_cu_coverage(wb, cu_payload, facets, capabilities, context)
+        _build_profile_coverage(wb, cu_payload, profiles, facets, capabilities, args.run_result)
+    _build_all_tests(wb, cases)
+    _build_filtered(wb, cases, "Test Failures", ["failed", "error"], _RED)
+    _build_filtered(wb, cases, "Skipped Test Cases", ["skipped"], _YELLOW)
+    _build_filtered(wb, cases, "Expected Failures", ["xfailed", "xpassed"], _ORANGE)
 
     wb.save(out_path)
     if args.write_baseline and context is not None:
@@ -1459,9 +1467,9 @@ def main() -> int:
     print(f"  Xfailed:  {xfailed}")
     print(f"  Total:    {len(cases)}")
     if cu_payload and facets:
-        print("  CU sheets: Profile Coverage, Facet and CU Coverage, CU Coverage")
+        print("  CU sheets: IJT Facet Breakdown, Conformance Unit Details, Profile Coverage Comparison")
     if failed > 0:
-        print(f"\n  *** {failed} FAILURE(S) — see 'Failures' sheet ***")
+        print(f"\n  *** {failed} FAILURE(S) — see 'Test Failures' sheet ***")
     return 0
 
 

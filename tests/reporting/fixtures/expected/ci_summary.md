@@ -7,7 +7,7 @@
 
 <a id="ci-outcome-overview"></a>
 
-### 📊 Outcome Overview
+### 📊 Test Outcome Overview
 
 > ✅ **Status:** 0 failed jobs &nbsp;·&nbsp; 0 coverage warnings &nbsp;·&nbsp; 0 skip-budget warnings &nbsp;·&nbsp; 0 artifact warnings
 

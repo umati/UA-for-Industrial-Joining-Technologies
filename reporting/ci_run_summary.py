@@ -746,7 +746,7 @@ def main() -> None:
         "",
         '<a id="ci-outcome-overview"></a>',
         "",
-        "### 📊 Outcome Overview",
+        "### 📊 Test Outcome Overview",
         "",
         f"> {status_summary}",
         "",

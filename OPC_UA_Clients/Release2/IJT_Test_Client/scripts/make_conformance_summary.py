@@ -2,13 +2,13 @@
 """
 make_conformance_summary.py — Render the IJT Test Client conformance summary.
 
-Writes a GitHub Actions Step Summary from JUnit XML and the per-CU conformance
-report. Invoked from `.github/workflows/integration.yml` after the live
-conformance pytest run.
+Renders a GitHub Actions Step Summary from JUnit XML and the per-CU
+conformance report. Invoked from `.github/workflows/integration.yml` after
+the live conformance pytest run.
 
 Reads:  test-results/pytest.xml   (or --xml=FILE)
         test-results/cu-compliance-report.json, when present
-Writes: $GITHUB_STEP_SUMMARY      (GitHub markdown step summary, if env var is set)
+Writes: $GITHUB_STEP_SUMMARY      (GitHub markdown step summary, when enabled)
         test-results/summary.md   (always, as a local copy)
 
 Called automatically by the CI workflow after the test run. Safe to run locally too.
@@ -156,6 +156,15 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--out", default="test-results/summary.md")
     p.add_argument("--cu-json", default=str(_DEFAULT_CU_JSON))
     p.add_argument("--baseline", default=str(_DEFAULT_BASELINE_JSON))
+    p.add_argument(
+        "--github-summary",
+        choices=["auto", "always", "never"],
+        default="auto",
+        help=(
+            "Control writes to GITHUB_STEP_SUMMARY. auto preserves existing behavior, "
+            "always requires the env var, and never writes the step summary."
+        ),
+    )
     return p.parse_args()
 
 
@@ -173,9 +182,8 @@ def main() -> int:
     run_ts_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     cu_payload = _load_json(Path(args.cu_json))
     baseline_path = Path(args.baseline)
-    baseline = _load_baseline(baseline_path)
 
-    md, context = render_conformance_summary(data, server_url, run_ts, cu_payload, baseline)
+    md, context = render_conformance_summary(data, server_url, run_ts, cu_payload)
 
     # Write local copy
     out_path = Path(args.out)
@@ -189,9 +197,16 @@ def main() -> int:
         )
         print(f"Baseline written: {baseline_path}")
 
-    # Write to GitHub Step Summary if running in CI
+    # Write to GitHub Step Summary if requested. CI can disable this when a
+    # downstream aggregator owns the visible run-page summary.
     github_summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if github_summary:
+    should_write_github_summary = args.github_summary == "always" or (
+        args.github_summary == "auto" and bool(github_summary)
+    )
+    if should_write_github_summary and not github_summary:
+        print("ERROR: --github-summary=always requires GITHUB_STEP_SUMMARY", file=sys.stderr)
+        return 1
+    if should_write_github_summary and github_summary:
         with open(github_summary, "a", encoding="utf-8") as fh:
             fh.write(md)
         print("GitHub Step Summary updated.")

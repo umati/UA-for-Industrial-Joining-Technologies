@@ -12,7 +12,7 @@ After a `run_all_tests.py` run the following files are produced:
 | `test-results/pytest-unit.xml` | JUnit XML | Unit test results from `run_all_tests.py` Phase 1 |
 | `test-results/mypy.txt` | Text | Blocking local Phase 1 type-check output from `python -m mypy . --ignore-missing-imports --no-error-summary` |
 | `test-results/report.xlsx` | Excel | Human-readable coloured summary by test area, full detail, filtered views |
-| `test-results/report-baseline.json` | JSON | Previous-run baseline used for the next report's delta view; generated locally/job-locally and ignored by git |
+| `test-results/report-baseline.json` | JSON | Internal trend snapshot written after each report render; generated locally/job-locally and ignored by git |
 | `test-results/smoke-sanity.xml` | JUnit XML | Quick server reachability smoke test (CI only) |
 | `test-results/cu-compliance-report.json` | JSON | Machine-readable CU compliance report by test, conformance unit, raw support outcome, conservative compliance status, and workbook row traceability |
 | `test-results/cu-compliance-report-unit.json` | JSON | Unit-stage plugin output; kept separate so the main CU report name is reserved for live compliance/conformance runs |
@@ -56,10 +56,9 @@ python run_all_tests.py --excel-out test-results/my-report.xlsx
 If the test run fails, `report.xlsx` is still generated for diagnostics when
 JUnit XML is available. In that case the workbook includes a red warning banner
 and should not be treated as a clean conformance report.
-When report data is available, `report-baseline.json` is read before rendering
-and overwritten after rendering. If no baseline exists, the delta section is
-hidden. Once a baseline exists, the report shows score, validation-health,
-server-support-coverage, finding, and per-CU deltas.
+`report-baseline.json` is overwritten after each render as an internal trend
+artifact. The renderer does not read it and the report contains no
+baseline-driven delta UI.
 
 **Write the CU compliance report to a custom location:**
 ```bash
@@ -73,8 +72,8 @@ python scripts/run_reference_workflow.py --interactive
 ```
 
 Reference workflow reports are non-conformance demo artifacts. They are driven
-by YAML under `reference_workflows/` and are not collected by the default Phase
-2 conformance run.
+by YAML under `reference_workflows/` and are not collected by the default
+conformance run.
 
 `cu-compliance-report.json` is written by the pytest plugin for live
 compliance/conformance runs. Unit-only runs can still load `conftest.py`, so
@@ -162,27 +161,27 @@ that need manual classification.
 
 | Sheet | Contents |
 |---|---|
-| **Summary** | Total counts (passed/failed/skipped/xfailed) by test area |
-| **All Tests** | Every test: name, file, status, duration, reason |
-| **Failures (N)** | Failed tests only — with full failure message |
-| **Skipped (N)** | Skipped tests only — with skip reason |
-| **Expected Fail (N)** | Xfailed/xpassed — expected failures with reason |
-| **Cover** | Audience-first summary with overall result, Conformance Score, KPI strip, delta, server support summary, and environment details |
-| **Profile Coverage** | User-facing IJT coverage overview: server capability profile, reference IJT facets, optional full CU-set view, server-supported CU count, server-support percentage, supported-CUs-validated percentage, outcome, and coverage counts |
-| **Facet and CU Coverage** | IJT facet table with CU counts, server-supported CU count, server-support percentage, supported-CUs-validated percentage, supported/not-supported/blocked/failed status, and facet descriptions |
-| **CU Coverage** | One row per conformance unit with public CU label, facet mapping, whether it is supported by the server capability profile, outcome, workbook case counts, and example test |
+| **Conformance Overview** | Audience-first summary with overall result banner, Validation Health, Server Support Coverage, KPI strip, IJT Facet Support block, Conformance Action Items, Server Scope Notes, and Test Client Environment details |
+| **Test Outcome Counts** | Total counts (passed/failed/skipped/xfailed) by test area |
+| **IJT Facet Breakdown** | IJT facet table with CU counts, server-supported CU count, server-support percentage, supported-CUs-validated percentage, supported/not-supported/blocked/failed status, and facet descriptions |
+| **Conformance Unit Details** | One row per conformance unit with public CU label, facet mapping, whether it is supported by the server capability profile, outcome, workbook case counts, and example test |
+| **Profile Coverage Comparison** | User-facing IJT coverage overview: server capability profile, reference IJT facets, optional full CU-set view, server-supported CU count, server-support percentage, supported-CUs-validated percentage, outcome, and coverage counts |
+| **All Test Cases** | Every test: name, file, status, duration, reason |
+| **Test Failures (N)** | Failed tests only — with full failure message |
+| **Skipped Test Cases (N)** | Skipped tests only — with skip reason |
+| **Expected Failures (N)** | Xfailed/xpassed — expected failures with reason |
 
 Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠 orange = xfailed.
 
 The profile/facet/CU sheets are generated when
-`test-results/cu-compliance-report.json` is present. CI Integration also adds a
-compact **IJT Profile, Facet, and Conformance Unit Coverage** table to
+`test-results/cu-compliance-report.json` is present. CI Integration also adds
+the **IJT Facet Breakdown** and **Conformance Unit Details** tables to
 `summary.md` and the GitHub Actions step summary, so users can see the active
-server capability profile, Conformance Score, conformance overview KPIs, change
-from the previous local/job baseline when one exists, capability support,
-Action Items, Informational Notes, facet and CU coverage, conformance status items,
-and a collapsible full CU coverage table without downloading the Excel
-file first.
+server capability profile, conformance overview KPIs, IJT Facet Support,
+Conformance Action Items, Server Scope Notes, IJT Facet Breakdown, Conformance
+Unit Details, and Skip &amp; Expected-Failure Diagnostics without downloading
+the Excel file first. The 0–100 composite score lives in the baseline JSON as
+an internal trend field and is not shown as a public compliance grade.
 `Server Supported CUs` is read from the server capability file (`n/a` when
 no capability file was loaded); `Outcome` and validated counts are calculated
 from the current test run. `Server Support %` is informational; `Supported CUs
@@ -195,17 +194,18 @@ The `Primary Reason` / `Notes` fields explain why a CU appears in the status
 table, such as a dependency on an optional method or a true runtime precondition
 that prevented coverage.
 `Review Status` is computed from the outcome: Failed means a failure or error,
-Blocked means a missing runtime precondition, Not Supported means a
-server-supported CU is not supported, and With Notes means supported with notes
-or outside server support. `Outcome` is the CU-level conformance classification
-for the current run.
+Blocked means a missing runtime precondition, Not Supported means a CU in the
+active server-capability profile reported the `not_supported` outcome (the
+server did not validate as supporting a required CU), and With Notes means
+supported with notes or outside server support. `Outcome` is the CU-level
+conformance classification for the current run.
 Profile and facet tables distinguish fully supported CUs from CUs supported
 with notes. "Supported with notes" means at least one test path passed and
 the remaining non-passing rows are accepted skips, Not Supported methods/CUs
 from the server profile, or environment/precondition notes; failures and errors
 are reported separately as Failed review-status items.
 Accepted policy and environment/tooling limitation skips remain visible in the
-skip diagnostics summary, but they do not reduce CU compliance
+Diagnostic Skips summary, but they do not reduce CU compliance
 when the CU also has passing support coverage. In Excel, `Supported with Notes`
 uses a light-green fill and `Not Supported` uses neutral gray so capability
 gaps are not presented as warnings.
@@ -271,7 +271,7 @@ The Test Client includes focused conformance coverage for IJT events and conditi
 ## Expected Failure (Xfail) Reasons
 
 Do not keep permanent `xfail` markers for behavior that is now implemented.
-If a previously xfailed test starts passing, remove the marker immediately and
+If an xfailed test starts passing, remove the marker immediately and
 convert it back to a normal pass/fail test.
 
 ---

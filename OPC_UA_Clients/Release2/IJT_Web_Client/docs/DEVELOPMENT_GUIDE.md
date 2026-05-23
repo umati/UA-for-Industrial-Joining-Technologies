@@ -49,7 +49,7 @@ python index.py
 ## Definition of Done
 
 - All validation commands pass.
-- No regressions in previously passing tests.
+- No regressions in existing passing tests.
 - Changes stay inside the intended scope.
 - Summary of changes provided: files touched, risks, and any follow-up needed.
 

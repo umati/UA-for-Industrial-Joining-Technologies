@@ -13,8 +13,9 @@ Architecture rules:
   wording, and the KPI separator live here only.
 - Internal outcome keys such as ``action_needed`` and ``partial`` are runner
   identifiers, not public wording. Map them with :func:`status_for`.
-- The conformance score formula is an external report contract. Do not change
-  weights, caps, or empty-profile behavior without a separate proposal.
+- The conformance score is retained as an internal trend index for existing
+  baselines. Public reports should show Validation Health and Server Support
+  Coverage instead of a composite score.
 - Icons are scoped by semantic class. KPI icons are unique within the KPI
   strip; cross-class overlap is intentional where the meaning aligns.
 
@@ -26,7 +27,8 @@ should not need label-specific edits.
 Public helpers include :func:`format_kpi_strip`, :func:`format_status_count`,
 :func:`format_status_label`, :func:`format_status_counts`,
 :func:`format_delta_summary`, :func:`outcome_label`,
-:func:`format_outcome_label`, and :func:`status_color_excel`.
+:func:`format_outcome_label`, :func:`status_color_excel`, and
+:func:`is_healthy`.
 """
 
 from __future__ import annotations
@@ -139,11 +141,16 @@ def format_pct(value: object) -> str:
 def conformance_score(
     counts: Mapping[str, int], server_supported_count: int | str, total_active_profile_cus: int
 ) -> int:
-    """Return the headline 0-100 conformance score for the report banner.
+    """Return the internal 0-100 conformance trend index for baselines.
 
     Formula: ``0.7 * validation_health + 0.3 * spec_coverage``. The score is
     capped at 50 when action items exist, capped at 75 when blocked items
-    exist, and returns 0 for an empty or invalid active profile.
+    exist, and returns 0 for an empty or invalid active profile. The value is
+    kept for baseline compatibility and is not rendered as a compliance grade.
+
+    Internal trend metric only — no longer surfaced in the report header. The
+    visible KPI strip uses Validation Health and Server Support Coverage
+    directly.
     """
     if not isinstance(server_supported_count, int) or server_supported_count <= 0 or total_active_profile_cus <= 0:
         return 0
@@ -155,6 +162,32 @@ def conformance_score(
     elif counts["blocked"] > 0:
         base = min(base, 75)
     return max(0, min(100, base))
+
+
+def is_healthy(
+    *,
+    context_present: bool,
+    server_supported_count: object,
+    active_cus_len: int,
+    failed_count: int,
+    blocked_count: int,
+) -> bool:
+    """Return True only when the run can credibly be called PASSED.
+
+    Healthy means: we actually built the report context (CU payload present),
+    the server profile declared at least one supported CU, the active profile
+    is non-empty, and the run produced zero failed and zero blocked items.
+    Missing payload, ``server_supported_count == 0``, or an empty active
+    profile all count as UNHEALTHY so a setup/profile problem cannot hide
+    behind a clean Action Items section.
+    """
+    if not context_present:
+        return False
+    if not isinstance(server_supported_count, int) or server_supported_count <= 0:
+        return False
+    if active_cus_len <= 0:
+        return False
+    return failed_count == 0 and blocked_count == 0
 
 
 def status_for(cu_key: str, outcome: str, active_cus: set[str]) -> tuple[str, str]:

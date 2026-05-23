@@ -30,12 +30,7 @@ def _section(markdown: str, heading: str) -> str:
 
 def test_primary_cu_columns_use_public_display_names() -> None:
     rendered = EXPECTED_CONFORMANCE.read_text(encoding="utf-8")
-    primary_sections = "\n".join(
-        [
-            _section(rendered, "## 📌 Action Items"),
-            _section(rendered, "## 📝 Informational Notes"),
-        ]
-    )
+    primary_sections = _section(rendered, "## 📋 Conformance Unit Details")
 
     assert "`acknowledge_results`" not in primary_sections
     assert "| ⚪ Not Supported | IJT Acknowledge Results |" in primary_sections

@@ -106,6 +106,84 @@ def test_md_cell_replaces_newlines():
     assert system_tests_run_summary.md_cell("line1\nline2\rline3") == "line1 line2 line3"
 
 
+def test_shift_markdown_headings_embeds_standalone_report():
+    """shift_markdown_headings lowers standalone summary headings by one level."""
+    markdown = "# Report\n\n## Section\n\n###### Deep"
+
+    assert (
+        system_tests_run_summary.shift_markdown_headings(markdown)
+        == "## Report\n\n### Section\n\n###### Deep"
+    )
+
+
+def test_shift_markdown_headings_basic_two_level_promotion():
+    """Spec example: `# A` -> `## A`, `## B` -> `### B`."""
+    assert system_tests_run_summary.shift_markdown_headings("# A\n## B\n", by=1) == "## A\n### B\n"
+
+
+def test_shift_markdown_headings_leaves_fenced_code_blocks_untouched():
+    """Headings inside fenced code blocks must not be shifted."""
+    markdown = "# Title\n\n```\n# not-a-heading\n## also-not\n```\n\n## Real Section\n"
+    shifted = system_tests_run_summary.shift_markdown_headings(markdown, by=1)
+    assert "# not-a-heading" in shifted
+    assert "## also-not" in shifted
+    assert "## Title" in shifted
+    assert "### Real Section" in shifted
+
+
+def test_load_test_client_conformance_summary_shifts_artifact_headings(tmp_path):
+    """load_test_client_conformance_summary embeds the artifact with shifted headings."""
+    summary = tmp_path / "summary.md"
+    summary.write_text("# IJT Conformance Test Report\n\n## Scope\n", encoding="utf-8")
+
+    assert system_tests_run_summary.load_test_client_conformance_summary(str(summary)) == [
+        "## IJT Conformance Test Report",
+        "",
+        "### Scope",
+    ]
+
+
+def test_tc_conformance_artifact_warning_success_with_content_no_warning():
+    """When the lane succeeded and summary.md has content, no warning is emitted."""
+    assert (
+        system_tests_run_summary.tc_conformance_artifact_warning(
+            "success", ["## IJT Conformance Test Report", ""], "path/summary.md"
+        )
+        is None
+    )
+
+
+def test_tc_conformance_artifact_warning_success_missing_emits_warning():
+    """When the lane succeeded but summary.md is missing (empty list), a warning is emitted."""
+    warning = system_tests_run_summary.tc_conformance_artifact_warning(
+        "success", [], "all-results/results-testclient/summary.md"
+    )
+    assert warning is not None
+    assert "Test Client conformance summary" in warning
+    assert "all-results/results-testclient/summary.md" in warning
+
+
+def test_tc_conformance_artifact_warning_success_empty_file_emits_warning(tmp_path):
+    """An empty summary.md round-trips through load_* to an empty list and triggers the warning."""
+    summary = tmp_path / "summary.md"
+    summary.write_text("", encoding="utf-8")
+    lines = system_tests_run_summary.load_test_client_conformance_summary(str(summary))
+    assert lines == []
+    warning = system_tests_run_summary.tc_conformance_artifact_warning(
+        "success", lines, str(summary)
+    )
+    assert warning is not None
+    assert "missing or empty" in warning
+
+
+def test_tc_conformance_artifact_warning_failure_no_warning():
+    """When the lane failed, the failure itself is the signal — no artifact warning."""
+    assert (
+        system_tests_run_summary.tc_conformance_artifact_warning("failure", [], "path/summary.md")
+        is None
+    )
+
+
 def test_format_skip_section_empty_returns_empty():
     """format_skip_section returns empty list when no skips."""
     result = system_tests_run_summary.format_skip_section("Test", [], 0)

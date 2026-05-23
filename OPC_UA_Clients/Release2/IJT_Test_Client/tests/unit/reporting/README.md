@@ -68,11 +68,11 @@ absence is the entire point of this scenario.
 ### `system_tests_full_conformance/`
 
 **Scenario:** Renderer's **full path** — a System Tests live conformance
-run with the complete CU compliance payload and a previous baseline.
+run with the complete CU compliance payload and a baseline file present.
 This is the **canonical real-world conformance regression fixture** for
-the renderer: it exercises authentic scale, profile/facet groups, the Change
-Since Last Run path, not-supported handling, with-notes / partial
-outcomes, truncation, and the full CU coverage table.
+the renderer: it exercises authentic scale, profile/facet groups,
+not-supported handling, with-notes / partial outcomes, truncation, and
+the Conformance Unit Details table.
 
 This fixture is **not** a complete branch-coverage oracle. Targeted
 Failed / Blocked / error-path tests remain the responsibility of small
@@ -82,14 +82,14 @@ dedicated fixtures when branch semantics need their own coverage lens.
 |---|---|---|
 | `pytest.xml` | extracted from `results-testclient` artifact of GitHub Actions run id `25794967225` (`integration.yml`, captured 2026-05-13) | JUnit input |
 | `cu_results.json` | from a representative local conformance run (the upstream artifact did not contain `cu-compliance-report.json`); coherent with the `baseline.json` below | per-CU compliance payload |
-| `baseline.json` | from the same local conformance run as `cu_results.json` | enables the Change Since Last Run block |
+| `baseline.json` | from the same local conformance run as `cu_results.json` | satisfies the renderer's optional `baseline` kwarg; not consumed by the renderer (no baseline-driven UI) |
 
 **Coherence note.** The upstream GitHub Actions artifact for run
 `25794967225` only included `pytest.xml`. The conformance JSON files
 (`cu-compliance-report.json` and `report-baseline.json`) are not
 currently uploaded by the workflow. To get a coherent fixture set, the
-JSON files were taken from a representative local conformance run in
-the same Phase 1 implementation context. They are internally consistent
+JSON files were taken from a representative local conformance run that
+shares the same renderer implementation context. They are internally consistent
 with each other; the `pytest.xml` is shape-compatible (same suite/test
 ids). If/when the workflow uploads JSON artifacts, re-capture this
 fixture from one CI run so all inputs share a single provenance source.

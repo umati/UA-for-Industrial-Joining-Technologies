@@ -402,7 +402,7 @@ Every runner invocation writes `test-results/timing-latest.json` and
 `test-results/timing-history.jsonl`, then appends the same payload to
 `.state/timing-history.jsonl`. Use those files for Phase 1 drift analysis
 instead of guessing from wall-clock totals.
-Root Phase 2 no longer delegates one broad Web Client live suite. It invokes
+Root Phase 2 invokes
 separate Web Client suites for Python OPC UA, Python WebSocket backend, Python
 WebSocket lifecycle, Playwright smoke, Playwright features, Playwright
 regression, and Docker smoke. Each live/browser suite owns its own OPC UA,
@@ -438,9 +438,9 @@ python run_all_tests.py --docker-only
 
 GitHub `ci.yml` runs this runner in two Phase 1 lanes: `web-client-python`
 delegates to `--phase1-python`, and `web-client-js` delegates to
-`--phase1-js`. The workflow no longer duplicates the individual pytest,
-Vitest, ESLint, mypy, Bandit, and audit commands, and the split gives each
-language stack its own timing and failure surface. GitHub `integration.yml`
+`--phase1-js`. The workflow invokes only those two runner entry points instead of
+the individual pytest, Vitest, ESLint, mypy, Bandit, and audit commands, and the
+split gives each language stack its own timing and failure surface. GitHub `integration.yml`
 runs the same root-runner Web Client live/e2e suites as local validation, split
 by execution surface. `web-client-live-*` suites stay on `windows-latest` with
 the Windows simulator package. Every `web-client-e2e-*` suite runs inside the

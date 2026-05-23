@@ -6,8 +6,97 @@ from helpers.report_scoring import (
     delta_symbol,
     format_pct,
     informational_notes_context,
+    is_healthy,
     pct_value,
 )
+
+
+def test_is_healthy_requires_context_present() -> None:
+    assert (
+        is_healthy(
+            context_present=False,
+            server_supported_count=5,
+            active_cus_len=5,
+            failed_count=0,
+            blocked_count=0,
+        )
+        is False
+    )
+
+
+def test_is_healthy_rejects_zero_server_support() -> None:
+    assert (
+        is_healthy(
+            context_present=True,
+            server_supported_count=0,
+            active_cus_len=5,
+            failed_count=0,
+            blocked_count=0,
+        )
+        is False
+    )
+
+
+def test_is_healthy_rejects_non_int_server_support() -> None:
+    assert (
+        is_healthy(
+            context_present=True,
+            server_supported_count="n/a",
+            active_cus_len=5,
+            failed_count=0,
+            blocked_count=0,
+        )
+        is False
+    )
+
+
+def test_is_healthy_rejects_empty_active_profile() -> None:
+    assert (
+        is_healthy(
+            context_present=True,
+            server_supported_count=5,
+            active_cus_len=0,
+            failed_count=0,
+            blocked_count=0,
+        )
+        is False
+    )
+
+
+def test_is_healthy_rejects_any_failed_or_blocked() -> None:
+    assert (
+        is_healthy(
+            context_present=True,
+            server_supported_count=5,
+            active_cus_len=5,
+            failed_count=1,
+            blocked_count=0,
+        )
+        is False
+    )
+    assert (
+        is_healthy(
+            context_present=True,
+            server_supported_count=5,
+            active_cus_len=5,
+            failed_count=0,
+            blocked_count=2,
+        )
+        is False
+    )
+
+
+def test_is_healthy_true_when_all_guards_pass() -> None:
+    assert (
+        is_healthy(
+            context_present=True,
+            server_supported_count=5,
+            active_cus_len=5,
+            failed_count=0,
+            blocked_count=0,
+        )
+        is True
+    )
 
 
 def test_pct_value_returns_none_for_zero_denominator():

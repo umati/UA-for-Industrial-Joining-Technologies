@@ -56,7 +56,7 @@ both produce a non-failing report warning so this table stays current.
 | Test | Reason | Condition to unskip |
 |------|--------|---------------------|
 | Web Client Python `test_required_static_asset_exists[node_modules/chart.js/dist/chart.umd.js]` | The `web-client-python` CI lane intentionally skips npm install; JavaScript dependency validation is owned by `web-client-js` | Install npm dependencies in the Python lane, or move this asset assertion fully to the JavaScript lane |
-| Web Client Python `test_static_analysis.py::test_eslint_passes` | ESLint is owned by the separate `web-client-js` CI lane after the Web Client Phase 1 split | Install npm dependencies in the Python lane, or remove this legacy Python-side ESLint gate once the JavaScript lane remains the sole lint owner |
+| Web Client Python `test_static_analysis.py::test_eslint_passes` | ESLint is owned by the separate `web-client-js` CI lane | Install npm dependencies in the Python lane, or remove this Python-side ESLint gate so the JavaScript lane remains the sole lint owner |
 | C# live integration tests | `IJT_PHASE1_ONLY=true` suppresses server auto-launch in the unit-test CI phase (`csharp-unit`) | These same tests **pass** in the `csharp-live` integration job where the server is launched on port 40464; the CI report tracks the expected skip identities |
 | Vitest `source-coverage` git check | `git` unavailable in bare zip-export environments | Not applicable in CI — git is always present; this protects zip-distribution consumers |
 

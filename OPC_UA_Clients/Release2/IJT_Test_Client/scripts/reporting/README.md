@@ -11,13 +11,10 @@ Inputs:
 - `test-results/pytest.xml` — the conformance pytest run.
 - `test-results/cu-compliance-report.json` — per-CU outcomes produced by the
   Test Client conformance run.
-- `test-results/report-baseline.json` — the previous run's baseline for the
-  "Change Since Last Run" block (optional).
 
 Output: a single Markdown document containing _Conformance Overview_, _Capability
-Support_, _Action Items_, _Informational Notes_, _Coverage Overview_, _Facet
-and CU Coverage_, _Conformance Status_, _Full CU Coverage_, _Test Environment_,
-_Change Since Last Run_, etc.
+Support_, _Action Items_ when there are failed or blocked CUs, _Scope Notes_,
+_Facet Breakdown_, _CU Detail_, _Diagnostics_, etc.
 
 ## What this package is **not**
 
@@ -33,12 +30,10 @@ _Change Since Last Run_, etc.
   `python scripts/make_conformance_summary.py`.
 
 In other words, this package is **conformance-only**, and that matches
-the Test Client's charter (profiles, capability units, and conformance
-scoring). Repository-wide CI/System Tests reporting is a separate concern
-and is scheduled for Phase 1B of the reporting overhaul, where those inline
-generators will be lifted out of YAML into their own top-level package
-(likely `scripts/reporting/` at the repo root, owned by the reporting
-maintainers, not the Test Client).
+the Test Client's charter (profiles, capability units, and explicit validation
+and server-support metrics). Repository-wide CI and System Tests reporting is
+a separate concern, owned by the reporting maintainers, and lives outside
+this package.
 
 ## File layout
 
@@ -51,12 +46,10 @@ scripts/
     └── README.md               # this file
 ```
 
-The shim was previously named `make_ci_summary.py` — a misleading name that
-predated the split between Test-Client conformance reporting and repo-wide
-CI reporting. It is invoked only from `.github/workflows/integration.yml`
-(the Test Client live conformance step), never from `ci.yml`. The rename
-to `make_conformance_summary.py` was bundled into the Phase 1 renderer
-extraction commit so the file's name and its purpose stay consistent.
+The shim `make_conformance_summary.py` is invoked only from
+`.github/workflows/integration.yml` (the Test Client live conformance step),
+never from `ci.yml`. The name reflects that this package produces the Test
+Client conformance summary and nothing else.
 
 ## Ownership
 

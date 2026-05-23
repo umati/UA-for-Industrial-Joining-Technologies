@@ -7,7 +7,7 @@
 
 <a id="system-outcome-overview"></a>
 
-### 📊 Outcome Overview
+### 📊 Test Outcome Overview
 
 > ✅ **Status:** 0 failed jobs &nbsp;·&nbsp; 0 drift warnings &nbsp;·&nbsp; 0 skip-policy failures &nbsp;·&nbsp; 0 artifact warnings
 
@@ -23,7 +23,7 @@
 
 <a id="system-lane-results"></a>
 
-### 🧪 Lane Results — 9 lanes
+### 🧪 Test Lane Results — 9 lanes
 
 | 🚦 | Lane | Result | Test Results |
 |:--:|:-----|:-------|:-------------|
@@ -36,6 +36,29 @@
 | ⏭️ | Console Client OPC UA security | skipped | Not reported |
 | ✅ | C# Client live | success | 110 passed, 0 skipped |
 | ⏭️ | C# Client OPC UA security | skipped | Not reported |
+
+---
+
+<a id="system-test-client-conformance-report"></a>
+
+## IJT Conformance Test Report
+
+🟢 **PASSED** · **0 action items** · **Validation 100.0% (98/98)** · **Server support 79.7% (98/123)**
+
+### 📊 Conformance Overview
+
+| Server Support Coverage | Validation Health | Conformance Action Items | Server Scope Notes |
+|:---:|:---:|:---:|:---:|
+| **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked** | **⚪ 25 Not Supported · ℹ️ 3 With Notes** |
+
+### 📋 Conformance Unit Details
+
+<details>
+<summary><b>28 rows needing review · 123 total CUs</b></summary>
+
+Full CU detail lives in the Test Client artifact fixture.
+
+</details>
 
 ---
 
@@ -144,8 +167,8 @@ No skip policy failures, test-count drift warnings, or artifact warnings.
 
 | Client / Component | Appears In |
 |:-------------------|:-----------|
-| OPC UA Server | [Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
-| Web Client | [Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
-| Test Client | [Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Conformance Overview](#system-conformance-overview); [Performance Hotspots](#system-performance-hotspots) |
-| Console Client | [Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results) |
-| C# Client | [Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
+| OPC UA Server | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
+| Web Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
+| Test Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Conformance Overview](#system-conformance-overview); [Conformance Report](#system-test-client-conformance-report); [Performance Hotspots](#system-performance-hotspots) |
+| Console Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results) |
+| C# Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |

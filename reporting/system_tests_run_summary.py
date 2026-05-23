@@ -4,6 +4,7 @@ import datetime
 import glob
 import json
 import os
+import re
 import sys
 import urllib.parse
 import urllib.request
@@ -30,6 +31,83 @@ def _urlopen(request, timeout):
     ``urllib.error.URLError`` at the protocol layer (no http/file handler).
     """
     return https_only_opener().open(request, timeout=timeout)
+
+
+_HEADING_RE = re.compile(r"^(#{1,5})(\s)")
+
+
+def shift_markdown_headings(markdown: str, by: int = 1) -> str:
+    """Shift every Markdown heading down by ``by`` levels (clamped at H6).
+
+    Used when embedding a standalone Markdown document (such as the Test
+    Client conformance summary, whose top-level heading is ``# IJT
+    Conformance Test Report``) inside the System Tests run summary so its
+    headings nest beneath the outer document. Fenced code blocks (``` ... ```
+    or ~~~ ... ~~~) are left untouched.
+    """
+    out_lines: list[str] = []
+    in_fence = False
+    fence_marker = ""
+    for line in markdown.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if not in_fence and (stripped.startswith("```") or stripped.startswith("~~~")):
+            in_fence = True
+            fence_marker = stripped[:3]
+            out_lines.append(line)
+            continue
+        if in_fence:
+            if stripped.startswith(fence_marker):
+                in_fence = False
+                fence_marker = ""
+            out_lines.append(line)
+            continue
+        match = _HEADING_RE.match(line)
+        if match:
+            new_level = "#" * min(6, len(match.group(1)) + by)
+            line = new_level + match.group(2) + line[match.end() :]
+        out_lines.append(line)
+    return "".join(out_lines)
+
+
+def load_test_client_conformance_summary(path: str) -> list[str]:
+    """Return the embedded Test Client conformance summary as Markdown lines.
+
+    Reads ``path`` (typically
+    ``all-results/results-testclient/summary.md``), shifts every heading
+    down by one level so the artifact's ``# IJT Conformance Test Report``
+    nests beneath the System Tests H1, and returns the result split into
+    lines (no trailing newlines). Returns an empty list when the file is
+    missing or empty.
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except (OSError, FileNotFoundError):
+        return []
+    if not text.strip():
+        return []
+    return shift_markdown_headings(text).splitlines()
+
+
+def tc_conformance_artifact_warning(
+    tc_result: str, summary_lines: list[str], path: str
+) -> str | None:
+    """Return a warning when test-client succeeded but the conformance summary artifact is missing.
+
+    The Test Client `summary.md` is the only path for the conformance block
+    to reach the aggregated System Tests summary when the test-client step
+    runs with ``--github-summary=never``. A silent drop on success therefore
+    hides regressions; surface it as an artifact warning. When the lane
+    itself failed the failure status is the signal, so no warning is emitted.
+    """
+    if tc_result != "success":
+        return None
+    if summary_lines:
+        return None
+    return (
+        f"⚠️ **Test Client conformance summary**: artifact missing or empty at "
+        f"`{path}` — conformance block omitted from the rendered summary"
+    )
 
 
 # ── Parsers ──────────────────────────────────────────────────────
@@ -786,6 +864,14 @@ def main() -> None:
         "opcua-security XML",
     )
 
+    tc_conformance_summary_path = "all-results/results-testclient/summary.md"
+    tc_conformance_summary_lines = load_test_client_conformance_summary(tc_conformance_summary_path)
+    tc_conformance_warning = tc_conformance_artifact_warning(
+        str(tc_r), tc_conformance_summary_lines, tc_conformance_summary_path
+    )
+    if tc_conformance_warning:
+        artifact_warnings.append(tc_conformance_warning)
+
     suite_counts = [
         ("sd_smoke", "OPC UA Server — Docker Smoke", sd_smoke),
         ("wd_py", "Web Client — Docker Python Unit", wd_py),
@@ -953,7 +1039,7 @@ def main() -> None:
         "",
         '<a id="system-outcome-overview"></a>',
         "",
-        "### 📊 Outcome Overview",
+        "### 📊 Test Outcome Overview",
         "",
         f"> {status_summary}",
         "",
@@ -973,7 +1059,7 @@ def main() -> None:
         "",
         '<a id="system-lane-results"></a>',
         "",
-        f"### 🧪 Lane Results — {lane_result_count} lanes",
+        f"### 🧪 Test Lane Results — {lane_result_count} lanes",
         "",
         "| 🚦 | Lane | Result | Test Results |",
         "|:--:|:-----|:-------|:-------------|",
@@ -1004,6 +1090,18 @@ def main() -> None:
         f"{lane_status_text(str(cs_opcua_security_r))} | "
         f"{count_test_results(csharp_opcua_security, csharp_opcua_security_base)} |",
         "",
+        *(
+            [
+                "---",
+                "",
+                '<a id="system-test-client-conformance-report"></a>',
+                "",
+                *tc_conformance_summary_lines,
+                "",
+            ]
+            if tc_conformance_summary_lines
+            else []
+        ),
         "---",
         "",
         '<a id="system-component-test-results"></a>',
@@ -1264,27 +1362,32 @@ def main() -> None:
         "| Client / Component | Appears In |",
         "|:-------------------|:-----------|",
         (
-            "| OPC UA Server | [Lane Results](#system-lane-results); "
+            "| OPC UA Server | [Test Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results); "
             "[Performance Hotspots](#system-performance-hotspots) |"
         ),
         (
-            "| Web Client | [Lane Results](#system-lane-results); "
+            "| Web Client | [Test Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results); "
             "[Performance Hotspots](#system-performance-hotspots) |"
         ),
         (
-            "| Test Client | [Lane Results](#system-lane-results); "
+            "| Test Client | [Test Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results); "
             "[Conformance Overview](#system-conformance-overview); "
-            "[Performance Hotspots](#system-performance-hotspots) |"
+            + (
+                "[Conformance Report](#system-test-client-conformance-report); "
+                if tc_conformance_summary_lines
+                else ""
+            )
+            + "[Performance Hotspots](#system-performance-hotspots) |"
         ),
         (
-            "| Console Client | [Lane Results](#system-lane-results); "
+            "| Console Client | [Test Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results) |"
         ),
         (
-            "| C# Client | [Lane Results](#system-lane-results); "
+            "| C# Client | [Test Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results); "
             "[Performance Hotspots](#system-performance-hotspots) |"
         ),
