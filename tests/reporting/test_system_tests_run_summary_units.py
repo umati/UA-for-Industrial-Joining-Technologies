@@ -717,3 +717,122 @@ def test_perf_status_fmt_unknown_fallback():
     assert system_tests_run_summary.perf_status_fmt("") == "unknown ⚠️"
     assert system_tests_run_summary.perf_status_fmt("None") == "unknown ⚠️"
     assert system_tests_run_summary.perf_status_fmt("weird") == "unknown ⚠️"
+
+
+def _write_perf_xml(tmp_path, properties):
+    body = "\n".join(f'      <property name="{k}" value="{v}" />' for k, v in properties.items())
+    xml = (
+        '<testsuite name="lane">\n'
+        '  <testcase classname="lane" name="test_result_transfer_time">\n'
+        "    <properties>\n"
+        f"{body}\n"
+        "    </properties>\n"
+        "  </testcase>\n"
+        "</testsuite>\n"
+    )
+    target = tmp_path / "pytest-live.xml"
+    target.write_text(xml, encoding="ascii")
+    return target
+
+
+def test_load_perf_benchmarks_happy_path(tmp_path):
+    _write_perf_xml(
+        tmp_path,
+        {
+            "perf_sample_count": 20,
+            "perf_mean_total_ms": 86.19,
+            "perf_p90_total_ms": 100.71,
+            "perf_min_total_ms": 12.63,
+            "perf_max_total_ms": 102.68,
+            "perf_threshold_mean_ms": 500,
+            "perf_threshold_p90_ms": 500,
+        },
+    )
+    metrics = system_tests_run_summary.load_perf_benchmarks(str(tmp_path / "*.xml"))
+    assert metrics is not None
+    assert metrics["perf_sample_count"] == 20.0
+    assert metrics["perf_mean_total_ms"] == 86.19
+    assert metrics["perf_threshold_p90_ms"] == 500.0
+
+
+def test_load_perf_benchmarks_missing_file(tmp_path):
+    assert system_tests_run_summary.load_perf_benchmarks(str(tmp_path / "absent*.xml")) is None
+
+
+def test_load_perf_benchmarks_partial_properties_returns_none(tmp_path):
+    _write_perf_xml(
+        tmp_path,
+        {
+            "perf_sample_count": 5,
+            "perf_mean_total_ms": 10.0,
+            # missing perf_p90_total_ms, perf_min_total_ms, perf_max_total_ms
+        },
+    )
+    assert system_tests_run_summary.load_perf_benchmarks(str(tmp_path / "*.xml")) is None
+
+
+def test_load_perf_benchmarks_skips_unparseable_value(tmp_path):
+    _write_perf_xml(
+        tmp_path,
+        {
+            "perf_sample_count": "not-a-number",
+            "perf_mean_total_ms": 10.0,
+            "perf_p90_total_ms": 12.0,
+            "perf_min_total_ms": 5.0,
+            "perf_max_total_ms": 20.0,
+        },
+    )
+    # required field is non-numeric => incomplete required set => None
+    assert system_tests_run_summary.load_perf_benchmarks(str(tmp_path / "*.xml")) is None
+
+
+def test_render_perf_section_empty_returns_empty_list():
+    assert system_tests_run_summary.render_perf_section([]) == []
+    assert system_tests_run_summary.render_perf_section([("X", {})]) == []
+
+
+def test_render_perf_section_pass_renders_table_and_marks_pass():
+    metrics = {
+        "perf_sample_count": 20,
+        "perf_mean_total_ms": 86.19,
+        "perf_p90_total_ms": 100.71,
+        "perf_min_total_ms": 12.63,
+        "perf_max_total_ms": 102.68,
+        "perf_threshold_mean_ms": 500,
+        "perf_threshold_p90_ms": 500,
+    }
+    lines = system_tests_run_summary.render_perf_section([("Console", metrics)])
+    assert any("### ⏱️ Performance Benchmarks" in line for line in lines)
+    row = [line for line in lines if line.startswith("| Console")][0]
+    assert "20" in row
+    assert "86.19" in row
+    assert "100.71" in row
+    assert "✅ PASS" in row
+
+
+def test_render_perf_section_fail_when_mean_exceeds_threshold():
+    metrics = {
+        "perf_sample_count": 10,
+        "perf_mean_total_ms": 600.0,
+        "perf_p90_total_ms": 100.0,
+        "perf_min_total_ms": 5.0,
+        "perf_max_total_ms": 700.0,
+        "perf_threshold_mean_ms": 500,
+        "perf_threshold_p90_ms": 500,
+    }
+    lines = system_tests_run_summary.render_perf_section([("MyLane", metrics)])
+    row = [line for line in lines if line.startswith("| MyLane")][0]
+    assert "❌ FAIL" in row
+
+
+def test_render_perf_section_without_thresholds_uses_dash():
+    metrics = {
+        "perf_sample_count": 3,
+        "perf_mean_total_ms": 10.0,
+        "perf_p90_total_ms": 12.0,
+        "perf_min_total_ms": 5.0,
+        "perf_max_total_ms": 20.0,
+    }
+    lines = system_tests_run_summary.render_perf_section([("MyLane", metrics)])
+    row = [line for line in lines if line.startswith("| MyLane")][0]
+    assert row.count("—") >= 2

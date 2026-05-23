@@ -76,20 +76,51 @@ Full CU detail lives in the Test Client artifact fixture.
 
 ---
 
-<a id="system-conformance-overview"></a>
+<a id="system-conformance-suites"></a>
 
-### 📑 Conformance Overview — 2 suites
+### 📑 Conformance Suites — 2
 
 | Suite | Port | Live Tests | Skipped | Notes |
 |:------|-----:|----------:|--------:|:------|
 | Test Client — Smoke sanity | 40462 | 10 ✅ | 0 | Server and namespace reachability |
-| Test Client — Conformance | 40462 | 889 ✅ | 154 | Not Implemented fixture marker |
+| Test Client — Conformance | 40462 | 889 ✅ | 154 | Not Implemented fixture marker ([Skip Details](#system-skip-details)) |
+
+---
+
+<a id="system-skip-details"></a>
+
+### ⏭️ Skip Details
+
+_Each suite below is collapsed by default — click to inspect skip reasons._
+
+<details><summary>⏭️ <b>Test Client — Conformance</b> — 154 skipped</summary>
+
+| Reason | Count |
+|:-------|------:|
+| Skip details unavailable in JUnit XML | 153 |
+| Not Implemented fixture marker | 1 |
+
+</details>
+
+---
+
+<a id="system-performance-benchmarks"></a>
+
+### ⏱️ Performance Benchmarks — 1 lane
+
+| Lane | Samples | min (ms) | mean (ms) | p90 (ms) | max (ms) | Target | Result |
+|:-----|--------:|---------:|----------:|---------:|---------:|:------:|:------:|
+| Console Client — Result Transfer Time | 20 | 12.63 | 86.19 | 100.71 | 102.68 | mean &lt; 500 · p90 &lt; 500 | ✅ PASS |
+
+_TOTAL = end-of-join → client callback. Full per-sample timing pipeline (joining, server acquisition/processing, wire) is recorded in JUnit XML test artifacts; download them for deep analysis._
 
 ---
 
 <a id="system-performance-hotspots"></a>
 
 ### ⏱️ Performance Hotspots
+
+<details><summary><b>Click to expand</b> — job, browser, C# and Test Client timing drilldown</summary>
 
 > Source order: current workflow run jobs API first, then Web Client timing JSON, C# TRX artifacts, and Test Client JUnit durations when available. Missing timing data is omitted rather than estimated.
 
@@ -133,29 +164,30 @@ Per-test durations are not available in the current JUnit artifact.
 
 </details>
 
+</details>
+
+
 ---
 
 <a id="system-warnings-drift"></a>
 
 ### ⚠️ Warnings and Drift
 
+<details><summary><b>Click to expand</b> — skip policy, drift, and artifact warnings</summary>
+
 No skip policy failures, test-count drift warnings, or artifact warnings.
+
+</details>
+
 
 ---
 
 ### 📎 Artifacts and Drilldown
 
+<details><summary><b>Click to expand</b> — where to find raw JUnit, drill-down, and security results</summary>
+
 > 📦 **Artifacts** — JUnit XML &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down
 > 🔒 Security audit (zizmor) results are in **CI** → Security → Code Scanning
-
-#### Skip Details
-
-<details><summary>⏭️ <b>Test Client — Conformance</b> — 154 skipped</summary>
-
-| Reason | Count |
-|:-------|------:|
-| Skip details unavailable in JUnit XML | 153 |
-| Not Implemented fixture marker | 1 |
 
 </details>
 
@@ -169,6 +201,6 @@ No skip policy failures, test-count drift warnings, or artifact warnings.
 |:-------------------|:-----------|
 | OPC UA Server | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
 | Web Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
-| Test Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Conformance Overview](#system-conformance-overview); [Conformance Report](#system-test-client-conformance-report); [Performance Hotspots](#system-performance-hotspots) |
-| Console Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results) |
+| Test Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Conformance Suites](#system-conformance-suites); [Conformance Report](#system-test-client-conformance-report); [Performance Hotspots](#system-performance-hotspots) |
+| Console Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Benchmarks](#system-performance-benchmarks) |
 | C# Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |

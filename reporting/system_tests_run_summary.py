@@ -191,6 +191,120 @@ def collect_skips(pattern):
     return skips_list
 
 
+# Numeric perf properties produced by the live perf tests. Required fields
+# must all be present for a lane to be rendered. Threshold fields are
+# optional — when absent the renderer hides the target/PASS-FAIL column.
+_PERF_REQUIRED_FIELDS = (
+    "perf_sample_count",
+    "perf_mean_total_ms",
+    "perf_p90_total_ms",
+    "perf_min_total_ms",
+    "perf_max_total_ms",
+)
+_PERF_OPTIONAL_FIELDS = ("perf_threshold_mean_ms", "perf_threshold_p90_ms")
+
+
+def load_perf_benchmarks(pattern: str) -> dict[str, float] | None:
+    """Return aggregated `perf_*` JUnit properties for the lane matched by ``pattern``.
+
+    The live perf tests publish their result-transfer benchmark via
+    ``record_property("perf_*", ...)``. JUnit XML stores these as
+    ``<properties><property name="perf_…" value="…"/></properties>`` either
+    at the ``<testsuite>`` level (when ``junit_family=xunit2``) or inside an
+    individual ``<testcase>``. We accept both shapes and return the first
+    file whose properties cover every required field. Returns ``None`` when
+    no matching file or no complete property set is found, so the renderer
+    can simply omit the lane row.
+
+    Values are returned as ``float`` (the JUnit XML payload is a string in
+    every case). ``perf_sample_count`` is integral by contract but typed as
+    ``float`` here so a single mapping shape can carry every metric — the
+    renderer formats it back to an integer string.
+    """
+    for path in sorted(glob.glob(pattern, recursive=True)):
+        try:
+            root = parse_xml_root(path)
+        except Exception as exc:
+            print(f"[WARN] load_perf_benchmarks({path}): {exc}")
+            continue
+        for property_holder in (*root.findall(".//testcase"), *iter_suites(root), root):
+            properties = property_holder.find("properties")
+            if properties is None:
+                continue
+            collected: dict[str, float] = {}
+            for prop in properties.findall("property"):
+                name = prop.get("name", "")
+                value = prop.get("value", "")
+                if name in _PERF_REQUIRED_FIELDS or name in _PERF_OPTIONAL_FIELDS:
+                    try:
+                        collected[name] = float(value)
+                    except (TypeError, ValueError):
+                        continue
+            if all(field in collected for field in _PERF_REQUIRED_FIELDS):
+                return collected
+    return None
+
+
+def render_perf_section(lanes: list[tuple[str, dict[str, float]]]) -> list[str]:
+    """Render the compact `⏱️ Performance Benchmarks` block as Markdown lines.
+
+    ``lanes`` is a list of ``(label, metrics)`` pairs where ``metrics`` is
+    the mapping returned by :func:`load_perf_benchmarks`. Returns an empty
+    list when no lane has metrics, so the caller can splat the result into
+    the outer document without an extra ``if`` branch.
+
+    Layout:
+
+    * One H3 + a one-row header summarising what is measured.
+    * One row per lane with sample count, min/mean/p90/max in milliseconds.
+    * A trailing PASS/FAIL pill when both ``perf_threshold_mean_ms`` and
+      ``perf_threshold_p90_ms`` are present; the target column shows both
+      thresholds (``mean < … · p90 < …``).
+
+    The renderer never writes free-form prose — the conformance block above
+    already explains how to read latency tables. Keeping this section
+    tight is what lets it live inside the single System Tests Report step
+    summary without re-creating the fragmented layout this change fixes.
+    """
+    present = [(label, metrics) for label, metrics in lanes if metrics]
+    if not present:
+        return []
+    out: list[str] = [
+        '<a id="system-performance-benchmarks"></a>',
+        "",
+        f"### ⏱️ Performance Benchmarks — {len(present)} lane{'s' if len(present) != 1 else ''}",
+        "",
+        ("| Lane | Samples | min (ms) | mean (ms) | p90 (ms) | max (ms) | Target | Result |"),
+        "|:-----|--------:|---------:|----------:|---------:|---------:|:------:|:------:|",
+    ]
+    for label, metrics in present:
+        samples = int(metrics["perf_sample_count"])
+        mean_ms = metrics["perf_mean_total_ms"]
+        p90_ms = metrics["perf_p90_total_ms"]
+        min_ms = metrics["perf_min_total_ms"]
+        max_ms = metrics["perf_max_total_ms"]
+        threshold_mean = metrics.get("perf_threshold_mean_ms")
+        threshold_p90 = metrics.get("perf_threshold_p90_ms")
+        if threshold_mean is not None and threshold_p90 is not None:
+            target_cell = f"mean &lt; {threshold_mean:.0f} · p90 &lt; {threshold_p90:.0f}"
+            target_met = mean_ms < threshold_mean and p90_ms < threshold_p90
+            result_cell = "✅ PASS" if target_met else "❌ FAIL"
+        else:
+            target_cell = "—"
+            result_cell = "—"
+        out.append(
+            f"| {md_cell(label)} | {samples} | {min_ms:.2f} | {mean_ms:.2f} | "
+            f"{p90_ms:.2f} | {max_ms:.2f} | {target_cell} | {result_cell} |"
+        )
+    out.append("")
+    out.append(
+        "_TOTAL = end-of-join → client callback. Full per-sample timing pipeline "
+        "(joining, server acquisition/processing, wire) is recorded in JUnit XML "
+        "test artifacts; download them for deep analysis._"
+    )
+    return out
+
+
 def md_cell(value):
     """Escape text for a GitHub markdown table cell."""
     text = str(value or "").replace("\r", " ").replace("\n", " ")
@@ -872,6 +986,18 @@ def main() -> None:
     if tc_conformance_warning:
         artifact_warnings.append(tc_conformance_warning)
 
+    # ── Performance benchmarks ────────────────────────────────────────
+    # Live perf tests publish their result-transfer latency stats as
+    # `perf_*` JUnit properties. The aggregator pulls them here so the
+    # single System Tests Report job summary owns the entire run-page
+    # output; the live test jobs no longer write to `$GITHUB_STEP_SUMMARY`
+    # directly (that previously fragmented the page in completion order).
+    perf_lanes: list[tuple[str, dict[str, float]]] = []
+    con_live_perf = load_perf_benchmarks("all-results/results-live-console/**/pytest-live.xml")
+    if con_live_perf:
+        perf_lanes.append(("Console Client — Result Transfer Time", con_live_perf))
+    perf_section_lines = render_perf_section(perf_lanes)
+
     suite_counts = [
         ("sd_smoke", "OPC UA Server — Docker Smoke", sd_smoke),
         ("wd_py", "Web Client — Docker Python Unit", wd_py),
@@ -1153,9 +1279,9 @@ def main() -> None:
         "",
         "---",
         "",
-        '<a id="system-conformance-overview"></a>',
+        '<a id="system-conformance-suites"></a>',
         "",
-        f"### 📑 Conformance Overview — {conformance_suite_count} suites",
+        f"### 📑 Conformance Suites — {conformance_suite_count}",
         "",
         "| Suite | Port | Live Tests | Skipped | Notes |",
         "|:------|-----:|----------:|--------:|:------|",
@@ -1167,11 +1293,64 @@ def main() -> None:
         (
             "| Test Client — Conformance | 40462 | "
             f"{tests_cell(tc_tests, tc_tests_base)} | "
-            f"{skips(tc_tests[3])} | {skip_note_inline(tc_conf_skips, tc_tests[3])} |"
+            f"{skips(tc_tests[3])} | "
+            f"{skip_note_inline(tc_conf_skips, tc_tests[3])} "
+            "([Skip Details](#system-skip-details)) |"
         ),
     ]
 
+    # ── Inline skip details (collapsible per suite) ──────────────────
+    # Built here so the Conformance Suites "see below" link points to the
+    # very next visual block, not 100+ lines below.
+
+    skip_sections = []
+    skip_sections += format_skip_section(
+        "OPC UA Server — Docker Smoke", sd_smoke_skips, sd_smoke[3]
+    )
+    skip_sections += format_skip_section("Web Client — Docker Python Unit", wd_py_skips, wd_py[3])
+    skip_sections += format_skip_section("Web Client — Docker JavaScript", wd_js_skips, wd_js[3])
+    skip_sections += format_skip_section("Test Client — Smoke Sanity", tc_smoke_skips, tc_smoke[3])
+    skip_sections += format_skip_section("Test Client — Conformance", tc_conf_skips, tc_tests[3])
+    skip_sections += format_skip_section("Console Client — Live", con_live_skips, con_live[3])
+    skip_sections += format_skip_section(
+        "Console Client — OPC UA Security",
+        console_opcua_security_skips,
+        console_opcua_security[3],
+    )
+    skip_sections += format_skip_section(
+        "Web Client — Python/WebSocket Live", wc_live_skips, wc_live[3]
+    )
+    skip_sections += format_skip_section(
+        "Web Client — Browser E2E", wc_browser_skips, wc_browser[3]
+    )
+    skip_sections += format_skip_section("C# Client — Live", cs_live_skips, cs_live[3])
+    skip_sections += format_skip_section(
+        "C# Client — OPC UA Security",
+        csharp_opcua_security_skips,
+        csharp_opcua_security[3],
+    )
+
+    if skip_sections:
+        out += [
+            "",
+            "---",
+            "",
+            '<a id="system-skip-details"></a>',
+            "",
+            "### ⏭️ Skip Details",
+            "",
+            "_Each suite below is collapsed by default — click to inspect skip reasons._",
+        ]
+        out += skip_sections
+
     timing_rows = bottleneck_candidates(job_timings, wc_feature_timings, cs_live_timings)
+    if perf_section_lines:
+        out += [
+            "",
+            "---",
+            "",
+            *perf_section_lines,
+        ]
     out += [
         "",
         "---",
@@ -1179,6 +1358,11 @@ def main() -> None:
         '<a id="system-performance-hotspots"></a>',
         "",
         "### ⏱️ Performance Hotspots",
+        "",
+        (
+            "<details><summary><b>Click to expand</b> — job, browser, C# and "
+            "Test Client timing drilldown</summary>"
+        ),
         "",
     ]
     if timing_rows:
@@ -1292,7 +1476,22 @@ def main() -> None:
             "</details>",
         ]
 
-    out += ["", "---", "", '<a id="system-warnings-drift"></a>', "", "### ⚠️ Warnings and Drift", ""]
+    out += ["", "</details>", ""]
+
+    out += [
+        "",
+        "---",
+        "",
+        '<a id="system-warnings-drift"></a>',
+        "",
+        "### ⚠️ Warnings and Drift",
+        "",
+        (
+            "<details><summary><b>Click to expand</b> — skip policy, drift, "
+            "and artifact warnings</summary>"
+        ),
+        "",
+    ]
     if skip_policy_failures:
         out += ["#### Skip Policy Failures", ""]
         out += skip_policy_failures
@@ -1308,34 +1507,7 @@ def main() -> None:
     if not skip_policy_failures and not report_warnings and not artifact_warnings:
         out += ["No skip policy failures, test-count drift warnings, or artifact warnings."]
 
-    # ── Inline skip details (collapsible) ──────────────────────────
-
-    skip_sections = []
-    skip_sections += format_skip_section(
-        "OPC UA Server — Docker Smoke", sd_smoke_skips, sd_smoke[3]
-    )
-    skip_sections += format_skip_section("Web Client — Docker Python Unit", wd_py_skips, wd_py[3])
-    skip_sections += format_skip_section("Web Client — Docker JavaScript", wd_js_skips, wd_js[3])
-    skip_sections += format_skip_section("Test Client — Smoke Sanity", tc_smoke_skips, tc_smoke[3])
-    skip_sections += format_skip_section("Test Client — Conformance", tc_conf_skips, tc_tests[3])
-    skip_sections += format_skip_section("Console Client — Live", con_live_skips, con_live[3])
-    skip_sections += format_skip_section(
-        "Console Client — OPC UA Security",
-        console_opcua_security_skips,
-        console_opcua_security[3],
-    )
-    skip_sections += format_skip_section(
-        "Web Client — Python/WebSocket Live", wc_live_skips, wc_live[3]
-    )
-    skip_sections += format_skip_section(
-        "Web Client — Browser E2E", wc_browser_skips, wc_browser[3]
-    )
-    skip_sections += format_skip_section("C# Client — Live", cs_live_skips, cs_live[3])
-    skip_sections += format_skip_section(
-        "C# Client — OPC UA Security",
-        csharp_opcua_security_skips,
-        csharp_opcua_security[3],
-    )
+    out += ["", "</details>", ""]
 
     out += [
         "",
@@ -1343,13 +1515,16 @@ def main() -> None:
         "",
         "### 📎 Artifacts and Drilldown",
         "",
+        (
+            "<details><summary><b>Click to expand</b> — where to find raw "
+            "JUnit, drill-down, and security results</summary>"
+        ),
+        "",
         "> 📦 **Artifacts** — JUnit XML &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down",
         "> 🔒 Security audit (zizmor) results are in **CI** → Security → Code Scanning",
+        "",
+        "</details>",
     ]
-
-    if skip_sections:
-        out += ["", "#### Skip Details"]
-        out += skip_sections
 
     out += [
         "",
@@ -1374,7 +1549,7 @@ def main() -> None:
         (
             "| Test Client | [Test Lane Results](#system-lane-results); "
             "[Component Test Results](#system-component-test-results); "
-            "[Conformance Overview](#system-conformance-overview); "
+            "[Conformance Suites](#system-conformance-suites); "
             + (
                 "[Conformance Report](#system-test-client-conformance-report); "
                 if tc_conformance_summary_lines
@@ -1384,7 +1559,8 @@ def main() -> None:
         ),
         (
             "| Console Client | [Test Lane Results](#system-lane-results); "
-            "[Component Test Results](#system-component-test-results) |"
+            "[Component Test Results](#system-component-test-results); "
+            "[Performance Benchmarks](#system-performance-benchmarks) |"
         ),
         (
             "| C# Client | [Test Lane Results](#system-lane-results); "

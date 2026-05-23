@@ -169,13 +169,19 @@ Each run is reported on its own terms; the renderer emits no baseline-driven del
 
 ## 6. Timing diagnostics terms
 
-### 6.1 `Bottleneck Spotlight` 🛠️ 🧪
+### 6.1 `⏱️ Performance Benchmarks` 🛠️ 🧪
+Compact lane-keyed latency table inside the System Tests Report. Source values are the `perf_*` JUnit `record_property` fields the live perf tests publish (`perf_sample_count`, `perf_mean_total_ms`, `perf_p90_total_ms`, `perf_min_total_ms`, `perf_max_total_ms`, plus optional `perf_threshold_mean_ms` / `perf_threshold_p90_ms`). Loaded by `reporting/system_tests_run_summary.py::load_perf_benchmarks()` and rendered by `render_perf_section()`. PASS/FAIL is derived from `mean < threshold_mean_ms AND p90 < threshold_p90_ms`. The run page no longer receives a separate per-job perf step summary — perf data flows through the aggregator only (see §6.4 for the broader writer-ownership rule and its one deferred exception).
+
+### 6.2 `Bottleneck Spotlight` 🛠️ 🧪
 Auto-detects the slowest current job/suite and appears inside the System Tests `⏱️ Performance Hotspots` section. The detection runs against the current job/suite mix so the slowest lane is always surfaced even as relative timing shifts between Web Client, C# Live, and Test Client lanes.
 
-### 6.2 Timing layers 🛠️ 🧪
+### 6.3 Timing layers 🛠️ 🧪
 - **Layer 1 (always visible):** top timing-source table built from current workflow jobs, Web Browser timing JSON, C# TRX artifacts, and Test Client JUnit durations when available.
 - **Layer 2 (always visible):** `Bottleneck Spotlight`.
 - **Layer 3 (`<details>` collapsed):** top-10 detail tables for available Web Browser, C# Live, and Test Client Conformance timing artifacts.
+
+### 6.4 Run-page step summary ownership 🛠️ 🧪
+Perf and test-result summaries for the System Tests workflow are consolidated in the aggregator job (`📋 System Tests Report`); lane jobs (Console Client perf, Test Client perf, etc.) emit JUnit XML and artifacts only and no longer write to `$GITHUB_STEP_SUMMARY`. One known exception remains: the Browser CI image resolve step still writes a short resolver block; that write is deferred to a follow-up commit and is the only non-aggregator writer left in the workflow. This keeps the run-page summary as a single consolidated block in the audience-tiered order: banner → outcome KPIs → lane results → conformance report → component results → conformance suites → skip details → performance benchmarks → performance hotspots → warnings → artifacts → per-client quick index.
 
 ---
 

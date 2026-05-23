@@ -440,24 +440,25 @@ def _log_report(samples: list) -> None:
 
 def _write_ci_report(
     record_property,
-    samples: list,
     mean_ms: float,
     p90_ms: float,
     min_ms: float,
     max_ms: float,
     n: int,
 ) -> None:
-    """Publish timing metrics to JUnit XML and the GitHub Actions step summary.
+    """Publish timing metrics to JUnit XML for the aggregated System Tests Report.
 
     JUnit XML properties (record_property):
         Visible in GitHub Actions "Tests" tab, test-results dashboards, and any
         CI system that parses JUnit XML artifacts.  Prefix ``perf_`` prevents
         collisions with pytest's own properties.
 
-    GitHub Step Summary (GITHUB_STEP_SUMMARY):
-        Appends a formatted markdown table to the workflow run summary page —
-        the most visible place in a GitHub Actions run.  No-op when the env var
-        is absent (local runs, non-GitHub CI).
+        These properties are the durable signal: the aggregated System Tests
+        Report job parses them out of ``pytest-live.xml`` and renders the
+        Performance Benchmarks block inside the single run-page step summary
+        owned by that job. Writing directly to ``GITHUB_STEP_SUMMARY`` from
+        this lane would fragment the run page in completion order (this job
+        finishes well before the report job), so it is intentionally avoided.
     """
     record_property("perf_sample_count", str(n))
     record_property("perf_mean_total_ms", f"{mean_ms:.2f}")
@@ -466,71 +467,6 @@ def _write_ci_report(
     record_property("perf_max_total_ms", f"{max_ms:.2f}")
     record_property("perf_threshold_mean_ms", f"{_THRESHOLD_MEAN_MS:.0f}")
     record_property("perf_threshold_p90_ms", f"{_THRESHOLD_P90_MS:.0f}")
-
-    gh_summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if not gh_summary:
-        return
-
-    st_joining = _col_stats(samples, "joining_ms")
-    st_acq = _col_stats(samples, "acquisition_ms")
-    st_proc = _col_stats(samples, "processing_ms")
-    st_server = _col_stats(samples, "time_on_server_ms")
-    st_wire = _col_stats(samples, "wire_ms")
-    st_total = _col_stats(samples, "total_ms")
-
-    def _row(label: str, st) -> str:
-        if st is None:
-            return f"| {label} | N/A | N/A | N/A | N/A | N/A |\n"
-        return (
-            f"| {label} | {st['min']:.2f} | {st['mean']:.2f} | "
-            f"{st['median']:.2f} | {st['p90']:.2f} | {st['max']:.2f} |\n"
-        )
-
-    target_met = mean_ms < _THRESHOLD_MEAN_MS and p90_ms < _THRESHOLD_P90_MS
-    pass_fail = "✅ PASS" if target_met else "❌ FAIL"
-
-    ends = sorted(s["end_time"] for s in samples if s.get("end_time"))
-    receives = sorted(s["client_time"] for s in samples if s.get("client_time"))
-    if ends and receives:
-        window = f"{ends[0].strftime('%H:%M:%S')} → {receives[-1].strftime('%H:%M:%S')} UTC"
-    else:
-        window = "Not reported"
-
-    try:
-        with open(gh_summary, "a", encoding="utf-8") as fh:
-            fh.write(f"\n## ⏱️ Result Transfer Time ({n} samples)\n\n")
-            fh.write(
-                f"> `MULTI_STEP_OK_RESULT` + full traces &nbsp;·&nbsp; "
-                f"Run window: {window}\n>\n"
-                f"> **Performance target:** mean &lt; {_THRESHOLD_MEAN_MS:.0f} ms "
-                f"**AND** p90 &lt; {_THRESHOLD_P90_MS:.0f} ms\n\n"
-            )
-            fh.write("| Phase | min (ms) | mean (ms) | median (ms) | p90 (ms) | max (ms) |\n")
-            fh.write("|---|---:|---:|---:|---:|---:|\n")
-            fh.write(_row("🔧 Joining duration *(informational)*", st_joining))
-            fh.write(_row("📥 Result acquisition *(server, informational)*", st_acq))
-            fh.write(_row("⚙️ Result processing *(server, informational)*", st_proc))
-            fh.write(_row("🖥️ Time on server", st_server))
-            fh.write(_row("📶 OPC UA + Wire", st_wire))
-            fh.write(_row("🏁 **TOTAL — Result Transfer Time**", st_total))
-            fh.write(
-                f"\n**{pass_fail}** &nbsp;—&nbsp; mean {mean_ms:.2f} ms &nbsp;·&nbsp; "
-                f"p90 {p90_ms:.2f} ms &nbsp;·&nbsp; target both &lt; "
-                f"{_THRESHOLD_MEAN_MS:.0f} ms\n\n"
-            )
-            fh.write(
-                "> **Reading the table.** *Joining duration* is the physical "
-                "operation itself — shown for context, not gated. *Result "
-                "acquisition* and *result processing* are durations the server "
-                "reports inside the *Time on server* wall-clock; they are "
-                "informational sub-components. *Time on server* covers everything "
-                "between end-of-join and the moment the server fires the event. "
-                "*OPC UA + Wire* covers transport from server event to client "
-                "callback. The **TOTAL** is end-of-join → client callback and is "
-                "the gated metric.\n"
-            )
-    except OSError as exc:
-        logger.warning("Could not write to GITHUB_STEP_SUMMARY: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -628,7 +564,6 @@ async def test_result_transfer_time(
 
     _write_ci_report(
         record_property,
-        samples,
         mean_ms,
         p90_ms,
         valid_totals[0],
