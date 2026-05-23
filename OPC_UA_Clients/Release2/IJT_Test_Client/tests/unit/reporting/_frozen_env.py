@@ -42,5 +42,6 @@ FROZEN_ENV = ReportEnvironment(
     asyncua_version="1.2b2",
     host_os="Windows-11-10.0.26200-SP0",
     run_logs_url="n/a",
+    glossary_url="OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md",
     now_utc=datetime(2026, 5, 13, 14, 0, 0, tzinfo=timezone.utc),
 )

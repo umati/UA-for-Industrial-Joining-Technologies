@@ -131,6 +131,7 @@ def test_renderer_ignores_live_environment_when_frozen_env_passed(monkeypatch: p
     )
     monkeypatch.setenv("GITHUB_SERVER_URL", "https://leak.invalid")
     monkeypatch.setenv("GITHUB_REPOSITORY", "leak/leak")
+    monkeypatch.setenv("GITHUB_SHA", "deadbeefcafefeed")
     monkeypatch.setenv("GITHUB_RUN_ID", "999999999")
 
     fixt = _FIXTURES_DIR / "system_tests_full_conformance"
@@ -154,7 +155,14 @@ def test_renderer_ignores_live_environment_when_frozen_env_passed(monkeypatch: p
         "not from `platform.*`, `_short_git_sha`, `_package_version`, or `GITHUB_*` env vars."
     )
     # Belt-and-braces: the leaked sentinels must never appear in the output.
-    for sentinel in ("9.99.99-leak", "FakeOS-Quantum-Leak", "deadbee", "0.0.0-leak", "leak.invalid"):
+    for sentinel in (
+        "9.99.99-leak",
+        "FakeOS-Quantum-Leak",
+        "deadbee",
+        "0.0.0-leak",
+        "leak.invalid",
+        "deadbeefcafefeed",
+    ):
         assert sentinel not in produced, f"Leaked sentinel {sentinel!r} found in renderer output"
     assert "5000 days ago" not in produced and "9000 days ago" not in produced, (
         "Renderer leaked a wall-clock read into byte-identity output. "
@@ -208,6 +216,7 @@ def test_runtime_report_environment_reads_live_state(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(_ci_summary, "_utc_now", lambda: fixed_now)
     monkeypatch.setenv("GITHUB_SERVER_URL", "https://example.test")
     monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
+    monkeypatch.setenv("GITHUB_SHA", "abc1234deadbeef")
     monkeypatch.setenv("GITHUB_RUN_ID", "42")
 
     env = ReportEnvironment.from_runtime()
@@ -217,6 +226,10 @@ def test_runtime_report_environment_reads_live_state(monkeypatch: pytest.MonkeyP
     assert env.host_os == "TestOS-1.0"
     assert env.run_logs_url == "https://example.test/owner/repo/actions/runs/42"
     assert env.now_utc == fixed_now
+    assert env.glossary_url == (
+        "https://example.test/owner/repo/blob/"
+        "abc1234deadbeef/OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md"
+    )
     assert env.repro_command == "python run_all_tests.py"
 
 

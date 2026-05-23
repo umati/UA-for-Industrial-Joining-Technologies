@@ -349,6 +349,7 @@ class ReportEnvironment:
     host_os: str
     run_logs_url: str
     now_utc: datetime
+    glossary_url: str = "OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md"
     repro_command: str = "python run_all_tests.py"
 
     @classmethod
@@ -361,6 +362,7 @@ class ReportEnvironment:
             host_os=platform.platform(),
             run_logs_url=_run_logs_url(),
             now_utc=_utc_now(),
+            glossary_url=_glossary_url(),
         )
 
 
@@ -1136,7 +1138,7 @@ def render_conformance_summary(
 
     lines.append("---")
     lines.append(
-        f"_Term reference: see [REPORT_GLOSSARY.md]({_glossary_url()}) for definitions of all terms used above._"
+        f"_Term reference: see [REPORT_GLOSSARY.md]({resolved_env.glossary_url}) for definitions of all terms used above._"
     )
     lines.append("*Full detail: download `report.xlsx` or `report.html` from the run artifacts.*")
     return "\n".join(lines), context
