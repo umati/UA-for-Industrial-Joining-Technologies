@@ -333,6 +333,12 @@ def cov(pct, threshold=None, job_result=None):
     return f"{pct:.1f}% / {threshold:.0f}% {icon}"
 
 
+def plural_label(count: int, singular: str, plural: str | None = None) -> str:
+    """Return a count plus a correctly pluralized public label."""
+    label = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {label}"
+
+
 # ── Cell-status helpers ──────────────────────────────────────────────
 # Cells in the Code Quality / Security tables lead with a status icon so that
 # multi-tool cells (joined with <br>) stay visually aligned at the cell's left
@@ -340,9 +346,8 @@ def cov(pct, threshold=None, job_result=None):
 # scanning for these icons in priority order.
 
 _CELL_NOT_APPLICABLE = "➖ Not Applicable"
-_CELL_NOT_MEASURED_SMOKE = "➖ Not Measured (Smoke)"
 _CELL_CSHARP_CODEQL_NOTE = "ℹ️ CodeQL source scan runs in Security workflow"
-_CELL_ESLINT_SEC_OUT_OF_SCOPE = "➖ Out of scope — legacy lane"
+_CELL_ESLINT_SEC_OUT_OF_SCOPE = "➖ Out of scope — legacy check"
 
 
 def row_status_icon(*cells: str) -> str:
@@ -716,7 +721,7 @@ def main() -> None:
     sec_cs_dep = nuget_fmt(cs_vuln)
     sec_tc_scan = bandit_fmt(tc_ban[0], tc_ban[1], tc_r)
     sec_tc_dep = pip_audit_fmt(tc_pip[0], tc_pip[1], tc_pip[2], tc_r)
-    validation_lane_count = len(suites)
+    validation_check_count = len(suites)
     quality_component_count = len([web_quality, con_ruff, nod_eslint, cs_quality, tc_ruff])
     security_component_count = len([web_dep_audit, con_pip, nod_npm, cs_vuln, tc_pip])
     infrastructure_check_count = len([dck_r, al_r, zz_r, pc_r])
@@ -766,45 +771,45 @@ def main() -> None:
         "",
         '<a id="ci-validation-results"></a>',
         "",
-        f"### 🧪 Validation Results — {validation_lane_count} lanes",
+        f"### 🧪 Validation Results — {plural_label(validation_check_count, 'check')}",
         "",
         "| Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |",
         "|:----------|:-----------------|----------:|--------:|:---------------------:|",
         (
-            f"| Web Client — Python | Ubuntu Release 2 Python unit lane | "
+            f"| Web Client — Python | Ubuntu Release 2 Python unit suite | "
             f"{tests_cell(web_py_t, web_py_r)} | "
             f"{skips(web_py_t[3], web_py_r)} | {cov(web_cov, 95, web_py_r)} |"
         ),
         (
-            "| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | "
+            "| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit suite | "
             f"{tests_cell(web_js_t, web_js_r)} | "
             f"{skips(web_js_t[3], web_js_r)} | {cov(web_js_cov, 95, web_js_r)} |"
         ),
         (
-            f"| Console Client — Python | Ubuntu Python unit lane | "
+            f"| Console Client — Python | Ubuntu Python unit suite | "
             f"{tests_cell(con_py_t, con_r)} | "
             f"{skips(con_py_t[3], con_r)} | {cov(con_cov, 95, con_r)} |"
         ),
         (
-            "| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | "
+            "| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit suite | "
             f"{tests_cell(nod_js_t, nod_r)} | "
             f"{skips(nod_js_t[3], nod_r)} | {cov(nod_cov, 95, nod_r)} |"
         ),
         (
-            f"| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | "
+            f"| C# Client — Unit (xUnit) | Windows C# xUnit unit suite | "
             f"{tests_cell(cs_unit_t, cs_u_r)} | "
             f"{skips(cs_unit_t[3], cs_u_r)} | {cov(cs_cov, 95, cs_u_r)} |"
         ),
         (
-            f"| Test Client — Python (Unit) | Ubuntu Python unit lane | "
+            f"| Test Client — Python (Unit) | Ubuntu Python unit suite | "
             f"{tests_cell(tc_py_t, tc_r)} | "
             f"{skips(tc_py_t[3], tc_r)} | {cov(tc_cov, 95, tc_r)} |"
         ),
         (
-            f"| OPC UA Server — Smoke | Windows native server smoke lane | "
+            f"| OPC UA Server — Smoke | Windows native server smoke check | "
             f"{tests_cell(ss_smoke, ss_r)} | "
             f"{skips(ss_smoke[3], ss_r)} | "
-            f"{_CELL_NOT_MEASURED_SMOKE} |"
+            f"{_CELL_NOT_APPLICABLE} |"
         ),
         "",
         "---",
@@ -847,15 +852,11 @@ def main() -> None:
         "",
         f"### 🔒 Source and Dependency Security — {security_component_count} components scanned",
         "",
-        (
-            "Static source analysis (bandit) and dependency vulnerability audit "
-            "(pip-audit, npm-audit, nuget)."
-        ),
+        "Bandit scans Python source. pip-audit, npm audit, and NuGet audit scan dependencies.",
         "",
         (
-            "For workflow security see CI Infrastructure → zizmor; for secret scanning see "
-            "Pre-commit Hooks → detect-secrets; for deep semantic analysis see "
-            "the Security — CodeQL workflow."
+            "See also: CI Infrastructure for zizmor, Pre-commit Hooks for detect-secrets, "
+            "and Security — CodeQL for semantic analysis."
         ),
         "",
         "| 🚦 | Component | Security Scan | Dependency Audit |",
@@ -968,12 +969,20 @@ def main() -> None:
             for _, skips_list, suite_skip_count in skip_suite_counts
             if (suite_skip_count or 0) > 0 or skips_list
         )
-        lane_count = sum(
+        suite_count = sum(
             1
             for _, skips_list, suite_skip_count in skip_suite_counts
             if (suite_skip_count or 0) > 0 or skips_list
         )
-        out += ["", "---", "", f"### ⏭️ Skip Details — {lane_count} lanes, {skip_count} skips"]
+        out += [
+            "",
+            "---",
+            "",
+            (
+                f"### ⏭️ Skip Details — {plural_label(suite_count, 'suite')}, "
+                f"{plural_label(skip_count, 'skip')}"
+            ),
+        ]
         out += skip_sections
 
     # ── Skip budget check (computed earlier; render here) ───────────────
@@ -1000,38 +1009,38 @@ def main() -> None:
         "| Client / Component | Appears In |",
         "|:-------------------|:-----------|",
         (
-            "| Web Client | [Validation Results](#ci-validation-results); "
-            "[Code Quality Checks](#ci-code-quality-checks); "
-            "[Source and Dependency Security](#ci-source-dependency-security); "
+            "| Web Client | [Validation Results](#ci-validation-results) · "
+            "[Code Quality Checks](#ci-code-quality-checks) · "
+            "[Source and Dependency Security](#ci-source-dependency-security) · "
             "[Timing](#ci-performance-timings) |"
         ),
         (
-            "| Console Client | [Validation Results](#ci-validation-results); "
-            "[Code Quality Checks](#ci-code-quality-checks); "
-            "[Source and Dependency Security](#ci-source-dependency-security); "
+            "| Console Client | [Validation Results](#ci-validation-results) · "
+            "[Code Quality Checks](#ci-code-quality-checks) · "
+            "[Source and Dependency Security](#ci-source-dependency-security) · "
             "[Timing](#ci-performance-timings) |"
         ),
         (
-            "| Node Client — Legacy JavaScript | [Validation Results](#ci-validation-results); "
-            "[Code Quality Checks](#ci-code-quality-checks); "
-            "[Source and Dependency Security](#ci-source-dependency-security); "
+            "| Node Client — Legacy JavaScript | [Validation Results](#ci-validation-results) · "
+            "[Code Quality Checks](#ci-code-quality-checks) · "
+            "[Source and Dependency Security](#ci-source-dependency-security) · "
             "[Timing](#ci-performance-timings) |"
         ),
         (
-            "| C# Client | [Validation Results](#ci-validation-results); "
-            "[Code Quality Checks](#ci-code-quality-checks); "
-            "[Source and Dependency Security](#ci-source-dependency-security); "
+            "| C# Client | [Validation Results](#ci-validation-results) · "
+            "[Code Quality Checks](#ci-code-quality-checks) · "
+            "[Source and Dependency Security](#ci-source-dependency-security) · "
             "[Timing](#ci-performance-timings) |"
         ),
         (
-            "| Test Client | [Validation Results](#ci-validation-results); "
-            "[Code Quality Checks](#ci-code-quality-checks); "
-            "[Source and Dependency Security](#ci-source-dependency-security); "
+            "| Test Client | [Validation Results](#ci-validation-results) · "
+            "[Code Quality Checks](#ci-code-quality-checks) · "
+            "[Source and Dependency Security](#ci-source-dependency-security) · "
             "[Timing](#ci-performance-timings) |"
         ),
         (
-            "| OPC UA Server | [Validation Results](#ci-validation-results); "
-            "[CI Infrastructure](#ci-infrastructure); [Timing](#ci-performance-timings) |"
+            "| OPC UA Server | [Validation Results](#ci-validation-results) · "
+            "[CI Infrastructure](#ci-infrastructure) · [Timing](#ci-performance-timings) |"
         ),
     ]
 

@@ -57,9 +57,6 @@ from helpers.report_scoring import (
     CAPABILITY_NOTE_LABEL_ORDER as _CAPABILITY_NOTE_LABEL_ORDER,
 )
 from helpers.report_scoring import (
-    CAPABILITY_NOTE_LABELS as _CAPABILITY_NOTE_LABELS,
-)
-from helpers.report_scoring import (
     CAPABILITY_SUPPORT_ICONS as _CAPABILITY_SUPPORT_ICONS,
 )
 from helpers.report_scoring import (
@@ -377,15 +374,23 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _plural_label(count: int, singular: str, plural: str | None = None) -> str:
+    """Return a count plus a correctly pluralized public label."""
+    label = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {label}"
+
+
 def _outcomes_cell(counts: Counter[str]) -> str:
     """Return compact Markdown for the coverage summary tables."""
-    return (
-        f"{counts['supported']} {_plain_outcome_label('supported')}<br>"
-        f"{counts['partial']} {_CAPABILITY_NOTE_LABEL_ORDER[1]}<br>"
-        f"{counts['not_supported']} {_CAPABILITY_NOTE_LABEL_ORDER[0]}<br>"
-        f"{counts['blocked']} {_ACTION_ITEM_LABEL_ORDER[1]}<br>"
-        f"{counts['action_needed']} {_ACTION_ITEM_LABEL_ORDER[0]}"
-    )
+    rows = [
+        (_plain_outcome_label("supported"), counts["supported"]),
+        (_CAPABILITY_NOTE_LABEL_ORDER[1], counts["partial"]),
+        (_CAPABILITY_NOTE_LABEL_ORDER[0], counts["not_supported"]),
+        (_ACTION_ITEM_LABEL_ORDER[1], counts["blocked"]),
+        (_ACTION_ITEM_LABEL_ORDER[0], counts["action_needed"]),
+    ]
+    rendered = [f"{_format_status_label(label)}: {count}" for label, count in rows if count]
+    return "<br>".join(rendered) if rendered else _NOT_APPLICABLE
 
 
 def _in_server_profile(cu_key: str, supported: set[str] | None) -> str:
@@ -431,6 +436,8 @@ def _compliance_label(counts: Counter[str], total: int) -> str:
         return _format_outcome_label("action_needed")
     if counts["blocked"]:
         return _format_outcome_label("blocked")
+    if total and counts["not_supported"] == total:
+        return _format_outcome_label("not_supported")
     if counts["partial"] or counts["not_supported"]:
         return _format_outcome_label("partial")
     if total and counts["supported"] == total:
@@ -641,7 +648,7 @@ def _build_report_context(cu_payload: dict[str, Any] | None) -> dict[str, Any] |
                 "status_icon": status_icon,
             }
         )
-    findings.sort(key=lambda item: (_STATUS_ORDER.get(str(item["status"]), 99), str(item["cu_key"])))
+    findings.sort(key=lambda item: (_STATUS_ORDER.get(str(item["status"]), 99), str(item["cu"])))
     findings_count = Counter(_status_count_key(str(item["status"])) for item in findings)
     is_healthy = _is_healthy(
         context_present=True,
@@ -715,9 +722,9 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
     rows.sort(key=lambda item: (item[0], item[1]))
     summary_counts = Counter(label for _rank, _name, _icon, label, _description in rows)
     support_chip = (
-        f"{summary_counts['Supported']} supported · "
-        f"{summary_counts['Partially Supported']} partial · "
-        f"{summary_counts['Not Supported']} not supported"
+        f"{summary_counts['Supported']} Supported · "
+        f"{summary_counts['Partially Supported']} Partial · "
+        f"{summary_counts['Not Supported']} Not Supported"
     )
     lines = [f"## 🧩 IJT Facet Support — {support_chip}", ""]
     lines.append("> 🚦 Support: ✅ Supported · ⚠️ Partially Supported · ⚪ Not Supported")
@@ -762,14 +769,13 @@ def _append_review_table(
     limit: int,
     more_target: str,
 ) -> None:
-    lines.append("| Review Status | CU | Outcome | Primary Reason |")
-    lines.append("|---|---|---|---|")
+    lines.append("| Status | CU | Reason |")
+    lines.append("|---|---|---|")
     for finding in findings[:limit]:
-        status = f"{finding['status_icon']} {finding['status']}"
+        status = _format_status_label(str(finding["status"]))
         cells = [
             status,
             _md_cell(str(finding["cu"])),
-            str(finding["result"]),
             _md_cell(str(finding["reason"]) or "See CU details"),
         ]
         lines.append("| " + " | ".join(cells) + " |")
@@ -778,7 +784,6 @@ def _append_review_table(
         cells = [
             "Additional rows",
             f"See full {more_target} section below",
-            "Preview limited",
             f"{remaining} additional items are listed in full in {more_target}",
         ]
         lines.append("| " + " | ".join(cells) + " |")
@@ -788,11 +793,8 @@ def _render_review_sections(context: dict[str, Any], limit: int = 10) -> list[st
     findings: list[dict[str, Any]] = context["findings"]
     counts: Counter[str] = context["findings_count"]
     action_items = [item for item in findings if str(item["status"]) in _ACTION_ITEM_LABELS]
-    capability_notes = [item for item in findings if str(item["status"]) in _CAPABILITY_NOTE_LABELS]
     ai_counts = Counter(str(item["status"]) for item in action_items)
-    notes_counts = Counter(str(item["status"]) for item in capability_notes)
     action_chip = f"{ai_counts['Failed']} failed · {ai_counts['Blocked']} blocked"
-    notes_chip = f"{notes_counts['Not Supported']} not supported · {notes_counts['With Notes']} with notes"
 
     lines: list[str] = []
     if not bool(context.get("is_healthy")):
@@ -800,21 +802,13 @@ def _render_review_sections(context: dict[str, Any], limit: int = 10) -> list[st
         lines.append(f"**{_format_status_counts(_ACTION_ITEM_LABEL_ORDER, counts)}**")
         lines.append("")
         if action_items:
-            _append_review_table(lines, action_items, limit, "Conformance Unit Details")
+            _append_review_table(lines, action_items, limit, "CUs Needing Review")
         else:
             lines.append(
                 "_No failed or blocked CUs. Review the profile and server support inputs because this run "
                 "does not have a healthy active CU scope._"
             )
         lines.append("")
-
-    lines.append(f"## 📝 Server Scope Notes — {notes_chip}")
-    lines.append("")
-    if capability_notes:
-        lines.append("Information only; review scope and caveats. See Conformance Unit Details below.")
-    else:
-        lines.append("_Server supports every CU in its server capability profile, no scope notes._")
-    lines.append("")
     return lines
 
 
@@ -830,12 +824,12 @@ def _render_test_environment(*, env: ReportEnvironment) -> list[str]:
 
 
 def _is_conformance_skip_reason(reason: str) -> bool:
-    """Return True when a skip bucket is already represented in Conformance Unit Details.
+    """Return True when a skip bucket is already represented in CUs Needing Review.
 
     Filters skip buckets whose display string starts with the literal
     ``"Not Supported:"`` prefix (case-sensitive, per spec). Those rows are
-    already accounted for in the Conformance Unit Details / Server Scope Notes
-    views, so listing them again as raw skip diagnostics is duplicate noise.
+    already accounted for in the CUs Needing Review table, so listing them
+    again as raw skip diagnostics is duplicate noise.
     """
     return _skip_reason_display(reason).lstrip().startswith("Not Supported:")
 
@@ -846,7 +840,7 @@ def _render_diagnostics(data: dict[str, Any]) -> list[str]:
     Only emitted when ``skip_reasons`` or ``xfail_reasons`` is truthy. The
     ``Not Supported:`` skip-reason prefix is filtered out of the Skip
     Diagnostics sub-table because those rows are already represented in
-    Conformance Unit Details / Server Scope Notes. The raw input is left
+    CUs Needing Review. The raw input is left
     untouched so Excel and other consumers still see the full bucket list.
     """
     skip_reasons = data.get("skip_reasons") or {}
@@ -861,8 +855,7 @@ def _render_diagnostics(data: dict[str, Any]) -> list[str]:
     lines: list[str] = ["<details>", "<summary><b>Skip &amp; Expected-Failure Diagnostics</b></summary>", ""]
     lines.append(
         '_Diagnostic skip buckets and expected failures. The "Not Supported:" reasons are intentionally '
-        "filtered here — server-unsupported CUs are tracked separately in Server Scope Notes / "
-        "Conformance Unit Details._"
+        'filtered here — server-unsupported CUs are tracked separately in "CUs Needing Review"._'
     )
     lines.append("")
     lines.append("#### Diagnostic Skips")
@@ -902,7 +895,6 @@ def _render_profile_facet_summary(
     by_cu: dict[str, Any] = context["by_cu"]
     supported: set[str] | None = context["supported"]
     all_cu_keys: list[str] = context["all_cu_keys"]
-    facet_map: dict[str, list[str]] = context["facet_map"]
 
     lines: list[str] = []
     lines.extend(_render_supports_block(context))
@@ -910,8 +902,11 @@ def _render_profile_facet_summary(
 
     lines.append("## 📐 IJT Facet Breakdown")
     lines.append("")
+    lines.append("<details>")
+    lines.append(f"<summary><b>{_plural_label(len(facets), 'facet row')}</b></summary>")
+    lines.append("")
     lines.append(
-        "| Facet | Type | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcomes | Outcome |"
+        "| Facet | Type | CUs | Server Supported CUs | Server Support % | Supported CUs Validated % | Outcome Counts | Outcome Rollup |"
     )
     lines.append("|---|---|---:|---:|---:|---:|---|---|")
     for facet in facets.values():
@@ -926,54 +921,35 @@ def _render_profile_facet_summary(
             f"{_compliance_label(counts, len(cu_keys))} |"
         )
     lines.append("")
-
-    lines.append("## 📋 Conformance Unit Details")
-    lines.append("")
-    detail_tag = "<details>" if bool(context.get("is_healthy")) else "<details open>"
-    lines.append(detail_tag)
-    lines.append(
-        f"<summary><b>{len(context['findings'])} rows needing review · {len(all_cu_keys)} total CUs</b></summary>"
-    )
-    lines.append("")
-    lines.append(
-        f"_Single source for CU review and full coverage. Filter `Review Status` for follow-up rows; "
-        f"blank review status means {_plain_outcome_label('supported')}._"
-    )
-    lines.append("")
-    active_cus_set = set(context["active_cus"])
-    tests_by_cu: dict[str, list[dict[str, Any]]] = context["tests_by_cu"]
-    lines.append(
-        f"| Review Status | CU | Facet(s) | Server Supported | Outcome | Primary Reason | Tests | Passed | "
-        f"{_plain_outcome_label('not_supported')} | {_plain_outcome_label('blocked')} | Failures | "
-        f"Workbook Cases |"
-    )
-    lines.append("|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|")
-    for cu_key in all_cu_keys:
-        data_raw = by_cu.get(cu_key)
-        data = data_raw if isinstance(data_raw, dict) else {}
-        failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
-        in_server_profile = _in_server_profile(cu_key, supported)
-        outcome = _cu_compliance_key(data)
-        status, status_icon = _status_for(cu_key, outcome, active_cus_set)
-        review_status = f"{status_icon} {status}".strip()
-        primary_reason = _cu_note_summary(cu_key, tests_by_cu) if review_status else ""
-        cells = [
-            review_status,
-            _md_cell(cu_display_name(cu_key)),
-            _md_cell(", ".join(facet_map.get(cu_key, []))),
-            str(in_server_profile),
-            _outcome_label(outcome),
-            _md_cell(primary_reason),
-            str(int(data.get("test_count", 0) or 0)),
-            str(int(data.get("passed", 0) or 0)),
-            str(int(data.get("not_supported", 0) or 0)),
-            str(int(data.get("blocked", 0) or 0)),
-            str(failed),
-            str(int(data.get("workbook_case_count", 0) or 0)),
-        ]
-        lines.append("| " + " | ".join(cells) + " |")
-    lines.append("")
     lines.append("</details>")
+    lines.append("")
+
+    findings: list[dict[str, Any]] = context["findings"]
+    lines.append(f"## 📋 CUs Needing Review — {_plural_label(len(findings), 'row')}")
+    lines.append("")
+    lines.append(f"_Review rows only. Full {len(all_cu_keys)}-CU detail remains in `report.xlsx` and `report.html`._")
+    lines.append("")
+    if findings:
+        lines.append(
+            f"| Status | CU | Server Supported | Reason | Tests | Passed | "
+            f"{_plain_outcome_label('not_supported')} | {_plain_outcome_label('blocked')} | Failures |"
+        )
+        lines.append("|---|---|---|---|---:|---:|---:|---:|---:|")
+        for finding in findings:
+            cells = [
+                _format_status_label(str(finding["status"])),
+                _md_cell(str(finding["cu"])),
+                str(finding["server_supported"]),
+                _md_cell(str(finding["reason"]) or "See test details"),
+                str(finding["tests"]),
+                str(finding["passed"]),
+                str(finding["not_supported"]),
+                str(finding["blocked"]),
+                str(finding["failed"]),
+            ]
+            lines.append("| " + " | ".join(cells) + " |")
+    else:
+        lines.append("_No CUs need review._")
     lines.append("")
 
     lines.append("<details>")
@@ -1138,8 +1114,10 @@ def render_conformance_summary(
     lines.extend(_render_diagnostics(data))
 
     lines.append("---")
+    lines.append("## 📎 Report References")
+    lines.append("")
     lines.append(
-        f"_Term reference: see [REPORT_GLOSSARY.md]({resolved_env.glossary_url}) for definitions of all terms used above._"
+        f"- Term reference: see [REPORT_GLOSSARY.md]({resolved_env.glossary_url}) for definitions of report terms."
     )
-    lines.append("*Full detail: download `report.xlsx` or `report.html` from the run artifacts.*")
+    lines.append("- Full detail: download `report.xlsx` or `report.html` from the run artifacts.")
     return "\n".join(lines), context

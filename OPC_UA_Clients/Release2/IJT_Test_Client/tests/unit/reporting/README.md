@@ -72,7 +72,7 @@ run with the complete CU compliance payload and a baseline file present.
 This is the **canonical real-world conformance regression fixture** for
 the renderer: it exercises authentic scale, profile/facet groups,
 not-supported handling, with-notes / partial outcomes, truncation, and
-the Conformance Unit Details table.
+the action-first CUs Needing Review table.
 
 This fixture is **not** a complete branch-coverage oracle. Targeted
 Failed / Blocked / error-path tests remain the responsibility of small

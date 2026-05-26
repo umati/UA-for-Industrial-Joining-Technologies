@@ -605,8 +605,8 @@ def test_skips_formatter():
 def test_count_test_results():
     """count_test_results combines tests and skips formatting."""
     result = system_tests_run_summary.count_test_results((100, 95, 5, 3))
-    assert "95 / 100" in result
-    assert "3 Skipped" in result
+    assert "Passed: 95 / 100" in result
+    assert "Skipped: 3" in result
 
 
 def test_count_test_results_with_baseline():
@@ -622,27 +622,27 @@ def test_count_test_results_zero_fail_with_skips_uses_passed_count():
     bug that reported (1043 total, 889 passed, 0 failed, 154 skipped) as
     "1,043 Passed, 154 Skipped" — which double-counts the 154 skips."""
     result = system_tests_run_summary.count_test_results((1043, 889, 0, 154))
-    assert result == "889 Passed, 154 Skipped"
+    assert result == "Passed: 889, Skipped: 154"
 
 
 def test_count_test_results_all_pass_no_skip():
-    """Clean all-passed lane prints just the passed count."""
+    """Clean all-passed suite prints the passed and skipped counts."""
     result = system_tests_run_summary.count_test_results((50, 50, 0, 0))
-    assert result == "50 Passed, 0 Skipped"
+    assert result == "Passed: 50, Skipped: 0"
 
 
 def test_bulleted_test_results_clean_lane():
     """Single-suite report cells use stable HTML bullets and Title Case labels."""
     result = system_tests_run_summary.bulleted_test_results((10, 10, 0, 0))
 
-    assert result == "&bull; 10 Passed<br>&bull; 0 Skipped"
+    assert result == "&bull; Passed: 10<br>&bull; Skipped: 0"
 
 
 def test_bulleted_test_results_failed_lane_includes_failed_count():
-    """Failed lanes keep passed/total, failed, and skipped counts visible."""
+    """Failed suites keep passed/total, failed, and skipped counts visible."""
     result = system_tests_run_summary.bulleted_test_results((10, 7, 2, 1))
 
-    assert result == "&bull; 7 / 10 Passed<br>&bull; 2 Failed<br>&bull; 1 Skipped"
+    assert result == "&bull; Passed: 7 / 10<br>&bull; Failed: 2<br>&bull; Skipped: 1"
 
 
 def test_bulleted_test_results_not_reported_lane():
@@ -661,12 +661,24 @@ def test_bulleted_multilane_test_results_indents_sub_counts():
 
     assert result == (
         "&bull; Python<br>"
-        "&nbsp;&nbsp;&bull; 700 Passed<br>"
-        "&nbsp;&nbsp;&bull; 0 Skipped<br>"
+        "&nbsp;&nbsp;&bull; Passed: 700<br>"
+        "&nbsp;&nbsp;&bull; Skipped: 0<br>"
         "&bull; JavaScript<br>"
-        "&nbsp;&nbsp;&bull; 557 Passed<br>"
-        "&nbsp;&nbsp;&bull; 0 Skipped"
+        "&nbsp;&nbsp;&bull; Passed: 557<br>"
+        "&nbsp;&nbsp;&bull; Skipped: 0"
     )
+
+
+def test_plural_label_handles_singular_and_plural():
+    assert system_tests_run_summary.plural_label(1, "suite") == "1 suite"
+    assert system_tests_run_summary.plural_label(2, "suite") == "2 suites"
+    assert system_tests_run_summary.plural_label(2, "benchmark") == "2 benchmarks"
+
+
+def test_skipped_count_cell_uses_icon_only_when_nonzero():
+    assert system_tests_run_summary.skipped_count_cell(None) == "—"
+    assert system_tests_run_summary.skipped_count_cell(0) == "0"
+    assert system_tests_run_summary.skipped_count_cell(154) == "154 ⏭️"
 
 
 def test_tests_cell_zero_fail_with_skips_uses_passed_count():
@@ -849,15 +861,18 @@ def test_render_perf_section_pass_renders_table_and_marks_pass():
     }
     lines = system_tests_run_summary.render_perf_section([("Console", metrics)])
     assert any("### ⏱️ Performance Benchmarks" in line for line in lines)
-    header = [line for line in lines if line.startswith("| Lane")][0]
+    assert any("### ⏱️ Performance Benchmarks — 1 benchmark" in line for line in lines)
+    header = [line for line in lines if line.startswith("| Benchmark")][0]
     row = [line for line in lines if line.startswith("| Console")][0]
     assert "90th Percentile" not in header
     assert "20" in row
     assert "86.19" in row
     assert "100.71" not in row
-    assert "Tail Check" in row
+    assert "Average &lt; 500 ms · 90% of samples &lt; 500 ms" in row
+    assert "Tail Check" not in row
     assert "102.68" in row
     assert "✅ Pass" in row
+    assert any("90% of samples to stay below the target" in line for line in lines)
 
 
 def test_render_perf_section_fail_when_mean_exceeds_threshold():

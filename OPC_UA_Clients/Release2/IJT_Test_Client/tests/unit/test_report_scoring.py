@@ -136,7 +136,7 @@ def test_overview_context_rows_are_data_aware():
     """Overview helper text distinguishes actionable work from information."""
     clean = {"action_needed": 0, "blocked": 0, "not_supported": 25, "with_notes": 3}
     assert action_items_context(clean) == "No action needed"
-    assert informational_notes_context(clean) == "Information only; review scope and caveats"
+    assert informational_notes_context(clean) == "Information only. Review scope and caveats"
 
     actionable = {"action_needed": 1, "blocked": 2, "not_supported": 0, "with_notes": 0}
     assert action_items_context(actionable) == "Investigate failed or blocked CUs"

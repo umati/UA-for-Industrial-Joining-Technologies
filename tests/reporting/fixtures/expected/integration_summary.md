@@ -9,7 +9,7 @@
 
 ### 📊 Test Outcome Overview
 
-> ✅ **Status:** 0 Failed Jobs &nbsp;·&nbsp; 0 Drift Warnings &nbsp;·&nbsp; 0 Skip-Policy Failures &nbsp;·&nbsp; 0 Artifact Warnings
+> ✅ **Status:** 0 Failed Jobs &nbsp;·&nbsp; 0 Baseline Warnings &nbsp;·&nbsp; 0 Skip-Policy Failures &nbsp;·&nbsp; 0 Artifact Warnings
 
 | 🚦  | Outcome | Count |
 | :-: | :------ | ----: |
@@ -21,20 +21,20 @@
 
 ---
 
-<a id="system-lane-results"></a>
+<a id="system-test-results"></a>
 
-### 🧪 Test Lane Results — 9 lanes
+### 🧪 Test Results — 9 suites
 
-| 🚦 | Lane | Result | Test Results |
-|:--:|:-----|:-------|:-------------|
-| ✅ | OPC UA Server Docker smoke | Success | &bull; 10 Passed<br>&bull; 0 Skipped |
-| ✅ | Web Client Docker tests | Success | &bull; Python<br>&nbsp;&nbsp;&bull; 680 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped<br>&bull; JavaScript<br>&nbsp;&nbsp;&bull; 522 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped |
-| ✅ | Test Client conformance | Success | &bull; 889 Passed<br>&bull; 154 Skipped |
-| ✅ | Web Client live suites | Success | &bull; 127 Passed<br>&bull; 0 Skipped |
-| ✅ | Browser E2E suites | Success | &bull; 66 Passed<br>&bull; 0 Skipped |
-| ✅ | Console Client live | Success | &bull; 18 Passed<br>&bull; 0 Skipped |
+| 🚦 | Suite | Result | Test Results |
+|:--:|:------|:-------|:-------------|
+| ✅ | OPC UA Server Docker smoke | Success | &bull; Passed: 10<br>&bull; Skipped: 0 |
+| ✅ | Web Client Docker tests | Success | &bull; Python<br>&nbsp;&nbsp;&bull; Passed: 680<br>&nbsp;&nbsp;&bull; Skipped: 0<br>&bull; JavaScript<br>&nbsp;&nbsp;&bull; Passed: 522<br>&nbsp;&nbsp;&bull; Skipped: 0 |
+| ✅ | Test Client conformance | Success | &bull; Passed: 889<br>&bull; Skipped: 154 |
+| ✅ | Web Client live suites | Success | &bull; Passed: 127<br>&bull; Skipped: 0 |
+| ✅ | Browser E2E suites | Success | &bull; Passed: 66<br>&bull; Skipped: 0 |
+| ✅ | Console Client live | Success | &bull; Passed: 18<br>&bull; Skipped: 0 |
 | ⏭️ | Console Client OPC UA security | Skipped | &bull; Not Reported |
-| ✅ | C# Client live | Success | &bull; 110 Passed<br>&bull; 0 Skipped |
+| ✅ | C# Client live | Success | &bull; Passed: 110<br>&bull; Skipped: 0 |
 | ⏭️ | C# Client OPC UA security | Skipped | &bull; Not Reported |
 
 ---
@@ -47,18 +47,24 @@
 
 ### 📊 Conformance Overview
 
+> 🚦 Review: 🔴 Failed · 🟠 Blocked · ⚪ Not Supported · ℹ️ With Notes
+
 | Server Support Coverage | Validation Health | Conformance Action Items | Server Scope Notes |
 |:---:|:---:|:---:|:---:|
 | **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked** | **⚪ 25 Not Supported · ℹ️ 3 With Notes** |
+| 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | No action needed | Information only. Review scope and caveats |
 
-### 📋 Conformance Unit Details
+### 📋 CUs Needing Review — 28 rows
 
-<details>
-<summary><b>28 rows needing review · 123 total CUs</b></summary>
+_Review rows only. Full 123-CU detail remains in `report.xlsx` and `report.html`._
 
-Full CU detail lives in the Test Client artifact fixture.
+Full review detail lives in the Test Client artifact fixture.
 
-</details>
+---
+### 📎 Report References
+
+- Term reference: see [REPORT_GLOSSARY.md](OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md) for definitions of report terms.
+- Full detail: download `report.xlsx` or `report.html` from the run artifacts.
 
 ---
 
@@ -68,22 +74,22 @@ Full CU detail lives in the Test Client artifact fixture.
 
 | 🚦 | Component | Validation Scope | Container Test Results | Live/System Test Results | Notes |
 |:--:|:----------|:-----------------|:-------------------|:---------------------|:------|
-| ✅ | OPC UA Server | Linux container plus Windows live server processes | &bull; 10 Passed<br>&bull; 0 Skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
-| ✅ | Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | &bull; Python<br>&nbsp;&nbsp;&bull; 680 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped<br>&bull; JavaScript<br>&nbsp;&nbsp;&bull; 522 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped | &bull; Python/WebSocket Live<br>&nbsp;&nbsp;&bull; 127 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped<br>&bull; Browser E2E<br>&nbsp;&nbsp;&bull; 66 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped | Headless Chromium baked into the IJT Browser CI image |
-| ⏭️ | Test Client | Live conformance harness against OPC UA server | ➖ Not Applicable | &bull; Smoke<br>&nbsp;&nbsp;&bull; 10 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped<br>&bull; Conformance<br>&nbsp;&nbsp;&bull; 889 Passed<br>&nbsp;&nbsp;&bull; 154 Skipped | Not Implemented fixture marker |
-| ✅ | Console Client | Live Python client behavior and OPC UA security coverage against OPC UA server | &bull; Not Reported | &bull; 18 Passed<br>&bull; 0 Skipped | No additional notes |
-| ✅ | C# Client | Nightly xUnit live behavior and OPC UA security coverage against OPC UA server | &bull; Not Reported | &bull; 110 Passed<br>&bull; 0 Skipped | Nightly drift detection |
+| ✅ | OPC UA Server | Linux container plus Windows live server processes | &bull; Passed: 10<br>&bull; Skipped: 0 | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
+| ✅ | Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | &bull; Python<br>&nbsp;&nbsp;&bull; Passed: 680<br>&nbsp;&nbsp;&bull; Skipped: 0<br>&bull; JavaScript<br>&nbsp;&nbsp;&bull; Passed: 522<br>&nbsp;&nbsp;&bull; Skipped: 0 | &bull; Python/WebSocket Live<br>&nbsp;&nbsp;&bull; Passed: 127<br>&nbsp;&nbsp;&bull; Skipped: 0<br>&bull; Browser E2E<br>&nbsp;&nbsp;&bull; Passed: 66<br>&nbsp;&nbsp;&bull; Skipped: 0 | Headless Chromium baked into the IJT Browser CI image |
+| ⏭️ | Test Client | Live conformance harness against OPC UA server | ➖ Not Applicable | &bull; Smoke<br>&nbsp;&nbsp;&bull; Passed: 10<br>&nbsp;&nbsp;&bull; Skipped: 0<br>&bull; Conformance<br>&nbsp;&nbsp;&bull; Passed: 889<br>&nbsp;&nbsp;&bull; Skipped: 154 | Not Implemented fixture marker |
+| ✅ | Console Client | Live Python client behavior and OPC UA security coverage against OPC UA server | &bull; Not Reported | &bull; Passed: 18<br>&bull; Skipped: 0 | No additional notes |
+| ✅ | C# Client | Nightly xUnit live behavior and OPC UA security coverage against OPC UA server | &bull; Not Reported | &bull; Passed: 110<br>&bull; Skipped: 0 | Nightly baseline check |
 
 ---
 
 <a id="system-conformance-suites"></a>
 
-### 📑 Conformance Suites — 2
+### 📑 Conformance Suites — 2 suites
 
 | Suite | Port | Live Tests | Skipped | Notes |
 |:------|-----:|----------:|--------:|:------|
 | Test Client — Smoke sanity | 40462 | 10 ✅ | 0 | Server and namespace reachability |
-| Test Client — Conformance | 40462 | 889 ✅ | 154 | Not Implemented fixture marker ([Skip Details](#system-skip-details)) |
+| Test Client — Conformance | 40462 | 889 ✅ | 154 ⏭️ | Not Implemented fixture marker ([Skip Details](#system-skip-details)) |
 
 ---
 
@@ -106,13 +112,13 @@ _Each suite below is collapsed by default — click to inspect skip reasons._
 
 <a id="system-performance-benchmarks"></a>
 
-### ⏱️ Performance Benchmarks — 1 lane
+### ⏱️ Performance Benchmarks — 1 benchmark
 
-| Lane | Samples | min (ms) | mean (ms) | max (ms) | Target | Result |
-|:-----|--------:|---------:|----------:|---------:|:------:|:------:|
-| Console Client — Result Transfer Time | 20 | 12.63 | 86.19 | 102.68 | Mean &lt; 500 · Tail Check &lt; 500 | ✅ Pass |
+| Benchmark | Samples | min (ms) | average (ms) | max (ms) | Target | Result |
+|:----------|--------:|---------:|-------------:|---------:|:-------|:------:|
+| Console Client — Result Transfer Time | 20 | 12.63 | 86.19 | 102.68 | Average &lt; 500 ms · 90% of samples &lt; 500 ms | ✅ Pass |
 
-_TOTAL = end of joining operation → client callback. The visible table keeps first-read latency numbers compact; the Pass/Fail gate also checks an internal tail-latency value. Full per-sample timing pipeline (joining, server acquisition/processing, wire) is recorded in JUnit XML test artifacts._
+_TOTAL = end of joining operation → client callback. The visible table shows min, average, and max latency. The Pass/Fail gate also requires at least 90% of samples to stay below the target. Per-sample timing pipeline details are recorded in JUnit XML test artifacts._
 
 ---
 
@@ -169,13 +175,13 @@ Per-test durations are not available in the current JUnit artifact.
 
 ---
 
-<a id="system-warnings-drift"></a>
+<a id="system-warnings-baseline"></a>
 
-### ⚠️ Warnings and Drift
+### ⚠️ Warnings and Baseline Checks
 
-<details><summary><b>Click to expand</b> — skip policy, drift, and artifact warnings</summary>
+<details><summary><b>Click to expand</b> — skip policy, baseline, and artifact warnings</summary>
 
-No skip policy failures, test-count drift warnings, or artifact warnings.
+No skip policy failures, baseline warnings, or artifact warnings.
 
 </details>
 
@@ -209,8 +215,8 @@ No skip policy failures, test-count drift warnings, or artifact warnings.
 
 | Client / Component | Appears In |
 |:-------------------|:-----------|
-| OPC UA Server | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
-| Web Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
-| Test Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Conformance Suites](#system-conformance-suites); [Conformance Report](#system-test-client-conformance-report); [Performance Hotspots](#system-performance-hotspots) |
-| Console Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Benchmarks](#system-performance-benchmarks) |
-| C# Client | [Test Lane Results](#system-lane-results); [Component Test Results](#system-component-test-results); [Performance Hotspots](#system-performance-hotspots) |
+| OPC UA Server | [Test Results](#system-test-results) · [Component Test Results](#system-component-test-results) · [Performance Hotspots](#system-performance-hotspots) |
+| Web Client | [Test Results](#system-test-results) · [Component Test Results](#system-component-test-results) · [Performance Hotspots](#system-performance-hotspots) |
+| Test Client | [Test Results](#system-test-results) · [Component Test Results](#system-component-test-results) · [Conformance Suites](#system-conformance-suites) · [Conformance Report](#system-test-client-conformance-report) · [Performance Hotspots](#system-performance-hotspots) |
+| Console Client | [Test Results](#system-test-results) · [Component Test Results](#system-component-test-results) · [Performance Benchmarks](#system-performance-benchmarks) |
+| C# Client | [Test Results](#system-test-results) · [Component Test Results](#system-component-test-results) · [Performance Hotspots](#system-performance-hotspots) |

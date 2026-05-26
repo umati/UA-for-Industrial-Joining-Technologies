@@ -324,6 +324,13 @@ def test_skips_formatter_converts_to_string():
     assert ci_run_summary.skips(0) == "0 Skipped"
 
 
+def test_plural_label_handles_singular_and_plural():
+    """Section count labels must not render awkward values such as 1 suites."""
+    assert ci_run_summary.plural_label(1, "check") == "1 check"
+    assert ci_run_summary.plural_label(7, "check") == "7 checks"
+    assert ci_run_summary.plural_label(2, "suite") == "2 suites"
+
+
 def test_cov_formatter_none_returns_not_reported():
     """cov formatter explains missing coverage data."""
     assert ci_run_summary.cov(None) == "Not Reported"

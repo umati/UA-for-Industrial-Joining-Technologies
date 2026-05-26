@@ -23,17 +23,17 @@
 
 <a id="ci-validation-results"></a>
 
-### 🧪 Validation Results — 7 lanes
+### 🧪 Validation Results — 7 checks
 
 | Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |
 |:----------|:-----------------|----------:|--------:|:---------------------:|
-| Web Client — Python | Ubuntu Release 2 Python unit lane | 2 Passed ✅ | 2 Skipped | 97.0% / 95% ✅ |
-| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | 3 Passed ✅ | 0 Skipped | 96.0% / 95% ✅ |
-| Console Client — Python | Ubuntu Python unit lane | 2 Passed ✅ | 0 Skipped | 99.0% / 95% ✅ |
-| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | 1 Passed ✅ | 1 Skipped | 95.0% / 95% ✅ |
-| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | 1 Passed ✅ | 15 Skipped | 95.0% / 95% ✅ |
-| Test Client — Python (Unit) | Ubuntu Python unit lane | 2 Passed ✅ | 0 Skipped | 98.0% / 95% ✅ |
-| OPC UA Server — Smoke | Windows native server smoke lane | 10 Passed ✅ | 0 Skipped | ➖ Not Measured (Smoke) |
+| Web Client — Python | Ubuntu Release 2 Python unit suite | 2 Passed ✅ | 2 Skipped | 97.0% / 95% ✅ |
+| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit suite | 3 Passed ✅ | 0 Skipped | 96.0% / 95% ✅ |
+| Console Client — Python | Ubuntu Python unit suite | 2 Passed ✅ | 0 Skipped | 99.0% / 95% ✅ |
+| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit suite | 1 Passed ✅ | 1 Skipped | 95.0% / 95% ✅ |
+| C# Client — Unit (xUnit) | Windows C# xUnit unit suite | 1 Passed ✅ | 15 Skipped | 95.0% / 95% ✅ |
+| Test Client — Python (Unit) | Ubuntu Python unit suite | 2 Passed ✅ | 0 Skipped | 98.0% / 95% ✅ |
+| OPC UA Server — Smoke | Windows native server smoke check | 10 Passed ✅ | 0 Skipped | ➖ Not Applicable |
 
 ---
 
@@ -55,15 +55,15 @@
 
 ### 🔒 Source and Dependency Security — 5 components scanned
 
-Static source analysis (bandit) and dependency vulnerability audit (pip-audit, npm-audit, nuget).
+Bandit scans Python source. pip-audit, npm audit, and NuGet audit scan dependencies.
 
-For workflow security see CI Infrastructure → zizmor; for secret scanning see Pre-commit Hooks → detect-secrets; for deep semantic analysis see the Security — CodeQL workflow.
+See also: CI Infrastructure for zizmor, Pre-commit Hooks for detect-secrets, and Security — CodeQL for semantic analysis.
 
 | 🚦 | Component | Security Scan | Dependency Audit |
 |:--:|:----------|:--------------|:-----------------|
 | ✅ | Web Client | ✅ bandit (0 issues) | ✅ pip-audit (0 CVEs)<br>✅ npm-audit (0 critical) |
 | ✅ | Console Client | ✅ bandit (0 issues) | ✅ pip-audit (0 CVEs) |
-| ✅ | Node Client — Legacy JavaScript | ➖ Out of scope — legacy lane | ✅ npm-audit (0 critical) |
+| ✅ | Node Client — Legacy JavaScript | ➖ Out of scope — legacy check | ✅ npm-audit (0 critical) |
 | ✅ | C# Client | ℹ️ CodeQL source scan runs in Security workflow | ✅ nuget (0 vulnerable) |
 | ✅ | Test Client | ✅ bandit (0 issues) | ✅ pip-audit (0 CVEs) |
 
@@ -115,14 +115,14 @@ Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage 
 
 ---
 
-### ⏭️ Skip Details — 3 lanes, 18 skips
+### ⏭️ Skip Details — 3 suites, 18 skips
 
 <details><summary>⏭️ <b>Web Client — Python</b> — 2 Skipped</summary>
 
 | Reason | Count |
 |:-------|------:|
-| node_modules absent in Web Client - Python lane; chart.js vendoring is gated by sibling 'Web Client - JavaScript' lane | 1 |
-| ESLint binary absent in Web Client - Python lane; JS lint is gated by sibling 'Web Client - JavaScript' lane | 1 |
+| node_modules absent in Web Client - Python check. chart.js vendoring is gated by sibling 'Web Client - JavaScript' check | 1 |
+| ESLint binary absent in Web Client - Python check. JS lint is gated by sibling 'Web Client - JavaScript' check | 1 |
 
 </details>
 
@@ -151,9 +151,9 @@ Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage 
 
 | Client / Component | Appears In |
 |:-------------------|:-----------|
-| Web Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security); [Timing](#ci-performance-timings) |
-| Console Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security); [Timing](#ci-performance-timings) |
-| Node Client — Legacy JavaScript | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security); [Timing](#ci-performance-timings) |
-| C# Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security); [Timing](#ci-performance-timings) |
-| Test Client | [Validation Results](#ci-validation-results); [Code Quality Checks](#ci-code-quality-checks); [Source and Dependency Security](#ci-source-dependency-security); [Timing](#ci-performance-timings) |
-| OPC UA Server | [Validation Results](#ci-validation-results); [CI Infrastructure](#ci-infrastructure); [Timing](#ci-performance-timings) |
+| Web Client | [Validation Results](#ci-validation-results) · [Code Quality Checks](#ci-code-quality-checks) · [Source and Dependency Security](#ci-source-dependency-security) · [Timing](#ci-performance-timings) |
+| Console Client | [Validation Results](#ci-validation-results) · [Code Quality Checks](#ci-code-quality-checks) · [Source and Dependency Security](#ci-source-dependency-security) · [Timing](#ci-performance-timings) |
+| Node Client — Legacy JavaScript | [Validation Results](#ci-validation-results) · [Code Quality Checks](#ci-code-quality-checks) · [Source and Dependency Security](#ci-source-dependency-security) · [Timing](#ci-performance-timings) |
+| C# Client | [Validation Results](#ci-validation-results) · [Code Quality Checks](#ci-code-quality-checks) · [Source and Dependency Security](#ci-source-dependency-security) · [Timing](#ci-performance-timings) |
+| Test Client | [Validation Results](#ci-validation-results) · [Code Quality Checks](#ci-code-quality-checks) · [Source and Dependency Security](#ci-source-dependency-security) · [Timing](#ci-performance-timings) |
+| OPC UA Server | [Validation Results](#ci-validation-results) · [CI Infrastructure](#ci-infrastructure) · [Timing](#ci-performance-timings) |

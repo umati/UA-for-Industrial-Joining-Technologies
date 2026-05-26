@@ -161,10 +161,10 @@ that need manual classification.
 
 | Sheet | Contents |
 |---|---|
-| **Conformance Overview** | Audience-first summary with overall result banner, Validation Health, Server Support Coverage, KPI strip, IJT Facet Support block, Conformance Action Items, Server Scope Notes, and Test Client Environment details |
+| **Conformance Overview** | Audience-first summary with overall result banner, Validation Health, Server Support Coverage, KPI strip, IJT Facet Support block, Conformance Action Items, Server Scope Notes count, and Test Client Environment details |
 | **Test Outcome Counts** | Total counts (passed/failed/skipped/xfailed) by test area |
 | **IJT Facet Breakdown** | IJT facet table with CU counts, server-supported CU count, server-support percentage, supported-CUs-validated percentage, supported/not-supported/blocked/failed status, and facet descriptions |
-| **Conformance Unit Details** | One row per conformance unit with public CU label, facet mapping, whether it is supported by the server capability profile, outcome, workbook case counts, and example test |
+| **Conformance Unit Details** | Excel-only full detail: one row per conformance unit with public CU label, facet mapping, whether it is supported by the server capability profile, raw outcome, review status, workbook case counts, and example test |
 | **Profile Coverage Comparison** | User-facing IJT coverage overview: server capability profile, reference IJT facets, optional full CU-set view, server-supported CU count, server-support percentage, supported-CUs-validated percentage, outcome, and coverage counts |
 | **All Test Cases** | Every test: name, file, status, duration, reason |
 | **Test Failures (N)** | Failed tests only — with full failure message |
@@ -175,13 +175,14 @@ Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠
 
 The profile/facet/CU sheets are generated when
 `test-results/cu-compliance-report.json` is present. CI Integration also adds
-the **IJT Facet Breakdown** and **Conformance Unit Details** tables to
-`summary.md` and the GitHub Actions step summary, so users can see the active
-server capability profile, conformance overview KPIs, IJT Facet Support,
-Conformance Action Items, Server Scope Notes, IJT Facet Breakdown, Conformance
-Unit Details, and Skip &amp; Expected-Failure Diagnostics without downloading
-the Excel file first. The 0–100 composite score lives in the baseline JSON as
-an internal trend field and is not shown as a public compliance grade.
+the **IJT Facet Breakdown** table and the action-first **CUs Needing Review**
+table to `summary.md` and the GitHub Actions step summary, so users can see the
+active server capability profile, conformance overview KPIs, IJT Facet Support,
+Conformance Action Items, Server Scope Notes count, IJT Facet Breakdown, CUs
+Needing Review, Report References, and Skip &amp; Expected-Failure Diagnostics
+without downloading the Excel file first. The 0–100 composite score lives in
+the baseline JSON as an internal trend field and is not shown as a public
+compliance grade.
 `Server Supported CUs` is read from the server capability file (`Not Applicable` when
 no capability file was loaded); `Outcome` and validated counts are calculated
 from the current test run. `Server Support %` is informational; `Supported CUs
@@ -193,12 +194,13 @@ additional pass/fail requirements for this server.
 The `Primary Reason` / `Notes` fields explain why a CU appears in the status
 table, such as a dependency on an optional method or a true runtime precondition
 that prevented coverage.
-`Review Status` is computed from the outcome: Failed means a failure or error,
-Blocked means a missing runtime precondition, Not Supported means a CU in the
-active server-capability profile reported the `not_supported` outcome (the
-server did not validate as supporting a required CU), and With Notes means
-supported with notes or outside server support. `Outcome` is the CU-level
-conformance classification for the current run.
+The Markdown `Status` column in **CUs Needing Review** is computed from the
+outcome: Failed means a failure or error, Blocked means a missing runtime
+precondition, Not Supported means a CU in the active server-capability profile
+reported the `not_supported` outcome (the server did not validate as supporting
+a required CU), and With Notes means supported with notes or outside server
+support. Excel keeps both `Review Status` and the raw `Outcome` because it is
+the full-detail artifact.
 Profile and facet tables distinguish fully supported CUs from CUs supported
 with notes. "Supported with notes" means at least one test path passed and
 the remaining non-passing rows are accepted skips, Not Supported methods/CUs

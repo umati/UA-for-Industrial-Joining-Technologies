@@ -55,8 +55,8 @@ REQUIRED_STATIC_ASSETS = [
         marks=pytest.mark.skipif(
             not _NODE_MODULES_DIR.exists(),
             reason=(
-                "node_modules absent in Web Client - Python lane; chart.js vendoring is gated "
-                + "by sibling 'Web Client - JavaScript' lane"
+                "node_modules absent in Web Client - Python check. chart.js vendoring is gated "
+                + "by sibling 'Web Client - JavaScript' check"
             ),
         ),
     ),

@@ -10,5 +10,7 @@
 | **Build** | commit `15bc900` · run logs: Not Applicable |
 
 ---
-_Term reference: see [REPORT_GLOSSARY.md](OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md) for definitions of all terms used above._
-*Full detail: download `report.xlsx` or `report.html` from the run artifacts.*
+## 📎 Report References
+
+- Term reference: see [REPORT_GLOSSARY.md](OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md) for definitions of report terms.
+- Full detail: download `report.xlsx` or `report.html` from the run artifacts.

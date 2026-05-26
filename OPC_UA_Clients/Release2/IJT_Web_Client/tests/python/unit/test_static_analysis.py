@@ -116,7 +116,7 @@ def test_bandit_no_high_severity_issues():
 @pytest.mark.skipif(
     not _eslint_executable(),
     reason=(
-        "ESLint binary absent in Web Client - Python lane; JS lint is gated by sibling 'Web Client - JavaScript' lane"
+        "ESLint binary absent in Web Client - Python check. JS lint is gated by sibling 'Web Client - JavaScript' check"
     ),
 )
 def test_eslint_passes():

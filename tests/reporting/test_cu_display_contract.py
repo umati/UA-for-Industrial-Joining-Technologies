@@ -30,10 +30,10 @@ def _section(markdown: str, heading: str) -> str:
 
 def test_primary_cu_columns_use_public_display_names() -> None:
     rendered = EXPECTED_CONFORMANCE.read_text(encoding="utf-8")
-    primary_sections = _section(rendered, "## 📋 Conformance Unit Details")
+    primary_sections = _section(rendered, "## 📋 CUs Needing Review")
 
     assert "`acknowledge_results`" not in primary_sections
-    assert "| ⚪ Not Supported | IJT Acknowledge Results |" in primary_sections
+    assert "| ⚪&nbsp;Not Supported | IJT Acknowledge Results |" in primary_sections
 
 
 def test_quick_index_links_have_explicit_targets() -> None:

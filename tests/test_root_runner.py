@@ -2169,7 +2169,7 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
     assert "smoke and unit suites" in report_script
     assert "sys.exit(1)" in report_script
     assert "tests/baselines/integration-test-counts.json" in report_script
-    assert "### ⚠️ Warnings and Drift" in report_script
+    assert "### ⚠️ Warnings and Baseline Checks" in report_script
     assert "skip drift" in report_script
     assert "suite collection drift" in report_script
     assert "tests/tools/update_integration_baseline.py --run" in report_script

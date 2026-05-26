@@ -216,7 +216,7 @@ def format_status_count(label: str, count: int) -> str:
 def format_status_label(label: str) -> str:
     """Render one public label with its canonical icon."""
     icon = KPI_ICONS.get(label, NON_KPI_ICONS.get(label, ""))
-    return f"{icon} {label}".strip()
+    return f"{icon}&nbsp;{label}" if icon else label
 
 
 def outcome_label(outcome: str) -> str:
@@ -243,7 +243,7 @@ def action_items_context(counts: Mapping[str, int]) -> str:
 def informational_notes_context(counts: Mapping[str, int]) -> str:
     """Render the Conformance Overview note for non-actionable findings."""
     total = sum(_status_count(counts, label) for label in CAPABILITY_NOTE_LABEL_ORDER)
-    return "Information only; review scope and caveats" if total else "No informational notes"
+    return "Information only. Review scope and caveats" if total else "No informational notes"
 
 
 def format_kpi_strip(counts: Mapping[str, int], separator: str = KPI_SEPARATOR) -> str:

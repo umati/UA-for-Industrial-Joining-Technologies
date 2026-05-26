@@ -142,7 +142,7 @@ python scripts/run_docker_tests.py --live-docker
 ## Zero-Escape Testing Tools (run_all_tests.py Phase 1)
 
 All auto-detected — present=run, absent=skip with install hint.
-Network-backed advisory tools fail fast: pip-audit uses the PyPI JSON endpoint preflight, local cache, spinner disabled, and short timeouts; Semgrep uses the real `p/default` rules endpoint. Network/TLS/timeout outcomes are advisory skips, but fixable `pip-audit` CVEs fail the Python lane and advisory-only CVEs pass with an explicit note. `mypy` scans explicit Python source roots instead of `.` so runner temp/state directories cannot break local checks on Windows.
+Network-backed advisory tools fail fast: pip-audit uses the PyPI JSON endpoint preflight, local cache, spinner disabled, and short timeouts; Semgrep uses the real `p/default` rules endpoint. Network/TLS/timeout outcomes are advisory skips, but fixable `pip-audit` CVEs fail the Python check and advisory-only CVEs pass with an explicit note. `mypy` scans explicit Python source roots instead of `.` so runner temp/state directories cannot break local checks on Windows.
 Runner-managed and Dockerfile `npm install` / `npm ci` commands use `--no-audit --no-fund`, disable the npm update notifier, and keep direct runner npm subprocesses on project `tmp/npm-cache` so repeated local/CI logs stay readable; JS CVEs are still checked by the separate explicit `npm audit` step.
 
 | Tool | What it checks |
@@ -394,9 +394,9 @@ Expected results:
 python run_all_tests.py
 ```
 Runs Python unit + integration tests, JS unit tests, ESLint, Bandit, mypy, pip-audit.
-For CI lane parity, run `python run_all_tests.py --phase1-python` for the
-Python/static lane and `python run_all_tests.py --phase1-js` for the
-JavaScript/static lane. The original `--phase1` flag still runs both lanes
+For CI check parity, run `python run_all_tests.py --phase1-python` for the
+Python/static check and `python run_all_tests.py --phase1-js` for the
+JavaScript/static check. The original `--phase1` flag still runs both checks
 together for local convenience.
 Every runner invocation writes `test-results/timing-latest.json` and
 `test-results/timing-history.jsonl`, then appends the same payload to

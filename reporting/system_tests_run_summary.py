@@ -204,6 +204,12 @@ _PERF_REQUIRED_FIELDS = (
 _PERF_OPTIONAL_FIELDS = ("perf_threshold_mean_ms", "perf_threshold_p90_ms")
 
 
+def plural_label(count: int, singular: str, plural: str | None = None) -> str:
+    """Return a count plus a correctly pluralized public label."""
+    label = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {label}"
+
+
 def load_perf_benchmarks(pattern: str) -> dict[str, float] | None:
     """Return aggregated `perf_*` JUnit properties for the lane matched by ``pattern``.
 
@@ -256,10 +262,10 @@ def render_perf_section(lanes: list[tuple[str, dict[str, float]]]) -> list[str]:
     Layout:
 
     * One H3 + a one-row header summarising what is measured.
-    * One row per lane with sample count and min/mean/max in milliseconds.
+    * One row per benchmark with sample count and min/average/max in milliseconds.
     * A trailing Pass/Fail pill when both ``perf_threshold_mean_ms`` and
       ``perf_threshold_p90_ms`` are present; the target column stays compact
-      while the internal gate still checks both mean and tail latency.
+      while the internal gate still checks both average and the 90% sample bound.
 
     The renderer never writes free-form prose — the conformance block above
     already explains how to read latency tables. Keeping this section
@@ -272,10 +278,10 @@ def render_perf_section(lanes: list[tuple[str, dict[str, float]]]) -> list[str]:
     out: list[str] = [
         '<a id="system-performance-benchmarks"></a>',
         "",
-        f"### ⏱️ Performance Benchmarks — {len(present)} lane{'s' if len(present) != 1 else ''}",
+        f"### ⏱️ Performance Benchmarks — {plural_label(len(present), 'benchmark')}",
         "",
-        "| Lane | Samples | min (ms) | mean (ms) | max (ms) | Target | Result |",
-        "|:-----|--------:|---------:|----------:|---------:|:------:|:------:|",
+        "| Benchmark | Samples | min (ms) | average (ms) | max (ms) | Target | Result |",
+        "|:----------|--------:|---------:|-------------:|---------:|:-------|:------:|",
     ]
     for label, metrics in present:
         samples = int(metrics["perf_sample_count"])
@@ -286,7 +292,9 @@ def render_perf_section(lanes: list[tuple[str, dict[str, float]]]) -> list[str]:
         threshold_mean = metrics.get("perf_threshold_mean_ms")
         threshold_p90 = metrics.get("perf_threshold_p90_ms")
         if threshold_mean is not None and threshold_p90 is not None:
-            target_cell = f"Mean &lt; {threshold_mean:.0f} · Tail Check &lt; {threshold_p90:.0f}"
+            target_cell = (
+                f"Average &lt; {threshold_mean:.0f} ms · 90% of samples &lt; {threshold_p90:.0f} ms"
+            )
             target_met = mean_ms < threshold_mean and p90_ms < threshold_p90
             result_cell = "✅ Pass" if target_met else "❌ Fail"
         else:
@@ -298,10 +306,10 @@ def render_perf_section(lanes: list[tuple[str, dict[str, float]]]) -> list[str]:
         )
     out.append("")
     out.append(
-        "_TOTAL = end of joining operation → client callback. The visible table keeps "
-        "first-read latency numbers compact; the Pass/Fail gate also checks an internal "
-        "tail-latency value. Full per-sample timing pipeline (joining, server "
-        "acquisition/processing, wire) is recorded in JUnit XML test artifacts._"
+        "_TOTAL = end of joining operation → client callback. The visible table shows "
+        "min, average, and max latency. The Pass/Fail gate also requires at least "
+        "90% of samples to stay below the target. Per-sample timing pipeline details "
+        "are recorded in JUnit XML test artifacts._"
     )
     return out
 
@@ -850,6 +858,13 @@ def skips(sk):
     return "—" if sk is None else str(sk)
 
 
+def skipped_count_cell(sk) -> str:
+    """Render a skipped-test count, adding the skip icon only for nonzero values."""
+    if sk is None:
+        return "—"
+    return f"{sk} ⏭️" if sk else "0"
+
+
 def count_test_results(counts, baseline=None):
     """Plain-text test-results cell for Lane Results and Component Test Results.
 
@@ -863,8 +878,9 @@ def count_test_results(counts, baseline=None):
     failed = counts[2] or 0
     skipped = counts[3] if counts[3] is not None else 0
     delta = format_count_delta(total, baseline)
-    body = f"{passed:,} / {total:,}{delta} Passed" if failed else f"{passed:,}{delta} Passed"
-    return f"{body}, {skipped:,} Skipped"
+    if failed:
+        return f"Passed: {passed:,} / {total:,}{delta}, Failed: {failed:,}, Skipped: {skipped:,}"
+    return f"Passed: {passed:,}{delta}, Skipped: {skipped:,}"
 
 
 def labeled_test_results(label, counts, baseline=None):
@@ -882,15 +898,14 @@ def _bulleted_count_lines(counts, baseline=None, indent: bool = False) -> list[s
     skipped = counts[3] if counts[3] is not None else 0
     delta = format_count_delta(total, baseline)
     if failed:
-        passed_text = f"{passed:,} / {total:,}{delta} Passed"
         return [
-            f"{bullet} {passed_text}",
-            f"{bullet} {failed:,} Failed",
-            f"{bullet} {skipped:,} Skipped",
+            f"{bullet} Passed: {passed:,} / {total:,}{delta}",
+            f"{bullet} Failed: {failed:,}",
+            f"{bullet} Skipped: {skipped:,}",
         ]
     return [
-        f"{bullet} {passed:,}{delta} Passed",
-        f"{bullet} {skipped:,} Skipped",
+        f"{bullet} Passed: {passed:,}{delta}",
+        f"{bullet} Skipped: {skipped:,}",
     ]
 
 
@@ -1128,7 +1143,7 @@ def main() -> None:
     status_emoji = "✅" if status_clean else "⚠️"
     status_summary = (
         f"{status_emoji} **Status:** {n_fail} Failed Jobs &nbsp;·&nbsp; "
-        f"{len(report_warnings)} Drift Warnings &nbsp;·&nbsp; "
+        f"{len(report_warnings)} Baseline Warnings &nbsp;·&nbsp; "
         f"{len(skip_policy_failures)} Skip-Policy Failures &nbsp;·&nbsp; "
         f"{len(artifact_warnings)} Artifact Warnings"
     )
@@ -1181,7 +1196,7 @@ def main() -> None:
     csharp_security_note = skip_note_inline(
         cs_live_skips + csharp_opcua_security_skips,
         (cs_live[3] or 0) + (csharp_opcua_security[3] or 0),
-        "Nightly drift detection",
+        "Nightly baseline check",
     )
     all_lane_results = [
         sd_r,
@@ -1240,12 +1255,12 @@ def main() -> None:
         "",
         "---",
         "",
-        '<a id="system-lane-results"></a>',
+        '<a id="system-test-results"></a>',
         "",
-        f"### 🧪 Test Lane Results — {lane_result_count} lanes",
+        f"### 🧪 Test Results — {plural_label(lane_result_count, 'suite')}",
         "",
-        "| 🚦 | Lane | Result | Test Results |",
-        "|:--:|:-----|:-------|:-------------|",
+        "| 🚦 | Suite | Result | Test Results |",
+        "|:--:|:------|:-------|:-------------|",
         f"| {lane_status_icon(str(sd_r))} | OPC UA Server Docker smoke "
         f"| {lane_status_text(str(sd_r))} "
         f"| {bulleted_test_results(sd_smoke, sd_smoke_base)} |",
@@ -1338,19 +1353,19 @@ def main() -> None:
         "",
         '<a id="system-conformance-suites"></a>',
         "",
-        f"### 📑 Conformance Suites — {conformance_suite_count}",
+        f"### 📑 Conformance Suites — {plural_label(conformance_suite_count, 'suite')}",
         "",
         "| Suite | Port | Live Tests | Skipped | Notes |",
         "|:------|-----:|----------:|--------:|:------|",
         (
             "| Test Client — Smoke sanity | 40462 | "
             f"{tests_cell(tc_smoke, tc_smoke_base)} | "
-            f"{skips(tc_smoke[3])} | Server and namespace reachability |"
+            f"{skipped_count_cell(tc_smoke[3])} | Server and namespace reachability |"
         ),
         (
             "| Test Client — Conformance | 40462 | "
             f"{tests_cell(tc_tests, tc_tests_base)} | "
-            f"{skips(tc_tests[3])} | "
+            f"{skipped_count_cell(tc_tests[3])} | "
             f"{skip_note_inline(tc_conf_skips, tc_tests[3])} "
             "([Skip Details](#system-skip-details)) |"
         ),
@@ -1539,12 +1554,12 @@ def main() -> None:
         "",
         "---",
         "",
-        '<a id="system-warnings-drift"></a>',
+        '<a id="system-warnings-baseline"></a>',
         "",
-        "### ⚠️ Warnings and Drift",
+        "### ⚠️ Warnings and Baseline Checks",
         "",
         (
-            "<details><summary><b>Click to expand</b> — skip policy, drift, "
+            "<details><summary><b>Click to expand</b> — skip policy, baseline, "
             "and artifact warnings</summary>"
         ),
         "",
@@ -1562,7 +1577,7 @@ def main() -> None:
         out += artifact_warnings
         out += [""]
     if not skip_policy_failures and not report_warnings and not artifact_warnings:
-        out += ["No skip policy failures, test-count drift warnings, or artifact warnings."]
+        out += ["No skip policy failures, baseline warnings, or artifact warnings."]
 
     out += ["", "</details>", ""]
 
@@ -1609,34 +1624,34 @@ def main() -> None:
         "| Client / Component | Appears In |",
         "|:-------------------|:-----------|",
         (
-            "| OPC UA Server | [Test Lane Results](#system-lane-results); "
-            "[Component Test Results](#system-component-test-results); "
+            "| OPC UA Server | [Test Results](#system-test-results) · "
+            "[Component Test Results](#system-component-test-results) · "
             "[Performance Hotspots](#system-performance-hotspots) |"
         ),
         (
-            "| Web Client | [Test Lane Results](#system-lane-results); "
-            "[Component Test Results](#system-component-test-results); "
+            "| Web Client | [Test Results](#system-test-results) · "
+            "[Component Test Results](#system-component-test-results) · "
             "[Performance Hotspots](#system-performance-hotspots) |"
         ),
         (
-            "| Test Client | [Test Lane Results](#system-lane-results); "
-            "[Component Test Results](#system-component-test-results); "
-            "[Conformance Suites](#system-conformance-suites); "
+            "| Test Client | [Test Results](#system-test-results) · "
+            "[Component Test Results](#system-component-test-results) · "
+            "[Conformance Suites](#system-conformance-suites) · "
             + (
-                "[Conformance Report](#system-test-client-conformance-report); "
+                "[Conformance Report](#system-test-client-conformance-report) · "
                 if tc_conformance_summary_lines
                 else ""
             )
             + "[Performance Hotspots](#system-performance-hotspots) |"
         ),
         (
-            "| Console Client | [Test Lane Results](#system-lane-results); "
-            "[Component Test Results](#system-component-test-results); "
+            "| Console Client | [Test Results](#system-test-results) · "
+            "[Component Test Results](#system-component-test-results) · "
             "[Performance Benchmarks](#system-performance-benchmarks) |"
         ),
         (
-            "| C# Client | [Test Lane Results](#system-lane-results); "
-            "[Component Test Results](#system-component-test-results); "
+            "| C# Client | [Test Results](#system-test-results) · "
+            "[Component Test Results](#system-component-test-results) · "
             "[Performance Hotspots](#system-performance-hotspots) |"
         ),
     ]

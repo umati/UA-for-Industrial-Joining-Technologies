@@ -4,6 +4,7 @@ import importlib
 import json
 import re
 import sys
+from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -343,9 +344,11 @@ def test_format_status_count_and_label_use_shared_icons():
     )
     assert (
         _report_scoring.format_status_label(ACTION_NEEDED)
-        == f"{_report_scoring.KPI_ICONS[ACTION_NEEDED]} {ACTION_NEEDED}"
+        == f"{_report_scoring.KPI_ICONS[ACTION_NEEDED]}&nbsp;{ACTION_NEEDED}"
     )
-    assert _report_scoring.format_status_label(supported) == f"{_report_scoring.NON_KPI_ICONS[supported]} {supported}"
+    assert (
+        _report_scoring.format_status_label(supported) == f"{_report_scoring.NON_KPI_ICONS[supported]}&nbsp;{supported}"
+    )
 
 
 def test_status_mapping():
@@ -389,11 +392,11 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
     assert " regressed " not in rendered
     assert "## 🧩 IJT Facet Support" in rendered
     assert "## 📌 Conformance Action Items" not in rendered
-    assert "## 📝 Server Scope Notes" in rendered
-    assert "Information only; review scope and caveats. See Conformance Unit Details below." in rendered
+    assert "## 📝 Server Scope Notes" not in rendered
     assert "## 📐 IJT Facet Breakdown" in rendered
-    assert "## 📋 Conformance Unit Details" in rendered
-    assert "<summary><b>2 rows needing review · 4 total CUs</b></summary>" in rendered
+    assert "## 📋 CUs Needing Review — 2 rows" in rendered
+    assert "_Review rows only. Full 4-CU detail remains in `report.xlsx` and `report.html`._" in rendered
+    assert "<summary><b>2 facet rows</b></summary>" in rendered
     assert "<summary><b>Coverage Overview</b></summary>" not in rendered
     assert "<summary><b>Conformance Status</b></summary>" not in rendered
     assert "<summary><b>Full CU Coverage</b></summary>" not in rendered
@@ -404,7 +407,8 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
     assert "Server Supported CUs" in rendered
     assert "Server Support %" in rendered
     assert "Supported CUs Validated %" in rendered
-    assert "Outcome" in rendered
+    assert "Outcome Counts" in rendered
+    assert "Outcome Rollup" in rendered
     for legacy_term in (
         "Dec" + "lared",
         "dec" + "lared",
@@ -418,30 +422,88 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
         "Minor",
     ):
         assert legacy_term not in rendered
-    supported_label = _report_scoring.outcome_label("supported")
     supported_status = _report_scoring.format_outcome_label("supported")
     supported_with_notes_status = _report_scoring.format_outcome_label("partial")
     not_supported_status = _report_scoring.format_outcome_label("not_supported")
 
-    assert "Primary Reason" in rendered
+    assert "Primary Reason" not in rendered
+    assert "Workbook Cases" not in rendered
     assert "OptionalFeature: Not Supported" in rendered
     assert not_supported_status in rendered
-    assert f"{context['findings_count']['with_notes']} with notes" in rendered
     assert (
         "| Basic Facet | Facet | 3 | 2 | 66.7% | 100.0% | "
-        f"2 {supported_label}<br>0 {WITH_NOTES}<br>1 {NOT_SUPPORTED}<br>0 {BLOCKED}<br>"
-        f"0 {ACTION_NEEDED} | {supported_with_notes_status} |" in rendered
+        f"{supported_status}: 2<br>{not_supported_status}: 1 | {supported_with_notes_status} |" in rendered
     )
     assert (
-        "| IJT Joining System Base | Basic Facet, Basic Joining System Server Facet "
-        f"| Yes | {supported_status} |  | 2 | 2 | 0 | 0 | 0 | 3 |"
-    ) in rendered
-    assert f"| IJT State Policy Note | Basic Facet | Yes | {supported_status} |  | 2 | 1 | 0 | 0 | 0 | 1 |" in rendered
-    assert (
-        f"| ⚪ Not Supported | IJT Optional Feature | Basic Facet | No | {not_supported_status} | "
-        "OptionalFeature: Not Supported — cannot run optional feature | 1 | 0 | 1 | 0 | 0 | 2 |" in rendered
+        f"| {_report_scoring.format_status_label(NOT_SUPPORTED)} | IJT Optional Feature | No | "
+        "OptionalFeature: Not Supported — cannot run optional feature | 1 | 0 | 1 | 0 | 0 |" in rendered
     )
+    assert "IJT Joining System Base |" not in rendered
+    assert "IJT State Policy Note |" not in rendered
     assert "Accepted Policy: ACCEPTED POLICY - Method: SelectJoiningProcess - state not ready" not in rendered
+
+
+def test_outcomes_cell_drops_zero_buckets_and_uses_status_icons():
+    counts = Counter({"supported": 2, "not_supported": 1})
+
+    assert _ci_summary._outcomes_cell(counts) == (
+        f"{_report_scoring.format_status_label(_report_scoring.outcome_label('supported'))}: 2"
+        "<br>"
+        f"{_report_scoring.format_status_label(NOT_SUPPORTED)}: 1"
+    )
+
+
+def test_profile_summary_uses_singular_labels_for_one_facet_and_one_review_row(monkeypatch):
+    monkeypatch.setattr(
+        _ci_summary,
+        "_load_facets",
+        lambda: {
+            "optional_facet": {
+                "display_name": "Optional Facet",
+                "description": "One optional CU.",
+                "conformance_units": ["optional_feature"],
+            },
+        },
+    )
+    monkeypatch.setattr(
+        _ci_summary,
+        "_load_profiles",
+        lambda: {"full_conformance": {"name": "Full Conformance", "facets": ["optional_facet"]}},
+    )
+    monkeypatch.setattr(
+        _ci_summary,
+        "_load_capabilities",
+        lambda: {
+            "server": {"name": "Report Test Server"},
+            "active_profile": "full_conformance",
+        },
+    )
+    payload = {
+        "supported_cus": [],
+        "by_cu": {"optional_feature": {"not_supported": 1, "test_count": 1}},
+        "tests": [
+            {
+                "cus": ["optional_feature"],
+                "nodeid": "conformance/test_optional.py::test_optional_feature",
+                "outcome": "not_supported",
+                "reason": "Skipped: OptionalFeature: Not Supported",
+            }
+        ],
+    }
+
+    lines, _context = _ci_summary._render_profile_facet_summary(payload)
+    rendered = "\n".join(lines)
+
+    assert "<summary><b>1 facet row</b></summary>" in rendered
+    assert "## 📋 CUs Needing Review — 1 row" in rendered
+    assert "1 rows" not in rendered
+    assert "1 facet rows" not in rendered
+
+
+def test_compliance_label_marks_all_not_supported_facets_not_supported():
+    counts = Counter({"not_supported": 3})
+
+    assert _ci_summary._compliance_label(counts, 3) == _report_scoring.format_outcome_label("not_supported")
 
 
 def test_full_markdown_uses_layered_headings(monkeypatch):
@@ -471,9 +533,10 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
     assert any(line.startswith("## 📊 Conformance Overview") for line in lines)
     assert any(line.startswith("## 🧩 IJT Facet Support") for line in lines)
     assert not any(line.startswith("## 📌 Conformance Action Items") for line in lines)
-    assert any(line.startswith("## 📝 Server Scope Notes") for line in lines)
+    assert not any(line.startswith("## 📝 Server Scope Notes") for line in lines)
     assert "Conformance Action Items" in rendered
     assert "Server Scope Notes" in rendered
+    assert "Information only. Review scope and caveats" in rendered
     assert (
         _report_scoring.format_status_counts(_report_scoring.ACTION_ITEM_LABEL_ORDER, _context["findings_count"])
         in rendered
@@ -482,7 +545,8 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
         _report_scoring.format_status_counts(_report_scoring.CAPABILITY_NOTE_LABEL_ORDER, _context["findings_count"])
         in rendered
     )
-    assert "## 📋 Conformance Unit Details" in rendered
+    assert "## 📋 CUs Needing Review" in rendered
+    assert "## 📎 Report References" in rendered
     # When skip_reasons and xfail_reasons are both empty, Diagnostics bundle is omitted entirely.
     assert "<summary><b>Skip &amp; Expected-Failure Diagnostics</b></summary>" not in rendered
     assert "_No diagnostic skips on this run._" not in rendered
