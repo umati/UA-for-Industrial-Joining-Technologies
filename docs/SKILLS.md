@@ -184,7 +184,7 @@ All Python runner scripts (`run_all_tests.py`) use a `_StepResult` class with fo
 | `ok=True, warn=False` | **PASS** | green | `passed` | Tool ran clean |
 | `warn=True` | **WARN** | yellow | `warned` (never `failed`) | Advisory tool: ran but output unreadable, or found non-critical issues |
 | `ok=False, warn=False` | **FAIL** | red | `failed` → suite FAIL | Real defect or gate violation |
-| `skipped=True` | **SKIP** | yellow | `skipped` | Tool not installed / not applicable |
+| `skipped=True` | **SKIP** | yellow | `skipped` | Tool not installed / Not Applicable |
 
 **Advisory tool rule**: Tools whose failures are inherently non-actionable on the local/CI environment (Semgrep SSL, pyright advisory, pip-audit network) must use `result.warn = True` or `skipped=True` — **never** `result.ok = False`. Setting `ok=False` converts an advisory observation into a suite-blocking failure. Actionable dependency findings are different: `pip-audit` findings with fix versions must fail the owning Python lane; advisory-only findings may pass with an explicit note.
 

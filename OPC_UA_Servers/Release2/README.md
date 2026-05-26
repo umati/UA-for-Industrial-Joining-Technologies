@@ -18,7 +18,7 @@ OPC UA IJT Server Simulator for the Industrial Joining Technologies (IJT) compan
   |----------|---------|------------|
   | Windows  | `OPC_UA_IJT_Server_Simulator.zip` | `OPC_UA_IJT_Server_Simulator/` |
   | Linux    | `OPC_UA_IJT_Server_Simulator_Linux.zip` | `OPC_UA_IJT_Server_Simulator_Linux/` |
-  | Docker   | Uses the Linux binary automatically | Not applicable |
+  | Docker   | Uses the Linux binary automatically | Not Applicable |
 
 - **Default Endpoint:** `opc.tcp://localhost:40451`
   - For remote connections, replace `localhost` with the hostname or IP address.
