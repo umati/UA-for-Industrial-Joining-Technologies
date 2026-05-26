@@ -132,10 +132,10 @@ def pct_value(numerator: int, denominator: int) -> float | None:
 
 
 def format_pct(value: object) -> str:
-    """Format a percentage value for reports, using ``n/a`` for non-numeric values."""
+    """Format a percentage value for reports, using ``Not Applicable`` for non-numeric values."""
     if isinstance(value, (int, float)):
         return f"{value:.1f}%"
-    return "n/a"
+    return "Not Applicable"
 
 
 def conformance_score(
@@ -172,7 +172,7 @@ def is_healthy(
     failed_count: int,
     blocked_count: int,
 ) -> bool:
-    """Return True only when the run can credibly be called PASSED.
+    """Return True only when the run can credibly be called Passed.
 
     Healthy means: we actually built the report context (CU payload present),
     the server profile declared at least one supported CU, the active profile

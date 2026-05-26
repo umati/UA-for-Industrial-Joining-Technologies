@@ -182,7 +182,7 @@ Conformance Action Items, Server Scope Notes, IJT Facet Breakdown, Conformance
 Unit Details, and Skip &amp; Expected-Failure Diagnostics without downloading
 the Excel file first. The 0–100 composite score lives in the baseline JSON as
 an internal trend field and is not shown as a public compliance grade.
-`Server Supported CUs` is read from the server capability file (`n/a` when
+`Server Supported CUs` is read from the server capability file (`Not Applicable` when
 no capability file was loaded); `Outcome` and validated counts are calculated
 from the current test run. `Server Support %` is informational; `Supported CUs
 Validated %` is the health signal for how much of the server's supported
@@ -216,14 +216,14 @@ gaps are not presented as warnings.
 
 | Status | Meaning |
 |---|---|
-| **PASSED** | Test ran and all assertions succeeded |
-| **FAILED** | Test ran and at least one assertion failed — this is a real problem |
-| **SKIPPED** | Test was not run — always has a documented reason (see table below) |
-| **XFAILED** | Test was expected to fail and did — a known server limitation, not a bug |
-| **XPASSED** | Test was expected to fail but passed — server has improved; update the xfail mark |
-| **ERROR** | Test crashed before reaching assertions — likely a setup or connection issue |
-| **NOT_SUPPORTED** | JSON compliance-report classification for a skipped CU/optional method that the server profile or address space does not support |
-| **BLOCKED** | JSON compliance-report classification for a skipped test whose runtime precondition was unavailable; CU-level `compliance=blocked` is used when no passing support coverage was available, and it takes precedence over Not Supported when both are present |
+| **Passed** | Test ran and all assertions succeeded |
+| **Failed** | Test ran and at least one assertion failed — this is a real problem |
+| **Skipped** | Test was not run — always has a documented reason (see table below) |
+| **Expected Failure** | Test was expected to fail and did — a known server limitation, not a bug |
+| **Unexpected Pass** | Test was expected to fail but passed — server has improved; update the xfail mark |
+| **Error** | Test crashed before reaching assertions — likely a setup or connection issue |
+| **Not Supported** | JSON compliance-report classification for a skipped CU/optional method that the server profile or address space does not support |
+| **Blocked** | JSON compliance-report classification for a skipped test whose runtime precondition was unavailable; CU-level `compliance=blocked` is used when no passing support coverage was available, and it takes precedence over Not Supported when both are present |
 
 ---
 

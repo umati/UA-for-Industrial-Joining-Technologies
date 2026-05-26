@@ -1,6 +1,6 @@
 ## IJT OPC UA — System Tests
 
-> ✅ **All 7 / 7 jobs passed**
+> ✅ **All 7 / 7 Jobs Passed**
 > **Branch:** `c2-phase-1b` &nbsp;·&nbsp; **Commit:** `abcdef12` &nbsp;·&nbsp; **Run:** [#84](https://github.example/ijt/actions/runs/84)
 
 ---
@@ -9,7 +9,7 @@
 
 ### 📊 Test Outcome Overview
 
-> ✅ **Status:** 0 failed jobs &nbsp;·&nbsp; 0 drift warnings &nbsp;·&nbsp; 0 skip-policy failures &nbsp;·&nbsp; 0 artifact warnings
+> ✅ **Status:** 0 Failed Jobs &nbsp;·&nbsp; 0 Drift Warnings &nbsp;·&nbsp; 0 Skip-Policy Failures &nbsp;·&nbsp; 0 Artifact Warnings
 
 | 🚦  | Outcome | Count |
 | :-: | :------ | ----: |
@@ -27,15 +27,15 @@
 
 | 🚦 | Lane | Result | Test Results |
 |:--:|:-----|:-------|:-------------|
-| ✅ | OPC UA Server Docker smoke | success | 10 passed, 0 skipped |
-| ✅ | Web Client Docker tests | success | Python: 680 passed, 0 skipped<br>JavaScript: 522 passed, 0 skipped |
-| ✅ | Test Client conformance | success | 889 passed, 154 skipped |
-| ✅ | Web Client live suites | success | 127 passed, 0 skipped |
-| ✅ | Browser E2E suites | success | 66 passed, 0 skipped |
-| ✅ | Console Client live | success | 18 passed, 0 skipped |
-| ⏭️ | Console Client OPC UA security | skipped | Not reported |
-| ✅ | C# Client live | success | 110 passed, 0 skipped |
-| ⏭️ | C# Client OPC UA security | skipped | Not reported |
+| ✅ | OPC UA Server Docker smoke | Success | &bull; 10 Passed<br>&bull; 0 Skipped |
+| ✅ | Web Client Docker tests | Success | &bull; Python<br>&nbsp;&nbsp;&bull; 680 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped<br>&bull; JavaScript<br>&nbsp;&nbsp;&bull; 522 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped |
+| ✅ | Test Client conformance | Success | &bull; 889 Passed<br>&bull; 154 Skipped |
+| ✅ | Web Client live suites | Success | &bull; 127 Passed<br>&bull; 0 Skipped |
+| ✅ | Browser E2E suites | Success | &bull; 66 Passed<br>&bull; 0 Skipped |
+| ✅ | Console Client live | Success | &bull; 18 Passed<br>&bull; 0 Skipped |
+| ⏭️ | Console Client OPC UA security | Skipped | &bull; Not Reported |
+| ✅ | C# Client live | Success | &bull; 110 Passed<br>&bull; 0 Skipped |
+| ⏭️ | C# Client OPC UA security | Skipped | &bull; Not Reported |
 
 ---
 
@@ -43,7 +43,7 @@
 
 ## IJT Conformance Test Report
 
-🟢 **PASSED** · **0 action items** · **Validation 100.0% (98/98)** · **Server support 79.7% (98/123)**
+🟢 **Passed** · **0 action items** · **Validation 100.0% (98/98)** · **Server support 79.7% (98/123)**
 
 ### 📊 Conformance Overview
 
@@ -68,11 +68,11 @@ Full CU detail lives in the Test Client artifact fixture.
 
 | 🚦 | Component | Validation Scope | Container Test Results | Live/System Test Results | Notes |
 |:--:|:----------|:-----------------|:-------------------|:---------------------|:------|
-| ✅ | OPC UA Server | Linux container plus Windows live server processes | 10 passed, 0 skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
-| ✅ | Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | Python: 680 passed, 0 skipped<br>JavaScript: 522 passed, 0 skipped | Python/WebSocket live: 127 passed, 0 skipped<br>Browser E2E: 66 passed, 0 skipped | Headless Chromium baked into the IJT Browser CI image |
-| ⏭️ | Test Client | Live conformance harness against OPC UA server | ➖ Not applicable | Smoke: 10 passed, 0 skipped<br>Conformance: 889 passed, 154 skipped | Not Implemented fixture marker |
-| ✅ | Console Client | Live Python client behavior and OPC UA security coverage against OPC UA server | Not reported | 18 passed, 0 skipped | No additional notes |
-| ✅ | C# Client | Nightly xUnit live behavior and OPC UA security coverage against OPC UA server | Not reported | 110 passed, 0 skipped | Nightly drift detection |
+| ✅ | OPC UA Server | Linux container plus Windows live server processes | &bull; 10 Passed<br>&bull; 0 Skipped | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
+| ✅ | Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | &bull; Python<br>&nbsp;&nbsp;&bull; 680 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped<br>&bull; JavaScript<br>&nbsp;&nbsp;&bull; 522 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped | &bull; Python/WebSocket Live<br>&nbsp;&nbsp;&bull; 127 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped<br>&bull; Browser E2E<br>&nbsp;&nbsp;&bull; 66 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped | Headless Chromium baked into the IJT Browser CI image |
+| ⏭️ | Test Client | Live conformance harness against OPC UA server | ➖ Not Applicable | &bull; Smoke<br>&nbsp;&nbsp;&bull; 10 Passed<br>&nbsp;&nbsp;&bull; 0 Skipped<br>&bull; Conformance<br>&nbsp;&nbsp;&bull; 889 Passed<br>&nbsp;&nbsp;&bull; 154 Skipped | Not Implemented fixture marker |
+| ✅ | Console Client | Live Python client behavior and OPC UA security coverage against OPC UA server | &bull; Not Reported | &bull; 18 Passed<br>&bull; 0 Skipped | No additional notes |
+| ✅ | C# Client | Nightly xUnit live behavior and OPC UA security coverage against OPC UA server | &bull; Not Reported | &bull; 110 Passed<br>&bull; 0 Skipped | Nightly drift detection |
 
 ---
 
@@ -93,7 +93,7 @@ Full CU detail lives in the Test Client artifact fixture.
 
 _Each suite below is collapsed by default — click to inspect skip reasons._
 
-<details><summary>⏭️ <b>Test Client — Conformance</b> — 154 skipped</summary>
+<details><summary>⏭️ <b>Test Client — Conformance</b> — 154 Skipped</summary>
 
 | Reason | Count |
 |:-------|------:|
@@ -108,11 +108,11 @@ _Each suite below is collapsed by default — click to inspect skip reasons._
 
 ### ⏱️ Performance Benchmarks — 1 lane
 
-| Lane | Samples | min (ms) | mean (ms) | p90 (ms) | max (ms) | Target | Result |
-|:-----|--------:|---------:|----------:|---------:|---------:|:------:|:------:|
-| Console Client — Result Transfer Time | 20 | 12.63 | 86.19 | 100.71 | 102.68 | mean &lt; 500 · p90 &lt; 500 | ✅ PASS |
+| Lane | Samples | min (ms) | mean (ms) | max (ms) | Target | Result |
+|:-----|--------:|---------:|----------:|---------:|:------:|:------:|
+| Console Client — Result Transfer Time | 20 | 12.63 | 86.19 | 102.68 | Mean &lt; 500 · Tail Check &lt; 500 | ✅ Pass |
 
-_TOTAL = end-of-join → client callback. Full per-sample timing pipeline (joining, server acquisition/processing, wire) is recorded in JUnit XML test artifacts; download them for deep analysis._
+_TOTAL = end of joining operation → client callback. The visible table keeps first-read latency numbers compact; the Pass/Fail gate also checks an internal tail-latency value. Full per-sample timing pipeline (joining, server acquisition/processing, wire) is recorded in JUnit XML test artifacts._
 
 ---
 
@@ -126,9 +126,9 @@ _TOTAL = end-of-join → client callback. Full per-sample timing pipeline (joini
 
 | Source | Item | Duration | Status |
 |:-------|:-----|---------:|:-------|
-| Browser timing artifact | 🏁 Browser Features (1/2) | 2.1 min | recorded 📊 |
-| C# TRX class | C# Live — SlowTests | 1.2 min | recorded 📊 |
-| C# TRX class | C# Live — FastTests | 5.5 s | recorded 📊 |
+| Browser timing artifact | 🏁 Browser Features (1/2) | 2.1 min | Recorded 📊 |
+| C# TRX class | C# Live — SlowTests | 1.2 min | Recorded 📊 |
+| C# TRX class | C# Live — FastTests | 5.5 s | Recorded 📊 |
 
 #### Bottleneck Spotlight
 
@@ -188,6 +188,16 @@ No skip policy failures, test-count drift warnings, or artifact warnings.
 
 > 📦 **Artifacts** — JUnit XML &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down
 > 🔒 Security audit (zizmor) results are in **CI** → Security → Code Scanning
+
+<details><summary><b>Browser CI Image</b></summary>
+
+| Field | Value |
+|:------|:------|
+| Plan | `cached` |
+| Image ref | `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:4910c3014c87914a9b041edcd05ea018ab13db65461707602d18c5f33e0ece87` |
+| Inputs fingerprint | `e569f8a7754eb9a1979bd341e274167c43d2b1985e96238270cc7140ec89aa31` |
+
+</details>
 
 </details>
 

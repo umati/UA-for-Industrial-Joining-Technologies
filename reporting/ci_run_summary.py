@@ -116,12 +116,12 @@ def md_cell(value):
 def timing_status_fmt(status: str) -> str:
     """Render CI timing status as text followed by an icon."""
     if status == "success":
-        return "success ✅"
+        return "Success ✅"
     if status == "failure":
-        return "failure ❌"
+        return "Failure ❌"
     if status == "skipped":
-        return "skipped ⏭️"
-    return "unknown ⚠️"
+        return "Skipped ⏭️"
+    return "Unknown ⚠️"
 
 
 def seconds(value):
@@ -225,7 +225,7 @@ def format_skip_section(label, skips_list, skip_count=None):
         reasons["Skip details unavailable in JUnit XML"] += reported_count - len(skips_list)
     lines = [
         "",
-        f"<details><summary>⏭️ <b>{label}</b> — {reported_count} skipped</summary>",
+        f"<details><summary>⏭️ <b>{label}</b> — {reported_count} Skipped</summary>",
         "",
         "| Reason | Count |",
         "|:-------|------:|",
@@ -304,15 +304,15 @@ def job_icon(r):
 
 def missing_cell(job_result=None):
     """Return explicit text for data that is not present in the report."""
-    return "Not run" if job_result == "skipped" else "Not reported"
+    return "Not Run" if job_result == "skipped" else "Not Reported"
 
 
 def tests(total, passed, failed, skipped=0, job_result=None):
     if total is None:
         return missing_cell(job_result)
     if failed:
-        return f"{passed:,} / {total:,} passed ❌"
-    return f"{passed:,} passed ✅"
+        return f"{passed:,} / {total:,} Passed ❌"
+    return f"{passed:,} Passed ✅"
 
 
 def tests_cell(counts, job_result=None):
@@ -320,7 +320,7 @@ def tests_cell(counts, job_result=None):
 
 
 def skips(sk, job_result=None):
-    return missing_cell(job_result) if sk is None else f"{sk:,} skipped"
+    return missing_cell(job_result) if sk is None else f"{sk:,} Skipped"
 
 
 def cov(pct, threshold=None, job_result=None):
@@ -340,7 +340,7 @@ def cov(pct, threshold=None, job_result=None):
 # scanning for these icons in priority order.
 
 _CELL_NOT_APPLICABLE = "➖ Not Applicable"
-_CELL_NOT_MEASURED_SMOKE = "➖ Not measured (smoke)"
+_CELL_NOT_MEASURED_SMOKE = "➖ Not Measured (Smoke)"
 _CELL_CSHARP_CODEQL_NOTE = "ℹ️ CodeQL source scan runs in Security workflow"
 _CELL_ESLINT_SEC_OUT_OF_SCOPE = "➖ Out of scope — legacy lane"
 
@@ -370,20 +370,20 @@ def _wrap(icon: str, text: str) -> str:
 
 def tool(r, label, job_result=None):
     if job_result == "skipped":
-        return _wrap("⏭️", f"{label} (not run)")
+        return _wrap("⏭️", f"{label} (Not Run)")
     if not r or r in ("", "unknown"):
-        return _wrap("⏭️", f"{label} (not reported)")
+        return _wrap("⏭️", f"{label} (Not Reported)")
     if r == "skipped":
-        return _wrap("⏭️", f"{label} (not run)")
+        return _wrap("⏭️", f"{label} (Not Run)")
     icon = {"success": "✅", "failure": "❌", "cancelled": "🚫", "skipped": "⏭️"}.get(r, "⚠️")
     return _wrap(icon, label)
 
 
 def bandit_fmt(high, medium, job_result=None):
     if job_result == "skipped":
-        return _wrap("⏭️", "bandit (not run)")
+        return _wrap("⏭️", "bandit (Not Run)")
     if high is None:
-        return _wrap("⏭️", "bandit (not reported)")
+        return _wrap("⏭️", "bandit (Not Reported)")
     if high == 0 and medium == 0:
         return _wrap("✅", "bandit (0 issues)")
     return _wrap("❌", f"bandit ({high} high, {medium} medium)")
@@ -391,11 +391,11 @@ def bandit_fmt(high, medium, job_result=None):
 
 def pip_audit_fmt(total, fixable, available, job_result=None):
     if job_result == "skipped":
-        return _wrap("⏭️", "pip-audit (not run)")
+        return _wrap("⏭️", "pip-audit (Not Run)")
     if not available:
-        return _wrap("⏭️", "pip-audit (not reported)")
+        return _wrap("⏭️", "pip-audit (Not Reported)")
     if total is None or fixable is None:
-        return _wrap("⏭️", "pip-audit (not reported)")
+        return _wrap("⏭️", "pip-audit (Not Reported)")
     if total == 0:
         return _wrap("✅", "pip-audit (0 CVEs)")
     if fixable > 0:
@@ -405,9 +405,9 @@ def pip_audit_fmt(total, fixable, available, job_result=None):
 
 def npm_fmt(crit, high, job_result=None):
     if job_result == "skipped":
-        return _wrap("⏭️", "npm-audit (not run)")
+        return _wrap("⏭️", "npm-audit (Not Run)")
     if crit is None:
-        return _wrap("⏭️", "npm-audit (not reported)")
+        return _wrap("⏭️", "npm-audit (Not Reported)")
     if crit == 0 and high == 0:
         return _wrap("✅", "npm-audit (0 critical)")
     return _wrap("❌", f"npm-audit ({crit} critical, {high} high)")
@@ -419,9 +419,9 @@ def nuget_fmt(result):
     if result == "failure":
         return _wrap("❌", "nuget (vulnerable packages detected)")
     if result == "skipped":
-        return _wrap("⏭️", "nuget (not run)")
+        return _wrap("⏭️", "nuget (Not Run)")
     if not result or result == "unknown":
-        return _wrap("⏭️", "nuget (not reported)")
+        return _wrap("⏭️", "nuget (Not Reported)")
     return tool(result, "nuget")
 
 
@@ -442,7 +442,7 @@ def eslint_fmt(step_r, esl_tuple, job_result=None):
 def lint(*items):
     """Join icon-leading cell tokens with ``<br>`` so each tool keeps its own line."""
     parts = [p for p in items if p and p != "—"]
-    return "<br>".join(parts) or _wrap("⏭️", "Not reported")
+    return "<br>".join(parts) or _wrap("⏭️", "Not Reported")
 
 
 def main() -> None:
@@ -657,16 +657,16 @@ def main() -> None:
     if n_fail == 0:
         if n_pass == n_total:
             status_icon = "✅"
-            status_msg = f"All {n_pass} / {n_total} jobs passed"
+            status_msg = f"All {n_pass} / {n_total} Jobs Passed"
         elif n_pass == 0 and n_skipped == n_total:
             status_icon = "⏭️"
-            status_msg = f"No CI jobs ran · {n_skipped} skipped"
+            status_msg = f"No CI Jobs Ran · {n_skipped} Skipped"
         else:
             status_icon = "✅"
-            status_msg = f"{n_pass} / {n_total} jobs passed · {n_skipped} skipped"
+            status_msg = f"{n_pass} / {n_total} Jobs Passed · {n_skipped} Skipped"
     else:
         status_icon = "❌"
-        status_msg = f"{n_fail} / {n_total} jobs failed  ·  {n_pass} passed"
+        status_msg = f"{n_fail} / {n_total} Jobs Failed  ·  {n_pass} Passed"
 
     suites = [web_py_t, web_js_t, con_py_t, nod_js_t, cs_unit_t, tc_py_t, ss_smoke]
     total_t = sum(s[0] for s in suites if s[0] is not None)
@@ -679,14 +679,14 @@ def main() -> None:
     )
     status_emoji = "✅" if status_clean else "⚠️"
     status_summary = (
-        f"{status_emoji} **Status:** {n_fail} failed jobs &nbsp;·&nbsp; "
-        f"{len(coverage_warnings)} coverage warnings &nbsp;·&nbsp; "
-        f"{len(budget_warnings)} skip-budget warnings &nbsp;·&nbsp; "
-        f"{len(artifact_warnings)} artifact warnings"
+        f"{status_emoji} **Status:** {n_fail} Failed Jobs &nbsp;·&nbsp; "
+        f"{len(coverage_warnings)} Coverage Warnings &nbsp;·&nbsp; "
+        f"{len(budget_warnings)} Skip-Budget Warnings &nbsp;·&nbsp; "
+        f"{len(artifact_warnings)} Artifact Warnings"
     )
 
     run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
-    sha_str = f"`{sha}`" if sha else "Not reported"
+    sha_str = f"`{sha}`" if sha else "Not Reported"
     web_quality = lint(
         tool(web_ruff, "ruff", web_py_r),
         eslint_fmt(web_eslint, web_esl, web_js_r),

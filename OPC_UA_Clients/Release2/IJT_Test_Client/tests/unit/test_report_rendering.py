@@ -25,6 +25,7 @@ _ci_summary: Any = _renderer
 _excel_report: Any = importlib.import_module("make_excel_report")
 _git_info: Any = importlib.import_module("helpers.git_info")
 _report_scoring: Any = importlib.import_module("helpers.report_scoring")
+_triage_report: Any = importlib.import_module("triage_cu_compliance")
 ACTION_NEEDED, BLOCKED, NOT_SUPPORTED, WITH_NOTES = _report_scoring.KPI_LABELS
 
 KPI_PATTERN = re.compile(
@@ -256,7 +257,7 @@ def test_excel_percentage_fill_thresholds():
         (50.0, _excel_report._LIGHT_ORANGE),
         (49.9, _excel_report._LIGHT_RED),
         (0.0, _excel_report._LIGHT_RED),
-        ("n/a", _excel_report._GRAY),
+        ("Not Applicable", _excel_report._GRAY),
     ]
 
     for value, expected_colour in cases:
@@ -586,7 +587,7 @@ def test_excel_cover_sheet_exists_and_first():
 
     assert wb.sheetnames[0] == "Conformance Overview"
     assert wb["Conformance Overview"]["A1"].value == (
-        "🟢 PASSED · 0 action items · Validation 100.0% (2/2) · Server support 66.7% (2/3)"
+        "🟢 Passed · 0 action items · Validation 100.0% (2/2) · Server support 66.7% (2/3)"
     )
     assert wb["Conformance Overview"]["A8"].value == "Server Scope Notes"
     assert wb["Conformance Overview"]["B8"].value == _report_scoring.format_status_counts(
@@ -594,6 +595,29 @@ def test_excel_cover_sheet_exists_and_first():
     )
     values = [cell.value for row in wb["Conformance Overview"].iter_rows() for cell in row]
     assert "Conformance Action Items" not in values
+
+
+def test_triage_workbook_mapping_precision_defaults_to_unknown_title_case():
+    rendered = _triage_report._render(
+        {
+            "schema": "fixture",
+            "summary": {"collected_cu_test_count": 1},
+            "tests": [],
+            "by_cu": {},
+            "workbook": {
+                "official_cu_count": 1,
+                "case_count": 1,
+                "expected_case_count": 1,
+                "exact_case_count": 0,
+                "missing_case_cus": [],
+            },
+        },
+        [],
+        Path("cu.json"),
+        None,
+    )
+
+    assert "| `mapping_precision` | Unknown |" in rendered
 
 
 def test_excel_cover_status_counts_use_separator():

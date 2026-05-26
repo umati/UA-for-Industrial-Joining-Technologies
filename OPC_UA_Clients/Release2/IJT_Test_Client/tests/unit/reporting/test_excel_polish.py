@@ -5,7 +5,7 @@ Tests that every data sheet has:
     (which is *not* always row 1 — see ``_EXPECTED_AUTOFILTER_START_ROW``)
   - landscape A4 fit-to-width print setup
   - header-row repeat on long table sheets, anchored at the same real header row
-  - banner text on Conformance Overview contains PASSED/FAILED + Validation + Server support
+  - banner text on Conformance Overview contains Passed/Failed + Validation + Server support
 """
 
 from __future__ import annotations
@@ -189,7 +189,7 @@ def test_layout_sheet_has_no_print_title_rows(all_sheets_workbook: openpyxl.Work
 
 
 def test_banner_text_present(all_sheets_workbook: openpyxl.Workbook) -> None:
-    """Conformance Overview row 1 or row 2 must contain PASSED/FAILED + Validation + Server support."""
+    """Conformance Overview row 1 or row 2 must contain Passed/Failed + Validation + Server support."""
     ws = all_sheets_workbook[_COVER_SHEET]
     banner_text = ""
     for row_idx in (1, 2):
@@ -197,6 +197,6 @@ def test_banner_text_present(all_sheets_workbook: openpyxl.Workbook) -> None:
             if cell.value and isinstance(cell.value, str):
                 banner_text += cell.value
 
-    assert "PASSED" in banner_text or "FAILED" in banner_text, f"Banner missing PASSED/FAILED. Got: {banner_text!r}"
+    assert "Passed" in banner_text or "Failed" in banner_text, f"Banner missing Passed/Failed. Got: {banner_text!r}"
     assert "Validation" in banner_text, f"Banner missing 'Validation'. Got: {banner_text!r}"
     assert "Server support" in banner_text, f"Banner missing 'Server support'. Got: {banner_text!r}"

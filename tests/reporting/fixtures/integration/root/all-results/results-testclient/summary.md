@@ -1,6 +1,6 @@
 # IJT Conformance Test Report
 
-🟢 **PASSED** · **0 action items** · **Validation 100.0% (98/98)** · **Server support 79.7% (98/123)**
+🟢 **Passed** · **0 action items** · **Validation 100.0% (98/98)** · **Server support 79.7% (98/123)**
 
 ## 📊 Conformance Overview
 

@@ -73,6 +73,14 @@ INTEGRATION_ENV = {
     "GH_TOKEN": "",
     "GITHUB_TOKEN": "",
     "REPORT_JOB_NAME": "📋 System Tests Report",
+    "BROWSER_IMAGE_PLAN": "cached",
+    "BROWSER_IMAGE_REF": (
+        "ghcr.io/umati/ua-for-industrial-joining-technologies/"
+        "ijt-browser-ci@sha256:4910c3014c87914a9b041edcd05ea018ab13db65461707602d18c5f33e0ece87"
+    ),
+    "BROWSER_IMAGE_INPUTS_FINGERPRINT": (
+        "e569f8a7754eb9a1979bd341e274167c43d2b1985e96238270cc7140ec89aa31"
+    ),
 }
 
 

@@ -744,6 +744,7 @@ jobs:
     outputs:
       image_ref: ${{ steps.pick.outputs.image_ref }}
       plan: ${{ needs.prepare-browser-image-plan.outputs.plan }}
+      inputs_fingerprint: ${{ steps.pick.outputs.inputs_fingerprint }}
     steps:
       - name: Log in to GHCR
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
@@ -790,13 +791,7 @@ jobs:
             exit 1
           fi
           echo "image_ref=${REF}" >> "$GITHUB_OUTPUT"
-          {
-            echo "## IJT Browser CI image resolved"
-            echo ""
-            echo "- Plan: \`${PLAN}\`"
-            echo "- Image ref: \`${REF}\`"
-            echo "- Inputs fingerprint: \`${CURRENT_FINGERPRINT}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "inputs_fingerprint=${CURRENT_FINGERPRINT}" >> "$GITHUB_OUTPUT"
           echo "Resolved IJT_BROWSER_CI_IMAGE=${REF} (plan=${PLAN})"
 
   # ───────────────────────────────────────────────────────────────────────────
@@ -1284,7 +1279,7 @@ jobs:
     name: "📋 System Tests Report"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [server-smoke-docker, webclient-docker, int-testclient, live-webclient, live-webclient-browser, live-console, csharp-live, csharp-client-opcua-security, console-client-opcua-security]
+    needs: [server-smoke-docker, webclient-docker, int-testclient, live-webclient, resolve-browser-image, live-webclient-browser, live-console, csharp-live, csharp-client-opcua-security, console-client-opcua-security]
     if: always()
     permissions:
       actions: read
@@ -1431,6 +1426,9 @@ jobs:
           CS_RESULT:   ${{ needs.csharp-live.result }}
           CS_OPCUA_SECURITY_RESULT: ${{ needs.csharp-client-opcua-security.result }}
           CONSOLE_OPCUA_SECURITY_RESULT: ${{ needs.console-client-opcua-security.result }}
+          BROWSER_IMAGE_PLAN: ${{ needs.resolve-browser-image.outputs.plan }}
+          BROWSER_IMAGE_REF:  ${{ needs.resolve-browser-image.outputs.image_ref }}
+          BROWSER_IMAGE_INPUTS_FINGERPRINT: ${{ needs.resolve-browser-image.outputs.inputs_fingerprint }}
           GH_SHA:         ${{ github.sha }}
           GH_BRANCH:      ${{ github.ref_name }}
           GH_RUN_NUMBER:  ${{ github.run_number }}

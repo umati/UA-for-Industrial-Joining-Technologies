@@ -41,7 +41,7 @@ def test_is_healthy_rejects_non_int_server_support() -> None:
     assert (
         is_healthy(
             context_present=True,
-            server_supported_count="n/a",
+            server_supported_count="Not Applicable",
             active_cus_len=5,
             failed_count=0,
             blocked_count=0,
@@ -107,10 +107,10 @@ def test_pct_value_returns_none_for_zero_denominator():
 
 
 def test_format_pct_handles_non_numeric_values():
-    """Test that format_pct returns 'n/a' for non-numeric values."""
-    assert format_pct(None) == "n/a"
-    assert format_pct("not a number") == "n/a"
-    assert format_pct([1, 2, 3]) == "n/a"
+    """Test that format_pct returns 'Not Applicable' for non-numeric values."""
+    assert format_pct(None) == "Not Applicable"
+    assert format_pct("not a number") == "Not Applicable"
+    assert format_pct([1, 2, 3]) == "Not Applicable"
     assert format_pct(42) == "42.0%"
     assert format_pct(98.5) == "98.5%"
 

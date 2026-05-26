@@ -23,6 +23,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+_NOT_APPLICABLE = "Not Applicable"
+
 # Bandit B405/B314 suppressions are limited to trusted pytest JUnit XML.
 
 _REVIEW_REASON_PATTERNS = [
@@ -230,9 +232,9 @@ def _render(payload: dict[str, Any], junit_cases: list[JUnitCase], source: Path,
         "workbook_expected_case_count",
         "workbook_exact_case_count",
     ):
-        lines.append(f"| `{key}` | {summary.get(key, 'n/a')} |")
+        lines.append(f"| `{key}` | {summary.get(key, _NOT_APPLICABLE)} |")
     missing = summary.get("missing_test_cus", [])
-    lines.append(f"| `missing_test_cus` | {len(missing) if isinstance(missing, list) else 'n/a'} |")
+    lines.append(f"| `missing_test_cus` | {len(missing) if isinstance(missing, list) else _NOT_APPLICABLE} |")
     missing_workbook = summary.get("workbook_missing_case_cus", [])
     if isinstance(missing_workbook, list):
         lines.append(f"| `workbook_missing_case_cus` | {len(missing_workbook)} |")
@@ -272,9 +274,9 @@ def _render(payload: dict[str, Any], junit_cases: list[JUnitCase], source: Path,
                 "expected_case_count",
                 "exact_case_count",
             ):
-                lines.append(f"| `{key}` | {workbook.get(key, 'n/a')} |")
+                lines.append(f"| `{key}` | {workbook.get(key, _NOT_APPLICABLE)} |")
             lines.append(f"| `missing_case_cus` | {len(workbook.get('missing_case_cus', []) or [])} |")
-            lines.append(f"| `mapping_precision` | {_md_cell(workbook.get('mapping_precision', 'unknown'))} |")
+            lines.append(f"| `mapping_precision` | {_md_cell(workbook.get('mapping_precision', 'Unknown'))} |")
             lines.append("")
             lines.append(
                 "Workbook rows are linked to CU-marked tests by CU key. Tests can add "

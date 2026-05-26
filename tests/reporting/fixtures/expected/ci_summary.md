@@ -1,6 +1,6 @@
 ## IJT OPC UA — CI
 
-> ✅ **All 12 / 12 jobs passed**
+> ✅ **All 12 / 12 Jobs Passed**
 > **Branch:** `c2-phase-1b` &nbsp;·&nbsp; **Commit:** `12345678` &nbsp;·&nbsp; **Run:** [#42](https://github.example/ijt/actions/runs/42)
 
 ---
@@ -9,7 +9,7 @@
 
 ### 📊 Test Outcome Overview
 
-> ✅ **Status:** 0 failed jobs &nbsp;·&nbsp; 0 coverage warnings &nbsp;·&nbsp; 0 skip-budget warnings &nbsp;·&nbsp; 0 artifact warnings
+> ✅ **Status:** 0 Failed Jobs &nbsp;·&nbsp; 0 Coverage Warnings &nbsp;·&nbsp; 0 Skip-Budget Warnings &nbsp;·&nbsp; 0 Artifact Warnings
 
 | 🚦  | Outcome |   Count |
 | :-: | :------ | ------: |
@@ -27,13 +27,13 @@
 
 | Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |
 |:----------|:-----------------|----------:|--------:|:---------------------:|
-| Web Client — Python | Ubuntu Release 2 Python unit lane | 2 passed ✅ | 2 skipped | 97.0% / 95% ✅ |
-| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | 3 passed ✅ | 0 skipped | 96.0% / 95% ✅ |
-| Console Client — Python | Ubuntu Python unit lane | 2 passed ✅ | 0 skipped | 99.0% / 95% ✅ |
-| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | 1 passed ✅ | 1 skipped | 95.0% / 95% ✅ |
-| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | 1 passed ✅ | 15 skipped | 95.0% / 95% ✅ |
-| Test Client — Python (Unit) | Ubuntu Python unit lane | 2 passed ✅ | 0 skipped | 98.0% / 95% ✅ |
-| OPC UA Server — Smoke | Windows native server smoke lane | 10 passed ✅ | 0 skipped | ➖ Not measured (smoke) |
+| Web Client — Python | Ubuntu Release 2 Python unit lane | 2 Passed ✅ | 2 Skipped | 97.0% / 95% ✅ |
+| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit lane | 3 Passed ✅ | 0 Skipped | 96.0% / 95% ✅ |
+| Console Client — Python | Ubuntu Python unit lane | 2 Passed ✅ | 0 Skipped | 99.0% / 95% ✅ |
+| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit lane | 1 Passed ✅ | 1 Skipped | 95.0% / 95% ✅ |
+| C# Client — Unit (xUnit) | Windows C# xUnit unit lane | 1 Passed ✅ | 15 Skipped | 95.0% / 95% ✅ |
+| Test Client — Python (Unit) | Ubuntu Python unit lane | 2 Passed ✅ | 0 Skipped | 98.0% / 95% ✅ |
+| OPC UA Server — Smoke | Windows native server smoke lane | 10 Passed ✅ | 0 Skipped | ➖ Not Measured (Smoke) |
 
 ---
 
@@ -117,7 +117,7 @@ Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage 
 
 ### ⏭️ Skip Details — 3 lanes, 18 skips
 
-<details><summary>⏭️ <b>Web Client — Python</b> — 2 skipped</summary>
+<details><summary>⏭️ <b>Web Client — Python</b> — 2 Skipped</summary>
 
 | Reason | Count |
 |:-------|------:|
@@ -126,7 +126,7 @@ Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage 
 
 </details>
 
-<details><summary>⏭️ <b>Node Client — Legacy JavaScript</b> — 1 skipped</summary>
+<details><summary>⏭️ <b>Node Client — Legacy JavaScript</b> — 1 Skipped</summary>
 
 | Reason | Count |
 |:-------|------:|
@@ -134,7 +134,7 @@ Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage 
 
 </details>
 
-<details><summary>⏭️ <b>C# Client — Unit</b> — 15 skipped</summary>
+<details><summary>⏭️ <b>C# Client — Unit</b> — 15 Skipped</summary>
 
 | Reason | Count |
 |:-------|------:|

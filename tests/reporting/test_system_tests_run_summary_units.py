@@ -199,7 +199,7 @@ def test_format_skip_section_generates_details_section(tmp_path):
     ]
     result = system_tests_run_summary.format_skip_section("Component", skips, 3)
     assert any("Component" in line for line in result)
-    assert any("3 skipped" in line for line in result)
+    assert any("3 Skipped" in line for line in result)
     assert any("<details>" in line for line in result)
 
 
@@ -606,7 +606,7 @@ def test_count_test_results():
     """count_test_results combines tests and skips formatting."""
     result = system_tests_run_summary.count_test_results((100, 95, 5, 3))
     assert "95 / 100" in result
-    assert "3 skipped" in result
+    assert "3 Skipped" in result
 
 
 def test_count_test_results_with_baseline():
@@ -620,15 +620,53 @@ def test_count_test_results_zero_fail_with_skips_uses_passed_count():
     """When there are skipped tests but no failures, the cell must report the
     *passed* count (not the total) so the math is honest. Regression for the
     bug that reported (1043 total, 889 passed, 0 failed, 154 skipped) as
-    "1,043 passed, 154 skipped" — which double-counts the 154 skips."""
+    "1,043 Passed, 154 Skipped" — which double-counts the 154 skips."""
     result = system_tests_run_summary.count_test_results((1043, 889, 0, 154))
-    assert result == "889 passed, 154 skipped"
+    assert result == "889 Passed, 154 Skipped"
 
 
 def test_count_test_results_all_pass_no_skip():
     """Clean all-passed lane prints just the passed count."""
     result = system_tests_run_summary.count_test_results((50, 50, 0, 0))
-    assert result == "50 passed, 0 skipped"
+    assert result == "50 Passed, 0 Skipped"
+
+
+def test_bulleted_test_results_clean_lane():
+    """Single-suite report cells use stable HTML bullets and Title Case labels."""
+    result = system_tests_run_summary.bulleted_test_results((10, 10, 0, 0))
+
+    assert result == "&bull; 10 Passed<br>&bull; 0 Skipped"
+
+
+def test_bulleted_test_results_failed_lane_includes_failed_count():
+    """Failed lanes keep passed/total, failed, and skipped counts visible."""
+    result = system_tests_run_summary.bulleted_test_results((10, 7, 2, 1))
+
+    assert result == "&bull; 7 / 10 Passed<br>&bull; 2 Failed<br>&bull; 1 Skipped"
+
+
+def test_bulleted_test_results_not_reported_lane():
+    """Missing artifact data is explicit and still uses the same bullet shape."""
+    result = system_tests_run_summary.bulleted_test_results((None, None, None, None))
+
+    assert result == "&bull; Not Reported"
+
+
+def test_bulleted_multilane_test_results_indents_sub_counts():
+    """Multi-suite cells keep suite names and count rows visually distinct."""
+    result = system_tests_run_summary.bulleted_multilane_test_results(
+        ("Python", (700, 700, 0, 0), None),
+        ("JavaScript", (557, 557, 0, 0), None),
+    )
+
+    assert result == (
+        "&bull; Python<br>"
+        "&nbsp;&nbsp;&bull; 700 Passed<br>"
+        "&nbsp;&nbsp;&bull; 0 Skipped<br>"
+        "&bull; JavaScript<br>"
+        "&nbsp;&nbsp;&bull; 557 Passed<br>"
+        "&nbsp;&nbsp;&bull; 0 Skipped"
+    )
 
 
 def test_tests_cell_zero_fail_with_skips_uses_passed_count():
@@ -687,36 +725,44 @@ def test_module_bootstrap_runs_main_via_runpy(tmp_path, monkeypatch):
 
 
 def test_lane_status_fmt_success():
-    assert system_tests_run_summary.lane_status_fmt("success") == "success ✅"
+    assert system_tests_run_summary.lane_status_fmt("success") == "Success ✅"
 
 
 def test_lane_status_fmt_failure():
-    assert system_tests_run_summary.lane_status_fmt("failure") == "failure ❌"
+    assert system_tests_run_summary.lane_status_fmt("failure") == "Failure ❌"
 
 
 def test_lane_status_fmt_skipped():
-    assert system_tests_run_summary.lane_status_fmt("skipped") == "skipped ⏭️"
+    assert system_tests_run_summary.lane_status_fmt("skipped") == "Skipped ⏭️"
+
+
+def test_status_text_title_cases_known_unknown_and_snake_case_values():
+    """User-facing status text stays Title Case without changing internal keys."""
+    assert system_tests_run_summary.status_text("success") == "Success"
+    assert system_tests_run_summary.status_text("unknown") == "Unknown"
+    assert system_tests_run_summary.status_text("not_reported") == "Not Reported"
+    assert system_tests_run_summary.status_text("") == "Unknown"
 
 
 def test_perf_status_fmt_recorded():
-    assert system_tests_run_summary.perf_status_fmt("recorded") == "recorded 📊"
+    assert system_tests_run_summary.perf_status_fmt("recorded") == "Recorded 📊"
 
 
 def test_perf_status_fmt_missing():
-    assert system_tests_run_summary.perf_status_fmt("missing") == "missing ⚠️"
+    assert system_tests_run_summary.perf_status_fmt("missing") == "Missing ⚠️"
 
 
 def test_perf_status_fmt_workflow_job_conclusions():
-    assert system_tests_run_summary.perf_status_fmt("success") == "passed ✅"
-    assert system_tests_run_summary.perf_status_fmt("failure") == "failed ❌"
-    assert system_tests_run_summary.perf_status_fmt("cancelled") == "cancelled ⚪"
-    assert system_tests_run_summary.perf_status_fmt("skipped") == "skipped ⏭️"
+    assert system_tests_run_summary.perf_status_fmt("success") == "Passed ✅"
+    assert system_tests_run_summary.perf_status_fmt("failure") == "Failed ❌"
+    assert system_tests_run_summary.perf_status_fmt("cancelled") == "Cancelled ⚪"
+    assert system_tests_run_summary.perf_status_fmt("skipped") == "Skipped ⏭️"
 
 
 def test_perf_status_fmt_unknown_fallback():
-    assert system_tests_run_summary.perf_status_fmt("") == "unknown ⚠️"
-    assert system_tests_run_summary.perf_status_fmt("None") == "unknown ⚠️"
-    assert system_tests_run_summary.perf_status_fmt("weird") == "unknown ⚠️"
+    assert system_tests_run_summary.perf_status_fmt("") == "Unknown ⚠️"
+    assert system_tests_run_summary.perf_status_fmt("None") == "Unknown ⚠️"
+    assert system_tests_run_summary.perf_status_fmt("weird") == "Unknown ⚠️"
 
 
 def _write_perf_xml(tmp_path, properties):
@@ -803,11 +849,15 @@ def test_render_perf_section_pass_renders_table_and_marks_pass():
     }
     lines = system_tests_run_summary.render_perf_section([("Console", metrics)])
     assert any("### ⏱️ Performance Benchmarks" in line for line in lines)
+    header = [line for line in lines if line.startswith("| Lane")][0]
     row = [line for line in lines if line.startswith("| Console")][0]
+    assert "90th Percentile" not in header
     assert "20" in row
     assert "86.19" in row
-    assert "100.71" in row
-    assert "✅ PASS" in row
+    assert "100.71" not in row
+    assert "Tail Check" in row
+    assert "102.68" in row
+    assert "✅ Pass" in row
 
 
 def test_render_perf_section_fail_when_mean_exceeds_threshold():
@@ -822,7 +872,7 @@ def test_render_perf_section_fail_when_mean_exceeds_threshold():
     }
     lines = system_tests_run_summary.render_perf_section([("MyLane", metrics)])
     row = [line for line in lines if line.startswith("| MyLane")][0]
-    assert "❌ FAIL" in row
+    assert "❌ Fail" in row
 
 
 def test_render_perf_section_without_thresholds_uses_dash():

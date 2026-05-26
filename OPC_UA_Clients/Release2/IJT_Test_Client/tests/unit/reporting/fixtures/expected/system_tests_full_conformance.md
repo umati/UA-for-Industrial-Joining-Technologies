@@ -1,13 +1,13 @@
 # IJT Conformance Test Report
 
-🟢 **PASSED** · **0 action items** · **Validation 100.0% (98/98)** · **Server support 79.7% (98/123)**
+🟢 **Passed** · **0 action items** · **Validation 100.0% (98/98)** · **Server support 79.7% (98/123)**
 
 | Item | Value |
 |---|---|
 | **Server** | My IJT Server (`opc.tcp://fixture.ijt.test:40451`) |
 | **Capability profile** | Full IJT Base Conformance |
 | **Run** | 2026-05-13 14:00 UTC · Duration 1m 25s |
-| **Build** | commit `15bc900` · run logs: n/a |
+| **Build** | commit `15bc900` · run logs: Not Applicable |
 
 ## 📊 Conformance Overview
 
@@ -90,8 +90,8 @@ Information only; review scope and caveats. See Conformance Unit Details below.
 | IJT Sequential Process Operations Server Facet | Facet | 4 | 4 | 100.0% | 100.0% | 4 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
 | IJT Additional Process Methods Server Facet | Facet | 6 | 1 | 16.7% | 100.0% | 1 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
 | IJT Joint Server Facet | Facet | 8 | 7 | 87.5% | 100.0% | 6 Supported<br>1 With Notes<br>1 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
-| IJT Joint Design Server Facet | Facet | 5 | 0 | 0.0% | n/a | 0 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
-| IJT Joint Component Server Facet | Facet | 5 | 0 | 0.0% | n/a | 0 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| IJT Joint Design Server Facet | Facet | 5 | 0 | 0.0% | Not Applicable | 0 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
+| IJT Joint Component Server Facet | Facet | 5 | 0 | 0.0% | Not Applicable | 0 Supported<br>0 With Notes<br>5 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
 | Basic Joining System Server Facet | Facet | 3 | 3 | 100.0% | 100.0% | 3 Supported<br>0 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟢 Supported |
 | General Joining System Server Facet | Facet Group | 39 | 39 | 100.0% | 100.0% | 37 Supported<br>2 With Notes<br>0 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
 | Joining System Selectable Features Server Facet | Facet Group | 84 | 59 | 70.2% | 100.0% | 58 Supported<br>1 With Notes<br>25 Not Supported<br>0 Blocked<br>0 Failed | 🟩 Supported with Notes |
@@ -241,7 +241,7 @@ _Single source for CU review and full coverage. Filter `Review Status` for follo
 | asyncua | 1.2b2 |
 | Host OS | Windows-11-10.0.26200-SP0 |
 | Repro command | `python run_all_tests.py` |
-| Run logs | n/a |
+| Run logs | Not Applicable |
 
 </details>
 

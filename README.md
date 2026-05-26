@@ -1,8 +1,8 @@
 # OPC UA for Industrial Joining Technologies (IJT)
 
-[![CI](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/ci.yml/badge.svg)](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/ci.yml)
-[![Integration](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/integration.yml/badge.svg)](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/integration.yml)
-[![CodeQL](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/codeql.yml/badge.svg)](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/codeql.yml)
+[![CI](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/ci.yml)
+[![Integration](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/integration.yml/badge.svg?branch=main&event=push)](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/integration.yml)
+[![CodeQL](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/codeql.yml/badge.svg?branch=main&event=push)](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/workflows/codeql.yml)
 
 The **VDMA OPC UA Industrial Joining Technologies (IJT)** Working Group defines a standard
 information model for joining technologies such as Tightening, Gluing, Riveting, Flow Drill

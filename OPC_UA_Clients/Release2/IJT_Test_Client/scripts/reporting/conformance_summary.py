@@ -39,6 +39,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _PROFILES_DIR = _PROJECT_ROOT / "profiles"
 _CU_COMPLIANCE_KEYS = {"supported", "partial", "not_supported", "blocked", "action_needed", "untested"}
 _FINDING_OUTCOMES = {"partial", "not_supported", "blocked", "action_needed"}
+_NOT_APPLICABLE = "Not Applicable"
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
@@ -177,8 +178,8 @@ def pad_table_rows(headers: list[str], rows: list[list[str]], aligns: list[str])
 
 def _status_badge(passed: int, failed: int, errors: int) -> str:
     if failed + errors > 0:
-        return f"{_RUN_RESULT_ICONS['failed']} **FAILED**"
-    return f"{_RUN_RESULT_ICONS['passed']} **PASSED**"
+        return f"{_RUN_RESULT_ICONS['failed']} **Failed**"
+    return f"{_RUN_RESULT_ICONS['passed']} **Passed**"
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -263,19 +264,19 @@ def _supported_set(cu_payload: dict[str, Any]) -> set[str] | None:
 
 def _server_profile_cu_count(cu_keys: list[str], supported: set[str] | None) -> int | str:
     if supported is None:
-        return "n/a"
+        return _NOT_APPLICABLE
     return len([cu for cu in cu_keys if cu in supported])
 
 
 def _pct(numerator: int, denominator: int) -> str:
     if denominator <= 0:
-        return "n/a"
+        return _NOT_APPLICABLE
     return f"{(numerator * 100 / denominator):.1f}%"
 
 
 def _server_profile_pct(server_profile_cus: int | str, total: int) -> str:
     if not isinstance(server_profile_cus, int):
-        return "n/a"
+        return _NOT_APPLICABLE
     return _pct(server_profile_cus, total)
 
 
@@ -287,7 +288,7 @@ def _server_supported_cu_keys(cu_keys: list[str], supported: set[str] | None) ->
 
 def _supported_cus_validated_count(cu_keys: list[str], by_cu: dict[str, Any], supported: set[str] | None) -> int | str:
     if supported is None:
-        return "n/a"
+        return _NOT_APPLICABLE
     counts = _count_outcomes(_server_supported_cu_keys(cu_keys, supported), by_cu)
     return counts["supported"] + counts["partial"]
 
@@ -296,7 +297,7 @@ def _supported_cus_validated_pct(cu_keys: list[str], by_cu: dict[str, Any], supp
     server_supported_count = _server_profile_cu_count(cu_keys, supported)
     validated_count = _supported_cus_validated_count(cu_keys, by_cu, supported)
     if not isinstance(server_supported_count, int) or not isinstance(validated_count, int):
-        return "n/a"
+        return _NOT_APPLICABLE
     return _pct(validated_count, server_supported_count)
 
 
@@ -316,7 +317,7 @@ def _run_logs_url() -> str:
     run_id = os.environ.get("GITHUB_RUN_ID")
     if server and repo and run_id:
         return f"{server}/{repo}/actions/runs/{run_id}"
-    return "n/a"
+    return _NOT_APPLICABLE
 
 
 def _package_version(package: str) -> str:
@@ -389,7 +390,7 @@ def _outcomes_cell(counts: Counter[str]) -> str:
 
 def _in_server_profile(cu_key: str, supported: set[str] | None) -> str:
     if supported is None:
-        return "n/a"
+        return _NOT_APPLICABLE
     return "Yes" if cu_key in supported else "No"
 
 
@@ -1063,7 +1064,7 @@ def render_conformance_summary(
     lines.append("")
     result_badge = _status_badge(p, f, 0)
     server_name = str(context["server_name"]) if context else "Server under test"
-    active_label = str(context["active_label"]) if context else "n/a"
+    active_label = str(context["active_label"]) if context else _NOT_APPLICABLE
     supported: Any = 0
     total_active: int = 0
     validated: Any = 0

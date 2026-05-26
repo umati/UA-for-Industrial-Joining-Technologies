@@ -178,6 +178,7 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
 
     assert workflow["name"] == "System Tests — Live OPC UA, Browser, Docker, Conformance"
     assert workflow["jobs"]["report"]["name"] == "📋 System Tests Report"
+    assert "resolve-browser-image" in workflow["jobs"]["report"]["needs"]
     assert step["run"].strip() == "python3 reporting/system_tests_run_summary.py"
     assert "PYEOF" not in step["run"]
     assert step["env"]["REPORT_JOB_NAME"] == "📋 System Tests Report"
@@ -191,6 +192,9 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
         "CS_RESULT",
         "CS_OPCUA_SECURITY_RESULT",
         "CONSOLE_OPCUA_SECURITY_RESULT",
+        "BROWSER_IMAGE_PLAN",
+        "BROWSER_IMAGE_REF",
+        "BROWSER_IMAGE_INPUTS_FINGERPRINT",
         "GH_SHA",
         "GH_BRANCH",
         "GH_RUN_NUMBER",
@@ -201,6 +205,15 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
         "GH_TOKEN",
         "REPORT_JOB_NAME",
     }
+
+
+def test_browser_image_resolver_does_not_write_step_summary_directly() -> None:
+    workflow = _workflow("integration.yml")
+    resolve_steps = workflow["jobs"]["resolve-browser-image"]["steps"]
+    resolver_body = "\n".join(str(step.get("run") or "") for step in resolve_steps)
+
+    assert "GITHUB_STEP_SUMMARY" not in resolver_body
+    assert "IJT Browser CI image resolved" not in resolver_body
 
 
 def test_integration_timing_artifacts_are_collected_from_report_job() -> None:

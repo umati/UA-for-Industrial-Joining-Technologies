@@ -55,31 +55,25 @@ jobs:
 
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Detect changed paths — used by all downstream jobs to skip when irrelevant
+  # Enable full CI matrix
   # ───────────────────────────────────────────────────────────────────────────
   changes:
-    name: "Detect changed paths"
+    name: "Enable full CI matrix"
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
-      # On workflow_dispatch: steps.dispatch.outputs.* are set to 'true' (all jobs run).
-      # On push/PR:           steps.filter.outputs.* are populated by dorny/paths-filter.
-      # The || pattern picks whichever step ran; the other produces an empty string.
-      web:        ${{ steps.dispatch.outputs.web        || steps.filter.outputs.web }}
-      console:    ${{ steps.dispatch.outputs.console    || steps.filter.outputs.console }}
-      node:       ${{ steps.dispatch.outputs.node       || steps.filter.outputs.node }}
-      docker:     ${{ steps.dispatch.outputs.docker     || steps.filter.outputs.docker }}
-      testclient: ${{ steps.dispatch.outputs.testclient || steps.filter.outputs.testclient }}
-      csharp:     ${{ steps.dispatch.outputs.csharp     || steps.filter.outputs.csharp }}
-      server:     ${{ steps.dispatch.outputs.server     || steps.filter.outputs.server }}
-      workflows:  ${{ steps.dispatch.outputs.workflows  || steps.filter.outputs.workflows }}
+      web:        ${{ steps.full.outputs.web }}
+      console:    ${{ steps.full.outputs.console }}
+      node:       ${{ steps.full.outputs.node }}
+      docker:     ${{ steps.full.outputs.docker }}
+      testclient: ${{ steps.full.outputs.testclient }}
+      csharp:     ${{ steps.full.outputs.csharp }}
+      server:     ${{ steps.full.outputs.server }}
+      workflows:  ${{ steps.full.outputs.workflows }}
     steps:
-      # workflow_dispatch has no 'before' SHA — skip dorny/paths-filter (it can't diff without one)
-      # and explicitly signal that every job should run.
-      - name: "All jobs enabled (workflow_dispatch)"
-        if: github.event_name == 'workflow_dispatch'
-        id: dispatch
+      - name: "All jobs enabled"
+        id: full
         run: |
           {
             echo "web=true"
@@ -91,46 +85,6 @@ jobs:
             echo "server=true"
             echo "workflows=true"
           } >> "$GITHUB_OUTPUT"
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        if: github.event_name != 'workflow_dispatch'
-        with:
-          persist-credentials: false
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4
-        if: github.event_name != 'workflow_dispatch'
-        id: filter
-        with:
-          filters: |
-            web:
-              - 'constraints.txt'
-              - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
-              - '.github/workflows/ci.yml'
-            console:
-              - 'constraints.txt'
-              - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
-              - '.github/workflows/ci.yml'
-            node:
-              - 'OPC_UA_Clients/Release1/IJT_Node_Client/**'
-              - '.github/workflows/ci.yml'
-            docker:
-              - '.dockerignore'
-              - 'constraints.txt'
-              - 'OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile'
-              - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
-              - '.github/workflows/ci.yml'
-            testclient:
-              - 'constraints.txt'
-              - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
-              - '.github/workflows/ci.yml'
-            csharp:
-              - 'OPC_UA_Clients/Release2/IJT_CSharp_Client/**'
-              - '.github/workflows/ci.yml'
-            server:
-              - 'constraints.txt'
-              - 'OPC_UA_Servers/**'
-              - '.github/workflows/ci.yml'
-            workflows:
-              - '.github/workflows/**'
 
   # ───────────────────────────────────────────────────────────────────────────
   # Web Client — Python lane
@@ -525,7 +479,7 @@ jobs:
     name: "C# Client - Unit Tests"
     runs-on: windows-latest
     needs: [changes]
-    # Runs when C# client paths or ci.yml changed (push or PR), or on manual dispatch.
+    # Full CI policy: changes job always enables this lane on push, PR, and manual dispatch.
     # Nightly integration covers cross-component regressions.
     if: needs.changes.outputs.csharp == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 20
@@ -1171,9 +1125,9 @@ jobs:
         run: pre-commit run --all-files --show-diff-on-failure --color=always
 
   # ───────────────────────────────────────────────────────────────────────────
-  # C# NuGet Vulnerability Scan — lightweight path-filtered gate.
-  #   Runs when C# paths change (catches vuln deps introduced in PRs),
-  #   or on manual dispatch. Nightly drift is covered by integration.yml.
+  # C# NuGet Vulnerability Scan — lightweight dependency gate.
+  #   Runs on every CI push and PR as part of the full matrix.
+  #   Nightly drift is covered by integration.yml.
   #   No build needed — just restore + scan.
   # ───────────────────────────────────────────────────────────────────────────
   csharp-vuln:
@@ -1221,13 +1175,13 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
 
   # ───────────────────────────────────────────────────────────────────────────
-  # CI aggregator — converts path-filtered "skipped" jobs to "success" so CI
+  # CI aggregator — converts lane-level "skipped" jobs to "success" so CI
   # has one readable gate result instead of requiring users to scan all
   # component jobs.
   #
   # Ruleset 15294123 currently requires only the CodeQL Analyze contexts; this
   # job is still kept as CI's own aggregate validation signal.
-  # "skipped" is treated as success (path filter didn't touch that component).
+  # "skipped" is treated as success (for example, a lane-level precondition).
   # "failure" or "cancelled" causes this job to fail.
   # ───────────────────────────────────────────────────────────────────────────
   all-required:

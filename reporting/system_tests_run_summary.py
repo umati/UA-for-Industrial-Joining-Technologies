@@ -193,7 +193,7 @@ def collect_skips(pattern):
 
 # Numeric perf properties produced by the live perf tests. Required fields
 # must all be present for a lane to be rendered. Threshold fields are
-# optional — when absent the renderer hides the target/PASS-FAIL column.
+# optional — when absent the renderer hides the target/Pass-Fail column.
 _PERF_REQUIRED_FIELDS = (
     "perf_sample_count",
     "perf_mean_total_ms",
@@ -256,10 +256,10 @@ def render_perf_section(lanes: list[tuple[str, dict[str, float]]]) -> list[str]:
     Layout:
 
     * One H3 + a one-row header summarising what is measured.
-    * One row per lane with sample count, min/mean/p90/max in milliseconds.
-    * A trailing PASS/FAIL pill when both ``perf_threshold_mean_ms`` and
-      ``perf_threshold_p90_ms`` are present; the target column shows both
-      thresholds (``mean < … · p90 < …``).
+    * One row per lane with sample count and min/mean/max in milliseconds.
+    * A trailing Pass/Fail pill when both ``perf_threshold_mean_ms`` and
+      ``perf_threshold_p90_ms`` are present; the target column stays compact
+      while the internal gate still checks both mean and tail latency.
 
     The renderer never writes free-form prose — the conformance block above
     already explains how to read latency tables. Keeping this section
@@ -274,8 +274,8 @@ def render_perf_section(lanes: list[tuple[str, dict[str, float]]]) -> list[str]:
         "",
         f"### ⏱️ Performance Benchmarks — {len(present)} lane{'s' if len(present) != 1 else ''}",
         "",
-        ("| Lane | Samples | min (ms) | mean (ms) | p90 (ms) | max (ms) | Target | Result |"),
-        "|:-----|--------:|---------:|----------:|---------:|---------:|:------:|:------:|",
+        "| Lane | Samples | min (ms) | mean (ms) | max (ms) | Target | Result |",
+        "|:-----|--------:|---------:|----------:|---------:|:------:|:------:|",
     ]
     for label, metrics in present:
         samples = int(metrics["perf_sample_count"])
@@ -286,21 +286,22 @@ def render_perf_section(lanes: list[tuple[str, dict[str, float]]]) -> list[str]:
         threshold_mean = metrics.get("perf_threshold_mean_ms")
         threshold_p90 = metrics.get("perf_threshold_p90_ms")
         if threshold_mean is not None and threshold_p90 is not None:
-            target_cell = f"mean &lt; {threshold_mean:.0f} · p90 &lt; {threshold_p90:.0f}"
+            target_cell = f"Mean &lt; {threshold_mean:.0f} · Tail Check &lt; {threshold_p90:.0f}"
             target_met = mean_ms < threshold_mean and p90_ms < threshold_p90
-            result_cell = "✅ PASS" if target_met else "❌ FAIL"
+            result_cell = "✅ Pass" if target_met else "❌ Fail"
         else:
             target_cell = "—"
             result_cell = "—"
         out.append(
             f"| {md_cell(label)} | {samples} | {min_ms:.2f} | {mean_ms:.2f} | "
-            f"{p90_ms:.2f} | {max_ms:.2f} | {target_cell} | {result_cell} |"
+            f"{max_ms:.2f} | {target_cell} | {result_cell} |"
         )
     out.append("")
     out.append(
-        "_TOTAL = end-of-join → client callback. Full per-sample timing pipeline "
-        "(joining, server acquisition/processing, wire) is recorded in JUnit XML "
-        "test artifacts; download them for deep analysis._"
+        "_TOTAL = end of joining operation → client callback. The visible table keeps "
+        "first-read latency numbers compact; the Pass/Fail gate also checks an internal "
+        "tail-latency value. Full per-sample timing pipeline (joining, server "
+        "acquisition/processing, wire) is recorded in JUnit XML test artifacts._"
     )
     return out
 
@@ -314,16 +315,37 @@ def md_cell(value):
 def lane_status_fmt(status: str) -> str:
     """Render lane status as text followed by an icon (legacy callers)."""
     if status == "success":
-        return "success ✅"
+        return "Success ✅"
     if status == "failure":
-        return "failure ❌"
+        return "Failure ❌"
     if status == "skipped":
-        return "skipped ⏭️"
-    return "unknown ⚠️"
+        return "Skipped ⏭️"
+    return "Unknown ⚠️"
 
 
 # Reusable cell constants for "not relevant for this lane" semantics.
-_CELL_NOT_APPLICABLE_INT = "➖ Not applicable"
+_CELL_NOT_APPLICABLE_INT = "➖ Not Applicable"
+
+
+_STATUS_TEXT = {
+    "success": "Success",
+    "failure": "Failure",
+    "failed": "Failed",
+    "skipped": "Skipped",
+    "cancelled": "Cancelled",
+    "recorded": "Recorded",
+    "missing": "Missing",
+    "unknown": "Unknown",
+}
+
+
+def status_text(status: str) -> str:
+    """Return the user-facing title-case label for a workflow/test status."""
+    text = str(status or "unknown")
+    return _STATUS_TEXT.get(
+        text,
+        " ".join(part.capitalize() for part in text.replace("_", " ").split()) or "Unknown",
+    )
 
 
 def lane_status_icon(status: str) -> str:
@@ -338,7 +360,9 @@ def lane_status_icon(status: str) -> str:
 
 def lane_status_text(status: str) -> str:
     """Plain-text lane outcome (no icon) for the Result column of Lane Results."""
-    return status if status in {"success", "failure", "skipped", "cancelled"} else "unknown"
+    return status_text(
+        status if status in {"success", "failure", "skipped", "cancelled"} else "unknown"
+    )
 
 
 def component_row_icon(*sources) -> str:
@@ -398,18 +422,18 @@ def perf_status_fmt(status: str) -> str:
     sources (``recorded``, ``missing``).
     """
     if status == "success":
-        return "passed ✅"
+        return "Passed ✅"
     if status == "failure":
-        return "failed ❌"
+        return "Failed ❌"
     if status == "cancelled":
-        return "cancelled ⚪"
+        return "Cancelled ⚪"
     if status == "skipped":
-        return "skipped ⏭️"
+        return "Skipped ⏭️"
     if status == "recorded":
-        return "recorded 📊"
+        return "Recorded 📊"
     if status == "missing":
-        return "missing ⚠️"
-    return "unknown ⚠️"
+        return "Missing ⚠️"
+    return "Unknown ⚠️"
 
 
 def format_skip_section(label, skips_list, skip_count=None):
@@ -424,7 +448,7 @@ def format_skip_section(label, skips_list, skip_count=None):
         reasons["Skip details unavailable in JUnit XML"] += reported_count - len(skips_list)
     lines = [
         "",
-        f"<details><summary>⏭️ <b>{label}</b> — {reported_count} skipped</summary>",
+        f"<details><summary>⏭️ <b>{label}</b> — {reported_count} Skipped</summary>",
         "",
         "| Reason | Count |",
         "|:-------|------:|",
@@ -833,19 +857,55 @@ def count_test_results(counts, baseline=None):
     signal so the cells stay tidy and left-aligned.
     """
     if counts[0] is None:
-        return "Not reported"
+        return "Not Reported"
     total = counts[0]
     passed = counts[1] or 0
     failed = counts[2] or 0
     skipped = counts[3] if counts[3] is not None else 0
     delta = format_count_delta(total, baseline)
-    body = f"{passed:,} / {total:,}{delta} passed" if failed else f"{passed:,}{delta} passed"
-    return f"{body}, {skipped:,} skipped"
+    body = f"{passed:,} / {total:,}{delta} Passed" if failed else f"{passed:,}{delta} Passed"
+    return f"{body}, {skipped:,} Skipped"
 
 
 def labeled_test_results(label, counts, baseline=None):
     """Single labelled test-result line for multi-lane table cells."""
     return f"{label}: {count_test_results(counts, baseline)}"
+
+
+def _bulleted_count_lines(counts, baseline=None, indent: bool = False) -> list[str]:
+    bullet = "&nbsp;&nbsp;&bull;" if indent else "&bull;"
+    if counts[0] is None:
+        return [f"{bullet} Not Reported"]
+    total = counts[0]
+    passed = counts[1] or 0
+    failed = counts[2] or 0
+    skipped = counts[3] if counts[3] is not None else 0
+    delta = format_count_delta(total, baseline)
+    if failed:
+        passed_text = f"{passed:,} / {total:,}{delta} Passed"
+        return [
+            f"{bullet} {passed_text}",
+            f"{bullet} {failed:,} Failed",
+            f"{bullet} {skipped:,} Skipped",
+        ]
+    return [
+        f"{bullet} {passed:,}{delta} Passed",
+        f"{bullet} {skipped:,} Skipped",
+    ]
+
+
+def bulleted_test_results(counts, baseline=None) -> str:
+    """Render a single-suite result cell as compact HTML bullets."""
+    return "<br>".join(_bulleted_count_lines(counts, baseline))
+
+
+def bulleted_multilane_test_results(*named_counts) -> str:
+    """Render labelled multi-suite result cells with indented count bullets."""
+    lines: list[str] = []
+    for label, counts, baseline in named_counts:
+        lines.append(f"&bull; {md_cell(label)}")
+        lines.extend(_bulleted_count_lines(counts, baseline, indent=True))
+    return "<br>".join(lines) if lines else "Not Reported"
 
 
 def bottleneck_candidates(job_timings, wc_feature_timings, cs_live_timings):
@@ -896,6 +956,9 @@ def main() -> None:
     branch = E("GH_BRANCH", "main")
     run_num = E("GH_RUN_NUMBER", "")
     run_url = E("GH_RUN_URL", "")
+    browser_image_plan = E("BROWSER_IMAGE_PLAN", "")
+    browser_image_ref = E("BROWSER_IMAGE_REF", "")
+    browser_image_inputs_fingerprint = E("BROWSER_IMAGE_INPUTS_FINGERPRINT", "")
 
     # ── Parse artifacts ──────────────────────────────────────────────
 
@@ -1064,21 +1127,21 @@ def main() -> None:
     )
     status_emoji = "✅" if status_clean else "⚠️"
     status_summary = (
-        f"{status_emoji} **Status:** {n_fail} failed jobs &nbsp;·&nbsp; "
-        f"{len(report_warnings)} drift warnings &nbsp;·&nbsp; "
-        f"{len(skip_policy_failures)} skip-policy failures &nbsp;·&nbsp; "
-        f"{len(artifact_warnings)} artifact warnings"
+        f"{status_emoji} **Status:** {n_fail} Failed Jobs &nbsp;·&nbsp; "
+        f"{len(report_warnings)} Drift Warnings &nbsp;·&nbsp; "
+        f"{len(skip_policy_failures)} Skip-Policy Failures &nbsp;·&nbsp; "
+        f"{len(artifact_warnings)} Artifact Warnings"
     )
 
     if n_fail == 0 and not skip_policy_failures:
         status_icon = "✅"
-        status_msg = f"All {n_pass} / {n_total} jobs passed"
+        status_msg = f"All {n_pass} / {n_total} Jobs Passed"
     else:
         status_icon = "❌"
         if skip_policy_failures and n_fail == 0:
-            status_msg = "Skip policy gate failed"
+            status_msg = "Skip Policy Gate Failed"
         else:
-            status_msg = f"{n_fail} / {n_total} jobs failed &nbsp;·&nbsp; {n_pass} passed"
+            status_msg = f"{n_fail} / {n_total} Jobs Failed &nbsp;·&nbsp; {n_pass} Passed"
 
     run_link = f"[#{run_num}]({run_url})" if run_url else f"#{run_num}"
     sha_str = f"`{sha}`" if sha else "—"
@@ -1099,23 +1162,17 @@ def main() -> None:
     csharp_opcua_security_base = baseline_suite(integration_baseline, "csharp_opcua_security")
     console_opcua_security_base = baseline_suite(integration_baseline, "console_opcua_security")
 
-    web_docker_results = "<br>".join(
-        (
-            labeled_test_results("Python", wd_py, wd_py_base),
-            labeled_test_results("JavaScript", wd_js, wd_js_base),
-        )
+    web_docker_results = bulleted_multilane_test_results(
+        ("Python", wd_py, wd_py_base),
+        ("JavaScript", wd_js, wd_js_base),
     )
-    web_live_results = "<br>".join(
-        (
-            labeled_test_results("Python/WebSocket live", wc_live, wc_live_base),
-            labeled_test_results("Browser E2E", wc_browser, wc_browser_base),
-        )
+    web_live_results = bulleted_multilane_test_results(
+        ("Python/WebSocket Live", wc_live, wc_live_base),
+        ("Browser E2E", wc_browser, wc_browser_base),
     )
-    test_client_live_results = "<br>".join(
-        (
-            labeled_test_results("Smoke", tc_smoke, tc_smoke_base),
-            labeled_test_results("Conformance", tc_tests, tc_tests_base),
-        )
+    test_client_live_results = bulleted_multilane_test_results(
+        ("Smoke", tc_smoke, tc_smoke_base),
+        ("Conformance", tc_tests, tc_tests_base),
     )
     console_security_note = skip_note_inline(
         con_live_skips + console_opcua_security_skips,
@@ -1191,30 +1248,30 @@ def main() -> None:
         "|:--:|:-----|:-------|:-------------|",
         f"| {lane_status_icon(str(sd_r))} | OPC UA Server Docker smoke "
         f"| {lane_status_text(str(sd_r))} "
-        f"| {count_test_results(sd_smoke, sd_smoke_base)} |",
+        f"| {bulleted_test_results(sd_smoke, sd_smoke_base)} |",
         f"| {lane_status_icon(str(wd_r))} | Web Client Docker tests "
         f"| {lane_status_text(str(wd_r))} | {web_docker_results} |",
         f"| {lane_status_icon(str(tc_r))} | Test Client conformance "
         f"| {lane_status_text(str(tc_r))} "
-        f"| {count_test_results(tc_tests, tc_tests_base)} |",
+        f"| {bulleted_test_results(tc_tests, tc_tests_base)} |",
         f"| {lane_status_icon(str(wc_r))} | Web Client live suites "
         f"| {lane_status_text(str(wc_r))} "
-        f"| {count_test_results(wc_live, wc_live_base)} |",
+        f"| {bulleted_test_results(wc_live, wc_live_base)} |",
         f"| {lane_status_icon(str(wb_r))} | Browser E2E suites "
         f"| {lane_status_text(str(wb_r))} "
-        f"| {count_test_results(wc_browser, wc_browser_base)} |",
+        f"| {bulleted_test_results(wc_browser, wc_browser_base)} |",
         f"| {lane_status_icon(str(con_r))} | Console Client live "
         f"| {lane_status_text(str(con_r))} "
-        f"| {count_test_results(con_live, con_live_base)} |",
+        f"| {bulleted_test_results(con_live, con_live_base)} |",
         f"| {lane_status_icon(str(console_opcua_security_r))} | Console Client OPC UA security | "
         f"{lane_status_text(str(console_opcua_security_r))} | "
-        f"{count_test_results(console_opcua_security, console_opcua_security_base)} |",
+        f"{bulleted_test_results(console_opcua_security, console_opcua_security_base)} |",
         f"| {lane_status_icon(str(cs_r))} | C# Client live "
         f"| {lane_status_text(str(cs_r))} "
-        f"| {count_test_results(cs_live, cs_live_base)} |",
+        f"| {bulleted_test_results(cs_live, cs_live_base)} |",
         f"| {lane_status_icon(str(cs_opcua_security_r))} | C# Client OPC UA security | "
         f"{lane_status_text(str(cs_opcua_security_r))} | "
-        f"{count_test_results(csharp_opcua_security, csharp_opcua_security_base)} |",
+        f"{bulleted_test_results(csharp_opcua_security, csharp_opcua_security_base)} |",
         "",
         *(
             [
@@ -1242,7 +1299,7 @@ def main() -> None:
         (
             f"| {component_row_icon(sd_smoke)} "
             "| OPC UA Server | Linux container plus Windows live server processes | "
-            f"{count_test_results(sd_smoke, sd_smoke_base)} | "
+            f"{bulleted_test_results(sd_smoke, sd_smoke_base)} | "
             "Dedicated Windows ports 40461/40462/40464 feed client live suites | "
             "Docker smoke proves packaged Linux startup and namespace reachability |"
         ),
@@ -1264,16 +1321,16 @@ def main() -> None:
             f"| {component_row_icon(console_opcua_security, con_live, console_security_note)} "
             "| Console Client | Live Python client behavior and OPC UA security coverage "
             "against OPC UA server | "
-            f"{count_test_results(console_opcua_security, console_opcua_security_base)} | "
-            f"{count_test_results(con_live, con_live_base)} | "
+            f"{bulleted_test_results(console_opcua_security, console_opcua_security_base)} | "
+            f"{bulleted_test_results(con_live, con_live_base)} | "
             f"{console_security_note} |"
         ),
         (
             f"| {component_row_icon(csharp_opcua_security, cs_live, csharp_security_note)} "
             "| C# Client | Nightly xUnit live behavior and OPC UA security coverage "
             "against OPC UA server | "
-            f"{count_test_results(csharp_opcua_security, csharp_opcua_security_base)} | "
-            f"{count_test_results(cs_live, cs_live_base)} | "
+            f"{bulleted_test_results(csharp_opcua_security, csharp_opcua_security_base)} | "
+            f"{bulleted_test_results(cs_live, cs_live_base)} | "
             f"{csharp_security_note} |"
         ),
         "",
@@ -1448,7 +1505,7 @@ def main() -> None:
         for row in cs_live_timings["top"]:
             out.append(
                 f"| {md_cell(row['method'])} | {format_duration(row['duration'])} | "
-                f"{md_cell(row['outcome'])} |"
+                f"{md_cell(status_text(str(row['outcome'])))} |"
             )
         out += ["", "</details>"]
 
@@ -1463,7 +1520,7 @@ def main() -> None:
         for row in tc_live_timings["top"]:
             out.append(
                 f"| {md_cell(row['method'])} | {format_duration(row['duration'])} | "
-                f"{md_cell(row['outcome'])} |"
+                f"{md_cell(status_text(str(row['outcome'])))} |"
             )
         out += ["", "</details>"]
     else:
@@ -1523,8 +1580,23 @@ def main() -> None:
         "> 📦 **Artifacts** — JUnit XML &nbsp;·&nbsp; 📋 **Checks** tab — per-test drill-down",
         "> 🔒 Security audit (zizmor) results are in **CI** → Security → Code Scanning",
         "",
-        "</details>",
     ]
+    if browser_image_plan or browser_image_ref or browser_image_inputs_fingerprint:
+        out += [
+            "<details><summary><b>Browser CI Image</b></summary>",
+            "",
+            "| Field | Value |",
+            "|:------|:------|",
+            f"| Plan | `{md_cell(browser_image_plan or 'Not Reported')}` |",
+            f"| Image ref | `{md_cell(browser_image_ref or 'Not Reported')}` |",
+            (
+                "| Inputs fingerprint | "
+                f"`{md_cell(browser_image_inputs_fingerprint or 'Not Reported')}` |"
+            ),
+            "",
+            "</details>",
+        ]
+    out += ["", "</details>"]
 
     out += [
         "",

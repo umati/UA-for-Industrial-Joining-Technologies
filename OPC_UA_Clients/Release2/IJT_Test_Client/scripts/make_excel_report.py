@@ -99,6 +99,7 @@ _DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-compliance-report.json"
 _DEFAULT_BASELINE_JSON = _PROJECT_ROOT / "test-results" / "report-baseline.json"
 _CU_COMPLIANCE_KEYS = {"supported", "partial", "not_supported", "blocked", "action_needed", "untested"}
 _FINDING_OUTCOMES = {"partial", "not_supported", "blocked", "action_needed"}
+_NOT_APPLICABLE = "Not Applicable"
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
@@ -347,19 +348,19 @@ def _supported_set(cu_payload: dict[str, Any]) -> set[str] | None:
 
 def _server_profile_cu_count(cu_keys: list[str], supported: set[str] | None) -> int | str:
     if supported is None:
-        return "n/a"
+        return _NOT_APPLICABLE
     return len([cu_key for cu_key in cu_keys if cu_key in supported])
 
 
 def _in_server_profile(cu_key: str, supported: set[str] | None) -> str:
     if supported is None:
-        return "n/a"
+        return _NOT_APPLICABLE
     return "Yes" if cu_key in supported else "No"
 
 
 def _server_profile_pct(server_profile_cus: int | str, total: int) -> str:
     if not isinstance(server_profile_cus, int):
-        return "n/a"
+        return _NOT_APPLICABLE
     return _pct(server_profile_cus, total)
 
 
@@ -371,7 +372,7 @@ def _server_supported_cu_keys(cu_keys: list[str], supported: set[str] | None) ->
 
 def _supported_cus_validated_count(cu_keys: list[str], by_cu: dict[str, Any], supported: set[str] | None) -> int | str:
     if supported is None:
-        return "n/a"
+        return _NOT_APPLICABLE
     counts = _count_cu_outcomes(_server_supported_cu_keys(cu_keys, supported), by_cu)
     return counts["supported"] + counts["partial"]
 
@@ -380,7 +381,7 @@ def _supported_cus_validated_pct(cu_keys: list[str], by_cu: dict[str, Any], supp
     server_supported_count = _server_profile_cu_count(cu_keys, supported)
     validated_count = _supported_cus_validated_count(cu_keys, by_cu, supported)
     if not isinstance(server_supported_count, int) or not isinstance(validated_count, int):
-        return "n/a"
+        return _NOT_APPLICABLE
     return _pct(validated_count, server_supported_count)
 
 
@@ -400,7 +401,7 @@ def _run_logs_url() -> str:
     run_id = os.environ.get("GITHUB_RUN_ID")
     if server and repo and run_id:
         return f"{server}/{repo}/actions/runs/{run_id}"
-    return "n/a"
+    return _NOT_APPLICABLE
 
 
 def _package_version(package: str) -> str:
@@ -566,6 +567,18 @@ def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) 
     return "; ".join(notes)
 
 
+def _test_status_label(status: str) -> str:
+    """Return the user-facing Excel label for a pytest outcome."""
+    return {
+        "passed": "Passed",
+        "failed": "Failed",
+        "error": "Error",
+        "skipped": "Skipped",
+        "xfailed": "Expected Failure",
+        "xpassed": "Unexpected Pass",
+    }.get(status, status.replace("_", " ").title())
+
+
 def _build_report_context(
     cu_payload: dict[str, Any] | None,
     profiles: dict[str, ProfileInfo],
@@ -675,25 +688,25 @@ def _support_rows(context: dict[str, Any], facets: dict[str, FacetInfo], limit: 
 
 def _compliance_status(counts: Counter[str], total: int) -> str:
     if counts["action_needed"]:
-        return "FAILED"
+        return "Failed"
     if counts["blocked"]:
-        return "BLOCKED"
+        return "Blocked"
     if counts["partial"] or counts["not_supported"]:
-        return "SUPPORTED WITH NOTES"
+        return "Supported With Notes"
     if total and counts["supported"] == total:
-        return "SUPPORTED"
+        return "Supported"
     if counts["supported"]:
-        return "SUPPORTED WITH NOTES"
-    return "NO COMPLIANCE RESULT"
+        return "Supported With Notes"
+    return "No Compliance Result"
 
 
 def _status_fill(status: str) -> PatternFill:
     colour = {
-        "SUPPORTED": _LIGHT_GREEN,
-        "SUPPORTED WITH NOTES": _LIGHT_GREEN_NOTE,
-        "BLOCKED": _LIGHT_ORANGE,
-        "FAILED": _LIGHT_RED,
-        "NO COMPLIANCE RESULT": _GRAY,
+        "Supported": _LIGHT_GREEN,
+        "Supported With Notes": _LIGHT_GREEN_NOTE,
+        "Blocked": _LIGHT_ORANGE,
+        "Failed": _LIGHT_RED,
+        "No Compliance Result": _GRAY,
     }.get(status, _WHITE)
     return _fill(colour)
 
@@ -703,7 +716,7 @@ def _review_status_fill(status: str) -> PatternFill:
 
 
 def _percentage_fill(value: str | float | None) -> PatternFill:
-    if value is None or value == "n/a":
+    if value is None or value == _NOT_APPLICABLE:
         return _fill(_GRAY)
     if isinstance(value, str):
         try:
@@ -725,7 +738,7 @@ def _percentage_fill(value: str | float | None) -> PatternFill:
 
 def _pct(numerator: int, denominator: int) -> str:
     if denominator <= 0:
-        return "n/a"
+        return _NOT_APPLICABLE
     return f"{(numerator * 100 / denominator):.1f}%"
 
 
@@ -811,7 +824,7 @@ def _write_failure_banner(ws, row: int) -> None:
         row=row,
         column=2,
         value=(
-            "FAILED - this workbook was generated for diagnostics after a failed test run. "
+            "Failed - this workbook was generated for diagnostics after a failed test run. "
             "Coverage may be partial; review the Failures sheet and runner output first."
         ),
     )
@@ -835,8 +848,8 @@ def _build_cover(
 
     statuses = [case.status for case in cases]
     failed = statuses.count("failed") + statuses.count("error")
-    status = "PASSED" if failed == 0 and run_result != "failed" else "FAILED"
-    _status_emoji = "🟢" if status == "PASSED" else "🔴"
+    status = "Passed" if failed == 0 and run_result != "failed" else "Failed"
+    _status_emoji = "🟢" if status == "Passed" else "🔴"
     ws.merge_cells("A1:G1")
     title = ws["A1"]
     if context:
@@ -854,7 +867,7 @@ def _build_cover(
     else:
         title.value = f"{_status_emoji} {status} · conformance profile unavailable"
     title.font = Font(bold=True, size=24)
-    title.fill = _fill(_LIGHT_GREEN if status == "PASSED" else _LIGHT_RED)
+    title.fill = _fill(_LIGHT_GREEN if status == "Passed" else _LIGHT_RED)
     title.alignment = Alignment(horizontal="center")
 
     if run_result == "failed":
@@ -1017,7 +1030,7 @@ def _build_all_tests(wb: openpyxl.Workbook, cases: list[TestCase]) -> None:
                 c.area,
                 c.file,
                 c.short_name,
-                c.status.upper(),
+                _test_status_label(c.status),
                 round(c.duration, 3),
                 c.message,
             ],
@@ -1107,8 +1120,8 @@ def _build_profile_coverage(
             ("Server", server),
             ("Server capability profile", profiles.get(active, ProfileInfo(active, active or "Unknown", "", [])).name),
             ("Official IJT CUs", summary.get("official_cu_count", len(by_cu))),
-            ("Server supported CUs", len(supported) if supported is not None else "n/a"),
-            ("Workbook test cases", summary.get("workbook_case_count", "n/a")),
+            ("Server supported CUs", len(supported) if supported is not None else _NOT_APPLICABLE),
+            ("Workbook test cases", summary.get("workbook_case_count", _NOT_APPLICABLE)),
         ],
     )
 
