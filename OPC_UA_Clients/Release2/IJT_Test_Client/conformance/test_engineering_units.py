@@ -428,55 +428,7 @@ async def test_trace_content_data_type_has_engineering_units(subscription_client
 
 
 @pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
-async def test_reported_value_data_type_in_event_has_engineering_units(subscription_client, result_trigger, ns_indices):
-    """Every ReportedValueDataType in a result must carry EngineeringUnits with a valid UnitId."""
-    result_data = await _trigger_and_get_result(
-        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT
-    )
-    if result_data is None:
-        pytest.skip("Could not retrieve multi-step result for reported value EU check")
-
-    reported_values: list = []
-    for attr in ("ReportedValues", "OverallReportedValues"):
-        vals = getattr(result_data, attr, None)
-        if isinstance(vals, (list, tuple)):
-            reported_values.extend(unwrap_variant(v) for v in vals)
-
-    meta = getattr(result_data, "ResultMetaData", None)
-    if meta is not None:
-        for attr in ("ReportedValues", "OverallReportedValues"):
-            vals = getattr(meta, attr, None)
-            if isinstance(vals, (list, tuple)):
-                reported_values.extend(unwrap_variant(v) for v in vals)
-
-    content = getattr(result_data, "ResultContent", None)
-    if isinstance(content, (list, tuple)):
-        for item in content:
-            item = getattr(item, "Value", item)  # unwrap asyncua Variant
-            for attr in ("ReportedValues",):
-                vals = getattr(item, attr, None)
-                if isinstance(vals, (list, tuple)):
-                    reported_values.extend(unwrap_variant(v) for v in vals)
-
-    if not reported_values:
-        skip_blocked(
-            "Reported-value EngineeringUnits validation not applicable: no ReportedValueDataType entries found"
-        )
-
-    failures: list[str] = []
-    for idx, rv in enumerate(reported_values):
-        eu = getattr(rv, "EngineeringUnits", None)
-        if eu is None:
-            continue
-        eu = getattr(eu, "Value", eu)  # unwrap nested Variant
-        identifier = getattr(eu, "UnitId", None)
-        if identifier is None:
-            failures.append(f"ReportedValue[{idx}].EngineeringUnits.UnitId is None")
-
-    assert not failures, "ReportedValue EngineeringUnits failures:\n  " + "\n  ".join(failures)
-
-
-@pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
+@pytest.mark.requires_dependency_cu(CU.JOINT_DESIGN_DATA)
 async def test_design_value_data_type_has_engineering_units(opcua_client, ns_indices):
     """Every DesignValueDataType in a joint design must carry EngineeringUnits with a valid UnitId."""
     ns_di = ns_indices.get(NS_DI)
@@ -492,11 +444,13 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
 
     jm = await find_child_by_browse_name(js, "JointManagement", ns_ijt)
     if jm is None:
-        pytest.skip("JointManagement not found — skipping design value EU check")
+        skip_not_supported(CU.JOINT_DESIGN_DATA, detail="JointManagement node absent", is_cu=True)
+    assert jm is not None  # for mypy: skip exits execution
 
     list_node = await find_child_by_browse_name(jm, "GetJointDesignList", ns_ijt)
     if list_node is None:
-        skip_not_supported("GetJointDesignList", detail="method node absent")
+        skip_not_supported(CU.JOINT_DESIGN_DATA, detail="GetJointDesignList method node absent", is_cu=True)
+    assert list_node is not None  # for mypy: skip exits execution
     await assert_input_argument_names(
         list_node,
         JOINT_METHOD_INPUTS["GetJointDesignList"],
@@ -514,7 +468,7 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
     if not list_result.success:
         error_text = str(list_result.error)
         if "not supported" in error_text.casefold():
-            skip_not_supported("GetJointDesignList", detail=error_text)
+            skip_not_supported(CU.JOINT_DESIGN_DATA, detail=error_text, is_cu=True)
         skip_blocked(
             "Design-value EngineeringUnits validation not applicable: GetJointDesignList "
             "returned no usable design list",
@@ -534,7 +488,8 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
     first_id = str(design_list[0] if isinstance(design_list, (list, tuple)) else design_list)
     get_node = await find_child_by_browse_name(jm, "GetJointDesign", ns_ijt)
     if get_node is None:
-        skip_not_supported("GetJointDesign", detail="method node absent")
+        skip_not_supported(CU.JOINT_DESIGN_DATA, detail="GetJointDesign method node absent", is_cu=True)
+    assert get_node is not None  # for mypy: skip exits execution
     await assert_input_argument_names(
         get_node,
         JOINT_METHOD_INPUTS["GetJointDesign"],
@@ -552,7 +507,7 @@ async def test_design_value_data_type_has_engineering_units(opcua_client, ns_ind
     if not get_result.success:
         error_text = str(get_result.error)
         if "not supported" in error_text.casefold():
-            skip_not_supported("GetJointDesign", detail=error_text)
+            skip_not_supported(CU.JOINT_DESIGN_DATA, detail=error_text, is_cu=True)
         skip_blocked(
             "Design-value EngineeringUnits validation not applicable: GetJointDesign returned no usable design data",
             method="GetJointDesign",

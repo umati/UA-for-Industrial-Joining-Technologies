@@ -738,27 +738,12 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
     if len(rows) > limit:
         lines.append("")
         lines.append(
-            "_Capability area counts: "
+            "_Showing the most relevant capability areas here. Full capability detail is in IJT Facet Breakdown. "
+            "Capability area counts: "
             f"{summary_counts['Supported']} Supported · "
             f"{summary_counts['Partially Supported']} Partially Supported · "
             f"{summary_counts['Not Supported']} Not Supported._"
         )
-        lines.append("")
-        lines.append("<details open>")
-        lines.append("<summary><b>All capability areas</b></summary>")
-        lines.append("")
-        table_rows = [
-            [_md_cell(name), icon, label, _md_cell(description)] for _rank, name, icon, label, description in rows
-        ]
-        lines.extend(
-            pad_table_rows(
-                ["Capability Area", "🚦", "Support", "Scope"],
-                table_rows,
-                ["left", "center", "left", "left"],
-            )
-        )
-        lines.append("")
-        lines.append("</details>")
     lines.append("")
     return lines
 
@@ -881,6 +866,43 @@ def _render_diagnostics(data: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _render_cus_needing_review(context: dict[str, Any]) -> list[str]:
+    """Render the action-first CU review table."""
+    findings: list[dict[str, Any]] = context["findings"]
+    all_cu_keys: list[str] = context["all_cu_keys"]
+    lines = [
+        '<a id="system-cus-needing-review"></a>',
+        "",
+        f"## 📋 CUs Needing Review — {_plural_label(len(findings), 'row')}",
+        "",
+        f"_Review rows only. Full {len(all_cu_keys)}-CU detail remains in `report.xlsx` and `report.html`._",
+        "",
+    ]
+    if findings:
+        lines.append(
+            f"| Status | CU | Server Supported | Reason | Tests | Passed | "
+            f"{_plain_outcome_label('not_supported')} | {_plain_outcome_label('blocked')} | Failures |"
+        )
+        lines.append("|---|---|---|---|---:|---:|---:|---:|---:|")
+        for finding in findings:
+            cells = [
+                _format_status_label(str(finding["status"])),
+                _md_cell(str(finding["cu"])),
+                str(finding["server_supported"]),
+                _md_cell(str(finding["reason"]) or "See test details"),
+                str(finding["tests"]),
+                str(finding["passed"]),
+                str(finding["not_supported"]),
+                str(finding["blocked"]),
+                str(finding["failed"]),
+            ]
+            lines.append("| " + " | ".join(cells) + " |")
+    else:
+        lines.append("_No CUs need review._")
+    lines.append("")
+    return lines
+
+
 def _render_profile_facet_summary(
     cu_payload: dict[str, Any] | None,
     *,
@@ -894,11 +916,11 @@ def _render_profile_facet_summary(
     facets: dict[str, dict[str, Any]] = context["facets"]
     by_cu: dict[str, Any] = context["by_cu"]
     supported: set[str] | None = context["supported"]
-    all_cu_keys: list[str] = context["all_cu_keys"]
 
     lines: list[str] = []
-    lines.extend(_render_supports_block(context))
     lines.extend(_render_review_sections(context))
+    lines.extend(_render_cus_needing_review(context))
+    lines.extend(_render_supports_block(context))
 
     lines.append("## 📐 IJT Facet Breakdown")
     lines.append("")
@@ -922,34 +944,6 @@ def _render_profile_facet_summary(
         )
     lines.append("")
     lines.append("</details>")
-    lines.append("")
-
-    findings: list[dict[str, Any]] = context["findings"]
-    lines.append(f"## 📋 CUs Needing Review — {_plural_label(len(findings), 'row')}")
-    lines.append("")
-    lines.append(f"_Review rows only. Full {len(all_cu_keys)}-CU detail remains in `report.xlsx` and `report.html`._")
-    lines.append("")
-    if findings:
-        lines.append(
-            f"| Status | CU | Server Supported | Reason | Tests | Passed | "
-            f"{_plain_outcome_label('not_supported')} | {_plain_outcome_label('blocked')} | Failures |"
-        )
-        lines.append("|---|---|---|---|---:|---:|---:|---:|---:|")
-        for finding in findings:
-            cells = [
-                _format_status_label(str(finding["status"])),
-                _md_cell(str(finding["cu"])),
-                str(finding["server_supported"]),
-                _md_cell(str(finding["reason"]) or "See test details"),
-                str(finding["tests"]),
-                str(finding["passed"]),
-                str(finding["not_supported"]),
-                str(finding["blocked"]),
-                str(finding["failed"]),
-            ]
-            lines.append("| " + " | ".join(cells) + " |")
-    else:
-        lines.append("_No CUs need review._")
     lines.append("")
 
     lines.append("<details>")

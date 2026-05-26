@@ -105,6 +105,19 @@ def _joining_result_has_final_tag(joining_result) -> bool:
     return False
 
 
+def _reported_value_field_failures(label: str, payload) -> list[str]:
+    """Return non-empty Result/ReportedValueDataType field violations."""
+    payload = _unwrap_variant(payload)
+    failures: list[str] = []
+    for attr in ("ReportedValues", "OverallReportedValues"):
+        if not hasattr(payload, attr):
+            continue
+        value = getattr(payload, attr)
+        if value not in (None, [], ()):
+            failures.append(f"{label}.{attr} is present and non-empty")
+    return failures
+
+
 async def _get_result(
     subscription_client,
     result_trigger,
@@ -158,6 +171,30 @@ async def test_single_result_has_result_meta_data(subscription_client, result_tr
     result_data, meta = await _get_result(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
     assert meta is not None, "Result collected from event has no 'ResultMetaData' attribute."
+
+
+@pytest.mark.requires_cu(CU.BASIC_RESULT)
+async def test_result_payload_excludes_reported_value_data_type(subscription_client, result_trigger, ns_indices):
+    """Result payloads must not carry ReportedValueDataType fields.
+
+    ReportedValueDataType belongs to JoiningSystemEventType and
+    JoiningSystemConditionType payloads, not to ResultDataType or
+    JoiningSystemResultReadyEventType result payloads.
+    """
+    result_data, meta = await _get_result(subscription_client, result_trigger, ns_indices)
+    _skip_if_no_result(result_data, result_trigger)
+
+    failures = _reported_value_field_failures("Result", result_data)
+    if meta is not None:
+        failures.extend(_reported_value_field_failures("Result.ResultMetaData", meta))
+
+    for index, item in enumerate(getattr(result_data, "ResultContent", None) or []):
+        failures.extend(_reported_value_field_failures(f"Result.ResultContent[{index}]", item))
+
+    assert not failures, (
+        "Result payload contains ReportedValueDataType fields, but ReportedValueDataType belongs "
+        "only to JoiningSystemEventType or JoiningSystemConditionType payloads:\n  " + "\n  ".join(failures)
+    )
 
 
 @pytest.mark.requires_cu(CU.BASIC_RESULT)

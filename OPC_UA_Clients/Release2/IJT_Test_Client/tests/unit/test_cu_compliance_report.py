@@ -8,7 +8,9 @@ import pytest
 from helpers.cu_compliance_report import (
     CuComplianceReportRecorder,
     _classify_report,
+    _dependency_cus_for_not_supported_reason,
     _marker_cus,
+    _marker_dependency_cus,
     _rollup_compliance,
     _rollup_outcome,
     _skip_text,
@@ -16,8 +18,9 @@ from helpers.cu_compliance_report import (
 
 
 class _Marker:
-    def __init__(self, *args):
+    def __init__(self, *args, name: str = "requires_cu"):
         self.args = args
+        self.name = name
 
 
 class _Item:
@@ -28,7 +31,7 @@ class _Item:
         self._markers = markers
 
     def iter_markers(self, name):
-        return self._markers if name == "requires_cu" else []
+        return [marker for marker in self._markers if marker.name == name]
 
 
 class _Report:
@@ -73,6 +76,29 @@ def test_marker_cus_returns_unique_sorted_strings():
     assert _marker_cus(item) == ["a_cu", "z_cu"]
 
 
+def test_marker_dependency_cus_returns_unique_sorted_strings():
+    item = _Item(
+        nodeid="n",
+        fspath=Path("test_file.py"),
+        name="test_case",
+        markers=[
+            _Marker("engineering_units"),
+            _Marker("joint_design_data", "engineering_units", name="requires_dependency_cu"),
+        ],
+    )
+
+    assert _marker_cus(item) == ["engineering_units"]
+    assert _marker_dependency_cus(item) == ["engineering_units", "joint_design_data"]
+
+
+def test_dependency_cus_for_not_supported_reason_matches_public_cu_label():
+    reason = "Skipped: IJT Joint Design Data NOT SUPPORTED"
+
+    assert _dependency_cus_for_not_supported_reason(reason, ["joint_design_data", "engineering_units"]) == [
+        "joint_design_data"
+    ]
+
+
 def test_skip_text_prefers_longreprtext():
     report = _Report(longrepr="fallback", longreprtext="expanded reason")
 
@@ -100,6 +126,30 @@ def test_classify_report_maps_pytest_outcomes():
     assert (
         _classify_report(_Report(skipped=True, longrepr=("file.py", 1, "Skipped: ENVIRONMENT - asyncua limitation")))
         == "environment"
+    )
+    assert (
+        _classify_report(
+            _Report(skipped=True, longrepr=("file.py", 1, "Skipped: TOOLING LIMITATION - asyncua AddNodes"))
+        )
+        == "environment"
+    )
+    assert (
+        _classify_report(
+            _Report(
+                skipped=True,
+                longrepr=("file.py", 1, "Skipped: SIMULATOR REGRESSION LIMIT - SimulateBulkResults"),
+            )
+        )
+        == "accepted_policy"
+    )
+    assert (
+        _classify_report(
+            _Report(
+                skipped=True,
+                longrepr=("file.py", 1, "Skipped: COMPANION SPEC PROFILE NOTE - Monitoring.Notifications"),
+            )
+        )
+        == "accepted_policy"
     )
     assert _classify_report(_Report(skipped=True, longrepr=("file.py", 1, "Skipped: precondition unavailable"))) == (
         "blocked"
@@ -188,6 +238,69 @@ def test_recorder_writes_cu_compliance_json(report_tmp_path, monkeypatch):
     assert reasons["conformance/test_file.py::test_not_supported"] == (
         "Skipped: AcknowledgeResults method: Not Supported"
     )
+
+
+def test_recorder_attributes_not_supported_dependency_to_dependency_cu(report_tmp_path, monkeypatch):
+    output = report_tmp_path / "reports" / "cu-compliance-report.json"
+    monkeypatch.setenv("IJT_CU_COMPLIANCE_REPORT_FILE", str(output))
+    test_file = report_tmp_path / "conformance" / "test_file.py"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text("# test placeholder\n", encoding="utf-8")
+
+    recorder = CuComplianceReportRecorder(
+        root=report_tmp_path,
+        all_cus=["engineering_units", "joint_design_data"],
+        supported_cus=["engineering_units"],
+    )
+    items = [
+        _Item(
+            nodeid="conformance/test_file.py::test_engineering_units_pass",
+            fspath=test_file,
+            name="test_engineering_units_pass",
+            markers=[_Marker("engineering_units")],
+        ),
+        _Item(
+            nodeid="conformance/test_file.py::test_design_value_engineering_units",
+            fspath=test_file,
+            name="test_design_value_engineering_units",
+            markers=[
+                _Marker("engineering_units"),
+                _Marker("joint_design_data", name="requires_dependency_cu"),
+            ],
+        ),
+    ]
+
+    recorder.pytest_collection_modifyitems(None, None, items)
+    recorder.pytest_runtest_logreport(
+        _Report(
+            nodeid="conformance/test_file.py::test_engineering_units_pass",
+            passed=True,
+            duration=0.1,
+        )
+    )
+    recorder.pytest_runtest_logreport(
+        _Report(
+            nodeid="conformance/test_file.py::test_design_value_engineering_units",
+            when="setup",
+            skipped=True,
+            longrepr=("file.py", 9, "Skipped: IJT Joint Design Data NOT SUPPORTED"),
+        )
+    )
+    recorder.pytest_sessionfinish(None, 0)
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["by_cu"]["engineering_units"]["outcome"] == "passed"
+    assert payload["by_cu"]["engineering_units"]["compliance"] == "supported"
+    assert payload["by_cu"]["engineering_units"]["not_supported"] == 0
+    assert payload["by_cu"]["joint_design_data"]["outcome"] == "not_supported"
+    assert payload["by_cu"]["joint_design_data"]["compliance"] == "not_supported"
+    dependency_entry = next(
+        entry
+        for entry in payload["tests"]
+        if entry["nodeid"] == "conformance/test_file.py::test_design_value_engineering_units"
+    )
+    assert dependency_entry["cus"] == ["joint_design_data"]
+    assert "dependency_cus" not in dependency_entry
 
 
 def test_recorder_does_not_overwrite_main_report_during_collect_only(report_tmp_path, monkeypatch):

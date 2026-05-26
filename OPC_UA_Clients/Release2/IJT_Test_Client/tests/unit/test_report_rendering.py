@@ -349,6 +349,13 @@ def test_format_status_count_and_label_use_shared_icons():
     assert (
         _report_scoring.format_status_label(supported) == f"{_report_scoring.NON_KPI_ICONS[supported]}&nbsp;{supported}"
     )
+    assert _report_scoring.format_status_label(NOT_SUPPORTED) == (
+        f"{_report_scoring.KPI_ICONS[NOT_SUPPORTED]}&nbsp;Not&nbsp;Supported"
+    )
+    assert _report_scoring.format_status_label(WITH_NOTES) == (
+        f"{_report_scoring.KPI_ICONS[WITH_NOTES]}&nbsp;With&nbsp;Notes"
+    )
+    assert _report_scoring.format_status_label("Custom Status") == "Custom&nbsp;Status"
 
 
 def test_status_mapping():
@@ -395,8 +402,11 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
     assert "## 📝 Server Scope Notes" not in rendered
     assert "## 📐 IJT Facet Breakdown" in rendered
     assert "## 📋 CUs Needing Review — 2 rows" in rendered
+    assert '<a id="system-cus-needing-review"></a>' in rendered
+    assert rendered.index("## 📋 CUs Needing Review") < rendered.index("## 🧩 IJT Facet Support")
     assert "_Review rows only. Full 4-CU detail remains in `report.xlsx` and `report.html`._" in rendered
     assert "<summary><b>2 facet rows</b></summary>" in rendered
+    assert "All capability areas" not in rendered
     assert "<summary><b>Coverage Overview</b></summary>" not in rendered
     assert "<summary><b>Conformance Status</b></summary>" not in rendered
     assert "<summary><b>Full CU Coverage</b></summary>" not in rendered

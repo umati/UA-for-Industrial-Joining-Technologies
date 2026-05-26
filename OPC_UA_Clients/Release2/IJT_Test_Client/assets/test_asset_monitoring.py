@@ -23,6 +23,7 @@ import pytest
 
 from helpers.namespaces import BN, NS_MACHINERY
 from helpers.node_discovery import find_child_by_browse_name
+from helpers.skip_reasons import skip_companion_spec_note
 
 pytestmark = [pytest.mark.live, pytest.mark.conformance, pytest.mark.structure]
 
@@ -89,7 +90,9 @@ async def test_controllers_monitoring_has_notifications(controllers_instances, n
         if notif is None:
             missing.append(name)
     if missing:
-        pytest.skip(f"Monitoring.Notifications not exposed for controller(s) in this server profile: {missing}")
+        skip_companion_spec_note(
+            f"Monitoring.Notifications not exposed for controller(s) in this server profile: {missing}"
+        )
 
 
 async def test_controllers_monitoring_has_machinery_item_state(controllers_instances, ns_indices):
@@ -107,7 +110,9 @@ async def test_controllers_monitoring_has_machinery_item_state(controllers_insta
         if mis is None:
             missing.append(name)
     if missing:
-        pytest.skip(f"Monitoring.MachineryItemState not exposed for controller(s) in this server profile: {missing}")
+        skip_companion_spec_note(
+            f"Monitoring.MachineryItemState not exposed for controller(s) in this server profile: {missing}"
+        )
 
 
 # ─── Tools — MachineryBuildingBlocks ─────────────────────────────────────────
@@ -154,7 +159,7 @@ async def test_tools_monitoring_has_notifications(tools_instances, ns_indices):
         if notif is None:
             missing.append(name)
     if missing:
-        pytest.skip(f"Monitoring.Notifications not exposed for tool(s) in this server profile: {missing}")
+        skip_companion_spec_note(f"Monitoring.Notifications not exposed for tool(s) in this server profile: {missing}")
 
 
 async def test_tools_monitoring_has_machinery_item_state(tools_instances, ns_indices):
@@ -172,7 +177,9 @@ async def test_tools_monitoring_has_machinery_item_state(tools_instances, ns_ind
         if mis is None:
             missing.append(name)
     if missing:
-        pytest.skip(f"Monitoring.MachineryItemState not exposed for tool(s) in this server profile: {missing}")
+        skip_companion_spec_note(
+            f"Monitoring.MachineryItemState not exposed for tool(s) in this server profile: {missing}"
+        )
 
 
 async def test_tools_monitoring_has_health_folder(tools_instances, ns_indices):

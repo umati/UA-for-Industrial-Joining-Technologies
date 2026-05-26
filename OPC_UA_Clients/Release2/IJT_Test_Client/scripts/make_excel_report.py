@@ -13,7 +13,7 @@ Sheets produced:
   Profile Coverage Comparison — IJT coverage overview, when CU JSON is present
   All Test Cases              — every test: name, file, status, duration, skip/fail reason
   Test Failures               — only failed tests with full message
-  Skipped Test Cases          — only skipped tests with reason
+  Skipped Test Cases          — only skipped tests with category and reason
   Expected Failures           — xfailed and xpassed tests with reason
 
 Usage:
@@ -522,6 +522,39 @@ def _reason_bucket(message: str) -> str:
     if len(msg) > 180:
         return f"{msg[:177].rstrip()}..."
     return msg
+
+
+def _skip_diagnostic_category(message: str) -> str:
+    """Return the user-facing diagnostic category for one skipped test."""
+    normalized = re.sub(r"\s+", " ", str(message or "").strip())
+    normalized = re.sub(r"^Skipped:\s*", "", normalized, flags=re.IGNORECASE)
+    reason_lower = normalized.lower()
+    if reason_lower.startswith("tooling limitation -"):
+        return "Test Tooling Limitations"
+    if (
+        "asyncua addnodes service call unavailable" in reason_lower
+        or "asyncua deletenodes service call unavailable" in reason_lower
+    ):
+        return "Test Tooling Limitations"
+    if reason_lower.startswith("companion spec profile note -"):
+        return "Companion Spec Profile Notes"
+    if reason_lower.startswith("monitoring.") or "lifetimecounters" in reason_lower:
+        return "Companion Spec Profile Notes"
+    if reason_lower.startswith("simulator regression limit -"):
+        return "Simulator Regression Limits"
+    if "simulatebulkresults" in reason_lower and (
+        "badtoomanyoperations" in reason_lower
+        or "concurrent access limit" in reason_lower
+        or "stability guard" in reason_lower
+    ):
+        return "Simulator Regression Limits"
+    if "simulatebulkevents" in reason_lower and (
+        "badtoomanyoperations" in reason_lower
+        or "subscription limit" in reason_lower
+        or "stability guard" in reason_lower
+    ):
+        return "Simulator Regression Limits"
+    return "Other Diagnostics"
 
 
 def _cu_test_index(cu_payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -1048,6 +1081,7 @@ def _build_filtered(
     wb: openpyxl.Workbook, cases: list[TestCase], sheet_name: str, statuses: list[str], colour: str
 ) -> None:
     filtered = [c for c in cases if c.status in statuses]
+    include_skip_category = statuses == ["skipped"] and sheet_name == "Skipped Test Cases"
     ws = wb.create_sheet(f"{sheet_name} ({len(filtered)})")
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = "A2"
@@ -1060,10 +1094,23 @@ def _build_filtered(
 
     headers = ["Area", "File", "Test Name", "Duration (s)", "Reason / Message"]
     col_widths = [15, 35, 55, 12, 80]
+    if include_skip_category:
+        headers = ["Area", "File", "Test Name", "Duration (s)", "Category", "Reason / Message"]
+        col_widths = [15, 35, 55, 12, 30, 80]
     _apply_header(ws, 1, headers, col_widths)
 
     for row_idx, c in enumerate(filtered, start=2):
-        for col, val in enumerate([c.area, c.file, c.short_name, round(c.duration, 3), c.message], start=1):
+        values = [c.area, c.file, c.short_name, round(c.duration, 3), c.message]
+        if include_skip_category:
+            values = [
+                c.area,
+                c.file,
+                c.short_name,
+                round(c.duration, 3),
+                _skip_diagnostic_category(c.message),
+                c.message,
+            ]
+        for col, val in enumerate(values, start=1):
             cell = ws.cell(row=row_idx, column=col, value=val)
             cell.fill = _fill(colour)
             cell.alignment = Alignment(wrap_text=True, vertical="top")

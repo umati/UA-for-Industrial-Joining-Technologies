@@ -66,6 +66,11 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
+        "requires_dependency_cu(cu_key, ...): skip this test when a prerequisite "
+        "conformance unit is outside the active server profile",
+    )
+    config.addinivalue_line(
+        "markers",
         "workbook_ref(sheet, rows): optional exact Test Cases workbook sheet/row traceability for a test",
     )
     config.addinivalue_line("markers", "live: requires a live OPC UA server")
@@ -148,6 +153,10 @@ def pytest_runtest_setup(item):
         return  # no profile loaded → run everything
 
     for marker in item.iter_markers("requires_cu"):
+        for cu_key in marker.args:
+            if cu_key not in _SUPPORTED_CUS:
+                pytest.skip(get_skip_reason(cu_key))
+    for marker in item.iter_markers("requires_dependency_cu"):
         for cu_key in marker.args:
             if cu_key not in _SUPPORTED_CUS:
                 pytest.skip(get_skip_reason(cu_key))

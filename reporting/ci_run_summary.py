@@ -747,6 +747,13 @@ def main() -> None:
             f"&nbsp;·&nbsp; **Run:** {run_link}"
         ),
         "",
+        (
+            "> Full report below: [Outcome](#ci-outcome-overview) · "
+            "[Validation](#ci-validation-results) · [Code Quality](#ci-code-quality-checks) · "
+            "[Security](#ci-source-dependency-security) · [Infrastructure](#ci-infrastructure) · "
+            "[Timing](#ci-performance-timings) · [Skip Details](#ci-skip-details)"
+        ),
+        "",
         "---",
         "",
         '<a id="ci-outcome-overview"></a>',
@@ -850,14 +857,18 @@ def main() -> None:
         "",
         '<a id="ci-source-dependency-security"></a>',
         "",
-        f"### 🔒 Source and Dependency Security — {security_component_count} components scanned",
+        f"### 🔒 Source and Dependency Security — {security_component_count} components",
         "",
-        "Bandit scans Python source. pip-audit, npm audit, and NuGet audit scan dependencies.",
-        "",
+        "- **Audit and Code Scanning**",
+        "  - Bandit scans Python source for security issues.",
         (
-            "See also: CI Infrastructure for zizmor, Pre-commit Hooks for detect-secrets, "
-            "and Security — CodeQL for semantic analysis."
+            "  - pip-audit, npm audit, and NuGet audit scan package dependencies "
+            "for known vulnerabilities."
         ),
+        "- **Related Security Checks**",
+        "  - CI Infrastructure runs zizmor for GitHub Actions workflow security.",
+        "  - Pre-commit Hooks runs detect-secrets for committed secret detection.",
+        "  - Security — CodeQL runs semantic code analysis.",
         "",
         "| 🚦 | Component | Security Scan | Dependency Audit |",
         "|:--:|:----------|:--------------|:-----------------|",
@@ -978,12 +989,25 @@ def main() -> None:
             "",
             "---",
             "",
+            '<a id="ci-skip-details"></a>',
+            "",
             (
                 f"### ⏭️ Skip Details — {plural_label(suite_count, 'suite')}, "
                 f"{plural_label(skip_count, 'skip')}"
             ),
         ]
         out += skip_sections
+    else:
+        out += [
+            "",
+            "---",
+            "",
+            '<a id="ci-skip-details"></a>',
+            "",
+            "### ⏭️ Skip Details — 0 suites, 0 skips",
+            "",
+            "No skipped tests reported.",
+        ]
 
     # ── Skip budget check (computed earlier; render here) ───────────────
     if budget_warnings:

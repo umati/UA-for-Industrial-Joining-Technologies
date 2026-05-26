@@ -134,10 +134,17 @@ def test_shift_markdown_headings_leaves_fenced_code_blocks_untouched():
 def test_load_test_client_conformance_summary_shifts_artifact_headings(tmp_path):
     """load_test_client_conformance_summary embeds the artifact with shifted headings."""
     summary = tmp_path / "summary.md"
-    summary.write_text("# IJT Conformance Test Report\n\n## Scope\n", encoding="utf-8")
+    summary.write_text(
+        "# IJT Conformance Test Report\n\n## 📋 CUs Needing Review — 1 row\n\n## Scope\n",
+        encoding="utf-8",
+    )
 
     assert system_tests_run_summary.load_test_client_conformance_summary(str(summary)) == [
         "## IJT Conformance Test Report",
+        "",
+        '<a id="system-cus-needing-review"></a>',
+        "",
+        "### 📋 CUs Needing Review — 1 row",
         "",
         "### Scope",
     ]
@@ -635,14 +642,16 @@ def test_bulleted_test_results_clean_lane():
     """Single-suite report cells use stable HTML bullets and Title Case labels."""
     result = system_tests_run_summary.bulleted_test_results((10, 10, 0, 0))
 
-    assert result == "&bull; Passed: 10<br>&bull; Skipped: 0"
+    assert result == "&bull; ✅&nbsp;Passed: 10<br>&bull; ⏭️&nbsp;Skipped: 0"
 
 
 def test_bulleted_test_results_failed_lane_includes_failed_count():
     """Failed suites keep passed/total, failed, and skipped counts visible."""
     result = system_tests_run_summary.bulleted_test_results((10, 7, 2, 1))
 
-    assert result == "&bull; Passed: 7 / 10<br>&bull; Failed: 2<br>&bull; Skipped: 1"
+    assert result == (
+        "&bull; ✅&nbsp;Passed: 7 / 10<br>&bull; ❌&nbsp;Failed: 2<br>&bull; ⏭️&nbsp;Skipped: 1"
+    )
 
 
 def test_bulleted_test_results_not_reported_lane():
@@ -661,11 +670,48 @@ def test_bulleted_multilane_test_results_indents_sub_counts():
 
     assert result == (
         "&bull; Python<br>"
-        "&nbsp;&nbsp;&bull; Passed: 700<br>"
-        "&nbsp;&nbsp;&bull; Skipped: 0<br>"
+        "&nbsp;&nbsp;&bull; ✅&nbsp;Passed: 700<br>"
+        "&nbsp;&nbsp;&bull; ⏭️&nbsp;Skipped: 0<br>"
         "&bull; JavaScript<br>"
-        "&nbsp;&nbsp;&bull; Passed: 557<br>"
-        "&nbsp;&nbsp;&bull; Skipped: 0"
+        "&nbsp;&nbsp;&bull; ✅&nbsp;Passed: 557<br>"
+        "&nbsp;&nbsp;&bull; ⏭️&nbsp;Skipped: 0"
+    )
+
+
+def test_test_client_diagnostics_group_public_categories():
+    skips = [
+        ("test_a", "TOOLING LIMITATION - asyncua AddNodes service call unavailable"),
+        ("test_b", "SIMULATOR REGRESSION LIMIT - SimulateBulkResults rejected by the server"),
+        ("test_c", "COMPANION SPEC PROFILE NOTE - Monitoring.Notifications not exposed"),
+        ("test_d", "custom diagnostic"),
+        (
+            "test_e",
+            "IJT Get Result Id List Filtered - Method: GetResultIdListFiltered NOT SUPPORTED",
+        ),
+    ]
+
+    diagnostic_lines, companion_lines = (
+        system_tests_run_summary.format_test_client_diagnostic_sections(skips, len(skips))
+    )
+    diagnostics = "\n".join(diagnostic_lines)
+    companion = "\n".join(companion_lines)
+
+    assert "Test Tooling Limitations" in diagnostics
+    assert "Simulator Regression Limits" in diagnostics
+    assert "Other Diagnostics" in diagnostics
+    assert (
+        "Server capability gaps are listed in [CUs Needing Review](#system-cus-needing-review)"
+        in diagnostics
+    )
+    assert "GetResultIdListFiltered NOT SUPPORTED" not in diagnostics
+    assert "Companion Spec Profile Notes" in companion
+    assert "Monitoring.Notifications" in companion
+
+
+def test_test_client_diagnostic_note_points_to_grouped_details():
+    assert (
+        system_tests_run_summary.test_client_diagnostic_note([("test", "reason")], 1)
+        == "Capability and diagnostic notes grouped below"
     )
 
 

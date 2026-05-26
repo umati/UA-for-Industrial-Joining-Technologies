@@ -17,6 +17,7 @@ import pytest
 
 from helpers.namespaces import BN, NS_MACHINERY
 from helpers.node_discovery import find_child_by_browse_name
+from helpers.skip_reasons import companion_spec_note_reason
 
 pytestmark = [pytest.mark.live, pytest.mark.structure]
 
@@ -40,7 +41,7 @@ def _require_ns_machinery(ns_indices):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason=_SKIP_REASON)
+@pytest.mark.skip(reason=companion_spec_note_reason(_SKIP_REASON))
 async def test_tools_mbb_has_lifetime_counters(tools_instances, ns_indices):
     """Every tool MachineryBuildingBlocks must contain a LifetimeCounters AddIn (Machinery ns)."""
     ns_m = _require_ns_machinery(ns_indices)
@@ -56,7 +57,7 @@ async def test_tools_mbb_has_lifetime_counters(tools_instances, ns_indices):
     assert not missing, f"Tools without LifetimeCounters in MachineryBuildingBlocks: {missing}"
 
 
-@pytest.mark.skip(reason=_SKIP_REASON)
+@pytest.mark.skip(reason=companion_spec_note_reason(_SKIP_REASON))
 async def test_tools_lifetime_counters_has_variable(tools_instances, ns_indices):
     """LifetimeCounters on each tool must have at least one LifetimeVariable child."""
     ns_m = _require_ns_machinery(ns_indices)
@@ -79,7 +80,7 @@ async def test_tools_lifetime_counters_has_variable(tools_instances, ns_indices)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason=_SKIP_REASON)
+@pytest.mark.skip(reason=companion_spec_note_reason(_SKIP_REASON))
 async def test_controllers_mbb_has_lifetime_counters(controllers_instances, ns_indices):
     """Every controller MachineryBuildingBlocks must contain a LifetimeCounters AddIn (Machinery ns)."""
     ns_m = _require_ns_machinery(ns_indices)
@@ -95,7 +96,7 @@ async def test_controllers_mbb_has_lifetime_counters(controllers_instances, ns_i
     assert not missing, f"Controllers without LifetimeCounters in MachineryBuildingBlocks: {missing}"
 
 
-@pytest.mark.skip(reason=_SKIP_REASON)
+@pytest.mark.skip(reason=companion_spec_note_reason(_SKIP_REASON))
 async def test_controllers_lifetime_counters_has_variable(controllers_instances, ns_indices):
     """LifetimeCounters on each controller must have at least one LifetimeVariable child."""
     ns_m = _require_ns_machinery(ns_indices)

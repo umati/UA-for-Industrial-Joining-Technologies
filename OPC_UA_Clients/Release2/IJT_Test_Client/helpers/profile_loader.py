@@ -179,23 +179,10 @@ def load_all_cus_from_facets() -> FrozenSet[str]:
 
 def get_skip_reason(cu_key: str, capabilities_path: Path | None = None) -> str:
     """
-    Return a human-readable skip reason for a CU that is not supported.
-    Includes the path to the capabilities file so users know where to
-    edit to enable the test.
-    """
-    if capabilities_path is None:
-        env_path = os.environ.get("OPCUA_CAPABILITIES_FILE")
-        caps_file = Path(env_path) if env_path else _PROJECT_ROOT / _DEFAULT_CAPABILITIES_FILENAME
-    else:
-        caps_file = capabilities_path
+    Return the canonical public skip reason for a CU that is not supported.
 
-    return not_supported_reason(
-        cu_key,
-        detail=(
-            f"CU: {cu_key}. "
-            f"To enable: add it under cu_overrides in {caps_file.name} "
-            f"or switch to a profile that includes it. "
-            f"Config file: {caps_file}"
-        ),
-        is_cu=True,
-    )
+    The run summary groups unsupported server-profile CUs separately, so this
+    reason intentionally omits config-file guidance and private path details.
+    """
+    _ = capabilities_path
+    return not_supported_reason(cu_key, is_cu=True)

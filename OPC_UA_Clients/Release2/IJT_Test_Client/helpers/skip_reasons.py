@@ -58,6 +58,21 @@ def environment_reason(reason: str) -> str:
     return f"ENVIRONMENT - {reason.strip()}"
 
 
+def tooling_limitation_reason(reason: str) -> str:
+    """Return a TOOLING LIMITATION reason for test-client coverage gaps."""
+    return f"TOOLING LIMITATION - {reason.strip()}"
+
+
+def companion_spec_note_reason(reason: str) -> str:
+    """Return a COMPANION SPEC PROFILE NOTE reason for profile-specific companion-spec gaps."""
+    return f"COMPANION SPEC PROFILE NOTE - {reason.strip()}"
+
+
+def simulator_regression_limit_reason(reason: str) -> str:
+    """Return a SIMULATOR REGRESSION LIMIT reason for simulator-only stability guards."""
+    return f"SIMULATOR REGRESSION LIMIT - {reason.strip()}"
+
+
 def skip_not_supported(cu_or_method: str, *, detail: str | None = None, is_cu: bool | None = None) -> None:
     """Skip because the server profile/address space does not support a CU or method."""
     pytest.skip(not_supported_reason(cu_or_method, detail=detail, is_cu=is_cu))
@@ -81,3 +96,18 @@ def skip_accepted_policy(policy: str, *, method: str | None = None, status: str 
 def skip_environment(reason: str) -> None:
     """Skip because of a local environment condition."""
     pytest.skip(environment_reason(reason))
+
+
+def skip_tooling_limitation(reason: str) -> None:
+    """Skip because the test client cannot exercise this path yet."""
+    pytest.skip(tooling_limitation_reason(reason))
+
+
+def skip_companion_spec_note(reason: str) -> None:
+    """Skip because a companion-spec feature is outside the active profile."""
+    pytest.skip(companion_spec_note_reason(reason))
+
+
+def skip_simulator_regression_limit(reason: str) -> None:
+    """Skip because a simulator-only regression utility hit an intentional guard."""
+    pytest.skip(simulator_regression_limit_reason(reason))

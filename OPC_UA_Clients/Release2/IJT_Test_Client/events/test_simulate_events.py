@@ -22,6 +22,7 @@ from asyncua import ua
 from helpers.event_collector import EventCollector
 from helpers.namespaces import BN, NS_APP, NS_IJT_BASE, IJTTypes, SimulateEventType
 from helpers.node_discovery import find_child_by_browse_name
+from helpers.skip_reasons import skip_simulator_regression_limit
 
 pytestmark = [pytest.mark.live, pytest.mark.events]
 
@@ -91,9 +92,10 @@ async def test_simulate_bulk_events_no_exception(
         )
     except ua.UaStatusCodeError as exc:
         if "BadTooManyOperations" in str(exc):
-            pytest.skip(
+            skip_simulator_regression_limit(
                 f"SimulateBulkEvents({event_type}, {count}) raised BadTooManyOperations — "
-                "server subscription limit reached during long test run (transient resource state)"
+                "the simulator intentionally rejects overlapping or excessive bulk event operations "
+                "to protect server stability."
             )
         raise
 

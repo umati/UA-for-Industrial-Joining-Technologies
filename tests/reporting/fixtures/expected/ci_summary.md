@@ -3,6 +3,8 @@
 > ✅ **All 12 / 12 Jobs Passed**
 > **Branch:** `c2-phase-1b` &nbsp;·&nbsp; **Commit:** `12345678` &nbsp;·&nbsp; **Run:** [#42](https://github.example/ijt/actions/runs/42)
 
+> Full report below: [Outcome](#ci-outcome-overview) · [Validation](#ci-validation-results) · [Code Quality](#ci-code-quality-checks) · [Security](#ci-source-dependency-security) · [Infrastructure](#ci-infrastructure) · [Timing](#ci-performance-timings) · [Skip Details](#ci-skip-details)
+
 ---
 
 <a id="ci-outcome-overview"></a>
@@ -53,11 +55,15 @@
 
 <a id="ci-source-dependency-security"></a>
 
-### 🔒 Source and Dependency Security — 5 components scanned
+### 🔒 Source and Dependency Security — 5 components
 
-Bandit scans Python source. pip-audit, npm audit, and NuGet audit scan dependencies.
-
-See also: CI Infrastructure for zizmor, Pre-commit Hooks for detect-secrets, and Security — CodeQL for semantic analysis.
+- **Audit and Code Scanning**
+  - Bandit scans Python source for security issues.
+  - pip-audit, npm audit, and NuGet audit scan package dependencies for known vulnerabilities.
+- **Related Security Checks**
+  - CI Infrastructure runs zizmor for GitHub Actions workflow security.
+  - Pre-commit Hooks runs detect-secrets for committed secret detection.
+  - Security — CodeQL runs semantic code analysis.
 
 | 🚦 | Component | Security Scan | Dependency Audit |
 |:--:|:----------|:--------------|:-----------------|
@@ -114,6 +120,8 @@ No reliable job duration source was available. Job durations require the current
 Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage gate.
 
 ---
+
+<a id="ci-skip-details"></a>
 
 ### ⏭️ Skip Details — 3 suites, 18 skips
 

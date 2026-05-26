@@ -41,7 +41,7 @@ from helpers.node_discovery import (
     get_type_definition,
     has_interface,
 )
-from helpers.skip_reasons import skip_environment
+from helpers.skip_reasons import skip_tooling_limitation
 
 logger = logging.getLogger(__name__)
 
@@ -1210,7 +1210,7 @@ async def test_machinery_building_blocks_add_nodes_is_rejected(opcua_client, ns_
             timeout=10.0,
         )
     except (ua.UaError, asyncio.TimeoutError, OSError) as exc:
-        skip_environment(
+        skip_tooling_limitation(
             f"asyncua AddNodes service call unavailable ({exc}); server-side rejection "
             "must be verified manually or with OPC UA CTT"
         )
@@ -1511,7 +1511,7 @@ async def test_asset_management_add_nodes_to_controllers_folder_is_rejected(opcu
             timeout=10.0,
         )
     except (ua.UaError, asyncio.TimeoutError, OSError) as exc:
-        skip_environment(
+        skip_tooling_limitation(
             f"asyncua AddNodes service call unavailable ({exc}); server-side rejection "
             "must be verified manually or with OPC UA CTT"
         )

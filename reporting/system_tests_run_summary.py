@@ -69,6 +69,19 @@ def shift_markdown_headings(markdown: str, by: int = 1) -> str:
     return "".join(out_lines)
 
 
+def ensure_system_cus_anchor(markdown: str) -> str:
+    """Inject the System Tests CUs anchor when the embedded artifact lacks it."""
+    anchor = '<a id="system-cus-needing-review"></a>'
+    if anchor in markdown:
+        return markdown
+    lines = markdown.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if re.match(r"^#{1,6}\s+📋\s+CUs Needing Review\b", line):
+            lines.insert(index, anchor + "\n\n")
+            return "".join(lines)
+    return markdown
+
+
 def load_test_client_conformance_summary(path: str) -> list[str]:
     """Return the embedded Test Client conformance summary as Markdown lines.
 
@@ -86,7 +99,7 @@ def load_test_client_conformance_summary(path: str) -> list[str]:
         return []
     if not text.strip():
         return []
-    return shift_markdown_headings(text).splitlines()
+    return shift_markdown_headings(ensure_system_cus_anchor(text)).splitlines()
 
 
 def tc_conformance_artifact_warning(
@@ -465,6 +478,115 @@ def format_skip_section(label, skips_list, skip_count=None):
         lines.append(f"| {md_cell(reason)} | {count} |")
     lines += ["", "</details>"]
     return lines
+
+
+def _test_client_diagnostic_category(reason: str) -> str:
+    """Classify Test Client skip reasons for public grouped diagnostics."""
+    normalized = str(reason or "").strip()
+    reason_lower = normalized.lower()
+    if reason_lower.startswith("companion spec profile note -") or reason_lower.startswith(
+        "monitoring."
+    ):
+        return "companion"
+    if "lifetimecounters" in reason_lower:
+        return "companion"
+    if reason_lower.startswith("tooling limitation -"):
+        return "tooling"
+    if (
+        "asyncua addnodes service call unavailable" in reason_lower
+        or "asyncua deletenodes service call unavailable" in reason_lower
+    ):
+        return "tooling"
+    if reason_lower.startswith("simulator regression limit -"):
+        return "simulator"
+    if "simulatebulkresults" in reason_lower and (
+        "badtoomanyoperations" in reason_lower or "concurrent access limit" in reason_lower
+    ):
+        return "simulator"
+    if "simulatebulkevents" in reason_lower and (
+        "badtoomanyoperations" in reason_lower or "subscription limit" in reason_lower
+    ):
+        return "simulator"
+    if "present as a stub" in reason_lower and "compliant" in reason_lower:
+        return "server_gap"
+    if "not listed as supported by active server capability profile" in reason_lower:
+        return "server_gap"
+    if "not supported" in reason_lower:
+        return "server_gap"
+    if "optional method" in reason_lower and "absent" in reason_lower:
+        return "server_gap"
+    return "other"
+
+
+def _diagnostic_details(title: str, reasons: Counter) -> list[str]:
+    """Render one grouped diagnostic reason table."""
+    if not reasons:
+        return []
+    skip_total = sum(reasons.values())
+    lines = [
+        "",
+        f"<details><summary><b>{title}</b> — {plural_label(skip_total, 'skip')}</summary>",
+        "",
+        "| Reason | Count |",
+        "|:-------|------:|",
+    ]
+    for reason, count in reasons.most_common():
+        lines.append(f"| {md_cell(reason)} | {count} |")
+    lines += ["", "</details>"]
+    return lines
+
+
+def format_test_client_diagnostic_sections(
+    skips_list, skip_count=None
+) -> tuple[list[str], list[str]]:
+    """Return public Test Client diagnostic sections and separate companion-spec notes."""
+    reported_count = skip_count if skip_count is not None else len(skips_list)
+    if reported_count is not None:
+        reported_count = max(reported_count, len(skips_list))
+    if not skips_list and (reported_count is None or reported_count <= 0):
+        return [], []
+
+    grouped: dict[str, Counter] = {
+        "tooling": Counter(),
+        "simulator": Counter(),
+        "companion": Counter(),
+        "other": Counter(),
+    }
+    server_gap_count = 0
+    for reason, count in Counter(msg for _, msg in skips_list).items():
+        category = _test_client_diagnostic_category(reason)
+        if category == "server_gap":
+            server_gap_count += count
+        else:
+            grouped[category][reason] += count
+
+    detailed_count = len(skips_list)
+    if reported_count is not None and reported_count > detailed_count:
+        grouped["other"]["Skip details unavailable in JUnit XML"] += reported_count - detailed_count
+
+    diagnostic_lines: list[str] = []
+    if server_gap_count:
+        diagnostic_lines += [
+            "",
+            (
+                "Server capability gaps are listed in "
+                "[CUs Needing Review](#system-cus-needing-review) "
+                f"above ({plural_label(server_gap_count, 'skip')} folded out of diagnostics)."
+            ),
+        ]
+    diagnostic_lines += _diagnostic_details("Test Tooling Limitations", grouped["tooling"])
+    diagnostic_lines += _diagnostic_details("Simulator Regression Limits", grouped["simulator"])
+    diagnostic_lines += _diagnostic_details("Other Diagnostics", grouped["other"])
+
+    companion_lines = _diagnostic_details("Companion Spec Profile Notes", grouped["companion"])
+    return diagnostic_lines, companion_lines
+
+
+def test_client_diagnostic_note(skips_list, skip_count=None, default="No additional notes"):
+    """Short table note for grouped Test Client diagnostics."""
+    if skips_list or (skip_count is not None and skip_count > 0):
+        return "Capability and diagnostic notes grouped below"
+    return default
 
 
 def skip_note_inline(skips_list, skip_count=None, default="No additional notes"):
@@ -899,13 +1021,13 @@ def _bulleted_count_lines(counts, baseline=None, indent: bool = False) -> list[s
     delta = format_count_delta(total, baseline)
     if failed:
         return [
-            f"{bullet} Passed: {passed:,} / {total:,}{delta}",
-            f"{bullet} Failed: {failed:,}",
-            f"{bullet} Skipped: {skipped:,}",
+            f"{bullet} ✅&nbsp;Passed: {passed:,} / {total:,}{delta}",
+            f"{bullet} ❌&nbsp;Failed: {failed:,}",
+            f"{bullet} ⏭️&nbsp;Skipped: {skipped:,}",
         ]
     return [
-        f"{bullet} Passed: {passed:,}{delta}",
-        f"{bullet} Skipped: {skipped:,}",
+        f"{bullet} ✅&nbsp;Passed: {passed:,}{delta}",
+        f"{bullet} ⏭️&nbsp;Skipped: {skipped:,}",
     ]
 
 
@@ -1189,6 +1311,7 @@ def main() -> None:
         ("Smoke", tc_smoke, tc_smoke_base),
         ("Conformance", tc_tests, tc_tests_base),
     )
+    tc_diagnostic_note = test_client_diagnostic_note(tc_conf_skips, tc_tests[3])
     console_security_note = skip_note_inline(
         con_live_skips + console_opcua_security_skips,
         (con_live[3] or 0) + (console_opcua_security[3] or 0),
@@ -1231,6 +1354,18 @@ def main() -> None:
         (
             f"> **Branch:** `{branch}` &nbsp;·&nbsp; **Commit:** {sha_str} "
             f"&nbsp;·&nbsp; **Run:** {run_link}"
+        ),
+        "",
+        (
+            "> Full report below: [Outcome](#system-outcome-overview) · "
+            "[Test Results](#system-test-results) · "
+            "[CUs Needing Review](#system-cus-needing-review) · "
+            "[Conformance Report](#system-test-client-conformance-report) · "
+            "[Components](#system-component-test-results) · "
+            "[Conformance Suites](#system-conformance-suites) · "
+            "[Diagnostics](#system-skip-details) · "
+            "[Performance](#system-performance-benchmarks) · "
+            "[Artifacts](#system-artifacts-and-drilldown)"
         ),
         "",
         "---",
@@ -1326,11 +1461,11 @@ def main() -> None:
             f"{wc_browser_note} |"
         ),
         (
-            f"| {component_row_icon(tc_tests, skip_note_inline(tc_conf_skips, tc_tests[3]))} "
+            f"| {component_row_icon(tc_tests, tc_diagnostic_note)} "
             "| Test Client | Live conformance harness against OPC UA server "
             f"| {_CELL_NOT_APPLICABLE_INT} | "
             f"{test_client_live_results} | "
-            f"{skip_note_inline(tc_conf_skips, tc_tests[3])} |"
+            f"{tc_diagnostic_note} |"
         ),
         (
             f"| {component_row_icon(console_opcua_security, con_live, console_security_note)} "
@@ -1366,7 +1501,7 @@ def main() -> None:
             "| Test Client — Conformance | 40462 | "
             f"{tests_cell(tc_tests, tc_tests_base)} | "
             f"{skipped_count_cell(tc_tests[3])} | "
-            f"{skip_note_inline(tc_conf_skips, tc_tests[3])} "
+            f"{tc_diagnostic_note} "
             "([Skip Details](#system-skip-details)) |"
         ),
     ]
@@ -1382,7 +1517,10 @@ def main() -> None:
     skip_sections += format_skip_section("Web Client — Docker Python Unit", wd_py_skips, wd_py[3])
     skip_sections += format_skip_section("Web Client — Docker JavaScript", wd_js_skips, wd_js[3])
     skip_sections += format_skip_section("Test Client — Smoke Sanity", tc_smoke_skips, tc_smoke[3])
-    skip_sections += format_skip_section("Test Client — Conformance", tc_conf_skips, tc_tests[3])
+    tc_diagnostic_sections, tc_companion_sections = format_test_client_diagnostic_sections(
+        tc_conf_skips, tc_tests[3]
+    )
+    skip_sections += tc_diagnostic_sections
     skip_sections += format_skip_section("Console Client — Live", con_live_skips, con_live[3])
     skip_sections += format_skip_section(
         "Console Client — OPC UA Security",
@@ -1414,6 +1552,31 @@ def main() -> None:
             "_Each suite below is collapsed by default — click to inspect skip reasons._",
         ]
         out += skip_sections
+    else:
+        out += [
+            "",
+            "---",
+            "",
+            '<a id="system-skip-details"></a>',
+            "",
+            "### ⏭️ Skip Details",
+            "",
+            "No skipped tests reported.",
+        ]
+
+    if tc_companion_sections:
+        out += [
+            "",
+            "---",
+            "",
+            "### 🧭 Companion Spec Profile Notes",
+            "",
+            (
+                "_These notes cover companion-spec profile areas that are intentionally "
+                "outside the active server profile._"
+            ),
+        ]
+        out += tc_companion_sections
 
     timing_rows = bottleneck_candidates(job_timings, wc_feature_timings, cs_live_timings)
     if perf_section_lines:
@@ -1584,6 +1747,8 @@ def main() -> None:
     out += [
         "",
         "---",
+        "",
+        '<a id="system-artifacts-and-drilldown"></a>',
         "",
         "### 📎 Artifacts and Drilldown",
         "",

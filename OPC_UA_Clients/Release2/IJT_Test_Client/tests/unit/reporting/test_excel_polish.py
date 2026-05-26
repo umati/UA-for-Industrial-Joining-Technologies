@@ -200,3 +200,57 @@ def test_banner_text_present(all_sheets_workbook: openpyxl.Workbook) -> None:
     assert "Passed" in banner_text or "Failed" in banner_text, f"Banner missing Passed/Failed. Got: {banner_text!r}"
     assert "Validation" in banner_text, f"Banner missing 'Validation'. Got: {banner_text!r}"
     assert "Server support" in banner_text, f"Banner missing 'Server support'. Got: {banner_text!r}"
+
+
+def test_skipped_test_cases_sheet_has_diagnostic_category_column() -> None:
+    """Skipped Test Cases keeps raw reasons and adds filterable diagnostic categories."""
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    cases = [
+        make_excel_report.TestCase(
+            "area",
+            "test_tooling",
+            "area/test.py",
+            "skipped",
+            0.0,
+            "TOOLING LIMITATION - asyncua AddNodes service call unavailable",
+        ),
+        make_excel_report.TestCase(
+            "area",
+            "test_companion",
+            "area/test.py",
+            "skipped",
+            0.0,
+            "COMPANION SPEC PROFILE NOTE - Monitoring.Notifications not exposed",
+        ),
+        make_excel_report.TestCase(
+            "area",
+            "test_simulator",
+            "area/test.py",
+            "skipped",
+            0.0,
+            "SIMULATOR REGRESSION LIMIT - SimulateBulkResults rejected by stability guard",
+        ),
+        make_excel_report.TestCase(
+            "area",
+            "test_other",
+            "area/test.py",
+            "skipped",
+            0.0,
+            "custom skip reason",
+        ),
+    ]
+
+    make_excel_report._build_filtered(wb, cases, "Skipped Test Cases", ["skipped"], make_excel_report._YELLOW)
+
+    ws = wb["Skipped Test Cases (4)"]
+    headers = [cell.value for cell in ws[1]]
+    assert headers == ["Area", "File", "Test Name", "Duration (s)", "Category", "Reason / Message"]
+    categories = [ws.cell(row=row_idx, column=5).value for row_idx in range(2, 6)]
+    assert categories == [
+        "Test Tooling Limitations",
+        "Companion Spec Profile Notes",
+        "Simulator Regression Limits",
+        "Other Diagnostics",
+    ]
+    assert ws.cell(row=2, column=6).value == "TOOLING LIMITATION - asyncua AddNodes service call unavailable"

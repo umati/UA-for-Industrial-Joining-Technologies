@@ -3,6 +3,8 @@ Structural tests for ResultManagement — verifies that the expected folder,
 methods and child nodes are present and browsable.
 """
 
+import logging
+
 import pytest
 
 from helpers.namespaces import (
@@ -14,6 +16,7 @@ from helpers.namespaces import (
 from helpers.node_discovery import find_child_by_browse_name
 
 pytestmark = [pytest.mark.live, pytest.mark.structure]
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -58,11 +61,11 @@ async def test_get_result_id_list_filtered_method_absent(result_management, ns_i
     ns_mr = ns_indices[NS_MACH_RESULT]
     node = await find_child_by_browse_name(result_management, BN.GET_RESULT_ID_LIST_FILTERED, ns_mr)
     if node is not None:
-        pytest.skip(
-            f"'{BN.GET_RESULT_ID_LIST_FILTERED}' is present as a stub — "
-            "compliant (absence OR Bad-status rejection both acceptable). "
-            "Rejection is validated in conformance/test_result_management.py."
+        logger.info(
+            "%s is present as a compliant stub; rejection is validated by conformance tests.",
+            BN.GET_RESULT_ID_LIST_FILTERED,
         )
+        return
 
 
 async def test_release_result_handle_method_absent(result_management, ns_indices):
@@ -76,11 +79,11 @@ async def test_release_result_handle_method_absent(result_management, ns_indices
     ns_mr = ns_indices[NS_MACH_RESULT]
     node = await find_child_by_browse_name(result_management, BN.RELEASE_RESULT_HANDLE, ns_mr)
     if node is not None:
-        pytest.skip(
-            f"'{BN.RELEASE_RESULT_HANDLE}' is present as a stub — "
-            "compliant (absence OR Bad-status rejection both acceptable). "
-            "Rejection is validated in conformance/test_result_management.py."
+        logger.info(
+            "%s is present as a compliant stub; rejection is validated by conformance tests.",
+            BN.RELEASE_RESULT_HANDLE,
         )
+        return
 
 
 # ---------------------------------------------------------------------------

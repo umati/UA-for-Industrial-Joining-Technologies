@@ -31,7 +31,7 @@ cited symbol moves, the glossary entry moves with it.
 |---|---|---|
 | `CI — Unit, Static, and Smoke Gates` | `.github/workflows/ci.yml` (`name:` field) | Pull-request gate for unit suites, static analysis, vulnerability scans, and required smoke checks. |
 | `System Tests — Live OPC UA, Browser, Docker, Conformance` | `.github/workflows/integration.yml` (`name:` field) | Nightly + manual full system run against live OPC UA server, browser end-to-end suites, Docker compose, and conformance harness. |
-| `Security — CodeQL` | `.github/workflows/codeql.yml` (`name:` field) | GitHub native code scanning. Matrix job names `Analyze (javascript)`, `Analyze (csharp)`, and `Analyze (python)` stay unchanged because ruleset `15294123` requires those contexts. |
+| `Security — CodeQL` | `.github/workflows/codeql.yml` (`name:` field) | Semantic source analysis through GitHub native code scanning. Matrix job names `Analyze (javascript)`, `Analyze (csharp)`, and `Analyze (python)` stay unchanged because ruleset `15294123` requires those contexts. |
 | `Web Client — Browser Compatibility Smoke` | `.github/workflows/web-client-compatibility-smoke.yml` (`name:` field) | Scheduled/manual browser smoke for audited Web Client file surfaces. The issue key `[Web Client Compatibility Smoke]` stays unchanged for continuity. |
 
 > 👔 management: the names describe the purpose of the run. Required branch-protection contexts are governed by the GitHub ruleset, not by these display labels.
@@ -151,7 +151,7 @@ Source: `scripts/reporting/conformance_summary.py` (`## 📋 CUs Needing Review`
 The Markdown report is action-first: it shows only review-needed rows with `Status | CU | Server Supported | Reason | Tests | Passed | Not Supported | Blocked | Failures`. The Excel workbook remains the full-detail artifact and keeps every CU, workbook-case counts, raw outcome, review status, and example tests.
 
 ### 4.5 `Skip & Expected-Failure Diagnostics` 🛠️ 🧪
-Source: `scripts/reporting/conformance_summary.py` `Skip & Expected-Failure Diagnostics` `<details>` block. Skip-reason and expected-failure histograms for diagnostic purposes only. The markdown view filters out `Not Supported:` reasons because those are already represented in `CUs Needing Review`; the Excel `Skipped Test Cases` and `Expected Failures` sheets remain raw JUnit evidence.
+Source: `scripts/reporting/conformance_summary.py` `Skip & Expected-Failure Diagnostics` `<details>` block and `reporting/system_tests_run_summary.py` grouped System Tests diagnostics. Skip-reason and expected-failure histograms for diagnostic purposes only. The markdown view filters out `Not Supported:` reasons because those are already represented in `CUs Needing Review`; the Excel `Skipped Test Cases` sheet keeps raw JUnit evidence and adds a filterable `Category` column for `Test Tooling Limitations`, `Companion Spec Profile Notes`, `Simulator Regression Limits`, and `Other Diagnostics`.
 
 ---
 
@@ -169,7 +169,32 @@ Each run is reported on its own terms; the renderer emits no baseline-driven del
 
 ### 5.3 Bullet and Icon Convention 👔 🛠️ 🧪 📦
 Source: `reporting/system_tests_run_summary.py` result-cell helpers and the conformance summary table renderers.
-Use icons for row status, high-level review status, and non-zero outcome buckets. Use plain HTML bullets inside dense result cells (`Passed: N`, `Skipped: N`) so compact tables remain readable when a cell contains both Python and JavaScript suites.
+Use icons for row status, high-level review status, non-zero outcome buckets, and the `Passed` / `Failed` / `Skipped` labels inside dense result cells. Keep parent suite labels plain and use HTML bullets plus indentation so compact tables remain readable when a cell contains both Python and JavaScript suites.
+
+### 5.4 Grouped System Tests Diagnostics 🛠️ 🧪
+Source: `reporting/system_tests_run_summary.py` Test Client diagnostic grouping and `helpers/skip_reasons.py` canonical reason helpers.
+The public System Tests report groups Test Client skips by action context instead of listing raw JUnit messages:
+- `Test Tooling Limitations`: the test client or asyncua stack cannot exercise a path yet, for example AddNodes/DeleteNodes service-call gaps.
+- `Companion Spec Profile Notes`: a Machinery or DI companion-spec area is outside the active server profile. Examples include `LifetimeCounters` and selected `Monitoring.*` folders.
+- `Simulator Regression Limits`: simulator-only regression utilities hit intentional server stability guards. `SimulateBulkResults` is the primary utility here; `SimulateBulkEvents` shares the same classification when the server rejects overlapping or excessive bulk event operations.
+- `Other Diagnostics`: fallback bucket for diagnostic skips that do not match a canonical helper.
+
+The Excel `Skipped Test Cases` sheet uses the same category labels in its `Category` column while preserving the original JUnit skip reason in `Reason / Message`.
+
+Cross-CU dependency skips use `@pytest.mark.requires_dependency_cu(...)`.
+When a primary CU test depends on an optional CU that is outside the active
+server profile, the missing dependency is reported as that dependency CU's
+`Not Supported` row instead of as an accepted-policy note on the primary CU.
+
+Server capability gaps stay in `CUs Needing Review`. They are not repeated in grouped diagnostics.
+
+### 5.5 Result/Event Payload Boundary 🛠️ 🧪
+Source: `conformance/test_single_result_data.py` and `conformance/test_events.py`.
+`ReportedValueDataType` belongs to `JoiningSystemEventType` and `JoiningSystemConditionType` payloads. Result events and Result payloads carry `ResultDataType` plus `BaseEventType` properties only; they must not expose `ReportedValues` or `OverallReportedValues`. Event-side `ReportedValues` engineering-unit validation remains in `test_events.py`.
+
+### 5.6 `Full report below` Navigation Cue 👔 🛠️ 🧪 📦
+Source: `reporting/ci_run_summary.py` and `reporting/system_tests_run_summary.py`.
+The top `Full report below:` line is a GitHub Actions run-page navigation cue. GitHub can render the workflow graph above the job summary and consume most of the first viewport, so the cue makes it explicit that the consolidated CI/System Tests report continues below. The links target stable report anchors only; they are not a replacement for the detailed Per-Client Quick Index near the end of each summary.
 
 ---
 
@@ -217,7 +242,7 @@ Locked left-to-right tab order produced by `scripts/make_excel_report.py`:
 | 5 | `Profile Coverage Comparison` | `_build_profile_coverage()` | Excel-only deep-dive comparison |
 | 6 | `All Test Cases` | `_build_all_tests()` | Raw evidence backing the markdown report |
 | 7 | `Test Failures (N)` | `_build_filtered()` | Failure rows linked from the report `<details>` blocks |
-| 8 | `Skipped Test Cases (N)` | `_build_filtered()` | Skip rows backing `Skip & Expected-Failure Diagnostics` |
+| 8 | `Skipped Test Cases (N)` | `_build_filtered()` | Skip rows backing `Skip & Expected-Failure Diagnostics`; includes a filterable `Category` column |
 | 9 | `Expected Failures (N)` | `_build_filtered()` | Xfail/xpass rows backing `Skip & Expected-Failure Diagnostics` |
 
 `(N)` on sheets 7–9 is the matching-row count appended at sheet-creation time by `_build_filtered()` in `scripts/make_excel_report.py` (for example, `Test Failures (3)`).

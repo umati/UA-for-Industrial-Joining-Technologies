@@ -72,7 +72,9 @@ run with the complete CU compliance payload and a baseline file present.
 This is the **canonical real-world conformance regression fixture** for
 the renderer: it exercises authentic scale, profile/facet groups,
 not-supported handling, with-notes / partial outcomes, truncation, and
-the action-first CUs Needing Review table.
+the action-first CUs Needing Review table. The Markdown summary shows
+review-needed CUs first, then the short IJT Facet Support summary, then
+the collapsed IJT Facet Breakdown. Full CU detail remains in Excel.
 
 This fixture is **not** a complete branch-coverage oracle. Targeted
 Failed / Blocked / error-path tests remain the responsibility of small

@@ -168,21 +168,28 @@ that need manual classification.
 | **Profile Coverage Comparison** | User-facing IJT coverage overview: server capability profile, reference IJT facets, optional full CU-set view, server-supported CU count, server-support percentage, supported-CUs-validated percentage, outcome, and coverage counts |
 | **All Test Cases** | Every test: name, file, status, duration, reason |
 | **Test Failures (N)** | Failed tests only — with full failure message |
-| **Skipped Test Cases (N)** | Skipped tests only — with skip reason |
+| **Skipped Test Cases (N)** | Skipped tests only — with diagnostic category and raw skip reason |
 | **Expected Failures (N)** | Xfailed/xpassed — expected failures with reason |
 
 Row colours: 🟢 green = passed, 🔴 red = failed, 🟡 yellow = skipped, 🟠 orange = xfailed.
+
+The **Skipped Test Cases (N)** sheet includes a `Category` column so Excel
+readers can filter or pivot skipped rows by the same report categories used in
+the GitHub summary: `Test Tooling Limitations`, `Companion Spec Profile Notes`,
+`Simulator Regression Limits`, and `Other Diagnostics`. The raw JUnit reason
+stays in `Reason / Message`.
 
 The profile/facet/CU sheets are generated when
 `test-results/cu-compliance-report.json` is present. CI Integration also adds
 the **IJT Facet Breakdown** table and the action-first **CUs Needing Review**
 table to `summary.md` and the GitHub Actions step summary, so users can see the
-active server capability profile, conformance overview KPIs, IJT Facet Support,
-Conformance Action Items, Server Scope Notes count, IJT Facet Breakdown, CUs
-Needing Review, Report References, and Skip &amp; Expected-Failure Diagnostics
-without downloading the Excel file first. The 0–100 composite score lives in
-the baseline JSON as an internal trend field and is not shown as a public
-compliance grade.
+active server capability profile, conformance overview KPIs, CUs Needing Review,
+IJT Facet Support, IJT Facet Breakdown, Report References, and
+Skip &amp; Expected-Failure Diagnostics without downloading the Excel file first.
+The root System Tests summary also adds a top `Full report below:` link row so
+readers know the full report continues below the GitHub Actions workflow graph.
+The 0–100 composite score lives in the baseline JSON as an internal trend field
+and is not shown as a public compliance grade.
 `Server Supported CUs` is read from the server capability file (`Not Applicable` when
 no capability file was loaded); `Outcome` and validated counts are calculated
 from the current test run. `Server Support %` is informational; `Supported CUs
@@ -207,10 +214,14 @@ the remaining non-passing rows are accepted skips, Not Supported methods/CUs
 from the server profile, or environment/precondition notes; failures and errors
 are reported separately as Failed review-status items.
 Accepted policy and environment/tooling limitation skips remain visible in the
-Diagnostic Skips summary, but they do not reduce CU compliance
-when the CU also has passing support coverage. In Excel, `Supported with Notes`
-uses a light-green fill and `Not Supported` uses neutral gray so capability
-gaps are not presented as warnings.
+Diagnostic Skips summary, but they do not reduce CU compliance when the CU also
+has passing support coverage. In the root System Tests summary, Test Client
+diagnostic skips are grouped into `Test Tooling Limitations`, `Simulator
+Regression Limits`, and `Other Diagnostics`; `Companion Spec Profile Notes`
+renders separately. Server capability gaps stay in `CUs Needing Review` and are
+not repeated in grouped diagnostics. In Excel, `Supported with Notes` uses a
+light-green fill and `Not Supported` uses neutral gray so capability gaps are
+not presented as warnings.
 
 ---
 
@@ -245,6 +256,9 @@ gaps are not presented as warnings.
 | Blocked runtime precondition | `BLOCKED - Method: StartSelectedJoining - tool/controller state is not ready` | The test path is valid, but the current server state cannot satisfy the setup precondition |
 | Accepted policy outcome | `ACCEPTED POLICY - Method: SelectJoiningProcess - selection precondition could not be established for current controller/tool state` | The server returned a documented simulator/domain policy result that should not fail the run |
 | Environment condition | `ENVIRONMENT - Docker backend not reachable` | Local tooling, port, browser, Docker, client-library, or network condition prevented the test path |
+| Test tooling limitation | `TOOLING LIMITATION - asyncua AddNodes service call unavailable` | Test-client or client-library tooling cannot exercise a path yet; the server-side rule should be verified with a capable tool such as CTT |
+| Companion spec profile note | `COMPANION SPEC PROFILE NOTE - Monitoring.Notifications not exposed...` | Machinery/DI companion-spec area is outside the active server profile; this is context, not an IJT conformance failure |
+| Simulator regression limit | `SIMULATOR REGRESSION LIMIT - SimulateBulkResults(...) rejected by the server...` | Simulator-only regression utilities such as `SimulateBulkResults` and `SimulateBulkEvents` intentionally reject overlapping or excessive calls to protect server stability |
 | Optional/deprecated path absent | `Deprecated direct Asset.Health.DeviceHealth absent ...` | Server omits an older or optional address-space path; use the replacement path when applicable |
 | Trace data absent | `No trace values in result` | Server/device did not populate `JoiningResultDataType.Trace` for this run; verify trigger settings (`includeTraces`) and server profile |
 | Missing prerequisite | `SetCalibration absent — cannot test downstream behaviour` | Cascading skip: an earlier optional feature was absent |
@@ -252,6 +266,14 @@ gaps are not presented as warnings.
 | Event source unavailable | `Representative event not generated by current trigger/server ...` | The test needs a real event source or active runtime trigger. If the server does not support that event type, classify it as Not Supported rather than Accepted Policy. |
 | Result classification unavailable | `INTERVENTION_RESULT not generated by current trigger/server ...` | Current trigger/server did not produce that classification, so classification-specific assertions cannot run |
 | Domain precondition failed | `SelectJoiningProcess precondition failed (...)` | A listed process exists but the server cannot select it in the current state |
+
+Tests that validate one CU but depend on another optional CU use
+`@pytest.mark.requires_dependency_cu(...)`. If the dependency is outside the
+active server profile, the report attributes the skip to the dependency CU as
+`Not Supported` instead of turning the primary CU into an accepted-policy note.
+For example, DesignValue EngineeringUnits checks depend on
+`IJT Joint Design Data`; if Joint Design is unsupported, the skip belongs to the
+Joint Design CU family.
 
 **What is NOT a valid skip reason:**
 - Method call returned an error (method IS present) → use `pytest.fail`

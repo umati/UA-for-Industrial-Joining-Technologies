@@ -33,6 +33,7 @@ from helpers.namespaces import (
     ResultType,
 )
 from helpers.node_discovery import find_child_by_browse_name
+from helpers.skip_reasons import skip_simulator_regression_limit
 
 pytestmark = [pytest.mark.live, pytest.mark.methods]
 
@@ -325,7 +326,11 @@ async def test_simulate_bulk_results_multiple_types(
                 "BadInvalidArgument",
             )
         ):
-            pytest.xfail(f"SimulateBulkResults({label}) rejected by server (concurrent access limit): {exc}")
+            skip_simulator_regression_limit(
+                f"SimulateBulkResults({label}) rejected by the server with {status_str}; "
+                "this simulator regression utility may reject bulk result operation requests that "
+                "exceed its stability guardrails."
+            )
         raise
     except Exception as exc:
         if _is_transport_timeout(exc):

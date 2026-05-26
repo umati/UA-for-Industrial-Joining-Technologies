@@ -66,27 +66,30 @@ class TestGetSkipReason:
 
     def test_mentions_cu_key(self):
         reason = get_skip_reason("single_result")
-        assert "single_result" in reason
+        assert "IJT Single Result" in reason
 
     def test_uses_public_not_supported_label(self):
         reason = get_skip_reason("send_joining_process")
         assert reason.startswith("IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED")
 
-    def test_mentions_config_file(self):
+    def test_omits_config_file_guidance(self):
         reason = get_skip_reason("any_key")
-        assert "server_capabilities.yaml" in reason or "yaml" in reason.lower()
+        assert "Config file:" not in reason
+        assert "To enable:" not in reason
+        assert "server_capabilities.yaml" not in reason
 
     def test_with_explicit_path(self, profile_tmp_path):
         caps_path = profile_tmp_path / "caps.yaml"
         reason = get_skip_reason("my_cu", capabilities_path=caps_path)
-        assert "my_cu" in reason
-        assert "caps.yaml" in reason
+        assert "IJT My Cu" in reason
+        assert "caps.yaml" not in reason
 
     def test_env_var_influences_path(self, profile_tmp_path, monkeypatch):
         caps_file = profile_tmp_path / "custom_caps.yaml"
         monkeypatch.setenv("OPCUA_CAPABILITIES_FILE", str(caps_file))
         reason = get_skip_reason("test_cu")
-        assert "custom_caps.yaml" in reason
+        assert "custom_caps.yaml" not in reason
+        assert "IJT Test Cu" in reason
 
 
 # ---------------------------------------------------------------------------

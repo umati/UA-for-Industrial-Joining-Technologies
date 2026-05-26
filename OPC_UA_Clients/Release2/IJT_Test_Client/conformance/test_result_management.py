@@ -33,7 +33,7 @@ from helpers.node_discovery import (
     get_type_definition,
 )
 from helpers.result_validator import assert_result_data_valid
-from helpers.skip_reasons import skip_environment
+from helpers.skip_reasons import skip_tooling_limitation
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -1073,7 +1073,7 @@ async def test_result_management_results_folder_delete_is_rejected(opcua_client,
             timeout=10.0,
         )
     except (ua.UaError, asyncio.TimeoutError, OSError) as exc:
-        skip_environment(
+        skip_tooling_limitation(
             f"asyncua DeleteNodes service call unavailable ({exc}); server-side rejection "
             "must be verified manually or with OPC UA CTT"
         )

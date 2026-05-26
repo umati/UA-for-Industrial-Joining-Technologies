@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from helpers.cu_registry import format_cu_not_supported
 from helpers.workbook_traceability import workbook_ref_id, workbook_traceability_report
 
 _TERMINAL_OUTCOME_RANK = {
@@ -36,6 +37,19 @@ def _marker_cus(item) -> list[str]:
     for marker in item.iter_markers("requires_cu"):
         cus.extend(str(arg) for arg in marker.args)
     return sorted(set(cus))
+
+
+def _marker_dependency_cus(item) -> list[str]:
+    cus: list[str] = []
+    for marker in item.iter_markers("requires_dependency_cu"):
+        cus.extend(str(arg) for arg in marker.args)
+    return sorted(set(cus))
+
+
+def _dependency_cus_for_not_supported_reason(reason: str, dependency_cus: Iterable[str]) -> list[str]:
+    reason_lower = reason.lower()
+    matches = [cu_key for cu_key in dependency_cus if format_cu_not_supported(cu_key).lower() in reason_lower]
+    return sorted(set(matches))
 
 
 def _normalize_rows(value) -> list[int]:
@@ -96,8 +110,11 @@ def _classify_report(report) -> str:
         reason_lower = reason.lower()
         if "accepted policy" in reason_lower or "accepted as optional server behaviour" in reason_lower:
             return "accepted_policy"
+        if "companion spec profile note" in reason_lower or "simulator regression limit" in reason_lower:
+            return "accepted_policy"
         if (
             "environment" in reason_lower
+            or "tooling limitation" in reason_lower
             or "service unavailable via this asyncua version" in reason_lower
             or "client-library limitation" in reason_lower
         ):
@@ -183,6 +200,7 @@ class CuComplianceReportRecorder:
                 "path": str(Path(str(item.fspath)).relative_to(self.root)),
                 "name": item.name,
                 "cus": cus,
+                "dependency_cus": _marker_dependency_cus(item),
                 "workbook_refs": _marker_workbook_refs(item),
             }
 
@@ -201,14 +219,20 @@ class CuComplianceReportRecorder:
         outcome = _classify_report(report)
         if report.when == "setup" and outcome == "passed":
             return
+        item = self.items_by_nodeid[report.nodeid]
+        reason = _skip_text(report) if outcome in {"not_supported", "blocked", "accepted_policy", "environment"} else ""
+        cus = item["cus"]
+        if outcome == "not_supported":
+            dependency_cus = _dependency_cus_for_not_supported_reason(reason, item.get("dependency_cus", []))
+            if dependency_cus:
+                cus = dependency_cus
         self.results_by_nodeid[report.nodeid] = {
-            **self.items_by_nodeid[report.nodeid],
+            **{key: value for key, value in item.items() if key != "dependency_cus"},
+            "cus": cus,
             "outcome": outcome,
             "phase": report.when,
             "duration_s": round(float(getattr(report, "duration", 0.0)), 6),
-            "reason": _skip_text(report)
-            if outcome in {"not_supported", "blocked", "accepted_policy", "environment"}
-            else "",
+            "reason": reason,
         }
 
     def pytest_sessionfinish(self, session, exitstatus):  # noqa: D401
@@ -217,11 +241,12 @@ class CuComplianceReportRecorder:
 
         results = []
         for nodeid, item in self.items_by_nodeid.items():
+            public_item = {key: value for key, value in item.items() if key != "dependency_cus"}
             results.append(
                 self.results_by_nodeid.get(
                     nodeid,
                     {
-                        **item,
+                        **public_item,
                         "outcome": "untested",
                         "phase": "collection",
                         "duration_s": 0.0,

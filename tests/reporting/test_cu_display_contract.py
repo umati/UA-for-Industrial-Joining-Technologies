@@ -33,7 +33,7 @@ def test_primary_cu_columns_use_public_display_names() -> None:
     primary_sections = _section(rendered, "## 📋 CUs Needing Review")
 
     assert "`acknowledge_results`" not in primary_sections
-    assert "| ⚪&nbsp;Not Supported | IJT Acknowledge Results |" in primary_sections
+    assert "| ⚪&nbsp;Not&nbsp;Supported | IJT Acknowledge Results |" in primary_sections
 
 
 def test_quick_index_links_have_explicit_targets() -> None:

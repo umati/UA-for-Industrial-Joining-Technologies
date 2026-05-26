@@ -216,7 +216,8 @@ def format_status_count(label: str, count: int) -> str:
 def format_status_label(label: str) -> str:
     """Render one public label with its canonical icon."""
     icon = KPI_ICONS.get(label, NON_KPI_ICONS.get(label, ""))
-    return f"{icon}&nbsp;{label}" if icon else label
+    safe_label = label.replace(" ", "&nbsp;")
+    return f"{icon}&nbsp;{safe_label}" if icon else safe_label
 
 
 def outcome_label(outcome: str) -> str:

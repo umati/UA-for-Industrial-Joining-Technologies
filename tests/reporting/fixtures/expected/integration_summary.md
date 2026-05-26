@@ -3,6 +3,8 @@
 > ✅ **All 7 / 7 Jobs Passed**
 > **Branch:** `c2-phase-1b` &nbsp;·&nbsp; **Commit:** `abcdef12` &nbsp;·&nbsp; **Run:** [#84](https://github.example/ijt/actions/runs/84)
 
+> Full report below: [Outcome](#system-outcome-overview) · [Test Results](#system-test-results) · [CUs Needing Review](#system-cus-needing-review) · [Conformance Report](#system-test-client-conformance-report) · [Components](#system-component-test-results) · [Conformance Suites](#system-conformance-suites) · [Diagnostics](#system-skip-details) · [Performance](#system-performance-benchmarks) · [Artifacts](#system-artifacts-and-drilldown)
+
 ---
 
 <a id="system-outcome-overview"></a>
@@ -27,14 +29,14 @@
 
 | 🚦 | Suite | Result | Test Results |
 |:--:|:------|:-------|:-------------|
-| ✅ | OPC UA Server Docker smoke | Success | &bull; Passed: 10<br>&bull; Skipped: 0 |
-| ✅ | Web Client Docker tests | Success | &bull; Python<br>&nbsp;&nbsp;&bull; Passed: 680<br>&nbsp;&nbsp;&bull; Skipped: 0<br>&bull; JavaScript<br>&nbsp;&nbsp;&bull; Passed: 522<br>&nbsp;&nbsp;&bull; Skipped: 0 |
-| ✅ | Test Client conformance | Success | &bull; Passed: 889<br>&bull; Skipped: 154 |
-| ✅ | Web Client live suites | Success | &bull; Passed: 127<br>&bull; Skipped: 0 |
-| ✅ | Browser E2E suites | Success | &bull; Passed: 66<br>&bull; Skipped: 0 |
-| ✅ | Console Client live | Success | &bull; Passed: 18<br>&bull; Skipped: 0 |
+| ✅ | OPC UA Server Docker smoke | Success | &bull; ✅&nbsp;Passed: 10<br>&bull; ⏭️&nbsp;Skipped: 0 |
+| ✅ | Web Client Docker tests | Success | &bull; Python<br>&nbsp;&nbsp;&bull; ✅&nbsp;Passed: 680<br>&nbsp;&nbsp;&bull; ⏭️&nbsp;Skipped: 0<br>&bull; JavaScript<br>&nbsp;&nbsp;&bull; ✅&nbsp;Passed: 522<br>&nbsp;&nbsp;&bull; ⏭️&nbsp;Skipped: 0 |
+| ✅ | Test Client conformance | Success | &bull; ✅&nbsp;Passed: 889<br>&bull; ⏭️&nbsp;Skipped: 154 |
+| ✅ | Web Client live suites | Success | &bull; ✅&nbsp;Passed: 127<br>&bull; ⏭️&nbsp;Skipped: 0 |
+| ✅ | Browser E2E suites | Success | &bull; ✅&nbsp;Passed: 66<br>&bull; ⏭️&nbsp;Skipped: 0 |
+| ✅ | Console Client live | Success | &bull; ✅&nbsp;Passed: 18<br>&bull; ⏭️&nbsp;Skipped: 0 |
 | ⏭️ | Console Client OPC UA security | Skipped | &bull; Not Reported |
-| ✅ | C# Client live | Success | &bull; Passed: 110<br>&bull; Skipped: 0 |
+| ✅ | C# Client live | Success | &bull; ✅&nbsp;Passed: 110<br>&bull; ⏭️&nbsp;Skipped: 0 |
 | ⏭️ | C# Client OPC UA security | Skipped | &bull; Not Reported |
 
 ---
@@ -53,6 +55,8 @@
 |:---:|:---:|:---:|:---:|
 | **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked** | **⚪ 25 Not Supported · ℹ️ 3 With Notes** |
 | 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | No action needed | Information only. Review scope and caveats |
+
+<a id="system-cus-needing-review"></a>
 
 ### 📋 CUs Needing Review — 28 rows
 
@@ -74,11 +78,11 @@ Full review detail lives in the Test Client artifact fixture.
 
 | 🚦 | Component | Validation Scope | Container Test Results | Live/System Test Results | Notes |
 |:--:|:----------|:-----------------|:-------------------|:---------------------|:------|
-| ✅ | OPC UA Server | Linux container plus Windows live server processes | &bull; Passed: 10<br>&bull; Skipped: 0 | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
-| ✅ | Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | &bull; Python<br>&nbsp;&nbsp;&bull; Passed: 680<br>&nbsp;&nbsp;&bull; Skipped: 0<br>&bull; JavaScript<br>&nbsp;&nbsp;&bull; Passed: 522<br>&nbsp;&nbsp;&bull; Skipped: 0 | &bull; Python/WebSocket Live<br>&nbsp;&nbsp;&bull; Passed: 127<br>&nbsp;&nbsp;&bull; Skipped: 0<br>&bull; Browser E2E<br>&nbsp;&nbsp;&bull; Passed: 66<br>&nbsp;&nbsp;&bull; Skipped: 0 | Headless Chromium baked into the IJT Browser CI image |
-| ⏭️ | Test Client | Live conformance harness against OPC UA server | ➖ Not Applicable | &bull; Smoke<br>&nbsp;&nbsp;&bull; Passed: 10<br>&nbsp;&nbsp;&bull; Skipped: 0<br>&bull; Conformance<br>&nbsp;&nbsp;&bull; Passed: 889<br>&nbsp;&nbsp;&bull; Skipped: 154 | Not Implemented fixture marker |
-| ✅ | Console Client | Live Python client behavior and OPC UA security coverage against OPC UA server | &bull; Not Reported | &bull; Passed: 18<br>&bull; Skipped: 0 | No additional notes |
-| ✅ | C# Client | Nightly xUnit live behavior and OPC UA security coverage against OPC UA server | &bull; Not Reported | &bull; Passed: 110<br>&bull; Skipped: 0 | Nightly baseline check |
+| ✅ | OPC UA Server | Linux container plus Windows live server processes | &bull; ✅&nbsp;Passed: 10<br>&bull; ⏭️&nbsp;Skipped: 0 | Dedicated Windows ports 40461/40462/40464 feed client live suites | Docker smoke proves packaged Linux startup and namespace reachability |
+| ✅ | Web Client | Docker unit/prod checks plus live Python/WebSocket and browser E2E | &bull; Python<br>&nbsp;&nbsp;&bull; ✅&nbsp;Passed: 680<br>&nbsp;&nbsp;&bull; ⏭️&nbsp;Skipped: 0<br>&bull; JavaScript<br>&nbsp;&nbsp;&bull; ✅&nbsp;Passed: 522<br>&nbsp;&nbsp;&bull; ⏭️&nbsp;Skipped: 0 | &bull; Python/WebSocket Live<br>&nbsp;&nbsp;&bull; ✅&nbsp;Passed: 127<br>&nbsp;&nbsp;&bull; ⏭️&nbsp;Skipped: 0<br>&bull; Browser E2E<br>&nbsp;&nbsp;&bull; ✅&nbsp;Passed: 66<br>&nbsp;&nbsp;&bull; ⏭️&nbsp;Skipped: 0 | Headless Chromium baked into the IJT Browser CI image |
+| ⏭️ | Test Client | Live conformance harness against OPC UA server | ➖ Not Applicable | &bull; Smoke<br>&nbsp;&nbsp;&bull; ✅&nbsp;Passed: 10<br>&nbsp;&nbsp;&bull; ⏭️&nbsp;Skipped: 0<br>&bull; Conformance<br>&nbsp;&nbsp;&bull; ✅&nbsp;Passed: 889<br>&nbsp;&nbsp;&bull; ⏭️&nbsp;Skipped: 154 | Capability and diagnostic notes grouped below |
+| ✅ | Console Client | Live Python client behavior and OPC UA security coverage against OPC UA server | &bull; Not Reported | &bull; ✅&nbsp;Passed: 18<br>&bull; ⏭️&nbsp;Skipped: 0 | No additional notes |
+| ✅ | C# Client | Nightly xUnit live behavior and OPC UA security coverage against OPC UA server | &bull; Not Reported | &bull; ✅&nbsp;Passed: 110<br>&bull; ⏭️&nbsp;Skipped: 0 | Nightly baseline check |
 
 ---
 
@@ -89,7 +93,7 @@ Full review detail lives in the Test Client artifact fixture.
 | Suite | Port | Live Tests | Skipped | Notes |
 |:------|-----:|----------:|--------:|:------|
 | Test Client — Smoke sanity | 40462 | 10 ✅ | 0 | Server and namespace reachability |
-| Test Client — Conformance | 40462 | 889 ✅ | 154 ⏭️ | Not Implemented fixture marker ([Skip Details](#system-skip-details)) |
+| Test Client — Conformance | 40462 | 889 ✅ | 154 ⏭️ | Capability and diagnostic notes grouped below ([Skip Details](#system-skip-details)) |
 
 ---
 
@@ -99,7 +103,7 @@ Full review detail lives in the Test Client artifact fixture.
 
 _Each suite below is collapsed by default — click to inspect skip reasons._
 
-<details><summary>⏭️ <b>Test Client — Conformance</b> — 154 Skipped</summary>
+<details><summary><b>Other Diagnostics</b> — 154 skips</summary>
 
 | Reason | Count |
 |:-------|------:|
@@ -187,6 +191,8 @@ No skip policy failures, baseline warnings, or artifact warnings.
 
 
 ---
+
+<a id="system-artifacts-and-drilldown"></a>
 
 ### 📎 Artifacts and Drilldown
 
