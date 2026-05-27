@@ -337,9 +337,9 @@ assert len(events) >= 1
 Skip reasons must name the actual missing capability or precondition. Avoid generic text like
 `No condition event received` or `RequestResults raised ua.UaError`; include the event source,
 method name, and actual exception/status so CI skip summaries are diagnostic.
-Unsupported CU/optional-method skips should summarize as
-`IJT <CU Name> - Method: <BrowseName> NOT SUPPORTED` when the CU maps to a
-method, for example `IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED`.
+Unsupported CU/optional-method skips keep the trailing `NOT SUPPORTED` marker in
+raw pytest reasons for classification, but runner summaries and reports display
+the cleaner form, for example `Method 'SendJoiningProcess' is not supported`.
 Use `helpers.skip_reasons.skip_not_supported(...)`,
 `skip_feature_not_supported(...)`, `skip_blocked(...)`,
 `skip_accepted_policy(...)`, or `skip_environment(...)` instead of

@@ -1120,9 +1120,9 @@ def _step_pyright() -> _StepResult:
         if not (proc.stdout or "").strip():
             result.ok = True
             result.note = (
-                "advisory: pyright failed with no JSON output"
+                "pyright advisory only: no JSON output"
                 if proc.returncode != 0
-                else "advisory: 0 errors, 0 warnings"
+                else "pyright advisory only: 0 type issues, 0 warnings"
             )
             return result
         data = json.loads(proc.stdout)
@@ -1131,12 +1131,16 @@ def _step_pyright() -> _StepResult:
         warns = summary.get("warningCount", 0)
         result.ok = True
         if errors:
-            result.note = f"advisory: {errors} error(s), {warns} warning(s)"
+            result.note = f"pyright advisory only: {errors} type issue(s), {warns} warning(s)"
         else:
-            result.note = f"advisory: 0 errors, {warns} warning(s)" if warns else "advisory: 0 errors, 0 warnings"
+            result.note = (
+                f"pyright advisory only: 0 type issues, {warns} warning(s)"
+                if warns
+                else "pyright advisory only: 0 type issues, 0 warnings"
+            )
     except Exception:
         result.ok = True
-        result.note = "advisory: pyright output parse failed"
+        result.note = "pyright advisory only: output parse failed"
     return result
 
 
@@ -1193,7 +1197,6 @@ def _step_live_tests(_junit_xml: str | None, verbose: bool = False) -> _StepResu
         cmd += [
             "--cov=.",
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage-live.xml'}",
-            "--cov-report=term-missing",
             "--cov-fail-under=0",  # coverage threshold is for unit tests only; live tests skip many paths
         ]
     rc, output = _run(cmd)

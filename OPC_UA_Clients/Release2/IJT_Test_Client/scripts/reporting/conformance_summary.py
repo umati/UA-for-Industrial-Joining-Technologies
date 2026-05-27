@@ -84,6 +84,9 @@ from helpers.report_scoring import (
     format_pct as _fmt_pct,
 )
 from helpers.report_scoring import (
+    format_primary_reason_note as _primary_reason_note,
+)
+from helpers.report_scoring import (
     format_status_counts as _format_status_counts,
 )
 from helpers.report_scoring import (
@@ -526,23 +529,6 @@ def _skip_reason_display(reason: str) -> str:
         return f"Not Supported: {detail}"
 
     return display_reason
-
-
-def _primary_reason_note(outcome: str, label: str, reason: str) -> str:
-    """Render a concise end-user reason without repeating the row status."""
-    display_reason = reason.strip()
-    if outcome == "not_supported":
-        display_reason = re.sub(
-            r"^Not Supported:\s*",
-            "",
-            display_reason,
-            flags=re.IGNORECASE,
-        )
-        display_reason = re.sub(r"\s+NOT SUPPORTED$", "", display_reason)
-        return display_reason
-    if display_reason.casefold().startswith(f"{label}:".casefold()):
-        return display_reason
-    return f"{label}: {display_reason}"
 
 
 def _cu_test_index(cu_payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:

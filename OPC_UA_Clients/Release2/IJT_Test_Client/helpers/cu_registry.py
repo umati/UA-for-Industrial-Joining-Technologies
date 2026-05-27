@@ -22,7 +22,6 @@ Usage::
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import FrozenSet
 
@@ -441,12 +440,14 @@ def cu_key_for_method(method_name: str) -> str | None:
 
 
 def format_cu_not_supported(cu_key: str) -> str:
-    """Return a compact report label for unsupported CU skips."""
+    """Return a classifier-safe sentence for unsupported CU skips."""
     methods = cu_method_names(cu_key)
     if not methods:
-        return f"{cu_display_name(cu_key)} NOT SUPPORTED"
-    method_label = "Method" if len(methods) == 1 else "Methods"
-    return f"{cu_display_name(cu_key)} - {method_label}: {', '.join(methods)} NOT SUPPORTED"
+        return f"Conformance unit '{cu_display_name(cu_key)}' is not supported NOT SUPPORTED"
+    if len(methods) == 1:
+        return f"Method '{methods[0]}' is not supported NOT SUPPORTED"
+    quoted_methods = "', '".join(methods)
+    return f"Methods '{quoted_methods}' are not supported NOT SUPPORTED"
 
 
 def format_method_not_supported(method_name: str) -> str:
@@ -454,5 +455,4 @@ def format_method_not_supported(method_name: str) -> str:
     cu_key = _METHOD_TO_CU.get(method_name)
     if cu_key:
         return format_cu_not_supported(cu_key)
-    display = re.sub(r"(?<!^)(?=[A-Z])", " ", method_name).replace("_", " ")
-    return f"IJT {display} - Method: {method_name} NOT SUPPORTED"
+    return f"Method '{method_name}' is not supported NOT SUPPORTED"

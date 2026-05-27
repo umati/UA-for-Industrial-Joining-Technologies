@@ -302,7 +302,7 @@ def test_counter_mixed_suite_warn_does_not_cause_suite_fail():
 
 
 def test_live_tests_collect_default_coverage_without_fail_gate():
-    """Live conformance tests collect coverage diagnostics without enforcing fail_under."""
+    """Live conformance tests collect coverage XML without enforcing fail_under."""
     with (
         patch.object(_mod, "_tool_available", return_value=True),
         patch.object(_mod, "_print_test_count"),
@@ -315,10 +315,30 @@ def test_live_tests_collect_default_coverage_without_fail_gate():
     assert "conformance" in args
     assert "--cov=helpers" in args
     assert "--cov-append" in args
-    assert "--cov-report=term-missing" in args
+    assert "--cov-report=term-missing" not in args
     assert "--cov-fail-under=0" in args
     assert any(arg.startswith("--cov-report=xml:") and "coverage-combined.xml" in arg for arg in args)
     assert "--no-cov" not in args
+
+
+def test_pyright_advisory_note_uses_type_issue_wording(tmp_path):
+    class Completed:
+        stdout = json.dumps({"summary": {"errorCount": 1, "warningCount": 0}})
+        stderr = ""
+        returncode = 1
+
+    with (
+        patch.object(_mod, "_ensure_cli_tool", return_value=(True, "")),
+        patch.object(_mod, "_binary_available", return_value=True),
+        patch.object(_mod, "_RESULTS_DIR", tmp_path),
+        patch.object(_mod.subprocess, "run", return_value=Completed()),
+    ):
+        result = _mod._step_pyright()
+
+    assert result.ok
+    assert result.warn
+    assert result.note == "pyright advisory only: 1 type issue(s), 0 warning(s)"
+    assert "error(s)" not in result.note
 
 
 def test_live_tests_respect_explicit_coverage_args():
@@ -348,22 +368,48 @@ def test_skip_summary_formats_cu_not_supported_reason():
         "Skipped: Conformance unit 'send_joining_process' is not listed as supported "
         "for this server. Config file: server_capabilities.simulator.yaml"
     )
-    assert _mod._summarize_skip_reason(reason) == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"
+    assert _mod._summarize_skip_reason(reason) == "Method 'SendJoiningProcess' is not supported"
 
 
 def test_skip_summary_formats_optional_method_reason():
     reason = "Skipped: Optional method 'SendJoiningProcess': Not Supported - skipping"
-    assert _mod._summarize_skip_reason(reason) == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"
+    assert _mod._summarize_skip_reason(reason) == "Method 'SendJoiningProcess' is not supported"
 
 
 def test_skip_summary_formats_browse_name_reason():
     reason = "SetCalibration: Not Supported - cannot validate method signature"
-    assert _mod._summarize_skip_reason(reason) == "IJT Set Calibration - Method: SetCalibration NOT SUPPORTED"
+    assert _mod._summarize_skip_reason(reason) == "Method 'SetCalibration' is not supported"
 
 
 def test_skip_summary_formats_method_suffix_reason():
     reason = "AcknowledgeResults method: Not Supported - optional per spec"
-    assert _mod._summarize_skip_reason(reason) == "IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED"
+    assert _mod._summarize_skip_reason(reason) == "Method 'AcknowledgeResults' is not supported"
+
+
+def test_skip_summary_formats_raw_method_not_supported_reason():
+    reason = "Skipped: Method 'AcknowledgeResults' is not supported NOT SUPPORTED"
+    assert _mod._summarize_skip_reason(reason) == "Method 'AcknowledgeResults' is not supported"
+
+
+def test_skip_summary_formats_raw_multi_method_not_supported_reason():
+    reason = "Skipped: Methods 'GetFeedbackFileList', 'SendFeedback' are not supported NOT SUPPORTED"
+    assert _mod._summarize_skip_reason(reason) == "Methods 'GetFeedbackFileList', 'SendFeedback' are not supported"
+
+
+def test_skip_summary_formats_display_cu_without_double_ijt_prefix():
+    reason = "Skipped: Conformance unit 'IJT Joint Design Data' is not supported NOT SUPPORTED"
+    assert _mod._summarize_skip_reason(reason) == "Conformance unit 'IJT Joint Design Data' is not supported"
+
+
+def test_skip_summary_groups_optional_companion_notes():
+    reason = (
+        "Skipped: COMPANION SPEC PROFILE NOTE - Optional JoiningProcessManagement method "
+        "'DeleteJoiningProcess' is absent; dedicated method CU tracks server support"
+    )
+    assert (
+        _mod._summarize_skip_reason(reason)
+        == "Companion spec profile note: optional method checks are tracked by dedicated CUs"
+    )
 
 
 def test_skip_summary_leaves_non_method_not_supported_reason():
@@ -376,7 +422,7 @@ def test_skip_summary_trims_feature_not_supported_reason():
         "Skipped: IJT JoiningSystemConditionType NOT SUPPORTED - "
         "retained Acknowledgeable Conditions are not exposed by this server/package"
     )
-    assert _mod._summarize_skip_reason(reason) == "IJT JoiningSystemConditionType NOT SUPPORTED"
+    assert _mod._summarize_skip_reason(reason) == "Conformance unit 'IJT JoiningSystemConditionType' is not supported"
 
 
 # ---------------------------------------------------------------------------

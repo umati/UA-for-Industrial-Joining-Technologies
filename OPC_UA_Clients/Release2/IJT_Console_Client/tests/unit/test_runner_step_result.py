@@ -372,6 +372,44 @@ def test_semgrep_no_output_file_does_not_block_suite():
     assert c["failed"] == 0, "No-output-file must not appear in failed count"
 
 
+def test_pyright_advisory_note_uses_type_issue_wording(tmp_path):
+    class Completed:
+        stdout = json.dumps({"summary": {"errorCount": 1, "warningCount": 0}})
+        stderr = ""
+        returncode = 1
+
+    with (
+        patch.object(_mod, "_binary_available", return_value=True),
+        patch.object(_mod, "_tool_available", return_value=True),
+        patch.object(_mod, "_RESULTS_DIR", tmp_path),
+        patch.object(_mod.subprocess, "run", return_value=Completed()),
+    ):
+        result = _mod._step_pyright()
+
+    assert result.ok
+    assert result.note == "pyright advisory only: 1 type issue(s), 0 warning(s)"
+    assert "error(s)" not in result.note
+
+
+def test_live_tests_collect_coverage_xml_without_terminal_table(monkeypatch, tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+
+    monkeypatch.setattr(_mod, "_TESTS_LIVE", live_dir)
+    monkeypatch.setattr(_mod, "_RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(_mod, "_is_port_reachable", lambda _host, _port: True)
+    monkeypatch.setattr(_mod, "_tool_available", lambda _name: True)
+
+    with patch.object(_mod, "_run", return_value=(0, "1 passed")) as run_cmd:
+        result = _mod._step_live_tests(None)
+
+    assert result.ok
+    args = run_cmd.call_args.args[0]
+    assert f"--cov-report=xml:{tmp_path / 'coverage-live.xml'}" in args
+    assert "--cov-report=term-missing" not in args
+    assert "--cov-fail-under=0" in args
+
+
 def test_semgrep_no_output_file_note_mentions_network():
     """No-output-file note must mention network or authentication so the cause is clear."""
     result = _run_semgrep_step_with_no_output_file()

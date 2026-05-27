@@ -2,6 +2,7 @@
 import asyncio
 import contextlib
 import json
+import logging
 import os
 import platform
 import signal
@@ -30,6 +31,27 @@ active_websockets: Set[websockets.ServerConnection] = set()
 active_handlers_lock = asyncio.Lock()
 shutdown_lock = asyncio.Lock()
 shutdown_started = False
+
+
+class _SuppressInvalidWebSocketHandshake(logging.Filter):
+    _ijt_suppress_invalid_handshake = True
+    _NOISY_HANDSHAKE_MARKERS = (
+        "did not receive a valid HTTP request",
+        "connection closed while reading HTTP request line",
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.getMessage() != "opening handshake failed" or record.exc_info is None:
+            return True
+        details = "".join(traceback.format_exception(*record.exc_info))
+        return not any(marker in details for marker in self._NOISY_HANDSHAKE_MARKERS)
+
+
+def _websocket_server_logger() -> logging.Logger:
+    logger = logging.getLogger("ijt_web_client.websockets")
+    if not any(getattr(filter_, "_ijt_suppress_invalid_handshake", False) for filter_ in logger.filters):
+        logger.addFilter(_SuppressInvalidWebSocketHandshake())
+    return logger
 
 
 async def handler(websocket):
@@ -129,7 +151,7 @@ async def main():
     # safe: server intentionally binds to all interfaces (containerised deployment).
     host = "0.0.0.0"  # nosec B104
     start_time = time.time()
-    websocket_server = await websockets.serve(handler, host, port)
+    websocket_server = await websockets.serve(handler, host, port, logger=_websocket_server_logger())
     elapsed = time.time() - start_time
 
     ijt_log.info(

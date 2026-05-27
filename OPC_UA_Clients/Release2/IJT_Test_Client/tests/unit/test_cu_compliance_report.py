@@ -92,7 +92,7 @@ def test_marker_dependency_cus_returns_unique_sorted_strings():
 
 
 def test_dependency_cus_for_not_supported_reason_matches_public_cu_label():
-    reason = "Skipped: IJT Joint Design Data NOT SUPPORTED"
+    reason = "Skipped: Conformance unit 'IJT Joint Design Data' is not supported NOT SUPPORTED"
 
     assert _dependency_cus_for_not_supported_reason(reason, ["joint_design_data", "engineering_units"]) == [
         "joint_design_data"
@@ -283,7 +283,7 @@ def test_recorder_attributes_not_supported_dependency_to_dependency_cu(report_tm
             nodeid="conformance/test_file.py::test_design_value_engineering_units",
             when="setup",
             skipped=True,
-            longrepr=("file.py", 9, "Skipped: IJT Joint Design Data NOT SUPPORTED"),
+            longrepr=("file.py", 9, "Skipped: Conformance unit 'IJT Joint Design Data' is not supported NOT SUPPORTED"),
         )
     )
     recorder.pytest_sessionfinish(None, 0)

@@ -448,7 +448,6 @@ def test_subprocess_env_preserves_explicit_npm_cache(monkeypatch):
 
 def test_websocket_backend_uses_existing_port(monkeypatch):
     runner = _load_runner()
-    monkeypatch.setattr(runner, "_port_open", lambda host, port, timeout=1.0: True)
     monkeypatch.setattr(runner, "wait_for_websocket_protocol_ready", lambda _ws_url, _endpoint, **_kwargs: None)
 
     started, ready, proc = runner._maybe_start_websocket_backend(Path("python"), "localhost", 8001)
@@ -460,7 +459,11 @@ def test_websocket_backend_uses_existing_port(monkeypatch):
 
 def test_websocket_backend_does_not_start_remote_host(monkeypatch):
     runner = _load_runner()
-    monkeypatch.setattr(runner, "_port_open", lambda host, port, timeout=1.0: False)
+    monkeypatch.setattr(
+        runner,
+        "wait_for_websocket_protocol_ready",
+        lambda _ws_url, _endpoint, **_kwargs: "ConnectionRefusedError: connection refused",
+    )
 
     started, ready, proc = runner._maybe_start_websocket_backend(Path("python"), "example.com", 8001)
 
@@ -493,9 +496,12 @@ def test_websocket_backend_auto_start_sets_ws_port(monkeypatch):
         return FakeProc()
 
     monkeypatch.setattr(runner, "ROOT", _PROJECT_ROOT)
-    port_checks = iter([False, True])
-    monkeypatch.setattr(runner, "_port_open", lambda host, port, timeout=1.0: next(port_checks))
-    monkeypatch.setattr(runner, "wait_for_websocket_protocol_ready", lambda _ws_url, _endpoint, **_kwargs: None)
+    probe_results = iter(["ConnectionRefusedError: connection refused", None])
+    monkeypatch.setattr(
+        runner,
+        "wait_for_websocket_protocol_ready",
+        lambda _ws_url, _endpoint, **_kwargs: next(probe_results),
+    )
     monkeypatch.setattr(runner.subprocess, "Popen", fake_popen)
 
     started, ready, proc = runner._maybe_start_websocket_backend(Path("python"), "localhost", 9001)
@@ -871,7 +877,6 @@ def test_feature_worker_pool_does_not_start_websocket_workers_after_simulator_re
 
 def test_websocket_backend_readiness_failure_terminates_owned_backend(monkeypatch, tmp_path):
     runner = _load_runner()
-    port_checks = iter([False, True])
 
     class FakeProc:
         def __init__(self):
@@ -893,12 +898,12 @@ def test_websocket_backend_readiness_failure_terminates_owned_backend(monkeypatc
     proc = FakeProc()
 
     monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(runner, "_port_open", lambda _host, _port, timeout=1.0: next(port_checks))
     monkeypatch.setattr(runner.subprocess, "Popen", lambda *_args, **_kwargs: proc)
+    probe_results = iter(["ConnectionRefusedError: connection refused", "backend readiness response timed out"])
     monkeypatch.setattr(
         runner,
         "wait_for_websocket_protocol_ready",
-        lambda _ws_url, _endpoint, **_kwargs: "backend readiness response timed out",
+        lambda _ws_url, _endpoint, **_kwargs: next(probe_results),
     )
 
     started, ready, returned_proc = runner._maybe_start_websocket_backend(

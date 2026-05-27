@@ -61,7 +61,7 @@ from helpers.node_discovery import (
     get_type_definition,
     read_tool_product_instance_uri,
 )
-from helpers.skip_reasons import skip_accepted_policy
+from helpers.skip_reasons import skip_accepted_policy, skip_companion_spec_note
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -328,7 +328,10 @@ async def test_all_joining_process_methods_present(joining_process_management, n
         if method_name in _MANDATORY_JPM_METHODS:
             pytest.fail(f"Mandatory method '{method_name}' not found in JoiningProcessManagement")
         else:
-            pytest.skip(f"Optional method '{method_name}': Not Supported — skipping")
+            skip_companion_spec_note(
+                f"Optional JoiningProcessManagement method '{method_name}' is absent; "
+                "dedicated method CU tracks server support"
+            )
 
 
 @pytest.mark.requires_cu(CU.JOINING_PROCESS_MANAGEMENT)
@@ -343,7 +346,10 @@ async def test_joining_process_method_input_arguments_match_nodeset(
     if node is None:
         if method_name in _MANDATORY_JPM_METHODS:
             pytest.fail(f"Mandatory method '{method_name}' not found in JoiningProcessManagement")
-        pytest.skip(f"Optional method '{method_name}': Not Supported")
+        skip_companion_spec_note(
+            f"Optional JoiningProcessManagement method '{method_name}' is absent; "
+            "dedicated method CU tracks server support"
+        )
     await assert_input_argument_names(node, expected_args, ns_opcua=ns_opcua, method_name=method_name)
 
 

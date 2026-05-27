@@ -701,6 +701,23 @@ def _websocket_probe_url(host: str, port: int) -> str:
     return f"ws://{ready_host}:{port}"
 
 
+def _websocket_probe_saw_closed_port(probe_error: str | None) -> bool:
+    if probe_error is None:
+        return False
+    lowered = probe_error.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "connectionrefusederror",
+            "connection refused",
+            "connect call failed",
+            "winerror 10061",
+            "errno 111",
+            "errno 61",
+        )
+    )
+
+
 def _local_host(host: str) -> bool:
     host_ip = _host_ip_address(host)
     return host == "localhost" or bool(host_ip and (host_ip.is_loopback or host_ip.is_unspecified))
@@ -719,10 +736,10 @@ def _maybe_start_websocket_backend(
         opcua_endpoint or os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL") or _default_opcua_endpoint()
     )
     probe_url = _websocket_probe_url(host, port)
-    if _port_open(host, port, timeout=1.0):
-        probe_error = wait_for_websocket_protocol_ready(probe_url, endpoint, attempts=1)
-        if probe_error is None:
-            return False, True, None
+    probe_error = wait_for_websocket_protocol_ready(probe_url, endpoint, attempts=1)
+    if probe_error is None:
+        return False, True, None
+    if not _websocket_probe_saw_closed_port(probe_error):
         _warn(f"WebSocket backend port {port} is open but backend readiness failed: {probe_error}")
         return False, False, None
     if not _local_host(host):
@@ -749,18 +766,17 @@ def _maybe_start_websocket_backend(
             stdin=subprocess.DEVNULL,
         )
 
-    ready_host = "127.0.0.1" if _wildcard_or_localhost_for_probe(host) else host
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         exit_code = proc.poll()
         if exit_code is not None:
             _warn(f"WebSocket backend exited with code {exit_code} before readiness; see {log_path}")
             return True, False, None
-        if _port_open(ready_host, port, timeout=1.0):
-            probe_error = wait_for_websocket_protocol_ready(probe_url, endpoint)
-            if probe_error is None:
-                _ok(f"WebSocket backend ready on :{port}")
-                return True, True, proc
+        probe_error = wait_for_websocket_protocol_ready(probe_url, endpoint, attempts=1)
+        if probe_error is None:
+            _ok(f"WebSocket backend ready on :{port}")
+            return True, True, proc
+        if not _websocket_probe_saw_closed_port(probe_error):
             _warn(f"WebSocket backend port {port} is open but backend readiness failed: {probe_error}; see {log_path}")
             _stop_websocket_backend(proc)
             return True, False, None
@@ -1179,12 +1195,12 @@ def _stage_python_lint(python: Path) -> StageResult:
             py_errors = summary.get("errorCount", 0)
             py_warns = summary.get("warningCount", 0)
             if py_errors:
-                _warn(f"pyright: advisory: {py_errors} error(s), {py_warns} warning(s)")
-                notes.append(f"pyright advisory: {py_errors} error(s)")
+                _warn(f"pyright advisory only: {py_errors} type issue(s), {py_warns} warning(s)")
+                notes.append(f"pyright advisory only: {py_errors} type issue(s)")
             elif py_warns:
-                _warn(f"pyright: advisory: 0 errors, {py_warns} warning(s)")
+                _warn(f"pyright advisory only: 0 type issues, {py_warns} warning(s)")
             else:
-                _ok("pyright: 0 errors, 0 warnings")
+                _ok("pyright: 0 type issues, 0 warnings")
         except Exception:
             _warn("pyright: could not parse output")
     else:

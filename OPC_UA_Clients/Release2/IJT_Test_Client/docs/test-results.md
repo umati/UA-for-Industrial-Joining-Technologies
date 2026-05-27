@@ -86,7 +86,7 @@ The live report records collected CU-marked tests, per-test outcomes, CU
 aggregates, conservative CU compliance status, Not Supported skips, and official
 CUs with no collected test path.
 Unsupported CU skips use compact public labels in runner summaries, for example
-`IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED`, so the
+`Method 'SendJoiningProcess' is not supported`, so the
 unsupported feature is visible without opening the test case.
 New manual skip sites should use `helpers.skip_reasons` so raw JUnit/Excel
 reasons start with one of the review categories: `NOT SUPPORTED`, `BLOCKED`,
@@ -252,7 +252,7 @@ not presented as warnings.
 
 | Category | Example Reason | Meaning |
 |---|---|---|
-| Unsupported CU / optional method / server feature | `IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED`; `IJT JoiningSystemConditionType NOT SUPPORTED` | Server profile or address space does not support this optional CU, method, or feature; skip is correct. For `JoiningSystemConditionType`, this means the current server/package does not expose retained Acknowledgeable Conditions. ConditionClass fields on `JoiningSystemEventType` remain supported and are separate from retained condition support. |
+| Unsupported CU / optional method / server feature | `Method 'SendJoiningProcess' is not supported NOT SUPPORTED`; `IJT JoiningSystemConditionType NOT SUPPORTED` | Server profile or address space does not support this optional CU, method, or feature; skip is correct. For `JoiningSystemConditionType`, this means the current server/package does not expose retained Acknowledgeable Conditions. ConditionClass fields on `JoiningSystemEventType` remain supported and are separate from retained condition support. |
 | Blocked runtime precondition | `BLOCKED - Method: StartSelectedJoining - tool/controller state is not ready` | The test path is valid, but the current server state cannot satisfy the setup precondition |
 | Accepted policy outcome | `ACCEPTED POLICY - Method: SelectJoiningProcess - selection precondition could not be established for current controller/tool state` | The server returned a documented simulator/domain policy result that should not fail the run |
 | Environment condition | `ENVIRONMENT - Docker backend not reachable` | Local tooling, port, browser, Docker, client-library, or network condition prevented the test path |

@@ -129,6 +129,9 @@ from helpers.report_scoring import (
     format_pct as _fmt_pct,
 )
 from helpers.report_scoring import (
+    format_primary_reason_note as _primary_reason_note,
+)
+from helpers.report_scoring import (
     format_status_counts as _format_status_counts,
 )
 from helpers.report_scoring import (
@@ -590,7 +593,7 @@ def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) 
             continue
         reason = next((_reason_bucket(str(test.get("reason") or "")) for test in matching if test.get("reason")), "")
         if reason and reason != "no reason":
-            notes.append(f"{label}: {reason}")
+            notes.append(_primary_reason_note(outcome, label, reason))
         else:
             notes.append(f"{label}: {len(matching)} test(s)")
     if not notes:

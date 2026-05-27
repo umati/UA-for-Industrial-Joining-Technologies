@@ -1268,9 +1268,9 @@ def _step_pyright() -> _StepResult:
         if not (proc.stdout or "").strip():
             result.ok = True
             if proc.returncode != 0:
-                result.note = "advisory: pyright failed with no JSON output"
+                result.note = "pyright advisory only: no JSON output"
             else:
-                result.note = "advisory: 0 errors, 0 warnings"
+                result.note = "pyright advisory only: 0 type issues, 0 warnings"
             return result
 
         data = json.loads(proc.stdout)
@@ -1280,12 +1280,16 @@ def _step_pyright() -> _StepResult:
         result.ok = True
         if errors:
             result.warn = True
-            result.note = f"advisory: {errors} error(s), {warns} warning(s)"
+            result.note = f"pyright advisory only: {errors} type issue(s), {warns} warning(s)"
         else:
-            result.note = f"advisory: 0 errors, {warns} warning(s)" if warns else "advisory: 0 errors, 0 warnings"
+            result.note = (
+                f"pyright advisory only: 0 type issues, {warns} warning(s)"
+                if warns
+                else "pyright advisory only: 0 type issues, 0 warnings"
+            )
     except Exception:
         result.ok = True
-        result.note = "advisory: pyright output parse failed"
+        result.note = "pyright advisory only: output parse failed"
     return result
 
 
@@ -1335,12 +1339,11 @@ def _has_explicit_coverage_option(args: list[str]) -> bool:
 
 
 def _default_live_coverage_args() -> list[str]:
-    """Return live-stage coverage args that collect diagnostics without blocking compliance."""
+    """Return live-stage coverage XML args that collect diagnostics without blocking compliance."""
     return [
         "--cov=helpers",
         "--cov-append",
         f"--cov-report=xml:{_RESULTS_DIR / 'coverage-combined.xml'}",
-        "--cov-report=term-missing",
         "--cov-fail-under=0",
     ]
 
@@ -1398,12 +1401,25 @@ def _default_excel_mode() -> str:
 def _summarize_skip_reason(message: str) -> str:
     """Return the compact skip reason shown in the runner summary."""
     from helpers.cu_registry import cu_key_for_method, format_cu_not_supported, format_method_not_supported
+    from helpers.report_scoring import format_primary_reason_note
 
     msg = message.removeprefix("Skipped: ").strip()
+    reason_lower = msg.lower()
+
+    if reason_lower.startswith("companion spec profile note - optional "):
+        return "Companion spec profile note: optional method checks are tracked by dedicated CUs"
+    if reason_lower.startswith("companion spec profile note -"):
+        return "Companion spec profile note"
 
     cu_match = re.search(r"Conformance unit '([^']+)'", msg)
     if cu_match:
-        return format_cu_not_supported(cu_match.group(1))
+        cu_or_display = cu_match.group(1)
+        reason = (
+            f"Conformance unit '{cu_or_display}' is not supported NOT SUPPORTED"
+            if cu_or_display.startswith("IJT ")
+            else format_cu_not_supported(cu_or_display)
+        )
+        return format_primary_reason_note("not_supported", "Not Supported", reason)
 
     method_match = re.search(
         r"Optional (?:[A-Za-z]+Management )?method '([^']+)'\s*:\s*Not Supported",
@@ -1411,23 +1427,38 @@ def _summarize_skip_reason(message: str) -> str:
         re.IGNORECASE,
     )
     if method_match:
-        return format_method_not_supported(method_match.group(1))
+        return format_primary_reason_note(
+            "not_supported", "Not Supported", format_method_not_supported(method_match.group(1))
+        )
 
     method_match = re.search(r"^([A-Za-z][A-Za-z0-9_]*)\s+method\s*:\s*Not Supported\b", msg, re.IGNORECASE)
     if method_match:
-        return format_method_not_supported(method_match.group(1))
+        return format_primary_reason_note(
+            "not_supported", "Not Supported", format_method_not_supported(method_match.group(1))
+        )
 
     method_match = re.search(r"^'([^']+)'\s*:\s*Not Supported\b", msg, re.IGNORECASE)
     if method_match and cu_key_for_method(method_match.group(1)):
-        return format_method_not_supported(method_match.group(1))
+        return format_primary_reason_note(
+            "not_supported", "Not Supported", format_method_not_supported(method_match.group(1))
+        )
 
     method_match = re.search(r"^([A-Za-z][A-Za-z0-9_]*)\s*:\s*Not Supported\b", msg, re.IGNORECASE)
     if method_match and cu_key_for_method(method_match.group(1)):
-        return format_method_not_supported(method_match.group(1))
+        return format_primary_reason_note(
+            "not_supported", "Not Supported", format_method_not_supported(method_match.group(1))
+        )
+
+    if msg.startswith(("Method '", "Methods '", "Conformance unit '")):
+        return format_primary_reason_note("not_supported", "Not Supported", msg)
 
     not_supported_index = msg.upper().find(" NOT SUPPORTED")
     if not_supported_index >= 0 and msg.startswith("IJT "):
-        return msg[: not_supported_index + len(" NOT SUPPORTED")]
+        return format_primary_reason_note(
+            "not_supported",
+            "Not Supported",
+            msg[: not_supported_index + len(" NOT SUPPORTED")],
+        )
 
     return msg
 

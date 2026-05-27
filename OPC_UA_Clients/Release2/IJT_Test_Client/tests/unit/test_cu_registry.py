@@ -213,22 +213,25 @@ class TestCuReportLabels:
     def test_not_supported_label_includes_method_name(self):
         assert (
             format_cu_not_supported(CU.SEND_JOINING_PROCESS)
-            == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"
+            == "Method 'SendJoiningProcess' is not supported NOT SUPPORTED"
         )
 
     def test_not_supported_label_handles_multi_method_cu(self):
         assert (
             format_cu_not_supported(CU.FEEDBACK_METHODS)
-            == "IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback NOT SUPPORTED"
+            == "Methods 'GetFeedbackFileList', 'SendFeedback' are not supported NOT SUPPORTED"
         )
 
     def test_not_supported_label_without_method_mapping(self):
-        assert format_cu_not_supported(CU.JOINT_DESIGN_DATA) == "IJT Joint Design Data NOT SUPPORTED"
+        assert (
+            format_cu_not_supported(CU.JOINT_DESIGN_DATA)
+            == "Conformance unit 'IJT Joint Design Data' is not supported NOT SUPPORTED"
+        )
 
     def test_method_lookup_uses_cu_label(self):
         assert (
             format_method_not_supported("SendJoiningProcess")
-            == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"
+            == "Method 'SendJoiningProcess' is not supported NOT SUPPORTED"
         )
 
     def test_cu_key_for_method(self):

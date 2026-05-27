@@ -70,7 +70,7 @@ class TestGetSkipReason:
 
     def test_uses_public_not_supported_label(self):
         reason = get_skip_reason("send_joining_process")
-        assert reason.startswith("IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED")
+        assert reason.startswith("Method 'SendJoiningProcess' is not supported NOT SUPPORTED")
 
     def test_omits_config_file_guidance(self):
         reason = get_skip_reason("any_key")

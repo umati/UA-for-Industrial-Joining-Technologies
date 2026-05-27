@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import runpy
 import sys
 from pathlib import Path
@@ -31,6 +32,21 @@ sys.path.insert(0, str(Path(__file__).parents[3] / "src"))
 import index  # noqa: E402
 
 
+def _log_record_for_exc(message: str, exc: Exception) -> logging.LogRecord:
+    try:
+        raise exc
+    except Exception:
+        return logging.LogRecord(
+            name="ijt_web_client.websockets",
+            level=logging.ERROR,
+            pathname=__file__,
+            lineno=0,
+            msg=message,
+            args=(),
+            exc_info=sys.exc_info(),
+        )
+
+
 def test_bootstrap_adds_src_path_when_absent(monkeypatch):
     """The module bootstrap must add src/ when launched as a script."""
     root = Path(index.__file__).resolve().parent
@@ -40,6 +56,21 @@ def test_bootstrap_adds_src_path_when_absent(monkeypatch):
     runpy.run_path(str(root / "index.py"), run_name="phase5_index_bootstrap")
 
     assert sys.path[0] == src
+
+
+def test_websocket_logger_suppresses_invalid_http_handshake():
+    record = _log_record_for_exc(
+        "opening handshake failed",
+        RuntimeError("did not receive a valid HTTP request"),
+    )
+
+    assert not index._SuppressInvalidWebSocketHandshake().filter(record)
+
+
+def test_websocket_logger_keeps_real_handler_failures_visible():
+    record = _log_record_for_exc("connection handler failed", RuntimeError("backend crashed"))
+
+    assert index._SuppressInvalidWebSocketHandshake().filter(record)
 
 
 # =============================================================================
@@ -310,6 +341,7 @@ class TestMain:
         assert mock_serve.call_args is not None
         port_arg = mock_serve.call_args[0][2]  # serve(handler, host, port)
         assert port_arg == 9999
+        assert mock_serve.call_args.kwargs["logger"].name == "ijt_web_client.websockets"
 
     @pytest.mark.asyncio
     async def test_invalid_ws_port_falls_back_to_8001(self, monkeypatch):

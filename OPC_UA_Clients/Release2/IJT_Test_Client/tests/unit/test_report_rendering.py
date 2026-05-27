@@ -291,6 +291,8 @@ def test_markdown_and_excel_share_report_scoring_helpers():
     assert _excel_report._status_for is _report_scoring.status_for
     assert _ci_summary._is_healthy is _report_scoring.is_healthy
     assert _excel_report._is_healthy is _report_scoring.is_healthy
+    assert _ci_summary._primary_reason_note is _report_scoring.format_primary_reason_note
+    assert _excel_report._primary_reason_note is _report_scoring.format_primary_reason_note
 
 
 def test_markdown_and_excel_use_same_status_count_formatter():
@@ -737,6 +739,33 @@ def test_excel_cu_coverage_has_no_change_column():
     assert "Change" not in headers
     assert ws["A1"].value == "Review Status"
     assert ws["B1"].value == "CU"
+
+
+def test_markdown_and_excel_share_human_readable_primary_reason(monkeypatch):
+    _patch_ci_metadata(monkeypatch)
+    payload = _sample_payload()
+    payload["tests"][0]["reason"] = "Skipped: IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED"
+
+    lines, _context = _ci_summary._render_profile_facet_summary(payload)
+    rendered = "\n".join(lines)
+    assert "Method 'AcknowledgeResults' is not supported" in rendered
+    assert "IJT Acknowledge Results - Method: AcknowledgeResults" not in rendered
+
+    profiles, facets, capabilities = _excel_metadata()
+    context = _excel_report._build_report_context(payload, profiles, facets, capabilities)
+    wb = _excel_report.openpyxl.Workbook()
+    wb.remove(wb.active)
+    _excel_report._build_cu_coverage(wb, payload, facets, capabilities, context)
+    ws = wb["Conformance Unit Details"]
+    headers = [ws.cell(row=1, column=col).value for col in range(1, ws.max_column + 1)]
+    reason_col = headers.index("Primary Reason") + 1
+    key_col = headers.index("CU Key") + 1
+    reason = next(
+        ws.cell(row=row, column=reason_col).value
+        for row in range(2, ws.max_row + 1)
+        if ws.cell(row=row, column=key_col).value == "optional_feature"
+    )
+    assert reason == "Method 'AcknowledgeResults' is not supported"
 
 
 def test_skip_diagnostics_filters_not_supported_prefix_in_markdown(monkeypatch):

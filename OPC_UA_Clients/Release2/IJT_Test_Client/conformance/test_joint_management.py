@@ -49,6 +49,7 @@ from helpers.cu_registry import CU
 from helpers.method_signature import JOINT_METHOD_INPUTS, assert_input_argument_names
 from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_OPC_UA
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system, read_tool_product_instance_uri
+from helpers.skip_reasons import skip_companion_spec_note
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -291,7 +292,9 @@ async def test_joint_method_input_arguments_match_nodeset(joint_management, ns_i
     ns_opcua = ns_indices.get(NS_OPC_UA, 0)
     node = await find_child_by_browse_name(joint_management, method_name, ns_ijt)
     if node is None:
-        pytest.skip(f"Optional method '{method_name}': Not Supported")
+        skip_companion_spec_note(
+            f"Optional JointManagement method '{method_name}' is absent; dedicated method CU tracks server support"
+        )
     await assert_input_argument_names(node, expected_args, ns_opcua=ns_opcua, method_name=method_name)
 
 

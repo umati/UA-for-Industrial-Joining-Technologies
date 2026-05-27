@@ -26,13 +26,14 @@ should not need label-specific edits.
 
 Public helpers include :func:`format_kpi_strip`, :func:`format_status_count`,
 :func:`format_status_label`, :func:`format_status_counts`,
-:func:`format_delta_summary`, :func:`outcome_label`,
+:func:`format_primary_reason_note`, :func:`format_delta_summary`, :func:`outcome_label`,
 :func:`format_outcome_label`, :func:`status_color_excel`, and
 :func:`is_healthy`.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any
@@ -233,6 +234,50 @@ def format_outcome_label(outcome: str) -> str:
 def format_status_counts(labels: tuple[str, ...], counts: Mapping[str, int]) -> str:
     """Render multiple status counts using the canonical KPI separator."""
     return KPI_SEPARATOR.join(format_status_count(label, _status_count(counts, label)) for label in labels)
+
+
+def format_primary_reason_note(outcome: str, label: str, reason: str) -> str:
+    """Render one concise user-facing reason without repeating the row status."""
+    display_reason = reason.strip()
+    if outcome == "not_supported":
+        display_reason = re.sub(
+            r"^Not Supported:\s*",
+            "",
+            display_reason,
+            flags=re.IGNORECASE,
+        )
+        display_reason = re.sub(r"\s+NOT SUPPORTED$", "", display_reason)
+        return _unsupported_reason_sentence(display_reason)
+    if display_reason.casefold().startswith(f"{label}:".casefold()):
+        return display_reason
+    return f"{label}: {display_reason}"
+
+
+def _unsupported_reason_sentence(display_reason: str) -> str:
+    single_method = re.fullmatch(r".+\s+-\s+Method:\s*([^:]+)", display_reason)
+    if single_method:
+        return f"Method '{single_method.group(1).strip()}' is not supported"
+
+    multi_method = re.fullmatch(r".+\s+-\s+Methods:\s*(.+)", display_reason)
+    if multi_method:
+        methods = [method.strip() for method in multi_method.group(1).split(",") if method.strip()]
+        quoted = "', '".join(methods)
+        return f"Methods '{quoted}' are not supported"
+
+    optional_method = re.fullmatch(
+        r"Optional method\s+'([^']+)':\s*Not Supported(?:\s+[—-]\s*(.+))?",
+        display_reason,
+        flags=re.IGNORECASE,
+    )
+    if optional_method:
+        detail = optional_method.group(2)
+        suffix = f" - {detail.strip()}" if detail else ""
+        return f"Method '{optional_method.group(1).strip()}' is not supported{suffix}"
+
+    if display_reason.startswith("IJT ") and ":" not in display_reason:
+        return f"Conformance unit '{display_reason}' is not supported"
+
+    return display_reason
 
 
 def action_items_context(counts: Mapping[str, int]) -> str:

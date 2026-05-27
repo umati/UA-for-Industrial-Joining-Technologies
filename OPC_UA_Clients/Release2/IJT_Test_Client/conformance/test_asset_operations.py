@@ -45,6 +45,7 @@ from helpers.node_discovery import (
     find_joining_system,
     find_method_set,
 )
+from helpers.skip_reasons import skip_companion_spec_note
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -209,7 +210,9 @@ async def test_asset_operation_method_input_arguments_match_nodeset(
         pytest.skip("AssetManagement MethodSet not found")
     method = await find_child_by_browse_name(ms, method_name, ns_ijt)
     if method is None:
-        pytest.skip(f"{method_name}: Not Supported — cannot validate method signature")
+        skip_companion_spec_note(
+            f"Optional AssetManagement method '{method_name}' is absent; dedicated method CU tracks server support"
+        )
     await assert_input_argument_names(method, expected_args, ns_opcua=ns_opcua, method_name=method_name)
 
 

@@ -22,17 +22,11 @@ from helpers.skip_reasons import (
 
 
 def test_not_supported_reason_for_cu_key():
-    assert (
-        not_supported_reason(CU.SEND_JOINING_PROCESS)
-        == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"
-    )
+    assert not_supported_reason(CU.SEND_JOINING_PROCESS) == "Method 'SendJoiningProcess' is not supported NOT SUPPORTED"
 
 
 def test_not_supported_reason_for_method_name():
-    assert (
-        not_supported_reason("SendJoiningProcess")
-        == "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED"
-    )
+    assert not_supported_reason("SendJoiningProcess") == "Method 'SendJoiningProcess' is not supported NOT SUPPORTED"
 
 
 def test_not_supported_reason_with_detail():
@@ -97,7 +91,7 @@ def test_simulator_regression_limit_reason():
 def test_skip_not_supported_raises_pytest_skip():
     with pytest.raises(pytest.skip.Exception) as exc:
         skip_not_supported("SendJoiningProcess")
-    assert "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED" in str(exc.value)
+    assert "Method 'SendJoiningProcess' is not supported NOT SUPPORTED" in str(exc.value)
 
 
 def test_skip_feature_not_supported_raises_pytest_skip():

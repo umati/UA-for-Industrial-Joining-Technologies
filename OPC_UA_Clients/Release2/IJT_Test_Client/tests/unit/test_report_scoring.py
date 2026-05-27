@@ -5,6 +5,7 @@ from helpers.report_scoring import (
     conformance_score,
     delta_symbol,
     format_pct,
+    format_primary_reason_note,
     informational_notes_context,
     is_healthy,
     pct_value,
@@ -141,6 +142,44 @@ def test_overview_context_rows_are_data_aware():
     actionable = {"action_needed": 1, "blocked": 2, "not_supported": 0, "with_notes": 0}
     assert action_items_context(actionable) == "Investigate failed or blocked CUs"
     assert informational_notes_context(actionable) == "No informational notes"
+
+
+def test_primary_reason_note_makes_not_supported_method_reasons_human_readable():
+    assert (
+        format_primary_reason_note(
+            "not_supported",
+            "Not Supported",
+            "IJT Acknowledge Results - Method: AcknowledgeResults NOT SUPPORTED",
+        )
+        == "Method 'AcknowledgeResults' is not supported"
+    )
+    assert (
+        format_primary_reason_note(
+            "not_supported",
+            "Not Supported",
+            "IJT Feedback Methods - Methods: GetFeedbackFileList, SendFeedback NOT SUPPORTED",
+        )
+        == "Methods 'GetFeedbackFileList', 'SendFeedback' are not supported"
+    )
+
+
+def test_primary_reason_note_handles_not_supported_cu_without_method_mapping():
+    assert (
+        format_primary_reason_note(
+            "not_supported",
+            "Not Supported",
+            "IJT Joint Design Data NOT SUPPORTED",
+        )
+        == "Conformance unit 'IJT Joint Design Data' is not supported"
+    )
+
+
+def test_primary_reason_note_does_not_duplicate_non_not_supported_labels():
+    assert format_primary_reason_note("blocked", "Blocked", "Missing prerequisite") == "Blocked: Missing prerequisite"
+    assert (
+        format_primary_reason_note("blocked", "Blocked", "Blocked: Missing prerequisite")
+        == "Blocked: Missing prerequisite"
+    )
 
 
 def test_delta_symbol_returns_empty_for_missing_baseline():

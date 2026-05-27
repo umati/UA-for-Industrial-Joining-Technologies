@@ -8,10 +8,10 @@
 
 | Server Support Coverage | Validation Health | Conformance Action Items | Server Scope Notes |
 |:---:|:---:|:---:|:---:|
-| **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked** | **⚪ 25 Not Supported · ℹ️ 3 With Notes** |
+| **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked** | **⚪ 25 Not Supported · ℹ️ 0 With Notes** |
 | 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | No action needed | Information only. Review scope and caveats |
 
-## 📋 CUs Needing Review — 28 rows
+## 📋 CUs Needing Review — 25 rows
 
 _Review rows only. Full 123-CU detail remains in `report.xlsx` and `report.html`._
 
