@@ -43,7 +43,7 @@ FROM python:3.14-slim-bookworm@sha256:a9bee15510a364124aa24692899d269835683b883d
 #   glibc 2.36 is too old. Python 3.14 is copied from the official python
 #   stage above (no third-party PPA, no source build).
 # ---------------------------------------------------------------------------
-FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b
+FROM ubuntu:24.04@sha256:db6914f1ac0c566f57857641e2214e3f3e453cb340cc2c890ed6c2b7b81b8a00
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin \
