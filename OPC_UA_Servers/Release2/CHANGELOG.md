@@ -1,5 +1,11 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-06-03
+
+1. Updated the simulator version to 1.15.0.
+2. Updated joint simulation logic to load GetJointList dynamically based on the list of Joining Programs returned from GetJoiningProcessList.
+3. Updated SendJoint logic to overwrite only new fields set and retain existing fields if Client does not send all fields.
+
 ## 2026-05-19
 
 1. Updated the simulator version to 1.14.0.
