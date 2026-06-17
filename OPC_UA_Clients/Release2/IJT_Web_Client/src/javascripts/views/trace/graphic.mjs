@@ -28,6 +28,7 @@ export default class Graphic {
     this.highlightDataset.setBorderWidth(5) */
 
     this.datasetMapping = {}
+    this.valueDatasetGroups = []
   }
 
   createStepValue (value, points, color) {
@@ -50,6 +51,7 @@ export default class Graphic {
     }
 
     this.setDataSet(value.ValueId, res)
+    this.valueDatasetGroups.push(res)
     return res
   }
 
@@ -59,6 +61,14 @@ export default class Graphic {
 
   setDataSet (valueId, content) {
     this.datasetMapping[valueId] = content
+  }
+
+  getAllDatasets () {
+    const datasets = [this.mainDataset, this.highlightDataset]
+    for (const value of this.valueDatasetGroups) {
+      datasets.push(value.valueDataset, value.targetDataset, value.limitsDataset)
+    }
+    return [...new Set(datasets.filter(Boolean))]
   }
 
   fade (fractionFade) {

@@ -4,7 +4,6 @@ import Graphic from './graphic.mjs'
 import { createOptionalTraceExtensionLoader } from './optional-trace-extension-loader.mjs'
 
 const LIMIT_ENDPOINT_ARROW_LENGTH = 14
-const LIMIT_ENDPOINT_BOX_RADIUS = 8
 const ZOOM_DEBOUNCE_MS = 100
 const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/core/limit-curve-geometry.mjs')
 
@@ -376,10 +375,20 @@ export default class ChartManager {
    * @param {*} selectedDataSets
    */
   filterOutGraphic (graphic) {
+    if (typeof graphic.getAllDatasets === 'function') {
+      this.filterOut(graphic.getAllDatasets())
+      return
+    }
     this.filterOut([graphic.mainDataset, graphic.highlightDataset])
     for (const value of Object.values(graphic.datasetMapping)) {
       this.filterOut([value.valueDataset, value.targetDataset, value.limitsDataset])
     }
+  }
+
+  clearTraceDatasets () {
+    this.myChart.data.datasets = this.myChart.data.datasets.filter((dataset) => {
+      return dataset?.envelopeMetaData?.type === 'envelope'
+    })
   }
 
   /**
@@ -395,20 +404,14 @@ export default class ChartManager {
   }
 
   newLimit (borderColour, areaColour, startOrEnd) {
-    const extension = limitGeometryExtension.get()
-    const createEndpointRadiusResolver = extension.createEndpointRadiusResolver ||
-      (() => () => 0)
-    const endpointRadius = createEndpointRadiusResolver(LIMIT_ENDPOINT_BOX_RADIUS)
-
     const limitDataSet = {
       borderColor: borderColour,
       borderWidth: 1,
       fill: startOrEnd,
       label: 'limit',
       backgroundColor: areaColour,
-      pointStyle: 'rect',
-      pointRadius: endpointRadius,
-      pointHoverRadius: endpointRadius,
+      pointRadius: 0,
+      pointHoverRadius: 0,
       pointHitRadius: 0,
       pointBorderColor: borderColour,
       pointBackgroundColor: borderColour,
@@ -425,5 +428,8 @@ export default class ChartManager {
 
   afterUpdateSubscribe (callback) {
     this.afterUpdateCallbacks.push(callback)
+    return () => {
+      this.afterUpdateCallbacks = this.afterUpdateCallbacks.filter((item) => item !== callback)
+    }
   }
 }

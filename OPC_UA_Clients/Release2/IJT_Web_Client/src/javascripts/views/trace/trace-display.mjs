@@ -38,6 +38,8 @@ export default class TraceDisplay {
     this.canvasCoverLayer.classList.add('traceArea')
     container.appendChild(this.canvasCoverLayer)
     this.mouseDownInTraceArea = false
+    this.fullscreenResizeTimer = null
+    this.setupFullscreenToggle()
 
     this.canvas = document.createElement('canvas')
     this.canvas.setAttribute('id', 'myChart')
@@ -84,6 +86,92 @@ export default class TraceDisplay {
     })
 
     // this.setupEventListeners()
+  }
+
+  setupFullscreenToggle () {
+    this.fullscreenButton = document.createElement('button')
+    this.fullscreenButton.type = 'button'
+    this.fullscreenButton.classList.add('traceFullscreenToggle')
+    this.fullscreenButton.setAttribute('aria-label', 'Expand trace')
+    this.fullscreenButton.setAttribute('aria-pressed', 'false')
+    this.fullscreenButton.title = 'Expand trace'
+
+    const stopTracePointerHandling = (evt) => {
+      evt.stopPropagation()
+    }
+    for (const eventName of ['mousedown', 'mouseup', 'touchstart', 'touchend', 'pointerdown', 'pointerup']) {
+      this.fullscreenButton.addEventListener(eventName, stopTracePointerHandling)
+    }
+    this.canvasCoverLayer.addEventListener('tracefullscreenchange', (evt) => {
+      this.traceManager?.onTraceFullscreenChanged?.(evt.detail?.expanded === true)
+    })
+    this.fullscreenButton.addEventListener('click', (evt) => {
+      evt.preventDefault()
+      evt.stopPropagation()
+      this.toggleFullscreen()
+    })
+    this.canvasCoverLayer.appendChild(this.fullscreenButton)
+  }
+
+  toggleFullscreen () {
+    if (this.canvasCoverLayer.classList.contains('is-trace-fullscreen')) {
+      this.exitFullscreen()
+    } else {
+      this.enterFullscreen()
+    }
+  }
+
+  enterFullscreen () {
+    for (const expandedTrace of document.querySelectorAll('.traceArea.is-trace-fullscreen')) {
+      if (expandedTrace !== this.canvasCoverLayer) {
+        expandedTrace.classList.remove('is-trace-fullscreen')
+        expandedTrace.querySelector('.traceFullscreenToggle')?.setAttribute('aria-pressed', 'false')
+        expandedTrace.querySelector('.traceFullscreenToggle')?.setAttribute('aria-label', 'Expand trace')
+        expandedTrace.querySelector('.traceFullscreenToggle')?.setAttribute('title', 'Expand trace')
+        expandedTrace.dispatchEvent(new CustomEvent('tracefullscreenchange', { detail: { expanded: false } }))
+      }
+    }
+    this.canvasCoverLayer.classList.add('is-trace-fullscreen')
+    document.body.classList.add('trace-fullscreen-open')
+    this.updateFullscreenButtonState()
+    this.canvasCoverLayer.dispatchEvent(new CustomEvent('tracefullscreenchange', { detail: { expanded: true } }))
+    this.scheduleChartResize()
+  }
+
+  exitFullscreen () {
+    this.canvasCoverLayer.classList.remove('is-trace-fullscreen')
+    if (!document.querySelector('.traceArea.is-trace-fullscreen')) {
+      document.body.classList.remove('trace-fullscreen-open')
+    }
+    this.updateFullscreenButtonState()
+    this.canvasCoverLayer.dispatchEvent(new CustomEvent('tracefullscreenchange', { detail: { expanded: false } }))
+    this.scheduleChartResize()
+  }
+
+  updateFullscreenButtonState () {
+    if (!this.fullscreenButton) {
+      return
+    }
+    const expanded = this.canvasCoverLayer.classList.contains('is-trace-fullscreen')
+    const label = expanded ? 'Shrink trace' : 'Expand trace'
+    this.fullscreenButton.setAttribute('aria-pressed', expanded ? 'true' : 'false')
+    this.fullscreenButton.setAttribute('aria-label', label)
+    this.fullscreenButton.title = label
+  }
+
+  scheduleChartResize () {
+    if (this.fullscreenResizeTimer) {
+      window.clearTimeout(this.fullscreenResizeTimer)
+    }
+    window.requestAnimationFrame(() => {
+      this.chartManager?.myChart?.resize?.()
+      this.update()
+      this.fullscreenResizeTimer = window.setTimeout(() => {
+        this.chartManager?.myChart?.resize?.()
+        this.update()
+        this.fullscreenResizeTimer = null
+      }, 220)
+    })
   }
 
   /**
@@ -171,6 +259,20 @@ export default class TraceDisplay {
     if (!this.selectedTrace && this.allTraces.length > 0) {
       this.selectTrace(this.allTraces[this.allTraces.length - 1])
     }
+    this.update()
+  }
+
+  clearAllTraces () {
+    for (const trace of this.allTraces) {
+      trace?.delete?.()
+    }
+    this.allTraces = []
+    this.chartManager?.clearTraceDatasets?.()
+    this.selectedTrace = null
+    this.selectedStep = null
+    this.result = null
+    this.traceInterface?.updateTracesInGUI?.(this.allTraces)
+    this.traceInterface?.clearSteps?.()
     this.update()
   }
 
@@ -327,6 +429,50 @@ export default class TraceDisplay {
         trace.displayOffset = this.findExtremes(step).min
       }
     }
+  }
+
+  findStepByProgramStepIdOrStepNumber (trace, programStepIdOrStepNumber) {
+    if (!trace || !Array.isArray(trace.steps)) {
+      return null
+    }
+    if (programStepIdOrStepNumber === 'all') {
+      return 'all'
+    }
+    if (Number.isInteger(programStepIdOrStepNumber)) {
+      return trace.steps[programStepIdOrStepNumber - 1] || null
+    }
+    return trace.findStepByProgramStepId(programStepIdOrStepNumber)
+  }
+
+  getStepXAxisRangeByProgramStepIdOrStepNumber (trace, programStepIdOrStepNumber) {
+    const step = this.findStepByProgramStepIdOrStepNumber(trace, programStepIdOrStepNumber)
+    if (!step || step === 'all') {
+      return null
+    }
+    const range = this.findExtremes(step)
+    if (!Number.isFinite(range.min) || !Number.isFinite(range.max)) {
+      return null
+    }
+    return range
+  }
+
+  alignByProgramStepIdOrStepNumber (trace, programStepIdOrStepNumber, referenceX = 0) {
+    const step = this.findStepByProgramStepIdOrStepNumber(trace, programStepIdOrStepNumber)
+    if (!step) {
+      return false
+    }
+    if (step === 'all') {
+      trace.displayOffset = 0
+      return true
+    }
+    const range = this.findExtremes(step)
+    const normalizedReferenceX = Number.isFinite(referenceX) ? referenceX : 0
+    const displayOffset = range.min - normalizedReferenceX
+    if (!Number.isFinite(displayOffset)) {
+      return false
+    }
+    trace.displayOffset = displayOffset
+    return true
   }
 
   zoomByIndex (trace, index) {
@@ -493,19 +639,25 @@ class GraphicalLimit {
   constructor (traceDisplay, limit, afterUpdateCallback) {
     this.traceDisplay = traceDisplay
     this.chartManager = traceDisplay.chartManager
-    this.glimit = this.chartManager.newLimit('red', 'rgba(135, 135, 241, 0.5)', 'start')
+    this.glimit = this.chartManager.newLimit('hsl(48 92% 58%)', 'hsl(48 92% 58% / 0.20)', 'start')
     this.chartManager.afterUpdateSubscribe(afterUpdateCallback)
+    this.latestLimit = limit
+    limitGeometryExtension.onLoad(() => {
+      if (this.latestLimit) {
+        this.update(this.latestLimit)
+      }
+    })
     this.update(limit)
   }
 
   update (limit) {
+    this.latestLimit = limit
     const extension = limitGeometryExtension.get()
     const determineLimitDirection = extension.determineLimitDirection ||
       (() => 1)
     const buildLimitCurvePoints = extension.buildLimitCurvePoints ||
       (() => [])
     this.glimit.envelopeMetaData.direction = determineLimitDirection(limit.range.start, limit.range.end)
-    this.glimit.borderColor = 'red'
     this.glimit.data = buildLimitCurvePoints(limit)
 
     if (limit.check.constructor.name === 'OverLimit') {

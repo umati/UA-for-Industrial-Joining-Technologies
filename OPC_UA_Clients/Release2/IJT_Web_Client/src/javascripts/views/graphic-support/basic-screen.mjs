@@ -5,6 +5,7 @@ import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
 
 const BUTTON_DEBOUNCE_MS = 150
 const DEFAULT_INPUT_WIDTH_PCT = 45
+const ENVELOPE_SECTION_STORAGE_PREFIX = 'ijt.envelope.sectionCollapsed'
 
 export default class BasicScreen {
   constructor (title) {
@@ -33,7 +34,113 @@ export default class BasicScreen {
     const area = document.createElement('div')
     area.appendChild(this.createLabel(title))
     area.appendChild(component)
+    this.setupEnvelopeCollapsibleTitle(area, title)
     return area
+  }
+
+  setupEnvelopeCollapsibleTitle (titleArea, title) {
+    if (!this.backGround?.classList?.contains('envelopeScreen')) {
+      return
+    }
+    titleArea.classList.add('envelopeCollapsibleTitle')
+    titleArea.setAttribute('role', 'button')
+    titleArea.setAttribute('tabindex', '0')
+
+    const applyStoredState = () => {
+      const section = titleArea.parentElement
+      if (!section) {
+        return
+      }
+      section.classList.add('envelopeCollapsibleSection')
+      if (!section.id) {
+        section.id = this.createEnvelopeSectionId(title)
+      }
+      titleArea.setAttribute('aria-controls', section.id)
+      const collapsed = this.readEnvelopeSectionCollapsed(title) === true
+      this.setEnvelopeSectionCollapsed(titleArea, section, collapsed)
+    }
+
+    const toggle = (evt) => {
+      if (this.isInteractiveTitleTarget(evt?.target, titleArea)) {
+        return
+      }
+      evt?.preventDefault?.()
+      evt?.stopPropagation?.()
+      const section = titleArea.parentElement
+      if (!section) {
+        return
+      }
+      const collapsed = !section.classList.contains('envelopeSectionCollapsed')
+      this.setEnvelopeSectionCollapsed(titleArea, section, collapsed)
+      this.writeEnvelopeSectionCollapsed(title, collapsed)
+    }
+
+    titleArea.addEventListener('click', toggle)
+    titleArea.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Enter' || evt.key === ' ') {
+        toggle(evt)
+      }
+    })
+    if (typeof window.queueMicrotask === 'function') {
+      window.queueMicrotask(applyStoredState)
+    } else {
+      window.setTimeout(applyStoredState, 0)
+    }
+  }
+
+  isInteractiveTitleTarget (target, titleArea) {
+    if (!target || target === titleArea) {
+      return false
+    }
+    return !!target.closest?.('button, input, select, textarea, a, [role="button"]')
+  }
+
+  setEnvelopeSectionCollapsed (titleArea, section, collapsed) {
+    section.classList.toggle('envelopeSectionCollapsed', collapsed)
+    titleArea.setAttribute('aria-expanded', collapsed ? 'false' : 'true')
+    titleArea.title = collapsed ? 'Click to show section' : 'Click to hide section'
+  }
+
+  envelopeSectionStorageKey (title) {
+    const screen = this.normalizeStorageKeyPart(this.title || 'Envelope')
+    const section = this.normalizeStorageKeyPart(title || 'Section')
+    return `${ENVELOPE_SECTION_STORAGE_PREFIX}.${screen}.${section}`
+  }
+
+  normalizeStorageKeyPart (value) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'unnamed'
+  }
+
+  createEnvelopeSectionId (title) {
+    const screen = this.normalizeStorageKeyPart(this.title || 'Envelope')
+    const section = this.normalizeStorageKeyPart(title || 'Section')
+    return `envelope-section-${screen}-${section}`
+  }
+
+  readEnvelopeSectionCollapsed (title) {
+    try {
+      return window.localStorage?.getItem(this.envelopeSectionStorageKey(title)) === 'collapsed'
+    } catch (error) {
+      ijtLog.warn('Could not read envelope section collapse state:', error)
+      return false
+    }
+  }
+
+  writeEnvelopeSectionCollapsed (title, collapsed) {
+    try {
+      const key = this.envelopeSectionStorageKey(title)
+      if (collapsed) {
+        window.localStorage?.setItem(key, 'collapsed')
+      } else {
+        window.localStorage?.removeItem(key)
+      }
+    } catch (error) {
+      ijtLog.warn('Could not store envelope section collapse state:', error)
+    }
   }
 
   createTitledInput (title, input, component) {

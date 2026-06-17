@@ -35,6 +35,92 @@
   height: 100%;
 }
 
+.traceArea .traceFullscreenToggle {
+  position: absolute;
+  top: var(--space-8);
+  right: var(--space-8);
+  z-index: 5;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: var(--ui-line-width) solid rgb(252 223 7 / 62%);
+  border-radius: var(--control-radius);
+  background: rgb(12 14 16 / 82%);
+  color: var(--ui-text-main);
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 32%);
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.traceArea .traceFullscreenToggle::before,
+.traceArea .traceFullscreenToggle::after {
+  content: '';
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-color: currentcolor;
+  border-style: solid;
+}
+
+.traceArea .traceFullscreenToggle::before {
+  top: 8px;
+  right: 8px;
+  border-width: 2px 2px 0 0;
+}
+
+.traceArea .traceFullscreenToggle::after {
+  left: 8px;
+  bottom: 8px;
+  border-width: 0 0 2px 2px;
+}
+
+.traceArea .traceFullscreenToggle:hover,
+.traceArea .traceFullscreenToggle:focus-visible {
+  background: rgb(252 223 7 / 20%);
+  border-color: rgb(252 223 7 / 92%);
+  transform: translateY(-1px);
+}
+
+.traceArea .traceFullscreenToggle:focus-visible {
+  outline: 2px solid rgb(252 223 7 / 75%);
+  outline-offset: 2px;
+}
+
+.traceArea.is-trace-fullscreen,
+.traceScreen .traceChartHost > .traceArea.is-trace-fullscreen,
+.demoScreen .demoTraceArea .traceArea.is-trace-fullscreen,
+.envelopeTraceField .traceArea.is-trace-fullscreen {
+  position: fixed;
+  inset: var(--space-10);
+  z-index: 10000;
+  height: auto;
+  min-height: 0;
+  padding: var(--space-6);
+  border: var(--ui-line-width) solid rgb(252 223 7 / 46%);
+  border-radius: var(--radius-lg);
+  background: var(--ui-bg-primary);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 58%);
+}
+
+.traceArea.is-trace-fullscreen .traceFullscreenToggle::before {
+  top: 10px;
+  right: 10px;
+  border-width: 0 0 2px 2px;
+}
+
+.traceArea.is-trace-fullscreen .traceFullscreenToggle::after {
+  left: 10px;
+  bottom: 10px;
+  border-width: 2px 2px 0 0;
+}
+
+body.trace-fullscreen-open {
+  overflow: hidden;
+}
+
 .traceScreen .traceMetaBar {
   display: flex;
   flex-wrap: wrap;
