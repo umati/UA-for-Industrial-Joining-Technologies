@@ -1121,30 +1121,37 @@ def test_playwright_install_retries_without_with_deps_on_local_linux(monkeypatch
     ]
 
 
-def test_playwright_install_fails_fast_when_node_tls_preflight_fails(monkeypatch):
+def test_playwright_install_retries_with_tls_bypass_when_preflight_fails(monkeypatch):
     runner = _load_runner()
     warnings: list[str] = []
+    infos: list[str] = []
+    captured_envs: list[dict] = []
 
     monkeypatch.setattr(runner, "_node_bin_path", lambda name: f"{name}.cmd")
+    monkeypatch.setattr(runner, "_node_executable_path", lambda: "node.exe")
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner, "_warn", warnings.append)
+    monkeypatch.setattr(runner, "_info", infos.append)
     monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+    monkeypatch.setattr(runner, "IS_WINDOWS", True)
     monkeypatch.setattr(
         runner,
         "_node_tls_download_preflight",
         lambda node: "Node cannot validate Playwright CDN TLS (UNABLE_TO_GET_ISSUER_CERT_LOCALLY)",
     )
 
-    def fail_if_install_runs(*_args, **_kwargs):
-        raise AssertionError("playwright install should not run after TLS preflight failure")
+    def mock_run(cmd, *, label="", env=None, **kwargs):
+        captured_envs.append(env or {})
+        return 0
 
-    monkeypatch.setattr(runner, "_run", fail_if_install_runs)
+    monkeypatch.setattr(runner, "_run", mock_run)
 
     result = runner._stage_playwright_install()
 
-    assert result.rc == 1
-    assert "UNABLE_TO_GET_ISSUER_CERT_LOCALLY" in result.notes[0]
-    assert warnings == [result.notes[0]]
+    assert result.rc == 0
+    assert any("TLS bypass" in n for n in result.notes)
+    assert captured_envs[0].get("NODE_TLS_REJECT_UNAUTHORIZED") == "0"
+    assert any("UNABLE_TO_GET_ISSUER_CERT_LOCALLY" in w for w in warnings)
 
 
 def test_e2e_local_connection_waits_for_endpoint_state_not_visual_status():
