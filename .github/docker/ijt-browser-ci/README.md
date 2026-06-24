@@ -8,8 +8,8 @@ commit `4ad418b5`.
 
 ## Files
 
-- `Dockerfile` — image definition (Python 3.14, Node 24, Playwright 1.60.0
-  + Chromium + Linux system libs; wheelhouse + npm cache pre-warmed).
+- `Dockerfile` — image definition (Python 3.14, Node 24, Playwright (version from
+  `package-lock.json`) + Chromium + Linux system libs; wheelhouse + npm cache pre-warmed).
 - `inputs-manifest.json` — canonical file list for the image dependency/cache
   fingerprint. Build, publish, pin refresh, and Integration use the same
   manifest so stale reviewed pins fail fast before browser suites run.
@@ -75,12 +75,13 @@ automatic without allowing live npm/pip/Playwright fetches during the browser
 test job.
 
 The image metadata and reviewed pin carry an `inputs_fingerprint` computed from
-`inputs-manifest.json`. When Integration consumes a PR/SHA image, it verifies
-the image metadata fingerprint against the current checkout. When Integration
-consumes the reviewed `image-pin.json` digest, it verifies the pin fingerprint
-against the current checkout before pulling/running the browser matrix. A stale
-pin therefore fails with a direct image-pin diagnostic instead of a late
-offline npm/pip cache miss.
+`inputs-manifest.json`. Integration first tries the reviewed pin, then a
+fingerprint cache image, then a same-run build. The resolver verifies the
+selected image metadata fingerprint against the current checkout before the
+browser matrix runs. A stale reviewed pin is therefore not a dependency-PR
+blocker when a matching cache image can be reused or built in the same run; a
+true metadata mismatch still fails with a direct image diagnostic instead of a
+late offline npm/pip cache miss.
 
 Fork PRs cannot publish GHCR images with the repository token. If a fork needs
 to change browser image inputs, a maintainer must replay the branch from this

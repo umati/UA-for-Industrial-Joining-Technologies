@@ -97,6 +97,7 @@ jobs:
       cache_key: ${{ steps.decide.outputs.cache_key }}
       pr_image_tag: ${{ steps.decide.outputs.pr_image_tag }}
       inputs_fingerprint: ${{ steps.fingerprint.outputs.inputs_fingerprint }}
+      playwright_version: ${{ steps.playwright.outputs.playwright_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
@@ -112,6 +113,18 @@ jobs:
           set -euo pipefail
           python .github/scripts/compute_browser_image_fingerprint.py --format github-output >> "$GITHUB_OUTPUT"
           python .github/scripts/compute_browser_image_fingerprint.py --format json
+
+      - name: Extract Playwright version from Web Client package-lock.json
+        # Single source of truth: the lockfile already constrains the exact version
+        # that npm ci will install into the image. Reading it here means the LABEL
+        # and metadata.json are always consistent with the lockfile — no manual
+        # version string to update when Renovate bumps @playwright/test.
+        id: playwright
+        run: |
+          set -euo pipefail
+          PW_VERSION=$(python -c "import json; d=json.load(open('OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json')); print(d['packages']['node_modules/@playwright/test']['version'])")
+          echo "playwright_version=${PW_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Playwright version from package-lock.json: ${PW_VERSION}"
 
       - name: Assert caller's expected fingerprint matches this checkout
         # Runs only on the workflow_call path (integration.yml planner -> build).
@@ -210,6 +223,7 @@ jobs:
             IMAGE_BUILD_REF=${{ github.ref }}
             IMAGE_BUILD_SHA=${{ steps.decide.outputs.source_sha }}
             IMAGE_INPUTS_FINGERPRINT=${{ steps.fingerprint.outputs.inputs_fingerprint }}
+            IMAGE_PLAYWRIGHT_VERSION=${{ steps.playwright.outputs.playwright_version }}
           cache-from: type=gha,scope=ijt-browser-ci
           cache-to: type=gha,scope=ijt-browser-ci,mode=max
 
@@ -428,6 +442,7 @@ jobs:
             IMAGE_BUILD_REF=${{ github.ref }}
             IMAGE_BUILD_SHA=${{ needs.build.outputs.source_sha }}
             IMAGE_INPUTS_FINGERPRINT=${{ needs.build.outputs.inputs_fingerprint }}
+            IMAGE_PLAYWRIGHT_VERSION=${{ needs.build.outputs.playwright_version }}
           provenance: true
           sbom: true
           cache-from: type=gha,scope=ijt-browser-ci

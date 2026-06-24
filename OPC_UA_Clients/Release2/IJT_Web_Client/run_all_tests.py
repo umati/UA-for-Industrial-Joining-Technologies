@@ -312,6 +312,15 @@ def _node_bin_path(name: str) -> Path | None:
     return None
 
 
+def _node_executable_path() -> Path | None:
+    candidates = ["node.exe", "node"] if IS_WINDOWS else ["node"]
+    for candidate in candidates:
+        path = shutil.which(candidate)
+        if path:
+            return Path(path)
+    return None
+
+
 def _missing_node_requirements(
     *,
     packages: tuple[str, ...] = (),
@@ -320,6 +329,70 @@ def _missing_node_requirements(
     missing = [f"package:{package}" for package in packages if not _node_package_path(package).exists()]
     missing.extend(f"bin:{name}" for name in bins if _node_bin_path(name) is None)
     return missing
+
+
+def _docker_engine_ostype(docker: str) -> str | None:
+    try:
+        result = subprocess.run(
+            [docker, "info", "--format", "{{.OSType}}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    ostype = result.stdout.strip().lower()
+    return ostype or None
+
+
+def _docker_linux_engine_skip_note(docker: str) -> str | None:
+    ostype = _docker_engine_ostype(docker)
+    if ostype == "linux":
+        return None
+    if ostype == "windows":
+        return (
+            "Docker is running Windows containers; switch Docker Desktop to "
+            "Linux containers before running Docker smoke"
+        )
+    return "Docker daemon OSType could not be determined"
+
+
+def _node_tls_download_preflight(node: Path | None) -> str | None:
+    """Return a clear failure note when Node cannot TLS-connect to Playwright CDN."""
+    if node is None:
+        return "local Node.js binary not found"
+    script = (
+        "const https=require('https');"
+        "const req=https.request('https://cdn.playwright.dev/',{method:'HEAD',timeout:10000},res=>{"
+        "res.resume();process.exit(0);"
+        "});"
+        "req.on('timeout',()=>{req.destroy(new Error('timeout'));});"
+        "req.on('error',err=>{console.error(err.code||err.message);process.exit(1);});"
+        "req.end();"
+    )
+    try:
+        result = subprocess.run(
+            [str(node), "-e", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return "Node TLS preflight for Playwright CDN failed before browser download"
+    if result.returncode == 0:
+        return None
+    stderr = (result.stderr or "").strip()
+    if "UNABLE_TO_GET_ISSUER_CERT_LOCALLY" in stderr:
+        return (
+            "Node cannot validate Playwright CDN TLS (UNABLE_TO_GET_ISSUER_CERT_LOCALLY); "
+            "configure NODE_EXTRA_CA_CERTS or npm cafile with the corporate CA before "
+            "running Playwright browser installs"
+        )
+    return f"Node cannot reach Playwright CDN before browser download: {stderr or 'unknown error'}"
 
 
 def _kill_proc_tree(pid: int) -> None:
@@ -1481,6 +1554,16 @@ def _stage_playwright_install() -> StageResult:
             notes=["chromium browser already installed"],
         )
 
+    tls_note = _node_tls_download_preflight(_node_executable_path())
+    if tls_note:
+        _warn(tls_note)
+        return StageResult(
+            "playwright-install",
+            1,
+            duration=time.monotonic() - t0,
+            notes=[tls_note],
+        )
+
     env = os.environ.copy()
 
     if IS_WINDOWS:
@@ -2567,6 +2650,9 @@ def _stage_docker_smoke() -> StageResult:
     docker = shutil.which("docker") or shutil.which("docker.exe")
     if not docker:
         return StageResult("docker-smoke", 0, skipped=True, notes=["docker not in PATH"])
+    linux_skip = _docker_linux_engine_skip_note(docker)
+    if linux_skip:
+        return StageResult("docker-smoke", 0, skipped=True, notes=[linux_skip])
     compose_cmd = [docker, "compose"]
 
     # DOCKER_BUILDKIT=1 enables layer caching — repeated local builds take seconds, not minutes.
