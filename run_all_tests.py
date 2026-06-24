@@ -806,6 +806,36 @@ def _docker_daemon_running(docker: str) -> bool:
         return False
 
 
+def _docker_engine_ostype(docker: str) -> str | None:
+    """Return Docker daemon OSType (linux/windows) when the daemon responds."""
+    try:
+        result = subprocess.run(
+            [docker, "info", "--format", "{{.OSType}}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    ostype = result.stdout.strip().lower()
+    return ostype or None
+
+
+def _docker_linux_engine_skip_note(docker: str) -> str | None:
+    """Return a skip reason when Docker cannot build Linux images locally."""
+    ostype = _docker_engine_ostype(docker)
+    if ostype == "linux":
+        return None
+    if ostype == "windows":
+        return (
+            "Docker is running Windows containers; switch Docker Desktop to "
+            "Linux containers before running Linux-image suites"
+        )
+    return "Docker daemon OSType could not be determined"
+
+
 def _start_server(no_rebuild: bool = False) -> bool:
     """Start the OPC UA server. Tries native binary first, Docker as fallback.
 
@@ -1650,6 +1680,9 @@ def _suite_server_linux_package_smoke() -> SuiteResult:
         return SuiteResult(name, True, skipped=True, notes=["docker not in PATH"])
     if not _docker_daemon_running(docker):
         return SuiteResult(name, True, skipped=True, notes=["Docker daemon not running"])
+    linux_skip = _docker_linux_engine_skip_note(docker)
+    if linux_skip:
+        return SuiteResult(name, True, skipped=True, notes=[linux_skip])
     if not _LINUX_PACKAGE_ZIP.exists():
         return SuiteResult(
             name,
@@ -2067,6 +2100,9 @@ def _suite_webclient_docker_smoke() -> SuiteResult:
         return SuiteResult(name, True, skipped=True, notes=["docker not in PATH"])
     if not _docker_daemon_running(docker):
         return SuiteResult(name, True, skipped=True, notes=["Docker daemon not running"])
+    linux_skip = _docker_linux_engine_skip_note(docker)
+    if linux_skip:
+        return SuiteResult(name, True, skipped=True, notes=[linux_skip])
 
     return _delegate_to_runner(
         name=name,

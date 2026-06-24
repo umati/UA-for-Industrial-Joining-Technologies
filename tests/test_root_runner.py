@@ -1073,6 +1073,7 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
     monkeypatch.setattr(_runner, "_delegate_to_runner", _fake_delegate_to_runner)
     monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
     monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
+    monkeypatch.setattr(_runner, "_docker_linux_engine_skip_note", lambda docker: None)
 
     results = [
         _runner._suite_webclient_live_python_opcua(),
@@ -1287,6 +1288,7 @@ def test_webclient_docker_smoke_skips_when_docker_daemon_is_not_running(monkeypa
 def test_server_linux_package_smoke_fails_when_package_missing(monkeypatch) -> None:
     monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
     monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
+    monkeypatch.setattr(_runner, "_docker_linux_engine_skip_note", lambda docker: None)
     monkeypatch.setattr(_runner, "_LINUX_PACKAGE_ZIP", Path("missing.zip"))
 
     result = _runner._suite_server_linux_package_smoke()
@@ -1294,6 +1296,38 @@ def test_server_linux_package_smoke_fails_when_package_missing(monkeypatch) -> N
     assert not result.ok
     assert not result.skipped
     assert result.notes == ["missing package: missing.zip"]
+
+
+def test_server_linux_package_smoke_skips_on_windows_docker_engine(monkeypatch) -> None:
+    monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
+    monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
+    monkeypatch.setattr(
+        _runner,
+        "_docker_linux_engine_skip_note",
+        lambda docker: (
+            "Docker is running Windows containers; switch Docker Desktop to Linux containers"
+        ),
+    )
+
+    result = _runner._suite_server_linux_package_smoke()
+
+    assert result.ok
+    assert result.skipped
+    assert "Windows containers" in result.notes[0]
+
+
+def test_docker_linux_engine_skip_note_classifies_engine_modes(monkeypatch) -> None:
+    monkeypatch.setattr(_runner, "_docker_engine_ostype", lambda docker: "linux")
+    assert _runner._docker_linux_engine_skip_note("docker") is None
+
+    monkeypatch.setattr(_runner, "_docker_engine_ostype", lambda docker: "windows")
+    assert "Windows containers" in _runner._docker_linux_engine_skip_note("docker")
+
+    monkeypatch.setattr(_runner, "_docker_engine_ostype", lambda docker: None)
+    assert (
+        _runner._docker_linux_engine_skip_note("docker")
+        == "Docker daemon OSType could not be determined"
+    )
 
 
 def test_server_linux_package_smoke_uses_dedicated_docker_port(monkeypatch) -> None:
@@ -1332,6 +1366,7 @@ def test_server_linux_package_smoke_uses_dedicated_docker_port(monkeypatch) -> N
 
     monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
     monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
+    monkeypatch.setattr(_runner, "_docker_linux_engine_skip_note", lambda docker: None)
     monkeypatch.setattr(_runner, "_LINUX_PACKAGE_ZIP", package)
     monkeypatch.setattr(_runner, "SMOKE_TEST", smoke_test)
     monkeypatch.setattr(_runner, "_current_python", lambda: "python")
@@ -1350,6 +1385,24 @@ def test_server_linux_package_smoke_uses_dedicated_docker_port(monkeypatch) -> N
     ) in docker_run
     smoke_cmd = next(cmd for cmd in commands if str(smoke_test) in cmd)
     assert f"opc.tcp://localhost:{_runner.OPCUA_SERVER_PORT_SERVER_DOCKER}" in smoke_cmd
+
+
+def test_webclient_docker_smoke_skips_on_windows_docker_engine(monkeypatch) -> None:
+    monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
+    monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
+    monkeypatch.setattr(
+        _runner,
+        "_docker_linux_engine_skip_note",
+        lambda docker: (
+            "Docker is running Windows containers; switch Docker Desktop to Linux containers"
+        ),
+    )
+
+    result = _runner._suite_webclient_docker_smoke()
+
+    assert result.ok
+    assert result.skipped
+    assert "Windows containers" in result.notes[0]
 
 
 def test_all_runner_https_preflights_use_requests_rules_endpoint(monkeypatch) -> None:

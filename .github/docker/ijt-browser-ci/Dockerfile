@@ -6,7 +6,7 @@
 # is sensitive to upstream apt-mirror availability and timeout budgets.
 #
 # Contract:
-#   - Python 3.14.x, Node 24.x, Playwright 1.60.0 + Chromium + Linux system
+#   - Python 3.14.x, Node 24.x, Playwright (version derived from package-lock.json) + Chromium + Linux system
 #     libs, all baked at image-build time.
 #   - Offline-by-construction at runtime: pip wheelhouse, npm cache, browser
 #     cache pre-warmed; intended to be invoked with --network=none.
@@ -172,12 +172,15 @@ ARG IMAGE_BUILD_REF=unknown
 ARG IMAGE_BUILD_SHA=unknown
 ARG IMAGE_BUILD_CREATED=unknown
 ARG IMAGE_INPUTS_FINGERPRINT=unknown
+# Playwright version is NOT hardcoded here. It is derived at build time from the
+# baked-in package-lock.json (see step 6) so Renovate bumps propagate automatically.
+ARG IMAGE_PLAYWRIGHT_VERSION=unknown
 RUN python -c "import json,sys,subprocess; \
     py=sys.version.split()[0]; \
     node=subprocess.check_output(['node','--version'],text=True).strip(); \
     npm=subprocess.check_output(['npm','--version'],text=True).strip(); \
     meta={'python_version':py,'node_version':node,'npm_version':npm,\
-          'playwright_version':'1.60.0',\
+          'playwright_version':json.load(open('/opt/ijt-browser-ci/web-client-deps/package-lock.json'))['packages']['node_modules/@playwright/test']['version'],\
           'build_ref':'${IMAGE_BUILD_REF}','build_sha':'${IMAGE_BUILD_SHA}',\
           'inputs_fingerprint':'${IMAGE_INPUTS_FINGERPRINT}',\
           'build_created':'${IMAGE_BUILD_CREATED}',\
@@ -207,7 +210,7 @@ LABEL org.opencontainers.image.title="ijt-browser-ci" \
       org.opencontainers.image.ref.name="${IMAGE_BUILD_REF}" \
       org.umati.ijt.python_version="3.14" \
       org.umati.ijt.node_version="24.x" \
-      org.umati.ijt.playwright_version="1.60.0" \
+      org.umati.ijt.playwright_version="${IMAGE_PLAYWRIGHT_VERSION}" \
       org.umati.ijt.inputs_fingerprint="${IMAGE_INPUTS_FINGERPRINT}" \
       org.umati.ijt.base_ubuntu_digest="sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b" \
       org.umati.ijt.base_python_digest="sha256:eae5d4c3ba20e5f89782e37950bb4815460e8f27564fd25112c3d950cd5351c9" \
