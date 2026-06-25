@@ -352,6 +352,59 @@ def test_integration_drift_warnings_skip_within_tolerance():
     assert len(warnings) == 0
 
 
+def test_integration_drift_warnings_minimum_mode_negative_drift():
+    """minimum mode warns when tests decrease below baseline."""
+    baseline = {
+        "drift_policy": {"mode": "minimum", "growth_warn_percent": 25, "growth_warn_absolute": 50},
+        "suites": {"wd_py": {"min_tests": 700, "skipped": 0}},
+        "skip_tolerance_default": 0,
+    }
+    suite_counts = [("wd_py", "Web Client Python", (680, 680, 0, 0))]
+    warnings = system_tests_run_summary.integration_drift_warnings(baseline, suite_counts, "12345")
+    assert len(warnings) == 1
+    assert "tests may have disappeared" in warnings[0]
+    assert "(-20 vs minimum 700)" in warnings[0]
+
+
+def test_integration_drift_warnings_minimum_mode_normal_positive_drift():
+    """minimum mode silently accepts normal positive drift."""
+    baseline = {
+        "drift_policy": {"mode": "minimum", "growth_warn_percent": 25, "growth_warn_absolute": 50},
+        "suites": {"wd_py": {"min_tests": 700, "skipped": 0}},
+        "skip_tolerance_default": 0,
+    }
+    suite_counts = [("wd_py", "Web Client Python", (720, 720, 0, 0))]
+    warnings = system_tests_run_summary.integration_drift_warnings(baseline, suite_counts, "12345")
+    assert len(warnings) == 0
+
+
+def test_integration_drift_warnings_minimum_mode_suspicious_growth():
+    """minimum mode warns on unusually large positive drift."""
+    baseline = {
+        "drift_policy": {"mode": "minimum", "growth_warn_percent": 25, "growth_warn_absolute": 50},
+        "suites": {"wd_py": {"min_tests": 100, "skipped": 0}},
+        "skip_tolerance_default": 0,
+    }
+    # +60 exceeds max(50, 100*25//100=25) = 50
+    suite_counts = [("wd_py", "Web Client Python", (160, 160, 0, 0))]
+    warnings = system_tests_run_summary.integration_drift_warnings(baseline, suite_counts, "12345")
+    assert len(warnings) == 1
+    assert "unusually large increase" in warnings[0]
+
+
+def test_integration_drift_warnings_minimum_mode_at_threshold_no_warn():
+    """minimum mode does not warn when positive drift is exactly at threshold."""
+    baseline = {
+        "drift_policy": {"mode": "minimum", "growth_warn_percent": 25, "growth_warn_absolute": 50},
+        "suites": {"wd_py": {"min_tests": 100, "skipped": 0}},
+        "skip_tolerance_default": 0,
+    }
+    # +50 equals max(50, 25) = 50, not exceeds it
+    suite_counts = [("wd_py", "Web Client Python", (150, 150, 0, 0))]
+    warnings = system_tests_run_summary.integration_drift_warnings(baseline, suite_counts, "12345")
+    assert len(warnings) == 0
+
+
 def test_must_not_skip_failures_allows_legitimate_skip_suites():
     """must_not_skip_failures allows skips in conformance/live/security suites."""
     suite_counts = [

@@ -608,7 +608,7 @@ def load_integration_baseline(path="tests/baselines/integration-test-counts.json
         with open(path, encoding="utf-8") as fh:
             payload = json.load(fh)
         suites = payload.get("suites", {})
-        if payload.get("schema_version") != 1 or not isinstance(suites, dict):
+        if payload.get("schema_version") not in (1, 2) or not isinstance(suites, dict):
             raise ValueError("unsupported baseline schema")
         return payload, None
     except Exception as exc:
@@ -639,24 +639,58 @@ def integration_drift_warnings(baseline, suite_counts, run_id):
     """Build non-failing warnings for test-count and skip-count drift."""
     warnings = []
     default_tolerance = int(baseline.get("skip_tolerance_default", 0) or 0)
+    drift_policy = baseline.get("drift_policy", {})
+    drift_mode = drift_policy.get("mode", "exact")
+    growth_warn_pct = int(drift_policy.get("growth_warn_percent", 25))
+    growth_warn_abs = int(drift_policy.get("growth_warn_absolute", 50))
+
     for key, label, counts in suite_counts:
         entry = baseline_suite(baseline, key)
         if not entry or counts[0] is None:
             continue
         total, _passed, _failed, skipped = counts
-        expected_tests = entry.get("tests")
+        # Support both legacy "tests" and new "min_tests" field names
+        expected_tests = entry.get("min_tests") or entry.get("tests")
         if expected_tests is not None:
-            delta = total - int(expected_tests)
-            if delta != 0:
-                reanchor_command = (
-                    f"python tests/tools/update_integration_baseline.py --run {run_id} "
-                    f"--suite {key}"
-                )
-                warnings.append(
-                    f"⚠️ **{label}**: {total:,} tests ({delta:+d} vs baseline "
-                    f"{int(expected_tests):,}) — investigate suite collection drift."
-                    f" After review, re-anchor with `{reanchor_command}`."
-                )
+            expected_tests = int(expected_tests)
+            delta = total - expected_tests
+
+            if drift_mode == "minimum":
+                # Negative drift: always warn (tests disappeared)
+                if delta < 0:
+                    reanchor_command = (
+                        f"python tests/tools/update_integration_baseline.py --run {run_id} "
+                        f"--suite {key}"
+                    )
+                    warnings.append(
+                        f"⚠️ **{label}**: {total:,} tests ({delta:+d} vs minimum "
+                        f"{expected_tests:,}) — tests may have disappeared."
+                        f" Investigate and re-anchor with `{reanchor_command}`."
+                    )
+                # Suspicious positive drift: warn if growth exceeds threshold
+                elif delta > max(growth_warn_abs, expected_tests * growth_warn_pct // 100):
+                    reanchor_command = (
+                        f"python tests/tools/update_integration_baseline.py --run {run_id} "
+                        f"--suite {key}"
+                    )
+                    warnings.append(
+                        f"⚠️ **{label}**: {total:,} tests ({delta:+d} vs baseline "
+                        f"{expected_tests:,}) — unusually large increase; check "
+                        f"parametrization/discovery. Re-anchor with `{reanchor_command}`."
+                    )
+                # Normal positive drift: silent, no action needed
+            else:
+                # Legacy exact mode: any drift warns
+                if delta != 0:
+                    reanchor_command = (
+                        f"python tests/tools/update_integration_baseline.py --run {run_id} "
+                        f"--suite {key}"
+                    )
+                    warnings.append(
+                        f"⚠️ **{label}**: {total:,} tests ({delta:+d} vs baseline "
+                        f"{int(expected_tests):,}) — investigate suite collection drift."
+                        f" After review, re-anchor with `{reanchor_command}`."
+                    )
 
         expected_skips = entry.get("skipped")
         if expected_skips is None or skipped is None:

@@ -1,60 +1,66 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "captured_from_run": 26534430196,
   "captured_at": "2026-05-27T19:48:22Z",
   "skip_tolerance_default": 0,
+  "drift_policy": {
+    "mode": "minimum",
+    "growth_warn_percent": 25,
+    "growth_warn_absolute": 50,
+    "comment": "Baseline is a minimum floor. Negative drift warns always. Positive drift warns only if it exceeds max(growth_warn_absolute, baseline * growth_warn_percent / 100). Skipped tests use stricter tolerance (per-suite skip_tolerance)."
+  },
   "suites": {
     "sd_smoke": {
       "label": "OPC UA Server - Docker Smoke",
-      "tests": 10,
+      "min_tests": 10,
       "skipped": 0,
       "skip_tolerance": 0
     },
     "wd_py": {
       "label": "Web Client - Docker Python Unit",
-      "tests": 702,
+      "min_tests": 704,
       "skipped": 0,
       "skip_tolerance": 0
     },
     "wd_js": {
       "label": "Web Client - Docker JavaScript",
-      "tests": 557,
+      "min_tests": 557,
       "skipped": 0,
       "skip_tolerance": 0
     },
     "tc_smoke": {
       "label": "Test Client - Smoke Sanity",
-      "tests": 10,
+      "min_tests": 10,
       "skipped": 0,
       "skip_tolerance": 0
     },
     "tc_tests": {
       "label": "Test Client - Conformance",
-      "tests": 1043,
+      "min_tests": 1043,
       "skipped": 152,
       "skip_tolerance": 10
     },
     "wc_live": {
       "label": "Web Client - Python/WebSocket Live",
-      "tests": 127,
+      "min_tests": 127,
       "skipped": 0,
       "skip_tolerance": 0
     },
     "wc_browser": {
       "label": "Web Client - Browser E2E",
-      "tests": 66,
+      "min_tests": 66,
       "skipped": 0,
       "skip_tolerance": 0
     },
     "con_live": {
       "label": "Console Client - Live",
-      "tests": 18,
+      "min_tests": 18,
       "skipped": 0,
       "skip_tolerance": 0
     },
     "cs_live": {
       "label": "C# Client - Live",
-      "tests": 110,
+      "min_tests": 110,
       "skipped": 0,
       "skip_tolerance": 0
     }

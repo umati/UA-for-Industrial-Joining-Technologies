@@ -69,6 +69,21 @@ cache writes are limited to trusted `main` runs. The smoke-test Python
 dependencies intentionally do not use `actions/setup-python` pip caching in
 this artifact-producing job.
 
+### Test-count baseline policy (schema v2)
+
+The committed baseline (`tests/baselines/integration-test-counts.json`) uses
+**minimum-floor semantics** with a suspicious-growth threshold:
+
+| Condition | Behaviour |
+|-----------|-----------|
+| Actual < `min_tests` | ⚠️ Warning — tests may have disappeared |
+| Actual > `min_tests` (normal growth) | Silent — no action needed |
+| Actual > `min_tests` + max(50, 25%) | ⚠️ Warning — unusually large increase |
+| Skipped > baseline + `skip_tolerance` | ⚠️ Warning — skip drift |
+
+Re-anchor with `python tests/tools/update_integration_baseline.py --run <id> --suite <key>`
+only when intentionally removing tests. Normal test additions need no baseline update.
+
 ### Integration Jobs
 
 For full job descriptions, test baselines, and toolchain versions, see the **CI/CD** section in [`docs/SKILLS.md`](../docs/SKILLS.md).

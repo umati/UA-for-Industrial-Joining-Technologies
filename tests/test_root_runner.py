@@ -2189,7 +2189,7 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     report_script = _INTEGRATION_REPORT_SCRIPT.read_text(encoding="utf-8")
 
-    assert baseline["schema_version"] == 1
+    assert baseline["schema_version"] == 2
     expected_suites = {
         "sd_smoke",
         "wd_py",
@@ -2202,11 +2202,14 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
         "cs_live",
     }
     assert set(baseline["suites"]) == expected_suites
+    assert baseline["drift_policy"]["mode"] == "minimum"
+    assert baseline["drift_policy"]["growth_warn_percent"] == 25
+    assert baseline["drift_policy"]["growth_warn_absolute"] == 50
     for key in expected_suites:
         entry = baseline["suites"][key]
         assert isinstance(entry["label"], str)
-        assert isinstance(entry["tests"], int)
-        assert entry["tests"] > 0
+        assert isinstance(entry["min_tests"], int)
+        assert entry["min_tests"] > 0
         assert isinstance(entry["skipped"], int)
         assert entry["skipped"] >= 0
         assert isinstance(entry["skip_tolerance"], int)
@@ -2225,6 +2228,9 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
     assert "### ⚠️ Warnings and Baseline Checks" in report_script
     assert "skip drift" in report_script
     assert "suite collection drift" in report_script
+    assert "tests may have disappeared" in report_script
+    assert "unusually large increase" in report_script
+    assert "drift_policy" in report_script
     assert "tests/tools/update_integration_baseline.py --run" in report_script
     assert "--suite {key}" in report_script
 
