@@ -223,8 +223,16 @@ public sealed class ResultManagement : IDisposable
 
             var writer = writeResult ?? IjtFileLogger.WriteResult;
             writer(IjtJsonSerializer.FormatOutput("Result", rd));
+
+            // Also write timestamped copy so multiple results are preserved
+            var jMeta = rd.ResultMetaData as UAModel.IJTBase.JoiningResultMetaDataType;
+            var tsPath = IjtFileLogger.WriteResultTimestamped(
+                IjtJsonSerializer.FormatOutput("Result", rd),
+                rd.ResultMetaData?.ResultId,
+                jMeta?.Name);
+
             _log.LogInformation("Result variable updated. Full payload logged: {Path}",
-                IjtFileLogger.ResultLogPath);
+                tsPath);
             return true;
         }
 
@@ -294,16 +302,17 @@ public sealed class ResultManagement : IDisposable
             ? eo.Body as UAModel.MachineryResult.ResultDataType
             : raw as UAModel.MachineryResult.ResultDataType;
 
-        // Write full payload to file as JSON
+        // Write full payload to file as JSON (timestamped + latest)
         var content = IjtJsonSerializer.FormatOutput("Result", outputs.Count > 1 ? outputs[1] : null);
-        IjtFileLogger.WriteResult(content);
+        var tsPath = IjtFileLogger.WriteResultTimestamped(content, rd?.ResultMetaData?.ResultId,
+            (rd?.ResultMetaData as UAModel.IJTBase.JoiningResultMetaDataType)?.Name);
 
         // Console: brief summary only
         var handle = IjtJsonSerializer.Serialize(outputs[0]);
         var error = outputs.Count > 2 ? IjtJsonSerializer.Serialize(outputs[2]) : "?";
         _log.LogInformation("OK Result received.  ResultHandle={Handle}  Error={Error}",
             handle, error);
-        _log.LogInformation("  -> Full result -> {Path}", IjtFileLogger.ResultLogPath);
+        _log.LogInformation("  -> Full result -> {Path}", tsPath);
     }
 
     private static bool HasMeaningfulResult(UAModel.MachineryResult.ResultDataType rd)

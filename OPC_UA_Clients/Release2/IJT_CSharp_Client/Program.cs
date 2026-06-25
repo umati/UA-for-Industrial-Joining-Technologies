@@ -41,6 +41,9 @@ await using (js)
 {
     _log.LogInformation("Connected. Log files: {Dir}", IjtFileLogger.BaseLogDir);
 
+    // Clear previous session's timestamped files so only this run's results/events accumulate
+    IjtFileLogger.ClearSessionLogs();
+
     // ── Event handlers — all output through logger, no Console calls ───────────
     js.EventSubscriber.OnResultReady += (_, e) =>
     {
@@ -50,8 +53,8 @@ await using (js)
             ? IjtResultFormatter.FormatResult(e.Result, e.EventTime)
             : IjtResultFormatter.FormatResultEventFields(
                 e.ResultId, e.Classification, e.Name, e.SequenceNumber, e.AssemblyType, e.EventTime);
-        IjtFileLogger.WriteResult(text);
-        _log.LogInformation("Result logged to: {Path}", IjtFileLogger.ResultLogPath);
+        var path = IjtFileLogger.WriteResultTimestamped(text, e.ResultId, e.Name);
+        _log.LogInformation("Result logged to: {Path}", path);
     };
 
     js.EventSubscriber.OnJoiningSystemEvent += (_, e) =>
@@ -61,8 +64,8 @@ await using (js)
         var json = IjtEventFormatter.SerializeEventJson(
             e.EventCode, e.EventText, e.JoiningTechnology, e.EventTime,
             e.AssociatedEntities, e.ReportedValues);
-        IjtFileLogger.WriteEvent(json);
-        _log.LogInformation("Event logged to: {Path}", IjtFileLogger.EventLogPath);
+        var path = IjtFileLogger.WriteEventTimestamped(json, e.EventCode, e.EventText);
+        _log.LogInformation("Event logged to: {Path}", path);
     };
 
     // -- Main menu loop ---------------------------------------------------------

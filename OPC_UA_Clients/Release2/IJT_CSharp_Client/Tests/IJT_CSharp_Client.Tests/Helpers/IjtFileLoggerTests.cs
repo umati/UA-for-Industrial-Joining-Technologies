@@ -213,4 +213,137 @@ public class IjtFileLoggerTests : IDisposable
     {
         Assert.Contains(Path.Combine("logs", "assets"), IjtFileLogger.AssetLogDir);
     }
+
+    // ── WriteResultTimestamped ───────────────────────────────────────────────
+
+    [Fact]
+    public void WriteResultTimestamped_CreatesTimestampedFile()
+    {
+        var path = IjtFileLogger.WriteResultTimestamped("timestamped-content", "RES-001", "TestResult");
+
+        Assert.True(File.Exists(path));
+        Assert.Equal("timestamped-content", File.ReadAllText(path));
+        Assert.Contains("TestResult", Path.GetFileName(path));
+        Assert.Contains("RES-001", Path.GetFileName(path));
+        Assert.EndsWith(".json", path);
+    }
+
+    [Fact]
+    public void WriteResultTimestamped_AlsoUpdatesLatestResultJson()
+    {
+        IjtFileLogger.WriteResultTimestamped("latest-via-timestamped", "RES-002");
+
+        Assert.True(File.Exists(IjtFileLogger.ResultLogPath));
+        Assert.Equal("latest-via-timestamped", File.ReadAllText(IjtFileLogger.ResultLogPath));
+    }
+
+    [Fact]
+    public void WriteResultTimestamped_MultipleCallsCreateSeparateFiles()
+    {
+        var path1 = IjtFileLogger.WriteResultTimestamped("result-one", "R1", "First");
+        // Small delay to ensure different timestamps
+        System.Threading.Thread.Sleep(5);
+        var path2 = IjtFileLogger.WriteResultTimestamped("result-two", "R2", "Second");
+
+        Assert.NotEqual(path1, path2);
+        Assert.True(File.Exists(path1));
+        Assert.True(File.Exists(path2));
+        Assert.Equal("result-one", File.ReadAllText(path1));
+        Assert.Equal("result-two", File.ReadAllText(path2));
+    }
+
+    [Fact]
+    public void WriteResultTimestamped_WithNullIdAndName_CreatesFileWithTimestampOnly()
+    {
+        var path = IjtFileLogger.WriteResultTimestamped("content-only");
+
+        Assert.True(File.Exists(path));
+        Assert.EndsWith(".json", path);
+    }
+
+    [Fact]
+    public void ResultsLogDir_IsUnderLogsDirectory()
+    {
+        Assert.Contains(Path.Combine("logs", "results"), IjtFileLogger.ResultsLogDir);
+    }
+
+    // ── WriteEventTimestamped ────────────────────────────────────────────────
+
+    [Fact]
+    public void WriteEventTimestamped_CreatesTimestampedFile()
+    {
+        var path = IjtFileLogger.WriteEventTimestamped("event-content", "1001", "Tool connected");
+
+        Assert.True(File.Exists(path));
+        Assert.Equal("event-content", File.ReadAllText(path));
+        Assert.Contains("1001", Path.GetFileName(path));
+        Assert.Contains("Tool connected", Path.GetFileName(path));
+        Assert.EndsWith(".json", path);
+    }
+
+    [Fact]
+    public void WriteEventTimestamped_AlsoUpdatesLatestEventJson()
+    {
+        IjtFileLogger.WriteEventTimestamped("latest-event", "2001");
+
+        Assert.True(File.Exists(IjtFileLogger.EventLogPath));
+        Assert.Equal("latest-event", File.ReadAllText(IjtFileLogger.EventLogPath));
+    }
+
+    [Fact]
+    public void WriteEventTimestamped_MultipleCallsCreateSeparateFiles()
+    {
+        var path1 = IjtFileLogger.WriteEventTimestamped("evt-one", "E1");
+        System.Threading.Thread.Sleep(5);
+        var path2 = IjtFileLogger.WriteEventTimestamped("evt-two", "E2");
+
+        Assert.NotEqual(path1, path2);
+        Assert.True(File.Exists(path1));
+        Assert.True(File.Exists(path2));
+    }
+
+    [Fact]
+    public void EventsHistoryLogDir_IsUnderLogsDirectory()
+    {
+        Assert.Contains(Path.Combine("logs", "events_history"), IjtFileLogger.EventsHistoryLogDir);
+    }
+
+    // ── ClearSessionLogs ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void ClearSessionLogs_RemovesTimestampedDirs()
+    {
+        // Create some timestamped files first
+        IjtFileLogger.WriteResultTimestamped("r1", "R1");
+        IjtFileLogger.WriteEventTimestamped("e1", "E1");
+
+        Assert.True(Directory.Exists(IjtFileLogger.ResultsLogDir));
+        Assert.True(Directory.Exists(IjtFileLogger.EventsHistoryLogDir));
+
+        IjtFileLogger.ClearSessionLogs();
+
+        Assert.False(Directory.Exists(IjtFileLogger.ResultsLogDir));
+        Assert.False(Directory.Exists(IjtFileLogger.EventsHistoryLogDir));
+    }
+
+    [Fact]
+    public void ClearSessionLogs_DoesNotRemoveLatestSnapshots()
+    {
+        IjtFileLogger.WriteResult("latest-result");
+        IjtFileLogger.WriteEvent("latest-event");
+
+        IjtFileLogger.ClearSessionLogs();
+
+        // Latest snapshot files should still exist
+        Assert.True(File.Exists(IjtFileLogger.ResultLogPath));
+        Assert.True(File.Exists(IjtFileLogger.EventLogPath));
+    }
+
+    [Fact]
+    public void ClearSessionLogs_DoesNotThrow_WhenDirsDoNotExist()
+    {
+        // Should be safe to call even when directories don't exist yet
+        var ex = Record.Exception(() => IjtFileLogger.ClearSessionLogs());
+        Assert.Null(ex);
+    }
 }

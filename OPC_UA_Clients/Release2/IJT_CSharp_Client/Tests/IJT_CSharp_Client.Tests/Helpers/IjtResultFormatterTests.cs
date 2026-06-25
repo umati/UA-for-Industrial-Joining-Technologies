@@ -83,7 +83,7 @@ public class IjtResultFormatterTests
     }
 
     [Fact]
-    public void FormatResult_WithAssociatedEntities_ContainsEntitiesLine()
+    public void FormatResult_WithAssociatedEntities_ContainsEntityDetails()
     {
         var rd = new ResultDataType
         {
@@ -91,7 +91,16 @@ public class IjtResultFormatterTests
             {
                 ResultId = "ENT",
                 AssociatedEntities = new UAModel.IJTBase.EntityDataTypeCollection {
-                    new UAModel.IJTBase.EntityDataType { EntityId = "e1" },
+                    new UAModel.IJTBase.EntityDataType
+                    {
+                        EntityId = "e1",
+                        Name = "Tool_A",
+                        EntityType = 2,
+                        IsExternal = true,
+                        Description = "Atlas Copco Spindle",
+                        EntityOriginId = "EXT-001",
+                    },
+                    new UAModel.IJTBase.EntityDataType { EntityId = "e2", Name = "Part_B" },
                 },
             }
         };
@@ -99,7 +108,15 @@ public class IjtResultFormatterTests
         var result = IjtResultFormatter.FormatResult(rd);
 
         Assert.Contains("AssociatedEntities", result);
-        Assert.Contains("1 entit", result);
+        Assert.Contains("2 entit", result);
+        // Verify entity details are included, not just the count
+        Assert.Contains("EntityId=e1", result);
+        Assert.Contains("Name=Tool_A", result);
+        Assert.Contains("IsExternal=True", result);
+        Assert.Contains("Atlas Copco Spindle", result);
+        Assert.Contains("EntityOriginId: EXT-001", result);
+        Assert.Contains("EntityId=e2", result);
+        Assert.Contains("Name=Part_B", result);
     }
 
     [Fact]
@@ -291,6 +308,183 @@ public class IjtResultFormatterTests
         // Must contain "[0]" fallback format and the raw string value
         Assert.Contains("[0]", result);
         Assert.Contains("raw-string-value", result);
+    }
+
+    // ── FormatContent — Child ResultDataType (Job/Batch/Sync) ────────────────
+
+    [Fact]
+    public void FormatResult_WithChildResultDataType_FormatsChildMetaData()
+    {
+        // Simulates a Job/Batch result where ResultContent contains child ResultDataType items
+        var childResult = new ResultDataType
+        {
+            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            {
+                ResultId = "CHILD-001",
+                Name = "ChildTightening",
+                SequenceNumber = 1,
+                Classification = 1,
+            }
+        };
+
+        var parentRd = new ResultDataType
+        {
+            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            {
+                ResultId = "JOB-001",
+                Name = "JobResult",
+                Classification = 3,
+            },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(childResult)),
+            },
+        };
+
+        var result = IjtResultFormatter.FormatResult(parentRd, DateTime.UtcNow);
+
+        Assert.Contains("JOB-001", result);
+        Assert.Contains("Child Result", result);
+        Assert.Contains("CHILD-001", result);
+        Assert.Contains("ChildTightening", result);
+    }
+
+    [Fact]
+    public void FormatResult_WithMultipleChildResults_FormatsAllChildren()
+    {
+        // Simulates a Batch result with 3 child results
+        var children = new[]
+        {
+            new ResultDataType
+            {
+                ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+                {
+                    ResultId = "BATCH-C1",
+                    Name = "Step1",
+                    Classification = 1,
+                }
+            },
+            new ResultDataType
+            {
+                ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+                {
+                    ResultId = "BATCH-C2",
+                    Name = "Step2",
+                    Classification = 1,
+                }
+            },
+            new ResultDataType
+            {
+                ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+                {
+                    ResultId = "BATCH-C3",
+                    Name = "Step3",
+                    Classification = 0,
+                }
+            },
+        };
+
+        var parentRd = new ResultDataType
+        {
+            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            {
+                ResultId = "BATCH-001",
+                Name = "BatchResult",
+                Classification = 3,
+            },
+            ResultContent = new Opc.Ua.VariantCollection(
+                children.Select(c => new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(c)))),
+        };
+
+        var result = IjtResultFormatter.FormatResult(parentRd, DateTime.UtcNow);
+
+        Assert.Contains("BATCH-001", result);
+        Assert.Contains("BATCH-C1", result);
+        Assert.Contains("BATCH-C2", result);
+        Assert.Contains("BATCH-C3", result);
+        Assert.Contains("Step1", result);
+        Assert.Contains("Step2", result);
+        Assert.Contains("Step3", result);
+    }
+
+    [Fact]
+    public void FormatResult_ChildResultWithJoiningContent_FormatsNestedContent()
+    {
+        // Child result that itself has JoiningResultDataType content
+        var rv = new UAModel.IJTBase.ResultValueDataType
+        {
+            Name = "Torque",
+            MeasuredValue = 25.0,
+            ResultEvaluation = ResultEvaluationEnum.OK,
+        };
+        var jr = new UAModel.IJTBase.JoiningResultDataType
+        {
+            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection { rv },
+        };
+        var childResult = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "NESTED-001" },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
+            },
+        };
+
+        var parentRd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "PARENT-001" },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(childResult)),
+            },
+        };
+
+        var result = IjtResultFormatter.FormatResult(parentRd, DateTime.UtcNow);
+
+        Assert.Contains("PARENT-001", result);
+        Assert.Contains("NESTED-001", result);
+        Assert.Contains("Torque", result);
+        Assert.Contains("25.000", result);
+    }
+
+    [Fact]
+    public void FormatResult_MixedContent_JoiningAndChildResult_FormatsAll()
+    {
+        // ResultContent with both a JoiningResultDataType and a child ResultDataType
+        var jr = new UAModel.IJTBase.JoiningResultDataType
+        {
+            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection
+            {
+                new UAModel.IJTBase.ResultValueDataType
+                {
+                    Name = "Angle",
+                    MeasuredValue = 90.0,
+                    ResultEvaluation = ResultEvaluationEnum.OK,
+                },
+            },
+        };
+        var childRd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "MIX-CHILD" },
+        };
+
+        var parentRd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "MIX-PARENT" },
+            ResultContent = new Opc.Ua.VariantCollection
+            {
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
+                new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(childRd)),
+            },
+        };
+
+        var result = IjtResultFormatter.FormatResult(parentRd, DateTime.UtcNow);
+
+        // Both content items should appear
+        Assert.Contains("Angle", result);
+        Assert.Contains("MIX-CHILD", result);
+        Assert.Contains("JoiningResultDataType", result);
+        Assert.Contains("Child Result", result);
     }
 
     [Fact]

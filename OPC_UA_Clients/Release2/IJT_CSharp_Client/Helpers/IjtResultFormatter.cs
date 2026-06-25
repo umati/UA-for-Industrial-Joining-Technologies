@@ -59,62 +59,76 @@ public static class IjtResultFormatter
 
     // -- private helpers -------------------------------------------------------
 
-    private static void FormatMetaData(StringBuilder sb, ResultMetaDataType? meta)
+    private static void FormatMetaData(StringBuilder sb, ResultMetaDataType? meta, int indentLevel = 1)
     {
-        if (meta is null) { sb.AppendLine("    (no metadata)"); return; }
+        int baseIndent = indentLevel * 4;
+        if (meta is null) { sb.AppendLine($"{Pad(baseIndent)}(no metadata)"); return; }
 
-        AppendField(sb, "ResultId", meta.ResultId, 4);
-        AppendField(sb, "HasTransferableDataOnFile", meta.HasTransferableDataOnFile.ToString(), 4);
-        AppendField(sb, "IsPartial", meta.IsPartial.ToString(), 4);
-        AppendField(sb, "IsSimulated", meta.IsSimulated.ToString(), 4);
-        AppendField(sb, "ResultState", meta.ResultState.ToString(), 4);
-        AppendField(sb, "StepId", meta.StepId, 4);
-        AppendField(sb, "PartId", meta.PartId, 4);
-        AppendField(sb, "ExternalRecipeId", meta.ExternalRecipeId, 4);
-        AppendField(sb, "InternalRecipeId", meta.InternalRecipeId, 4);
-        AppendField(sb, "ProductId", meta.ProductId, 4);
-        AppendField(sb, "ExternalConfigurationId", meta.ExternalConfigurationId, 4);
-        AppendField(sb, "InternalConfigurationId", meta.InternalConfigurationId, 4);
-        AppendField(sb, "JobId", meta.JobId, 4);
+        AppendField(sb, "ResultId", meta.ResultId, baseIndent);
+        AppendField(sb, "HasTransferableDataOnFile", meta.HasTransferableDataOnFile.ToString(), baseIndent);
+        AppendField(sb, "IsPartial", meta.IsPartial.ToString(), baseIndent);
+        AppendField(sb, "IsSimulated", meta.IsSimulated.ToString(), baseIndent);
+        AppendField(sb, "ResultState", meta.ResultState.ToString(), baseIndent);
+        AppendField(sb, "StepId", meta.StepId, baseIndent);
+        AppendField(sb, "PartId", meta.PartId, baseIndent);
+        AppendField(sb, "ExternalRecipeId", meta.ExternalRecipeId, baseIndent);
+        AppendField(sb, "InternalRecipeId", meta.InternalRecipeId, baseIndent);
+        AppendField(sb, "ProductId", meta.ProductId, baseIndent);
+        AppendField(sb, "ExternalConfigurationId", meta.ExternalConfigurationId, baseIndent);
+        AppendField(sb, "InternalConfigurationId", meta.InternalConfigurationId, baseIndent);
+        AppendField(sb, "JobId", meta.JobId, baseIndent);
         AppendField(sb, "CreationTime",
-            meta.CreationTime > DateTime.MinValue ? meta.CreationTime.ToString("yyyy-MM-dd HH:mm:ss.fff UTC") : null, 4);
-        AppendField(sb, "ResultEvaluation", meta.ResultEvaluation.ToString(), 4);
+            meta.CreationTime > DateTime.MinValue ? meta.CreationTime.ToString("yyyy-MM-dd HH:mm:ss.fff UTC") : null, baseIndent);
+        AppendField(sb, "ResultEvaluation", meta.ResultEvaluation.ToString(), baseIndent);
         AppendField(sb, "ResultEvaluationCode",
-            meta.ResultEvaluationCode != 0 ? meta.ResultEvaluationCode.ToString() : null, 4);
-        AppendField(sb, "ResultEvaluationDetails", meta.ResultEvaluationDetails?.Text, 4);
+            meta.ResultEvaluationCode != 0 ? meta.ResultEvaluationCode.ToString() : null, baseIndent);
+        AppendField(sb, "ResultEvaluationDetails", meta.ResultEvaluationDetails?.Text, baseIndent);
         AppendField(sb, "ResultUri",
-            meta.ResultUri?.Count > 0 ? string.Join(", ", meta.ResultUri) : null, 4);
+            meta.ResultUri?.Count > 0 ? string.Join(", ", meta.ResultUri) : null, baseIndent);
         AppendField(sb, "FileFormat",
-            meta.FileFormat?.Count > 0 ? string.Join(", ", meta.FileFormat) : null, 4);
+            meta.FileFormat?.Count > 0 ? string.Join(", ", meta.FileFormat) : null, baseIndent);
 
         // IJT JoiningResultMetaDataType subtype extra fields
         if (meta is UAModel.IJTBase.JoiningResultMetaDataType jm)
         {
-            AppendField(sb, "JoiningTechnology", jm.JoiningTechnology?.Text, 4);
-            AppendField(sb, "SequenceNumber", jm.SequenceNumber.ToString(), 4);
-            AppendField(sb, "Name", jm.Name, 4);
-            AppendField(sb, "Description", jm.Description?.Text, 4);
-            AppendField(sb, "Classification", jm.Classification.ToString(), 4);
-            AppendField(sb, "OperationMode", jm.OperationMode.ToString(), 4);
-            AppendField(sb, "AssemblyType", jm.AssemblyType.ToString(), 4);
-            AppendField(sb, "InterventionType", jm.InterventionType.ToString(), 4);
-            AppendField(sb, "IsGeneratedOffline", jm.IsGeneratedOffline.ToString(), 4);
+            AppendField(sb, "JoiningTechnology", jm.JoiningTechnology?.Text, baseIndent);
+            AppendField(sb, "SequenceNumber", jm.SequenceNumber.ToString(), baseIndent);
+            AppendField(sb, "Name", jm.Name, baseIndent);
+            AppendField(sb, "Description", jm.Description?.Text, baseIndent);
+            AppendField(sb, "Classification", jm.Classification.ToString(), baseIndent);
+            AppendField(sb, "OperationMode", jm.OperationMode.ToString(), baseIndent);
+            AppendField(sb, "AssemblyType", jm.AssemblyType.ToString(), baseIndent);
+            AppendField(sb, "InterventionType", jm.InterventionType.ToString(), baseIndent);
+            AppendField(sb, "IsGeneratedOffline", jm.IsGeneratedOffline.ToString(), baseIndent);
             if (jm.AssociatedEntities?.Count > 0)
-                sb.AppendLine($"    {"AssociatedEntities",-28} ({jm.AssociatedEntities.Count} entities)");
+            {
+                sb.AppendLine($"{Pad(baseIndent)}{"AssociatedEntities",-28} ({jm.AssociatedEntities.Count} entities)");
+                foreach (var entity in jm.AssociatedEntities)
+                {
+                    sb.AppendLine($"{Pad(baseIndent + 2)}- EntityId={entity.EntityId ?? "-"}  Name={entity.Name ?? "-"}  " +
+                        $"Type={entity.EntityType}  IsExternal={entity.IsExternal}");
+                    if (!string.IsNullOrEmpty(entity.Description))
+                        sb.AppendLine($"{Pad(baseIndent + 4)}Description: {entity.Description}");
+                    if (!string.IsNullOrEmpty(entity.EntityOriginId))
+                        sb.AppendLine($"{Pad(baseIndent + 4)}EntityOriginId: {entity.EntityOriginId}");
+                }
+            }
             if (jm.ResultCounters?.Count > 0)
             {
-                sb.AppendLine($"    {"ResultCounters",-28} ({jm.ResultCounters.Count} counters)");
+                sb.AppendLine($"{Pad(baseIndent)}{"ResultCounters",-28} ({jm.ResultCounters.Count} counters)");
                 foreach (var c in jm.ResultCounters)
-                    sb.AppendLine($"      - {c.Name}: {c.CounterValue}");
+                    sb.AppendLine($"{Pad(baseIndent + 2)}- {c.Name}: {c.CounterValue}");
             }
             if (jm.ExtendedMetaData?.Count > 0)
             {
-                sb.AppendLine($"    {"ExtendedMetaData",-28} ({jm.ExtendedMetaData.Count} entries)");
+                sb.AppendLine($"{Pad(baseIndent)}{"ExtendedMetaData",-28} ({jm.ExtendedMetaData.Count} entries)");
                 foreach (var kv in jm.ExtendedMetaData)
-                    sb.AppendLine($"      {kv.Key}: {kv.Value}");
+                    sb.AppendLine($"{Pad(baseIndent + 2)}{kv.Key}: {kv.Value}");
             }
         }
     }
+
+    private static string Pad(int count) => new string(' ', count);
 
     private static void FormatContent(StringBuilder sb, VariantCollection? content)
     {
@@ -123,20 +137,29 @@ public static class IjtResultFormatter
             sb.AppendLine("    (no content)");
             return;
         }
-        bool decoded = false;
-        foreach (var variant in content)
+        for (int i = 0; i < content.Count; i++)
         {
-            var raw = variant.Value is ExtensionObject eo ? eo.Body : variant.Value;
+            var raw = content[i].Value is ExtensionObject eo ? eo.Body : content[i].Value;
             if (raw is JoiningResultDataType jr)
             {
+                sb.AppendLine($"    --- ResultContent[{i}] (JoiningResultDataType) ---");
                 FormatJoiningResult(sb, jr);
-                decoded = true;
             }
-        }
-        if (!decoded)
-        {
-            for (int i = 0; i < content.Count; i++)
+            else if (raw is ResultDataType childRd)
+            {
+                sb.AppendLine($"    --- ResultContent[{i}] (Child Result) ---");
+                sb.AppendLine("      ResultMetaData");
+                FormatMetaData(sb, childRd.ResultMetaData, indentLevel: 2);
+                if (childRd.ResultContent is not null && childRd.ResultContent.Count > 0)
+                {
+                    sb.AppendLine("      ResultContent");
+                    FormatContent(sb, childRd.ResultContent);
+                }
+            }
+            else
+            {
                 sb.AppendLine($"    [{i}] {content[i]}");
+            }
         }
     }
 
