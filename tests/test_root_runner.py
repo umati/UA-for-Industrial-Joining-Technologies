@@ -2525,13 +2525,8 @@ def test_workflows_do_not_depend_on_actions_cache_or_setup_caches() -> None:
 def test_ci_report_web_python_skip_budget_uses_expected_skip_identities() -> None:
     report_script = _CI_REPORT_SCRIPT.read_text(encoding="utf-8")
 
-    assert '"web-client (Python)": 2' in report_script
+    assert '"web-client (Python)": 0' in report_script
     assert "expected_skip_names" in report_script
-    assert (
-        "test_required_static_asset_exists[node_modules/chart.js/dist/chart.umd.js]"
-        in report_script
-    )
-    assert "test_eslint_passes" in report_script
     assert "unexpected skips detected" in report_script
     assert "missing_expected_names" in report_script
     assert "expected skips not observed" in report_script

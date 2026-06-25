@@ -6,8 +6,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+_UPDATE_SNAPSHOTS = os.environ.get("UPDATE_SNAPSHOTS", "").strip().lower() in ("1", "true", "yes")
 
 _ICON_SIGNAL = "\U0001f6a6"
 _ICON_PASSED = "\u2705"
@@ -115,7 +119,11 @@ def _run_summary(
 
 def test_ci_summary_snapshot_matches_fixed_artifacts(tmp_path: Path) -> None:
     actual = _run_summary("ci_run_summary.py", "ci", CI_ENV, tmp_path)
-    expected = (FIXTURES / "expected" / "ci_summary.md").read_text(encoding="utf-8")
+    expected_path = FIXTURES / "expected" / "ci_summary.md"
+    if _UPDATE_SNAPSHOTS:
+        expected_path.write_text(actual, encoding="utf-8")
+        pytest.skip("snapshot updated")
+    expected = expected_path.read_text(encoding="utf-8")
     assert actual == expected
 
 
@@ -126,7 +134,11 @@ def test_integration_summary_snapshot_matches_fixed_artifacts(tmp_path: Path) ->
         INTEGRATION_ENV,
         tmp_path,
     )
-    expected = (FIXTURES / "expected" / "integration_summary.md").read_text(encoding="utf-8")
+    expected_path = FIXTURES / "expected" / "integration_summary.md"
+    if _UPDATE_SNAPSHOTS:
+        expected_path.write_text(actual, encoding="utf-8")
+        pytest.skip("snapshot updated")
+    expected = expected_path.read_text(encoding="utf-8")
     assert actual == expected
 
 
@@ -137,8 +149,8 @@ def test_ci_outcome_overview_exact_block() -> None:
         "| :-: | :------ | ------: |\n"
         f"| {_ICON_PASSED}  | Passed  |      21 |\n"
         f"| {_ICON_FAILED}  | Failed  |       0 |\n"
-        f"| {_ICON_SKIPPED}  | Skipped |      18 |\n"
-        f"| {_ICON_TOTAL}  | Total   |      39 |\n"
+        f"| {_ICON_SKIPPED}  | Skipped |      16 |\n"
+        f"| {_ICON_TOTAL}  | Total   |      37 |\n"
         f"| {_ICON_JOBS}  | Jobs    | 12 / 12 |\n"
     )
     assert expected in text, (

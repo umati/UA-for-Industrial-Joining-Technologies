@@ -576,7 +576,7 @@ def main() -> None:
     # ── Skip budget check (computed early so status line can report it) ─
     # Known expected skips per TEST_TIERS.md; any extra skip is a warning.
     skip_budget = {
-        "web-client (Python)": 2,  # Split Python lane delegates JS/npm checks to web-client-js
+        "web-client (Python)": 0,  # All JS/npm gates removed; nothing skips here now
         "web-client (JS)": 0,
         "console-client (Python)": 0,
         "node-client (JS)": 1,  # git unavailable in CI (vitest)
@@ -584,12 +584,7 @@ def main() -> None:
         "test-client (Python)": 0,
         "server-smoke (Windows)": 0,
     }
-    expected_skip_names = {
-        "web-client (Python)": {
-            "test_required_static_asset_exists[node_modules/chart.js/dist/chart.umd.js]",
-            "test_eslint_passes",
-        },
-    }
+    expected_skip_names = {}
     actual_skips = {
         "web-client (Python)": web_py_t[3],
         "web-client (JS)": web_js_t[3],
