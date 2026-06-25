@@ -10,9 +10,7 @@ from __future__ import annotations
 
 import ast
 import io
-import platform
 import re
-import shutil
 import subprocess
 import sys
 import tokenize
@@ -56,26 +54,6 @@ def _tool_available(name: str) -> bool:
     )
 
 
-def _npm_available() -> bool:
-    return shutil.which("npm") is not None
-
-
-def _is_wsl() -> bool:
-    """Detect WSL: Linux kernel but accessing a Windows NTFS filesystem."""
-    release = platform.release().lower()
-    return "microsoft" in release or "wsl" in release
-
-
-def _eslint_executable() -> bool:
-    """Return True only if eslint is installed and runnable."""
-    if not _npm_available():
-        return False
-    if _is_wsl():
-        return False
-    eslint_bin = _PROJECT_ROOT / "node_modules" / ".bin" / "eslint"
-    return eslint_bin.exists()
-
-
 # ===========================================================================
 # 1. Bandit — Python security scanner
 # ===========================================================================
@@ -109,32 +87,7 @@ def test_bandit_no_high_severity_issues():
 
 
 # ===========================================================================
-# 2. ESLint — JavaScript source quality gate
-# ===========================================================================
-
-
-@pytest.mark.skipif(
-    not _eslint_executable(),
-    reason=(
-        "ESLint binary absent in Web Client - Python check. JS lint is gated by sibling 'Web Client - JavaScript' check"
-    ),
-)
-def test_eslint_passes():
-    """npm run lint must exit 0 (no ESLint errors in src/javascripts/)."""
-    npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
-    result = subprocess.run(
-        [npm_cmd, "run", "lint"],
-        capture_output=True,
-        text=True,
-        cwd=str(_PROJECT_ROOT),
-    )
-    assert result.returncode == 0, (
-        f"ESLint failed (exit {result.returncode}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    )
-
-
-# ===========================================================================
-# 3. Empty except-block gate (all project Python files)
+# 2. Empty except-block gate (all project Python files)
 # ===========================================================================
 
 _BROAD_EXCEPTION_NAMES = {"Exception", "BaseException"}
@@ -172,7 +125,7 @@ def test_no_empty_except_blocks():
 
 
 # ===========================================================================
-# 4. Implicit string concatenation in list literals
+# 3. Implicit string concatenation in list literals
 #    CodeQL: py/implicit-string-concatenation
 # ===========================================================================
 
@@ -224,7 +177,7 @@ def test_no_implicit_string_concat_in_lists():
 
 
 # ===========================================================================
-# 5. Mixed/inconsistent return statements  (CodeQL R1710)
+# 4. Mixed/inconsistent return statements  (CodeQL R1710)
 # ===========================================================================
 
 _SKIP_METHOD_NAMES = {
@@ -328,7 +281,7 @@ def test_no_mixed_return_statements():
 
 
 # ===========================================================================
-# 6. Duplicate imports  (CodeQL py/duplicate-import)
+# 5. Duplicate imports  (CodeQL py/duplicate-import)
 # ===========================================================================
 
 
@@ -366,7 +319,7 @@ def test_no_duplicate_imports():
 
 
 # ===========================================================================
-# 7. Unused global declarations  (CodeQL py/unused-global-variable)
+# 6. Unused global declarations  (CodeQL py/unused-global-variable)
 # ===========================================================================
 
 _KNOWN_UNUSED_GLOBAL_EXCEPTIONS = {
@@ -467,7 +420,7 @@ def test_no_unused_global_declarations():
 
 
 # ===========================================================================
-# 8. Variable defined multiple times without intervening use
+# 7. Variable defined multiple times without intervening use
 #     CodeQL: py/multiple-definition
 # ===========================================================================
 
@@ -531,7 +484,7 @@ def test_no_multiple_definitions():
 
 
 # ===========================================================================
-# 9. Unused pytest.importorskip assignments
+# 8. Unused pytest.importorskip assignments
 #     Catches: X = pytest.importorskip(...) where X is never used as X.something
 # ===========================================================================
 

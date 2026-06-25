@@ -44,22 +44,11 @@ def test_connection_has_required_method(method_name):
 # ---------------------------------------------------------------------------
 
 WEB_CLIENT_ROOT = Path(__file__).parents[3]
-_NODE_MODULES_DIR = WEB_CLIENT_ROOT / "node_modules"
 
 REQUIRED_STATIC_ASSETS = [
     "src/resources/digital_twin.jpg",
     "src/resources/settings.json",
     "src/resources/connectionpoints.json",
-    pytest.param(
-        "node_modules/chart.js/dist/chart.umd.js",
-        marks=pytest.mark.skipif(
-            not _NODE_MODULES_DIR.exists(),
-            reason=(
-                "node_modules absent in Web Client - Python check. chart.js vendoring is gated "
-                + "by sibling 'Web Client - JavaScript' check"
-            ),
-        ),
-    ),
 ]
 
 
