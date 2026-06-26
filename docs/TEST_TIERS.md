@@ -223,7 +223,7 @@ run their live/integration tests in parallel without port conflicts.
 | Web Client Playwright features | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | `.venv_test` + Playwright | Feature specs with four owned backend/server worker pairs |
 | Web Client Playwright regression | OPC UA 40480 / WS 8010 / HTTP 3006 | `.venv_test` + Playwright | Regression spec with owned backend and UI ports |
 | Web Client — Browser Compatibility Smoke | OPC UA 40468 / WS 8004 / HTTP 3007 | `.venv_test` + Playwright + real browser channel | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
-| Web Client Docker smoke | HTTP 3000 / WS 8001 | Docker | Builds the Web Client production image through `--docker-only`; independent from live/browser suites; root runner skips when Docker is unavailable |
+| Web Client Docker smoke | Standalone HTTP 3000 / WS 8001; root runner HTTP 3008 / WS 8011 | Docker | Builds the Web Client production image through `--docker-only`; root runner gives it isolated host ports and a scoped Compose project so it can run alongside live/browser suites; root runner skips when Docker is unavailable |
 | IJT_Node_Client    | **40451** (fixed) | N/A (Node) | **Release 1 legacy** — server port is hardcoded, dynamic isolation not supported |
 | Server smoke/native default | 40451  | —            | Built-in default (from `server_configuration.json`); root runner Phase 2 validates this package path |
 | Server Linux package smoke | 40465  | Docker       | Builds the Docker image from the Linux ZIP package and runs `smoke_test.py` |
