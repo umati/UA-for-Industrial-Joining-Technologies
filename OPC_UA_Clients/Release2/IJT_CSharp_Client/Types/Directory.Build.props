@@ -4,7 +4,7 @@
 
   DEFAULT (standard build, no flag needed):
     dotnet build
-    - OPC Foundation : 1.5.378.145
+    - OPC Foundation : Directory.Packages.props $(OpcFoundationVersion)
     - Targets        : net8.0; net9.0; net10.0
     - Includes       : DataTypes.cs + Constants.cs + Classes.cs (full server + client types)
 
@@ -27,8 +27,7 @@
 <Project>
 
   <PropertyGroup>
-    <!-- OPC Foundation NuGet package version — used by PackageReference in each .csproj -->
-    <OpcFoundationVersion Condition="'$(OpcUaClientOnly)' != 'true'">1.5.378.145</OpcFoundationVersion>
+    <!-- Standard builds inherit OpcFoundationVersion from ../Directory.Packages.props. -->
     <OpcFoundationVersion Condition="'$(OpcUaClientOnly)' == 'true'">1.5.376.235</OpcFoundationVersion>
 
     <!--

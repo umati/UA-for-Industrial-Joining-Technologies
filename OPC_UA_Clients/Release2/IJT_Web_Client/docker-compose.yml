@@ -4,7 +4,9 @@ services:
       context: ../../..
       dockerfile: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
     image: ijt_web_client:latest
-    container_name: ijt_web_client
+    # No container_name on purpose: Compose scopes generated container,
+    # network, and volume names by project so parallel checkouts/runners do not
+    # fight for one global Docker name.
     working_dir: /app
     volumes:
       - .:/app
@@ -24,10 +26,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      start_period: 20s
-      retries: 3
+      start_period: 60s
+      retries: 6
 
   # Optional: run tests inside Docker
   ijt_tests:
@@ -35,7 +37,6 @@ services:
       context: ../../..
       dockerfile: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
     image: ijt_web_client:latest
-    container_name: ijt_tests
     working_dir: /app
     environment:
       IS_DOCKER: "true"

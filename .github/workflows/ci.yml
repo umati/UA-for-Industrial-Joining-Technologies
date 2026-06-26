@@ -440,12 +440,13 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Start Compose Stack
-        # ``--wait --wait-timeout 120`` makes compose itself the synchronization
+        # ``--wait --wait-timeout 180`` makes compose itself the synchronization
         # primitive: the step exits success only after the ijt_web_client
         # compose healthcheck (curl -f http://localhost:3000) reports healthy.
-        # 120s covers start_period 20s + interval 30s × retries 3 ≈ 110s budget
-        # with margin. Replaces the previous "up -d" + manual curl loop.
-        run: docker compose up -d --no-build --wait --wait-timeout 120
+        # 180s covers first-run npm/container setup plus the compose
+        # healthcheck window with margin. Replaces the previous "up -d" +
+        # manual curl loop.
+        run: docker compose up -d --no-build --wait --wait-timeout 180
 
       - name: Verify WebSocket Port
         shell: bash
@@ -457,11 +458,11 @@ jobs:
 
       - name: Show Container Status
         if: always()
-        run: docker ps --filter name=ijt_web_client
+        run: docker compose ps ijt_web_client
 
       - name: Show Recent Logs
         if: always()
-        run: docker logs --tail 120 ijt_web_client
+        run: docker compose logs --tail 120 ijt_web_client
 
       - name: Teardown Compose Stack
         if: always()

@@ -247,9 +247,11 @@ WEB_CLIENT_WS_PORT_LIFECYCLE = 8003
 WEB_CLIENT_WS_PORT_E2E_SMOKE = 8004
 WEB_CLIENT_WS_PORT_E2E_FEATURES = 8005
 WEB_CLIENT_WS_PORT_E2E_REGRESSION = 8010
+WEB_CLIENT_WS_PORT_DOCKER_SMOKE = 8011
 WEB_CLIENT_UI_PORT_E2E_SMOKE = 3004
 WEB_CLIENT_UI_PORT_E2E_FEATURES = 3005
 WEB_CLIENT_UI_PORT_E2E_REGRESSION = 3006
+WEB_CLIENT_UI_PORT_DOCKER_SMOKE = 3008
 
 
 def _int_env(name: str, default: int) -> int:
@@ -2109,7 +2111,11 @@ def _suite_webclient_docker_smoke() -> SuiteResult:
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--docker-only"],
         label="webclient runner (docker-only)",
-        extra_env={"IJT_WEB_TEST_RESULTS_DIR": str(WEB_CLIENT_RESULTS_DIR / "docker-smoke")},
+        extra_env={
+            "IJT_WEB_TEST_RESULTS_DIR": str(WEB_CLIENT_RESULTS_DIR / "docker-smoke"),
+            "WEB_CLIENT_HTTP_PORT": str(WEB_CLIENT_UI_PORT_DOCKER_SMOKE),
+            "WEB_CLIENT_WS_PORT": str(WEB_CLIENT_WS_PORT_DOCKER_SMOKE),
+        },
         timeout=DOCKER_BUILD_TIMEOUT + 180,
     )
 

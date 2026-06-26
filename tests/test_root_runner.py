@@ -989,6 +989,13 @@ def test_csharp_client_and_generated_types_share_default_opc_foundation_version(
         / "IJT_CSharp_Client"
         / "IJT_CSharp_Client.csproj"
     )
+    central_packages = (
+        _runner.REPO_ROOT
+        / "OPC_UA_Clients"
+        / "Release2"
+        / "IJT_CSharp_Client"
+        / "Directory.Packages.props"
+    )
     types_props = (
         _runner.REPO_ROOT
         / "OPC_UA_Clients"
@@ -999,30 +1006,47 @@ def test_csharp_client_and_generated_types_share_default_opc_foundation_version(
     )
 
     client_root = ET.parse(client_project).getroot()
+    central_packages_root = ET.parse(central_packages).getroot()
     types_root = ET.parse(types_props).getroot()
-    client_version = next(
-        ref.attrib["Version"]
-        for ref in client_root.iter("PackageReference")
-        if ref.attrib.get("Include") == "OPCFoundation.NetStandard.Opc.Ua"
+    assert (
+        next(
+            ref.attrib.get("Version")
+            for ref in client_root.iter("PackageReference")
+            if ref.attrib.get("Include") == "OPCFoundation.NetStandard.Opc.Ua"
+        )
+        is None
     )
-    default_types_version = next(
+    central_opc_version = next(
+        prop.text for prop in central_packages_root.iter("OpcFoundationVersion")
+    )
+    central_client_version = next(
+        version.attrib["Version"]
+        for version in central_packages_root.iter("PackageVersion")
+        if version.attrib.get("Include") == "OPCFoundation.NetStandard.Opc.Ua"
+    )
+    central_core_version = next(
+        version.attrib["Version"]
+        for version in central_packages_root.iter("PackageVersion")
+        if version.attrib.get("Include") == "OPCFoundation.NetStandard.Opc.Ua.Core"
+    )
+    client_only_types_version = next(
         prop.text
         for prop in types_root.iter("OpcFoundationVersion")
-        if prop.attrib.get("Condition") == "'$(OpcUaClientOnly)' != 'true'"
+        if prop.attrib.get("Condition") == "'$(OpcUaClientOnly)' == 'true'"
     )
 
-    assert default_types_version == client_version
+    assert central_client_version == "$(OpcFoundationVersion)"
+    assert central_core_version == "$(OpcFoundationVersion)"
+    assert central_opc_version != client_only_types_version
 
 
 def test_csharp_lockfiles_track_generated_type_opc_foundation_ranges() -> None:
     csharp_root = _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client"
-    types_props = csharp_root / "Types" / "Directory.Build.props"
-    default_types_version = next(
-        prop.text
-        for prop in ET.parse(types_props).getroot().iter("OpcFoundationVersion")
-        if prop.attrib.get("Condition") == "'$(OpcUaClientOnly)' != 'true'"
+    central_packages = csharp_root / "Directory.Packages.props"
+    default_opc_foundation_version = next(
+        prop.text for prop in ET.parse(central_packages).getroot().iter("OpcFoundationVersion")
     )
-    expected_range = f"[{default_types_version}, )"
+    expected_range = f"[{default_opc_foundation_version}, )"
     generated_type_projects = {
         "uamodel.amb",
         "uamodel.di",
@@ -1126,6 +1150,12 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
     )
     assert calls[6]["extra_env"]["IJT_WEB_TEST_RESULTS_DIR"] == str(
         _runner.WEB_CLIENT_RESULTS_DIR / "docker-smoke"
+    )
+    assert calls[6]["extra_env"]["WEB_CLIENT_HTTP_PORT"] == str(
+        _runner.WEB_CLIENT_UI_PORT_DOCKER_SMOKE
+    )
+    assert calls[6]["extra_env"]["WEB_CLIENT_WS_PORT"] == str(
+        _runner.WEB_CLIENT_WS_PORT_DOCKER_SMOKE
     )
     assert calls[5]["timeout"] == _runner.WEB_CLIENT_E2E_REGRESSION_TIMEOUT
     assert calls[6]["timeout"] == _runner.DOCKER_BUILD_TIMEOUT + 180
