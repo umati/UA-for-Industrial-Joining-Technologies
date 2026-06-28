@@ -170,10 +170,10 @@ def test_test_client_pyright_resolves_reporting_scripts() -> None:
 
 def test_negative_service_tests_use_request_helpers() -> None:
     add_nodes_tests = (
-        _runner.TEST_CLIENT_DIR / "conformance" / "test_joining_system_base.py"
+        _runner.TEST_CLIENT_DIR / "specification_tests" / "test_joining_system_base.py"
     ).read_text(encoding="utf-8")
     delete_nodes_tests = (
-        _runner.TEST_CLIENT_DIR / "conformance" / "test_result_management.py"
+        _runner.TEST_CLIENT_DIR / "specification_tests" / "test_result_management.py"
     ).read_text(encoding="utf-8")
 
     assert "ua.ExpandedNodeId(ua.NodeId(" not in add_nodes_tests

@@ -176,7 +176,7 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
     workflow = _workflow("integration.yml")
     step = _summary_step("integration.yml")
 
-    assert workflow["name"] == "System Tests — Live OPC UA, Browser, Docker, Conformance"
+    assert workflow["name"] == "System Tests — Live OPC UA, Browser, Docker, Specification Testing"
     assert workflow["jobs"]["report"]["name"] == "📋 System Tests Report"
     assert "resolve-browser-image" in workflow["jobs"]["report"]["needs"]
     assert step["run"].strip() == "python3 reporting/system_tests_run_summary.py"
@@ -223,7 +223,7 @@ def test_integration_timing_artifacts_are_collected_from_report_job() -> None:
     assert collect_step["run"].strip() == "python3 scripts/reporting/collect_timing.py"
     assert (
         collect_step["env"]["TIMING_WORKFLOW_NAME"]
-        == "System Tests — Live OPC UA, Browser, Docker, Conformance"
+        == "System Tests — Live OPC UA, Browser, Docker, Specification Testing"
     )
     assert collect_step["env"]["TIMING_OUTPUT_DIR"] == "timing-results"
     assert collect_step["env"]["REPORT_JOB_NAME"] == "📋 System Tests Report"
@@ -237,7 +237,7 @@ def test_integration_dorny_actions_keep_check_runs_but_suppress_step_summaries()
         "OPC UA Server — Smoke Tests (Docker Linux)",
         "Web Client Docker — Python Tests",
         "Web Client Docker — JS Tests (Vitest)",
-        "Test Client — Conformance Tests (Live)",
+        "Test Client — Specification Tests (Live)",
         "Web Client — Local Live Suites",
         "Console Client — Live Tests",
         "C# Client — Live Tests (xUnit)",

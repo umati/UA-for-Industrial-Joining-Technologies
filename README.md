@@ -7,7 +7,7 @@
 The **VDMA OPC UA Industrial Joining Technologies (IJT)** Working Group defines a standard
 information model for joining technologies such as Tightening, Gluing, Riveting, Flow Drill
 Fastening, and additional joining technologies. This repository provides reference implementations
-of OPC UA IJT clients and servers, supporting documents, and self-testing tools.
+of OPC UA IJT clients and servers, supporting documents, and specification testing tools.
 
 ## Contact
 
@@ -22,7 +22,7 @@ of OPC UA IJT clients and servers, supporting documents, and self-testing tools.
 | [IJT Web Client](OPC_UA_Clients/Release2/IJT_Web_Client) | Provides a browser-based client for exploring IJT data, events, assets, results, and traces |
 | [IJT Console Client](OPC_UA_Clients/Release2/IJT_Console_Client) | Provides a command-line client for connecting to a server, subscribing to events, and calling IJT methods |
 | [IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client) | Provides a C#/.NET client and reusable generated OPC UA type libraries |
-| [IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client) | Provides a self-testing client for validating OPC UA IJT server behavior |
+| [IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client) | Provides a specification test client for validating OPC UA IJT server behavior |
 
 ## Getting Started
 

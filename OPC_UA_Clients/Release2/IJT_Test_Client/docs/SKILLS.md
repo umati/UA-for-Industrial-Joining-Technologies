@@ -1,4 +1,4 @@
-# IJT Test Client — Developer Reference
+﻿# IJT Test Client — Developer Reference
 
 Full technical reference: [`opc-ua-server-context.md`](../../../../OPC_UA_Servers/Release2/docs/opc-ua-server-context.md)
 
@@ -21,14 +21,14 @@ Use `run_all_tests.py` as the only test runner entry point.
 
 See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail explanations, and Excel output details.
 
-Reference workflow walkthroughs are separate from conformance compliance
+Reference workflow walkthroughs are separate from specification test
 validation. They are driven by YAML under `reference_workflows/`, render
 Markdown tables for review or Teams demos, and are not collected by default
 Phase 2 runs.
 
 `python run_all_tests.py` is the full orchestrator. Phase 1 runs static,
 security, unit, type, and formatting checks. Phase 2 runs the live
-server-facing compliance/conformance suite and defaults to `conformance` so
+server-facing specification test suite and defaults to `specification_tests` so
 unit tests are not duplicated after Phase 1. Phase 2 appends helper coverage
 diagnostics to `test-results/coverage-combined.xml` and disables only the live
 coverage fail-under gate; the hard helper coverage gate belongs to the Phase 1
@@ -69,7 +69,7 @@ The runner refreshes `pip` before the requirements-hash fast path so stale boots
 The runner invokes Pyright with the active Python interpreter (`.venv_test` normally, `.venv_ci` for local `--ci-mode`) so installed dependencies are resolved consistently during local checks.
 `mypy` is blocking in local Phase 1 and uses the same command as CI:
 `python -m mypy . --ignore-missing-imports --no-error-summary`. Its output is
-written to `test-results/mypy.txt`, so strict type issues in conformance files
+written to `test-results/mypy.txt`, so strict type issues in specification_tests files
 are caught before CI.
 
 A **Python pytest suite** that validates an OPC UA server implementing the
@@ -166,10 +166,10 @@ Objects/
 ```
 
 Event and condition validation has two layers:
-- `conformance/test_event_condition_catalog.py` walks every simulator id
+- `specification_tests/test_event_condition_catalog.py` walks every simulator id
   `1..60` by use-case category and verifies each id as a
   `JoiningSystemEventType` and as a retained `JoiningSystemConditionType`.
-- `conformance/test_joining_system_condition_methods.py` samples standard OPC
+- `specification_tests/test_joining_system_condition_methods.py` samples standard OPC
   UA condition methods against received `JoiningSystemConditionType`
   notifications: Acknowledge, Confirm, AddComment, Enable/Disable, invalid
   EventId rejection, and ConditionRefresh.
@@ -177,8 +177,8 @@ Event and condition validation has two layers:
 Focused checks against a locally running Debug server:
 
 ```bash
-python -m pytest conformance/test_event_condition_catalog.py conformance/test_joining_system_condition_methods.py -q
-python -m pytest conformance/test_events.py events -q
+python -m pytest specification_tests/test_event_condition_catalog.py specification_tests/test_joining_system_condition_methods.py -q
+python -m pytest specification_tests/test_events.py events -q
 ```
 
 ---
@@ -193,7 +193,7 @@ IJT_Test_Client/
 ├── pyproject.toml                ← asyncio_mode=auto, timeout=120, mypy check_untyped_defs=true (+ ruff, coverage, bandit); OPC UA test dirs have [[tool.mypy.overrides]] suppressing asyncua stub false-positives
 ├── helpers/
 │   ├── namespaces.py             ← ALL type IDs and BrowseName constants
-│   ├── cu_compliance_report.py   ← pytest plugin for CU/workbook compliance JSON
+│   ├── cu_coverage_report.py     ← pytest plugin for CU coverage JSON
 │   ├── method_signature.py       ← NodeSet-derived method InputArguments guards
 │   ├── workbook_traceability.py  ← checked-in Test Cases workbook row metadata
 │   ├── reference_workflow.py     ← reference workflow demo/report renderer helpers
@@ -211,7 +211,7 @@ IJT_Test_Client/
 │   └── data_types/
 ├── joining_process/              ← JoiningProcessManagement structure + methods
 ├── joint/                        ← JointManagement structure + methods
-├── conformance/                  ← Conformance Unit tests (asset, result, event, joining process, joint)
+├── specification_tests/          ← Specification Unit tests (asset, result, event, joining process, joint)
 ├── scripts/run_reference_workflow.py ← Markdown + interactive reference workflow runner
 ├── tests/
     └── unit/                     ← Pure-logic helper tests (no OPC UA server needed)
@@ -265,7 +265,7 @@ async with ResultCollector(client, ns_indices, is_simulator=True) as rc:
 # result is None on timeout; test should skip in that case
 ```
 
-Prefer this over `GetLatestResult`/`GetResultById` in conformance tests — events are the primary delivery path per the IJT specification.
+Prefer this over `GetLatestResult`/`GetResultById` in specification tests — events are the primary delivery path per the IJT specification.
 
 ### OpcUa_Uncertain — method call business-logic response
 ```python
@@ -386,7 +386,7 @@ return result_data
 All callers must guard: `if result_data is None: pytest.skip(...)`.
 
 Use this retry pattern only in standalone GetLatestResult-specific tests in
-`test_result_access.py`. Result conformance tests should prefer
+`test_result_access.py`. Result specification tests should prefer
 `ResultCollector`.
 
 ---
@@ -409,7 +409,7 @@ Register it before running:
 
 ```bash
 export OPCUA_TRIGGER_CLASS=my_server.trigger.MyServerTrigger
-pytest conformance/
+pytest specification_tests/
 ```
 
 All tests call `result_trigger.trigger_single(...)` and skip gracefully if no trigger is available.
@@ -466,7 +466,7 @@ For the full port assignment table, auto-launch mechanics, and venv rationale, s
 
 ---
 
-## Writing New Conformance Tests
+## Writing New Specification Tests
 
 ### Passing ProductInstanceUri to counter/method calls
 

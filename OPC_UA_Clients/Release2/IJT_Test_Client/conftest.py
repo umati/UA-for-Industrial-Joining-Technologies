@@ -34,7 +34,7 @@ import pytest
 import pytest_asyncio
 from asyncua import Client
 
-from helpers.cu_compliance_report import CuComplianceReportRecorder
+from helpers.cu_coverage_report import CuCoverageReportRecorder
 from helpers.profile_loader import get_skip_reason, load_all_cus_from_facets, load_supported_cus
 
 # Loaded once at collection time — all tests see the same supported-CU set.
@@ -132,7 +132,7 @@ def pytest_configure(config):
         _SUPPORTED_CUS = None  # None = no gating; run everything
 
     config.pluginmanager.register(
-        CuComplianceReportRecorder(
+        CuCoverageReportRecorder(
             root=_project_root,
             all_cus=load_all_cus_from_facets(),
             supported_cus=_SUPPORTED_CUS,

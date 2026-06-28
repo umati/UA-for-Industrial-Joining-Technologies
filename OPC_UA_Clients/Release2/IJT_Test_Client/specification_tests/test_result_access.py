@@ -1,5 +1,5 @@
 """
-Conformance tests for Result Access Methods — OPC 40450-1 IJT Base.
+specification tests for Result Access Methods — OPC 40450-1 IJT Base.
 
 Covered conformance units:
 

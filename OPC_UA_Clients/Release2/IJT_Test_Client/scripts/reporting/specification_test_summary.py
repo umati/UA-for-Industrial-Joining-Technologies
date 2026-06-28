@@ -1,13 +1,13 @@
-"""Conformance summary renderer for the IJT Test Client.
+"""Specification test summary renderer for the IJT Test Client.
 
 This module owns the Markdown rendering pipeline that produces the
-`IJT Conformance Test Report` written by `make_conformance_summary.py`. The
+`IJT Specification Test Report` written by `make_specification_test_summary.py`. The
 rendering logic lives here so it can be tested separately by
-`tests/unit/reporting/test_render_conformance_summary.py`.
+`tests/unit/reporting/test_render_specification_test_summary.py`.
 
-The public entry point is `render_conformance_summary(...)`. Its
+The public entry point is `render_specification_test_summary(...)`. Its
 signature mirrors the original `_render(...)` so the surrounding CLI
-shim in `make_conformance_summary.py` stays a one-line delegation. The output
+shim in `make_specification_test_summary.py` stays a one-line delegation. The output
 of this function must remain byte-identical to the pre-extraction
 output for the captured fixtures; do not introduce any wording or
 ordering change here without updating the expected Markdown files
@@ -33,7 +33,7 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-# scripts/reporting/conformance_summary.py is two directories deep inside
+# scripts/reporting/specification_test_summary.py is two directories deep inside
 # IJT_Test_Client, so parents[2] points at the Test Client project root.
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _PROFILES_DIR = _PROJECT_ROOT / "profiles"
@@ -329,14 +329,14 @@ def _package_version(package: str) -> str:
 
 @dataclass(frozen=True)
 class ReportEnvironment:
-    """Frozen execution-environment metadata for the conformance summary.
+    """Frozen execution-environment metadata for the specification test summary.
 
     Bundles every runtime-derived value the renderer would otherwise read
     from ``platform``, ``importlib.metadata``, the local git checkout, the
     ``GITHUB_*`` environment variables, or the system wall clock. Production
     callers should construct this from live state via :meth:`from_runtime` (which is also
     the implicit default when ``report_environment=None`` is passed to
-    :func:`render_conformance_summary`). Byte-identity tests and the
+    :func:`render_specification_test_summary`). Byte-identity tests and the
     capture helper pass a frozen instance so the rendered Markdown stays
     deterministic regardless of which Python patch version, host OS,
     asyncua release, git SHA, or GitHub Actions run hosts the test — the
@@ -716,7 +716,7 @@ def _render_supports_block(context: dict[str, Any], limit: int = 12) -> list[str
     lines.append("> 🚦 Support: ✅ Supported · ⚠️ Partially Supported · ⚪ Not Supported")
     lines.append("")
     lines.append(
-        "_Auto-generated from the server profile and conformance outcomes. Full detail is in IJT Facet Breakdown._"
+        "_Auto-generated from the server profile and specification test outcomes. Full detail is in IJT Facet Breakdown._"
     )
     lines.append("")
     for _rank, name, icon, label, description in rows[:limit]:
@@ -769,7 +769,7 @@ def _render_review_sections(context: dict[str, Any], limit: int = 10) -> list[st
 
     lines: list[str] = []
     if not bool(context.get("is_healthy")):
-        lines = [f"## 📌 Conformance Action Items — {action_chip}", ""]
+        lines = [f"## 📌 Specification Test Action Items — {action_chip}", ""]
         lines.append(f"**{_format_status_counts(_ACTION_ITEM_LABEL_ORDER, counts)}**")
         lines.append("")
         if action_items:
@@ -794,7 +794,7 @@ def _render_test_environment(*, env: ReportEnvironment) -> list[str]:
     return lines
 
 
-def _is_conformance_skip_reason(reason: str) -> bool:
+def _is_specification_test_skip_reason(reason: str) -> bool:
     """Return True when a skip bucket is already represented in CUs Needing Review.
 
     Filters skip buckets whose display string starts with the literal
@@ -820,7 +820,7 @@ def _render_diagnostics(data: dict[str, Any]) -> list[str]:
         return []
 
     diagnostic_skips = {
-        reason: count for reason, count in skip_reasons.items() if not _is_conformance_skip_reason(reason)
+        reason: count for reason, count in skip_reasons.items() if not _is_specification_test_skip_reason(reason)
     }
 
     lines: list[str] = ["<details>", "<summary><b>Skip &amp; Expected-Failure Diagnostics</b></summary>", ""]
@@ -965,7 +965,7 @@ def _glossary_url() -> str:
     return relpath
 
 
-def render_conformance_summary(
+def render_specification_test_summary(
     data: dict,
     server_url: str,
     run_ts: str,
@@ -976,10 +976,10 @@ def render_conformance_summary(
 ) -> tuple[str, dict[str, Any] | None]:
     """Return the IJT Conformance Test Report Markdown plus the report context.
 
-    Inputs are the same as the original `_render(...)` in `make_conformance_summary.py`:
+    Inputs are the same as the original `_render(...)` in `make_specification_test_summary.py`:
     parsed JUnit XML data, the OPC UA server URL string, the formatted
     `run_ts` to print on the report, and an optional `cu_payload` from
-    `cu-compliance-report.json`.
+    `cu-coverage-report.json`.
 
     ``baseline`` is accepted for backwards compatibility but no longer
     affects the rendered output; trend information was
@@ -1016,7 +1016,7 @@ def render_conformance_summary(
     )
 
     lines: list[str] = []
-    lines.append("# IJT Conformance Test Report")
+    lines.append("# IJT Specification Test Report")
     lines.append("")
     result_badge = _status_badge(p, f, 0)
     server_name = str(context["server_name"]) if context else "Server under test"
@@ -1038,7 +1038,7 @@ def render_conformance_summary(
             f"**Server support {_fmt_pct(context['spec_coverage_value'])} ({supported}/{total_active})**"
         )
     else:
-        lines.append(f"{result_badge} · **Conformance profile unavailable**")
+        lines.append(f"{result_badge} · **Specification coverage profile unavailable**")
     lines.append("")
     lines.append("| Item | Value |")
     lines.append("|---|---|")
@@ -1049,11 +1049,13 @@ def render_conformance_summary(
     lines.append("")
 
     if context:
-        lines.append("## 📊 Conformance Overview")
+        lines.append("## 📊 Specification Test Overview")
         lines.append("")
         lines.append("> 🚦 Review: 🔴 Failed · 🟠 Blocked · ⚪ Not Supported · ℹ️ With Notes")
         lines.append("")
-        lines.append("| Server Support Coverage | Validation Health | Conformance Action Items | Server Scope Notes |")
+        lines.append(
+            "| Server Support Coverage | Validation Health | Specification Test Action Items | Server Scope Notes |"
+        )
         lines.append("|:---:|:---:|:---:|:---:|")
         lines.append(
             f"| **{_fmt_pct(context['spec_coverage_value'])}** | "

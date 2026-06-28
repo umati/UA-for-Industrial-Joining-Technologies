@@ -1,5 +1,5 @@
 """
-Single result data structure conformance tests — OPC 40450-1.
+Single result data structure specification tests — OPC 40450-1.
 
 Covers: single_result, basic_result, result_additional_data,
 result_extended_meta_data, joining_result_failure_reason,

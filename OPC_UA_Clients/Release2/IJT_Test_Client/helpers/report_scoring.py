@@ -1,7 +1,7 @@
 """Shared scoring, status, KPI formatting, and delta helpers for IJT reports.
 
 Single source of truth for user-facing report logic shared by the Markdown
-generator (``scripts/make_conformance_summary.py``) and the Excel generator
+generator (``scripts/make_specification_test_summary.py``) and the Excel generator
 (``scripts/make_excel_report.py``).
 
 Architecture rules:
@@ -60,7 +60,7 @@ OUTCOME_LABELS: Mapping[str, str] = MappingProxyType(
         "untested": "Untested",
     }
 )
-NO_COMPLIANCE_LABEL = "No compliance result"
+NO_COMPLIANCE_LABEL = "No test result"
 NON_KPI_ICONS: Mapping[str, str] = MappingProxyType(
     {
         "Supported": "🟢",
@@ -281,13 +281,13 @@ def _unsupported_reason_sentence(display_reason: str) -> str:
 
 
 def action_items_context(counts: Mapping[str, int]) -> str:
-    """Render the Conformance Overview note for actionable findings."""
+    """Render the Specification Test Overview note for actionable findings."""
     total = sum(_status_count(counts, label) for label in ACTION_ITEM_LABEL_ORDER)
     return "Investigate failed or blocked CUs" if total else "No action needed"
 
 
 def informational_notes_context(counts: Mapping[str, int]) -> str:
-    """Render the Conformance Overview note for non-actionable findings."""
+    """Render the Specification Test Overview note for non-actionable findings."""
     total = sum(_status_count(counts, label) for label in CAPABILITY_NOTE_LABEL_ORDER)
     return "Information only. Review scope and caveats" if total else "No informational notes"
 

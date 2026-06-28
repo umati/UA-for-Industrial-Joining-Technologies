@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from conformance.test_single_result_data import _reported_value_field_failures
+from specification_tests.test_single_result_data import _reported_value_field_failures
 
 
 def test_result_payload_boundary_allows_absent_or_empty_reported_values():

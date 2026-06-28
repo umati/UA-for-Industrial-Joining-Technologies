@@ -1,6 +1,6 @@
-# IJT Conformance Test Report
+# IJT Specification Test Report
 
-🟢 **Passed** · **Conformance profile unavailable**
+🟢 **Passed** · **Specification coverage profile unavailable**
 
 | Item | Value |
 |---|---|

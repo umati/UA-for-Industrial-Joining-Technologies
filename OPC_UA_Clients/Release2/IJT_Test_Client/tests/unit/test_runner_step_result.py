@@ -302,7 +302,7 @@ def test_counter_mixed_suite_warn_does_not_cause_suite_fail():
 
 
 def test_live_tests_collect_default_coverage_without_fail_gate():
-    """Live conformance tests collect coverage XML without enforcing fail_under."""
+    """Live specification tests collect coverage XML without enforcing fail_under."""
     with (
         patch.object(_mod, "_tool_available", return_value=True),
         patch.object(_mod, "_print_test_count"),
@@ -312,7 +312,7 @@ def test_live_tests_collect_default_coverage_without_fail_gate():
 
     assert result.ok
     args = run_pytest.call_args.args[0]
-    assert "conformance" in args
+    assert "specification_tests" in args
     assert "--cov=helpers" in args
     assert "--cov-append" in args
     assert "--cov-report=term-missing" not in args

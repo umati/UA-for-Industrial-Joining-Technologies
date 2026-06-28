@@ -1,5 +1,5 @@
 """
-Result identifier conformance tests — OPC 40450-1.
+Result identifier specification tests — OPC 40450-1.
 
 Covers:
   result_internal_identifiers — AssociatedEntities with asset and process identifiers.

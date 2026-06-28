@@ -1129,7 +1129,7 @@ def _step_unit_tests() -> _StepResult:
     if _tool_available("pytest_cov"):
         pytest_args += [
             # Cover only helpers/ — the library actually tested by unit tests.
-            # Using --cov=. would include live/conformance test files (0% coverage)
+            # Using --cov=. would include live/specification tests files (0% coverage)
             # and pull the total far below the fail_under threshold.
             "--cov=helpers",
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage.xml'}",
@@ -1140,7 +1140,7 @@ def _step_unit_tests() -> _StepResult:
     cmd: list[str] = [sys.executable, "-m", "pytest", *pytest_args]
     rc, output = _run(
         cmd,
-        extra_env={"IJT_CU_COMPLIANCE_REPORT_FILE": str(_RESULTS_DIR / "cu-compliance-report-unit.json")},
+        extra_env={"IJT_CU_COVERAGE_REPORT_FILE": str(_RESULTS_DIR / "cu-coverage-report-unit.json")},
     )
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
@@ -1359,7 +1359,7 @@ def run_pytest(extra_args: list[str]) -> int:
 def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _StepResult:
     """Run the full live test suite via venv pytest.
 
-    The unit stage owns the hard coverage gate. Live conformance tests still
+    The unit stage owns the hard coverage gate. Live specification tests still
     collect helper coverage diagnostics by default, but force fail-under to 0
     so an otherwise passing server-facing compliance run is not failed by the
     live coverage shape.
@@ -1377,7 +1377,7 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
 
     live_selection_args = list(extra_pytest_args)
     if not _has_explicit_pytest_selection(live_selection_args):
-        live_selection_args.append("conformance")
+        live_selection_args.append("specification_tests")
 
     _print_test_count(live_selection_args)
 

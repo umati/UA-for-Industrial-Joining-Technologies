@@ -17,7 +17,7 @@ EXPECTED_CONFORMANCE = (
     / "reporting"
     / "fixtures"
     / "expected"
-    / "system_tests_full_conformance.md"
+    / "system_tests_full_specification_coverage.md"
 )
 
 

@@ -15,8 +15,8 @@ _ROOT = Path(__file__).parents[2]
 _SCRIPTS = _ROOT / "scripts"
 sys.path.insert(0, str(_SCRIPTS))
 
-_shim: Any = importlib.import_module("make_conformance_summary")
-_renderer: Any = importlib.import_module("reporting.conformance_summary")
+_shim: Any = importlib.import_module("make_specification_test_summary")
+_renderer: Any = importlib.import_module("reporting.specification_test_summary")
 # Tests historically referred to the renderer module as ``_ci_summary``; keep
 # that alias to minimise diff churn now that the renderer is its own module.
 # All renderer entry points are accessed through this alias; ``_shim`` is used
@@ -26,7 +26,7 @@ _ci_summary: Any = _renderer
 _excel_report: Any = importlib.import_module("make_excel_report")
 _git_info: Any = importlib.import_module("helpers.git_info")
 _report_scoring: Any = importlib.import_module("helpers.report_scoring")
-_triage_report: Any = importlib.import_module("triage_cu_compliance")
+_triage_report: Any = importlib.import_module("triage_cu_specification_test")
 ACTION_NEEDED, BLOCKED, NOT_SUPPORTED, WITH_NOTES = _report_scoring.KPI_LABELS
 
 KPI_PATTERN = re.compile(
@@ -414,7 +414,7 @@ def test_ci_summary_renders_audience_sections(monkeypatch):
     assert "<summary><b>Full CU Coverage</b></summary>" not in rendered
     assert "<summary><b>Test Client Environment</b></summary>" in rendered
     assert "<summary><b>Glossary and Reading Guide</b></summary>" not in rendered
-    assert rendered.count("# IJT Conformance Test Report") == 0
+    assert rendered.count("# IJT specification tests Report") == 0
     assert "## Coverage Overview" not in rendered
     assert "Server Supported CUs" in rendered
     assert "Server Support %" in rendered
@@ -533,7 +533,7 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
         "xfail_reasons": {},
     }
 
-    rendered, _context = _ci_summary.render_conformance_summary(
+    rendered, _context = _ci_summary.render_specification_test_summary(
         data,
         "opc.tcp://localhost:40462",
         "2026-05-10 15:46 UTC",
@@ -541,12 +541,12 @@ def test_full_markdown_uses_layered_headings(monkeypatch):
     )
     lines = rendered.splitlines()
 
-    assert lines.count("# IJT Conformance Test Report") == 1
-    assert any(line.startswith("## 📊 Conformance Overview") for line in lines)
+    assert lines.count("# IJT Specification Test Report") == 1
+    assert any(line.startswith("## 📊 Specification Test Overview") for line in lines)
     assert any(line.startswith("## 🧩 IJT Facet Support") for line in lines)
-    assert not any(line.startswith("## 📌 Conformance Action Items") for line in lines)
+    assert not any(line.startswith("## 📌 Specification Test Action Items") for line in lines)
     assert not any(line.startswith("## 📝 Server Scope Notes") for line in lines)
-    assert "Conformance Action Items" in rendered
+    assert "Specification Test Action Items" in rendered
     assert "Server Scope Notes" in rendered
     assert "Information only. Review scope and caveats" in rendered
     assert (
@@ -581,7 +581,7 @@ def test_review_items_sort_order(monkeypatch):
 
 
 def test_baseline_kwarg_is_silently_ignored_by_renderer(monkeypatch):
-    """``render_conformance_summary`` accepts ``baseline`` for backwards compatibility but never uses it."""
+    """``render_specification_test_summary`` accepts ``baseline`` for backwards compatibility but never uses it."""
     _patch_ci_metadata(monkeypatch)
     baseline = {
         "run_ts": "2026-05-09T14:21:00Z",
@@ -608,7 +608,7 @@ def test_baseline_kwarg_is_silently_ignored_by_renderer(monkeypatch):
         "xfail_reasons": {},
     }
 
-    rendered, _ctx = _ci_summary.render_conformance_summary(
+    rendered, _ctx = _ci_summary.render_specification_test_summary(
         data,
         "opc.tcp://fixture.test:40451",
         "2026-05-10 15:46 UTC",
@@ -790,7 +790,7 @@ def test_skip_diagnostics_filters_not_supported_prefix_in_markdown(monkeypatch):
         "xfail_reasons": {},
     }
 
-    rendered, _ctx = _ci_summary.render_conformance_summary(
+    rendered, _ctx = _ci_summary.render_specification_test_summary(
         data, "opc.tcp://localhost:40462", "2026-05-10 15:46 UTC", _sample_payload()
     )
 
@@ -821,7 +821,7 @@ def test_github_summary_never_does_not_touch_step_summary(tmp_path, monkeypatch)
     result = subprocess.run(
         [
             sys.executable,
-            str(_SCRIPTS / "make_conformance_summary.py"),
+            str(_SCRIPTS / "make_specification_test_summary.py"),
             "--xml",
             str(fixt / "pytest.xml"),
             "--out",
@@ -843,13 +843,13 @@ def test_github_summary_never_does_not_touch_step_summary(tmp_path, monkeypatch)
     assert step_summary.read_text(encoding="utf-8") == "PRE-EXISTING\n"
 
 
-def test_is_conformance_skip_reason_helper():
+def test_is_specification_test_skip_reason_helper():
     """Helper filters reasons that display as 'Not Supported:' (after normalization)."""
-    assert _ci_summary._is_conformance_skip_reason("Not Supported: missing precondition") is True
+    assert _ci_summary._is_specification_test_skip_reason("Not Supported: missing precondition") is True
     # Display normalization is case-insensitive on the prefix, so lower-case variants are also filtered.
-    assert _ci_summary._is_conformance_skip_reason("not supported: lower") is True
-    assert _ci_summary._is_conformance_skip_reason("Server unavailable") is False
-    assert _ci_summary._is_conformance_skip_reason("") is False
+    assert _ci_summary._is_specification_test_skip_reason("not supported: lower") is True
+    assert _ci_summary._is_specification_test_skip_reason("Server unavailable") is False
+    assert _ci_summary._is_specification_test_skip_reason("") is False
 
 
 def test_glossary_url_absolute_when_github_env_set(monkeypatch):

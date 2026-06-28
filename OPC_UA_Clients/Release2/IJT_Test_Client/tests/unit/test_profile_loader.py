@@ -123,14 +123,14 @@ class TestLoadSupportedCusMissingFile:
 class TestLoadSupportedCusFullConformance:
     def test_full_conformance_returns_large_set(self, profile_tmp_path):
         caps_file = profile_tmp_path / "caps.yaml"
-        _write_yaml(caps_file, "active_profile: full_conformance\n")
+        _write_yaml(caps_file, "active_profile: full_specification_coverage\n")
         supported = load_supported_cus(capabilities_path=caps_file)
         # full_conformance claims 123 CUs
         assert len(supported) >= 100
 
     def test_full_conformance_includes_basic_cus(self, profile_tmp_path):
         caps_file = profile_tmp_path / "caps.yaml"
-        _write_yaml(caps_file, "active_profile: full_conformance\n")
+        _write_yaml(caps_file, "active_profile: full_specification_coverage\n")
         supported = load_supported_cus(capabilities_path=caps_file)
         assert "single_result" in supported
         assert "basic_result" in supported
@@ -138,7 +138,7 @@ class TestLoadSupportedCusFullConformance:
 
     def test_returns_frozenset(self, profile_tmp_path):
         caps_file = profile_tmp_path / "caps.yaml"
-        _write_yaml(caps_file, "active_profile: full_conformance\n")
+        _write_yaml(caps_file, "active_profile: full_specification_coverage\n")
         supported = load_supported_cus(capabilities_path=caps_file)
         assert isinstance(supported, frozenset)
 
@@ -154,7 +154,7 @@ class TestLoadSupportedCusUnsupportedOverride:
         _write_yaml(
             caps_file,
             """\
-            active_profile: full_conformance
+            active_profile: full_specification_coverage
             cu_overrides:
               single_result: unsupported
             """,
@@ -167,7 +167,7 @@ class TestLoadSupportedCusUnsupportedOverride:
         _write_yaml(
             caps_file,
             """\
-            active_profile: full_conformance
+            active_profile: full_specification_coverage
             cu_overrides:
               single_result: unsupported
             """,
@@ -181,7 +181,7 @@ class TestLoadSupportedCusUnsupportedOverride:
         _write_yaml(
             caps_file,
             """\
-            active_profile: full_conformance
+            active_profile: full_specification_coverage
             cu_overrides:
               phantom_cu: unsupported
             """,
@@ -215,7 +215,7 @@ class TestLoadSupportedCusSupportedOverride:
         _write_yaml(
             caps_file,
             """\
-            active_profile: full_conformance
+            active_profile: full_specification_coverage
             cu_overrides:
               vendor_special_feature: supported
             """,
@@ -235,7 +235,7 @@ class TestLoadSupportedCusUnknownDisposition:
         _write_yaml(
             caps_file,
             """\
-            active_profile: full_conformance
+            active_profile: full_specification_coverage
             cu_overrides:
               single_result: maybe
             """,
@@ -325,7 +325,7 @@ class TestLoadSupportedCusEnvVar:
         _write_yaml(
             caps_file,
             """\
-            active_profile: full_conformance
+            active_profile: full_specification_coverage
             cu_overrides:
               env_test_cu: supported
             """,
@@ -337,11 +337,11 @@ class TestLoadSupportedCusEnvVar:
     def test_explicit_path_takes_precedence_over_env_var(self, profile_tmp_path, monkeypatch):
         env_caps = profile_tmp_path / "env_caps.yaml"
         explicit_caps = profile_tmp_path / "explicit_caps.yaml"
-        _write_yaml(env_caps, "active_profile: full_conformance\n")
+        _write_yaml(env_caps, "active_profile: full_specification_coverage\n")
         _write_yaml(
             explicit_caps,
             """\
-            active_profile: full_conformance
+            active_profile: full_specification_coverage
             cu_overrides:
               explicit_only_cu: supported
             """,
@@ -362,7 +362,7 @@ class TestLoadFacetsMissingFile:
         is an empty frozenset (no facets to populate from)."""
         monkeypatch.setattr(_pl_module, "_PROFILES_DIR", profile_tmp_path)
         caps_file = profile_tmp_path / "caps.yaml"
-        caps_file.write_text("active_profile: full_conformance\n", encoding="utf-8")
+        caps_file.write_text("active_profile: full_specification_coverage\n", encoding="utf-8")
         with caplog.at_level(logging.WARNING, logger="helpers.profile_loader"):
             supported = load_supported_cus(capabilities_path=caps_file)
         assert isinstance(supported, frozenset)

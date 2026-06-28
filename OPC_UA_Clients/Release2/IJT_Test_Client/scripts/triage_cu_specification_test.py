@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Summarize IJT CU compliance JSON and optional JUnit XML after a live run.
+Summarize IJT CU coverage JSON and optional JUnit XML after a live run.
 
 This script is intentionally read-only with respect to test artifacts: it reads
-the CU compliance JSON/JUnit XML and writes a separate Markdown triage summary.
+the CU coverage JSON/JUnit XML and writes a separate Markdown triage summary.
 Use it after simulator or real-server runs to classify failures, blocked tests,
 Not Supported CUs, and suspicious skip reasons before deciding whether an issue
 belongs to the server, the server capability profile, or the Test Client.
@@ -365,7 +365,7 @@ def _render(payload: dict[str, Any], junit_cases: list[JUnitCase], source: Path,
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cu-json", default="test-results/cu-compliance-report.json")
+    parser.add_argument("--cu-json", default="test-results/cu-coverage-report.json")
     parser.add_argument("--junit", default="test-results/pytest-live.xml")
     parser.add_argument("--out", default="test-results/cu-compliance-triage.md")
     parser.add_argument("--no-junit", action="store_true", help="Do not attempt to read JUnit XML")

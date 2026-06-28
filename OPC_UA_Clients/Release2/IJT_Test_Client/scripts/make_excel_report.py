@@ -95,7 +95,7 @@ _CU_STATUS_COLOUR = {
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _PROFILES_DIR = _PROJECT_ROOT / "profiles"
-_DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-compliance-report.json"
+_DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-coverage-report.json"
 _DEFAULT_BASELINE_JSON = _PROJECT_ROOT / "test-results" / "report-baseline.json"
 _CU_COMPLIANCE_KEYS = {"supported", "partial", "not_supported", "blocked", "action_needed", "untested"}
 _FINDING_OUTCOMES = {"partial", "not_supported", "blocked", "action_needed"}
@@ -810,7 +810,7 @@ def _apply_print_setup(ws, *, repeat_header_row: int | None = 1) -> None:
     ws.page_margins.footer = 0.3
     if repeat_header_row is not None and ws.max_row >= repeat_header_row:
         ws.print_title_rows = f"{repeat_header_row}:{repeat_header_row}"
-    ws.oddHeader.center.text = "IJT Conformance Test Report"
+    ws.oddHeader.center.text = "IJT Specification Test Report"
     ws.oddHeader.center.size = 12
     ws.oddHeader.center.color = "24292E"
     ws.oddFooter.center.text = "Page &P of &N"
@@ -985,7 +985,7 @@ def _build_summary(wb: openpyxl.Workbook, cases: list[TestCase], run_ts: str, ru
     ws.sheet_view.showGridLines = False
 
     # Title
-    ws["A1"] = "IJT Test Client — Conformance Test Report"
+    ws["A1"] = "IJT Test Client — Specification Test Report"
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = f"Generated: {run_ts}"
     ws["A2"].font = Font(italic=True, size=10)

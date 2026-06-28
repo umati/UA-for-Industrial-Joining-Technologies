@@ -1,5 +1,5 @@
 """
-Result trace data conformance tests — OPC 40450-1.
+Result trace data specification tests — OPC 40450-1.
 
 Covers:
   joining_result_trace — JoiningTraceDataType with TraceId, ResultId, StepTraces.

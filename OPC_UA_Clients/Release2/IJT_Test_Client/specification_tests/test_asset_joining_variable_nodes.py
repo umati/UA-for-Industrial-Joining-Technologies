@@ -1,5 +1,5 @@
 """
-Conformance tests for JoiningDataVariableType node structure — OPC 40450-1.
+specification tests for JoiningDataVariableType node structure — OPC 40450-1.
 
 Covers official asset-management conformance units:
     Every JoiningDataVariable parameter node (CableLength, FeedingSpeed, NominalVoltage,

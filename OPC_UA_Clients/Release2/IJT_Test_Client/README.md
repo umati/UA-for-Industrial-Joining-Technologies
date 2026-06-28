@@ -1,6 +1,6 @@
 # IJT Test Client
 
-Self-Testing client for validating OPC UA IJT servers against the Industrial Joining Technologies
+IJT Specification Test Client for validating OPC UA IJT servers against the Industrial Joining Technologies
 (IJT) companion specifications.
 
 ## Contact
@@ -34,8 +34,8 @@ invalid EventId rejection, and ConditionRefresh.
 Focused Debug-server checks:
 
 ```bash
-python -m pytest conformance/test_event_condition_catalog.py conformance/test_joining_system_condition_methods.py -q
-python -m pytest conformance/test_events.py events -q
+python -m pytest specification_tests/test_event_condition_catalog.py specification_tests/test_joining_system_condition_methods.py -q
+python -m pytest specification_tests/test_events.py events -q
 ```
 
 ## Test Reports

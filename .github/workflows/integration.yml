@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# System Tests — Live OPC UA, Browser, Docker, Conformance
+# System Tests — Live OPC UA, Browser, Docker, Specification Testing
 #
 # TIER: integration (non-blocking) — skips and failures are tracked but do
 # not gate merges. See docs/TEST_TIERS.md for the full tier policy and the
@@ -25,7 +25,7 @@
 #   - Push / PR touching server or client code paths (see path filters below)
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: "System Tests — Live OPC UA, Browser, Docker, Conformance"
+name: "System Tests — Live OPC UA, Browser, Docker, Specification Testing"
 
 on:
   schedule:
@@ -48,7 +48,7 @@ on:
       - 'OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_Linux/**'
       # Web Client — local live suites cover Python backend contracts and Playwright E2E.
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
-      # Test Client — every change is an OPC UA conformance test change
+      # Test Client — every change is an OPC UA specification test change
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
       # Console Client — live/OPC UA security tests run here (not in fast CI)
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
@@ -477,7 +477,7 @@ jobs:
           OPCUA_CAPABILITIES_FILE: server_capabilities.simulator.yaml
         run: |
           python -m pytest `
-            conformance/ assets/ joining_process/ results/ joint/ events/ common/ `
+            specification_tests/ assets/ joining_process/ results/ joint/ events/ common/ `
             -v --tb=short -rs --timeout=120 `
             --durations=30 `
             --junitxml=test-results/pytest.xml `
@@ -492,7 +492,7 @@ jobs:
         run: |
           python scripts/make_excel_report.py
           # Visible GitHub run-page summary is owned by the 📋 System Tests Report job below.
-          python scripts/make_conformance_summary.py --github-summary=never
+          python scripts/make_specification_test_summary.py --github-summary=never
 
       - name: Collect test results into flat directory
         if: always()
@@ -1343,12 +1343,12 @@ jobs:
           fail-on-error: false
           fail-on-empty: false
 
-      - name: "Report — Test Client Conformance Tests"
+      - name: "Report — Test Client Specification Tests"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
         if: always()
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
-          name: "Test Client — Conformance Tests (Live)"
+          name: "Test Client — Specification Tests (Live)"
           path: all-results/results-testclient/pytest.xml
           reporter: java-junit
           use-actions-summary: false
@@ -1444,7 +1444,7 @@ jobs:
       - name: Collect Timing JSON
         if: always()
         env:
-          TIMING_WORKFLOW_NAME: "System Tests — Live OPC UA, Browser, Docker, Conformance"
+          TIMING_WORKFLOW_NAME: "System Tests — Live OPC UA, Browser, Docker, Specification Testing"
           TIMING_OUTPUT_DIR: timing-results
           GH_REPOSITORY:  ${{ github.repository }}
           GH_RUN_ID:      ${{ github.run_id }}
