@@ -1,4 +1,4 @@
-"""Function-level byte-identity gate for the conformance summary renderer.
+"""Function-level byte-identity gate for the specification test summary renderer.
 
 Phase 1 of the IJT CI / System Tests reporting overhaul moved
 ``_render(...)`` out of ``scripts/make_specification_test_summary.py`` (formerly
@@ -168,6 +168,37 @@ def test_renderer_ignores_live_environment_when_frozen_env_passed(monkeypatch: p
         "Renderer leaked a wall-clock read into byte-identity output. "
         "All age calculations must come from `env.now_utc`, not `_utc_now()` or `datetime.now()`."
     )
+
+
+def test_simulator_fixture_keeps_expected_cu_scope_visible_in_report() -> None:
+    """Guard the live-report symptom of a missing active profile.
+
+    If the simulator capabilities file points at a missing profile, every CU
+    looks unsupported and this report regresses from 25 review rows to 123.
+    """
+    fixt = _FIXTURES_DIR / "system_tests_full_specification_coverage"
+    data = _parse(fixt / "pytest.xml")
+    cu_payload = _load_json(fixt / "cu_results.json")
+    baseline = _load_baseline(fixt / "baseline.json")
+
+    produced, context = render_specification_test_summary(
+        data,
+        FIXED_SERVER_URL,
+        FIXED_RUN_TS,
+        cu_payload,
+        baseline,
+        report_environment=FROZEN_ENV,
+    )
+
+    assert context is not None
+    assert context["server_supported_count"] == 98
+    assert len(context["active_cus"]) == 123
+    assert len(context["findings"]) == 25
+    assert "98 / 123 CUs server-supported" in produced
+    assert "98 / 98 server-supported CUs validated" in produced
+    assert "CUs Needing Review — 25 rows" in produced
+    assert "0 / 0 CUs server-supported" not in produced
+    assert "CUs Needing Review — 123 rows" not in produced
 
 
 def test_failure_overflow_row_uses_explicit_wording() -> None:

@@ -37,14 +37,14 @@ unit stage and is currently 95%.
 ### Report Output Behavior
 
 - `run_all_tests.py` writes JUnit XML to `test-results/pytest-live.xml` by default (or `--junit-xml FILE`).
-- Live CU compliance output is `test-results/cu-compliance-report.json`; unit-stage plugin output is redirected to `test-results/cu-compliance-report-unit.json` when CU-marked tests are collected.
+- Live CU coverage output is `test-results/cu-coverage-report.json`; unit-stage plugin output is redirected to `test-results/cu-coverage-report-unit.json` when CU-marked tests are collected.
 - In each `by_cu` row, `outcome` is the raw execution rollup kept for compatibility; `compliance` is the conservative report status consumed by GitHub/Excel. New tooling should read `compliance`.
-- The live CU compliance report includes workbook traceability for the checked-in Test Cases workbook: 1,122 expected TC header rows grouped by official CU, positive/negative classification, CTT/review/spec-link metadata, and optional exact row links from `@pytest.mark.workbook_ref("Sheet", [row])`.
-- Unit-only and collect-only pytest sessions must not write or overwrite the live CU compliance report.
+- The live CU coverage report includes workbook traceability for the checked-in Test Cases workbook: 1,122 expected TC header rows grouped by official CU, positive/negative classification, CTT/review/spec-link metadata, and optional exact row links from `@pytest.mark.workbook_ref("Sheet", [row])`.
+- Unit-only and collect-only pytest sessions must not write or overwrite the live CU coverage report.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
 - Default is `always` locally and in CI; the Excel post-step is non-fatal. When tests fail, the workbook is diagnostic and includes a red warning banner.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
-- Excel and GitHub Actions summaries include explicit Validation Health and Server Support Coverage metrics, change from `test-results/report-baseline.json`, capability support, Action Items, Scope Notes, Facet Breakdown, CU Detail, and diagnostics when the live CU compliance report is present. The 0–100 composite score is an internal-only trend field in the baseline JSON.
+- Excel and GitHub Actions summaries include explicit Validation Health and Server Support Coverage metrics, change from `test-results/report-baseline.json`, capability support, Action Items, Scope Notes, Facet Breakdown, CU Detail, and diagnostics when the live CU coverage report is present. The 0–100 composite score is an internal-only trend field in the baseline JSON.
 - Report wording separates `Server capability profile`, `Reference IJT facet`, `Reference full CU set`, `Server Supported CUs`, `Server Support %`, `Supported CUs Validated %`, `Result`, `Status`, and `Primary Reason` for public clarity.
 - `report-baseline.json` is local/job-local in the current implementation; do not add GitHub Actions cache or cross-run baseline download without a separate security review.
 - Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
@@ -225,7 +225,7 @@ IJT_Test_Client/
         ├── test_trigger.py
         ├── test_cu_registry.py
         ├── test_namespaces.py
-        ├── test_cu_compliance_report.py
+        ├── test_cu_coverage_report.py
         ├── test_method_signature.py
         ├── test_workbook_traceability.py
         ├── test_profile_loader.py

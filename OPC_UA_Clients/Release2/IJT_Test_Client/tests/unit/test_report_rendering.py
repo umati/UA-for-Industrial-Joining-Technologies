@@ -93,19 +93,19 @@ def _sample_payload() -> dict[str, Any]:
         "tests": [
             {
                 "cus": ["optional_feature"],
-                "nodeid": "conformance/test_optional.py::test_optional_feature",
+                "nodeid": "specification_tests/test_optional.py::test_optional_feature",
                 "outcome": "not_supported",
                 "reason": "Skipped: OptionalFeature: Not Supported — cannot run optional feature",
             },
             {
                 "cus": ["outside_profile_note"],
-                "nodeid": "conformance/test_optional.py::test_outside_profile_note",
+                "nodeid": "specification_tests/test_optional.py::test_outside_profile_note",
                 "outcome": "not_supported",
                 "reason": "Skipped: OutsideProfileNote: Not Supported — outside active profile",
             },
             {
                 "cus": ["state_policy_note"],
-                "nodeid": "conformance/test_state.py::test_state_policy",
+                "nodeid": "specification_tests/test_state.py::test_state_policy",
                 "outcome": "accepted_policy",
                 "reason": "Skipped: ACCEPTED POLICY - Method: SelectJoiningProcess - state not ready",
             },
@@ -134,8 +134,8 @@ def _patch_ci_metadata(monkeypatch):
         _ci_summary,
         "_load_profiles",
         lambda: {
-            "full_conformance": {
-                "name": "Full Conformance",
+            "full_specification_coverage": {
+                "name": "Full Specification Coverage",
                 "facets": ["basic_facet"],
             },
         },
@@ -145,7 +145,7 @@ def _patch_ci_metadata(monkeypatch):
         "_load_capabilities",
         lambda: {
             "server": {"name": "Report Test Server"},
-            "active_profile": "full_conformance",
+            "active_profile": "full_specification_coverage",
         },
     )
 
@@ -170,14 +170,14 @@ def _excel_metadata():
         ),
     }
     profiles = {
-        "full_conformance": _excel_report.ProfileInfo(
-            "full_conformance",
-            "Full Conformance",
+        "full_specification_coverage": _excel_report.ProfileInfo(
+            "full_specification_coverage",
+            "Full Specification Coverage",
             "",
             ["basic_facet"],
         )
     }
-    capabilities = _excel_report.CapabilitiesInfo("Report Test Server", "full_conformance", [], {})
+    capabilities = _excel_report.CapabilitiesInfo("Report Test Server", "full_specification_coverage", [], {})
     return profiles, facets, capabilities
 
 
@@ -480,14 +480,19 @@ def test_profile_summary_uses_singular_labels_for_one_facet_and_one_review_row(m
     monkeypatch.setattr(
         _ci_summary,
         "_load_profiles",
-        lambda: {"full_conformance": {"name": "Full Conformance", "facets": ["optional_facet"]}},
+        lambda: {
+            "full_specification_coverage": {
+                "name": "Full Specification Coverage",
+                "facets": ["optional_facet"],
+            }
+        },
     )
     monkeypatch.setattr(
         _ci_summary,
         "_load_capabilities",
         lambda: {
             "server": {"name": "Report Test Server"},
-            "active_profile": "full_conformance",
+            "active_profile": "full_specification_coverage",
         },
     )
     payload = {
@@ -496,7 +501,7 @@ def test_profile_summary_uses_singular_labels_for_one_facet_and_one_review_row(m
         "tests": [
             {
                 "cus": ["optional_feature"],
-                "nodeid": "conformance/test_optional.py::test_optional_feature",
+                "nodeid": "specification_tests/test_optional.py::test_optional_feature",
                 "outcome": "not_supported",
                 "reason": "Skipped: OptionalFeature: Not Supported",
             }

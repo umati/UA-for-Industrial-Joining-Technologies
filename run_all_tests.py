@@ -1951,13 +1951,13 @@ def _suite_console_opcua_security_linux() -> SuiteResult:
 
 
 def _suite_testclient_full() -> SuiteResult:
-    """Test Client -- Phase 2 (live conformance).  Delegates to sub-project runner.
+    """Test Client -- Phase 2 (live specification tests).  Delegates to sub-project runner.
 
     No OPCUA_SERVER_URL passed — the TestClient runner owns its server on port 40462.
-    Uses 1200s timeout — conformance tests span many OPC UA round-trips.
+    Uses 1200s timeout — specification tests span many OPC UA round-trips.
     """
     return _delegate_to_runner(
-        name="test-client-live-conformance",
+        name="test-client-live-specification-tests",
         runner_dir=TEST_CLIENT_DIR,
         phase_args=["--phase2"],
         label="testclient runner (phase2)",
@@ -2285,9 +2285,9 @@ SUITE_REGISTRY: dict[str, SuiteSpec] = {
         group=SuiteGroup.PHASE2_OPCUA_SECURITY,
         runner=_suite_console_opcua_security_linux,
     ),
-    "test-client-live-conformance": SuiteSpec(
-        id="test-client-live-conformance",
-        display_name="Test Client - Live conformance",
+    "test-client-live-specification-tests": SuiteSpec(
+        id="test-client-live-specification-tests",
+        display_name="Test Client - Live specification tests",
         group=SuiteGroup.PHASE2_LIVE,
         runner=_suite_testclient_full,
     ),

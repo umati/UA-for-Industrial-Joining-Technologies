@@ -10,6 +10,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+import yaml
 
 import helpers.profile_loader as _pl_module
 from helpers.profile_loader import get_skip_reason, is_cu_supported, load_supported_cus
@@ -116,19 +117,19 @@ class TestLoadSupportedCusMissingFile:
 
 
 # ---------------------------------------------------------------------------
-# load_supported_cus — full_conformance profile
+# load_supported_cus — full_specification_coverage profile
 # ---------------------------------------------------------------------------
 
 
-class TestLoadSupportedCusFullConformance:
-    def test_full_conformance_returns_large_set(self, profile_tmp_path):
+class TestLoadSupportedCusFullSpecificationCoverage:
+    def test_full_specification_coverage_returns_large_set(self, profile_tmp_path):
         caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(caps_file, "active_profile: full_specification_coverage\n")
         supported = load_supported_cus(capabilities_path=caps_file)
-        # full_conformance claims 123 CUs
+        # full_specification_coverage claims 123 CUs.
         assert len(supported) >= 100
 
-    def test_full_conformance_includes_basic_cus(self, profile_tmp_path):
+    def test_full_specification_coverage_includes_basic_cus(self, profile_tmp_path):
         caps_file = profile_tmp_path / "caps.yaml"
         _write_yaml(caps_file, "active_profile: full_specification_coverage\n")
         supported = load_supported_cus(capabilities_path=caps_file)
@@ -141,6 +142,43 @@ class TestLoadSupportedCusFullConformance:
         _write_yaml(caps_file, "active_profile: full_specification_coverage\n")
         supported = load_supported_cus(capabilities_path=caps_file)
         assert isinstance(supported, frozenset)
+
+
+# ---------------------------------------------------------------------------
+# Checked-in capabilities files
+# ---------------------------------------------------------------------------
+
+
+class TestCheckedInCapabilitiesFiles:
+    def test_active_profiles_exist_for_all_checked_in_capabilities_files(self):
+        caps_files = sorted(_pl_module._PROJECT_ROOT.glob("server_capabilities*.yaml"))
+        assert caps_files
+
+        for caps_file in caps_files:
+            caps = yaml.safe_load(caps_file.read_text(encoding="utf-8")) or {}
+            active_profile = caps.get("active_profile")
+            assert active_profile, f"{caps_file.name} must declare active_profile"
+            profile_path = _pl_module._PROFILES_DIR / f"{active_profile}.yaml"
+            assert profile_path.exists(), f"{caps_file.name} references missing profile {profile_path.name}"
+
+    def test_checked_in_capabilities_resolve_non_empty_cu_scope(self):
+        caps_files = sorted(_pl_module._PROJECT_ROOT.glob("server_capabilities*.yaml"))
+        assert caps_files
+
+        for caps_file in caps_files:
+            supported = load_supported_cus(capabilities_path=caps_file)
+            assert supported, f"{caps_file.name} resolved to 0 supported CUs"
+
+    def test_simulator_capabilities_keep_expected_supported_cu_count(self):
+        simulator_caps = _pl_module._PROJECT_ROOT / "server_capabilities.simulator.yaml"
+        supported = load_supported_cus(capabilities_path=simulator_caps)
+        assert len(supported) == 98
+
+    def test_full_specification_coverage_profile_declares_all_cus(self, profile_tmp_path):
+        caps_file = profile_tmp_path / "caps.yaml"
+        _write_yaml(caps_file, "active_profile: full_specification_coverage\n")
+        supported = load_supported_cus(capabilities_path=caps_file)
+        assert len(supported) == 123
 
 
 # ---------------------------------------------------------------------------

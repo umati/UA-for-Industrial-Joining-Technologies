@@ -1,4 +1,4 @@
-"""Maintenance helper: regenerate the expected conformance summary Markdown.
+"""Maintenance helper: regenerate the expected specification test summary Markdown.
 
 Run from the IJT_Test_Client/ directory:
 

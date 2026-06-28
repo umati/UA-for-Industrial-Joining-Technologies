@@ -29,7 +29,7 @@ def test_default_workbook_cases_load_all_tc_headers():
 
 def test_workbook_traceability_report_links_rows_to_cu_tests_and_exact_refs():
     first_case = load_workbook_cases()[CU.JOINING_SYSTEM_BASE][0]
-    nodeid = "conformance/test_joining_system_base.py::test_joining_system_type_present"
+    nodeid = "specification_tests/test_joining_system_base.py::test_joining_system_type_present"
 
     report = workbook_traceability_report(
         tests_by_cu={CU.JOINING_SYSTEM_BASE: [{"nodeid": nodeid}]},

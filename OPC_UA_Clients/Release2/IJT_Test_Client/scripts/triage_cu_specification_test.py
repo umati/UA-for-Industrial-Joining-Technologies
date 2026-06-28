@@ -55,9 +55,9 @@ def _load_json(path: Path) -> dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        raise SystemExit(f"ERROR: CU compliance JSON not found: {path}") from None
+        raise SystemExit(f"ERROR: CU coverage JSON not found: {path}") from None
     except json.JSONDecodeError as exc:
-        raise SystemExit(f"ERROR: CU compliance JSON is not valid JSON: {path}: {exc}") from exc
+        raise SystemExit(f"ERROR: CU coverage JSON is not valid JSON: {path}: {exc}") from exc
 
 
 def _text(elem: ET.Element | None) -> str:
@@ -367,7 +367,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cu-json", default="test-results/cu-coverage-report.json")
     parser.add_argument("--junit", default="test-results/pytest-live.xml")
-    parser.add_argument("--out", default="test-results/cu-compliance-triage.md")
+    parser.add_argument("--out", default="test-results/cu-coverage-triage.md")
     parser.add_argument("--no-junit", action="store_true", help="Do not attempt to read JUnit XML")
     return parser.parse_args()
 
@@ -381,7 +381,7 @@ def main() -> int:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(_render(payload, junit_cases, cu_json, junit), encoding="utf-8")
-    print(f"CU compliance triage written: {out_path}")
+    print(f"CU coverage triage written: {out_path}")
     return 0
 
 

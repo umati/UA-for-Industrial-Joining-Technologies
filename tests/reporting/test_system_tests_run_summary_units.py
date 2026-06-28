@@ -135,12 +135,12 @@ def test_load_test_client_conformance_summary_shifts_artifact_headings(tmp_path)
     """load_test_client_conformance_summary embeds the artifact with shifted headings."""
     summary = tmp_path / "summary.md"
     summary.write_text(
-        "# IJT Conformance Test Report\n\n## 📋 CUs Needing Review — 1 row\n\n## Scope\n",
+        "# IJT Specification Test Report\n\n## 📋 CUs Needing Review — 1 row\n\n## Scope\n",
         encoding="utf-8",
     )
 
     assert system_tests_run_summary.load_test_client_conformance_summary(str(summary)) == [
-        "## IJT Conformance Test Report",
+        "## IJT Specification Test Report",
         "",
         '<a id="system-cus-needing-review"></a>',
         "",
@@ -154,7 +154,7 @@ def test_tc_conformance_artifact_warning_success_with_content_no_warning():
     """When the lane succeeded and summary.md has content, no warning is emitted."""
     assert (
         system_tests_run_summary.tc_conformance_artifact_warning(
-            "success", ["## IJT Conformance Test Report", ""], "path/summary.md"
+            "success", ["## IJT Specification Test Report", ""], "path/summary.md"
         )
         is None
     )
@@ -166,7 +166,7 @@ def test_tc_conformance_artifact_warning_success_missing_emits_warning():
         "success", [], "all-results/results-testclient/summary.md"
     )
     assert warning is not None
-    assert "Test Client conformance summary" in warning
+    assert "Test Client specification test summary" in warning
     assert "all-results/results-testclient/summary.md" in warning
 
 
@@ -406,7 +406,7 @@ def test_integration_drift_warnings_minimum_mode_at_threshold_no_warn():
 
 
 def test_must_not_skip_failures_allows_legitimate_skip_suites():
-    """must_not_skip_failures allows skips in conformance/live/security suites."""
+    """must_not_skip_failures allows skips in specification/live/security suites."""
     suite_counts = [
         ("tc_tests", "Test Client", (100, 95, 0, 5)),
         ("con_live", "Console Client Live", (57, 19, 0, 38)),
@@ -781,7 +781,7 @@ def test_skipped_count_cell_uses_icon_only_when_nonzero():
 
 
 def test_tests_cell_zero_fail_with_skips_uses_passed_count():
-    """tests_cell mirror of the same regression — used by Conformance Overview."""
+    """tests_cell mirror of the same regression — used by Specification Test Overview."""
     result = system_tests_run_summary.tests_cell((1043, 889, 0, 154))
     assert "889" in result
     assert "1,043" not in result

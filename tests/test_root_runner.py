@@ -533,7 +533,9 @@ def test_total_test_outcomes_show_pass_fail_skip_breakdown() -> None:
     results = [
         _runner.SuiteResult("web-client-static", True, counts="707 passed (py), 634 passed (js)"),
         _runner.SuiteResult("web-client-e2e-features", False, counts="1 failed, 64 passed"),
-        _runner.SuiteResult("test-client-live-conformance", True, counts="713 passed, 140 skipped"),
+        _runner.SuiteResult(
+            "test-client-live-specification-tests", True, counts="713 passed, 140 skipped"
+        ),
     ]
 
     totals = _runner._test_outcome_counts_from_results(results)
@@ -709,7 +711,7 @@ def test_suite_registry_has_no_duplicate_ids() -> None:
         "csharp-client-opcua-security-linux",
         "console-client-opcua-security-windows",
         "console-client-opcua-security-linux",
-        "test-client-live-conformance",
+        "test-client-live-specification-tests",
         "web-client-live-opcua-direct",
         "web-client-live-websocket-api",
         "web-client-live-websocket-connection",
@@ -1260,7 +1262,7 @@ def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
             counts="9 passed",
         ),
         _runner.SuiteResult(
-            "test-client-live-conformance",
+            "test-client-live-specification-tests",
             True,
             duration=3.0,
             counts="713 passed, 140 skipped",

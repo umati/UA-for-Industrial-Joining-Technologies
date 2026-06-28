@@ -931,7 +931,7 @@ def _build_cover(
         if not bool(context.get("is_healthy")):
             metrics.append(
                 (
-                    "Conformance Action Items",
+                    "Specification Test Action Items",
                     _format_status_counts(_ACTION_ITEM_LABEL_ORDER, findings_count),
                     _action_items_context(findings_count),
                 )
@@ -1155,7 +1155,7 @@ def _build_profile_coverage(
         "Start with the Server Capability Profile row; Reference IJT Facet and Reference Full CU Set rows are comparison views only, not extra pass/fail requirements. "
         "Server Supported CUs comes from the server capability file. Outcome and validated counts come from this test run. "
         "Supported CUs Validated % is the main health signal and is color-coded; Server Support % is informational and is not color-coded. "
-        "Skip diagnostics may overlap with Conformance Action Items."
+        "Skip diagnostics may overlap with Specification Test Action Items."
     )
     ws["A2"].alignment = Alignment(wrap_text=True)
     if run_result == "failed":
@@ -1226,7 +1226,7 @@ def _build_profile_coverage(
             )
         )
 
-    if active != "full_conformance":
+    if active != "full_specification_coverage":
         view_rows.append(
             (
                 "Full IJT Base CU Set",
@@ -1449,7 +1449,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--cu-json",
         default=str(_DEFAULT_CU_JSON),
-        help="Optional CU compliance JSON input for profile/facet/CU sheets",
+        help="Optional CU coverage JSON input for profile/facet/CU sheets",
     )
     p.add_argument(
         "--capabilities",

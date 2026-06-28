@@ -76,7 +76,7 @@ class TestCuStringConstants:
         assert not duplicates, f"Duplicate CU values found: {set(duplicates)}"
 
     def test_constant_count_is_123(self):
-        """Exactly 123 CU string constants as documented in full_conformance.yaml."""
+        """Exactly 123 CU string constants as documented in full_specification_coverage.yaml."""
         constants = _get_string_cu_constants()
         count = len(constants)
         assert count == 123, f"Expected 123 CU constants, got {count}"

@@ -281,7 +281,7 @@ UA-for-Industrial-Joining-Technologies/
         ├── IJT_Console_Client/      # Python console client
         │   ├── docs/SKILLS.md
         │   └── run_all_tests.py
-        ├── IJT_Test_Client/         # OPC UA IJT spec conformance test suite
+        ├── IJT_Test_Client/         # OPC UA IJT specification test suite
         │   ├── docs/SKILLS.md
         │   └── run_all_tests.py
         └── IJT_CSharp_Client/       # C# .NET OPC UA client
@@ -309,8 +309,8 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Test Client (`OPC_UA_Clients/Release2/IJT_Test_Client/`)
 - **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt, pytest
-- **Purpose**: OPC UA IJT spec conformance test suite — validates server against OPC 40450-1 / 40451-1
-- **Tests**: conformance (`conformance/` — requires running OPC UA server); unit (`tests/unit/` — pure-logic helper coverage, no server needed)
+- **Purpose**: OPC UA IJT specification test suite — validates server behavior against OPC 40450-1 / 40451-1 without implying formal certification
+- **Tests**: specification tests (`specification_tests/` — require running OPC UA server); unit (`tests/unit/` — pure-logic helper coverage, no server needed)
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
 
@@ -525,7 +525,7 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/skills/endpointgraphics-tab-adder.md` | Adding endpoint graphics tabs |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/skills/associated-entities-interpreter.md` | Associated entities interpretation |
 | `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md` | Console Client context, patterns, test commands, method call examples |
-| `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md` | Test Client conformance suite, test structure, markers |
+| `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md` | Test Client specification test suite, test structure, markers |
 | `OPC_UA_Clients/Release2/IJT_Test_Client/docs/test-results.md` | Report locations, Excel sheets, status meanings, skip categories |
 | `OPC_UA_Servers/Release2/docs/opc-ua-server-context.md` | Address space map, namespaces, event hierarchy, server limitations |
 | `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md` | C# client architecture, test commands, Softing SDK DLL integration |

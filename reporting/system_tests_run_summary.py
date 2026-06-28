@@ -40,8 +40,8 @@ def shift_markdown_headings(markdown: str, by: int = 1) -> str:
     """Shift every Markdown heading down by ``by`` levels (clamped at H6).
 
     Used when embedding a standalone Markdown document (such as the Test
-    Client conformance summary, whose top-level heading is ``# IJT
-    Conformance Test Report``) inside the System Tests run summary so its
+    Client specification test summary, whose top-level heading is ``# IJT
+    Specification Test Report``) inside the System Tests run summary so its
     headings nest beneath the outer document. Fenced code blocks (``` ... ```
     or ~~~ ... ~~~) are left untouched.
     """
@@ -83,11 +83,11 @@ def ensure_system_cus_anchor(markdown: str) -> str:
 
 
 def load_test_client_conformance_summary(path: str) -> list[str]:
-    """Return the embedded Test Client conformance summary as Markdown lines.
+    """Return the embedded Test Client specification test summary as Markdown lines.
 
     Reads ``path`` (typically
     ``all-results/results-testclient/summary.md``), shifts every heading
-    down by one level so the artifact's ``# IJT Conformance Test Report``
+    down by one level so the artifact's ``# IJT Specification Test Report``
     nests beneath the System Tests H1, and returns the result split into
     lines (no trailing newlines). Returns an empty list when the file is
     missing or empty.
@@ -105,9 +105,9 @@ def load_test_client_conformance_summary(path: str) -> list[str]:
 def tc_conformance_artifact_warning(
     tc_result: str, summary_lines: list[str], path: str
 ) -> str | None:
-    """Return a warning when test-client succeeded but the conformance summary artifact is missing.
+    """Return a warning when test-client succeeded but the spec-test artifact is missing.
 
-    The Test Client `summary.md` is the only path for the conformance block
+    The Test Client `summary.md` is the only path for the specification test block
     to reach the aggregated System Tests summary when the test-client step
     runs with ``--github-summary=never``. A silent drop on success therefore
     hides regressions; surface it as an artifact warning. When the lane
@@ -118,8 +118,8 @@ def tc_conformance_artifact_warning(
     if summary_lines:
         return None
     return (
-        f"⚠️ **Test Client conformance summary**: artifact missing or empty at "
-        f"`{path}` — conformance block omitted from the rendered summary"
+        f"⚠️ **Test Client specification test summary**: artifact missing or empty at "
+        f"`{path}` — specification test block omitted from the rendered summary"
     )
 
 
@@ -280,7 +280,7 @@ def render_perf_section(lanes: list[tuple[str, dict[str, float]]]) -> list[str]:
       ``perf_threshold_p90_ms`` are present; the target column stays compact
       while the internal gate still checks both average and the 90% sample bound.
 
-    The renderer never writes free-form prose — the conformance block above
+    The renderer never writes free-form prose — the specification test block above
     already explains how to read latency tables. Keeping this section
     tight is what lets it live inside the single System Tests Report step
     summary without re-creating the fragmented layout this change fixes.
@@ -1237,7 +1237,7 @@ def main() -> None:
         ("wd_py", "Web Client — Docker Python Unit", wd_py),
         ("wd_js", "Web Client — Docker JavaScript", wd_js),
         ("tc_smoke", "Test Client — Smoke Sanity", tc_smoke),
-        ("tc_tests", "Test Client — Conformance", tc_tests),
+        ("tc_tests", "Test Client — Specification Tests", tc_tests),
         ("wc_live", "Web Client — Python/WebSocket Live", wc_live),
         ("wc_browser", "Web Client — Browser E2E", wc_browser),
         ("con_live", "Console Client — Live", con_live),
@@ -1343,7 +1343,7 @@ def main() -> None:
     )
     test_client_live_results = bulleted_multilane_test_results(
         ("Smoke", tc_smoke, tc_smoke_base),
-        ("Conformance", tc_tests, tc_tests_base),
+        ("Specification Tests", tc_tests, tc_tests_base),
     )
     tc_diagnostic_note = test_client_diagnostic_note(tc_conf_skips, tc_tests[3])
     console_security_note = skip_note_inline(
@@ -1394,9 +1394,9 @@ def main() -> None:
             "> Full report below: [Outcome](#system-outcome-overview) · "
             "[Test Results](#system-test-results) · "
             "[CUs Needing Review](#system-cus-needing-review) · "
-            "[Conformance Report](#system-test-client-conformance-report) · "
+            "[Specification Test Report](#system-test-client-specification-test-report) · "
             "[Components](#system-component-test-results) · "
-            "[Conformance Suites](#system-conformance-suites) · "
+            "[Specification Test Suites](#system-specification-test-suites) · "
             "[Diagnostics](#system-skip-details) · "
             "[Performance](#system-performance-benchmarks) · "
             "[Artifacts](#system-artifacts-and-drilldown)"
@@ -1435,7 +1435,7 @@ def main() -> None:
         f"| {bulleted_test_results(sd_smoke, sd_smoke_base)} |",
         f"| {lane_status_icon(str(wd_r))} | Web Client Docker tests "
         f"| {lane_status_text(str(wd_r))} | {web_docker_results} |",
-        f"| {lane_status_icon(str(tc_r))} | Test Client conformance "
+        f"| {lane_status_icon(str(tc_r))} | Test Client specification tests "
         f"| {lane_status_text(str(tc_r))} "
         f"| {bulleted_test_results(tc_tests, tc_tests_base)} |",
         f"| {lane_status_icon(str(wc_r))} | Web Client live suites "
@@ -1461,7 +1461,7 @@ def main() -> None:
             [
                 "---",
                 "",
-                '<a id="system-test-client-conformance-report"></a>',
+                '<a id="system-test-client-specification-test-report"></a>',
                 "",
                 *tc_conformance_summary_lines,
                 "",
@@ -1496,7 +1496,7 @@ def main() -> None:
         ),
         (
             f"| {component_row_icon(tc_tests, tc_diagnostic_note)} "
-            "| Test Client | Live conformance harness against OPC UA server "
+            "| Test Client | Live specification test harness against OPC UA server "
             f"| {_CELL_NOT_APPLICABLE_INT} | "
             f"{test_client_live_results} | "
             f"{tc_diagnostic_note} |"
@@ -1520,9 +1520,9 @@ def main() -> None:
         "",
         "---",
         "",
-        '<a id="system-conformance-suites"></a>',
+        '<a id="system-specification-test-suites"></a>',
         "",
-        f"### 📑 Conformance Suites — {plural_label(conformance_suite_count, 'suite')}",
+        f"### 📑 Specification Test Suites — {plural_label(conformance_suite_count, 'suite')}",
         "",
         "| Suite | Port | Live Tests | Skipped | Notes |",
         "|:------|-----:|----------:|--------:|:------|",
@@ -1532,7 +1532,7 @@ def main() -> None:
             f"{skipped_count_cell(tc_smoke[3])} | Server and namespace reachability |"
         ),
         (
-            "| Test Client — Conformance | 40462 | "
+            "| Test Client — Specification Tests | 40462 | "
             f"{tests_cell(tc_tests, tc_tests_base)} | "
             f"{skipped_count_cell(tc_tests[3])} | "
             f"{tc_diagnostic_note} "
@@ -1541,7 +1541,7 @@ def main() -> None:
     ]
 
     # ── Inline skip details (collapsible per suite) ──────────────────
-    # Built here so the Conformance Suites "see below" link points to the
+    # Built here so the Specification Test Suites "see below" link points to the
     # very next visual block, not 100+ lines below.
 
     skip_sections = []
@@ -1724,7 +1724,7 @@ def main() -> None:
     if tc_live_timings:
         out += [
             "",
-            "<details><summary><b>Test Client Conformance Timing Details</b></summary>",
+            "<details><summary><b>Test Client Specification Test Timing Details</b></summary>",
             "",
             "| Test | Duration | Outcome |",
             "|:-----|---------:|:--------|",
@@ -1738,7 +1738,7 @@ def main() -> None:
     else:
         out += [
             "",
-            "<details><summary><b>Test Client Conformance Timing Details</b></summary>",
+            "<details><summary><b>Test Client Specification Test Timing Details</b></summary>",
             "",
             "Per-test durations are not available in the current JUnit artifact.",
             "",
@@ -1835,9 +1835,9 @@ def main() -> None:
         (
             "| Test Client | [Test Results](#system-test-results) · "
             "[Component Test Results](#system-component-test-results) · "
-            "[Conformance Suites](#system-conformance-suites) · "
+            "[Specification Test Suites](#system-specification-test-suites) · "
             + (
-                "[Conformance Report](#system-test-client-conformance-report) · "
+                "[Specification Test Report](#system-test-client-specification-test-report) · "
                 if tc_conformance_summary_lines
                 else ""
             )

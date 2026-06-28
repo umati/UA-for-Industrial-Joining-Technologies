@@ -141,7 +141,7 @@ The table of facet-level rows that breaks down validation by IJT Companion Spec 
 
 ### 4.2 `Server Scope Notes` 🛠️ 🧪
 Source: `scripts/reporting/specification_test_summary.py` — `Server Scope Notes` column header in the `## 📊 Specification Test Overview` KPI table.
-Per-CU notes about CUs that are **not** action items (no failure, no block) but still need explanation. The count remains in Conformance Overview; the old standalone Markdown section was removed because the same review rows now live in `CUs Needing Review`. The label deliberately avoids `Exceptions`, because "Exception" has a specific meaning in the OPC UA spec (a StatusCode-bearing condition) and reusing that term in the report would be confusing.
+Per-CU notes about CUs that are **not** action items (no failure, no block) but still need explanation. The count remains in Specification Test Overview; the old standalone Markdown section was removed because the same review rows now live in `CUs Needing Review`. The label deliberately avoids `Exceptions`, because "Exception" has a specific meaning in the OPC UA spec (a StatusCode-bearing condition) and reusing that term in the report would be confusing.
 
 ### 4.3 `Profile Coverage Comparison` 👔 🛠️ 🧪 📦
 Excel-only sheet built by `_build_profile_coverage(...)` in `make_excel_report.py`. It compares the active profile against the server's declared capability set, surfacing per-profile CU totals, supported counts, and outcomes side by side. The markdown report intentionally omits this comparison because the same numbers are already covered by the KPI strip and the facet rows; the sheet exists as a deep-dive lens for Excel readers.
@@ -212,7 +212,7 @@ Auto-detects the slowest current job/suite and appears inside the System Tests `
 - **Layer 3 (`<details>` collapsed):** top-10 detail tables for available Web Browser, C# Live, and Test Client Specification Test timing artifacts.
 
 ### 6.4 Run-page step summary ownership 🛠️ 🧪
-Perf, test-result, and Browser CI image summaries for the System Tests workflow are consolidated in the aggregator job (`📋 System Tests Report`); suite jobs (Console Client perf, Test Client perf, Browser CI image resolve, etc.) emit JUnit XML, outputs, and artifacts only and no longer write directly to `$GITHUB_STEP_SUMMARY`. This keeps the run-page summary as a single consolidated block in the audience-tiered order: banner → outcome KPIs → test results → conformance report → component results → conformance suites → skip details → performance benchmarks → performance hotspots → warnings → artifacts → per-client quick index.
+Perf, test-result, and Browser CI image summaries for the System Tests workflow are consolidated in the aggregator job (`📋 System Tests Report`); suite jobs (Console Client perf, Test Client perf, Browser CI image resolve, etc.) emit JUnit XML, outputs, and artifacts only and no longer write directly to `$GITHUB_STEP_SUMMARY`. This keeps the run-page summary as a single consolidated block in the audience-tiered order: banner → outcome KPIs → test results → specification test report → component results → specification test suites → skip details → performance benchmarks → performance hotspots → warnings → artifacts → per-client quick index.
 
 ### 6.5 `Baseline Warnings` 🛠️ 🧪
 Source: `reporting/system_tests_run_summary.py` status banner and warnings details.

@@ -82,7 +82,7 @@ dedicated fixtures when branch semantics need their own coverage lens.
 | File | Origin | Purpose |
 |---|---|---|
 | `pytest.xml` | extracted from `results-testclient` artifact of GitHub Actions run id `25794967225` (`integration.yml`, captured 2026-05-13) | JUnit input |
-| `cu_results.json` | from a representative local specification test run (the upstream artifact did not contain `cu-coverage-report.json`); coherent with the `baseline.json` below | per-CU compliance payload |
+| `cu_results.json` | from a representative local specification test run (the upstream artifact did not contain `cu-coverage-report.json`); coherent with the `baseline.json` below | per-CU coverage payload |
 | `baseline.json` | from the same local specification test run as `cu_results.json` | satisfies the renderer's optional `baseline` kwarg; not consumed by the renderer (no baseline-driven UI) |
 
 **Coherence note.** The upstream GitHub Actions artifact for run

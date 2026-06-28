@@ -56,7 +56,7 @@ async def test_get_result_id_list_filtered_method_absent(result_management, ns_i
     A server that does not support this optional CU may omit the method node or
     expose it as a stub that rejects calls with a Bad OPC UA status.
     If the method is present, skip here — rejection behaviour is validated in
-    conformance/test_result_management.py::test_result_management_get_result_id_list_filtered_is_not_supported.
+    specification_tests/test_result_management.py::test_result_management_get_result_id_list_filtered_is_not_supported.
     """
     ns_mr = ns_indices[NS_MACH_RESULT]
     node = await find_child_by_browse_name(result_management, BN.GET_RESULT_ID_LIST_FILTERED, ns_mr)
@@ -74,7 +74,7 @@ async def test_release_result_handle_method_absent(result_management, ns_indices
     A compliant server must either omit the method node (absent) or expose it as a stub
     that rejects calls with a Bad OPC UA status.  Both are acceptable.
     If the method is present, skip here — rejection behaviour is validated in
-    conformance/test_result_management.py::test_result_management_release_result_handle_if_present.
+    specification_tests/test_result_management.py::test_result_management_release_result_handle_if_present.
     """
     ns_mr = ns_indices[NS_MACH_RESULT]
     node = await find_child_by_browse_name(result_management, BN.RELEASE_RESULT_HANDLE, ns_mr)

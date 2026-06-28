@@ -137,7 +137,7 @@ def pytest_configure(config):
             all_cus=load_all_cus_from_facets(),
             supported_cus=_SUPPORTED_CUS,
         ),
-        "ijt-cu-compliance-report",
+        "ijt-cu-coverage-report",
     )
 
 

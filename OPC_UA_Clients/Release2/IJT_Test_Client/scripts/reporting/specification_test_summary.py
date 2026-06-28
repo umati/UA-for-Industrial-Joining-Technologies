@@ -974,7 +974,7 @@ def render_specification_test_summary(
     *,
     report_environment: ReportEnvironment | None = None,
 ) -> tuple[str, dict[str, Any] | None]:
-    """Return the IJT Conformance Test Report Markdown plus the report context.
+    """Return the IJT Specification Test Report Markdown plus the report context.
 
     Inputs are the same as the original `_render(...)` in `make_specification_test_summary.py`:
     parsed JUnit XML data, the OPC UA server URL string, the formatted

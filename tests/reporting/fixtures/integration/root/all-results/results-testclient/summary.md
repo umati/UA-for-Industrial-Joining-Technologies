@@ -1,12 +1,12 @@
-# IJT Conformance Test Report
+# IJT Specification Test Report
 
 🟢 **Passed** · **0 action items** · **Validation 100.0% (98/98)** · **Server support 79.7% (98/123)**
 
-## 📊 Conformance Overview
+## 📊 Specification Test Overview
 
 > 🚦 Review: 🔴 Failed · 🟠 Blocked · ⚪ Not Supported · ℹ️ With Notes
 
-| Server Support Coverage | Validation Health | Conformance Action Items | Server Scope Notes |
+| Server Support Coverage | Validation Health | Specification Test Action Items | Server Scope Notes |
 |:---:|:---:|:---:|:---:|
 | **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked** | **⚪ 25 Not Supported · ℹ️ 0 With Notes** |
 | 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | No action needed | Information only. Review scope and caveats |
