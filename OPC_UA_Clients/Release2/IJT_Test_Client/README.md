@@ -1,6 +1,6 @@
 # IJT Test Client
 
-Conformance test client for validating OPC UA IJT servers against the Industrial Joining Technologies
+Self-Testing client for validating OPC UA IJT servers against the Industrial Joining Technologies
 (IJT) companion specifications.
 
 ## Contact
