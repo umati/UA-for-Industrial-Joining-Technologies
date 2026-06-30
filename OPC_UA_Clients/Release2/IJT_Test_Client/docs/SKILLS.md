@@ -1,4 +1,4 @@
-﻿# IJT Test Client — Developer Reference
+# IJT Test Client — Developer Reference
 
 Full technical reference: [`opc-ua-server-context.md`](../../../../OPC_UA_Servers/Release2/docs/opc-ua-server-context.md)
 
@@ -202,7 +202,11 @@ IJT_Test_Client/
 │   ├── event_collector.py        ← EventCollector for subscription tests
 │   ├── result_collector.py       ← events-primary result delivery
 │   ├── result_navigation.py      ← Variant unwrap + ResultContent traversal helpers
-│   └── server_manager.py         ← auto-start simulator if not running
+│   ├── server_manager.py         ← auto-start simulator if not running
+│   ├── cu_evidence_map.py        ← CU evidence kind metadata (structure/method/result/event/workflow/…)
+│   ├── target_server_cu_config.py   ← target server CU profile loader and validator
+│   ├── target_server_readiness.py   ← readiness/preflight model with typed outcome vocabulary
+│   └── target_server_triggers.py   ← StartSelectedJoiningResultTrigger, ManualResultTrigger, ManualEventTrigger
 ├── common/                       ← connection + namespace registration tests
 ├── assets/                       ← asset structure, interfaces, health, counters
 ├── results/                      ← result management structure + retrieval + simulation
@@ -212,6 +216,12 @@ IJT_Test_Client/
 ├── joining_process/              ← JoiningProcessManagement structure + methods
 ├── joint/                        ← JointManagement structure + methods
 ├── specification_tests/          ← Specification Unit tests (asset, result, event, joining process, joint)
+├── target_server_cu_profiles/       ← Target Server CU execution profiles (sanitized examples)
+│   ├── README.md                 ← Profile usage, commands, sanitization rules
+│   ├── template.yaml             ← Commented schema template with safe defaults
+│   ├── example_remote_start.yaml ← Generic profile for StartSelectedJoining target servers
+│   └── example_manual_trigger.yaml ← Generic profile for manual/physical tool trigger
+├── run_target_server_cu.py          ← Standalone target server CU runner (preflight/automated/guided)
 ├── scripts/run_reference_workflow.py ← Markdown + interactive reference workflow runner
 ├── tests/
     └── unit/                     ← Pure-logic helper tests (no OPC UA server needed)
@@ -229,8 +239,97 @@ IJT_Test_Client/
         ├── test_method_signature.py
         ├── test_workbook_traceability.py
         ├── test_profile_loader.py
-        └── test_ruff_format_guard.py ← canary: ruff format must not corrupt except (A, B): clauses
+        ├── test_ruff_format_guard.py ← canary: ruff format must not corrupt except (A, B): clauses
+        ├── test_cu_evidence_map.py   ← target server CU evidence kind metadata tests
+        ├── test_target_server_cu_config.py ← target server profile loader/validator tests
+        ├── test_target_server_readiness.py ← readiness/preflight model tests
+        ├── test_target_server_triggers.py  ← StartSelectedJoiningResultTrigger, ManualResultTrigger tests
+        └── test_run_target_server_cu.py    ← target server CU runner CLI/report tests (no server needed)
 ```
+
+---
+
+## Target Server CU Execution
+
+Target Server CU execution checks an OPC UA IJT server under test (SUT). The SUT
+can be the simulator, a product/device server, or another IJT server endpoint.
+
+This path is additive. Simulator behavior, test count, report schemas, skip/fail
+semantics, and CU coverage outputs are unchanged.
+
+### Evidence Kinds
+
+`helpers/cu_evidence_map.py` maps every CU key to an evidence kind and execution flags:
+
+| Kind | Description |
+|---|---|
+| `structure` | Browse/read address-space; no state changes |
+| `method` | Call OPC UA method; may change state |
+| `result` | Requires live tightening result |
+| `consolidated_result` | Requires batch/sync/job result |
+| `event` | Requires live OPC UA event |
+| `condition` | Requires retained condition validation |
+| `workflow` | Requires joining workflow orchestration |
+| `optional_operation` | Gated by CU profile support |
+| `negative_path` | Tests invalid/rejected operations |
+| `manual` | Requires physical operator/tool action |
+
+### Trigger Modes
+
+| Mode | Adapter class | When to use |
+|---|---|---|
+| `simulate_methods` | `SimulatorResultTrigger` (existing) | Simulator only |
+| `start_selected_joining` | `StartSelectedJoiningResultTrigger` | Target server with OPC UA automation |
+| `manual_trigger` | `ManualResultTrigger` | Physical tool trigger; guided mode prompts |
+| `observe_only` | `ExternalResultTrigger` | Passive evidence; no trigger needed |
+| `none` | `ExternalResultTrigger` | No evidence path; dependent CUs blocked |
+
+### Target Server CU Runner Commands
+
+```bash
+# Preflight — no state changes, safe for any server:
+python run_target_server_cu.py --profile target_server_cu_profiles/template.yaml --preflight-only
+
+# Automated run:
+python run_target_server_cu.py --profile my_profile.yaml --mode automated
+
+# Guided run with interactive prompts:
+python run_target_server_cu.py --profile my_profile.yaml --mode guided --interactive-prompts
+
+# Override endpoint:
+python run_target_server_cu.py --profile template.yaml --endpoint opc.tcp://10.0.0.1:40451 --preflight-only
+
+# Integrate with run_all_tests.py (non-fatal by default):
+python run_all_tests.py --target-server-profile target_server_cu_profiles/example_remote_start.yaml
+
+# Make target server preflight gate the overall run:
+python run_all_tests.py --target-server-profile my_profile.yaml --target-server-preflight-strict
+```
+
+### Outcome Vocabulary
+
+Stable reason codes used in preflight reports, CU evidence, and skip reasons:
+
+| Code | Meaning |
+|---|---|
+| `passed` | All preconditions met |
+| `blocked` | Valid config but server-under-test precondition unmet |
+| `failed` | Hard check error |
+| `unsupported` | CU not supported per profile |
+| `manual_required` | Physical operator action needed |
+| `claim_mismatch` | Profile claims support but address space disagrees |
+| `configuration_error` | YAML invalid or inconsistent |
+
+### Sanitization Rules for Committed Profiles
+
+Target Server CU profiles may **not** contain:
+- Real IP addresses or hostnames
+- Real `ProductInstanceUri` serial numbers
+- Real joining process IDs or vendor names
+- Operator credentials or authentication tokens
+
+Use placeholders like `opc.tcp://<target-server-host>:40451` in committed examples.
+Store real profiles outside the repository or sanitize before committing.
 
 ### Key Fixtures (conftest.py)
 | Fixture | Scope | Description |
@@ -391,7 +490,7 @@ Use this retry pattern only in standalone GetLatestResult-specific tests in
 
 ---
 
-## Custom Trigger Adapter (for Real Controllers)
+## Custom Trigger Adapter (for Real Target Servers)
 
 For servers that cannot simulate their own results, implement a trigger adapter:
 

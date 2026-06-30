@@ -108,6 +108,15 @@ def test_pypi_https_preflight_checks_json_endpoint(monkeypatch):
     assert seen == ["https://pypi.org/pypi/pip/json"]
 
 
+def test_target_server_profile_parser_flags():
+    parser = _mod._build_parser()
+
+    args = parser.parse_args(["--target-server-profile", "profile.yaml", "--target-server-preflight-strict"])
+
+    assert args.target_server_profile == "profile.yaml"
+    assert args.target_server_preflight_strict is True
+
+
 def test_pip_audit_timeout_is_advisory_skip():
     timeout_output = "[TIMEOUT] Command exceeded 30s limit: pip-audit\n"
     with (

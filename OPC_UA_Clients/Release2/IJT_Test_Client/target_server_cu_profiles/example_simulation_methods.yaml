@@ -1,0 +1,78 @@
+# Target Server CU Profile — Simulation Methods Example
+#
+# Use this profile for an IJT server under test that exposes simulation helper
+# methods such as SimulateResults or SimulateEvents. This can be the checked-in
+# simulator or another server that intentionally provides simulation helpers.
+#
+# SANITIZED: No real endpoints, PIUs, process IDs, or vendor values are present.
+#
+# Usage:
+#   python run_target_server_cu.py --profile example_simulation_methods.yaml --preflight-only
+
+schema_version: 1
+profile_name: "Generic Simulation Methods Target Server"
+description: >
+  Sanitized example profile for target servers that expose simulation helper
+  methods for result and event evidence.
+
+capabilities_file: "../server_capabilities.yaml"
+
+target:
+  endpoint: "opc.tcp://localhost:40451"
+  expected_server:
+    application_name: ""
+    application_version: ""
+    warn_only_on_version_drift: true
+
+cu_execution:
+  default_mode: automated
+  scoring_mode: diagnostic
+  precondition_failure_policy: blocked
+  allow_manual_steps: false
+  default_timeout_seconds: 60
+  state_changing_methods:
+    default_policy: require_explicit_opt_in
+    allowed_methods: []
+  method_status_policies: {}
+  extension_fields: {}
+
+selection:
+  tool:
+    policy: first_ready
+    product_instance_uri: ""
+    capability_tags: []
+  joining_process:
+    policy: first_compatible
+    joining_process_id: ""
+    joining_process_origin_id: ""
+    selection_name: ""
+    capability_tags: []
+
+triggers:
+  result:
+    mode: simulate_methods
+    timeout_seconds: 30
+    deselect_after_joining: false
+  event:
+    mode: simulate_methods
+    timeout_seconds: 30
+  condition:
+    mode: simulate_methods
+    timeout_seconds: 30
+
+workflow_execution:
+  start_invocation_policy: single_start_produces_final_result
+  expected_operation_count: 1
+  expected_results:
+    classification: single
+    final_result_required: true
+    timeout_seconds: 30
+  cleanup:
+    policy: best_effort_with_evidence
+    deselect_process: false
+    reset_identifiers: false
+
+reporting:
+  output_dir: "test-results/target-server-cu"
+  sanitize_shared_artifacts: true
+  keep_local_exact_debug_artifacts: false

@@ -1,0 +1,212 @@
+# Target Server CU Profile — Schema Template
+#
+# Copy this file and fill in your target server-specific values.
+# DO NOT commit files with real endpoints, PIUs, process IDs, or
+# serial numbers. Keep target server-specific profiles outside this
+# repository or sanitize them fully before committing.
+#
+# All fields shown below are optional unless marked REQUIRED.
+# Omitted sections use safe defaults (no state-changing methods allowed,
+# first-available selection, diagnostic scoring, no manual steps).
+#
+# Run preflight to validate before executing any state-changing tests:
+#   python run_target_server_cu.py --profile <this_file> --preflight-only
+#
+# See target_server_cu_profiles/README.md for full usage documentation.
+
+# REQUIRED: Schema version. Must be 1 for this release.
+schema_version: 1
+
+# Human-readable profile name for reports and output.
+profile_name: "Template Target Server CU Profile"
+
+# Description shown in evidence reports.
+description: >
+  Copy this template and fill in your target server values.
+  Sanitize or keep outside the repository before committing.
+
+# Path to the server_capabilities.yaml CU support declaration.
+# Can be relative to this profile file (recommended) or absolute.
+capabilities_file: "../server_capabilities.yaml"
+
+# ---------------------------------------------------------------------------
+# Target: Target server endpoint and server identity cross-check.
+# ---------------------------------------------------------------------------
+
+target:
+  # OPC UA endpoint URL. Replace <host> with the target server hostname or IP.
+  # REQUIRED for non-default runs. Placeholder triggers a configuration error.
+  endpoint: "opc.tcp://<host>:40451"
+
+  # Optional server identity cross-check.
+  # When warn_only_on_version_drift is true (recommended), version mismatches
+  # produce warnings but do not block the run.
+  expected_server:
+    application_name: ""        # e.g. "IJT Target Server 1.0" — leave blank to skip
+    application_version: ""     # e.g. "1.0.0" — leave blank to skip
+    warn_only_on_version_drift: true
+
+# ---------------------------------------------------------------------------
+# CU execution: policy for how tests are run and scored.
+# ---------------------------------------------------------------------------
+
+cu_execution:
+  # Execution mode:
+  #   automated      — no manual waits; manual-only evidence becomes blocked
+  #   guided         — prompts and waits allowed with --interactive-prompts
+  #   preflight_only — discover and classify outcomes only; no state changes
+  default_mode: automated
+
+  # Scoring mode:
+  #   diagnostic     — all outcomes reported; no pass/fail gate
+  #   strict_profile — zero claim mismatches and failures within declared scope
+  #   acceptance     — zero failed CUs and zero claim mismatches in declared scope
+  scoring_mode: diagnostic
+
+  # What to do when a supported CU's preconditions are missing:
+  #   blocked  — report as blocked (recommended for diagnostic runs)
+  #   failed   — fail the run (for strict acceptance/certification)
+  #   skip     — skip silently (less diagnostic)
+  precondition_failure_policy: blocked
+
+  # Allow manual steps (operator prompts) in automated mode? Normally false.
+  allow_manual_steps: false
+
+  # Default timeout in seconds for OPC UA method calls and result waiting.
+  default_timeout_seconds: 60
+
+  # State-changing method policy.
+  # default_policy values:
+  #   require_explicit_opt_in  — only methods in allowed_methods list are called (safe default)
+  #   allow_all                — all state-changing calls are allowed (use with caution)
+  #   deny_all                 — no state-changing calls are allowed
+  state_changing_methods:
+    default_policy: require_explicit_opt_in
+    allowed_methods: []
+    # Example for a target server that supports StartSelectedJoining workflow:
+    # allowed_methods:
+    #   - SelectJoiningProcess
+    #   - StartSelectedJoining
+    #   - DeselectJoiningProcess
+
+  # Per-method status code classification overrides.
+  # Map method BrowseName to expected status policy: "accepted", "warning", "fail"
+  method_status_policies: {}
+
+  # Extension fields for forward-compatible experimental use only.
+  extension_fields: {}
+
+# ---------------------------------------------------------------------------
+# Selection: Tool and joining-process discovery and selection policy.
+# ---------------------------------------------------------------------------
+
+selection:
+  tool:
+    # Selection policy:
+    #   first_ready       — use first tool in ready state (recommended)
+    #   first_available   — use first discoverable tool
+    #   exact_match       — requires product_instance_uri to be set
+    policy: first_ready
+
+    # Exact tool ProductInstanceUri. Leave empty for runtime discovery.
+    # If set, this PIU is passed to GetJoiningProcessList and StartSelectedJoining.
+    # SANITIZE: do not commit real serial numbers or asset identifiers.
+    product_instance_uri: ""
+
+    # Optional capability tags for filtered selection (not yet implemented).
+    capability_tags: []
+
+  joining_process:
+    # Selection policy:
+    #   first_compatible  — use first process compatible with the tool (recommended)
+    #   first_available   — use first discoverable process
+    #   exact_match       — requires joining_process_id to be set
+    policy: first_compatible
+
+    # Exact joining process identifier. Leave empty for runtime discovery.
+    # SANITIZE: do not commit real process IDs, names, or vendor payloads.
+    joining_process_id: ""
+    joining_process_origin_id: ""
+    selection_name: ""
+
+    # Optional capability tags for filtered selection (not yet implemented).
+    capability_tags: []
+
+# ---------------------------------------------------------------------------
+# Triggers: Evidence generation strategy for result, event, condition CUs.
+# ---------------------------------------------------------------------------
+
+triggers:
+  result:
+    # Trigger mode for result-producing CUs:
+    #   none                    — no trigger; result CUs will be blocked
+    #   simulate_methods        — use simulator SimulateResults methods (simulator only)
+    #   start_selected_joining  — use SelectJoiningProcess + StartSelectedJoining
+    #   manual_trigger          — subscribe first, wait for physical tool trigger
+    #   observe_only            — validate passive evidence without triggering
+    mode: none
+    timeout_seconds: 60
+    deselect_after_joining: false
+
+  event:
+    # Trigger mode for event-producing CUs:
+    #   observe_only    — validate events that arrive naturally (recommended for target servers)
+    #   simulate_methods — use simulator SimulateEvents methods
+    #   manual_trigger  — wait for events produced by operator/target server action
+    #   none            — no event trigger; event CUs will be blocked
+    mode: observe_only
+    timeout_seconds: 60
+
+  condition:
+    # Trigger mode for condition CUs:
+    #   observe_only    — validate retained conditions passively (recommended)
+    #   simulate_methods — use simulator SimulateConditions methods
+    #   manual_trigger  — wait for conditions produced by operator/target server action
+    #   none            — no condition trigger; condition CUs will be blocked
+    mode: observe_only
+    timeout_seconds: 60
+
+# ---------------------------------------------------------------------------
+# Workflow execution: joining workflow setup and cleanup.
+# ---------------------------------------------------------------------------
+
+workflow_execution:
+  # How many StartSelectedJoining calls produce the required result evidence:
+  #   single_start_produces_final_result  — one start → one result (recommended)
+  #   one_start_per_operation             — call start N times for batch/sync evidence
+  #   manual_operation_trigger            — do not call start; wait for physical trigger
+  start_invocation_policy: single_start_produces_final_result
+
+  # Expected number of joining operations (for batch/sync workflows).
+  expected_operation_count: 1
+
+  expected_results:
+    # Expected result classification: single, batch, sync, job, any
+    classification: single
+    final_result_required: true
+    timeout_seconds: 60
+
+  cleanup:
+    # Cleanup policy after run:
+    #   best_effort_with_evidence  — attempt cleanup, log any failures (recommended)
+    #   strict_cleanup             — fail if cleanup cannot complete
+    #   no_cleanup                 — skip cleanup (leave target server state as-is)
+    policy: best_effort_with_evidence
+    deselect_process: true
+    reset_identifiers: false
+
+# ---------------------------------------------------------------------------
+# Reporting: Output directory and sanitization settings.
+# ---------------------------------------------------------------------------
+
+reporting:
+  # Output directory for evidence reports (relative to this profile file or absolute).
+  output_dir: "test-results/target-server-cu"
+
+  # Sanitize hostnames, serial numbers, PIUs, and process IDs in shared artifacts.
+  # Keep true for any artifact that may be committed or shared.
+  sanitize_shared_artifacts: true
+
+  # Keep exact (unsanitized) local debug artifacts.
+  # Keep false for shared or committed runs; true for local debugging only.
+  keep_local_exact_debug_artifacts: false
