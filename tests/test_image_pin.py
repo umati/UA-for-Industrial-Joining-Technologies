@@ -281,6 +281,12 @@ def test_ijt_browser_ci_image_env_var_is_workflow_or_image_config_only() -> None
     )
 
 
+def test_optional_private_module_backups_are_gitignored() -> None:
+    """setup_project.py backup folders must stay local-only."""
+    gitignore = (_REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "**/*.backup-before-submodule-*/" in gitignore
+
+
 def test_local_web_e2e_does_not_require_docker_or_ghcr() -> None:
     """Web Client runner module + package.json must not require Docker or GHCR for local E2E.
 

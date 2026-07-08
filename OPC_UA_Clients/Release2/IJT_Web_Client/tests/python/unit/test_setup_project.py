@@ -177,6 +177,72 @@ def test_extract_replaces_dir_logs_info_for_newer_zip(fs, monkeypatch, caplog):
 
 
 # =============================================================================
+# optional private submodule setup
+# =============================================================================
+
+
+def test_backup_existing_optional_module_path_moves_non_git_folder(tmp_path, monkeypatch, caplog):
+    import logging
+
+    target = tmp_path / "envelope"
+    target.mkdir()
+    (target / "local-change.mjs").write_text("export const local = true;\n", encoding="utf-8")
+    monkeypatch.setattr(sp.time, "strftime", lambda _fmt: "20260708-180500")
+
+    with caplog.at_level(logging.WARNING, logger="setup_project"):
+        backup = sp._backup_existing_optional_module_path("Envelope", target)
+
+    assert backup == tmp_path / "envelope.backup-before-submodule-20260708-180500"
+    assert not target.exists()
+    assert (backup / "local-change.mjs").read_text(encoding="utf-8") == "export const local = true;\n"
+    assert any("not a Git checkout" in record.message for record in caplog.records)
+
+
+def test_backup_existing_optional_module_path_leaves_git_checkout(tmp_path):
+    target = tmp_path / "envelope"
+    target.mkdir()
+    (target / ".git").write_text("gitdir: ../../../.git/modules/envelope\n", encoding="utf-8")
+
+    assert sp._backup_existing_optional_module_path("Envelope", target) is None
+    assert target.exists()
+
+
+def test_sync_optional_private_submodules_backs_up_loose_folder_before_update(tmp_path, monkeypatch):
+    repo_root = tmp_path / "repo"
+    target = repo_root / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "src" / "javascripts" / "views" / "envelope"
+    target.mkdir(parents=True)
+    (target / "legacy.mjs").write_text("export const legacy = true;\n", encoding="utf-8")
+    (repo_root / ".gitmodules").write_text(
+        "path = OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(sp, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(sp, "_ENV_IS_PRE_ISOLATED", False)
+    monkeypatch.setattr(sp.shutil, "which", lambda name: "/usr/bin/git" if name == "git" else None)
+    monkeypatch.setattr(sp.time, "strftime", lambda _fmt: "20260708-180500")
+
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd, **_kwargs):
+        calls.append(cmd)
+        if "update" in cmd:
+            target.mkdir(parents=True)
+            (target / ".git").write_text("gitdir: ../../../../../../.git/modules/envelope\n", encoding="utf-8")
+            (target / "ui").mkdir()
+            (target / "ui" / "envelope-graphics.mjs").write_text("export {};\n", encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(sp.subprocess, "run", _fake_run)
+
+    sp._sync_optional_private_submodules()
+
+    backup = target.with_name("envelope.backup-before-submodule-20260708-180500")
+    assert (backup / "legacy.mjs").exists()
+    assert (target / "ui" / "envelope-graphics.mjs").exists()
+    assert ["/usr/bin/git", "submodule", "sync", "--", target.relative_to(repo_root).as_posix()] in calls
+    assert any("update" in cmd and "--remote" in cmd for cmd in calls)
+
+
+# =============================================================================
 # _find_simulator_executable
 # =============================================================================
 

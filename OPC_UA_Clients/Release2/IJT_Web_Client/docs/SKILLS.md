@@ -586,7 +586,7 @@ Authorized developers with access to both repositories get the latest Envelope c
 python .\setup_project.py
 ```
 
-Default local setup runs `git submodule update --init --remote --recursive` for the Envelope path. This updates the local submodule checkout to the latest private `main` commit and may make the IJT parent repo show a changed submodule pointer. Test first, then commit the IJT pointer update only when the new Envelope baseline should become reproducible for other authorized developers.
+Default local setup runs `git submodule update --init --remote --recursive` for the Envelope path. This updates the local submodule checkout to the latest private `main` commit and may make the IJT parent repo show a changed submodule pointer. If the Envelope path already exists as a non-Git folder from an older manual workflow, setup moves that folder to a timestamped sibling backup before initializing the real submodule. Test first, then commit the IJT pointer update only when the new Envelope baseline should become reproducible for other authorized developers.
 
 Use these alternatives when needed:
 

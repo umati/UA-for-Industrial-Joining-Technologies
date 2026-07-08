@@ -166,6 +166,31 @@ def _run_command(cmd: list[str], check: bool = True, capture_output: bool = Fals
     return subprocess.run(cmd, check=False)
 
 
+def _is_git_checkout(path: Path) -> bool:
+    return (path / ".git").exists()
+
+
+def _backup_existing_optional_module_path(name: str, target: Path) -> Path | None:
+    if not target.exists() or _is_git_checkout(target):
+        return None
+
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    backup = target.with_name(f"{target.name}.backup-before-submodule-{timestamp}")
+    suffix = 1
+    while backup.exists():
+        backup = target.with_name(f"{target.name}.backup-before-submodule-{timestamp}-{suffix}")
+        suffix += 1
+
+    log.warning(
+        "Optional private %s path already exists but is not a Git checkout. "
+        "Moving it to %s before initializing the submodule.",
+        name,
+        backup,
+    )
+    target.rename(backup)
+    return backup
+
+
 def _sync_optional_private_submodules(update_remote: bool = True) -> None:
     """Best-effort sync for private optional modules used by authorized developers.
 
@@ -193,6 +218,7 @@ def _sync_optional_private_submodules(update_remote: bool = True) -> None:
             continue
         log.info("Syncing optional private %s submodule at %s...", name, relative_path)
         try:
+            _backup_existing_optional_module_path(name, target)
             subprocess.run(
                 [git, "submodule", "sync", "--", git_path],
                 cwd=REPO_ROOT,
