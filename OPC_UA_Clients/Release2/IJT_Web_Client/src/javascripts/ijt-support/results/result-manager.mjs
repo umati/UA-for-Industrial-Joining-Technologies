@@ -9,6 +9,10 @@ import {
   parseResultBundle,
   serializeResultForStorage
 } from './result-serialization.mjs'
+import {
+  DEFAULT_IGNORE_LOOSENINGS
+} from './result-storage-constants.mjs'
+import { isLooseningResult } from './loosening-result-filter.mjs'
 import ResultDataType from '../models/results/result-data-type.mjs'
 import TighteningDataType from '../models/results/tightening-data-type.mjs'
 import BatchDataModel from '../models/results/batch-data-type.mjs'
@@ -71,6 +75,43 @@ export class ResultManager extends ObservableManagerBase {
     }
 
     return fallback
+  }
+
+  normalizeBooleanSetting (value, fallback = false) {
+    if (typeof value === 'boolean') {
+      return value
+    }
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase()
+      if (normalized === 'true') {
+        return true
+      }
+      if (normalized === 'false') {
+        return false
+      }
+    }
+    return fallback
+  }
+
+  shouldIgnoreLooseningResults () {
+    if (!this.settingsProvider) {
+      return DEFAULT_IGNORE_LOOSENINGS
+    }
+
+    if (typeof this.settingsProvider.getIgnoreLoosenings === 'function') {
+      return this.normalizeBooleanSetting(this.settingsProvider.getIgnoreLoosenings(), DEFAULT_IGNORE_LOOSENINGS)
+    }
+
+    const fromSettingsObject = this.settingsProvider?.settings?.ignoreloosenings
+    if (fromSettingsObject !== undefined) {
+      return this.normalizeBooleanSetting(fromSettingsObject, DEFAULT_IGNORE_LOOSENINGS)
+    }
+
+    return this.normalizeBooleanSetting(this.settingsProvider?.ignoreLoosenings, DEFAULT_IGNORE_LOOSENINGS)
+  }
+
+  shouldDropResult (result) {
+    return this.shouldIgnoreLooseningResults() && isLooseningResult(result)
   }
 
   getAllResultsChronological () {
@@ -271,8 +312,10 @@ export class ResultManager extends ObservableManagerBase {
       try {
         const runtimeResult = this.createRuntimeResultFromPayload(payload)
         const hadBefore = !!alreadyStored
-        this.addResult(runtimeResult)
-        if (hadBefore) {
+        const storedResult = this.addResult(runtimeResult)
+        if (!storedResult) {
+          incrementSkip('ignored_loosening')
+        } else if (hadBefore) {
           summary.replaced++
         } else {
           summary.imported++
@@ -384,6 +427,9 @@ export class ResultManager extends ObservableManagerBase {
    * @param {*} result the new result
    */
   addResult (result) {
+    if (this.shouldDropResult(result)) {
+      return false
+    }
     if (!result?.ClientData) {
       result.ClientData = { rebuildState: { claimed: false, resolved: false, partial: false } }
     }
@@ -413,6 +459,7 @@ export class ResultManager extends ObservableManagerBase {
     this.enforceStorageLimit()
 
     this._notifyTopic('results', result)
+    return true
   }
 
   notifyEvictedResult (result, reason = 'storage-limit') {

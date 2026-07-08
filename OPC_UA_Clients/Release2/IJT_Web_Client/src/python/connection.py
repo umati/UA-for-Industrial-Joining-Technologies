@@ -24,6 +24,7 @@ from python.serialize_data import serialize_full_event, serialize_tuple, seriali
 _OPCUA_TIMEOUT_S = 60  # per-request timeout for long-running operations (method calls, reads)
 _OPCUA_TIMEOUT_SHORT_S = 15  # wall-clock limit for OPC UA session establishment (SecureChannel + Session handshake)
 _OPCUA_TIMEOUT_BROWSE_S = 30  # per-loader wall-clock limit for OPC UA type-definition loading
+_OPCUA_WATCHDOG_INTERVAL_DEFAULT = "3600"
 _SUBSCRIPTION_PERIOD_MS = 100
 _CONNECT_RETRIES_DEFAULT = "8"
 _CONNECT_DELAY_DEFAULT = "1.0"
@@ -73,6 +74,15 @@ def id_object_to_string(inp: Any) -> str:
         return f"ns={namespace};s={identifier}"
     # Safe fallback: avoid dict-subscript TypeError on unexpected types
     return str(inp)
+
+
+def _opcua_watchdog_interval() -> float:
+    """Return asyncua watchdog interval in seconds.
+
+    The default is deliberately long because some controllers time out asyncua's
+    periodic ServerState watchdog read while still delivering Publish messages.
+    """
+    return max(1.0, float(os.getenv("OPCUA_WATCHDOG_INTERVAL_SEC", _OPCUA_WATCHDOG_INTERVAL_DEFAULT)))
 
 
 class Connection:
@@ -164,7 +174,11 @@ class Connection:
         # PublishRequest.  Under this load the CallResponse can arrive well after
         # the old 10-second window, causing asyncua to raise
         # "Unhandled exception while sending request to OPC UA server".
-        self.client = Client(server_url, timeout=_OPCUA_TIMEOUT_S)
+        self.client = Client(
+            server_url,
+            timeout=_OPCUA_TIMEOUT_S,
+            watchdog_intervall=_opcua_watchdog_interval(),
+        )
 
         # Security policy: asyncua Client defaults to no-security (SecurityPolicy.None_,
         # MessageSecurityMode.None_), which is exactly what this client requires.
@@ -207,7 +221,11 @@ class Connection:
                 # This eliminates concurrent-request issues when SimulateJobResult
                 # fires many Publish messages while a CallResponse is still in-flight.
                 try:
-                    self.subscription_client = Client(server_url, timeout=_OPCUA_TIMEOUT_S)
+                    self.subscription_client = Client(
+                        server_url,
+                        timeout=_OPCUA_TIMEOUT_S,
+                        watchdog_intervall=_opcua_watchdog_interval(),
+                    )
                     sub_client_name = f"urn:{computer_name}:IJT:WebClient:Sub"
                     self.subscription_client.name = sub_client_name
                     self.subscription_client.description = sub_client_name

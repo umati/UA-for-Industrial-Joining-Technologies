@@ -111,6 +111,13 @@ class ResultEventHandler:
             ijt_log.error(f"Error handling result event notification: {exc}")
             ijt_log.error(traceback.format_exc())
 
+    def status_change_notification(self, status: Any) -> None:
+        """asyncua subscription callback for subscription status changes."""
+        if self.closed:
+            return
+        status_code = getattr(status, "Status", status)
+        ijt_log.warning(f"Result event subscription status changed: {status_code}")
+
     async def handle_queue(self):
         """Coroutine. Background worker that drains the queue and sends JSON messages.
 

@@ -231,6 +231,33 @@ async def test_event_notification_ignored_when_closed():
     await handler.close()
 
 
+@pytest.mark.asyncio
+async def test_status_change_notification_logs_status():
+    ws = AsyncMock()
+    handler = EventHandler(ws, "opc.tcp://localhost:40451")
+    status = MagicMock()
+    status.Status = "BadTimeout"
+
+    with patch("python.event_handler.ijt_log.warning") as warning:
+        handler.status_change_notification(status)
+
+    warning.assert_called_once_with("Joining-system event subscription status changed: BadTimeout")
+    await handler.close()
+
+
+@pytest.mark.asyncio
+async def test_status_change_notification_ignored_when_closed():
+    ws = AsyncMock()
+    handler = EventHandler(ws, "opc.tcp://localhost:40451")
+    handler.closed = True
+
+    with patch("python.event_handler.ijt_log.warning") as warning:
+        handler.status_change_notification("BadTimeout")
+
+    warning.assert_not_called()
+    await handler.close()
+
+
 # ---------------------------------------------------------------------------
 # EventHandler.handle_queue — happy path sends correct JSON
 # ---------------------------------------------------------------------------

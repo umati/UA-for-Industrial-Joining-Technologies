@@ -48,6 +48,27 @@ function nodeClassToText (nodeClass) {
   return text
 }
 
+export function formatReadNodeId (msg) {
+  const nodeId = nodeIdToText(msg?.nodeid ?? msg?.NodeId ?? msg?.nodeId) || 'unknown node'
+  if (nodeId.length > 30) {
+    return `...${nodeId.substring(nodeId.length - 27, nodeId.length)}`
+  }
+  return nodeId
+}
+
+function readValueToDisplay (msg) {
+  if (msg?.value !== undefined) {
+    return msg.value
+  }
+  if (msg?.dataValue?.value?.value !== undefined) {
+    return msg.dataValue.value.value
+  }
+  if (msg?.exception) {
+    return { exception: String(msg.exception) }
+  }
+  return { message: 'No read value returned.' }
+}
+
 function setTreeButtonIdentity (button, { node, relation }) {
   // Consumed by E2E tests; keep in sync with tests/e2e/page-objects.mjs::expandByBrowseName.
   const sourceNodeId = relation?.NodeId ?? node?.nodeId
@@ -104,11 +125,9 @@ export default class AddressSpaceGraphics extends ControlMessageSplitScreen {
       // Subscribe to read results to show in right column for debug purposes
       this.addressSpace.socketHandler.registerMandatory('read', (msg) => {
         const modelToHTML = new ModelToHTML(this.messages)
-        let shortId = msg.nodeid
-        if (shortId.length > 30) {
-          shortId = `...${shortId.substring(shortId.length - 27, shortId.length)}`
-        }
-        modelToHTML.display(msg.value, `Read ${shortId} (${msg.command}):`)
+        const shortId = formatReadNodeId(msg)
+        const command = msg?.command ?? msg?.attribute ?? 'read'
+        modelToHTML.display(readValueToDisplay(msg), `Read ${shortId} (${command}):`)
       })
 
       this._mandatoryHandlersRegistered = true

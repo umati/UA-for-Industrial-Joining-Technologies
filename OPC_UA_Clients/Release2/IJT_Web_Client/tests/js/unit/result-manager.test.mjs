@@ -67,4 +67,36 @@ describe('ResultManager', () => {
     rm.handlePartial(stored, update)
     expect(stored.constructor).toBe(originalConstructor)
   })
+
+  it('drops loosening results before storing or notifying subscribers when enabled', () => {
+    const rm = new ResultManager(makeEventManager(), {
+      getIgnoreLoosenings: () => true
+    })
+    const cb = vi.fn()
+    rm.subscribe(cb)
+    const loosening = makeResult('loosen-1', '1')
+    loosening.ResultMetaData.Tags = ['loosening']
+
+    const added = rm.addResult(loosening)
+
+    expect(added).toBe(false)
+    expect(rm.resultFromId('loosen-1')).toBeUndefined()
+    expect(cb).not.toHaveBeenCalled()
+  })
+
+  it('keeps non-loosening results when loosening filtering is enabled', () => {
+    const rm = new ResultManager(makeEventManager(), {
+      settings: { ignoreloosenings: 'true' }
+    })
+    const cb = vi.fn()
+    rm.subscribe(cb)
+    const tightening = makeResult('tighten-1', '1')
+    tightening.ResultMetaData.Tags = ['tightening']
+
+    const added = rm.addResult(tightening)
+
+    expect(added).toBe(true)
+    expect(rm.resultFromId('tighten-1')).toBe(tightening)
+    expect(cb).toHaveBeenCalledWith(tightening)
+  })
 })

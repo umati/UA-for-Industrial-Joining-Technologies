@@ -207,6 +207,33 @@ async def test_event_notification_exception_does_not_propagate():
     await handler.close()
 
 
+@pytest.mark.asyncio
+async def test_status_change_notification_logs_status():
+    ws = AsyncMock()
+    handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
+    status = MagicMock()
+    status.Status = "BadTimeout"
+
+    with patch("python.result_event_handler.ijt_log.warning") as warning:
+        handler.status_change_notification(status)
+
+    warning.assert_called_once_with("Result event subscription status changed: BadTimeout")
+    await handler.close()
+
+
+@pytest.mark.asyncio
+async def test_status_change_notification_ignored_when_closed():
+    ws = AsyncMock()
+    handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
+    handler.closed = True
+
+    with patch("python.result_event_handler.ijt_log.warning") as warning:
+        handler.status_change_notification("BadTimeout")
+
+    warning.assert_not_called()
+    await handler.close()
+
+
 # ---------------------------------------------------------------------------
 # ResultEventHandler.handle_queue
 # ---------------------------------------------------------------------------

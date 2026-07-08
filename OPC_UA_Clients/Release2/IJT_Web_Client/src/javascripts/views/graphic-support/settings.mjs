@@ -1,6 +1,7 @@
 import BasicScreen from './basic-screen.mjs' // Basic functionality application code for the screen functionality
 import { lowerCaseJsonKeys } from './json-key-normalization.mjs'
 import {
+  DEFAULT_IGNORE_LOOSENINGS,
   DEFAULT_RESULT_SESSION_AUTO_RESTORE,
   DEFAULT_RESULT_SESSION_AUTO_SAVE,
   RESULT_SESSION_STORAGE_KEY
@@ -31,6 +32,7 @@ export default class Settings extends BasicScreen {
     this.maxStoredResults = DEFAULT_MAX_STORED_RESULTS
     this.resultSessionAutoSave = DEFAULT_RESULT_SESSION_AUTO_SAVE
     this.resultSessionAutoRestore = DEFAULT_RESULT_SESSION_AUTO_RESTORE
+    this.ignoreLoosenings = DEFAULT_IGNORE_LOOSENINGS
 
     this.settings = { // default values
       productid: 'www.company.com/ProductABC123',
@@ -42,6 +44,7 @@ export default class Settings extends BasicScreen {
       maxstoredresults: DEFAULT_MAX_STORED_RESULTS,
       resultsessionautosave: DEFAULT_RESULT_SESSION_AUTO_SAVE,
       resultsessionautorestore: DEFAULT_RESULT_SESSION_AUTO_RESTORE,
+      ignoreloosenings: DEFAULT_IGNORE_LOOSENINGS,
       command: 'set settings',
       endpoint: 'common'
     }
@@ -111,6 +114,7 @@ export default class Settings extends BasicScreen {
       this.settings.maxstoredresults = this.getMaxStoredResults()
       this.settings.resultsessionautosave = this.getResultSessionAutoSave()
       this.settings.resultsessionautorestore = this.getResultSessionAutoRestore()
+      this.settings.ignoreloosenings = this.getIgnoreLoosenings()
       this.webSocketManager.send('set settings', null, null, this.settings)
     })
 
@@ -128,7 +132,10 @@ export default class Settings extends BasicScreen {
 
     if (normalizedMsg.productid !== undefined ||
         normalizedMsg.initialviewlevel !== undefined ||
-        normalizedMsg.maxstoredresults !== undefined) {
+        normalizedMsg.maxstoredresults !== undefined ||
+        normalizedMsg.resultsessionautosave !== undefined ||
+        normalizedMsg.resultsessionautorestore !== undefined ||
+        normalizedMsg.ignoreloosenings !== undefined) {
       this.settings = { ...this.settings, ...normalizedMsg }
       if (normalizedMsg.productid !== undefined) {
         this.productId = normalizedMsg.productid
@@ -165,6 +172,11 @@ export default class Settings extends BasicScreen {
         this.resultSessionAutoRestore = this.normalizeBooleanSetting(normalizedMsg.resultsessionautorestore, DEFAULT_RESULT_SESSION_AUTO_RESTORE)
       } else {
         this.resultSessionAutoRestore = this.normalizeBooleanSetting(this.settings.resultsessionautorestore, DEFAULT_RESULT_SESSION_AUTO_RESTORE)
+      }
+      if (normalizedMsg.ignoreloosenings !== undefined) {
+        this.ignoreLoosenings = this.normalizeBooleanSetting(normalizedMsg.ignoreloosenings, DEFAULT_IGNORE_LOOSENINGS)
+      } else {
+        this.ignoreLoosenings = this.normalizeBooleanSetting(this.settings.ignoreloosenings, DEFAULT_IGNORE_LOOSENINGS)
       }
       if (normalizedMsg.envelope !== undefined) {
         this.envelope = normalizedMsg.envelope
@@ -268,6 +280,15 @@ export default class Settings extends BasicScreen {
       })
       this.container.appendChild(autoRestoreCheckbox)
       this.container.appendChild(document.createElement('br'))
+
+      const ignoreLooseningsLabel = document.createElement('label')
+      ignoreLooseningsLabel.textContent = 'Ignore loosenings   '
+      this.container.appendChild(ignoreLooseningsLabel)
+      const ignoreLooseningsCheckbox = this.createCheckbox(this.getIgnoreLoosenings(), (checked) => {
+        this.ignoreLoosenings = !!checked
+      })
+      this.container.appendChild(ignoreLooseningsCheckbox)
+      this.container.appendChild(document.createElement('br'))
     } finally {
       if (!initial) {
         this.loaded = true
@@ -323,6 +344,10 @@ export default class Settings extends BasicScreen {
 
   getResultSessionAutoRestore () {
     return this.normalizeBooleanSetting(this.resultSessionAutoRestore, DEFAULT_RESULT_SESSION_AUTO_RESTORE)
+  }
+
+  getIgnoreLoosenings () {
+    return this.normalizeBooleanSetting(this.ignoreLoosenings, DEFAULT_IGNORE_LOOSENINGS)
   }
 
   clearLocalResultSession () {

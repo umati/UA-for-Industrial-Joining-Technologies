@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import Settings from '../../../src/javascripts/views/graphic-support/settings.mjs'
 import {
+  DEFAULT_IGNORE_LOOSENINGS,
   DEFAULT_RESULT_SESSION_AUTO_RESTORE,
   DEFAULT_RESULT_SESSION_AUTO_SAVE,
   RESULT_SESSION_STORAGE_KEY
@@ -12,6 +13,7 @@ function makeSettingsLike () {
   settings.setStatusBanner = vi.fn()
   settings.resultSessionAutoSave = DEFAULT_RESULT_SESSION_AUTO_SAVE
   settings.resultSessionAutoRestore = DEFAULT_RESULT_SESSION_AUTO_RESTORE
+  settings.ignoreLoosenings = DEFAULT_IGNORE_LOOSENINGS
   return settings
 }
 
@@ -34,8 +36,10 @@ describe('Settings boolean session options', () => {
     const settings = makeSettingsLike()
     settings.resultSessionAutoSave = 'false'
     settings.resultSessionAutoRestore = 'true'
+    settings.ignoreLoosenings = 'true'
     expect(settings.getResultSessionAutoSave()).toBe(false)
     expect(settings.getResultSessionAutoRestore()).toBe(true)
+    expect(settings.getIgnoreLoosenings()).toBe(true)
   })
 })
 
