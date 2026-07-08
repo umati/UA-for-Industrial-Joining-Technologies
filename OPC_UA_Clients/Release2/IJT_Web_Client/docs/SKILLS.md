@@ -76,6 +76,7 @@ IJT_Web_Client/
 │       ├── methods/
 │       ├── trace/ events/ standard-demo/ complex-result/
 │       ├── assets/ entities/ joints/
+│       ├── envelope/       # Optional private submodule; loads only for authorized developers
 │       └── graphic-support/  # TabGenerator, BasicScreen base
 │
 ├── tests/
@@ -572,14 +573,35 @@ and `SimulateBulkEvents` defaults to event type `1` and count `3`.
 11. **Never** send empty numeric simulator method arguments from the Web UI; define a valid default or require user input before calling.
 12. **Never** include local virtualenvs or generated test artifacts in Docker build context; keep `.venv/`, `.venv_test/`, `.venv_ci/`, `node_modules/`, `test-results/`, and `tmp/` ignored by `.dockerignore`.
 13. **Never** reintroduce a broad root Web Client live suite; add or adjust the narrow live/browser suite that owns the affected test type and service lifecycle.
-14. **Never** add a hard-coded `404` or `requestfailed` assertion for a URL that belongs to an optional gitignored overlay (e.g. the company-specific `envelope/` view). Add the path prefix to `OPTIONAL_GITIGNORED_PATHS` in `tests/e2e/smoke.spec.mjs` instead.
+14. **Never** add a hard-coded `404` or `requestfailed` assertion for a URL that belongs to an optional private module (e.g. the company-specific `envelope/` submodule). Add the path prefix to `OPTIONAL_PRIVATE_MODULE_PATHS` in `tests/e2e/smoke.spec.mjs` instead.
 15. **Never** use `waitForTimeout` + a one-shot assertion to wait for OPC UA async result propagation in E2E tests — use `expect.poll()` with an explicit timeout so the test retries until the value stabilises.
 
+## Optional Private Envelope Module
+
+Envelope is an optional private Git submodule mounted at `src/javascripts/views/envelope`. The public Web Client must continue to work when that submodule is unavailable.
+
+Authorized developers with access to both repositories get the latest Envelope code automatically when running:
+
+```powershell
+python .\setup_project.py
+```
+
+Default local setup runs `git submodule update --init --remote --recursive` for the Envelope path. This updates the local submodule checkout to the latest private `main` commit and may make the IJT parent repo show a changed submodule pointer. Test first, then commit the IJT pointer update only when the new Envelope baseline should become reproducible for other authorized developers.
+
+Use these alternatives when needed:
+
+```powershell
+python .\setup_project.py --private-modules-pinned
+python .\setup_project.py --skip-private-modules
+```
+
+`--private-modules-pinned` initializes the submodule at the IJT-pinned commit. `--skip-private-modules` leaves private modules untouched.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
+| `IJT_SYNC_PRIVATE_MODULES` | `1` locally, skipped in Docker/GitHub Actions | Best-effort sync for optional private submodules such as Envelope. Set to `0` to skip. |
 | `OPCUA_TEST_ENDPOINT` | `opc.tcp://localhost:40451` | OPC UA server endpoint for direct live tests; runner auto-launch uses `opc.tcp://localhost:40463` |
 | `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | Runtime OPC UA server override; when set, auto-launch is skipped |
 | `WS_PORT` | `8001` | WebSocket backend port |

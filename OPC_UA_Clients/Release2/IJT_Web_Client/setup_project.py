@@ -86,6 +86,12 @@ SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_S
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
 SETUP_LOCK_FILE = STATE_DIR / "setup.lock"
 RUNTIME_STATE_FILE = STATE_DIR / "runtime_processes.json"
+OPTIONAL_PRIVATE_SUBMODULES: tuple[tuple[str, Path], ...] = (
+    (
+        "Envelope",
+        Path("OPC_UA_Clients") / "Release2" / "IJT_Web_Client" / "src" / "javascripts" / "views" / "envelope",
+    ),
+)
 
 # Legacy venv directory names that pre-date the .venv / .venv_test / .venv_ci convention.
 _STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_backup")
@@ -158,6 +164,79 @@ def _run_command(cmd: list[str], check: bool = True, capture_output: bool = Fals
         subprocess.check_call(cmd)
         return None
     return subprocess.run(cmd, check=False)
+
+
+def _sync_optional_private_submodules(update_remote: bool = True) -> None:
+    """Best-effort sync for private optional modules used by authorized developers.
+
+    Public users and CI must still be able to run the Web Client without private
+    module access, so failures here are warnings rather than setup blockers.
+    """
+    if _ENV_IS_PRE_ISOLATED:
+        log.info("Pre-isolated environment detected. Skipping optional private submodule sync.")
+        return
+    if not (REPO_ROOT / ".gitmodules").exists():
+        return
+    git = shutil.which("git")
+    if not git:
+        log.warning("Git not found. Skipping optional private submodule sync.")
+        return
+
+    env = os.environ.copy()
+    env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    env.setdefault("GCM_INTERACTIVE", "Never")
+
+    for name, relative_path in OPTIONAL_PRIVATE_SUBMODULES:
+        git_path = relative_path.as_posix()
+        target = REPO_ROOT / relative_path
+        if not _gitmodules_mentions_path(git_path):
+            continue
+        log.info("Syncing optional private %s submodule at %s...", name, relative_path)
+        try:
+            subprocess.run(
+                [git, "submodule", "sync", "--", git_path],
+                cwd=REPO_ROOT,
+                env=env,
+                check=True,
+                timeout=60,
+            )
+            update_cmd = [git, "submodule", "update", "--init", "--recursive"]
+            if update_remote:
+                update_cmd.append("--remote")
+            update_cmd.extend(["--", git_path])
+            subprocess.run(update_cmd, cwd=REPO_ROOT, env=env, check=True, timeout=180)
+            if (target / "ui" / "envelope-graphics.mjs").exists():
+                log.info("Optional private %s submodule is ready.", name)
+            else:
+                log.warning(
+                    "Optional private %s submodule synced, but its entry point is missing: %s",
+                    name,
+                    target / "ui" / "envelope-graphics.mjs",
+                )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            log.warning(
+                "Optional private %s submodule is unavailable. Continuing without it. "
+                "Authorized developers should authenticate to GitHub and rerun setup. Details: %s",
+                name,
+                exc,
+            )
+
+
+def _gitmodules_mentions_path(git_path: str) -> bool:
+    try:
+        content = (REPO_ROOT / ".gitmodules").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return git_path in content
+
+
+def _private_module_sync_enabled(args: argparse.Namespace) -> bool:
+    if getattr(args, "skip_private_modules", False):
+        return False
+    raw = os.getenv("IJT_SYNC_PRIVATE_MODULES")
+    if raw is None:
+        return True
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _semver_tuple(ver: str):
@@ -1546,6 +1625,21 @@ def main():
         help="Run setup launcher in detached mode (do not block terminal).",
     )
     parser.add_argument(
+        "--skip-private-modules",
+        action="store_true",
+        help=(
+            "Skip best-effort sync of optional private submodules such as Envelope.\n"
+            "Equivalent to setting IJT_SYNC_PRIVATE_MODULES=0."
+        ),
+    )
+    parser.add_argument(
+        "--private-modules-pinned",
+        action="store_true",
+        help=(
+            "Initialize optional private submodules at the IJT-pinned commit instead of pulling the latest remote commit."
+        ),
+    )
+    parser.add_argument(
         "--bootstrap-wsl",
         action="store_true",
         help=(
@@ -1590,6 +1684,11 @@ def main():
     if not setup_lock.acquire():
         log.info("Another setup_project.py instance is already running. Exiting this invocation.")
         return
+
+    if _private_module_sync_enabled(args):
+        _sync_optional_private_submodules(update_remote=not args.private_modules_pinned)
+    else:
+        log.info("Optional private submodule sync skipped.")
 
     # Fast path: if everything exists and isn't too old, just run.
     if not args.force_full and _is_runtime_ready():

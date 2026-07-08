@@ -90,13 +90,13 @@ test('switching to highest requested view level keeps dropdown value valid', asy
 
 // ─── Critical static assets loaded ───────────────────────────────────────────
 
-// Paths that are intentionally optional and gitignored (e.g. company-specific
-// overlays that only exist on certain developer machines). The browser will
+// Paths that are intentionally optional (e.g. company-specific private
+// submodules that only authorized developers can fetch). The browser will
 // request these via dynamic import; a 404/ERR_ABORTED is expected and safe.
-const OPTIONAL_GITIGNORED_PATHS = [
+const OPTIONAL_PRIVATE_MODULE_PATHS = [
   '/src/javascripts/views/envelope/'
 ]
-const isOptional = (url) => OPTIONAL_GITIGNORED_PATHS.some((p) => url.includes(p))
+const isOptional = (url) => OPTIONAL_PRIVATE_MODULE_PATHS.some((p) => url.includes(p))
 
 test('no 404s for any resource loaded by the page', async ({ page }) => {
   const notFound = []

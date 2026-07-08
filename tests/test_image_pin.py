@@ -211,13 +211,19 @@ def _tracked_files() -> list[Path]:
     git = shutil.which("git")
     assert git, "git executable is required for repo-wide image-pin boundary checks"
     result = subprocess.run(
-        [git, "ls-files"],
+        [git, "ls-files", "-z"],
         cwd=_REPO_ROOT,
         check=True,
         capture_output=True,
-        text=True,
     )
-    return [_REPO_ROOT / line for line in result.stdout.splitlines() if line]
+    tracked_paths: list[Path] = []
+    for raw_path in result.stdout.split(b"\0"):
+        if not raw_path:
+            continue
+        path = _REPO_ROOT / raw_path.decode()
+        if path.is_file():
+            tracked_paths.append(path)
+    return tracked_paths
 
 
 @pytest.mark.parametrize(
