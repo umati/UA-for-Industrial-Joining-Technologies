@@ -1,8 +1,8 @@
 """
-Pytest plugin for CU compliance reporting.
+Pytest plugin for CU coverage reporting.
 
-The conformance client needs more than a pass/fail console log. This recorder
-maps collected tests to official conformance units and writes a generic JSON
+The specification test client needs more than a pass/fail console log. This recorder
+maps collected tests to official Conformance Units (CUs) and writes a generic JSON
 artifact that downstream tooling can roll up by CU, facet, profile, controller,
 device family, or vendor extension.
 """
@@ -178,8 +178,8 @@ def _is_collect_only_session(session) -> bool:
     return bool(getattr(option, "collectonly", False))
 
 
-class CuComplianceReportRecorder:
-    """Collect pytest results as a CU compliance report and write a JSON artifact."""
+class CuCoverageReportRecorder:
+    """Collect pytest results as a CU coverage report and write a JSON artifact."""
 
     def __init__(self, *, root: Path, all_cus: Iterable[str], supported_cus: Iterable[str] | None):
         self.root = root
@@ -187,8 +187,8 @@ class CuComplianceReportRecorder:
         self.supported_cus = None if supported_cus is None else sorted(set(supported_cus))
         self.items_by_nodeid: dict[str, dict] = {}
         self.results_by_nodeid: dict[str, dict] = {}
-        configured = os.environ.get("IJT_CU_COMPLIANCE_REPORT_FILE")
-        self.output_path = Path(configured) if configured else root / "test-results" / "cu-compliance-report.json"
+        configured = os.environ.get("IJT_CU_COVERAGE_REPORT_FILE")
+        self.output_path = Path(configured) if configured else root / "test-results" / "cu-coverage-report.json"
 
     def pytest_collection_modifyitems(self, session, config, items):  # noqa: D401
         for item in items:
@@ -302,7 +302,7 @@ class CuComplianceReportRecorder:
             }
 
         payload = {
-            "schema": "ijt-cu-compliance-report/v1",
+            "schema": "ijt-cu-coverage-report/v1",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "exitstatus": int(exitstatus),
             "supported_cus": self.supported_cus,

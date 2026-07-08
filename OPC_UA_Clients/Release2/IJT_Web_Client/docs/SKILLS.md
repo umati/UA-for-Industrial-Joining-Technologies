@@ -10,7 +10,7 @@
 | **Purpose** | Reference OPC UA IJT client: Python WebSocket backend + Node.js browser frontend |
 | **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt, Node.js 24+, Vite/Vitest, ESLint |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
-| **Docker** | Container healthy on HTTP:3000 + WS:8001 (non-root `appuser`) |
+| **Docker** | Standalone container healthy on HTTP:3000 + WS:8001; root Phase 2 isolates Docker smoke on HTTP:3008 + WS:8011 (non-root `appuser`) |
 
 ---
 
@@ -406,8 +406,9 @@ Root Phase 2 invokes
 separate Web Client suites for Python OPC UA, Python WebSocket backend, Python
 WebSocket lifecycle, Playwright smoke, Playwright features, Playwright
 regression, and Docker smoke. Each live/browser suite owns its own OPC UA,
-WebSocket, and UI ports, so failures are localized to one test type and service
-lifecycle.
+WebSocket, and UI ports, and Docker smoke gets root-runner host ports 3008/8011
+plus a scoped Compose project, so failures are localized to one test type and
+service lifecycle.
 At the root-runner level, `web-client-docker-smoke` is prechecked like the server
 Docker smoke: missing Docker or a stopped daemon is reported as a skipped suite.
 Calling this Web runner directly with `--docker-only` remains an explicit Docker

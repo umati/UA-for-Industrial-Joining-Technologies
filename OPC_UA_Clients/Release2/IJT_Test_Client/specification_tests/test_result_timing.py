@@ -1,5 +1,5 @@
 """
-Result processing times conformance tests — OPC 40450-1.
+Result processing times specification tests — OPC 40450-1.
 
 Covers:
   result_processing_times — Result.ResultMetaData.ProcessingTimes.StartTime and EndTime.

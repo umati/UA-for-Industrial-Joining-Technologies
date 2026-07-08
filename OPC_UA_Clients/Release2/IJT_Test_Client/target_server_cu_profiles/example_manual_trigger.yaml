@@ -1,0 +1,115 @@
+# Target Server CU Profile — Generic Manual Trigger Example
+#
+# This is a generic sanitized example for OPC UA IJT server under tests that require
+# a physical/manual tool trigger to produce joining results.  The OPC UA
+# client subscribes to result events before the operation, then waits for
+# results produced by the physical joining tool.
+#
+# Use this profile when:
+#   - The target server does not expose StartSelectedJoining over OPC UA, OR
+#   - You explicitly prefer manual trigger for safety or validation policy reasons
+#
+# SANITIZED: No real endpoints, PIUs, process IDs, or vendor values are present.
+# Copy this file and replace placeholder values for your target server.
+#
+# Usage:
+#   python run_target_server_cu.py --profile example_manual_trigger.yaml --preflight-only
+#   python run_target_server_cu.py --profile example_manual_trigger.yaml --mode guided --interactive-prompts
+
+schema_version: 1
+profile_name: "Generic Manual Trigger Target Server"
+description: >
+  Sanitized example profile for target servers where joining results are produced
+  by a physical operator/tool trigger rather than via OPC UA StartSelectedJoining.
+  Replace <target-server-host> with the target server hostname or IP address.
+  Keep this profile outside the repository if it contains real identifiers.
+
+capabilities_file: "../server_capabilities.yaml"
+
+target:
+  # Replace <target-server-host> with your target server hostname or IP address.
+  endpoint: "opc.tcp://<target-server-host>:40451"
+
+  expected_server:
+    application_name: ""
+    application_version: ""
+    warn_only_on_version_drift: true
+
+cu_execution:
+  # Use guided mode so operator prompts are available for manual trigger steps.
+  default_mode: guided
+  scoring_mode: diagnostic
+  precondition_failure_policy: blocked
+
+  # Allow manual steps so guided mode can prompt and wait.
+  allow_manual_steps: true
+  default_timeout_seconds: 120
+
+  # No state-changing method automation — the operator physically triggers the tool.
+  state_changing_methods:
+    default_policy: require_explicit_opt_in
+    allowed_methods: []
+    # Optionally allow process selection if the operator pre-selects the program
+    # before the physical trigger:
+    # allowed_methods:
+    #   - SelectJoiningProcess
+
+  method_status_policies: {}
+  extension_fields: {}
+
+selection:
+  tool:
+    # first_ready: select first tool in ready state for address-space discovery
+    policy: first_ready
+    product_instance_uri: ""
+    capability_tags: []
+
+  joining_process:
+    # first_compatible: select first process for address-space/method probing
+    policy: first_compatible
+    joining_process_id: ""
+    joining_process_origin_id: ""
+    selection_name: ""
+    capability_tags: []
+
+triggers:
+  result:
+    # manual_trigger: subscribe first, then wait for results produced by
+    # the physical joining tool or operator action.
+    # In guided + interactive-prompts mode, the runner displays operator
+    # instructions before waiting.
+    mode: manual_trigger
+    # Allow up to 3 minutes for the operator to trigger the tool.
+    timeout_seconds: 180
+
+  event:
+    # observe_only: validate OPC UA events that arrive naturally.
+    mode: observe_only
+    timeout_seconds: 60
+
+  condition:
+    # observe_only: validate retained conditions passively.
+    mode: observe_only
+    timeout_seconds: 60
+
+workflow_execution:
+  # manual_operation_trigger: do not call StartSelectedJoining;
+  # wait for the physical tool trigger instead.
+  start_invocation_policy: manual_operation_trigger
+  expected_operation_count: 1
+
+  expected_results:
+    classification: single
+    final_result_required: true
+    # Allow up to 3 minutes for a manual tightening operation.
+    timeout_seconds: 180
+
+  cleanup:
+    policy: best_effort_with_evidence
+    deselect_process: false
+    reset_identifiers: false
+
+reporting:
+  output_dir: "test-results/target-server-cu"
+  sanitize_shared_artifacts: true
+  keep_local_exact_debug_artifacts: false

@@ -135,12 +135,12 @@ def test_load_test_client_conformance_summary_shifts_artifact_headings(tmp_path)
     """load_test_client_conformance_summary embeds the artifact with shifted headings."""
     summary = tmp_path / "summary.md"
     summary.write_text(
-        "# IJT Conformance Test Report\n\n## 📋 CUs Needing Review — 1 row\n\n## Scope\n",
+        "# IJT Specification Test Report\n\n## 📋 CUs Needing Review — 1 row\n\n## Scope\n",
         encoding="utf-8",
     )
 
     assert system_tests_run_summary.load_test_client_conformance_summary(str(summary)) == [
-        "## IJT Conformance Test Report",
+        "## IJT Specification Test Report",
         "",
         '<a id="system-cus-needing-review"></a>',
         "",
@@ -154,7 +154,7 @@ def test_tc_conformance_artifact_warning_success_with_content_no_warning():
     """When the lane succeeded and summary.md has content, no warning is emitted."""
     assert (
         system_tests_run_summary.tc_conformance_artifact_warning(
-            "success", ["## IJT Conformance Test Report", ""], "path/summary.md"
+            "success", ["## IJT Specification Test Report", ""], "path/summary.md"
         )
         is None
     )
@@ -166,7 +166,7 @@ def test_tc_conformance_artifact_warning_success_missing_emits_warning():
         "success", [], "all-results/results-testclient/summary.md"
     )
     assert warning is not None
-    assert "Test Client conformance summary" in warning
+    assert "Test Client specification test summary" in warning
     assert "all-results/results-testclient/summary.md" in warning
 
 
@@ -352,8 +352,61 @@ def test_integration_drift_warnings_skip_within_tolerance():
     assert len(warnings) == 0
 
 
+def test_integration_drift_warnings_minimum_mode_negative_drift():
+    """minimum mode warns when tests decrease below baseline."""
+    baseline = {
+        "drift_policy": {"mode": "minimum", "growth_warn_percent": 25, "growth_warn_absolute": 50},
+        "suites": {"wd_py": {"min_tests": 700, "skipped": 0}},
+        "skip_tolerance_default": 0,
+    }
+    suite_counts = [("wd_py", "Web Client Python", (680, 680, 0, 0))]
+    warnings = system_tests_run_summary.integration_drift_warnings(baseline, suite_counts, "12345")
+    assert len(warnings) == 1
+    assert "tests may have disappeared" in warnings[0]
+    assert "(-20 vs minimum 700)" in warnings[0]
+
+
+def test_integration_drift_warnings_minimum_mode_normal_positive_drift():
+    """minimum mode silently accepts normal positive drift."""
+    baseline = {
+        "drift_policy": {"mode": "minimum", "growth_warn_percent": 25, "growth_warn_absolute": 50},
+        "suites": {"wd_py": {"min_tests": 700, "skipped": 0}},
+        "skip_tolerance_default": 0,
+    }
+    suite_counts = [("wd_py", "Web Client Python", (720, 720, 0, 0))]
+    warnings = system_tests_run_summary.integration_drift_warnings(baseline, suite_counts, "12345")
+    assert len(warnings) == 0
+
+
+def test_integration_drift_warnings_minimum_mode_suspicious_growth():
+    """minimum mode warns on unusually large positive drift."""
+    baseline = {
+        "drift_policy": {"mode": "minimum", "growth_warn_percent": 25, "growth_warn_absolute": 50},
+        "suites": {"wd_py": {"min_tests": 100, "skipped": 0}},
+        "skip_tolerance_default": 0,
+    }
+    # +60 exceeds max(50, 100*25//100=25) = 50
+    suite_counts = [("wd_py", "Web Client Python", (160, 160, 0, 0))]
+    warnings = system_tests_run_summary.integration_drift_warnings(baseline, suite_counts, "12345")
+    assert len(warnings) == 1
+    assert "unusually large increase" in warnings[0]
+
+
+def test_integration_drift_warnings_minimum_mode_at_threshold_no_warn():
+    """minimum mode does not warn when positive drift is exactly at threshold."""
+    baseline = {
+        "drift_policy": {"mode": "minimum", "growth_warn_percent": 25, "growth_warn_absolute": 50},
+        "suites": {"wd_py": {"min_tests": 100, "skipped": 0}},
+        "skip_tolerance_default": 0,
+    }
+    # +50 equals max(50, 25) = 50, not exceeds it
+    suite_counts = [("wd_py", "Web Client Python", (150, 150, 0, 0))]
+    warnings = system_tests_run_summary.integration_drift_warnings(baseline, suite_counts, "12345")
+    assert len(warnings) == 0
+
+
 def test_must_not_skip_failures_allows_legitimate_skip_suites():
-    """must_not_skip_failures allows skips in conformance/live/security suites."""
+    """must_not_skip_failures allows skips in specification/live/security suites."""
     suite_counts = [
         ("tc_tests", "Test Client", (100, 95, 0, 5)),
         ("con_live", "Console Client Live", (57, 19, 0, 38)),
@@ -728,7 +781,7 @@ def test_skipped_count_cell_uses_icon_only_when_nonzero():
 
 
 def test_tests_cell_zero_fail_with_skips_uses_passed_count():
-    """tests_cell mirror of the same regression — used by Conformance Overview."""
+    """tests_cell mirror of the same regression — used by Specification Test Overview."""
     result = system_tests_run_summary.tests_cell((1043, 889, 0, 154))
     assert "889" in result
     assert "1,043" not in result

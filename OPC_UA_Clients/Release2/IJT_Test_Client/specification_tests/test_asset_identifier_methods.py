@@ -1,5 +1,5 @@
 """
-Conformance tests for asset identifier methods — OPC 40450-1 IJT Base.
+specification tests for asset identifier methods — OPC 40450-1 IJT Base.
 
 Covers the following conformance units:
 

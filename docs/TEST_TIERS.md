@@ -55,8 +55,6 @@ both produce a non-failing report warning so this table stays current.
 
 | Test | Reason | Condition to unskip |
 |------|--------|---------------------|
-| Web Client Python `test_required_static_asset_exists[node_modules/chart.js/dist/chart.umd.js]` | The `web-client-python` CI check intentionally skips npm install. JavaScript dependency validation is owned by `web-client-js` | Install npm dependencies in the Python check, or move this asset assertion fully to the JavaScript check |
-| Web Client Python `test_static_analysis.py::test_eslint_passes` | ESLint is owned by the separate `web-client-js` CI check | Install npm dependencies in the Python check, or remove this Python-side ESLint gate so the JavaScript check remains the sole lint owner |
 | C# live integration tests | `IJT_PHASE1_ONLY=true` suppresses server auto-launch in the unit-test CI phase (`csharp-unit`) | These same tests **pass** in the `csharp-live` integration job where the server is launched on port 40464; the CI report tracks the expected skip identities |
 | Vitest `source-coverage` git check | `git` unavailable in bare zip-export environments | Not Applicable in CI — git is always present; this protects zip-distribution consumers |
 
@@ -70,6 +68,21 @@ The `server-smoke-docker` job may restore Docker layer cache for speed, but
 cache writes are limited to trusted `main` runs. The smoke-test Python
 dependencies intentionally do not use `actions/setup-python` pip caching in
 this artifact-producing job.
+
+### Test-count baseline policy (schema v2)
+
+The committed baseline (`tests/baselines/integration-test-counts.json`) uses
+**minimum-floor semantics** with a suspicious-growth threshold:
+
+| Condition | Behaviour |
+|-----------|-----------|
+| Actual < `min_tests` | ⚠️ Warning — tests may have disappeared |
+| Actual > `min_tests` (normal growth) | Silent — no action needed |
+| Actual > `min_tests` + max(50, 25%) | ⚠️ Warning — unusually large increase |
+| Skipped > baseline + `skip_tolerance` | ⚠️ Warning — skip drift |
+
+Re-anchor with `python tests/tools/update_integration_baseline.py --run <id> --suite <key>`
+only when intentionally removing tests. Normal test additions need no baseline update.
 
 ### Integration Jobs
 
@@ -96,7 +109,7 @@ fails with `pytest.fail()` (loud, never silent). This applies to:
 | Test | Status | Reason |
 |------|--------|--------|
 | Console live joint workflows | fail on missing tool identity | `ProductInstanceUri` is required for live method coverage. Tests browse the server tool list, call `GetJointList(ProductInstanceUri)`, and fail loudly if no usable `JointId` is exposed. |
-| Test Client conformance (optional/supplementary result APIs) | presence or skip/fail-by-design checks | `GetResultIdListFiltered` is optional/profile-dependent and is checked by node presence/Executable; `ReleaseResultHandle`, `AcknowledgeResults`, and `RequestUnacknowledgedResults` may be absent or return Bad-status in the simulator profile |
+| Test Client specification tests (optional/supplementary result APIs) | presence or skip/fail-by-design checks | `GetResultIdListFiltered` is optional/profile-dependent and is checked by node presence/Executable; `ReleaseResultHandle`, `AcknowledgeResults`, and `RequestUnacknowledgedResults` may be absent or return Bad-status in the simulator profile |
 | Test Client asset sub-type folders (controllers, tools, etc.) | pass | All asset category folders are required in the current server configuration; tests assert presence and fail on missing nodes |
 | `zizmor` job | promoted to ci | SARIF upload to Code Scanning (Security → Code scanning alerts). Skipped on fork PRs. The CI job runs with workflow-file changes, but Code Scanning alert merge-blocking still depends on repo branch-protection / Code Scanning check-failure settings. The local root runner parses current zizmor v1 finding exit codes (`13` and `14`) plus any parseable JSON findings output, and fails High/Critical findings instead of treating tool-version exit-code drift as a silent skip. |
 
@@ -210,7 +223,7 @@ run their live/integration tests in parallel without port conflicts.
 | Web Client Playwright features | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | `.venv_test` + Playwright | Feature specs with four owned backend/server worker pairs |
 | Web Client Playwright regression | OPC UA 40480 / WS 8010 / HTTP 3006 | `.venv_test` + Playwright | Regression spec with owned backend and UI ports |
 | Web Client — Browser Compatibility Smoke | OPC UA 40468 / WS 8004 / HTTP 3007 | `.venv_test` + Playwright + real browser channel | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
-| Web Client Docker smoke | HTTP 3000 / WS 8001 | Docker | Builds the Web Client production image through `--docker-only`; independent from live/browser suites; root runner skips when Docker is unavailable |
+| Web Client Docker smoke | Standalone HTTP 3000 / WS 8001; root runner HTTP 3008 / WS 8011 | Docker | Builds the Web Client production image through `--docker-only`; root runner gives it isolated host ports and a scoped Compose project so it can run alongside live/browser suites; root runner skips when Docker is unavailable |
 | IJT_Node_Client    | **40451** (fixed) | N/A (Node) | **Release 1 legacy** — server port is hardcoded, dynamic isolation not supported |
 | Server smoke/native default | 40451  | —            | Built-in default (from `server_configuration.json`); root runner Phase 2 validates this package path |
 | Server Linux package smoke | 40465  | Docker       | Builds the Docker image from the Linux ZIP package and runs `smoke_test.py` |

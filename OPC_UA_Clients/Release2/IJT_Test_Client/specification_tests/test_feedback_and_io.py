@@ -1,5 +1,5 @@
 """
-Feedback, I/O signals, time and offline timer method conformance tests — OPC 40450-1.
+Feedback, I/O signals, time and offline timer method specification tests — OPC 40450-1.
 
 Covers:
   feedback_methods — SendFeedback and GetFeedbackFileList methods.

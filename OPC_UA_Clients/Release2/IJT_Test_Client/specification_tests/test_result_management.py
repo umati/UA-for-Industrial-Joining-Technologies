@@ -1,5 +1,5 @@
 """
-Result management method conformance tests — OPC 40450-1.
+Result management method specification tests — OPC 40450-1.
 
 Covers: result_management, get_latest_result, get_result_by_id,
 get_result_with_filter_criteria, result_variable_access, result_event_access,

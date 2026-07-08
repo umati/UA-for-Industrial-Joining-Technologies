@@ -109,7 +109,7 @@ def load_supported_cus(
     if not capabilities_path.exists():
         logger.warning(
             "server_capabilities.yaml not found at %s — "
-            "treating all conformance units as supported (full conformance mode)",
+            "treating all Conformance Units as supported (full specification coverage mode)",
             capabilities_path,
         )
         return _all_cus_from_facets()
@@ -120,7 +120,7 @@ def load_supported_cus(
     supported_cu_keys: set[str] = set()
 
     # Resolve active base profile
-    active_profile = caps.get("active_profile", "full_conformance")
+    active_profile = caps.get("active_profile", "full_specification_coverage")
     profile_facet_names = _resolve_profile_facets(active_profile)
     for facet_name in profile_facet_names:
         keys = all_facets.get(facet_name, [])

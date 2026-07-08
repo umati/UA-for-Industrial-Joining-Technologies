@@ -1129,7 +1129,7 @@ def _step_unit_tests() -> _StepResult:
     if _tool_available("pytest_cov"):
         pytest_args += [
             # Cover only helpers/ — the library actually tested by unit tests.
-            # Using --cov=. would include live/conformance test files (0% coverage)
+            # Using --cov=. would include live/specification tests files (0% coverage)
             # and pull the total far below the fail_under threshold.
             "--cov=helpers",
             f"--cov-report=xml:{_RESULTS_DIR / 'coverage.xml'}",
@@ -1140,7 +1140,7 @@ def _step_unit_tests() -> _StepResult:
     cmd: list[str] = [sys.executable, "-m", "pytest", *pytest_args]
     rc, output = _run(
         cmd,
-        extra_env={"IJT_CU_COMPLIANCE_REPORT_FILE": str(_RESULTS_DIR / "cu-compliance-report-unit.json")},
+        extra_env={"IJT_CU_COVERAGE_REPORT_FILE": str(_RESULTS_DIR / "cu-coverage-report-unit.json")},
     )
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
@@ -1359,7 +1359,7 @@ def run_pytest(extra_args: list[str]) -> int:
 def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _StepResult:
     """Run the full live test suite via venv pytest.
 
-    The unit stage owns the hard coverage gate. Live conformance tests still
+    The unit stage owns the hard coverage gate. Live specification tests still
     collect helper coverage diagnostics by default, but force fail-under to 0
     so an otherwise passing server-facing compliance run is not failed by the
     live coverage shape.
@@ -1377,7 +1377,7 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
 
     live_selection_args = list(extra_pytest_args)
     if not _has_explicit_pytest_selection(live_selection_args):
-        live_selection_args.append("conformance")
+        live_selection_args.append("specification_tests")
 
     _print_test_count(live_selection_args)
 
@@ -1595,6 +1595,65 @@ def _maybe_generate_excel(
 # ---------------------------------------------------------------------------
 
 
+def _step_target_server_cu_preflight(target_server_profile: str, strict: bool = False) -> _StepResult:
+    """Run Target Server CU preflight via run_target_server_cu.py (non-fatal by default).
+
+    When *strict* is False (default), blocking preflight outcomes are reported
+    as WARN rather than FAIL so the simulator-based run always continues.
+    When *strict* is True, blocking outcomes fail the overall run.
+
+    Args:
+        target_server_profile: Path to a Target Server CU profile YAML file.
+        strict:             Whether preflight failures gate the overall run.
+    """
+    result = _StepResult("[TARGET SERVER] CU preflight")
+    t0 = time.monotonic()
+    profile_path = Path(target_server_profile)
+    if not profile_path.exists():
+        result.skipped = True
+        result.note = f"profile not found: {target_server_profile}"
+        result.duration = time.monotonic() - t0
+        return result
+
+    target_server_output_dir = _RESULTS_DIR / "target-server-cu"
+    runner_script = _HERE / "run_target_server_cu.py"
+    if not runner_script.exists():
+        result.skipped = True
+        result.note = "run_target_server_cu.py not found — Target Server CU runner not installed"
+        result.duration = time.monotonic() - t0
+        return result
+
+    rc, output = _run(
+        [
+            str(_venv_python(VENV)),
+            str(runner_script),
+            "--profile",
+            str(profile_path),
+            "--preflight-only",
+            "--output-dir",
+            str(target_server_output_dir),
+        ],
+        timeout=60,
+        timeout_label="target-server-cu-preflight",
+    )
+    result.duration = time.monotonic() - t0
+    # rc=0: passed; rc=1: blocking issues or config errors
+    if rc == 0:
+        result.ok = True
+        result.note = "preflight passed"
+    elif strict:
+        result.ok = False
+        result.note = "preflight blocking issues (use run_target_server_cu.py for details)"
+        if output.strip():
+            _log(output.strip())
+    else:
+        # Non-strict: report as advisory warning, not a failure
+        result.ok = True
+        result.warn = True
+        result.note = f"preflight advisory issues (non-fatal; see {target_server_output_dir})"
+    return result
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="IJT Test Client — venv setup, static analysis + live test orchestrator",
@@ -1635,6 +1694,19 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip pre-test OPC UA server reachability check",
     )
     p.add_argument(
+        "--target-server-profile",
+        metavar="FILE",
+        dest="target_server_profile",
+        default=None,
+        help=("Path to a Target Server CU profile YAML for optional Target Server preflight."),
+    )
+    p.add_argument(
+        "--target-server-preflight-strict",
+        action="store_true",
+        dest="target_server_preflight_strict",
+        help=("Make Target Server CU preflight failures gate the overall run. Requires --target-server-profile."),
+    )
+    p.add_argument(
         "pytest_args",
         nargs=argparse.REMAINDER,
         help="Extra args forwarded to pytest (phase 2 only)",
@@ -1653,13 +1725,13 @@ def main() -> int:
     _RUN_START = time.time()
     _RUNNER_SET_CAPABILITIES_FILE = False
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    args = _build_parser().parse_args()
     _cleanup_caches(_HERE)  # pre-run: clear stale caches from interrupted runs
     global _USE_COLOUR, _AUTO_INSTALL_TOOLS, _VERBOSE
 
     _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
     _prepare_tmp_dir()
 
-    args = _build_parser().parse_args()
     _VERBOSE = bool(args.verbose)
     _AUTO_INSTALL_TOOLS = bool(args.auto_install_tools)
     run_phase1 = not args.phase2
@@ -1712,6 +1784,15 @@ def main() -> int:
             _check_server(skip=args.no_server_check)
             server_proc = _ensure_server()
             results.append(_step_live_tests(extra_pytest_args, skip_server_check=args.no_server_check))
+
+        if getattr(args, "target_server_profile", None):
+            _section("Target Server CU (optional)")
+            results.append(
+                _step_target_server_cu_preflight(
+                    args.target_server_profile,
+                    strict=getattr(args, "target_server_preflight_strict", False),
+                )
+            )
 
     finally:
         if server_proc is not None:

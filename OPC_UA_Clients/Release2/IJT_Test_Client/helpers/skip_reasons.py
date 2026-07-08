@@ -1,5 +1,5 @@
 """
-Consistent pytest skip reason helpers for IJT conformance reports.
+Consistent pytest skip reason helpers for IJT specification test reports.
 
 Keep skip categories machine-readable at the start of the message so raw JUnit,
 Excel reports, and root-runner summaries stay useful.

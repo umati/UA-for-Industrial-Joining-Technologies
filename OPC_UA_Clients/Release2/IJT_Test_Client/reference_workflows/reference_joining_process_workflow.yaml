@@ -11,7 +11,7 @@ source_note: >
 scope:
   - Interactive step-by-step demo for reviews and Teams walkthroughs.
   - Data-driven checklist for future live workflow automation.
-  - Non-conformance scenario lane; official conformance tests remain separate.
+  - Non-conformance scenario lane; official specification tests remain separate.
 out_of_scope:
   - Production-specific station names, model names, and identifiers.
   - Server rebuild or package creation.
@@ -92,7 +92,7 @@ steps:
       - Enable or readiness command succeeds when supported
       - Unsupported optional readiness commands are reported as skipped outcomes, not failures
     simulator_support: partial
-    demo_note: Keeps the workflow portable across simulators and real controllers.
+    demo_note: Keeps the workflow portable across simulators and target servers.
 
   - id: send_work_identifiers
     phase: work_context
@@ -118,7 +118,7 @@ steps:
     expected_outcome:
       - At least one joining process is returned
       - Selected process identification is captured in the report
-      - Empty ProductInstanceUri is only used where the server policy allows controller-level catalog discovery
+      - Empty ProductInstanceUri is only used where the server policy allows target server-level catalog discovery
     simulator_support: current
     demo_note: This is the bridge between line-service process intent and IJT process selection.
 
@@ -216,4 +216,4 @@ server_change_policy:
   server_change_needed_if:
     - The workflow must validate JoiningSystemConditionType events
     - The workflow depends on methods currently reported as NotSupported or NotImplemented
-    - The workflow requires hardware-like IO timing or persistent controller state beyond current simulator scope
+    - The workflow requires hardware-like IO timing or persistent target server state beyond current simulator scope

@@ -17,8 +17,8 @@
 | :-: | :------ | ------: |
 | ✅  | Passed  |      21 |
 | ❌  | Failed  |       0 |
-| ⏭️  | Skipped |      18 |
-| 🧮  | Total   |      39 |
+| ⏭️  | Skipped |      16 |
+| 🧮  | Total   |      37 |
 | 🛠️  | Jobs    | 12 / 12 |
 
 ---
@@ -29,7 +29,7 @@
 
 | Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |
 |:----------|:-----------------|----------:|--------:|:---------------------:|
-| Web Client — Python | Ubuntu Release 2 Python unit suite | 2 Passed ✅ | 2 Skipped | 97.0% / 95% ✅ |
+| Web Client — Python | Ubuntu Release 2 Python unit suite | 2 Passed ✅ | 0 Skipped | 97.0% / 95% ✅ |
 | Web Client — JavaScript | Ubuntu Release 2 JavaScript unit suite | 3 Passed ✅ | 0 Skipped | 96.0% / 95% ✅ |
 | Console Client — Python | Ubuntu Python unit suite | 2 Passed ✅ | 0 Skipped | 99.0% / 95% ✅ |
 | Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit suite | 1 Passed ✅ | 1 Skipped | 95.0% / 95% ✅ |
@@ -123,16 +123,7 @@ Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage 
 
 <a id="ci-skip-details"></a>
 
-### ⏭️ Skip Details — 3 suites, 18 skips
-
-<details><summary>⏭️ <b>Web Client — Python</b> — 2 Skipped</summary>
-
-| Reason | Count |
-|:-------|------:|
-| node_modules absent in Web Client - Python check. chart.js vendoring is gated by sibling 'Web Client - JavaScript' check | 1 |
-| ESLint binary absent in Web Client - Python check. JS lint is gated by sibling 'Web Client - JavaScript' check | 1 |
-
-</details>
+### ⏭️ Skip Details — 2 suites, 16 skips
 
 <details><summary>⏭️ <b>Node Client — Legacy JavaScript</b> — 1 Skipped</summary>
 

@@ -14,7 +14,7 @@ and parser branches that the extracted workflow heredocs consumed:
 - `integration/root/` contains representative Integration JUnit, timing, TRX,
   and baseline files for every summary row.
 - `integration/root/all-results/results-testclient/summary.md` is the synthetic
-  Test Client conformance artifact feeding the aggregator's
+  Test Client specification test artifact feeding the aggregator's
   `load_test_client_conformance_summary()`. Its banner, KPI strip, and
   top-level section headings must mirror the wire shape emitted by
   `scripts/reporting/conformance_summary.py` (Test Client renderer).

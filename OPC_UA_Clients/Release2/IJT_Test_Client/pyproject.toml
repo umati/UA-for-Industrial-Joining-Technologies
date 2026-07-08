@@ -6,10 +6,10 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 pythonpath = ["."]
-# Default collection is limited to unit tests and CU-marked conformance tests.
+# Default collection is limited to unit tests and CU-marked specification tests.
 # Legacy root suites remain runnable by explicit path, but are not part of the
-# default compliance run because most do not carry requires_cu gating metadata.
-testpaths = ["tests/unit", "conformance"]
+# default specification test run because most do not carry requires_cu gating metadata.
+testpaths = ["tests/unit", "specification_tests"]
 python_files = ["test_*.py"]
 addopts = "-v -p no:cacheprovider"
 tmp_path_retention_policy = "all"
@@ -20,7 +20,7 @@ markers = [
     "structure: Address space structure tests (read-only, no state changes)",
     "methods: Method call tests (trigger simulation — state changes expected)",
     "events: Event subscription and notification tests",
-    "conformance: Full IJT specification conformance scenarios",
+    "specification_test: Full IJT specification test scenarios",
     "negative: Negative tests verifying that invalid operations are rejected",
 ]
 
@@ -50,7 +50,7 @@ ignore = ["E501", "E402", "E731"]
 
 [tool.coverage.run]
 # Unit stage runs against tests/unit/ with --cov=helpers (library code only).
-# Live conformance stage appends helper coverage diagnostics but overrides
+# Live specification test stage appends helper coverage diagnostics but overrides
 # fail-under to 0; Phase 1 remains the hard coverage quality gate.
 # Pass explicit --cov args to pytest for one-off custom live coverage runs.
 # The omit list keeps venv and runner scaffolding out of coverage measurements.
@@ -73,14 +73,14 @@ exclude_lines = [
 ]
 
 [tool.pylint.main]
-# sys.path insert ensures conformance test modules resolve when pylint runs from project root.
+# sys.path insert ensures specification_tests/ modules resolve when pylint runs from project root.
 init-hook = "import sys; sys.path.insert(0, '.')"
 
 [tool.pylint.messages-control]
 disable = [
     "import-outside-toplevel",
     "wrong-import-position",
-    "import-error",            # false positive: conformance modules resolve via pythonpath = ["."]
+    "import-error",            # false positive: specification_tests/ modules resolve via pythonpath = ["."]
     "broad-exception-caught",  # OPC UA can raise many exception types; broad catch is intentional
     "unused-argument",         # pytest fixtures injected by name; can't use _
     "not-callable",
@@ -99,7 +99,7 @@ disable = [
     "too-many-locals",
     "consider-using-with",
     "duplicate-code",
-    # Conformance test files are inherently large — splitting would break readability
+    # Specification test files are inherently large — splitting would break readability
     "too-many-lines",
     # Local imports inside helper functions shadow top-level imports — intentional test pattern
     "reimported",
@@ -121,7 +121,7 @@ max-module-lines = 1200
 explicit_package_bases = true
 ignore_missing_imports = true
 # Check bodies of untyped functions — this removes [annotation-unchecked] notes
-# from CI annotations and gives mypy full coverage of conformance test logic.
+# from CI annotations and gives mypy full coverage of specification test logic.
 check_untyped_defs = true
 # Exclude generated test/tool output that may be locked on Windows.
 exclude = ["(?:^|.*[/\\\\])tmp[/\\\\]", "pytest-cache-files-.*"]
@@ -132,7 +132,7 @@ cache_dir = "tmp/mypy-cache"
 
 [tool.pyright]
 # Reporting tests import the CLI shim and renderer from scripts/ the same way
-# `python scripts/make_conformance_summary.py` runs them at runtime.
+# `python scripts/make_specification_test_summary.py` runs them at runtime.
 extraPaths = ["scripts"]
 # asyncua 1.2b2 uses class-based OPC UA primitive types (Int32, UInt32, etc.)
 # that inherit from int/str/bytes. Plain int literals are not directly assignable
@@ -185,9 +185,9 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = [
     "assets.test_asset_management_structure",
-    "conformance.test_asset_management",
-    "conformance.test_events",
-    "conformance.test_single_result_data",
+    "specification_tests.test_asset_management",
+    "specification_tests.test_events",
+    "specification_tests.test_single_result_data",
     "events.data_types.test_event_data_types",
     "events.test_event_types_structure",
     "events.test_joining_system_events",
@@ -200,19 +200,19 @@ module = [
 disable_error_code = ["arg-type"]
 
 [[tool.mypy.overrides]]
-module = ["conformance.test_joint_management"]
+module = ["specification_tests.test_joint_management"]
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
-module = ["conformance.test_result_access", "conformance.test_result_management"]
+module = ["specification_tests.test_result_access", "specification_tests.test_result_management"]
 disable_error_code = ["arg-type", "union-attr"]
 
 [[tool.mypy.overrides]]
-module = ["conformance.test_joining_process"]
+module = ["specification_tests.test_joining_process"]
 disable_error_code = ["arg-type", "attr-defined"]
 
 [[tool.mypy.overrides]]
-module = ["conformance.test_joining_system_base"]
+module = ["specification_tests.test_joining_system_base"]
 disable_error_code = ["arg-type", "attr-defined", "operator", "union-attr"]
 
 [[tool.mypy.overrides]]

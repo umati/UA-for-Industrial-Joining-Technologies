@@ -1,11 +1,11 @@
-# Conformance Renderer Tests
+﻿# Specification Test Renderer Tests
 
-Byte-identity regression tests for the conformance summary renderer
-(`scripts/reporting/conformance_summary.py`).
+Byte-identity regression tests for the specification test summary renderer
+(`scripts/reporting/specification_test_summary.py`).
 
 The byte-identity test
-([`test_render_conformance_summary.py`](test_render_conformance_summary.py))
-calls `render_conformance_summary(...)` against each fixture under
+([`test_render_specification_test_summary.py`](test_render_specification_test_summary.py))
+calls `render_specification_test_summary(...)` against each fixture under
 [`fixtures/`](fixtures/) and asserts that the produced Markdown matches
 the corresponding file under [`fixtures/expected/`](fixtures/expected/)
 **byte-for-byte**. This test is the regression oracle that locks the
@@ -31,7 +31,7 @@ The renderer routes **every** runtime-derived value through the
 `ReportEnvironment` seam (no `datetime.now()`, `platform.*`,
 `importlib.metadata`, git, or `os.environ.get("GITHUB_*")` calls outside
 that seam). Two companion tests in
-[`test_render_conformance_summary.py`](test_render_conformance_summary.py)
+[`test_render_specification_test_summary.py`](test_render_specification_test_summary.py)
 guard the seam:
 
 - `test_renderer_ignores_live_environment_when_frozen_env_passed` —
@@ -53,23 +53,22 @@ the same commit.
 
 **Scenario:** Renderer's **degraded path** — a CI unit pytest run where no
 `cu_results.json` is produced. The renderer must fall back to a minimal
-summary that doesn't reference any CU compliance data.
+summary that doesn't reference any CU coverage data.
 
 This fixture's only job is to lock the no-CU-payload path. It is **not**
 a complete branch-coverage oracle for the renderer.
 
 | File | Origin | Purpose |
 |---|---|---|
-| `pytest.xml` | extracted verbatim from the `results-test-client` artifact of GitHub Actions run id `25794958154` (`ci.yml` / Test Client unit job, captured 2026-05-13) | JUnit input to `render_conformance_summary(...)` |
+| `pytest.xml` | extracted verbatim from the `results-test-client` artifact of GitHub Actions run id `25794958154` (`ci.yml` / Test Client unit job, captured 2026-05-13) | JUnit input to `render_specification_test_summary(...)` |
 
 `cu_results.json` and `baseline.json` are **deliberately absent** — that
 absence is the entire point of this scenario.
 
-### `system_tests_full_conformance/`
+### `system_tests_full_specification_coverage/`
 
-**Scenario:** Renderer's **full path** — a System Tests live conformance
-run with the complete CU compliance payload and a baseline file present.
-This is the **canonical real-world conformance regression fixture** for
+**Scenario:** Renderer's **full path** — a System Tests live specification test run with the complete CU coverage payload and a baseline file present.
+This is the **canonical real-world specification test regression fixture** for
 the renderer: it exercises authentic scale, profile/facet groups,
 not-supported handling, with-notes / partial outcomes, truncation, and
 the action-first CUs Needing Review table. The Markdown summary shows
@@ -83,14 +82,14 @@ dedicated fixtures when branch semantics need their own coverage lens.
 | File | Origin | Purpose |
 |---|---|---|
 | `pytest.xml` | extracted from `results-testclient` artifact of GitHub Actions run id `25794967225` (`integration.yml`, captured 2026-05-13) | JUnit input |
-| `cu_results.json` | from a representative local conformance run (the upstream artifact did not contain `cu-compliance-report.json`); coherent with the `baseline.json` below | per-CU compliance payload |
-| `baseline.json` | from the same local conformance run as `cu_results.json` | satisfies the renderer's optional `baseline` kwarg; not consumed by the renderer (no baseline-driven UI) |
+| `cu_results.json` | from a representative local specification test run (the upstream artifact did not contain `cu-coverage-report.json`); coherent with the `baseline.json` below | per-CU coverage payload |
+| `baseline.json` | from the same local specification test run as `cu_results.json` | satisfies the renderer's optional `baseline` kwarg; not consumed by the renderer (no baseline-driven UI) |
 
 **Coherence note.** The upstream GitHub Actions artifact for run
-`25794967225` only included `pytest.xml`. The conformance JSON files
-(`cu-compliance-report.json` and `report-baseline.json`) are not
+`25794967225` only included `pytest.xml`. The specification test JSON files
+(`cu-coverage-report.json` and `report-baseline.json`) are not
 currently uploaded by the workflow. To get a coherent fixture set, the
-JSON files were taken from a representative local conformance run that
+JSON files were taken from a representative local specification test run that
 shares the same renderer implementation context. They are internally consistent
 with each other; the `pytest.xml` is shape-compatible (same suite/test
 ids). If/when the workflow uploads JSON artifacts, re-capture this

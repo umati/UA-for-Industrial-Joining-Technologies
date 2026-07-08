@@ -1,6 +1,6 @@
-"""Shared frozen inputs for conformance summary byte-identity tests.
+"""Shared frozen inputs for specification test summary byte-identity tests.
 
-Both ``test_render_conformance_summary.py`` (the byte-identity regression gate)
+Both ``test_render_specification_summary.py`` (the byte-identity regression gate)
 and ``_capture_expected_summaries.py`` (the helper that regenerates the
 expected Markdown fixtures when the report shape is intentionally changed)
 must drive the renderer with **exactly the same** frozen inputs. Any drift
@@ -12,7 +12,7 @@ This module is the single source of truth for those inputs. Both callers
 import from here; there is no second copy to keep in sync.
 
 The ``now_utc`` value is intentionally ~1 day after the
-``system_tests_full_conformance`` fixture baseline ``run_ts``
+``system_tests_full_specification_coverage`` fixture baseline ``run_ts``
 (``2026-05-12T13:09:41.281286Z``). The renderer no longer reads the
 baseline at all (trend UI was removed), but the frozen
 value is kept stable so byte-identity output stays deterministic across
@@ -31,7 +31,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[3] / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from reporting.conformance_summary import ReportEnvironment  # noqa: E402
+from reporting.specification_test_summary import ReportEnvironment  # noqa: E402
 
 FIXED_RUN_TS = "2026-05-13 14:00 UTC"
 FIXED_SERVER_URL = "opc.tcp://fixture.ijt.test:40451"

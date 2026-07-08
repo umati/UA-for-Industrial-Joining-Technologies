@@ -82,16 +82,20 @@ def test_image_pin_inputs_fingerprint_is_valid_when_present(pin: dict) -> None:
 
 
 def test_image_pin_playwright_version_matches_package_lock(pin: dict) -> None:
-    """The pinned CI image must track the Web Client's locked Playwright version."""
+    """The reviewed pin must be version-current only when it matches current inputs."""
     lock_path = _IJT_WEB_CLIENT_DIR / "package-lock.json"
     assert lock_path.is_file(), f"missing Web Client package-lock.json: {lock_path}"
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
     package = lock.get("packages", {}).get("node_modules/@playwright/test")
     assert package, "package-lock.json is missing node_modules/@playwright/test"
+    current_fingerprint = _load_fingerprint_module().compute_fingerprint()["fingerprint"]
+    if pin.get("inputs_fingerprint") != current_fingerprint:
+        return
     assert pin["playwright_version"] == package["version"], (
-        "image-pin.json playwright_version must match package-lock.json "
-        "node_modules/@playwright/test. Rebuild/publish ijt-browser-ci and "
-        "update image-pin.json in the same Playwright bump."
+        "image-pin.json playwright_version must match package-lock.json when "
+        "image-pin.json inputs_fingerprint already matches the current Browser "
+        "CI image inputs. Stale pins are handled by Integration's fingerprint "
+        "cache/build path instead of requiring every dependency PR to edit the pin."
     )
 
 
@@ -519,6 +523,10 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
         build_job["outputs"]["inputs_fingerprint"]
         == "${{ steps.fingerprint.outputs.inputs_fingerprint }}"
     )
+    assert (
+        build_job["outputs"]["playwright_version"]
+        == "${{ steps.playwright.outputs.playwright_version }}"
+    )
 
     checkout_step = next(step for step in build_job["steps"] if step.get("name") == "Checkout")
     assert "ref" not in checkout_step["with"], (
@@ -565,7 +573,12 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     build_body = "\n".join(str(step.get("run", "")) for step in build_job["steps"])
     assert "compute_browser_image_fingerprint.py --format github-output" in build_body
     assert "inputs_fingerprint" in build_body
+    assert "Extract Playwright version from Web Client package-lock.json" in str(build_job)
+    assert "node_modules/@playwright/test" in build_body
     assert "IMAGE_INPUTS_FINGERPRINT=${{ steps.fingerprint.outputs.inputs_fingerprint }}" in str(
+        build_job
+    )
+    assert "IMAGE_PLAYWRIGHT_VERSION=${{ steps.playwright.outputs.playwright_version }}" in str(
         build_job
     )
     image_smoke_metadata_step = next(
@@ -647,6 +660,9 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     publish_job = jobs["publish"]
     publish_body = "\n".join(str(step.get("run", "")) for step in publish_job["steps"])
     assert "IMAGE_INPUTS_FINGERPRINT=${{ needs.build.outputs.inputs_fingerprint }}" in str(
+        publish_job
+    )
+    assert "IMAGE_PLAYWRIGHT_VERSION=${{ needs.build.outputs.playwright_version }}" in str(
         publish_job
     )
     assert "EXPECTED_INPUTS_FINGERPRINT" in publish_body
@@ -806,3 +822,9 @@ def test_browser_ci_dockerfile_derives_asyncua_runtime_constraint_from_wheel() -
     assert "ARG IMAGE_INPUTS_FINGERPRINT=unknown" in dockerfile
     assert "'inputs_fingerprint':'${IMAGE_INPUTS_FINGERPRINT}'" in dockerfile
     assert 'org.umati.ijt.inputs_fingerprint="${IMAGE_INPUTS_FINGERPRINT}"' in dockerfile
+    assert "'playwright_version':'1." not in dockerfile
+    assert "node_modules/@playwright/test" in dockerfile
+    assert (
+        "package-lock.json'))['packages']['node_modules/@playwright/test']['version']" in dockerfile
+    )
+    assert 'org.umati.ijt.playwright_version="${IMAGE_PLAYWRIGHT_VERSION}"' in dockerfile

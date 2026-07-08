@@ -142,7 +142,7 @@ def workbook_traceability_report(
     tests_by_cu: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     exact_refs_by_row: Mapping[str, Iterable[str]] | None = None,
 ) -> dict[str, Any]:
-    """Return workbook row traceability data for the CU compliance JSON."""
+    """Return workbook row traceability data for the CU coverage JSON."""
     source = workbook_path or DEFAULT_WORKBOOK_PATH
     cases_by_cu = load_workbook_cases(source)
     tests_by_cu = tests_by_cu or {}

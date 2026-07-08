@@ -247,8 +247,10 @@ Large method outputs are written to domain-specific log files instead of floodin
 
 ```
 logs/
-  result/result.json                          — GetLatestResult, GetResultById, ResultReady events
-  events/joining_system_event.json            — JoiningSystemEvent, JoiningSystemCondition notifications
+  result/result.json                          — latest Result snapshot (GetLatestResult, GetResultById, ResultReady events)
+  results/{Name}_{ResultId}_{timestamp}.json  — timestamped result history (one file per result, preserved across Job/Batch)
+  events/joining_system_event.json            — latest JoiningSystemEvent snapshot
+  events_history/{Code}_{Text}_{timestamp}.json — timestamped event history (one file per event)
   joining_process/joining_process_list.json   — GetJoiningProcessList
   joining_process/selected_joining_program.json — GetSelectedJoiningProgram
   joint/joint_list.json                       — GetJointList
@@ -261,7 +263,7 @@ logs/
                                                  mirrors the OPC UA address space hierarchy as nested JSON)
 ```
 
-All files **overwrite** on every call — always reflects the latest payload. Use `IjtFileLogger.BaseLogDir` to get the base path at runtime. Asset files are written via `IjtFileLogger.WriteAsset(assetKey, content)` (key = `{catName}_{displayName}`, auto-sanitized); the folder is `IjtFileLogger.AssetLogDir`.
+**Snapshot files** (result.json, joining_system_event.json, etc.) overwrite on every call — always reflects the latest payload. **Timestamped files** (results/, events_history/) are preserved so that multi-result operations (SimulateJobResult, SimulateBatchOrSyncResult, SimulateBulkResults) produce one file per result instead of overwriting a single file. Timestamped directories are cleared on client startup (`IjtFileLogger.ClearSessionLogs()`) so only the current session's files accumulate. Use `IjtFileLogger.BaseLogDir` to get the base path at runtime. Asset files are written via `IjtFileLogger.WriteAsset(assetKey, content)` (key = `{catName}_{displayName}`, auto-sanitized); the folder is `IjtFileLogger.AssetLogDir`.
 
 ### Pattern (copy for new operations)
 
@@ -331,8 +333,8 @@ JoiningSystem
 |---------|----------------|
 | Unit display | `Console.OutputEncoding = UTF8` at startup; `IjtResultFormatter.NormalizeUnits()` maps U+00B0/U+FFFD to `"deg"`. |
 | Log/prompt ordering | `SynchronousConsoleProvider` in `IjtLog.cs`; all console writes share a static lock. |
-| JSON log freshness | Log files use `File.WriteAllText` and overwrite on every call, so each file reflects the latest payload. |
-| Trace output | `IjtResultFormatter.FormatTrace()` writes trace steps to `result/result.json`. |
+| JSON log freshness | Snapshot files overwrite on every call (latest payload). Results and events also write timestamped copies to `results/` and `events_history/` (cleared on startup via `ClearSessionLogs()`). |
+| Trace output | `IjtResultFormatter.FormatTrace()` writes trace steps to `result/result.json` and timestamped files. |
 | Terminal compatibility | `IjtMenuHelper.cs` uses ASCII-only box drawing characters. |
 | Prompt density | Compact prompt; `h`/`help` shows full usage on demand. |
 

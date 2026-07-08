@@ -1,6 +1,6 @@
 # IJT Test Client
 
-Conformance test client for validating OPC UA IJT servers against the Industrial Joining Technologies
+IJT Specification Test Client for validating OPC UA IJT servers against the Industrial Joining Technologies
 (IJT) companion specifications.
 
 ## Contact
@@ -23,6 +23,31 @@ Conformance test client for validating OPC UA IJT servers against the Industrial
 - **Skip Excel report generation:** `python run_all_tests.py --excel=never`
 - **Generate a reference workflow walkthrough:** `python scripts/run_reference_workflow.py --output test-results/reference-workflows/reference_joining_process_workflow.md`
 
+## Target Server CU Validation
+
+Use this when you want to check an OPC UA IJT server under test (SUT), such as a
+product/device server or any other IJT server endpoint. The checked-in simulator
+remains the default test target for `run_all_tests.py`.
+
+Target Server CU validation is additive. It does not change the simulator path,
+default test runner behavior, or existing report files.
+
+```bash
+# Preflight only — safe for any target server, no state changes.
+# Copy template.yaml first, edit the endpoint, then run:
+python run_target_server_cu.py --profile my_target_server.yaml --preflight-only
+
+# Automated run (target server supports StartSelectedJoining):
+python run_target_server_cu.py --profile target_server_cu_profiles/example_remote_start.yaml --mode automated
+
+# Guided/manual run, for servers that need a physical tool trigger:
+python run_target_server_cu.py --profile my_profile.yaml --mode guided --interactive-prompts
+```
+
+- Target Server CU profiles are in `target_server_cu_profiles/` — see `target_server_cu_profiles/README.md`.
+- Evidence reports are written to `test-results/target-server-cu/` by default.
+- Never commit profiles with real endpoints, PIUs, process IDs, or vendor identifiers.
+
 ## Event And Condition Coverage
 
 For servers that expose simulator triggers, the Test Client covers all 60
@@ -34,8 +59,8 @@ invalid EventId rejection, and ConditionRefresh.
 Focused Debug-server checks:
 
 ```bash
-python -m pytest conformance/test_event_condition_catalog.py conformance/test_joining_system_condition_methods.py -q
-python -m pytest conformance/test_events.py events -q
+python -m pytest specification_tests/test_event_condition_catalog.py specification_tests/test_joining_system_condition_methods.py -q
+python -m pytest specification_tests/test_events.py events -q
 ```
 
 ## Test Reports

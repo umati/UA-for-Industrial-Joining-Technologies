@@ -281,7 +281,7 @@ UA-for-Industrial-Joining-Technologies/
         ├── IJT_Console_Client/      # Python console client
         │   ├── docs/SKILLS.md
         │   └── run_all_tests.py
-        ├── IJT_Test_Client/         # OPC UA IJT spec conformance test suite
+        ├── IJT_Test_Client/         # OPC UA IJT specification test suite
         │   ├── docs/SKILLS.md
         │   └── run_all_tests.py
         └── IJT_CSharp_Client/       # C# .NET OPC UA client
@@ -297,7 +297,7 @@ UA-for-Industrial-Joining-Technologies/
 - **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt, Node.js 24+, Vitest, ESLint, Docker
 - **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), and split live suites for Python OPC UA, Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and Playwright regression. Each live/browser suite owns its own OPC UA/WS/UI ports; root Phase 2 runs Docker as a separate `web-client-docker-smoke` suite.
 - **One test command**: `python run_all_tests.py`
-- **Docker**: healthy on HTTP:3000 + WS:8001
+- **Docker**: standalone smoke is healthy on HTTP:3000 + WS:8001; root Phase 2 isolates Docker smoke on HTTP:3008 + WS:8011
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md`
 
 ### IJT Console Client (`OPC_UA_Clients/Release2/IJT_Console_Client/`)
@@ -309,8 +309,8 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Test Client (`OPC_UA_Clients/Release2/IJT_Test_Client/`)
 - **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt, pytest
-- **Purpose**: OPC UA IJT spec conformance test suite — validates server against OPC 40450-1 / 40451-1
-- **Tests**: conformance (`conformance/` — requires running OPC UA server); unit (`tests/unit/` — pure-logic helper coverage, no server needed)
+- **Purpose**: OPC UA IJT specification test suite — validates server behavior against OPC 40450-1 / 40451-1 without implying formal certification
+- **Tests**: specification tests (`specification_tests/` — require running OPC UA server); unit (`tests/unit/` — pure-logic helper coverage, no server needed)
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
 
@@ -410,14 +410,14 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs with owned browser/backend/server workers; GitHub Integration uses two Browser Features shards inside the owned `ijt-browser-ci` image under `docker run --network=none` |
 | `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec; GitHub Integration runs it inside the owned `ijt-browser-ci` image under `docker run --network=none` |
 | Web Client — Browser Compatibility Smoke | Web runner + `web-client-compatibility-smoke.yml` | OPC UA 40468 / WS 8004 / HTTP 3007 | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
-| `web-client-docker-smoke` | local root runner | HTTP 3000 / WS 8001 | Web Client production Docker image/readiness smoke |
+| `web-client-docker-smoke` | local root runner | HTTP 3008 / WS 8011 | Web Client production Docker image/readiness smoke with isolated host ports and scoped Compose project |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
 | `live-webclient` | `integration.yml` | **40463/40466/40467** | Windows native EXE for non-browser Web Client live suites |
 | `live-webclient-browser` | `integration.yml` | **40469–40472 / 40480** | `ubuntu-latest` host runner; suites execute **inside** the owned `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci` image from the reviewed `image-pin.json` digest under `docker run --network=none`; Chromium, Linux system libraries, Python 3.14, and Node 24 are baked into the image; the Linux simulator binary comes from the mounted checkout |
 | `live-console` | `integration.yml` | **40461** | Windows native EXE |
 | `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
 
-Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation exercises the native/default server package path on port 40451. When Docker is running, it also runs `server-linux-package-smoke` on port 40465 to build the Docker image from the Linux ZIP package and smoke-test it, plus `web-client-docker-smoke` for the Web Client production image/readiness check. If Docker is unavailable, the root runner marks those Docker suites skipped instead of launching child runners that would fail on Docker daemon startup. Set `IJT_DOCKER_BUILD_TIMEOUT` if a cold Docker/network environment needs more than the default 1200 seconds.
+Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation exercises the native/default server package path on port 40451. When Docker is running, it also runs `server-linux-package-smoke` on port 40465 to build the Docker image from the Linux ZIP package and smoke-test it, plus `web-client-docker-smoke` for the Web Client production image/readiness check. Root-runner Docker smoke uses isolated host ports 3008/8011 and a scoped Compose project so it can run beside other Web Client suites. If Docker is unavailable, the root runner marks those Docker suites skipped instead of launching child runners that would fail on Docker daemon startup. Set `IJT_DOCKER_BUILD_TIMEOUT` for cold image builds or `IJT_DOCKER_COMPOSE_WAIT_TIMEOUT` for slow first container startup.
 The root runner splits Web Client live/browser validation by test type instead
 of using one broad Web Client live suite. Python OPC UA, Python WebSocket
 backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and
@@ -525,7 +525,7 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/skills/endpointgraphics-tab-adder.md` | Adding endpoint graphics tabs |
 | `OPC_UA_Clients/Release2/IJT_Web_Client/docs/skills/associated-entities-interpreter.md` | Associated entities interpretation |
 | `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md` | Console Client context, patterns, test commands, method call examples |
-| `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md` | Test Client conformance suite, test structure, markers |
+| `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md` | Test Client specification test suite, test structure, markers |
 | `OPC_UA_Clients/Release2/IJT_Test_Client/docs/test-results.md` | Report locations, Excel sheets, status meanings, skip categories |
 | `OPC_UA_Servers/Release2/docs/opc-ua-server-context.md` | Address space map, namespaces, event hierarchy, server limitations |
 | `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md` | C# client architecture, test commands, Softing SDK DLL integration |

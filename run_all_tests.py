@@ -219,8 +219,8 @@ _RUNNER_SCRIPT_PATHS: tuple[Path, ...] = (
     SERVER_DIR / "run_all_tests.py",
 )
 _OPTIONAL_IMPORT_GUARD_PATHS: tuple[Path, ...] = _RUNNER_SCRIPT_PATHS + (
-    TEST_CLIENT_DIR / "scripts" / "make_conformance_summary.py",
-    TEST_CLIENT_DIR / "scripts" / "reporting" / "conformance_summary.py",
+    TEST_CLIENT_DIR / "scripts" / "make_specification_test_summary.py",
+    TEST_CLIENT_DIR / "scripts" / "reporting" / "specification_test_summary.py",
     TEST_CLIENT_DIR / "scripts" / "make_excel_report.py",
 )
 
@@ -247,9 +247,11 @@ WEB_CLIENT_WS_PORT_LIFECYCLE = 8003
 WEB_CLIENT_WS_PORT_E2E_SMOKE = 8004
 WEB_CLIENT_WS_PORT_E2E_FEATURES = 8005
 WEB_CLIENT_WS_PORT_E2E_REGRESSION = 8010
+WEB_CLIENT_WS_PORT_DOCKER_SMOKE = 8011
 WEB_CLIENT_UI_PORT_E2E_SMOKE = 3004
 WEB_CLIENT_UI_PORT_E2E_FEATURES = 3005
 WEB_CLIENT_UI_PORT_E2E_REGRESSION = 3006
+WEB_CLIENT_UI_PORT_DOCKER_SMOKE = 3008
 
 
 def _int_env(name: str, default: int) -> int:
@@ -804,6 +806,36 @@ def _docker_daemon_running(docker: str) -> bool:
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return False
+
+
+def _docker_engine_ostype(docker: str) -> str | None:
+    """Return Docker daemon OSType (linux/windows) when the daemon responds."""
+    try:
+        result = subprocess.run(
+            [docker, "info", "--format", "{{.OSType}}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    ostype = result.stdout.strip().lower()
+    return ostype or None
+
+
+def _docker_linux_engine_skip_note(docker: str) -> str | None:
+    """Return a skip reason when Docker cannot build Linux images locally."""
+    ostype = _docker_engine_ostype(docker)
+    if ostype == "linux":
+        return None
+    if ostype == "windows":
+        return (
+            "Docker is running Windows containers; switch Docker Desktop to "
+            "Linux containers before running Linux-image suites"
+        )
+    return "Docker daemon OSType could not be determined"
 
 
 def _start_server(no_rebuild: bool = False) -> bool:
@@ -1650,6 +1682,9 @@ def _suite_server_linux_package_smoke() -> SuiteResult:
         return SuiteResult(name, True, skipped=True, notes=["docker not in PATH"])
     if not _docker_daemon_running(docker):
         return SuiteResult(name, True, skipped=True, notes=["Docker daemon not running"])
+    linux_skip = _docker_linux_engine_skip_note(docker)
+    if linux_skip:
+        return SuiteResult(name, True, skipped=True, notes=[linux_skip])
     if not _LINUX_PACKAGE_ZIP.exists():
         return SuiteResult(
             name,
@@ -1916,13 +1951,13 @@ def _suite_console_opcua_security_linux() -> SuiteResult:
 
 
 def _suite_testclient_full() -> SuiteResult:
-    """Test Client -- Phase 2 (live conformance).  Delegates to sub-project runner.
+    """Test Client -- Phase 2 (live specification tests).  Delegates to sub-project runner.
 
     No OPCUA_SERVER_URL passed — the TestClient runner owns its server on port 40462.
-    Uses 1200s timeout — conformance tests span many OPC UA round-trips.
+    Uses 1200s timeout — specification tests span many OPC UA round-trips.
     """
     return _delegate_to_runner(
-        name="test-client-live-conformance",
+        name="test-client-live-specification-tests",
         runner_dir=TEST_CLIENT_DIR,
         phase_args=["--phase2"],
         label="testclient runner (phase2)",
@@ -2067,13 +2102,20 @@ def _suite_webclient_docker_smoke() -> SuiteResult:
         return SuiteResult(name, True, skipped=True, notes=["docker not in PATH"])
     if not _docker_daemon_running(docker):
         return SuiteResult(name, True, skipped=True, notes=["Docker daemon not running"])
+    linux_skip = _docker_linux_engine_skip_note(docker)
+    if linux_skip:
+        return SuiteResult(name, True, skipped=True, notes=[linux_skip])
 
     return _delegate_to_runner(
         name=name,
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--docker-only"],
         label="webclient runner (docker-only)",
-        extra_env={"IJT_WEB_TEST_RESULTS_DIR": str(WEB_CLIENT_RESULTS_DIR / "docker-smoke")},
+        extra_env={
+            "IJT_WEB_TEST_RESULTS_DIR": str(WEB_CLIENT_RESULTS_DIR / "docker-smoke"),
+            "WEB_CLIENT_HTTP_PORT": str(WEB_CLIENT_UI_PORT_DOCKER_SMOKE),
+            "WEB_CLIENT_WS_PORT": str(WEB_CLIENT_WS_PORT_DOCKER_SMOKE),
+        },
         timeout=DOCKER_BUILD_TIMEOUT + 180,
     )
 
@@ -2243,9 +2285,9 @@ SUITE_REGISTRY: dict[str, SuiteSpec] = {
         group=SuiteGroup.PHASE2_OPCUA_SECURITY,
         runner=_suite_console_opcua_security_linux,
     ),
-    "test-client-live-conformance": SuiteSpec(
-        id="test-client-live-conformance",
-        display_name="Test Client - Live conformance",
+    "test-client-live-specification-tests": SuiteSpec(
+        id="test-client-live-specification-tests",
+        display_name="Test Client - Live specification tests",
         group=SuiteGroup.PHASE2_LIVE,
         runner=_suite_testclient_full,
     ),

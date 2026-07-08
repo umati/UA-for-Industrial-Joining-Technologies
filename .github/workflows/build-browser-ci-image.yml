@@ -97,14 +97,15 @@ jobs:
       cache_key: ${{ steps.decide.outputs.cache_key }}
       pr_image_tag: ${{ steps.decide.outputs.pr_image_tag }}
       inputs_fingerprint: ${{ steps.fingerprint.outputs.inputs_fingerprint }}
+      playwright_version: ${{ steps.playwright.outputs.playwright_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c  # v4
 
       - name: Compute Browser CI image input fingerprint
         id: fingerprint
@@ -112,6 +113,18 @@ jobs:
           set -euo pipefail
           python .github/scripts/compute_browser_image_fingerprint.py --format github-output >> "$GITHUB_OUTPUT"
           python .github/scripts/compute_browser_image_fingerprint.py --format json
+
+      - name: Extract Playwright version from Web Client package-lock.json
+        # Single source of truth: the lockfile already constrains the exact version
+        # that npm ci will install into the image. Reading it here means the LABEL
+        # and metadata.json are always consistent with the lockfile — no manual
+        # version string to update when Renovate bumps @playwright/test.
+        id: playwright
+        run: |
+          set -euo pipefail
+          PW_VERSION=$(python -c "import json; d=json.load(open('OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json')); print(d['packages']['node_modules/@playwright/test']['version'])")
+          echo "playwright_version=${PW_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Playwright version from package-lock.json: ${PW_VERSION}"
 
       - name: Assert caller's expected fingerprint matches this checkout
         # Runs only on the workflow_call path (integration.yml planner -> build).
@@ -199,7 +212,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build image (load only, gha cache export)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
         with:
           context: .
           file: .github/docker/ijt-browser-ci/Dockerfile
@@ -210,6 +223,7 @@ jobs:
             IMAGE_BUILD_REF=${{ github.ref }}
             IMAGE_BUILD_SHA=${{ steps.decide.outputs.source_sha }}
             IMAGE_INPUTS_FINGERPRINT=${{ steps.fingerprint.outputs.inputs_fingerprint }}
+            IMAGE_PLAYWRIGHT_VERSION=${{ steps.playwright.outputs.playwright_version }}
           cache-from: type=gha,scope=ijt-browser-ci
           cache-to: type=gha,scope=ijt-browser-ci,mode=max
 
@@ -372,15 +386,15 @@ jobs:
       tags: ${{ steps.meta.outputs.tags }}
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c  # v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0  # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -418,7 +432,7 @@ jobs:
 
       - name: Push image (cache from build job)
         id: push
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
         with:
           context: .
           file: .github/docker/ijt-browser-ci/Dockerfile
@@ -428,6 +442,7 @@ jobs:
             IMAGE_BUILD_REF=${{ github.ref }}
             IMAGE_BUILD_SHA=${{ needs.build.outputs.source_sha }}
             IMAGE_INPUTS_FINGERPRINT=${{ needs.build.outputs.inputs_fingerprint }}
+            IMAGE_PLAYWRIGHT_VERSION=${{ needs.build.outputs.playwright_version }}
           provenance: true
           sbom: true
           cache-from: type=gha,scope=ijt-browser-ci
@@ -511,12 +526,12 @@ jobs:
       packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
       - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0  # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

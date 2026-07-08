@@ -108,6 +108,15 @@ def test_pypi_https_preflight_checks_json_endpoint(monkeypatch):
     assert seen == ["https://pypi.org/pypi/pip/json"]
 
 
+def test_target_server_profile_parser_flags():
+    parser = _mod._build_parser()
+
+    args = parser.parse_args(["--target-server-profile", "profile.yaml", "--target-server-preflight-strict"])
+
+    assert args.target_server_profile == "profile.yaml"
+    assert args.target_server_preflight_strict is True
+
+
 def test_pip_audit_timeout_is_advisory_skip():
     timeout_output = "[TIMEOUT] Command exceeded 30s limit: pip-audit\n"
     with (
@@ -302,7 +311,7 @@ def test_counter_mixed_suite_warn_does_not_cause_suite_fail():
 
 
 def test_live_tests_collect_default_coverage_without_fail_gate():
-    """Live conformance tests collect coverage XML without enforcing fail_under."""
+    """Live specification tests collect coverage XML without enforcing fail_under."""
     with (
         patch.object(_mod, "_tool_available", return_value=True),
         patch.object(_mod, "_print_test_count"),
@@ -312,7 +321,7 @@ def test_live_tests_collect_default_coverage_without_fail_gate():
 
     assert result.ok
     args = run_pytest.call_args.args[0]
-    assert "conformance" in args
+    assert "specification_tests" in args
     assert "--cov=helpers" in args
     assert "--cov-append" in args
     assert "--cov-report=term-missing" not in args

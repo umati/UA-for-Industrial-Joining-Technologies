@@ -34,7 +34,7 @@ import pytest
 import pytest_asyncio
 from asyncua import Client
 
-from helpers.cu_compliance_report import CuComplianceReportRecorder
+from helpers.cu_coverage_report import CuCoverageReportRecorder
 from helpers.profile_loader import get_skip_reason, load_all_cus_from_facets, load_supported_cus
 
 # Loaded once at collection time — all tests see the same supported-CU set.
@@ -132,12 +132,12 @@ def pytest_configure(config):
         _SUPPORTED_CUS = None  # None = no gating; run everything
 
     config.pluginmanager.register(
-        CuComplianceReportRecorder(
+        CuCoverageReportRecorder(
             root=_project_root,
             all_cus=load_all_cus_from_facets(),
             supported_cus=_SUPPORTED_CUS,
         ),
-        "ijt-cu-compliance-report",
+        "ijt-cu-coverage-report",
     )
 
 
@@ -184,6 +184,7 @@ from helpers.namespaces import (
     ALL_NAMESPACE_URIS,
     BN,
     NS_APP,
+    NS_DI,
     NS_IJT_BASE,
     NS_MACH_RESULT,
 )
@@ -661,20 +662,58 @@ async def subscription_client(session_client):
 
 
 # ─── Trigger fixtures (function-scoped, use module-scoped opcua_client) ──────
+def _target_server_profile_path() -> str:
+    """Return the optional Target Server CU profile path for live runner mode."""
+    return os.environ.get("OPCUA_TARGET_SERVER_PROFILE", "")
+
+
+def _target_server_mode_allows_waiting() -> bool:
+    """Return True when the Target Server runner is in guided/manual mode."""
+    return os.environ.get("OPCUA_TARGET_SERVER_MODE", "").lower() == "guided"
+
+
+async def _find_simulation_child(joining_system, ns_app: int | None, child_name: str):
+    """Find a simulator child folder without invoking another async fixture."""
+    if ns_app is None:
+        return None
+    simulations = await find_child_by_browse_name(joining_system, BN.SIMULATIONS, ns_app)
+    if simulations is None:
+        return None
+    return await find_child_by_browse_name(simulations, child_name, ns_app)
+
+
 @pytest_asyncio.fixture(scope="function")
-async def result_trigger(opcua_client, simulate_results_folder, ns_indices):
+async def result_trigger(opcua_client, joining_system, ns_indices):
     """
     Function-scoped ResultTrigger.
     Returns SimulatorResultTrigger when the simulator's SimulateResults folder is available.
     Returns ExternalResultTrigger (no-op, causes test to skip) when running against a real
-    controller that does not expose simulator methods.
-    Controller teams can override this by setting OPCUA_TRIGGER_CLASS env var.
+    server that does not expose simulator methods.
+    Target Server runs can override this by setting OPCUA_TARGET_SERVER_PROFILE.
+    Implementers can also override this by setting OPCUA_TRIGGER_CLASS env var.
     """
+    ns_app = ns_indices.get(NS_APP)
+    target_profile_path = _target_server_profile_path()
+    if target_profile_path:
+        from helpers.target_server_cu_config import load_target_server_profile
+        from helpers.target_server_triggers import make_target_server_result_trigger
+
+        profile = load_target_server_profile(Path(target_profile_path))
+        return make_target_server_result_trigger(
+            opcua_client,
+            joining_system,
+            ns_app or 0,
+            profile,
+            ns_ijt=ns_indices.get(NS_IJT_BASE),
+            ns_di=ns_indices.get(NS_DI),
+            allow_waiting=_target_server_mode_allows_waiting(),
+        )
+
     from helpers.trigger import make_result_trigger
 
-    ns_app = ns_indices.get(NS_APP)
+    simulate_results_folder = await _find_simulation_child(joining_system, ns_app, BN.SIMULATE_RESULTS_FOLDER)
     trigger = make_result_trigger(opcua_client, simulate_results_folder, ns_app)
-    # Allow controller teams to inject their own trigger implementation
+    # Allow implementers to inject their own trigger implementation.
     trigger_class_path = os.environ.get("OPCUA_TRIGGER_CLASS")
     if trigger_class_path:
         try:
@@ -693,15 +732,28 @@ async def result_trigger(opcua_client, simulate_results_folder, ns_indices):
 
 
 @pytest_asyncio.fixture(scope="function")
-async def event_trigger(opcua_client, simulate_events_folder, ns_indices):
+async def event_trigger(opcua_client, joining_system, ns_indices):
     """
     Function-scoped EventTrigger.
     Returns SimulatorEventTrigger when the simulator's SimulateEventsAndConditions folder is available.
     Returns ExternalEventTrigger (no-op, causes test to skip) otherwise.
+    Target Server runs can override this by setting OPCUA_TARGET_SERVER_PROFILE.
     """
+    target_profile_path = _target_server_profile_path()
+    if target_profile_path:
+        from helpers.target_server_cu_config import load_target_server_profile
+        from helpers.target_server_triggers import make_target_server_event_trigger
+
+        profile = load_target_server_profile(Path(target_profile_path))
+        return make_target_server_event_trigger(
+            profile,
+            allow_waiting=_target_server_mode_allows_waiting(),
+        )
+
     from helpers.trigger import make_event_trigger
 
     ns_app = ns_indices.get(NS_APP)
+    simulate_events_folder = await _find_simulation_child(joining_system, ns_app, BN.SIMULATE_EVENTS_AND_CONDITIONS)
     return make_event_trigger(opcua_client, simulate_events_folder, ns_app)
 
 

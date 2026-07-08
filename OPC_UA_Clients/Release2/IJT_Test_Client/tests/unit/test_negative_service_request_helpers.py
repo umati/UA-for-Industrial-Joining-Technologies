@@ -2,8 +2,8 @@
 
 from asyncua import ua
 
-from conformance.test_joining_system_base import _expanded_nodeid
-from conformance.test_result_management import _delete_nodes_parameters
+from specification_tests.test_joining_system_base import _expanded_nodeid
+from specification_tests.test_result_management import _delete_nodes_parameters
 
 
 def test_expanded_nodeid_preserves_nodeid_components() -> None:

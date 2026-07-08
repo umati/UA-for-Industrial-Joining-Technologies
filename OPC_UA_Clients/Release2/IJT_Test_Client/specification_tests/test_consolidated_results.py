@@ -1,5 +1,5 @@
 """
-Conformance tests for Consolidated and Combined Results — OPC 40450-1 IJT Base.
+specification tests for Consolidated and Combined Results — OPC 40450-1 IJT Base.
 
 Covered conformance units:
 

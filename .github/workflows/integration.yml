@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# System Tests — Live OPC UA, Browser, Docker, Conformance
+# System Tests — Live OPC UA, Browser, Docker, Specification Testing
 #
 # TIER: integration (non-blocking) — skips and failures are tracked but do
 # not gate merges. See docs/TEST_TIERS.md for the full tier policy and the
@@ -25,7 +25,7 @@
 #   - Push / PR touching server or client code paths (see path filters below)
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: "System Tests — Live OPC UA, Browser, Docker, Conformance"
+name: "System Tests — Live OPC UA, Browser, Docker, Specification Testing"
 
 on:
   schedule:
@@ -48,7 +48,7 @@ on:
       - 'OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator_Linux/**'
       # Web Client — local live suites cover Python backend contracts and Playwright E2E.
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
-      # Test Client — every change is an OPC UA conformance test change
+      # Test Client — every change is an OPC UA specification test change
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
       # Console Client — live/OPC UA security tests run here (not in fast CI)
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
@@ -128,7 +128,7 @@ jobs:
       run_opcua_security: ${{ steps.filter.outputs.run_opcua_security }}
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -179,7 +179,7 @@ jobs:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
@@ -207,17 +207,17 @@ jobs:
 
       - name: Log in to Docker Hub (optional — increases pull rate limit)
         if: env.DOCKERHUB_USERNAME != ''
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0  # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c  # v4
 
       - name: Build Docker image (Linux native binary, no cache write)
         if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
         with:
           context: OPC_UA_Servers/Release2
           tags: opcua-ijt-server:ci
@@ -226,7 +226,7 @@ jobs:
 
       - name: Build Docker image (Linux native binary, trusted cache write)
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
         with:
           context: OPC_UA_Servers/Release2
           tags: opcua-ijt-server:ci
@@ -276,7 +276,7 @@ jobs:
           print(f"OPC UA HELLO ack in {result.elapsed_seconds}s (attempts={result.attempts})")
           PY
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.14"
 
@@ -326,22 +326,22 @@ jobs:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
       - name: Log in to Docker Hub (optional — increases pull rate limit)
         if: env.DOCKERHUB_USERNAME != ''
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0  # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c  # v4
 
       - name: Build Web Client Docker image (test target)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
         with:
           context: .
           file: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
@@ -378,7 +378,7 @@ jobs:
           retention-days: 14
 
       - name: Build Web Client Docker image (production target)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
         with:
           context: .
           file: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
@@ -430,11 +430,11 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.14"
 
@@ -477,7 +477,7 @@ jobs:
           OPCUA_CAPABILITIES_FILE: server_capabilities.simulator.yaml
         run: |
           python -m pytest `
-            conformance/ assets/ joining_process/ results/ joint/ events/ common/ `
+            specification_tests/ assets/ joining_process/ results/ joint/ events/ common/ `
             -v --tb=short -rs --timeout=120 `
             --durations=30 `
             --junitxml=test-results/pytest.xml `
@@ -492,7 +492,7 @@ jobs:
         run: |
           python scripts/make_excel_report.py
           # Visible GitHub run-page summary is owned by the 📋 System Tests Report job below.
-          python scripts/make_conformance_summary.py --github-summary=never
+          python scripts/make_specification_test_summary.py --github-summary=never
 
       - name: Collect test results into flat directory
         if: always()
@@ -549,11 +549,11 @@ jobs:
             label: "WebSocket Connection"
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.14"
 
@@ -637,16 +637,16 @@ jobs:
       candidate_digest: ${{ steps.decide.outputs.candidate_digest }}
       current_fingerprint: ${{ steps.decide.outputs.current_fingerprint }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.14"
 
       - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0  # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -747,7 +747,7 @@ jobs:
       inputs_fingerprint: ${{ steps.pick.outputs.inputs_fingerprint }}
     steps:
       - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0  # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -835,12 +835,12 @@ jobs:
             shard_suffix: ""
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
       - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0  # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -917,11 +917,11 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.14"
 
@@ -988,7 +988,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
@@ -1007,7 +1007,7 @@ jobs:
             --port 40464 `
             --diagnostics-dir OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/readiness
 
-      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2  # v5
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1  # v5
         with:
           dotnet-version: '10.x'
 
@@ -1166,15 +1166,15 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.14"
 
-      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2  # v5
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1  # v5
         with:
           dotnet-version: '10.x'
 
@@ -1243,11 +1243,11 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.14"
 
@@ -1287,11 +1287,11 @@ jobs:
       checks: write
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.14"
 
@@ -1343,12 +1343,12 @@ jobs:
           fail-on-error: false
           fail-on-empty: false
 
-      - name: "Report — Test Client Conformance Tests"
+      - name: "Report — Test Client Specification Tests"
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
         if: always()
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
-          name: "Test Client — Conformance Tests (Live)"
+          name: "Test Client — Specification Tests (Live)"
           path: all-results/results-testclient/pytest.xml
           reporter: java-junit
           use-actions-summary: false
@@ -1444,7 +1444,7 @@ jobs:
       - name: Collect Timing JSON
         if: always()
         env:
-          TIMING_WORKFLOW_NAME: "System Tests — Live OPC UA, Browser, Docker, Conformance"
+          TIMING_WORKFLOW_NAME: "System Tests — Live OPC UA, Browser, Docker, Specification Testing"
           TIMING_OUTPUT_DIR: timing-results
           GH_REPOSITORY:  ${{ github.repository }}
           GH_RUN_ID:      ${{ github.run_id }}

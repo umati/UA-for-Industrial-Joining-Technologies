@@ -1,10 +1,21 @@
 # Reference Workflows
 
-This folder contains portable reference workflow scenarios for IJT client
-demonstrations and future workflow-level automation.
+This folder contains **static reference workflows** for IJT client demonstrations
+and manual reviews.
 
-Each workflow is described as reviewable YAML so the same definition can support
-documentation, interactive walkthroughs, and future live execution.
+Static means:
+
+- no OPC UA connection is opened;
+- no methods are called on a server;
+- no CU result is passed or failed;
+- the YAML is rendered into a Markdown or terminal walkthrough only.
+
+Use this folder when you need a readable checklist or demo of the expected
+joining-process flow. Use `run_target_server_cu.py` when you need preflight,
+classification, or CU evidence for a server under test.
+
+The reference workflow is intentionally kept separate from Target Server CU
+execution. It explains the workflow to people; it does not validate a server.
 
 ## Current Workflow
 
@@ -26,6 +37,5 @@ Run it step by step in a terminal:
 python scripts/run_reference_workflow.py --interactive
 ```
 
-The current runner is a deterministic demo/report lane. It does not contact an
-OPC UA server. Live workflow execution should be added as a separate mode after
-the reviewed workflow data is stable.
+The current runner does not contact an OPC UA server. It is a documentation and
+walkthrough tool, not a conformance test runner.

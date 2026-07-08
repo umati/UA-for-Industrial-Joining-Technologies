@@ -21,14 +21,14 @@ Use `run_all_tests.py` as the only test runner entry point.
 
 See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail explanations, and Excel output details.
 
-Reference workflow walkthroughs are separate from conformance compliance
+Reference workflow walkthroughs are separate from specification test
 validation. They are driven by YAML under `reference_workflows/`, render
 Markdown tables for review or Teams demos, and are not collected by default
 Phase 2 runs.
 
 `python run_all_tests.py` is the full orchestrator. Phase 1 runs static,
 security, unit, type, and formatting checks. Phase 2 runs the live
-server-facing compliance/conformance suite and defaults to `conformance` so
+server-facing specification test suite and defaults to `specification_tests` so
 unit tests are not duplicated after Phase 1. Phase 2 appends helper coverage
 diagnostics to `test-results/coverage-combined.xml` and disables only the live
 coverage fail-under gate; the hard helper coverage gate belongs to the Phase 1
@@ -37,14 +37,14 @@ unit stage and is currently 95%.
 ### Report Output Behavior
 
 - `run_all_tests.py` writes JUnit XML to `test-results/pytest-live.xml` by default (or `--junit-xml FILE`).
-- Live CU compliance output is `test-results/cu-compliance-report.json`; unit-stage plugin output is redirected to `test-results/cu-compliance-report-unit.json` when CU-marked tests are collected.
+- Live CU coverage output is `test-results/cu-coverage-report.json`; unit-stage plugin output is redirected to `test-results/cu-coverage-report-unit.json` when CU-marked tests are collected.
 - In each `by_cu` row, `outcome` is the raw execution rollup kept for compatibility; `compliance` is the conservative report status consumed by GitHub/Excel. New tooling should read `compliance`.
-- The live CU compliance report includes workbook traceability for the checked-in Test Cases workbook: 1,122 expected TC header rows grouped by official CU, positive/negative classification, CTT/review/spec-link metadata, and optional exact row links from `@pytest.mark.workbook_ref("Sheet", [row])`.
-- Unit-only and collect-only pytest sessions must not write or overwrite the live CU compliance report.
+- The live CU coverage report includes workbook traceability for the checked-in Test Cases workbook: 1,122 expected TC header rows grouped by official CU, positive/negative classification, CTT/review/spec-link metadata, and optional exact row links from `@pytest.mark.workbook_ref("Sheet", [row])`.
+- Unit-only and collect-only pytest sessions must not write or overwrite the live CU coverage report.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
 - Default is `always` locally and in CI; the Excel post-step is non-fatal. When tests fail, the workbook is diagnostic and includes a red warning banner.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
-- Excel and GitHub Actions summaries include explicit Validation Health and Server Support Coverage metrics, change from `test-results/report-baseline.json`, capability support, Action Items, Scope Notes, Facet Breakdown, CU Detail, and diagnostics when the live CU compliance report is present. The 0–100 composite score is an internal-only trend field in the baseline JSON.
+- Excel and GitHub Actions summaries include explicit Validation Health and Server Support Coverage metrics, change from `test-results/report-baseline.json`, capability support, Action Items, Scope Notes, Facet Breakdown, CU Detail, and diagnostics when the live CU coverage report is present. The 0–100 composite score is an internal-only trend field in the baseline JSON.
 - Report wording separates `Server capability profile`, `Reference IJT facet`, `Reference full CU set`, `Server Supported CUs`, `Server Support %`, `Supported CUs Validated %`, `Result`, `Status`, and `Primary Reason` for public clarity.
 - `report-baseline.json` is local/job-local in the current implementation; do not add GitHub Actions cache or cross-run baseline download without a separate security review.
 - Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
@@ -69,7 +69,7 @@ The runner refreshes `pip` before the requirements-hash fast path so stale boots
 The runner invokes Pyright with the active Python interpreter (`.venv_test` normally, `.venv_ci` for local `--ci-mode`) so installed dependencies are resolved consistently during local checks.
 `mypy` is blocking in local Phase 1 and uses the same command as CI:
 `python -m mypy . --ignore-missing-imports --no-error-summary`. Its output is
-written to `test-results/mypy.txt`, so strict type issues in conformance files
+written to `test-results/mypy.txt`, so strict type issues in specification_tests files
 are caught before CI.
 
 A **Python pytest suite** that validates an OPC UA server implementing the
@@ -166,10 +166,10 @@ Objects/
 ```
 
 Event and condition validation has two layers:
-- `conformance/test_event_condition_catalog.py` walks every simulator id
+- `specification_tests/test_event_condition_catalog.py` walks every simulator id
   `1..60` by use-case category and verifies each id as a
   `JoiningSystemEventType` and as a retained `JoiningSystemConditionType`.
-- `conformance/test_joining_system_condition_methods.py` samples standard OPC
+- `specification_tests/test_joining_system_condition_methods.py` samples standard OPC
   UA condition methods against received `JoiningSystemConditionType`
   notifications: Acknowledge, Confirm, AddComment, Enable/Disable, invalid
   EventId rejection, and ConditionRefresh.
@@ -177,8 +177,8 @@ Event and condition validation has two layers:
 Focused checks against a locally running Debug server:
 
 ```bash
-python -m pytest conformance/test_event_condition_catalog.py conformance/test_joining_system_condition_methods.py -q
-python -m pytest conformance/test_events.py events -q
+python -m pytest specification_tests/test_event_condition_catalog.py specification_tests/test_joining_system_condition_methods.py -q
+python -m pytest specification_tests/test_events.py events -q
 ```
 
 ---
@@ -193,7 +193,7 @@ IJT_Test_Client/
 ├── pyproject.toml                ← asyncio_mode=auto, timeout=120, mypy check_untyped_defs=true (+ ruff, coverage, bandit); OPC UA test dirs have [[tool.mypy.overrides]] suppressing asyncua stub false-positives
 ├── helpers/
 │   ├── namespaces.py             ← ALL type IDs and BrowseName constants
-│   ├── cu_compliance_report.py   ← pytest plugin for CU/workbook compliance JSON
+│   ├── cu_coverage_report.py     ← pytest plugin for CU coverage JSON
 │   ├── method_signature.py       ← NodeSet-derived method InputArguments guards
 │   ├── workbook_traceability.py  ← checked-in Test Cases workbook row metadata
 │   ├── reference_workflow.py     ← reference workflow demo/report renderer helpers
@@ -202,7 +202,11 @@ IJT_Test_Client/
 │   ├── event_collector.py        ← EventCollector for subscription tests
 │   ├── result_collector.py       ← events-primary result delivery
 │   ├── result_navigation.py      ← Variant unwrap + ResultContent traversal helpers
-│   └── server_manager.py         ← auto-start simulator if not running
+│   ├── server_manager.py         ← auto-start simulator if not running
+│   ├── cu_evidence_map.py        ← CU evidence kind metadata (structure/method/result/event/workflow/…)
+│   ├── target_server_cu_config.py   ← target server CU profile loader and validator
+│   ├── target_server_readiness.py   ← readiness/preflight model with typed outcome vocabulary
+│   └── target_server_triggers.py   ← StartSelectedJoiningResultTrigger, ManualResultTrigger, ManualEventTrigger
 ├── common/                       ← connection + namespace registration tests
 ├── assets/                       ← asset structure, interfaces, health, counters
 ├── results/                      ← result management structure + retrieval + simulation
@@ -211,7 +215,13 @@ IJT_Test_Client/
 │   └── data_types/
 ├── joining_process/              ← JoiningProcessManagement structure + methods
 ├── joint/                        ← JointManagement structure + methods
-├── conformance/                  ← Conformance Unit tests (asset, result, event, joining process, joint)
+├── specification_tests/          ← Specification Unit tests (asset, result, event, joining process, joint)
+├── target_server_cu_profiles/       ← Target Server CU execution profiles (sanitized examples)
+│   ├── README.md                 ← Profile usage, commands, sanitization rules
+│   ├── template.yaml             ← Commented schema template with safe defaults
+│   ├── example_remote_start.yaml ← Generic profile for StartSelectedJoining target servers
+│   └── example_manual_trigger.yaml ← Generic profile for manual/physical tool trigger
+├── run_target_server_cu.py          ← Standalone target server CU runner (preflight/automated/guided)
 ├── scripts/run_reference_workflow.py ← Markdown + interactive reference workflow runner
 ├── tests/
     └── unit/                     ← Pure-logic helper tests (no OPC UA server needed)
@@ -225,12 +235,101 @@ IJT_Test_Client/
         ├── test_trigger.py
         ├── test_cu_registry.py
         ├── test_namespaces.py
-        ├── test_cu_compliance_report.py
+        ├── test_cu_coverage_report.py
         ├── test_method_signature.py
         ├── test_workbook_traceability.py
         ├── test_profile_loader.py
-        └── test_ruff_format_guard.py ← canary: ruff format must not corrupt except (A, B): clauses
+        ├── test_ruff_format_guard.py ← canary: ruff format must not corrupt except (A, B): clauses
+        ├── test_cu_evidence_map.py   ← target server CU evidence kind metadata tests
+        ├── test_target_server_cu_config.py ← target server profile loader/validator tests
+        ├── test_target_server_readiness.py ← readiness/preflight model tests
+        ├── test_target_server_triggers.py  ← StartSelectedJoiningResultTrigger, ManualResultTrigger tests
+        └── test_run_target_server_cu.py    ← target server CU runner CLI/report tests (no server needed)
 ```
+
+---
+
+## Target Server CU Execution
+
+Target Server CU execution checks an OPC UA IJT server under test (SUT). The SUT
+can be the simulator, a product/device server, or another IJT server endpoint.
+
+This path is additive. Simulator behavior, test count, report schemas, skip/fail
+semantics, and CU coverage outputs are unchanged.
+
+### Evidence Kinds
+
+`helpers/cu_evidence_map.py` maps every CU key to an evidence kind and execution flags:
+
+| Kind | Description |
+|---|---|
+| `structure` | Browse/read address-space; no state changes |
+| `method` | Call OPC UA method; may change state |
+| `result` | Requires live tightening result |
+| `consolidated_result` | Requires batch/sync/job result |
+| `event` | Requires live OPC UA event |
+| `condition` | Requires retained condition validation |
+| `workflow` | Requires joining workflow orchestration |
+| `optional_operation` | Gated by CU profile support |
+| `negative_path` | Tests invalid/rejected operations |
+| `manual` | Requires physical operator/tool action |
+
+### Trigger Modes
+
+| Mode | Adapter class | When to use |
+|---|---|---|
+| `simulate_methods` | `SimulatorResultTrigger` (existing) | Simulator only |
+| `start_selected_joining` | `StartSelectedJoiningResultTrigger` | Target server with OPC UA automation |
+| `manual_trigger` | `ManualResultTrigger` | Physical tool trigger; guided mode prompts |
+| `observe_only` | `ExternalResultTrigger` | Passive evidence; no trigger needed |
+| `none` | `ExternalResultTrigger` | No evidence path; dependent CUs blocked |
+
+### Target Server CU Runner Commands
+
+```bash
+# Preflight — no state changes, safe for any server:
+python run_target_server_cu.py --profile target_server_cu_profiles/template.yaml --preflight-only
+
+# Automated run:
+python run_target_server_cu.py --profile my_profile.yaml --mode automated
+
+# Guided run with interactive prompts:
+python run_target_server_cu.py --profile my_profile.yaml --mode guided --interactive-prompts
+
+# Override endpoint:
+python run_target_server_cu.py --profile template.yaml --endpoint opc.tcp://10.0.0.1:40451 --preflight-only
+
+# Integrate with run_all_tests.py (non-fatal by default):
+python run_all_tests.py --target-server-profile target_server_cu_profiles/example_remote_start.yaml
+
+# Make target server preflight gate the overall run:
+python run_all_tests.py --target-server-profile my_profile.yaml --target-server-preflight-strict
+```
+
+### Outcome Vocabulary
+
+Stable reason codes used in preflight reports, CU evidence, and skip reasons:
+
+| Code | Meaning |
+|---|---|
+| `passed` | All preconditions met |
+| `blocked` | Valid config but server-under-test precondition unmet |
+| `failed` | Hard check error |
+| `unsupported` | CU not supported per profile |
+| `manual_required` | Physical operator action needed |
+| `claim_mismatch` | Profile claims support but address space disagrees |
+| `configuration_error` | YAML invalid or inconsistent |
+
+### Sanitization Rules for Committed Profiles
+
+Target Server CU profiles may **not** contain:
+- Real IP addresses or hostnames
+- Real `ProductInstanceUri` serial numbers
+- Real joining process IDs or vendor names
+- Operator credentials or authentication tokens
+
+Use placeholders like `opc.tcp://<target-server-host>:40451` in committed examples.
+Store real profiles outside the repository or sanitize before committing.
 
 ### Key Fixtures (conftest.py)
 | Fixture | Scope | Description |
@@ -265,7 +364,7 @@ async with ResultCollector(client, ns_indices, is_simulator=True) as rc:
 # result is None on timeout; test should skip in that case
 ```
 
-Prefer this over `GetLatestResult`/`GetResultById` in conformance tests — events are the primary delivery path per the IJT specification.
+Prefer this over `GetLatestResult`/`GetResultById` in specification tests — events are the primary delivery path per the IJT specification.
 
 ### OpcUa_Uncertain — method call business-logic response
 ```python
@@ -386,12 +485,12 @@ return result_data
 All callers must guard: `if result_data is None: pytest.skip(...)`.
 
 Use this retry pattern only in standalone GetLatestResult-specific tests in
-`test_result_access.py`. Result conformance tests should prefer
+`test_result_access.py`. Result specification tests should prefer
 `ResultCollector`.
 
 ---
 
-## Custom Trigger Adapter (for Real Controllers)
+## Custom Trigger Adapter (for Real Target Servers)
 
 For servers that cannot simulate their own results, implement a trigger adapter:
 
@@ -409,7 +508,7 @@ Register it before running:
 
 ```bash
 export OPCUA_TRIGGER_CLASS=my_server.trigger.MyServerTrigger
-pytest conformance/
+pytest specification_tests/
 ```
 
 All tests call `result_trigger.trigger_single(...)` and skip gracefully if no trigger is available.
@@ -466,7 +565,7 @@ For the full port assignment table, auto-launch mechanics, and venv rationale, s
 
 ---
 
-## Writing New Conformance Tests
+## Writing New Specification Tests
 
 ### Passing ProductInstanceUri to counter/method calls
 

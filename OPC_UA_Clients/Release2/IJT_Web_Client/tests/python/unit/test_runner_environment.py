@@ -974,6 +974,7 @@ def test_playwright_install_skips_with_deps_on_windows(monkeypatch):
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner, "_warn", lambda message: None)
     monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+    monkeypatch.setattr(runner, "_node_tls_download_preflight", lambda node: None)
 
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
@@ -1017,6 +1018,7 @@ def test_playwright_install_uses_with_deps_on_linux(monkeypatch):
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner, "_warn", lambda message: None)
     monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+    monkeypatch.setattr(runner, "_node_tls_download_preflight", lambda node: None)
 
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
@@ -1060,6 +1062,7 @@ def test_playwright_install_fails_fast_in_ci_when_with_deps_fails(monkeypatch):
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner, "_warn", lambda message: None)
     monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+    monkeypatch.setattr(runner, "_node_tls_download_preflight", lambda node: None)
 
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
@@ -1099,6 +1102,7 @@ def test_playwright_install_retries_without_with_deps_on_local_linux(monkeypatch
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner, "_warn", lambda message: None)
     monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+    monkeypatch.setattr(runner, "_node_tls_download_preflight", lambda node: None)
 
     rcs = iter([1, 0])
 
@@ -1115,6 +1119,39 @@ def test_playwright_install_retries_without_with_deps_on_local_linux(monkeypatch
         ["/usr/local/bin/playwright", "install", "chromium", "--with-deps"],
         ["/usr/local/bin/playwright", "install", "chromium"],
     ]
+
+
+def test_playwright_install_retries_with_tls_bypass_when_preflight_fails(monkeypatch):
+    runner = _load_runner()
+    warnings: list[str] = []
+    infos: list[str] = []
+    captured_envs: list[dict] = []
+
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: f"{name}.cmd")
+    monkeypatch.setattr(runner, "_node_executable_path", lambda: "node.exe")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_warn", warnings.append)
+    monkeypatch.setattr(runner, "_info", infos.append)
+    monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+    monkeypatch.setattr(runner, "IS_WINDOWS", True)
+    monkeypatch.setattr(
+        runner,
+        "_node_tls_download_preflight",
+        lambda node: "Node cannot validate Playwright CDN TLS (UNABLE_TO_GET_ISSUER_CERT_LOCALLY)",
+    )
+
+    def mock_run(cmd, *, label="", env=None, **kwargs):
+        captured_envs.append(env or {})
+        return 0
+
+    monkeypatch.setattr(runner, "_run", mock_run)
+
+    result = runner._stage_playwright_install()
+
+    assert result.rc == 0
+    assert any("TLS bypass" in n for n in result.notes)
+    assert captured_envs[0].get("NODE_TLS_REJECT_UNAUTHORIZED") == "0"
+    assert any("UNABLE_TO_GET_ISSUER_CERT_LOCALLY" in w for w in warnings)
 
 
 def test_e2e_local_connection_waits_for_endpoint_state_not_visual_status():
@@ -1265,6 +1302,7 @@ def test_target_only_dependencies_run_before_target_stage(monkeypatch, tmp_path)
 
     monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--playwright-features-only"])
     monkeypatch.setattr(runner, "IS_CI", True)
+    monkeypatch.setattr(runner, "_ENV_IS_PRE_ISOLATED", True)
     monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "results")
     monkeypatch.setattr(runner, "_cleanup_caches", lambda root: None)
     monkeypatch.setattr(runner, "_prepare_tmp_dir", lambda: None)
@@ -1302,6 +1340,7 @@ def test_compatibility_smoke_target_uses_owned_services_without_chromium_install
 
     monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--compatibility-smoke-only"])
     monkeypatch.setattr(runner, "IS_CI", True)
+    monkeypatch.setattr(runner, "_ENV_IS_PRE_ISOLATED", True)
     monkeypatch.setattr(runner, "_RESULTS_DIR", _PROJECT_ROOT / "test-results" / "unit-compatibility-smoke-target")
     monkeypatch.setattr(runner, "_cleanup_caches", lambda root: None)
     monkeypatch.setattr(runner, "_prepare_tmp_dir", lambda: None)
@@ -1356,6 +1395,7 @@ def test_target_only_dependency_failure_stops_before_live_stage(monkeypatch, tmp
 
     monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--python-opcua-only"])
     monkeypatch.setattr(runner, "IS_CI", True)
+    monkeypatch.setattr(runner, "_ENV_IS_PRE_ISOLATED", True)
     monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "results")
     monkeypatch.setattr(runner, "_cleanup_caches", lambda root: None)
     monkeypatch.setattr(runner, "_prepare_tmp_dir", lambda: None)
@@ -1382,6 +1422,7 @@ def _phase1_lane_runner(monkeypatch, tmp_path, argv):
 
     monkeypatch.setattr(sys, "argv", ["run_all_tests.py", *argv])
     monkeypatch.setattr(runner, "IS_CI", True)
+    monkeypatch.setattr(runner, "_ENV_IS_PRE_ISOLATED", True)
     monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "results")
     monkeypatch.setattr(runner, "_cleanup_caches", lambda root: None)
     monkeypatch.setattr(runner, "_prepare_tmp_dir", lambda: None)
@@ -1739,6 +1780,93 @@ def test_playwright_config_uses_runtime_ui_port_and_no_retries():
     assert "fullyParallel: true" in source
 
 
+def test_docker_smoke_skips_when_docker_engine_is_windows(monkeypatch):
+    runner = _load_runner()
+
+    monkeypatch.setattr(runner.shutil, "which", lambda name: "docker" if name == "docker" else None)
+    monkeypatch.setattr(
+        runner,
+        "_docker_linux_engine_skip_note",
+        lambda docker: "Docker is running Windows containers; switch Docker Desktop to Linux containers",
+    )
+
+    def fail_if_build_runs(*_args, **_kwargs):
+        raise AssertionError("docker build should not run when Docker is in Windows-container mode")
+
+    monkeypatch.setattr(runner, "_run", fail_if_build_runs)
+
+    result = runner._stage_docker_smoke()
+
+    assert result.rc == 0
+    assert result.skipped
+    assert "Windows containers" in result.notes[0]
+
+
+def test_docker_linux_engine_skip_note_classifies_engine_modes(monkeypatch):
+    runner = _load_runner()
+
+    monkeypatch.setattr(runner, "_docker_engine_ostype", lambda docker: "linux")
+    assert runner._docker_linux_engine_skip_note("docker") is None
+
+    monkeypatch.setattr(runner, "_docker_engine_ostype", lambda docker: "windows")
+    assert "Windows containers" in runner._docker_linux_engine_skip_note("docker")
+
+    monkeypatch.setattr(runner, "_docker_engine_ostype", lambda docker: None)
+    assert runner._docker_linux_engine_skip_note("docker") == "Docker daemon OSType could not be determined"
+
+
+def test_node_tls_download_preflight_reports_corporate_ca_failure(monkeypatch):
+    runner = _load_runner()
+
+    class _Result:
+        returncode = 1
+        stderr = "UNABLE_TO_GET_ISSUER_CERT_LOCALLY"
+
+    monkeypatch.setattr(runner.subprocess, "run", lambda *args, **kwargs: _Result())
+
+    note = runner._node_tls_download_preflight(Path("node"))
+
+    assert note is not None
+    assert "UNABLE_TO_GET_ISSUER_CERT_LOCALLY" in note
+    assert "NODE_EXTRA_CA_CERTS" in note
+
+
+def test_node_tls_download_preflight_allows_success(monkeypatch):
+    runner = _load_runner()
+
+    class _Result:
+        returncode = 0
+        stderr = ""
+
+    monkeypatch.setattr(runner.subprocess, "run", lambda *args, **kwargs: _Result())
+
+    assert runner._node_tls_download_preflight(Path("node")) is None
+
+
+def test_playwright_install_uses_path_node_for_tls_preflight(monkeypatch):
+    runner = _load_runner()
+    preflight_nodes: list[Path | None] = []
+
+    monkeypatch.setattr(runner, "IS_WINDOWS", True)
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
+    monkeypatch.setattr(runner, "_node_executable_path", lambda: Path("C:/Tools/node.exe"))
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_warn", lambda message: None)
+    monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+
+    def fake_preflight(node):
+        preflight_nodes.append(node)
+        return None
+
+    monkeypatch.setattr(runner, "_node_tls_download_preflight", fake_preflight)
+    monkeypatch.setattr(runner, "_run", lambda *args, **kwargs: 0)
+
+    result = runner._stage_playwright_install()
+
+    assert result.rc == 0
+    assert preflight_nodes == [Path("C:/Tools/node.exe")]
+
+
 def test_e2e_fixture_passes_runtime_websocket_query():
     source = (_PROJECT_ROOT / "tests" / "e2e" / "e2e-fixtures.mjs").read_text(encoding="utf-8")
 
@@ -1924,6 +2052,7 @@ def test_playwright_install_failure_is_not_reported_as_skip(monkeypatch):
 
     monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
     monkeypatch.setattr(runner, "_playwright_chromium_available", lambda: False)
+    monkeypatch.setattr(runner, "_node_tls_download_preflight", lambda node: None)
     monkeypatch.setattr(runner, "_run", lambda *_args, **_kwargs: -1)
 
     result = runner._stage_playwright_install()

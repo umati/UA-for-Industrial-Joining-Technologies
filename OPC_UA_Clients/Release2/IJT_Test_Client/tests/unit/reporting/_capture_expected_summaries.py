@@ -1,17 +1,17 @@
-"""Maintenance helper: regenerate the expected conformance summary Markdown.
+"""Maintenance helper: regenerate the expected specification test summary Markdown.
 
 Run from the IJT_Test_Client/ directory:
 
     python tests/unit/reporting/_capture_expected_summaries.py
 
 For each fixture under ``tests/unit/reporting/fixtures/``, this re-runs the
-current conformance renderer (``scripts/reporting/conformance_summary.py``)
+current specification test renderer (``scripts/reporting/specification_test_summary.py``)
 with frozen inputs (no wall-clock time, no baseline file write, no live
 environment reads) and overwrites the corresponding expected Markdown file
 under ``tests/unit/reporting/fixtures/expected/``.
 
 Only re-run this helper when the renderer output is intentionally allowed
-to change. The byte-equality test in ``test_render_conformance_summary.py``
+to change. The byte-equality test in ``test_render_specification_test_summary.py``
 otherwise acts as the regression gate.
 """
 
@@ -22,7 +22,7 @@ from pathlib import Path
 
 # scripts/ is not a Python package; add it to sys.path so we can import the
 # renderer the same way the workflow CLI does (``python
-# scripts/make_conformance_summary.py`` puts scripts/ on sys.path[0]).
+# scripts/make_specification_test_summary.py`` puts scripts/ on sys.path[0]).
 _SCRIPTS_DIR = Path(__file__).resolve().parents[3] / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
@@ -35,15 +35,15 @@ if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 
 from _frozen_env import FIXED_RUN_TS, FIXED_SERVER_URL, FROZEN_ENV  # noqa: E402
-from make_conformance_summary import _load_baseline, _load_json, _parse  # noqa: E402
-from reporting.conformance_summary import render_conformance_summary  # noqa: E402
+from make_specification_test_summary import _load_baseline, _load_json, _parse  # noqa: E402
+from reporting.specification_test_summary import render_specification_test_summary  # noqa: E402
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_DIR = FIXTURES_DIR / "expected"
 
 CASES = [
     ("ci_unit_no_cu_payload", "ci_unit_no_cu_payload.md"),
-    ("system_tests_full_conformance", "system_tests_full_conformance.md"),
+    ("system_tests_full_specification_coverage", "system_tests_full_specification_coverage.md"),
 ]
 
 
@@ -53,7 +53,7 @@ def render_fixture(fixture_dir: Path) -> str:
     baseline_json = fixture_dir / "baseline.json"
     cu_payload = _load_json(cu_json) if cu_json.exists() else None
     baseline = _load_baseline(baseline_json) if baseline_json.exists() else None
-    md, _ctx = render_conformance_summary(
+    md, _ctx = render_specification_test_summary(
         data,
         FIXED_SERVER_URL,
         FIXED_RUN_TS,

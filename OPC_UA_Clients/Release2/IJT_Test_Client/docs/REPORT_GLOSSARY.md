@@ -1,15 +1,15 @@
-# IJT Report Glossary and Reading Guide
+﻿# IJT Report Glossary and Reading Guide
 
 **Status:** authoritative in-repo terminology reference for the IJT Test
-Client conformance summary renderer
-(`scripts/reporting/conformance_summary.py`) and the Excel parity report
+Client specification test summary renderer
+(`scripts/reporting/specification_test_summary.py`) and the Excel parity report
 (`scripts/make_excel_report.py`).
 
 **Audience tags:** 👔 management - 🛠 dev - 🧪 test - 📦 customer
 
 This glossary defines every term that appears in:
-- the Test Client conformance summary (`scripts/reporting/conformance_summary.py`,
- invoked via `scripts/make_conformance_summary.py` from
+- the Test Client specification test summary (`scripts/reporting/specification_test_summary.py`,
+ invoked via `scripts/make_specification_test_summary.py` from
  `.github/workflows/integration.yml`)
 - the repo-wide CI summary table (`reporting/ci_run_summary.py`, invoked by
  `.github/workflows/ci.yml` job `report`)
@@ -30,7 +30,7 @@ cited symbol moves, the glossary entry moves with it.
 | Current display name | Source anchor | What it means |
 |---|---|---|
 | `CI — Unit, Static, and Smoke Gates` | `.github/workflows/ci.yml` (`name:` field) | Pull-request gate for unit suites, static analysis, vulnerability scans, and required smoke checks. |
-| `System Tests — Live OPC UA, Browser, Docker, Conformance` | `.github/workflows/integration.yml` (`name:` field) | Nightly + manual full system run against live OPC UA server, browser end-to-end suites, Docker compose, and conformance harness. |
+| `System Tests — Live OPC UA, Browser, Docker, Specification Testing` | `.github/workflows/integration.yml` (`name:` field) | Nightly + manual full system run against live OPC UA server, browser end-to-end suites, Docker compose, and specification testing harness. |
 | `Security — CodeQL` | `.github/workflows/codeql.yml` (`name:` field) | Semantic source analysis through GitHub native code scanning. Matrix job names `Analyze (javascript)`, `Analyze (csharp)`, and `Analyze (python)` stay unchanged because ruleset `15294123` requires those contexts. |
 | `Web Client — Browser Compatibility Smoke` | `.github/workflows/web-client-compatibility-smoke.yml` (`name:` field) | Scheduled/manual browser smoke for audited Web Client file surfaces. The issue key `[Web Client Compatibility Smoke]` stays unchanged for continuity. |
 
@@ -49,36 +49,36 @@ cited symbol moves, the glossary entry moves with it.
 
 ---
 
-## 2. Conformance report top-level terms
+## 2. Specification test report top-level terms
 
-### 2.1 `📊 Conformance Overview` 👔 🛠️ 🧪 📦
-Source: `scripts/reporting/conformance_summary.py` (`## 📊 Conformance Overview` heading and KPI table emitted in `render_conformance_summary()`).
-Rendered as a **four-column KPI strip** (`Server Support Coverage` | `Validation Health` | `Conformance Action Items` | `Server Scope Notes`) **plus a four-cell context row** beneath it. All KPI labels are plain text.
+### 2.1 `📊 Specification Test Overview` 👔 🛠️ 🧪 📦
+Source: `scripts/reporting/specification_test_summary.py` (`## 📊 Specification Test Overview` heading and KPI table emitted in `render_specification_test_summary()`).
+Rendered as a **four-column KPI strip** (`Server Support Coverage` | `Validation Health` | `Specification Test Action Items` | `Server Scope Notes`) **plus a four-cell context row** beneath it. All KPI labels are plain text.
 
-`Conformance Action Items` renders **`Failed` · `Blocked`** and means work to investigate or fix. `Server Scope Notes` renders **`Not Supported` · `With Notes`** and means capability gaps or caveats for context.
+`Specification Test Action Items` renders **`Failed` · `Blocked`** and means work to investigate or fix. `Server Scope Notes` renders **`Not Supported` · `With Notes`** and means capability gaps or caveats for context.
 
-The IJT Facet Support summary splits the support icon into its own `🚦` marker, and the IJT Facet Support and Conformance Overview sections include one-line legends for the support and review icon meanings.
+The IJT Facet Support summary splits the support icon into its own `🚦` marker, and the IJT Facet Support and Specification Test Overview sections include one-line legends for the support and review icon meanings.
 
 ### 2.2 `Server Support Coverage` 👔 🛠️ 📦
-Source: `scripts/reporting/conformance_summary.py` — `Server Support Coverage` column header in the `## 📊 Conformance Overview` KPI table; value is the local `spec_coverage_value` computed in `render_conformance_summary()`.
+Source: `scripts/reporting/specification_test_summary.py` — `Server Support Coverage` column header in the `## 📊 Specification Test Overview` KPI table; value is the local `spec_coverage_value` computed in `render_specification_test_summary()`.
 The share of OPC 40100 Joining Test Result CUs (Conformance Units) that the **server under test claims to support** in its capability file.
 - **Numerator:** CUs the server lists as supported.
 - **Denominator:** CUs in the active profile (facet or full set).
 - Example: 78% means the server says it supports 78% of the CUs in the active profile.
 
 ### 2.3 `Validation Health` 👔 🛠️ 🧪 📦
-Source: `scripts/reporting/conformance_summary.py` — `Validation Health` column header in the `## 📊 Conformance Overview` KPI table; value is the local `validation_health_value` computed in `render_conformance_summary()` via `_supported_cus_validated_pct_value()`.
+Source: `scripts/reporting/specification_test_summary.py` — `Validation Health` column header in the `## 📊 Specification Test Overview` KPI table; value is the local `validation_health_value` computed in `render_specification_test_summary()` via `_supported_cus_validated_pct_value()`.
 The share of server-supported CUs that this run validated as **Supported** or **Supported with Notes**.
 - **Numerator:** CUs validated as Supported or Supported with Notes.
 - **Denominator:** CUs the server says it supports.
 - Example: 95% means 95% of the CUs the server claims to support were proven by tests.
 
-### 2.4 `Conformance Action Items` and `Server Scope Notes` 👔 🛠️ 🧪 📦
-Source: `scripts/reporting/conformance_summary.py` — `Conformance Action Items` and `Server Scope Notes` column headers in the `## 📊 Conformance Overview` KPI table; cells rendered via `_format_status_counts(...)` from `helpers/report_scoring.py` (the `findings_count` Counter is built in `render_conformance_summary()`).
+### 2.4 `Specification Test Action Items` and `Server Scope Notes` 👔 🛠️ 🧪 📦
+Source: `scripts/reporting/specification_test_summary.py` — `Specification Test Action Items` and `Server Scope Notes` column headers in the `## 📊 Specification Test Overview` KPI table; cells rendered via `_format_status_counts(...)` from `helpers/report_scoring.py` (the `findings_count` Counter is built in `render_specification_test_summary()`).
 Compressed status counts across all CUs. The split renders the four KPI labels from `KPI_LABELS` in `helpers/report_scoring.py` as two reader layers:
 
 ```
-Conformance Action Items: Failed · Blocked
+Specification Test Action Items: Failed · Blocked
 Server Scope Notes:       Not Supported · With Notes
 ```
 
@@ -117,7 +117,7 @@ Current table shapes:
 The internal JSON key remains `action_needed` so existing machine-readable data stays stable. The public label is `Failed`.
 
 ### 3.2 `Failures` 🛠️ 🧪
-Source: `scripts/reporting/conformance_summary.py` — `Failures` column header in the `CUs Needing Review` table; Excel parity in the `Failures` column emitted by `make_excel_report.py`.
+Source: `scripts/reporting/specification_test_summary.py` — `Failures` column header in the `CUs Needing Review` table; Excel parity in the `Failures` column emitted by `make_excel_report.py`.
 The single count of failures and harness/runtime errors. The code already collapses these into one number; the column name matches the column header used by `_build_filtered(..., "Test Failures", ...)` in `make_excel_report.py`.
 
 > Note: The column `Failures` counts pytest `failed + errors`. The CU **outcome** label `Failed` is not the same field: `Failures` is a per-CU count of underlying test failures+errors; `Failed` is the CU-level outcome bucket.
@@ -136,39 +136,39 @@ The single count of failures and harness/runtime errors. The code already collap
 > [Markdown Sections](#markdown-sections) tables below.
 
 ### 4.1 `IJT Facet Breakdown` 🛠️ 🧪
-Source: `scripts/reporting/conformance_summary.py` — `## 📐 IJT Facet Breakdown`; full IJT facet details are emitted by `_render_supports_block()`. The Excel workbook mirrors this as the `IJT Facet Breakdown` sheet built by `_build_facet_coverage(...)` in `make_excel_report.py`.
+Source: `scripts/reporting/specification_test_summary.py` — `## 📐 IJT Facet Breakdown`; full IJT facet details are emitted by `_render_supports_block()`. The Excel workbook mirrors this as the `IJT Facet Breakdown` sheet built by `_build_facet_coverage(...)` in `make_excel_report.py`.
 The table of facet-level rows that breaks down validation by IJT Companion Spec facet of the OPC 40100 profile.
 
 ### 4.2 `Server Scope Notes` 🛠️ 🧪
-Source: `scripts/reporting/conformance_summary.py` — `Server Scope Notes` column header in the `## 📊 Conformance Overview` KPI table.
-Per-CU notes about CUs that are **not** action items (no failure, no block) but still need explanation. The count remains in Conformance Overview; the old standalone Markdown section was removed because the same review rows now live in `CUs Needing Review`. The label deliberately avoids `Exceptions`, because "Exception" has a specific meaning in the OPC UA spec (a StatusCode-bearing condition) and reusing that term in the report would be confusing.
+Source: `scripts/reporting/specification_test_summary.py` — `Server Scope Notes` column header in the `## 📊 Specification Test Overview` KPI table.
+Per-CU notes about CUs that are **not** action items (no failure, no block) but still need explanation. The count remains in Specification Test Overview; the old standalone Markdown section was removed because the same review rows now live in `CUs Needing Review`. The label deliberately avoids `Exceptions`, because "Exception" has a specific meaning in the OPC UA spec (a StatusCode-bearing condition) and reusing that term in the report would be confusing.
 
 ### 4.3 `Profile Coverage Comparison` 👔 🛠️ 🧪 📦
 Excel-only sheet built by `_build_profile_coverage(...)` in `make_excel_report.py`. It compares the active profile against the server's declared capability set, surfacing per-profile CU totals, supported counts, and outcomes side by side. The markdown report intentionally omits this comparison because the same numbers are already covered by the KPI strip and the facet rows; the sheet exists as a deep-dive lens for Excel readers.
 
 ### 4.4 `CUs Needing Review` and `Conformance Unit Details` 🛠️ 🧪
-Source: `scripts/reporting/conformance_summary.py` (`## 📋 CUs Needing Review`) and Excel parity in the `Conformance Unit Details` sheet built by `_build_cu_coverage(...)` in `make_excel_report.py`.
+Source: `scripts/reporting/specification_test_summary.py` (`## 📋 CUs Needing Review`) and Excel parity in the `Conformance Unit Details` sheet built by `_build_cu_coverage(...)` in `make_excel_report.py`.
 The Markdown report is action-first: it shows only review-needed rows with `Status | CU | Server Supported | Reason | Tests | Passed | Not Supported | Blocked | Failures`. The Excel workbook remains the full-detail artifact and keeps every CU, workbook-case counts, raw outcome, review status, and example tests.
 
 ### 4.5 `Skip & Expected-Failure Diagnostics` 🛠️ 🧪
-Source: `scripts/reporting/conformance_summary.py` `Skip & Expected-Failure Diagnostics` `<details>` block and `reporting/system_tests_run_summary.py` grouped System Tests diagnostics. Skip-reason and expected-failure histograms for diagnostic purposes only. The markdown view filters out `Not Supported:` reasons because those are already represented in `CUs Needing Review`; the Excel `Skipped Test Cases` sheet keeps raw JUnit evidence and adds a filterable `Category` column for `Test Tooling Limitations`, `Companion Spec Profile Notes`, `Simulator Regression Limits`, and `Other Diagnostics`.
+Source: `scripts/reporting/specification_test_summary.py` `Skip & Expected-Failure Diagnostics` `<details>` block and `reporting/system_tests_run_summary.py` grouped System Tests diagnostics. Skip-reason and expected-failure histograms for diagnostic purposes only. The markdown view filters out `Not Supported:` reasons because those are already represented in `CUs Needing Review`; the Excel `Skipped Test Cases` sheet keeps raw JUnit evidence and adds a filterable `Category` column for `Test Tooling Limitations`, `Companion Spec Profile Notes`, `Simulator Regression Limits`, and `Other Diagnostics`.
 
 ---
 
 ## 5. Document structure terms
 
 ### 5.1 Glossary link 👔 🛠️ 🧪 📦
-Source: `scripts/reporting/conformance_summary.py` footer.
+Source: `scripts/reporting/specification_test_summary.py` footer.
 The generated report links to `docs/REPORT_GLOSSARY.md` instead of repeating the glossary inline. This file is the authoritative in-repo terminology reference.
 
 ### 5.2 `Skip & Expected-Failure Diagnostics` 🛠️ 🧪
-Source: `scripts/reporting/conformance_summary.py` collapsed `<details>` block heading.
+Source: `scripts/reporting/specification_test_summary.py` collapsed `<details>` block heading.
 The trailing diagnostics block bundles `Diagnostic Skips` and `Expected Failures` only. The Test Client Environment block ships as a separate `<details>` section, and test outcome counts live exclusively in the Excel `Test Outcome Counts` sheet.
 
 Each run is reported on its own terms; the renderer emits no baseline-driven delta UI. `test-results/report-baseline.json` is written by `_baseline_payload()` as an internal trend artifact only.
 
 ### 5.3 Bullet and Icon Convention 👔 🛠️ 🧪 📦
-Source: `reporting/system_tests_run_summary.py` result-cell helpers and the conformance summary table renderers.
+Source: `reporting/system_tests_run_summary.py` result-cell helpers and the specification test summary table renderers.
 Use icons for row status, high-level review status, non-zero outcome buckets, and the `Passed` / `Failed` / `Skipped` labels inside dense result cells. Keep parent suite labels plain and use HTML bullets plus indentation so compact tables remain readable when a cell contains both Python and JavaScript suites.
 
 ### 5.4 Grouped System Tests Diagnostics 🛠️ 🧪
@@ -189,7 +189,7 @@ server profile, the missing dependency is reported as that dependency CU's
 Server capability gaps stay in `CUs Needing Review`. They are not repeated in grouped diagnostics.
 
 ### 5.5 Result/Event Payload Boundary 🛠️ 🧪
-Source: `conformance/test_single_result_data.py` and `conformance/test_events.py`.
+Source: `specification_tests/test_single_result_data.py` and `specification_tests/test_events.py`.
 `ReportedValueDataType` belongs to `JoiningSystemEventType` and `JoiningSystemConditionType` payloads. Result events and Result payloads carry `ResultDataType` plus `BaseEventType` properties only; they must not expose `ReportedValues` or `OverallReportedValues`. Event-side `ReportedValues` engineering-unit validation remains in `test_events.py`.
 
 ### 5.6 `Full report below` Navigation Cue 👔 🛠️ 🧪 📦
@@ -209,10 +209,10 @@ Auto-detects the slowest current job/suite and appears inside the System Tests `
 ### 6.3 Timing layers 🛠️ 🧪
 - **Layer 1 (always visible):** top timing-source table built from current workflow jobs, Web Browser timing JSON, C# TRX artifacts, and Test Client JUnit durations when available.
 - **Layer 2 (always visible):** `Bottleneck Spotlight`.
-- **Layer 3 (`<details>` collapsed):** top-10 detail tables for available Web Browser, C# Live, and Test Client Conformance timing artifacts.
+- **Layer 3 (`<details>` collapsed):** top-10 detail tables for available Web Browser, C# Live, and Test Client Specification Test timing artifacts.
 
 ### 6.4 Run-page step summary ownership 🛠️ 🧪
-Perf, test-result, and Browser CI image summaries for the System Tests workflow are consolidated in the aggregator job (`📋 System Tests Report`); suite jobs (Console Client perf, Test Client perf, Browser CI image resolve, etc.) emit JUnit XML, outputs, and artifacts only and no longer write directly to `$GITHUB_STEP_SUMMARY`. This keeps the run-page summary as a single consolidated block in the audience-tiered order: banner → outcome KPIs → test results → conformance report → component results → conformance suites → skip details → performance benchmarks → performance hotspots → warnings → artifacts → per-client quick index.
+Perf, test-result, and Browser CI image summaries for the System Tests workflow are consolidated in the aggregator job (`📋 System Tests Report`); suite jobs (Console Client perf, Test Client perf, Browser CI image resolve, etc.) emit JUnit XML, outputs, and artifacts only and no longer write directly to `$GITHUB_STEP_SUMMARY`. This keeps the run-page summary as a single consolidated block in the audience-tiered order: banner → outcome KPIs → test results → specification test report → component results → specification test suites → skip details → performance benchmarks → performance hotspots → warnings → artifacts → per-client quick index.
 
 ### 6.5 `Baseline Warnings` 🛠️ 🧪
 Source: `reporting/system_tests_run_summary.py` status banner and warnings details.
@@ -221,7 +221,7 @@ Baseline warnings mean a current test-count artifact differs from the expected b
 ---
 
 ## 7. Cross-report parity (Markdown ↔ Excel) 🛠️ 🧪
-- Every term rendered in `scripts/reporting/conformance_summary.py` is rendered in lockstep in `make_excel_report.py`.
+- Every term rendered in `scripts/reporting/specification_test_summary.py` is rendered in lockstep in `make_excel_report.py`.
 - Markdown section headings and Excel sheet tab names share the same vocabulary; see the [Workbook Sheets](#workbook-sheets) and [Markdown Sections](#markdown-sections) tables.
 - Excel terminology source: column-header constants and sheet builders in `scripts/make_excel_report.py`.
 
@@ -235,7 +235,7 @@ Locked left-to-right tab order produced by `scripts/make_excel_report.py`:
 
 | # | Sheet tab | Builder | Mirrors markdown section |
 |---|---|---|---|
-| 1 | `Conformance Overview` | `_build_cover()` | `📊 Conformance Overview` (banner, KPI strip, IJT Facet Support, Server Scope Notes count) |
+| 1 | `Conformance Overview` | `_build_cover()` | `📊 Specification Test Overview` (banner, KPI strip, IJT Facet Support, Server Scope Notes count) |
 | 2 | `Test Outcome Counts` | `_build_summary()` | Excel-only outcome counts table (markdown omits this — counts live exclusively here) |
 | 3 | `IJT Facet Breakdown` | `_build_facet_coverage()` | `📐 IJT Facet Breakdown` |
 | 4 | `Conformance Unit Details` | `_build_cu_coverage()` | `📋 CUs Needing Review` in Markdown plus full CU detail in Excel |
@@ -250,21 +250,21 @@ Locked left-to-right tab order produced by `scripts/make_excel_report.py`:
 Sheet tab names mirror the markdown section vocabulary; the workbook is the authoritative artifact and any external automation should bind to these names.
 
 Sheets 3–5 are only emitted when CU JSON is present; the workbook still
-produces sheets 1, 2, 6–9 for runs without conformance data.
+produces sheets 1, 2, 6–9 for runs without CU payload data.
 
 <a id="markdown-sections"></a>
 
 ## 7.2 Markdown Sections 🛠️ 🧪 📦
 
-Top-level sections produced by `scripts/reporting/conformance_summary.py`:
+Top-level sections produced by `scripts/reporting/specification_test_summary.py`:
 
 | Heading | Renderer entry point | Workbook mirror |
 |---|---|---|
-| `# IJT Conformance Test Report` | `render_conformance_summary()` | Workbook banner row (`Conformance Overview` sheet, row 1) |
-| `## 📊 Conformance Overview` | `render_conformance_summary()` KPI table | `Conformance Overview` (rows 5–9) |
-| `## 🧩 IJT Facet Support` | `_render_supports_block()` | `Conformance Overview` (IJT Facet Support block) and `IJT Facet Breakdown` sheet |
+| `# IJT Specification Test Report` | `render_specification_test_summary()` | Workbook banner row (`Conformance Overview` sheet, row 1) |
+| `## 📊 Specification Test Overview` | `render_specification_test_summary()` KPI table | `Conformance Overview` (rows 5–9) |
+| `## 🧩 IJT Facet Support` | `_render_supports_block()` | `Specification Test Overview` (IJT Facet Support block) and `IJT Facet Breakdown` sheet |
 | `## 📋 CUs Needing Review` | `_render_profile_facet_summary()` | `Conformance Unit Details` sheet |
-| `## 📌 Conformance Action Items` | `_render_review_sections()` | `Conformance Overview` (Conformance Action Items row) |
+| `## 📌 Specification Test Action Items` | `_render_review_sections()` | `Specification Test Overview` (Specification Test Action Items row) |
 | `## 📐 IJT Facet Breakdown` | `_render_supports_block()` | `IJT Facet Breakdown` sheet |
 | `<summary><b>Test Client Environment</b></summary>` | diagnostics `<details>` | `Conformance Overview` (Test Client Environment block) |
 | `<summary><b>Skip &amp; Expected-Failure Diagnostics</b></summary>` | diagnostics `<details>` | `Skipped Test Cases` and `Expected Failures` sheets |

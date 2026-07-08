@@ -38,8 +38,58 @@ public static class IjtFileLogger
     /// <summary>Overwrites result.json with the latest result payload.</summary>
     public static void WriteResult(string content) => WriteFile(ResultLogPath, content);
 
+    /// <summary>
+    /// Writes result content to a uniquely named timestamped file in logs/results/
+    /// so that multiple results (e.g. from SimulateJobResult) are preserved.
+    /// Also updates the latest result.json snapshot for backward compatibility.
+    /// Returns the timestamped file path.
+    /// </summary>
+    public static string WriteResultTimestamped(string content, string? resultId = null, string? name = null)
+    {
+        // Always update the latest snapshot
+        WriteResult(content);
+
+        // Build unique filename: {name}_{resultId}_{timestamp}.json
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff");
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(name))
+            parts.Add(SanitizeFileName(name));
+        if (!string.IsNullOrWhiteSpace(resultId))
+            parts.Add(SanitizeFileName(resultId));
+        parts.Add(timestamp);
+        var fileName = string.Join("_", parts) + ".json";
+
+        var path = Path.Combine(ResultsLogDir, fileName);
+        WriteFile(path, content);
+        return path;
+    }
+
     /// <summary>Overwrites events/joining_system_event.json with the latest JoiningSystemEvent payload.</summary>
     public static void WriteEvent(string content) => WriteFile(EventLogPath, content);
+
+    /// <summary>
+    /// Writes event content to a uniquely named timestamped file in logs/events_history/
+    /// so that multiple events are preserved.
+    /// Also updates the latest joining_system_event.json snapshot for backward compatibility.
+    /// Returns the timestamped file path.
+    /// </summary>
+    public static string WriteEventTimestamped(string content, string? eventCode = null, string? eventText = null)
+    {
+        WriteEvent(content);
+
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff");
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(eventCode))
+            parts.Add(SanitizeFileName(eventCode));
+        if (!string.IsNullOrWhiteSpace(eventText))
+            parts.Add(SanitizeFileName(eventText));
+        parts.Add(timestamp);
+        var fileName = string.Join("_", parts) + ".json";
+
+        var path = Path.Combine(EventsHistoryLogDir, fileName);
+        WriteFile(path, content);
+        return path;
+    }
 
     /// <summary>Overwrites joining_process_list.json with the given content.</summary>
     public static void WriteJoiningProcessList(string content) => WriteFile(JoiningProcessListLogPath, content);
@@ -76,7 +126,9 @@ public static class IjtFileLogger
     public static string BaseLogDir => CurrentBaseDir;
 
     public static string ResultLogPath => Path.Combine(BaseLogDir, "result", "result.json");
+    public static string ResultsLogDir => Path.Combine(BaseLogDir, "results");
     public static string EventLogPath => Path.Combine(BaseLogDir, "events", "joining_system_event.json");
+    public static string EventsHistoryLogDir => Path.Combine(BaseLogDir, "events_history");
     public static string JoiningProcessListLogPath => Path.Combine(BaseLogDir, "joining_process", "joining_process_list.json");
     public static string SelectedProgramLogPath => Path.Combine(BaseLogDir, "joining_process", "selected_joining_program.json");
     public static string JointListLogPath => Path.Combine(BaseLogDir, "joint", "joint_list.json");
@@ -84,6 +136,29 @@ public static class IjtFileLogger
     public static string IdentifiersLogPath => Path.Combine(BaseLogDir, "entity_list", "entity_list.json");
     public static string IOSignalsLogPath => Path.Combine(BaseLogDir, "io_signals", "io_signals.json");
     public static string AssetLogDir => Path.Combine(BaseLogDir, "assets");
+
+    /// <summary>
+    /// Clears timestamped log directories (results/ and events_history/) so only
+    /// the current session's files accumulate. Call once at client startup.
+    /// Does not touch the "latest" snapshot files (result.json, joining_system_event.json, etc.).
+    /// </summary>
+    public static void ClearSessionLogs()
+    {
+        ClearDirectory(ResultsLogDir);
+        ClearDirectory(EventsHistoryLogDir);
+        _log.LogInformation("Cleared timestamped log directories.");
+    }
+
+    private static void ClearDirectory(string dir)
+    {
+        try
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+        catch (IOException ex) { _log.LogWarning("Clear failed for {Dir}: {Message}", dir, ex.Message); }
+        catch (UnauthorizedAccessException ex) { _log.LogWarning("Access denied clearing {Dir}: {Message}", dir, ex.Message); }
+    }
 
     /// <summary>
     /// Temporarily overrides the base log directory for the current execution context.

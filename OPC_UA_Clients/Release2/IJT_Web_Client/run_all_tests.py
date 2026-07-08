@@ -289,6 +289,17 @@ def _subprocess_env(env: dict | None = None) -> dict:
     return run_env
 
 
+def _compose_project_name() -> str:
+    explicit = os.environ.get("COMPOSE_PROJECT_NAME")
+    if explicit and explicit.strip():
+        return explicit.strip()
+
+    import hashlib
+
+    digest = hashlib.sha256(str(ROOT).encode("utf-8", "surrogatepass")).hexdigest()[:12]
+    return f"ijt_web_client_{digest}"
+
+
 def _npm_install_args(npm: str) -> list[str]:
     """Return deterministic install args for CI and developer-friendly args locally."""
     command = "ci" if IS_CI and (ROOT / "package-lock.json").exists() else "install"
@@ -312,6 +323,15 @@ def _node_bin_path(name: str) -> Path | None:
     return None
 
 
+def _node_executable_path() -> Path | None:
+    candidates = ["node.exe", "node"] if IS_WINDOWS else ["node"]
+    for candidate in candidates:
+        path = shutil.which(candidate)
+        if path:
+            return Path(path)
+    return None
+
+
 def _missing_node_requirements(
     *,
     packages: tuple[str, ...] = (),
@@ -320,6 +340,70 @@ def _missing_node_requirements(
     missing = [f"package:{package}" for package in packages if not _node_package_path(package).exists()]
     missing.extend(f"bin:{name}" for name in bins if _node_bin_path(name) is None)
     return missing
+
+
+def _docker_engine_ostype(docker: str) -> str | None:
+    try:
+        result = subprocess.run(
+            [docker, "info", "--format", "{{.OSType}}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    ostype = result.stdout.strip().lower()
+    return ostype or None
+
+
+def _docker_linux_engine_skip_note(docker: str) -> str | None:
+    ostype = _docker_engine_ostype(docker)
+    if ostype == "linux":
+        return None
+    if ostype == "windows":
+        return (
+            "Docker is running Windows containers; switch Docker Desktop to "
+            "Linux containers before running Docker smoke"
+        )
+    return "Docker daemon OSType could not be determined"
+
+
+def _node_tls_download_preflight(node: Path | None) -> str | None:
+    """Return a clear failure note when Node cannot TLS-connect to Playwright CDN."""
+    if node is None:
+        return "local Node.js binary not found"
+    script = (
+        "const https=require('https');"
+        "const req=https.request('https://cdn.playwright.dev/',{method:'HEAD',timeout:10000},res=>{"
+        "res.resume();process.exit(0);"
+        "});"
+        "req.on('timeout',()=>{req.destroy(new Error('timeout'));});"
+        "req.on('error',err=>{console.error(err.code||err.message);process.exit(1);});"
+        "req.end();"
+    )
+    try:
+        result = subprocess.run(
+            [str(node), "-e", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return "Node TLS preflight for Playwright CDN failed before browser download"
+    if result.returncode == 0:
+        return None
+    stderr = (result.stderr or "").strip()
+    if "UNABLE_TO_GET_ISSUER_CERT_LOCALLY" in stderr:
+        return (
+            "Node cannot validate Playwright CDN TLS (UNABLE_TO_GET_ISSUER_CERT_LOCALLY); "
+            "configure NODE_EXTRA_CA_CERTS or npm cafile with the corporate CA before "
+            "running Playwright browser installs"
+        )
+    return f"Node cannot reach Playwright CDN before browser download: {stderr or 'unknown error'}"
 
 
 def _kill_proc_tree(pid: int) -> None:
@@ -1481,7 +1565,16 @@ def _stage_playwright_install() -> StageResult:
             notes=["chromium browser already installed"],
         )
 
+    tls_note = _node_tls_download_preflight(_node_executable_path())
+    tls_bypass = False
+    if tls_note:
+        _warn(tls_note)
+        _info("Retrying playwright install with TLS verification disabled (install subprocess only)")
+        tls_bypass = True
+
     env = os.environ.copy()
+    if tls_bypass:
+        env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
 
     if IS_WINDOWS:
         rc = _run(
@@ -1529,7 +1622,8 @@ def _stage_playwright_install() -> StageResult:
                 "Browser download failed - configure proxy/CA certs and run 'npm install' then 'npm run test:e2e:smoke'"
             ],
         )
-    return StageResult("playwright-install", rc, duration=time.monotonic() - t0)
+    notes = ["installed with TLS bypass for CDN download"] if tls_bypass else []
+    return StageResult("playwright-install", rc, duration=time.monotonic() - t0, notes=notes)
 
 
 def _stage_playwright_ffmpeg_install() -> StageResult:
@@ -1772,6 +1866,7 @@ def _capture_compose_failure_logs(
     service: str,
     docker: str,
     label: str,
+    project: str | None = None,
 ) -> None:
     """Best-effort capture of compose logs into ``test-results/readiness/``.
 
@@ -1797,6 +1892,7 @@ def _capture_compose_failure_logs(
         diag_dir,
         compose_dir,
         f"{service}-{label}",
+        project=project,
         docker_executable=docker,
     )
 
@@ -1851,6 +1947,9 @@ def _parse_int_env(name: str, default: int) -> int:
 # environments; override with IJT_DOCKER_TIMEOUT=<seconds> for slow CI runners.
 _DOCKER_TIMEOUT = _parse_int_env("IJT_DOCKER_TIMEOUT", 90)
 _DOCKER_BUILD_TIMEOUT = _parse_int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
+_DOCKER_COMPOSE_WAIT_TIMEOUT = _parse_int_env("IJT_DOCKER_COMPOSE_WAIT_TIMEOUT", 180)
+_DOCKER_HTTP_PORT = _parse_int_env("WEB_CLIENT_HTTP_PORT", 3000)
+_DOCKER_WS_PORT = _parse_int_env("WEB_CLIENT_WS_PORT", 8001)
 _PLAYWRIGHT_FEATURE_WORKERS = _parse_int_env("IJT_PLAYWRIGHT_FEATURE_WORKERS", 2 if IS_CI else 4)
 
 
@@ -2567,7 +2666,12 @@ def _stage_docker_smoke() -> StageResult:
     docker = shutil.which("docker") or shutil.which("docker.exe")
     if not docker:
         return StageResult("docker-smoke", 0, skipped=True, notes=["docker not in PATH"])
+    linux_skip = _docker_linux_engine_skip_note(docker)
+    if linux_skip:
+        return StageResult("docker-smoke", 0, skipped=True, notes=[linux_skip])
     compose_cmd = [docker, "compose"]
+    compose_project = _compose_project_name()
+    compose_env = {"COMPOSE_PROJECT_NAME": compose_project}
 
     # DOCKER_BUILDKIT=1 enables layer caching — repeated local builds take seconds, not minutes.
     build_env = {**os.environ, "DOCKER_BUILDKIT": "1", "BUILDKIT_INLINE_CACHE": "1"}
@@ -2593,12 +2697,13 @@ def _stage_docker_smoke() -> StageResult:
         return StageResult("docker-smoke", rc, duration=time.monotonic() - t0, notes=["docker build failed"])
 
     rc = _run(
-        compose_cmd + ["up", "-d", "--wait", "--wait-timeout", "120"],
+        compose_cmd + ["up", "-d", "--wait", "--wait-timeout", str(_DOCKER_COMPOSE_WAIT_TIMEOUT)],
         label="docker compose up -d --wait",
         # Outer subprocess timeout: see _start_opcua_docker_server above. We
         # bound the whole compose-up call to (--wait-timeout + 60s docker
         # slack) so a hung daemon or pull cannot freeze docker-smoke.
-        timeout=120 + 60,
+        env=compose_env,
+        timeout=_DOCKER_COMPOSE_WAIT_TIMEOUT + 60,
     )
     if rc != 0:
         _capture_compose_failure_logs(
@@ -2606,29 +2711,33 @@ def _stage_docker_smoke() -> StageResult:
             service="ijt_web_client",
             docker=compose_cmd[0],
             label="ijt-web-compose-up",
+            project=compose_project,
         )
+        _run(compose_cmd + ["down", "-v"], label="docker compose down -v", env=compose_env)
         return StageResult("docker-smoke", rc, duration=time.monotonic() - t0, notes=["docker compose up failed"])
 
     # docker compose --wait blocked until the Web Client compose healthcheck
     # (curl -f http://localhost:3000) reported healthy, so HTTP readiness is
     # already proven by the time we get here. Probe the WebSocket port only;
     # the backend's WS readiness is not part of the compose healthcheck.
-    ready = _port_open("127.0.0.1", 3000, timeout=2.0)
+    ready = _port_open("127.0.0.1", _DOCKER_HTTP_PORT, timeout=2.0)
 
-    ws_ready = _port_open("127.0.0.1", 8001, timeout=2.0)
+    ws_ready = _port_open("127.0.0.1", _DOCKER_WS_PORT, timeout=2.0)
 
-    _run(compose_cmd + ["logs", "--tail=20"], label="docker compose logs")
-    _run(compose_cmd + ["down", "-v"], label="docker compose down -v")
+    _run(compose_cmd + ["logs", "--tail=20"], label="docker compose logs", env=compose_env)
+    _run(compose_cmd + ["down", "-v"], label="docker compose down -v", env=compose_env)
 
     if not ready:
         return StageResult(
             "docker-smoke",
             1,
             duration=time.monotonic() - t0,
-            notes=[f"HTTP :3000 not ready within {_DOCKER_TIMEOUT} s (set IJT_DOCKER_TIMEOUT to override)"],
+            notes=[
+                f"HTTP :{_DOCKER_HTTP_PORT} not ready within {_DOCKER_TIMEOUT} s (set IJT_DOCKER_TIMEOUT to override)"
+            ],
         )
 
-    notes = [] if ws_ready else ["WS :8001 not ready — backend may need OPC UA server"]
+    notes = [] if ws_ready else [f"WS :{_DOCKER_WS_PORT} not ready — backend may need OPC UA server"]
     return StageResult("docker-smoke", 0, duration=time.monotonic() - t0, notes=notes)
 
 

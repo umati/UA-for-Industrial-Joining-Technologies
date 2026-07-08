@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from helpers.cu_compliance_report import (
-    CuComplianceReportRecorder,
+from helpers.cu_coverage_report import (
+    CuCoverageReportRecorder,
     _classify_report,
     _dependency_cus_for_not_supported_reason,
     _marker_cus,
@@ -38,7 +38,7 @@ class _Report:
     def __init__(
         self,
         *,
-        nodeid: str = "conformance/test_file.py::test_case",
+        nodeid: str = "specification_tests/test_file.py::test_case",
         when: str = "call",
         failed: bool = False,
         passed: bool = False,
@@ -60,7 +60,7 @@ class _Report:
 @pytest.fixture
 def report_tmp_path():
     """Repo-local temp path for environments where pytest tmp_path ACLs are locked."""
-    path = Path(__file__).resolve().parents[2] / "tmp" / "cu_compliance_report" / uuid.uuid4().hex
+    path = Path(__file__).resolve().parents[2] / "tmp" / "cu_coverage_report" / uuid.uuid4().hex
     path.mkdir(parents=True, exist_ok=False)
     yield path
 
@@ -176,32 +176,32 @@ def test_rollup_compliance_is_conservative_for_report_readers():
 
 
 def test_recorder_writes_cu_compliance_json(report_tmp_path, monkeypatch):
-    output = report_tmp_path / "reports" / "cu-compliance-report.json"
-    monkeypatch.setenv("IJT_CU_COMPLIANCE_REPORT_FILE", str(output))
+    output = report_tmp_path / "reports" / "cu-coverage-report.json"
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(output))
     test_file = report_tmp_path / "conformance" / "test_file.py"
     test_file.parent.mkdir(parents=True)
     test_file.write_text("# test placeholder\n", encoding="utf-8")
 
-    recorder = CuComplianceReportRecorder(
+    recorder = CuCoverageReportRecorder(
         root=report_tmp_path,
         all_cus=["single_result", "acknowledge_results"],
         supported_cus=["single_result"],
     )
     items = [
         _Item(
-            nodeid="conformance/test_file.py::test_passes",
+            nodeid="specification_tests/test_file.py::test_passes",
             fspath=test_file,
             name="test_passes",
             markers=[_Marker("single_result")],
         ),
         _Item(
-            nodeid="conformance/test_file.py::test_not_supported",
+            nodeid="specification_tests/test_file.py::test_not_supported",
             fspath=test_file,
             name="test_not_supported",
             markers=[_Marker("acknowledge_results")],
         ),
         _Item(
-            nodeid="conformance/test_file.py::test_extension",
+            nodeid="specification_tests/test_file.py::test_extension",
             fspath=test_file,
             name="test_extension",
             markers=[_Marker("vendor_extension_cu")],
@@ -210,11 +210,11 @@ def test_recorder_writes_cu_compliance_json(report_tmp_path, monkeypatch):
 
     recorder.pytest_collection_modifyitems(None, None, items)
     recorder.pytest_runtest_logreport(
-        _Report(nodeid="conformance/test_file.py::test_passes", passed=True, duration=0.1234567)
+        _Report(nodeid="specification_tests/test_file.py::test_passes", passed=True, duration=0.1234567)
     )
     recorder.pytest_runtest_logreport(
         _Report(
-            nodeid="conformance/test_file.py::test_not_supported",
+            nodeid="specification_tests/test_file.py::test_not_supported",
             skipped=True,
             longrepr=("file.py", 9, "Skipped: AcknowledgeResults method: Not Supported"),
         )
@@ -222,7 +222,7 @@ def test_recorder_writes_cu_compliance_json(report_tmp_path, monkeypatch):
     recorder.pytest_sessionfinish(None, 1)
 
     payload = json.loads(output.read_text(encoding="utf-8"))
-    assert payload["schema"] == "ijt-cu-compliance-report/v1"
+    assert payload["schema"] == "ijt-cu-coverage-report/v1"
     assert payload["exitstatus"] == 1
     assert payload["supported_cus"] == ["single_result"]
     assert payload["summary"]["official_cu_count"] == 2
@@ -235,32 +235,32 @@ def test_recorder_writes_cu_compliance_json(report_tmp_path, monkeypatch):
     assert payload["by_cu"]["vendor_extension_cu"]["outcome"] == "untested"
     assert payload["by_cu"]["vendor_extension_cu"]["compliance"] == "untested"
     reasons = {entry["nodeid"]: entry["reason"] for entry in payload["tests"]}
-    assert reasons["conformance/test_file.py::test_not_supported"] == (
+    assert reasons["specification_tests/test_file.py::test_not_supported"] == (
         "Skipped: AcknowledgeResults method: Not Supported"
     )
 
 
 def test_recorder_attributes_not_supported_dependency_to_dependency_cu(report_tmp_path, monkeypatch):
-    output = report_tmp_path / "reports" / "cu-compliance-report.json"
-    monkeypatch.setenv("IJT_CU_COMPLIANCE_REPORT_FILE", str(output))
+    output = report_tmp_path / "reports" / "cu-coverage-report.json"
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(output))
     test_file = report_tmp_path / "conformance" / "test_file.py"
     test_file.parent.mkdir(parents=True)
     test_file.write_text("# test placeholder\n", encoding="utf-8")
 
-    recorder = CuComplianceReportRecorder(
+    recorder = CuCoverageReportRecorder(
         root=report_tmp_path,
         all_cus=["engineering_units", "joint_design_data"],
         supported_cus=["engineering_units"],
     )
     items = [
         _Item(
-            nodeid="conformance/test_file.py::test_engineering_units_pass",
+            nodeid="specification_tests/test_file.py::test_engineering_units_pass",
             fspath=test_file,
             name="test_engineering_units_pass",
             markers=[_Marker("engineering_units")],
         ),
         _Item(
-            nodeid="conformance/test_file.py::test_design_value_engineering_units",
+            nodeid="specification_tests/test_file.py::test_design_value_engineering_units",
             fspath=test_file,
             name="test_design_value_engineering_units",
             markers=[
@@ -273,14 +273,14 @@ def test_recorder_attributes_not_supported_dependency_to_dependency_cu(report_tm
     recorder.pytest_collection_modifyitems(None, None, items)
     recorder.pytest_runtest_logreport(
         _Report(
-            nodeid="conformance/test_file.py::test_engineering_units_pass",
+            nodeid="specification_tests/test_file.py::test_engineering_units_pass",
             passed=True,
             duration=0.1,
         )
     )
     recorder.pytest_runtest_logreport(
         _Report(
-            nodeid="conformance/test_file.py::test_design_value_engineering_units",
+            nodeid="specification_tests/test_file.py::test_design_value_engineering_units",
             when="setup",
             skipped=True,
             longrepr=("file.py", 9, "Skipped: Conformance unit 'IJT Joint Design Data' is not supported NOT SUPPORTED"),
@@ -297,29 +297,29 @@ def test_recorder_attributes_not_supported_dependency_to_dependency_cu(report_tm
     dependency_entry = next(
         entry
         for entry in payload["tests"]
-        if entry["nodeid"] == "conformance/test_file.py::test_design_value_engineering_units"
+        if entry["nodeid"] == "specification_tests/test_file.py::test_design_value_engineering_units"
     )
     assert dependency_entry["cus"] == ["joint_design_data"]
     assert "dependency_cus" not in dependency_entry
 
 
 def test_recorder_does_not_overwrite_main_report_during_collect_only(report_tmp_path, monkeypatch):
-    output = report_tmp_path / "reports" / "cu-compliance-report.json"
+    output = report_tmp_path / "reports" / "cu-coverage-report.json"
     output.parent.mkdir(parents=True)
     original = {"schema": "existing-live-run-report", "summary": {"executed_cu_test_count": 831}}
     output.write_text(json.dumps(original), encoding="utf-8")
-    monkeypatch.setenv("IJT_CU_COMPLIANCE_REPORT_FILE", str(output))
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(output))
     test_file = report_tmp_path / "conformance" / "test_file.py"
     test_file.parent.mkdir(parents=True)
     test_file.write_text("# test placeholder\n", encoding="utf-8")
 
-    recorder = CuComplianceReportRecorder(root=report_tmp_path, all_cus=["single_result"], supported_cus=None)
+    recorder = CuCoverageReportRecorder(root=report_tmp_path, all_cus=["single_result"], supported_cus=None)
     recorder.pytest_collection_modifyitems(
         None,
         None,
         [
             _Item(
-                nodeid="conformance/test_file.py::test_collected_only",
+                nodeid="specification_tests/test_file.py::test_collected_only",
                 fspath=test_file,
                 name="test_collected_only",
                 markers=[_Marker("single_result")],
@@ -334,13 +334,13 @@ def test_recorder_does_not_overwrite_main_report_during_collect_only(report_tmp_
 
 
 def test_recorder_does_not_overwrite_main_report_when_no_cu_tests(report_tmp_path, monkeypatch):
-    output = report_tmp_path / "reports" / "cu-compliance-report.json"
+    output = report_tmp_path / "reports" / "cu-coverage-report.json"
     output.parent.mkdir(parents=True)
     original = {"schema": "existing-live-run-report", "summary": {"executed_cu_test_count": 831}}
     output.write_text(json.dumps(original), encoding="utf-8")
-    monkeypatch.setenv("IJT_CU_COMPLIANCE_REPORT_FILE", str(output))
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(output))
 
-    recorder = CuComplianceReportRecorder(root=report_tmp_path, all_cus=["single_result"], supported_cus=None)
+    recorder = CuCoverageReportRecorder(root=report_tmp_path, all_cus=["single_result"], supported_cus=None)
     session = SimpleNamespace(config=SimpleNamespace(option=SimpleNamespace(collectonly=False)))
     recorder.pytest_sessionfinish(session, 0)
 
@@ -348,7 +348,7 @@ def test_recorder_does_not_overwrite_main_report_when_no_cu_tests(report_tmp_pat
 
 
 def test_normalize_rows_handles_various_input_types():
-    from helpers.cu_compliance_report import _normalize_rows
+    from helpers.cu_coverage_report import _normalize_rows
 
     assert _normalize_rows(None) == []
     assert _normalize_rows(5) == [5]
@@ -362,7 +362,7 @@ def test_normalize_rows_handles_various_input_types():
 
 
 def test_marker_workbook_refs_extracts_sheet_and_rows():
-    from helpers.cu_compliance_report import _marker_workbook_refs
+    from helpers.cu_coverage_report import _marker_workbook_refs
 
     class _WorkbookMarker:
         def __init__(self, args=(), kwargs=None):
@@ -416,10 +416,13 @@ def test_rollup_compliance_handles_edge_cases():
 def test_recorder_ignores_passed_setup_and_teardown():
     from pathlib import Path
 
-    recorder = CuComplianceReportRecorder(root=Path("."), all_cus=["test_cu"], supported_cus=None)
-    test_file = Path("conformance/test_file.py")
+    recorder = CuCoverageReportRecorder(root=Path("."), all_cus=["test_cu"], supported_cus=None)
+    test_file = Path("specification_tests/test_file.py")
     item = _Item(
-        nodeid="conformance/test_file.py::test_case", fspath=test_file, name="test_case", markers=[_Marker("test_cu")]
+        nodeid="specification_tests/test_file.py::test_case",
+        fspath=test_file,
+        name="test_case",
+        markers=[_Marker("test_cu")],
     )
 
     recorder.items_by_nodeid[item.nodeid] = {
@@ -443,10 +446,13 @@ def test_recorder_ignores_passed_setup_and_teardown():
 def test_recorder_handles_teardown_after_result():
     from pathlib import Path
 
-    recorder = CuComplianceReportRecorder(root=Path("."), all_cus=["test_cu"], supported_cus=None)
-    test_file = Path("conformance/test_file.py")
+    recorder = CuCoverageReportRecorder(root=Path("."), all_cus=["test_cu"], supported_cus=None)
+    test_file = Path("specification_tests/test_file.py")
     item = _Item(
-        nodeid="conformance/test_file.py::test_case", fspath=test_file, name="test_case", markers=[_Marker("test_cu")]
+        nodeid="specification_tests/test_file.py::test_case",
+        fspath=test_file,
+        name="test_case",
+        markers=[_Marker("test_cu")],
     )
 
     recorder.items_by_nodeid[item.nodeid] = {
@@ -467,7 +473,7 @@ def test_recorder_handles_teardown_after_result():
 def test_recorder_ignores_non_cu_tests():
     from pathlib import Path
 
-    recorder = CuComplianceReportRecorder(root=Path("."), all_cus=["test_cu"], supported_cus=None)
+    recorder = CuCoverageReportRecorder(root=Path("."), all_cus=["test_cu"], supported_cus=None)
     report = _Report(nodeid="unit/test_helper.py::test_function", passed=True)
     recorder.pytest_runtest_logreport(report)
     assert "unit/test_helper.py::test_function" not in recorder.results_by_nodeid
@@ -476,10 +482,13 @@ def test_recorder_ignores_non_cu_tests():
 def test_recorder_ignores_invalid_report_phases():
     from pathlib import Path
 
-    recorder = CuComplianceReportRecorder(root=Path("."), all_cus=["test_cu"], supported_cus=None)
-    test_file = Path("conformance/test_file.py")
+    recorder = CuCoverageReportRecorder(root=Path("."), all_cus=["test_cu"], supported_cus=None)
+    test_file = Path("specification_tests/test_file.py")
     item = _Item(
-        nodeid="conformance/test_file.py::test_case", fspath=test_file, name="test_case", markers=[_Marker("test_cu")]
+        nodeid="specification_tests/test_file.py::test_case",
+        fspath=test_file,
+        name="test_case",
+        markers=[_Marker("test_cu")],
     )
 
     recorder.items_by_nodeid[item.nodeid] = {
@@ -504,21 +513,19 @@ def test_classify_report_handles_service_unavailable():
 
 def test_recorder_handles_workbook_error(report_tmp_path, monkeypatch):
     """Test that recorder gracefully handles workbook traceability errors."""
-    output = report_tmp_path / "reports" / "cu-compliance-report.json"
-    monkeypatch.setenv("IJT_CU_COMPLIANCE_REPORT_FILE", str(output))
+    output = report_tmp_path / "reports" / "cu-coverage-report.json"
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(output))
     test_file = report_tmp_path / "conformance" / "test_file.py"
     test_file.parent.mkdir(parents=True)
     test_file.write_text("# test placeholder\n", encoding="utf-8")
 
     # Force workbook error by using non-existent path
-    monkeypatch.setattr(
-        "helpers.cu_compliance_report.workbook_traceability_report", lambda **kw: {"error": "test_error"}
-    )
+    monkeypatch.setattr("helpers.cu_coverage_report.workbook_traceability_report", lambda **kw: {"error": "test_error"})
 
-    recorder = CuComplianceReportRecorder(root=report_tmp_path, all_cus=["single_result"], supported_cus=None)
+    recorder = CuCoverageReportRecorder(root=report_tmp_path, all_cus=["single_result"], supported_cus=None)
     items = [
         _Item(
-            nodeid="conformance/test_file.py::test_case",
+            nodeid="specification_tests/test_file.py::test_case",
             fspath=test_file,
             name="test_case",
             markers=[_Marker("single_result")],
@@ -526,7 +533,7 @@ def test_recorder_handles_workbook_error(report_tmp_path, monkeypatch):
     ]
 
     recorder.pytest_collection_modifyitems(None, None, items)
-    recorder.pytest_runtest_logreport(_Report(nodeid="conformance/test_file.py::test_case", passed=True))
+    recorder.pytest_runtest_logreport(_Report(nodeid="specification_tests/test_file.py::test_case", passed=True))
     recorder.pytest_sessionfinish(None, 0)
 
     payload = json.loads(output.read_text(encoding="utf-8"))
@@ -552,14 +559,14 @@ def test_classify_report_returns_skipped_for_generic_skip():
 
 def test_normalize_rows_handles_int_value():
     """Test that _normalize_rows handles integer values."""
-    from helpers.cu_compliance_report import _normalize_rows
+    from helpers.cu_coverage_report import _normalize_rows
 
     assert _normalize_rows(5) == [5]
 
 
 def test_marker_workbook_refs_handles_kwargs_row():
     """Test that _marker_workbook_refs extracts row from kwargs."""
-    from helpers.cu_compliance_report import _marker_workbook_refs
+    from helpers.cu_coverage_report import _marker_workbook_refs
 
     class _WorkbookMarker:
         def __init__(self, args=(), kwargs=None):
@@ -582,8 +589,8 @@ def test_marker_workbook_refs_handles_kwargs_row():
 
 def test_recorder_handles_workbook_exception(report_tmp_path, monkeypatch):
     """Test that recorder handles exception in workbook_traceability_report."""
-    output = report_tmp_path / "reports" / "cu-compliance-report.json"
-    monkeypatch.setenv("IJT_CU_COMPLIANCE_REPORT_FILE", str(output))
+    output = report_tmp_path / "reports" / "cu-coverage-report.json"
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(output))
     test_file = report_tmp_path / "conformance" / "test_file.py"
     test_file.parent.mkdir(parents=True)
     test_file.write_text("# test placeholder\n", encoding="utf-8")
@@ -592,12 +599,12 @@ def test_recorder_handles_workbook_exception(report_tmp_path, monkeypatch):
     def raise_exception(**kwargs):
         raise RuntimeError("Workbook error")
 
-    monkeypatch.setattr("helpers.cu_compliance_report.workbook_traceability_report", raise_exception)
+    monkeypatch.setattr("helpers.cu_coverage_report.workbook_traceability_report", raise_exception)
 
-    recorder = CuComplianceReportRecorder(root=report_tmp_path, all_cus=["single_result"], supported_cus=None)
+    recorder = CuCoverageReportRecorder(root=report_tmp_path, all_cus=["single_result"], supported_cus=None)
     items = [
         _Item(
-            nodeid="conformance/test_file.py::test_case",
+            nodeid="specification_tests/test_file.py::test_case",
             fspath=test_file,
             name="test_case",
             markers=[_Marker("single_result")],
@@ -605,7 +612,7 @@ def test_recorder_handles_workbook_exception(report_tmp_path, monkeypatch):
     ]
 
     recorder.pytest_collection_modifyitems(None, None, items)
-    recorder.pytest_runtest_logreport(_Report(nodeid="conformance/test_file.py::test_case", passed=True))
+    recorder.pytest_runtest_logreport(_Report(nodeid="specification_tests/test_file.py::test_case", passed=True))
     recorder.pytest_sessionfinish(None, 0)
 
     payload = json.loads(output.read_text(encoding="utf-8"))

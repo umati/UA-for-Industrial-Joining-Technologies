@@ -172,7 +172,8 @@ def _apply_update(
 ) -> dict:
     entry = baseline["suites"][suite]
     new_tests = counts["tests"]
-    old_tests = int(entry["tests"])
+    # Support both legacy "tests" and new "min_tests" field names
+    old_tests = int(entry.get("min_tests") or entry.get("tests", 0))
     if new_tests < old_tests and not allow_decrease:
         raise SystemExit(
             f"{suite} would decrease from {old_tests} to {new_tests}. "
@@ -186,7 +187,11 @@ def _apply_update(
             "Re-run with --allow-decrease after reviewing the skip change."
         )
 
-    entry["tests"] = new_tests
+    # Write to whichever field name the entry uses
+    if "min_tests" in entry:
+        entry["min_tests"] = new_tests
+    else:
+        entry["tests"] = new_tests
     entry["skipped"] = new_skipped
     baseline["captured_from_run"] = int(run_id)
     baseline["captured_at"] = captured_at

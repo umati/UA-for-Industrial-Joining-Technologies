@@ -1,5 +1,5 @@
 """
-Conformance tests for Engineering Units — OPC 40450-1 IJT Base.
+specification tests for Engineering Units — OPC 40450-1 IJT Base.
 
 Covered conformance unit:
 

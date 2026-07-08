@@ -1,5 +1,5 @@
 """
-Joining System base structure conformance tests — OPC 40450-1.
+Joining System base structure specification tests — OPC 40450-1.
 
 Covers the joining_system_base, joining_system_identification,
 joining_system_machinery_building_blocks, asset_management,

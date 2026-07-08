@@ -170,10 +170,10 @@ def test_test_client_pyright_resolves_reporting_scripts() -> None:
 
 def test_negative_service_tests_use_request_helpers() -> None:
     add_nodes_tests = (
-        _runner.TEST_CLIENT_DIR / "conformance" / "test_joining_system_base.py"
+        _runner.TEST_CLIENT_DIR / "specification_tests" / "test_joining_system_base.py"
     ).read_text(encoding="utf-8")
     delete_nodes_tests = (
-        _runner.TEST_CLIENT_DIR / "conformance" / "test_result_management.py"
+        _runner.TEST_CLIENT_DIR / "specification_tests" / "test_result_management.py"
     ).read_text(encoding="utf-8")
 
     assert "ua.ExpandedNodeId(ua.NodeId(" not in add_nodes_tests
@@ -533,7 +533,9 @@ def test_total_test_outcomes_show_pass_fail_skip_breakdown() -> None:
     results = [
         _runner.SuiteResult("web-client-static", True, counts="707 passed (py), 634 passed (js)"),
         _runner.SuiteResult("web-client-e2e-features", False, counts="1 failed, 64 passed"),
-        _runner.SuiteResult("test-client-live-conformance", True, counts="713 passed, 140 skipped"),
+        _runner.SuiteResult(
+            "test-client-live-specification-tests", True, counts="713 passed, 140 skipped"
+        ),
     ]
 
     totals = _runner._test_outcome_counts_from_results(results)
@@ -709,7 +711,7 @@ def test_suite_registry_has_no_duplicate_ids() -> None:
         "csharp-client-opcua-security-linux",
         "console-client-opcua-security-windows",
         "console-client-opcua-security-linux",
-        "test-client-live-conformance",
+        "test-client-live-specification-tests",
         "web-client-live-opcua-direct",
         "web-client-live-websocket-api",
         "web-client-live-websocket-connection",
@@ -989,6 +991,13 @@ def test_csharp_client_and_generated_types_share_default_opc_foundation_version(
         / "IJT_CSharp_Client"
         / "IJT_CSharp_Client.csproj"
     )
+    central_packages = (
+        _runner.REPO_ROOT
+        / "OPC_UA_Clients"
+        / "Release2"
+        / "IJT_CSharp_Client"
+        / "Directory.Packages.props"
+    )
     types_props = (
         _runner.REPO_ROOT
         / "OPC_UA_Clients"
@@ -999,30 +1008,47 @@ def test_csharp_client_and_generated_types_share_default_opc_foundation_version(
     )
 
     client_root = ET.parse(client_project).getroot()
+    central_packages_root = ET.parse(central_packages).getroot()
     types_root = ET.parse(types_props).getroot()
-    client_version = next(
-        ref.attrib["Version"]
-        for ref in client_root.iter("PackageReference")
-        if ref.attrib.get("Include") == "OPCFoundation.NetStandard.Opc.Ua"
+    assert (
+        next(
+            ref.attrib.get("Version")
+            for ref in client_root.iter("PackageReference")
+            if ref.attrib.get("Include") == "OPCFoundation.NetStandard.Opc.Ua"
+        )
+        is None
     )
-    default_types_version = next(
+    central_opc_version = next(
+        prop.text for prop in central_packages_root.iter("OpcFoundationVersion")
+    )
+    central_client_version = next(
+        version.attrib["Version"]
+        for version in central_packages_root.iter("PackageVersion")
+        if version.attrib.get("Include") == "OPCFoundation.NetStandard.Opc.Ua"
+    )
+    central_core_version = next(
+        version.attrib["Version"]
+        for version in central_packages_root.iter("PackageVersion")
+        if version.attrib.get("Include") == "OPCFoundation.NetStandard.Opc.Ua.Core"
+    )
+    client_only_types_version = next(
         prop.text
         for prop in types_root.iter("OpcFoundationVersion")
-        if prop.attrib.get("Condition") == "'$(OpcUaClientOnly)' != 'true'"
+        if prop.attrib.get("Condition") == "'$(OpcUaClientOnly)' == 'true'"
     )
 
-    assert default_types_version == client_version
+    assert central_client_version == "$(OpcFoundationVersion)"
+    assert central_core_version == "$(OpcFoundationVersion)"
+    assert central_opc_version != client_only_types_version
 
 
 def test_csharp_lockfiles_track_generated_type_opc_foundation_ranges() -> None:
     csharp_root = _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client"
-    types_props = csharp_root / "Types" / "Directory.Build.props"
-    default_types_version = next(
-        prop.text
-        for prop in ET.parse(types_props).getroot().iter("OpcFoundationVersion")
-        if prop.attrib.get("Condition") == "'$(OpcUaClientOnly)' != 'true'"
+    central_packages = csharp_root / "Directory.Packages.props"
+    default_opc_foundation_version = next(
+        prop.text for prop in ET.parse(central_packages).getroot().iter("OpcFoundationVersion")
     )
-    expected_range = f"[{default_types_version}, )"
+    expected_range = f"[{default_opc_foundation_version}, )"
     generated_type_projects = {
         "uamodel.amb",
         "uamodel.di",
@@ -1073,6 +1099,7 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
     monkeypatch.setattr(_runner, "_delegate_to_runner", _fake_delegate_to_runner)
     monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
     monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
+    monkeypatch.setattr(_runner, "_docker_linux_engine_skip_note", lambda docker: None)
 
     results = [
         _runner._suite_webclient_live_python_opcua(),
@@ -1125,6 +1152,12 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
     )
     assert calls[6]["extra_env"]["IJT_WEB_TEST_RESULTS_DIR"] == str(
         _runner.WEB_CLIENT_RESULTS_DIR / "docker-smoke"
+    )
+    assert calls[6]["extra_env"]["WEB_CLIENT_HTTP_PORT"] == str(
+        _runner.WEB_CLIENT_UI_PORT_DOCKER_SMOKE
+    )
+    assert calls[6]["extra_env"]["WEB_CLIENT_WS_PORT"] == str(
+        _runner.WEB_CLIENT_WS_PORT_DOCKER_SMOKE
     )
     assert calls[5]["timeout"] == _runner.WEB_CLIENT_E2E_REGRESSION_TIMEOUT
     assert calls[6]["timeout"] == _runner.DOCKER_BUILD_TIMEOUT + 180
@@ -1229,7 +1262,7 @@ def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
             counts="9 passed",
         ),
         _runner.SuiteResult(
-            "test-client-live-conformance",
+            "test-client-live-specification-tests",
             True,
             duration=3.0,
             counts="713 passed, 140 skipped",
@@ -1287,6 +1320,7 @@ def test_webclient_docker_smoke_skips_when_docker_daemon_is_not_running(monkeypa
 def test_server_linux_package_smoke_fails_when_package_missing(monkeypatch) -> None:
     monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
     monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
+    monkeypatch.setattr(_runner, "_docker_linux_engine_skip_note", lambda docker: None)
     monkeypatch.setattr(_runner, "_LINUX_PACKAGE_ZIP", Path("missing.zip"))
 
     result = _runner._suite_server_linux_package_smoke()
@@ -1294,6 +1328,38 @@ def test_server_linux_package_smoke_fails_when_package_missing(monkeypatch) -> N
     assert not result.ok
     assert not result.skipped
     assert result.notes == ["missing package: missing.zip"]
+
+
+def test_server_linux_package_smoke_skips_on_windows_docker_engine(monkeypatch) -> None:
+    monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
+    monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
+    monkeypatch.setattr(
+        _runner,
+        "_docker_linux_engine_skip_note",
+        lambda docker: (
+            "Docker is running Windows containers; switch Docker Desktop to Linux containers"
+        ),
+    )
+
+    result = _runner._suite_server_linux_package_smoke()
+
+    assert result.ok
+    assert result.skipped
+    assert "Windows containers" in result.notes[0]
+
+
+def test_docker_linux_engine_skip_note_classifies_engine_modes(monkeypatch) -> None:
+    monkeypatch.setattr(_runner, "_docker_engine_ostype", lambda docker: "linux")
+    assert _runner._docker_linux_engine_skip_note("docker") is None
+
+    monkeypatch.setattr(_runner, "_docker_engine_ostype", lambda docker: "windows")
+    assert "Windows containers" in _runner._docker_linux_engine_skip_note("docker")
+
+    monkeypatch.setattr(_runner, "_docker_engine_ostype", lambda docker: None)
+    assert (
+        _runner._docker_linux_engine_skip_note("docker")
+        == "Docker daemon OSType could not be determined"
+    )
 
 
 def test_server_linux_package_smoke_uses_dedicated_docker_port(monkeypatch) -> None:
@@ -1332,6 +1398,7 @@ def test_server_linux_package_smoke_uses_dedicated_docker_port(monkeypatch) -> N
 
     monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
     monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
+    monkeypatch.setattr(_runner, "_docker_linux_engine_skip_note", lambda docker: None)
     monkeypatch.setattr(_runner, "_LINUX_PACKAGE_ZIP", package)
     monkeypatch.setattr(_runner, "SMOKE_TEST", smoke_test)
     monkeypatch.setattr(_runner, "_current_python", lambda: "python")
@@ -1350,6 +1417,24 @@ def test_server_linux_package_smoke_uses_dedicated_docker_port(monkeypatch) -> N
     ) in docker_run
     smoke_cmd = next(cmd for cmd in commands if str(smoke_test) in cmd)
     assert f"opc.tcp://localhost:{_runner.OPCUA_SERVER_PORT_SERVER_DOCKER}" in smoke_cmd
+
+
+def test_webclient_docker_smoke_skips_on_windows_docker_engine(monkeypatch) -> None:
+    monkeypatch.setattr(_runner, "_find_cmd", lambda names: "docker")
+    monkeypatch.setattr(_runner, "_docker_daemon_running", lambda docker: True)
+    monkeypatch.setattr(
+        _runner,
+        "_docker_linux_engine_skip_note",
+        lambda docker: (
+            "Docker is running Windows containers; switch Docker Desktop to Linux containers"
+        ),
+    )
+
+    result = _runner._suite_webclient_docker_smoke()
+
+    assert result.ok
+    assert result.skipped
+    assert "Windows containers" in result.notes[0]
 
 
 def test_all_runner_https_preflights_use_requests_rules_endpoint(monkeypatch) -> None:
@@ -2136,7 +2221,7 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     report_script = _INTEGRATION_REPORT_SCRIPT.read_text(encoding="utf-8")
 
-    assert baseline["schema_version"] == 1
+    assert baseline["schema_version"] == 2
     expected_suites = {
         "sd_smoke",
         "wd_py",
@@ -2149,11 +2234,14 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
         "cs_live",
     }
     assert set(baseline["suites"]) == expected_suites
+    assert baseline["drift_policy"]["mode"] == "minimum"
+    assert baseline["drift_policy"]["growth_warn_percent"] == 25
+    assert baseline["drift_policy"]["growth_warn_absolute"] == 50
     for key in expected_suites:
         entry = baseline["suites"][key]
         assert isinstance(entry["label"], str)
-        assert isinstance(entry["tests"], int)
-        assert entry["tests"] > 0
+        assert isinstance(entry["min_tests"], int)
+        assert entry["min_tests"] > 0
         assert isinstance(entry["skipped"], int)
         assert entry["skipped"] >= 0
         assert isinstance(entry["skip_tolerance"], int)
@@ -2172,6 +2260,9 @@ def test_integration_report_uses_count_baseline_and_skip_drift_warnings() -> Non
     assert "### ⚠️ Warnings and Baseline Checks" in report_script
     assert "skip drift" in report_script
     assert "suite collection drift" in report_script
+    assert "tests may have disappeared" in report_script
+    assert "unusually large increase" in report_script
+    assert "drift_policy" in report_script
     assert "tests/tools/update_integration_baseline.py --run" in report_script
     assert "--suite {key}" in report_script
 
@@ -2472,13 +2563,8 @@ def test_workflows_do_not_depend_on_actions_cache_or_setup_caches() -> None:
 def test_ci_report_web_python_skip_budget_uses_expected_skip_identities() -> None:
     report_script = _CI_REPORT_SCRIPT.read_text(encoding="utf-8")
 
-    assert '"web-client (Python)": 2' in report_script
+    assert '"web-client (Python)": 0' in report_script
     assert "expected_skip_names" in report_script
-    assert (
-        "test_required_static_asset_exists[node_modules/chart.js/dist/chart.umd.js]"
-        in report_script
-    )
-    assert "test_eslint_passes" in report_script
     assert "unexpected skips detected" in report_script
     assert "missing_expected_names" in report_script
     assert "expected skips not observed" in report_script

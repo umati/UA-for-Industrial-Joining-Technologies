@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 """
-make_conformance_summary.py — Render the IJT Test Client conformance summary.
+make_specification_test_summary.py — Render the IJT Test Client specification test summary.
 
 Renders a GitHub Actions Step Summary from JUnit XML and the per-CU
-conformance report. Invoked from `.github/workflows/integration.yml` after
-the live conformance pytest run.
+coverage report. Invoked from `.github/workflows/integration.yml` after
+the live specification test pytest run.
 
 Reads:  test-results/pytest.xml   (or --xml=FILE)
-        test-results/cu-compliance-report.json, when present
+        test-results/cu-coverage-report.json, when present
 Writes: $GITHUB_STEP_SUMMARY      (GitHub markdown step summary, when enabled)
         test-results/summary.md   (always, as a local copy)
 
 Called automatically by the CI workflow after the test run. Safe to run locally too.
 
 The Markdown rendering pipeline lives in
-``scripts/reporting/conformance_summary.py`` so it can be tested
+``scripts/reporting/specification_test_summary.py`` so it can be tested
 independently. This module is the CLI shim that parses arguments, reads test
 artifacts, calls
-``render_conformance_summary(...)``, and writes the result to disk and to the
+``render_specification_test_summary(...)``, and writes the result to disk and to the
 GitHub step summary. The shim re-exports a ``_render`` symbol that delegates
 to the new renderer purely for backward compatibility with any historical
-caller; new code should import ``render_conformance_summary`` directly.
+caller; new code should import ``render_specification_test_summary`` directly.
 """
 
 from __future__ import annotations
@@ -37,21 +37,21 @@ from typing import Any
 # Bandit B405/B314 suppressions are limited to trusted JUnit XML from pytest.
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-compliance-report.json"
+_DEFAULT_CU_JSON = _PROJECT_ROOT / "test-results" / "cu-coverage-report.json"
 _DEFAULT_BASELINE_JSON = _PROJECT_ROOT / "test-results" / "report-baseline.json"
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-# scripts/ is on sys.path[0] when this file is invoked as `python scripts/make_conformance_summary.py`,
-# so the renderer package is importable as `reporting.conformance_summary`.
-from reporting.conformance_summary import (  # noqa: E402
+# scripts/ is on sys.path[0] when this file is invoked as `python scripts/make_specification_test_summary.py`,
+# so the renderer package is importable as `reporting.specification_test_summary`.
+from reporting.specification_test_summary import (  # noqa: E402
     _baseline_payload,
     _skip_reason_bucket,
-    render_conformance_summary,
+    render_specification_test_summary,
 )
 
 # Backward-compatible alias for any historical caller that imported `_render`.
-_render = render_conformance_summary
+_render = render_specification_test_summary
 
 
 # ── Parse JUnit XML ───────────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ def main() -> int:
     cu_payload = _load_json(Path(args.cu_json))
     baseline_path = Path(args.baseline)
 
-    md, context = render_conformance_summary(data, server_url, run_ts, cu_payload)
+    md, context = render_specification_test_summary(data, server_url, run_ts, cu_payload)
 
     # Write local copy
     out_path = Path(args.out)

@@ -1,19 +1,19 @@
-# IJT Conformance Test Report
+# IJT Specification Test Report
 
 🟢 **Passed** · **0 action items** · **Validation 100.0% (98/98)** · **Server support 79.7% (98/123)**
 
 | Item | Value |
 |---|---|
 | **Server** | My IJT Server (`opc.tcp://fixture.ijt.test:40451`) |
-| **Capability profile** | Full IJT Base Conformance |
+| **Capability profile** | Full IJT Base Specification Coverage |
 | **Run** | 2026-05-13 14:00 UTC · Duration 1m 25s |
 | **Build** | commit `15bc900` · run logs: Not Applicable |
 
-## 📊 Conformance Overview
+## 📊 Specification Test Overview
 
 > 🚦 Review: 🔴 Failed · 🟠 Blocked · ⚪ Not Supported · ℹ️ With Notes
 
-| Server Support Coverage | Validation Health | Conformance Action Items | Server Scope Notes |
+| Server Support Coverage | Validation Health | Specification Test Action Items | Server Scope Notes |
 |:---:|:---:|:---:|:---:|
 | **79.7%** | **100.0%** | **🔴 0 Failed · 🟠 0 Blocked** | **⚪ 25 Not Supported · ℹ️ 0 With Notes** |
 | 98 / 123 CUs server-supported | 98 / 98 server-supported CUs validated | No action needed | Information only. Review scope and caveats |
@@ -56,7 +56,7 @@ _Review rows only. Full 123-CU detail remains in `report.xlsx` and `report.html`
 
 > 🚦 Support: ✅ Supported · ⚠️ Partially Supported · ⚪ Not Supported
 
-_Auto-generated from the server profile and conformance outcomes. Full detail is in IJT Facet Breakdown._
+_Auto-generated from the server profile and specification test outcomes. Full detail is in IJT Facet Breakdown._
 
 - ⚪ **Joint Component** — Not Supported. Joint component send, list, read, data, and delete coverage.
 - ⚪ **Joint Design** — Not Supported. Joint design send, list, read, data, and delete coverage.

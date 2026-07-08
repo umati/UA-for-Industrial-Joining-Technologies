@@ -38,7 +38,7 @@ a web browser. The backend is Python with WebSockets. The frontend is Node.js.
 
 - **Run with Docker helper:** `python run_docker_setup.py`
   - Manual build from repo root: `docker build -f OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile -t ijt_web_client .`
-  - Manual run: `docker run --name ijt_web_client -d -p 3000:3000 -p 8001:8001 ijt_web_client`
+  - Manual run: `docker run --rm -d -p 3000:3000 -p 8001:8001 ijt_web_client`
   - Access: `http://localhost:3000`
 
 ## Option 3 - WSL

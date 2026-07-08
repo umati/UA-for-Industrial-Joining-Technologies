@@ -1,11 +1,11 @@
-"""Function-level byte-identity gate for the conformance summary renderer.
+"""Function-level byte-identity gate for the specification test summary renderer.
 
 Phase 1 of the IJT CI / System Tests reporting overhaul moved
-``_render(...)`` out of ``scripts/make_conformance_summary.py`` (formerly
+``_render(...)`` out of ``scripts/make_specification_test_summary.py`` (formerly
 ``scripts/make_ci_summary.py``; renamed in the same commit to reflect that
 this is a Test-Client conformance renderer, not a repo-wide CI summary) into
-``scripts/reporting/conformance_summary.py`` as
-``render_conformance_summary(...)``. These tests prove that move was
+``scripts/reporting/specification_test_summary.py`` as
+``render_specification_test_summary(...)``. These tests prove that move was
 behavior-preserving: the new function reproduces the exact Markdown that
 was captured from the pre-extraction renderer for two real fixtures —
 the CI Test Client unit run and a representative System Tests live
@@ -15,7 +15,7 @@ Each test:
 
 1. Loads ``pytest.xml`` (and, when present, ``cu_results.json`` and
    ``baseline.json``) from a captured fixture directory.
-2. Calls ``render_conformance_summary(...)`` with frozen ``run_ts``,
+2. Calls ``render_specification_test_summary(...)`` with frozen ``run_ts``,
    ``server_url``, and ``report_environment`` so wall-clock time, host
    environment, runner Python patch version, asyncua release, git SHA, or
    GitHub Actions run cannot drift the output.
@@ -58,11 +58,11 @@ if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 
 from _frozen_env import FIXED_RUN_TS, FIXED_SERVER_URL, FROZEN_ENV  # noqa: E402
-from make_conformance_summary import _load_baseline, _load_json, _parse  # noqa: E402
-from reporting import conformance_summary as _ci_summary  # noqa: E402
-from reporting.conformance_summary import (  # noqa: E402
+from make_specification_test_summary import _load_baseline, _load_json, _parse  # noqa: E402
+from reporting import specification_test_summary as _ci_summary  # noqa: E402
+from reporting.specification_test_summary import (  # noqa: E402
     ReportEnvironment,
-    render_conformance_summary,
+    render_specification_test_summary,
 )
 
 _FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -73,9 +73,9 @@ _EXPECTED_DIR = _FIXTURES_DIR / "expected"
     ("fixture_dir", "expected_file"),
     [
         ("ci_unit_no_cu_payload", "ci_unit_no_cu_payload.md"),
-        ("system_tests_full_conformance", "system_tests_full_conformance.md"),
+        ("system_tests_full_specification_coverage", "system_tests_full_specification_coverage.md"),
     ],
-    ids=["ci_unit_no_cu_payload", "system_tests_full_conformance"],
+    ids=["ci_unit_no_cu_payload", "system_tests_full_specification_coverage"],
 )
 def test_conformance_summary_byte_identical(fixture_dir: str, expected_file: str) -> None:
     fixt = _FIXTURES_DIR / fixture_dir
@@ -86,7 +86,7 @@ def test_conformance_summary_byte_identical(fixture_dir: str, expected_file: str
     cu_payload = _load_json(cu_path) if cu_path.exists() else None
     baseline = _load_baseline(baseline_path) if baseline_path.exists() else None
 
-    produced, _context = render_conformance_summary(
+    produced, _context = render_specification_test_summary(
         data,
         FIXED_SERVER_URL,
         FIXED_RUN_TS,
@@ -107,7 +107,7 @@ def test_conformance_summary_byte_identical(fixture_dir: str, expected_file: str
 def test_renderer_ignores_live_environment_when_frozen_env_passed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Guard: renderer must not read live env when a frozen environment is passed.
 
-    Drives ``render_conformance_summary`` with the same fixture inputs as the
+    Drives ``render_specification_test_summary`` with the same fixture inputs as the
     byte-identity test, but first replaces every live-environment read in the
     renderer module with deliberately absurd values that do not match the
     captured fixture. If the renderer leaks any of those reads into the output
@@ -134,12 +134,12 @@ def test_renderer_ignores_live_environment_when_frozen_env_passed(monkeypatch: p
     monkeypatch.setenv("GITHUB_SHA", "deadbeefcafefeed")
     monkeypatch.setenv("GITHUB_RUN_ID", "999999999")
 
-    fixt = _FIXTURES_DIR / "system_tests_full_conformance"
+    fixt = _FIXTURES_DIR / "system_tests_full_specification_coverage"
     data = _parse(fixt / "pytest.xml")
     cu_payload = _load_json(fixt / "cu_results.json")
     baseline = _load_baseline(fixt / "baseline.json") if (fixt / "baseline.json").exists() else None
 
-    produced, _context = render_conformance_summary(
+    produced, _context = render_specification_test_summary(
         data,
         FIXED_SERVER_URL,
         FIXED_RUN_TS,
@@ -148,7 +148,7 @@ def test_renderer_ignores_live_environment_when_frozen_env_passed(monkeypatch: p
         report_environment=FROZEN_ENV,
     )
 
-    expected = (_EXPECTED_DIR / "system_tests_full_conformance.md").read_text(encoding="utf-8")
+    expected = (_EXPECTED_DIR / "system_tests_full_specification_coverage.md").read_text(encoding="utf-8")
     assert produced == expected, (
         "Renderer leaked a live-environment read into byte-identity output. "
         "Every runtime-derived value must come from the passed ReportEnvironment, "
@@ -170,6 +170,37 @@ def test_renderer_ignores_live_environment_when_frozen_env_passed(monkeypatch: p
     )
 
 
+def test_simulator_fixture_keeps_expected_cu_scope_visible_in_report() -> None:
+    """Guard the live-report symptom of a missing active profile.
+
+    If the simulator capabilities file points at a missing profile, every CU
+    looks unsupported and this report regresses from 25 review rows to 123.
+    """
+    fixt = _FIXTURES_DIR / "system_tests_full_specification_coverage"
+    data = _parse(fixt / "pytest.xml")
+    cu_payload = _load_json(fixt / "cu_results.json")
+    baseline = _load_baseline(fixt / "baseline.json")
+
+    produced, context = render_specification_test_summary(
+        data,
+        FIXED_SERVER_URL,
+        FIXED_RUN_TS,
+        cu_payload,
+        baseline,
+        report_environment=FROZEN_ENV,
+    )
+
+    assert context is not None
+    assert context["server_supported_count"] == 98
+    assert len(context["active_cus"]) == 123
+    assert len(context["findings"]) == 25
+    assert "98 / 123 CUs server-supported" in produced
+    assert "98 / 98 server-supported CUs validated" in produced
+    assert "CUs Needing Review — 25 rows" in produced
+    assert "0 / 0 CUs server-supported" not in produced
+    assert "CUs Needing Review — 123 rows" not in produced
+
+
 def test_failure_overflow_row_uses_explicit_wording() -> None:
     """Failure overflow rows must not use ellipsis placeholders."""
     data = {
@@ -185,7 +216,7 @@ def test_failure_overflow_row_uses_explicit_wording() -> None:
         "xfail_reasons": {},
     }
 
-    produced, _context = render_conformance_summary(
+    produced, _context = render_specification_test_summary(
         data,
         FIXED_SERVER_URL,
         FIXED_RUN_TS,

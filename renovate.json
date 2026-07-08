@@ -3,7 +3,37 @@
   "extends": [
     "config:recommended"
   ],
+  "dependencyDashboard": true,
+  "timezone": "Europe/Stockholm",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
   "packageRules": [
+    {
+      "description": "GitHub Actions are owned by Dependabot's weekly grouped SHA-refresh PR. Disable Renovate for github-actions so the two bots do not create duplicate digest PRs.",
+      "matchManagers": ["github-actions"],
+      "enabled": false
+    },
+    {
+      "description": "Group Docker digest refreshes into one weekly reviewed PR. Digest churn is normal, but daily one-image PRs add CI load without improving safety.",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["digest"],
+      "groupName": "Docker image digest updates",
+      "groupSlug": "docker-digests",
+      "schedule": ["before 7am on monday"],
+      "minimumReleaseAge": "3 days",
+      "automerge": false,
+      "addLabels": ["dependencies", "docker-digest", "needs-manual-review"]
+    },
+    {
+      "description": "Batch Playwright monorepo updates weekly so Browser CI image refreshes are deliberate and reuse the fingerprint-cache path instead of producing daily PR pressure.",
+      "matchPackageNames": ["@playwright/test", "playwright"],
+      "groupName": "Playwright monorepo",
+      "groupSlug": "playwright-monorepo",
+      "schedule": ["before 7am on monday"],
+      "minimumReleaseAge": "3 days",
+      "automerge": false,
+      "addLabels": ["dependencies", "playwright", "needs-manual-review"]
+    },
     {
       "description": "Docker OS base-image bumps (ubuntu, debian, alpine…) must pass CI before merging. They can break compiled binaries, rename packages, or change system defaults. Renovate creates the PR; a human merges after CI is green.",
       "matchDatasources": ["docker"],
