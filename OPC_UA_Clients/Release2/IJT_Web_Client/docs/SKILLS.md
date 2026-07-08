@@ -244,6 +244,11 @@ sim_node = client.get_node('ns=1;s=TighteningSystem/Simulations/SimulateResults'
 - `IJT_OPCUA_HOST_REWRITE=true` is a separate opt-in for Docker Compose flows
   where a container must reach an OPC UA simulator running on the host
 
+### Local smoke runner (`run_all_tests.py --docker-only`)
+- `docker build` runs first; `--cache-from ijt_web_client:latest` is **only added when the image already exists locally** — without this guard BuildKit tries to pull from Docker Hub and fails with an auth error on fresh machines.
+- `docker compose up` uses `--no-build` so the image built above is used directly (matches CI behaviour and prevents a redundant second build + cache-from probe).
+- `_find_free_port()` detects host-port conflicts before compose up; if the configured port is already held by a parallel test suite, an alternative port is selected automatically.
+
 ### Venv Skip Pattern (in `setup_project.py` at project root)
 ```python
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
@@ -567,6 +572,8 @@ and `SimulateBulkEvents` defaults to event type `1` and count `3`.
 11. **Never** send empty numeric simulator method arguments from the Web UI; define a valid default or require user input before calling.
 12. **Never** include local virtualenvs or generated test artifacts in Docker build context; keep `.venv/`, `.venv_test/`, `.venv_ci/`, `node_modules/`, `test-results/`, and `tmp/` ignored by `.dockerignore`.
 13. **Never** reintroduce a broad root Web Client live suite; add or adjust the narrow live/browser suite that owns the affected test type and service lifecycle.
+14. **Never** add a hard-coded `404` or `requestfailed` assertion for a URL that belongs to an optional gitignored overlay (e.g. the company-specific `envelope/` view). Add the path prefix to `OPTIONAL_GITIGNORED_PATHS` in `tests/e2e/smoke.spec.mjs` instead.
+15. **Never** use `waitForTimeout` + a one-shot assertion to wait for OPC UA async result propagation in E2E tests — use `expect.poll()` with an explicit timeout so the test retries until the value stabilises.
 
 
 ## Environment Variables

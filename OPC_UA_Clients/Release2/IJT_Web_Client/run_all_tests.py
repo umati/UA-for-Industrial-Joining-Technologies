@@ -709,6 +709,22 @@ def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
         return False
 
 
+def _find_free_port(start: int, end: int = 0) -> int:
+    """Return the first TCP port in [start, start+200) that is not in use.
+
+    Used by the Docker smoke stage to avoid binding ports that are already
+    held by other test suites running in parallel (e.g. the WS backend on
+    the default port 8001).  Falls back to *start* so the caller still gets
+    a concrete port number even if all candidates are busy (compose up will
+    then produce a clear port-conflict error rather than a silent hang).
+    """
+    search_end = end if end > start else start + 200
+    for p in range(start, search_end):
+        if not _port_open("127.0.0.1", p, timeout=0.2):
+            return p
+    return start  # fallback
+
+
 def _parse_opcua_host_port(endpoint: str) -> tuple[str, int]:
     """Parse 'opc.tcp://host:port' → (host, port).
 
@@ -2675,11 +2691,21 @@ def _stage_docker_smoke() -> StageResult:
 
     # DOCKER_BUILDKIT=1 enables layer caching — repeated local builds take seconds, not minutes.
     build_env = {**os.environ, "DOCKER_BUILDKIT": "1", "BUILDKIT_INLINE_CACHE": "1"}
+    # Guard --cache-from: only pass it when the image already exists locally.
+    # Without this guard, BuildKit tries to pull ijt_web_client:latest from
+    # Docker Hub (the default registry), which fails with an auth error on
+    # machines that have never logged in or on a first build.  The error is
+    # non-fatal for the build itself but clutters the output and can confuse
+    # retry logic.  A local image is always sufficient as a cache source.
+    cache_probe = subprocess.run(
+        [docker, "image", "inspect", "ijt_web_client:latest"],
+        capture_output=True,
+        timeout=10,
+    )
     build_cmd = [
         docker,
         "build",
-        "--cache-from",
-        "ijt_web_client:latest",
+        *(["--cache-from", "ijt_web_client:latest"] if cache_probe.returncode == 0 else []),
         "-t",
         "ijt_web_client",
         "-f",
@@ -2696,8 +2722,28 @@ def _stage_docker_smoke() -> StageResult:
     if rc != 0:
         return StageResult("docker-smoke", rc, duration=time.monotonic() - t0, notes=["docker build failed"])
 
+    # Choose host ports for the Compose stack that don't conflict with services
+    # already running from parallel test suites (e.g. the WS backend that lives
+    # on the default port 8001 throughout the live-test phase).
+    # --no-build: the image was already produced above; asking compose to
+    # rebuild would repeat the cache-from probe and risks a second auth error.
+    http_port = (
+        _DOCKER_HTTP_PORT
+        if not _port_open("127.0.0.1", _DOCKER_HTTP_PORT, timeout=0.3)
+        else _find_free_port(_DOCKER_HTTP_PORT + 1000)
+    )
+    ws_port = (
+        _DOCKER_WS_PORT
+        if not _port_open("127.0.0.1", _DOCKER_WS_PORT, timeout=0.3)
+        else _find_free_port(_DOCKER_WS_PORT + 1000)
+    )
+    compose_env = {
+        **compose_env,
+        "WEB_CLIENT_HTTP_PORT": str(http_port),
+        "WEB_CLIENT_WS_PORT": str(ws_port),
+    }
     rc = _run(
-        compose_cmd + ["up", "-d", "--wait", "--wait-timeout", str(_DOCKER_COMPOSE_WAIT_TIMEOUT)],
+        compose_cmd + ["up", "-d", "--no-build", "--wait", "--wait-timeout", str(_DOCKER_COMPOSE_WAIT_TIMEOUT)],
         label="docker compose up -d --wait",
         # Outer subprocess timeout: see _start_opcua_docker_server above. We
         # bound the whole compose-up call to (--wait-timeout + 60s docker
@@ -2720,9 +2766,9 @@ def _stage_docker_smoke() -> StageResult:
     # (curl -f http://localhost:3000) reported healthy, so HTTP readiness is
     # already proven by the time we get here. Probe the WebSocket port only;
     # the backend's WS readiness is not part of the compose healthcheck.
-    ready = _port_open("127.0.0.1", _DOCKER_HTTP_PORT, timeout=2.0)
+    ready = _port_open("127.0.0.1", http_port, timeout=2.0)
 
-    ws_ready = _port_open("127.0.0.1", _DOCKER_WS_PORT, timeout=2.0)
+    ws_ready = _port_open("127.0.0.1", ws_port, timeout=2.0)
 
     _run(compose_cmd + ["logs", "--tail=20"], label="docker compose logs", env=compose_env)
     _run(compose_cmd + ["down", "-v"], label="docker compose down -v", env=compose_env)
@@ -2732,12 +2778,10 @@ def _stage_docker_smoke() -> StageResult:
             "docker-smoke",
             1,
             duration=time.monotonic() - t0,
-            notes=[
-                f"HTTP :{_DOCKER_HTTP_PORT} not ready within {_DOCKER_TIMEOUT} s (set IJT_DOCKER_TIMEOUT to override)"
-            ],
+            notes=[f"HTTP :{http_port} not ready within {_DOCKER_TIMEOUT} s (set IJT_DOCKER_TIMEOUT to override)"],
         )
 
-    notes = [] if ws_ready else [f"WS :{_DOCKER_WS_PORT} not ready — backend may need OPC UA server"]
+    notes = [] if ws_ready else [f"WS :{ws_port} not ready — backend may need OPC UA server"]
     return StageResult("docker-smoke", 0, duration=time.monotonic() - t0, notes=notes)
 
 

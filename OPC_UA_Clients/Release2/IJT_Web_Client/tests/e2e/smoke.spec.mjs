@@ -90,11 +90,19 @@ test('switching to highest requested view level keeps dropdown value valid', asy
 
 // ─── Critical static assets loaded ───────────────────────────────────────────
 
+// Paths that are intentionally optional and gitignored (e.g. company-specific
+// overlays that only exist on certain developer machines). The browser will
+// request these via dynamic import; a 404/ERR_ABORTED is expected and safe.
+const OPTIONAL_GITIGNORED_PATHS = [
+  '/src/javascripts/views/envelope/'
+]
+const isOptional = (url) => OPTIONAL_GITIGNORED_PATHS.some((p) => url.includes(p))
+
 test('no 404s for any resource loaded by the page', async ({ page }) => {
   const notFound = []
   // Intercept ALL responses — 404 is a valid HTTP response, NOT a requestfailed event
   page.on('response', (resp) => {
-    if (resp.status() === 404) {
+    if (resp.status() === 404 && !isOptional(resp.url())) {
       notFound.push(`${resp.status()} ${resp.url()}`)
     }
   })
@@ -118,7 +126,9 @@ test('no JavaScript console errors on load', async ({ page }) => {
 test('no failed network requests for essential scripts', async ({ page }) => {
   const failed = []
   page.on('requestfailed', (req) => {
-    failed.push(`${req.failure()?.errorText} ${req.url()}`)
+    if (!isOptional(req.url())) {
+      failed.push(`${req.failure()?.errorText} ${req.url()}`)
+    }
   })
   await page.goto('/')
   await page.waitForTimeout(1_000)

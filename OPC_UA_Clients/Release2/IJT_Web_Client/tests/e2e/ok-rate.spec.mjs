@@ -65,11 +65,16 @@ test('OkRate: rate increases to 100% after clearing and simulating one OK', asyn
   const okBtn = app.page.locator('button:has-text("Simulate OK result")').first()
   await expect(okBtn, 'Simulate OK result button must be available').toBeVisible()
   await okBtn.click()
-  await app.page.waitForTimeout(1_000)
 
-  const rate = await okRate.getOkRateNumber()
-  // After 1 OK and 0 NOK, rate should be 100
-  expect(isNaN(rate) || rate === 100).toBe(true)
+  // Poll until the OPC UA result propagates and the display updates.
+  // A fixed timeout is unreliable across machines and load conditions.
+  await expect.poll(
+    async () => {
+      const r = await okRate.getOkRateNumber()
+      return isNaN(r) || r === 100
+    },
+    { timeout: 15_000, message: 'OK rate should reach 100 after clearing and simulating one OK result' }
+  ).toBe(true)
 })
 
 test('OkRate: rate decreases after simulating a NOT OK result', async ({ connected: app }) => {
@@ -90,10 +95,15 @@ test('OkRate: rate decreases after simulating a NOT OK result', async ({ connect
   await okBtn.click()
   await app.page.waitForTimeout(600)
   await nokBtn.click()
-  await app.page.waitForTimeout(1_000)
 
-  const rate = await okRate.getOkRateNumber()
-  expect(isNaN(rate) || rate < 100).toBe(true)
+  // Poll until both results propagate — fixed waits are unreliable under load.
+  await expect.poll(
+    async () => {
+      const r = await okRate.getOkRateNumber()
+      return isNaN(r) || r < 100
+    },
+    { timeout: 15_000, message: 'OK rate should drop below 100 after adding a NOT OK result' }
+  ).toBe(true)
 })
 
 test('OkRate: clear counters resets display', async ({ connected: app }) => {
