@@ -369,8 +369,8 @@ export default class ChartManager {
   /**
    * Enforce the graph to redraw itself
    */
-  update () {
-    this.myChart.update()
+  update (mode = 'none') {
+    this.myChart.update(mode)
   }
 
   /**
