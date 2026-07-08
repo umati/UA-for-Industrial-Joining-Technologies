@@ -117,6 +117,56 @@
   border-width: 2px 2px 0 0;
 }
 
+.traceArea .envelopeFullscreenTraceControls {
+  display: none;
+}
+
+.traceArea.is-trace-fullscreen .envelopeFullscreenTraceControls {
+  position: absolute;
+  top: var(--space-8);
+  left: var(--space-8);
+  z-index: 6;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(74px, auto));
+  align-items: center;
+  gap: var(--space-6);
+  max-width: min(520px, calc(100% - 76px));
+  padding: var(--space-8);
+  border: var(--ui-line-width) solid rgb(252 223 7 / 48%);
+  border-radius: var(--control-radius);
+  background: rgb(12 14 16 / 88%);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 38%);
+}
+
+.traceArea.is-trace-fullscreen .envelopeFullscreenTraceControls .myButton {
+  height: var(--control-height-compact);
+  min-height: var(--control-height-compact);
+  margin: 0;
+  padding: 0 var(--space-8);
+  font-size: var(--demo-font-button);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.envelopeTraceModeCheckboxToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: var(--control-height-compact);
+  color: var(--ui-text-main);
+  font-size: var(--demo-font-button);
+  cursor: pointer;
+  user-select: none;
+}
+
+.envelopeTraceModeCheckboxToggle input {
+  margin: 0;
+}
+
+.envelopeFullscreenTraceModeToggle {
+  grid-column: 1 / -1;
+}
+
 body.trace-fullscreen-open {
   overflow: hidden;
 }
@@ -187,7 +237,7 @@ body.trace-fullscreen-open {
 
 .traceScreen .myButton {
   background-color: var(--demo-button-bg);
-  border: var(--ui-line-width) solid var(--ui-line-color);
+  border: var(--ui-line-width) solid var(--ui-button-line-color);
   color: var(--ui-text-main);
   border-radius: var(--control-radius);
   font-weight: 600;
@@ -252,6 +302,229 @@ body.trace-fullscreen-open {
 .traceScreen .stepItemButton.myButtonSelected::before {
   content: '• ';
   color: #fff6a8;
+}
+
+.envelopeTrackTraceModeToggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
+.envelopeTrackTraceModeCheckboxToggle {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 var(--space-8);
+  border: var(--ui-line-width) solid oklch(78% 0.05 92deg / 42%);
+  border-radius: var(--control-radius);
+  background: oklch(21% 0.015 92deg / 72%);
+}
+
+.envelopeScreen {
+  --envelope-rail-button-height: var(--control-height-compact);
+  --envelope-rail-button-padding-inline: var(--space-8);
+}
+
+.envelopeTrackRail .myButton,
+.envelopeConfigureRail .myButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  height: var(--envelope-rail-button-height);
+  min-height: var(--envelope-rail-button-height);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 var(--envelope-rail-button-padding-inline);
+  font: inherit;
+  font-size: var(--demo-font-button);
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.envelopeTrackTraceModeButton {
+  border: var(--ui-line-width) solid oklch(78% 0.05 92deg / 42%);
+  border-radius: var(--control-radius);
+  background: oklch(21% 0.015 92deg / 72%);
+  color: var(--ui-text-main);
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.envelopeTrackTraceModeButton:not(:disabled):hover,
+.envelopeTrackTraceModeButton:focus-visible {
+  border-color: oklch(86% 0.11 92deg / 76%);
+  background: oklch(31% 0.045 92deg / 76%);
+  transform: translateY(-1px);
+}
+
+.envelopeTrackTraceModeButton:focus-visible {
+  outline: 2px solid oklch(86% 0.11 92deg / 76%);
+  outline-offset: 2px;
+}
+
+.envelopeTrackTraceModeButton--active {
+  border-color: oklch(86% 0.12 92deg / 86%);
+  background: oklch(36% 0.075 92deg / 78%);
+  box-shadow: inset 0 0 0 1px oklch(86% 0.12 92deg / 64%);
+}
+
+.envelopeTrackShellToggleButton::before {
+  content: '';
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: var(--space-4);
+  border-radius: 999px;
+  background: oklch(74% 0.12 215deg / 86%);
+  box-shadow: 0 0 0 2px oklch(72% 0.12 68deg / 64%);
+}
+
+.envelopeTrackTraceModeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.envelopeTrackRail .envelopeTrackLimitActions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-width: 0;
+}
+
+.envelopeTrackRail .envelopeTrackLimitActions > .myButton {
+  flex: 0 0 calc((100% - (3 * var(--space-4))) / 4);
+  width: calc((100% - (3 * var(--space-4))) / 4);
+  min-width: 0;
+  max-width: calc((100% - (3 * var(--space-4))) / 4);
+  padding-inline: var(--space-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.envelopeTrackAutomaticLimitButton {
+  min-width: 0;
+}
+
+.envelopeSortableRailCard {
+  overflow: hidden;
+}
+
+.envelopeSortableRailCardHandle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 30px;
+  padding: var(--space-8) var(--space-10);
+  margin: 0 0 var(--space-4);
+  box-sizing: border-box;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  border-radius: calc(var(--control-radius) - 1px) calc(var(--control-radius) - 1px) 0 0;
+  background-color: transparent;
+  transition:
+    box-shadow var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard);
+}
+
+.envelopeSortableRailCardHandle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-color: transparent;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard);
+}
+
+.envelopeSortableRailCardHandleLabel {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  transition:
+    color var(--motion-fast) var(--motion-ease-standard);
+}
+
+.envelopeSortableRailCard > .envelopeSortableRailCardHandle:hover,
+.envelopeSortableRailCard > .envelopeSortableRailCardHandle:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px oklch(84% 0.01 92deg / 54%),
+    0 0 0 2px oklch(84% 0.01 92deg / 18%);
+  color: var(--ui-text-main);
+}
+
+.envelopeSortableRailCard > .envelopeSortableRailCardHandle:hover::before,
+.envelopeSortableRailCard > .envelopeSortableRailCardHandle:focus-visible::before {
+  background-color: oklch(48% 0.006 92deg / 96%);
+}
+
+.envelopeSortableRailCard > .envelopeSortableRailCardHandle:active {
+  cursor: grabbing;
+}
+
+.envelopeSortableRailCard > .envelopeSortableRailCardHandle:active::before {
+  background-color: oklch(55% 0.008 92deg / 98%);
+}
+
+.envelopeSortableRailCard--dragging {
+  opacity: 0.58;
+  transform: scale(0.99);
+}
+
+.envelopeSortableRailContainer--active {
+  outline: 1px dashed oklch(82% 0.12 92deg / 46%);
+  outline-offset: var(--space-4);
+}
+
+.envelopeTrackRelevantTraceRow {
+  display: grid;
+  grid-template-columns: minmax(2.4rem, auto) minmax(0, 1fr) minmax(5rem, auto);
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  gap: var(--space-6);
+}
+
+.envelopeTrackRelevantTraceRow--header {
+  color: var(--ui-text-dark);
+  font-size: var(--type-12);
+  font-weight: 700;
+}
+
+.envelopeTrackRelevantTraceRow > span {
+  min-width: 0;
+}
+
+.envelopeTrackRelevantTraceRow .envelopeTrackTraceSelectWrap,
+.envelopePassExpectationCell {
+  justify-content: center;
+}
+
+.envelopeTrackRelevantTraceRow .envelopeRelevantTraceButton {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.envelopePassExpectationCell {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
 }
 
 @media (width <= 1180px) {

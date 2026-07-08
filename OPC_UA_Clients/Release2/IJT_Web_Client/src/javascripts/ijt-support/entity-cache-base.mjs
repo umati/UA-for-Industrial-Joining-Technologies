@@ -48,11 +48,19 @@ export class EntityCacheBase {
    * Remove all entries with a matching EntityId (across all types).
    * @param {object} entity
    */
-  removeEntity (entity) {
+  removeEntity (entity, { notify = true } = {}) {
+    let removed = false
     for (const [key, values] of Object.entries(this.cache)) {
-      this.cache[key] = values.filter((e) => e.EntityId !== entity.EntityId)
+      const filtered = values.filter((e) => e.EntityId !== entity.EntityId)
+      if (filtered.length !== values.length) {
+        removed = true
+      }
+      this.cache[key] = filtered
     }
-    this._notify(entity)
+    if (removed && notify) {
+      this._notify(entity)
+    }
+    return removed
   }
 
   /**
@@ -72,7 +80,7 @@ export class EntityCacheBase {
    * @param {object} entity
    */
   updateEntity (entity) {
-    this.removeEntity(entity)
+    this.removeEntity(entity, { notify: false })
     this.addEntity(entity)
   }
 

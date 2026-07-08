@@ -17,6 +17,22 @@ function resolveXValue (step, sampleIndex, xDimensionName) {
   return toNumber(step.angle?.[sampleIndex])
 }
 
+export function isRundownStep (step) {
+  const candidates = [
+    step?.name,
+    step?.stepType,
+    step?.stepId?.link?.Name,
+    step?.stepId?.link?.StepType,
+    step?.stepId?.link?.ProgramStepId,
+    step?.stepId?.link?.StepResultId,
+    step?.StepResultId?.link?.Name,
+    step?.StepResultId?.link?.StepType,
+    step?.StepResultId?.link?.ProgramStepId,
+    step?.StepResultId?.link?.StepResultId
+  ]
+  return candidates.some((value) => typeof value === 'string' && value.toLowerCase().includes('rundown'))
+}
+
 function buildOrderedSamples (trace) {
   const samples = []
   for (const step of trace?.steps ?? []) {
@@ -87,4 +103,22 @@ export function detectRundownZoomRange (trace, xDimensionName) {
   }
 
   return { minX, snugX, maxX }
+}
+
+export function detectRundownEndX (trace, xDimensionName) {
+  const rundownStep = (trace?.steps ?? []).find(isRundownStep)
+  if (!rundownStep) {
+    return null
+  }
+  const sourceValues = xDimensionName === 'time' ? rundownStep.time : rundownStep.angle
+  if (!Array.isArray(sourceValues) || sourceValues.length === 0) {
+    return null
+  }
+  for (let index = sourceValues.length - 1; index >= 0; index--) {
+    const xValue = resolveXValue(rundownStep, index, xDimensionName)
+    if (xValue !== null) {
+      return xValue
+    }
+  }
+  return null
 }

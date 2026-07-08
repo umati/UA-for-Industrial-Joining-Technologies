@@ -34,6 +34,22 @@
         window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       )
     },
+    get ENVELOPE_LOOSENING_RESULT_HANDLING () {
+      return firstConfiguredValue(
+        query.get('envelopeLooseningResultHandling'),
+        runtime.ENVELOPE_LOOSENING_RESULT_HANDLING,
+        runtime.envelopeLooseningResultHandling,
+        ''
+      )
+    },
+    get ENVELOPE_ALIGN_ON_RUNDOWN_END () {
+      return firstConfiguredValue(
+        query.get('envelopeAlignOnRundownEnd'),
+        runtime.ENVELOPE_ALIGN_ON_RUNDOWN_END,
+        runtime.envelopeAlignOnRundownEnd,
+        ''
+      )
+    },
     getWebSocketUrl: function () {
       const port = this.WS_PORT ? `:${this.WS_PORT}` : ''
       return `${this.WS_PROTOCOL}//${this.WS_HOST}${port}/`

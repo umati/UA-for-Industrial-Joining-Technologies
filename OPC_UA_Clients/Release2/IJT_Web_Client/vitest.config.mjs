@@ -13,7 +13,10 @@ export default defineConfig({
     }
   },
   test: {
-    include: ['tests/js/unit/**/*.test.mjs'],
+    include: [
+      'tests/js/unit/**/*.test.mjs',
+      'src/javascripts/views/envelope/tests/unit/**/*.test.mjs'
+    ],
     environment: 'node',
     silent: true,
     coverage: {

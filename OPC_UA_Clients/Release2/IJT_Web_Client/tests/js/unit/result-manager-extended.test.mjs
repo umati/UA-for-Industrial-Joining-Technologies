@@ -267,6 +267,54 @@ describe('ResultManager - max storage cap', () => {
     const rm = new ResultManager(makeEventManager(), makeSettingsProvider(0))
     expect(rm.getMaxStoredResults()).toBe(200)
   })
+
+  it('notifies evicted results in oldest-to-newest order with storage-limit payload', () => {
+    const rm = new ResultManager(makeEventManager(), makeSettingsProvider(2))
+    const evictedPayloads = []
+    rm.subscribeEvicted((payload) => {
+      evictedPayloads.push(payload)
+    })
+
+    const r1 = makeResult('evict-1', '1')
+    const r2 = makeResult('evict-2', '2')
+    const r3 = makeResult('evict-3', '3')
+    const r4 = makeResult('evict-4', '4')
+
+    rm.addResult(r1)
+    rm.addResult(r2)
+    rm.addResult(r3)
+    rm.addResult(r4)
+
+    expect(evictedPayloads).toHaveLength(2)
+    expect(evictedPayloads[0]).toMatchObject({
+      reason: 'storage-limit',
+      resultId: 'evict-1',
+      classification: '1',
+      uniqueCounter: 0
+    })
+    expect(evictedPayloads[0].result).toBe(r1)
+    expect(evictedPayloads[1]).toMatchObject({
+      reason: 'storage-limit',
+      resultId: 'evict-2',
+      classification: '2',
+      uniqueCounter: 1
+    })
+    expect(evictedPayloads[1].result).toBe(r2)
+  })
+
+  it('supports subscribeRemoved as alias of subscribeEvicted', () => {
+    const rm = new ResultManager(makeEventManager(), makeSettingsProvider(1))
+    const removedCb = vi.fn()
+    rm.subscribeRemoved(removedCb)
+
+    rm.addResult(makeResult('alias-1', '1'))
+    rm.addResult(makeResult('alias-2', '1'))
+
+    expect(removedCb).toHaveBeenCalledOnce()
+    const firstPayload = removedCb.mock.calls[0][0]
+    expect(firstPayload.reason).toBe('storage-limit')
+    expect(firstPayload.resultId).toBe('alias-1')
+  })
 })
 
 describe('ResultManager - export helpers', () => {

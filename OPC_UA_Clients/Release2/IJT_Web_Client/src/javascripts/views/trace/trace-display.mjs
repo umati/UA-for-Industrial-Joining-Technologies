@@ -1,7 +1,7 @@
 import SingleTraceData from './single-trace-data.mjs'
 import ChartManager from './chart-handler.mjs'
 import { createOptionalTraceExtensionLoader } from './optional-trace-extension-loader.mjs'
-import { detectRundownZoomRange } from './rundown-detector.mjs'
+import { detectRundownEndX, detectRundownZoomRange, isRundownStep } from './rundown-detector.mjs'
 
 const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/core/limit-curve-geometry.mjs')
 
@@ -11,7 +11,7 @@ const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/c
  * Little to none OPC UA relevant logic happens here
  */
 export default class TraceDisplay {
-  constructor (dimensions, resultManager, traceManager, container, debugSourceText) {
+  constructor (dimensions, resultManager, traceManager, container, debugSourceText, options = {}) {
     this.traceInterface = traceManager.traceInterface
     this.traceManager = traceManager
     this.xDimensionName = dimensions[0]
@@ -25,6 +25,7 @@ export default class TraceDisplay {
     this.allTraces = []
     this.selectedTrace = null
     this.selectedStep = null
+    this.alignOnRundownEnd = options.alignOnRundownEnd === true
     this.absoluteFunction = (x) => { return x }
     this.plugins = {
       autocolors: false,
@@ -33,6 +34,7 @@ export default class TraceDisplay {
       },
     }
     this.evictedSubscriptionAttached = false
+    this.pendingChartUpdate = false
 
     this.canvasCoverLayer = document.createElement('div')
     this.canvasCoverLayer.classList.add('traceArea')
@@ -45,7 +47,9 @@ export default class TraceDisplay {
     this.canvas.setAttribute('id', 'myChart')
     this.canvasCoverLayer.appendChild(this.canvas)
 
-    this.chartManager = new ChartManager(traceManager, this.canvas, debugSourceText)
+    this.chartManager = new ChartManager(traceManager, this.canvas, debugSourceText, {
+      chartPlugins: Array.isArray(options.chartPlugins) ? options.chartPlugins : []
+    })
 
     this.canvasCoverLayer.addEventListener('mousedown', () => {
       this.mouseDownInTraceArea = true
@@ -135,6 +139,7 @@ export default class TraceDisplay {
     document.body.classList.add('trace-fullscreen-open')
     this.updateFullscreenButtonState()
     this.canvasCoverLayer.dispatchEvent(new CustomEvent('tracefullscreenchange', { detail: { expanded: true } }))
+    this.zoomToLatestTraceXRange()
     this.scheduleChartResize()
   }
 
@@ -277,7 +282,21 @@ export default class TraceDisplay {
   }
 
   update () {
-    this.chartManager.update()
+    this.scheduleChartUpdate()
+  }
+
+  scheduleChartUpdate () {
+    if (this.pendingChartUpdate) {
+      return
+    }
+    this.pendingChartUpdate = true
+    const scheduler = (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function')
+      ? window.requestAnimationFrame.bind(window)
+      : (callback) => setTimeout(callback, 0)
+    scheduler(() => {
+      this.pendingChartUpdate = false
+      this.chartManager.update()
+    })
   }
 
   /**
@@ -312,7 +331,11 @@ export default class TraceDisplay {
     // Store it
     this.allTraces.push(newResultandTrace)
 
-    this.align(newResultandTrace, this.alignStep)
+    if (this.alignOnRundownEnd && this.alignTracesOnRundownEnd()) {
+      this.update()
+    } else {
+      this.align(newResultandTrace, this.alignStep)
+    }
 
     // Show buttons to select the trace and its substeps
     if (this.traceInterface) {
@@ -334,7 +357,95 @@ export default class TraceDisplay {
     const remainingInterval = range.maxX - range.snugX
     const paddedLeft = range.snugX - (remainingInterval * 0.2)
     const zoomLeft = Math.max(range.minX, paddedLeft)
-    this.chartManager.setXZoom(zoomLeft, range.maxX)
+    const displayOffset = Number(trace?.displayOffset)
+    const offset = Number.isFinite(displayOffset) ? displayOffset : 0
+    this.chartManager.setXZoom(zoomLeft - offset, range.maxX - offset)
+  }
+
+  alignTracesOnRundownEnd () {
+    let aligned = false
+    const diagnostics = []
+    for (const trace of this.allTraces) {
+      const rundownEndX = detectRundownEndX(trace, this.xDimensionName)
+      if (rundownEndX === null) {
+        trace.displayOffset = 0
+        diagnostics.push({
+          resultId: trace?.resultId,
+          rundownEndX: null,
+          displayOffset: trace.displayOffset,
+          renderedRundownEndX: null
+        })
+        continue
+      }
+      trace.displayOffset = rundownEndX
+      aligned = true
+      diagnostics.push({
+        resultId: trace?.resultId,
+        rundownEndX,
+        displayOffset: trace.displayOffset,
+        renderedRundownEndX: null
+      })
+    }
+    if (aligned) {
+      this.refreshAllData()
+    }
+    for (const diagnostic of diagnostics) {
+      const trace = this.allTraces.find((item) => item?.resultId === diagnostic.resultId)
+      const rundownStep = (trace?.steps ?? []).find(isRundownStep)
+      const renderedPoints = rundownStep?.graphic?.mainDataset?.data
+      const renderedEndPoint = Array.isArray(renderedPoints) ? renderedPoints[renderedPoints.length - 1] : null
+      diagnostic.renderedRundownEndX = Number.isFinite(Number(renderedEndPoint?.x)) ? Number(renderedEndPoint.x) : null
+    }
+    this.traceManager?.onRundownAlignmentUpdated?.(diagnostics)
+    return aligned
+  }
+
+  zoomToLatestTraceXRange () {
+    const latestTrace = this.allTraces[this.allTraces.length - 1]
+    const range = this.getTraceXAxisRange(latestTrace)
+    if (!range) {
+      return
+    }
+    this.chartManager.setXZoom(range.minX, range.maxX)
+  }
+
+  getTraceXAxisRange (trace) {
+    let minX = Infinity
+    let maxX = -Infinity
+    const displayOffset = Number(trace?.displayOffset) || 0
+
+    for (const step of trace?.steps ?? []) {
+      const values = this.getStepXAxisValues(step)
+      const startTimeOffset = this.xDimensionName === 'time' ? Number(step?.startTimeOffset) || 0 : 0
+      for (const value of values) {
+        const xValue = Number(value)
+        if (!Number.isFinite(xValue)) {
+          continue
+        }
+        const displayedX = xValue + startTimeOffset - displayOffset
+        if (displayedX < minX) {
+          minX = displayedX
+        }
+        if (displayedX > maxX) {
+          maxX = displayedX
+        }
+      }
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) {
+      return null
+    }
+    if (minX === maxX) {
+      return { minX: minX - 1, maxX: maxX + 1 }
+    }
+    return { minX, maxX }
+  }
+
+  getStepXAxisValues (step) {
+    if (this.xDimensionName === 'time') {
+      return Array.isArray(step?.time) ? step.time : []
+    }
+    return Array.isArray(step?.angle) ? step.angle : []
   }
 
   handleOldTraces (refreshCallback) {
@@ -369,7 +480,7 @@ export default class TraceDisplay {
     }
     this.traceInterface?.setAxisInfo?.(this.xDimensionName, this.yDimensionName)
     this.refreshAllData()
-    this.chartManager.update()
+    this.update()
   }
 
   // Step handling ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -567,7 +678,7 @@ export default class TraceDisplay {
       this.showValuesSelected = false
     }
     this.refreshAllData()
-    this.chartManager.update()
+    this.update()
   }
 
   showLimits (value) {
@@ -577,7 +688,7 @@ export default class TraceDisplay {
       this.showLimitSelected = false
     }
     this.refreshAllData()
-    this.chartManager.update()
+    this.update()
   }
 
   //  Point handling //////////////////////////////////////////////////////////////
@@ -626,7 +737,7 @@ export default class TraceDisplay {
     } else {
       this.selectStep(stepId.value)
     }
-    this.chartManager.update()
+    this.update()
   }
 
   createGraphicalLimit (limit, callback) {
@@ -668,7 +779,7 @@ class GraphicalLimit {
       this.glimit.fill = false
     }
 
-    this.chartManager.update()
+    this.traceDisplay.update()
   }
 
   pixelToValue (pos) {

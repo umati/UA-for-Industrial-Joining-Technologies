@@ -198,13 +198,22 @@ describe('EntityCache — updateEntity', () => {
     expect(cache.getEntityFromId(4, 'tool-1').Name).toBe('Tool A Updated')
   })
 
-  it('notifies subscribers twice (once for remove, once for add)', () => {
+  it('notifies subscribers once for an update', () => {
     const entity = { EntityType: 4, EntityId: 'tool-1', Name: 'Tool A' }
     cache.addEntity(entity)
     const cb = vi.fn()
     cache.subscribe(cb)
     cache.updateEntity(entity)
-    expect(cb).toHaveBeenCalledTimes(2)
+    expect(cb).toHaveBeenCalledTimes(1)
+  })
+
+  it('moves an entity to its new type bucket when the type changes', () => {
+    const original = { EntityType: 4, EntityId: 'tool-1', Name: 'Tool A' }
+    const updated = { EntityType: 3, EntityId: 'tool-1', Name: 'Tool A Updated' }
+    cache.addEntity(original)
+    cache.updateEntity(updated)
+    expect(cache.getEntityFromId(4, 'tool-1')).toBeUndefined()
+    expect(cache.getEntityFromId(3, 'tool-1').Name).toBe('Tool A Updated')
   })
 })
 

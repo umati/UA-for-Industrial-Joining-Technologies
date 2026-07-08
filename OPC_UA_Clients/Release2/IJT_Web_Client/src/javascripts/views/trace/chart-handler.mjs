@@ -12,7 +12,7 @@ const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/c
  * make it possible to exchange chart component with minimal effort
  */
 export default class ChartManager {
-  constructor (traceManager, context, debugSourceText) {
+  constructor (traceManager, context, debugSourceText, options = {}) {
     this.afterUpdateCallbacks = []
     this.traceManager = traceManager
     this.context = context
@@ -38,6 +38,45 @@ export default class ChartManager {
 
     const arrowPlugin = {
       id: 'arrowPlugin',
+      beforeDatasetDraw (chart, args) {
+        const dataset = chart.data.datasets[args.index]
+        if (!dataset?.envelopeMetaData || dataset.envelopeMetaData.type !== 'shell') {
+          return
+        }
+        const highlightColor = dataset.envelopeMetaData.highlightColor
+        if (typeof highlightColor !== 'string' || highlightColor.trim().length === 0) {
+          return
+        }
+        const points = chart.getDatasetMeta(args.index)?.data || []
+        if (points.length < 2) {
+          return
+        }
+        const lineWidth = Number(dataset.envelopeMetaData.highlightLineWidth)
+        const ctx = chart.ctx
+        ctx.save()
+        ctx.beginPath()
+        let didMove = false
+        for (const point of points) {
+          const x = Number(point?.x)
+          const y = Number(point?.y)
+          if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            didMove = false
+            continue
+          }
+          if (!didMove) {
+            ctx.moveTo(x, y)
+            didMove = true
+          } else {
+            ctx.lineTo(x, y)
+          }
+        }
+        ctx.strokeStyle = highlightColor
+        ctx.lineWidth = Number.isFinite(lineWidth) ? lineWidth : 7
+        ctx.lineJoin = 'round'
+        ctx.lineCap = 'round'
+        ctx.stroke()
+        ctx.restore()
+      },
       afterDatasetDraw (chart, args, options) {
         // Get the last two points of the dataset
         const ctx = chart.ctx
@@ -110,6 +149,10 @@ export default class ChartManager {
     }
     // arrowPlugin.context = this
 
+    const chartPlugins = Array.isArray(options.chartPlugins)
+      ? options.chartPlugins.filter(Boolean)
+      : []
+
     this.myChart = new Chart(context, {
       type: 'line',
       data: {
@@ -138,7 +181,7 @@ export default class ChartManager {
           },
         },
       },
-      plugins: [customPlugin, arrowPlugin],
+      plugins: [customPlugin, arrowPlugin, ...chartPlugins],
     })
 
     // this.myChart.options.plugins.push(customPlugin)

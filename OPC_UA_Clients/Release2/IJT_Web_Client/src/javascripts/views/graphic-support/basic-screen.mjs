@@ -92,7 +92,8 @@ export default class BasicScreen {
     if (!target || target === titleArea) {
       return false
     }
-    return !!target.closest?.('button, input, select, textarea, a, [role="button"]')
+    const interactiveElement = target.closest?.('button, input, select, textarea, a, [role="button"]')
+    return !!interactiveElement && interactiveElement !== titleArea
   }
 
   setEnvelopeSectionCollapsed (titleArea, section, collapsed) {

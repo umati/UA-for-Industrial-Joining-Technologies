@@ -645,6 +645,24 @@ export default class ResultGraphics extends BasicScreen {
     return `${before}\n${suffix}`
   }
 
+  getResultBoxLabelText (result) {
+    const name = typeof result?.name === 'string' ? result.name.trim() : ''
+    const evaluationDetails = typeof result?.ResultMetaData?.ResultEvaluationDetails?.Text === 'string'
+      ? result.ResultMetaData.ResultEvaluationDetails.Text.trim()
+      : ''
+
+    if (name && evaluationDetails && name !== evaluationDetails) {
+      return `${evaluationDetails}\n${name}`
+    }
+    if (evaluationDetails) {
+      return evaluationDetails
+    }
+    if (name) {
+      return name
+    }
+    return ''
+  }
+
   /**
    * Hide label text when the rendered box width is too narrow to reasonably
    * fit 10 letters, to avoid very tall wrapped boxes.
@@ -919,18 +937,13 @@ export default class ResultGraphics extends BasicScreen {
       // console.log('OTHER')
       return
     } else {
-      if (result.name) {
-        this.setLabelText(top, result.name)
+      const resultLabelText = this.getResultBoxLabelText(result)
+      if (resultLabelText) {
+        this.setLabelText(top, resultLabelText)
+      } else if (result.ResultMetaData.CreationTime) {
+        this.setLabelText(top, `Other: ${result.id}`)
       } else {
-        if (result.ResultMetaData.CreationTime) {
-          if (result.ResultMetaData.ResultEvaluationDetails) {
-            this.setLabelText(top, result.ResultMetaData.ResultEvaluationDetails.Text)
-          } else {
-            this.setLabelText(top, `Other: ${result.id}`)
-          }
-        } else {
-          this.setLabelText(top, `Ref: ${result.id}`)
-        }
+        this.setLabelText(top, `Ref: ${result.id}`)
       }
 
       /*
