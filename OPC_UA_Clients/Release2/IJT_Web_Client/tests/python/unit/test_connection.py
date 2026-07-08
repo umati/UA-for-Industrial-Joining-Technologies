@@ -225,6 +225,31 @@ async def test_connect_configures_long_watchdog_interval(monkeypatch):
     assert client_factory.call_args_list[1].kwargs["watchdog_intervall"] == 120.0
 
 
+@pytest.mark.asyncio
+async def test_connect_uses_default_watchdog_interval_for_invalid_env(monkeypatch):
+    monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "1")
+    monkeypatch.setenv("OPCUA_WATCHDOG_INTERVAL_SEC", "not-a-number")
+
+    main_mock = MagicMock()
+    main_mock.connect = AsyncMock(return_value=None)
+    main_mock.load_type_definitions = AsyncMock(return_value=None)
+    main_mock.load_data_type_definitions = AsyncMock(return_value=None)
+    main_mock.get_root_node = MagicMock(return_value=MagicMock())
+
+    sub_mock = MagicMock()
+    sub_mock.connect = AsyncMock(return_value=None)
+    sub_mock.load_type_definitions = AsyncMock(return_value=None)
+    sub_mock.load_data_type_definitions = AsyncMock(return_value=None)
+
+    with patch("python.connection.Client", side_effect=[main_mock, sub_mock]) as client_factory:
+        conn = _make_connection(server_url="opc.tcp://localhost:40451")
+        result = await conn.connect()
+
+    assert result.get("command") == "connection established"
+    assert client_factory.call_args_list[0].kwargs["watchdog_intervall"] == 3600.0
+    assert client_factory.call_args_list[1].kwargs["watchdog_intervall"] == 3600.0
+
+
 # ---------------------------------------------------------------------------
 # terminate
 # ---------------------------------------------------------------------------

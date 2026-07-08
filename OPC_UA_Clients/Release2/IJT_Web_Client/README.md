@@ -34,6 +34,17 @@ a web browser. The backend is Python with WebSockets. The frontend is Node.js.
   - Stop detached services: `python setup_project.py --stop`
   - Access: `http://localhost:3000`
 
+## Local configuration files
+
+- Git tracks default templates under `src/resources/`:
+  - `connectionpoints.default.json`
+  - `settings.default.json`
+- The backend creates local runtime files from those templates when missing:
+  - `connectionpoints.json`
+  - `settings.json`
+- Runtime files are ignored by Git. You can add personal OPC UA endpoints or UI settings locally without pushing them.
+- To reset local configuration, delete the runtime JSON file and restart the Web Client backend.
+
 ## Option 2 - Docker
 
 - **Run with Docker helper:** `python run_docker_setup.py`

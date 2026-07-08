@@ -82,7 +82,16 @@ def _opcua_watchdog_interval() -> float:
     The default is deliberately long because some controllers time out asyncua's
     periodic ServerState watchdog read while still delivering Publish messages.
     """
-    return max(1.0, float(os.getenv("OPCUA_WATCHDOG_INTERVAL_SEC", _OPCUA_WATCHDOG_INTERVAL_DEFAULT)))
+    configured_value = os.getenv("OPCUA_WATCHDOG_INTERVAL_SEC", _OPCUA_WATCHDOG_INTERVAL_DEFAULT)
+    try:
+        return max(1.0, float(configured_value))
+    except ValueError:
+        ijt_log.warning(
+            "Invalid OPCUA_WATCHDOG_INTERVAL_SEC=%r; using default %s seconds",
+            configured_value,
+            _OPCUA_WATCHDOG_INTERVAL_DEFAULT,
+        )
+        return float(_OPCUA_WATCHDOG_INTERVAL_DEFAULT)
 
 
 class Connection:

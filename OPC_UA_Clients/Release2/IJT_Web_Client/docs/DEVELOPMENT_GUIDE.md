@@ -17,12 +17,20 @@ Before submitting a change, confirm:
 ## Contribution Guidelines
 
 - Do **not** edit `.venv/` or `node_modules/`.
+- Do **not** commit local `src/resources/connectionpoints.json` or `src/resources/settings.json`; edit the `*.default.json` templates only when changing shared defaults.
 - Do **not** change Docker setup unless the contribution requires it.
 - Prefer code that is easy to read and understand — this project is used for educational purposes.
 - Prefer minimal, targeted edits over broad rewrites.
 - Comment code where it aids understanding.
 - If runtime behaviour might change, document the assumptions and impact.
 - Preserve existing public APIs unless the change explicitly requires updating them.
+
+## Runtime JSON resources
+
+The shared defaults live in `src/resources/connectionpoints.default.json` and `src/resources/settings.default.json`.
+The backend creates `connectionpoints.json` and `settings.json` locally when they are missing, then reads and writes those runtime files.
+
+Keep personal controller endpoints and local UI preferences in the generated runtime files only. If a default should apply to every fresh checkout, change the matching `*.default.json` template and keep the runtime file ignored.
 
 ## Validation Commands
 

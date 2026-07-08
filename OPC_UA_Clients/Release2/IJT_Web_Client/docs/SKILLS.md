@@ -52,6 +52,12 @@ IJT_Web_Client/
 │   ├── network_utils.py    # endpoint_reachable(), parse_endpoint_host_port()
 │   └── utils.py            # Shared helpers
 │
+├── src/resources/
+│   ├── connectionpoints.default.json  # Committed shared default endpoint list
+│   ├── settings.default.json          # Committed shared default UI/method settings
+│   ├── connectionpoints.json          # Local runtime file, generated and gitignored
+│   └── settings.json                  # Local runtime file, generated and gitignored
+│
 ├── src/javascripts/
 │   ├── ijt-support/        # Core client library (see docs/guides/ijt-support-guide.md)
 │   │   ├── ijt-support.mjs         # Barrel export
@@ -350,6 +356,7 @@ Only standard files at root: `index.html`, `index.py`, `config.js`, `run_all_tes
 - `scripts/create_structure.py` is the only scaffolding script location; do not add a root-level copy.
 - `src/python/network_utils.py` is the only network helper location; do not add root-level import shims.
 - `src/resources/css/nodeStyle.css` is the stylesheet location used by `index.html`.
+- `src/resources/connectionpoints.json` and `src/resources/settings.json` are generated local runtime files; commit only the matching `*.default.json` templates.
 - Do not add a root `conftest.py`; pytest fixtures live under `tests/`.
 - Do not add root shell/bootstrap runners; use project-root `run_all_tests.py`.
 - Do not add `scripts/run_tests.py` or `scripts/run_all_tests_bootstrap.py`; use project-root `run_all_tests.py`.
@@ -581,6 +588,7 @@ and `SimulateBulkEvents` defaults to event type `1` and count `3`.
 | `IJT_SIMULATOR_INSTANCE_ROOT` | `{RUNNER_TEMP or temp}/ijt-sim` | Optional short root for runner-owned simulator copies; each port gets its own child directory |
 | `IJT_DOCKER_BUILD_TIMEOUT` | `1200` | Docker image build timeout in seconds |
 | `IJT_DOCKER_TIMEOUT` | `90` | Docker HTTP readiness timeout in seconds |
+| `OPCUA_WATCHDOG_INTERVAL_SEC` | `3600` | Optional asyncua watchdog interval override; invalid values fall back to the default |
 
 ### Server Auto-Launch & Port Isolation
 
@@ -592,6 +600,9 @@ When the runner sets `OPCUA_TEST_ENDPOINT`, the WebSocket backend serves that en
 `LOCAL` connection point for Playwright so UI tests connect to the same isolated server as direct tests.
 `OPCUA_SERVER_URL` follows the same runtime override path for local validation; leave it unset for normal
 production/browser use unless you intentionally want to replace the served `LOCAL` endpoint.
+The committed `connectionpoints.default.json` keeps only the shared `LOCAL` endpoint. The backend creates
+the ignored runtime `connectionpoints.json` from that template, so developers can add local controller endpoints
+without breaking repository hygiene checks.
 
 Runner-owned OPC UA simulator launches write `opcua-server-<port>.out.log` and
 `opcua-server-<port>.err.log` under `test-results/` (or `IJT_WEB_TEST_RESULTS_DIR`

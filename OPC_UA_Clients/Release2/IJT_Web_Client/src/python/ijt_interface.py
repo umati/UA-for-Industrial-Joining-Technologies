@@ -4,7 +4,8 @@
 delegates every command arriving over the WebSocket to the appropriate
 :class:`~python.connection.Connection` method.  It also owns the persistent
 JSON resource files (``connectionpoints.json``, ``settings.json``) under
-``src/resources/``.
+``src/resources/``. The mutable runtime files are generated from committed
+``*.default.json`` templates on first use.
 """
 
 __all__ = ["IJTInterface"]
@@ -43,6 +44,10 @@ class IJTInterface:
     # of which directory the process was started from or host filesystem casing.
     _SOURCE_ROOT: Path = Path(__file__).resolve().parent.parent
     _RESOURCE_DIR_CANDIDATES: tuple[str, ...] = ("resources", "Resources")
+    _DEFAULT_RESOURCE_FILENAMES: dict[str, str] = {
+        "connectionpoints.json": "connectionpoints.default.json",
+        "settings.json": "settings.default.json",
+    }
 
     def __init__(self) -> None:
         self.connection_list: Dict[str, Optional[Connection]] = {}
@@ -55,6 +60,21 @@ class IJTInterface:
             if resource_dir.exists():
                 return resource_dir / filename
         return cls._SOURCE_ROOT / cls._RESOURCE_DIR_CANDIDATES[0] / filename
+
+    def _resource_default_path(self, filename: str) -> Path:
+        return self._resource_path(self._DEFAULT_RESOURCE_FILENAMES.get(filename, filename))
+
+    def _ensure_runtime_resource(self, filename: str) -> Path:
+        path = self._resource_path(filename)
+        if path.exists():
+            return path
+
+        default_path = self._resource_default_path(filename)
+        payload = self._normalize_json_keys_lower(json.loads(default_path.read_text(encoding="utf-8")))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        ijt_log.info(f"Created local runtime resource {path} from {default_path}")
+        return path
 
     @classmethod
     def _normalize_json_keys_lower(cls, payload: Any) -> Any:
@@ -162,11 +182,12 @@ class IJTInterface:
         """Coroutine. Read and return the saved connection-points configuration.
 
         Returns:
-            Parsed JSON contents of ``Resources/connectionpoints.json``, or
-            ``{"exception": "…"}`` if the file cannot be read.
+            Parsed JSON contents of ``Resources/connectionpoints.json`` (created
+            from ``connectionpoints.default.json`` if missing), or
+            ``{"exception": "…"}`` if the runtime/default file cannot be read.
         """
-        path = self._resource_path("connectionpoints.json")
         try:
+            path = self._ensure_runtime_resource("connectionpoints.json")
             payload = json.loads(path.read_text(encoding="utf-8"))
             payload = self._normalize_json_keys_lower(payload)
             return self._apply_runtime_local_endpoint(payload)
@@ -184,7 +205,8 @@ class IJTInterface:
         path = self._resource_path("connectionpoints.json")
         try:
             normalized_data = self._normalize_json_keys_lower(data)
-            path.write_text(json.dumps(normalized_data, indent=2), encoding="utf-8")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(normalized_data, indent=2) + "\n", encoding="utf-8")
         except Exception as exc:
             ijt_log.error(f"Error writing connection points: {exc}")
 
@@ -192,15 +214,16 @@ class IJTInterface:
         """Coroutine. Read and return the saved application settings.
 
         Returns:
-            Parsed JSON contents of ``Resources/settings.json``, or
-            ``{"exception": "…"}`` if the file is missing or unreadable.
+            Parsed JSON contents of ``Resources/settings.json`` (created from
+            ``settings.default.json`` if missing), or ``{"exception": "…"}``
+            if the runtime/default file is missing or unreadable.
         """
-        path = self._resource_path("settings.json")
         try:
+            path = self._ensure_runtime_resource("settings.json")
             payload = json.loads(path.read_text(encoding="utf-8"))
             return self._normalize_json_keys_lower(payload)
         except FileNotFoundError:
-            return {"exception": "File not found: Resources/settings.json"}
+            return {"exception": "File not found: Resources/settings.default.json"}
         except Exception as exc:
             ijt_log.error(f"Error reading settings: {exc}")
             return {"exception": str(exc)}
@@ -215,7 +238,8 @@ class IJTInterface:
         path = self._resource_path("settings.json")
         try:
             normalized_data = self._normalize_json_keys_lower(data)
-            path.write_text(json.dumps(normalized_data, indent=2), encoding="utf-8")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(normalized_data, indent=2) + "\n", encoding="utf-8")
         except Exception as exc:
             ijt_log.error(f"Error writing settings: {exc}")
 

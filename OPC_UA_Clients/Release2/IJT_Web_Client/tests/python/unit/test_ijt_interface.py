@@ -47,8 +47,8 @@ WEB_CLIENT_ROOT = Path(__file__).parents[3]
 
 REQUIRED_STATIC_ASSETS = [
     "src/resources/digital_twin.jpg",
-    "src/resources/settings.json",
-    "src/resources/connectionpoints.json",
+    "src/resources/settings.default.json",
+    "src/resources/connectionpoints.default.json",
 ]
 
 
@@ -519,9 +519,12 @@ async def test_handle_get_connection_points_returns_exception_on_read_error():
 async def test_handle_set_connection_points_logs_on_write_error():
     """handle_set_connection_points swallows write exceptions (no raise)."""
     from pathlib import Path
+    from unittest.mock import MagicMock
 
     interface = IJTInterface()
-    interface._resource_path = lambda _: Path("/nonexistent/xyz/file.json")  # type: ignore[method-assign]
+    bad_path = MagicMock(spec=Path)
+    bad_path.write_text.side_effect = PermissionError("permission denied")
+    interface._resource_path = lambda _: bad_path  # type: ignore[method-assign]
 
     await interface.handle_set_connection_points({"connectionpoints": []})
 
@@ -557,9 +560,12 @@ async def test_handle_get_settings_returns_exception_on_generic_error():
 async def test_handle_set_settings_logs_on_write_error():
     """handle_set_settings swallows write exceptions (no raise)."""
     from pathlib import Path
+    from unittest.mock import MagicMock
 
     interface = IJTInterface()
-    interface._resource_path = lambda _: Path("/nonexistent/xyz/settings.json")  # type: ignore[method-assign]
+    bad_path = MagicMock(spec=Path)
+    bad_path.write_text.side_effect = PermissionError("permission denied")
+    interface._resource_path = lambda _: bad_path  # type: ignore[method-assign]
 
     await interface.handle_set_settings({"initialviewlevel": 1})
 
@@ -871,11 +877,49 @@ async def test_handle_get_settings_returns_exception_on_file_not_found():
 
     interface = IJTInterface()
     interface._resource_path = lambda _: Path("/no/such/path/settings.json")  # type: ignore[method-assign]
+    interface._resource_default_path = lambda _: Path("/no/such/path/settings.default.json")  # type: ignore[method-assign]
 
     result = await interface.handle_get_settings()
 
     assert "exception" in result
     assert "File not found" in result["exception"]
+
+
+@pytest.mark.asyncio
+async def test_missing_runtime_resources_are_created_from_defaults(tmp_path):
+    """Mutable JSON resources are generated locally from committed defaults."""
+    resource_dir = tmp_path / "resources"
+    resource_dir.mkdir()
+    (resource_dir / "connectionpoints.default.json").write_text(
+        json.dumps(
+            {
+                "connectionpoints": [
+                    {
+                        "name": "LOCAL",
+                        "address": "opc.tcp://127.0.0.1:40451",
+                        "autoconnect": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (resource_dir / "settings.default.json").write_text(
+        json.dumps({"InitialViewLevel": "4"}),
+        encoding="utf-8",
+    )
+
+    interface = IJTInterface()
+    interface._resource_path = lambda filename: resource_dir / filename  # type: ignore[method-assign]
+
+    connectionpoints = await interface.handle_get_connection_points()
+    settings = await interface.handle_get_settings()
+
+    assert "exception" not in connectionpoints
+    assert "exception" not in settings
+    assert (resource_dir / "connectionpoints.json").exists()
+    assert (resource_dir / "settings.json").exists()
+    assert settings["initialviewlevel"] == "4"
 
 
 # ===========================================================================

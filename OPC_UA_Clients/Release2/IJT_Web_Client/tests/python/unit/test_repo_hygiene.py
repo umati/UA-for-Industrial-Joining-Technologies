@@ -189,16 +189,16 @@ class TestGitignoreCoverage:
 
 
 # ===========================================================================
-# 3. connectionpoints.json — default config enforcement
+# 3. Runtime/default JSON resource enforcement
 # ===========================================================================
 
 
 @pytest.mark.checkout_hygiene
-class TestConnectionpointsDefault:
-    """Enforce that committed connectionpoints.json files contain only the LOCAL entry.
+class TestRuntimeResourceDefaults:
+    """Enforce stable committed defaults and ignored mutable runtime JSON files.
 
-    Developers may add extra entries locally, but must not push them.
-    CI catches this automatically.
+    Developers may add extra connection points or settings locally, but must not
+    push machine-specific runtime state. CI catches this automatically.
     """
 
     _LOCAL_NAMES = {"local", "localhost"}
@@ -207,37 +207,70 @@ class TestConnectionpointsDefault:
         not _git_available(),
         reason="git not installed — skipping connectionpoints checks",
     )
-    def test_web_client_connectionpoints_has_only_local(self):
-        """src/resources/connectionpoints.json in IJT_Web_Client must have exactly one
+    def test_web_client_connectionpoints_default_has_only_local(self):
+        """src/resources/connectionpoints.default.json must have exactly one
         entry and it must be the LOCAL endpoint (127.0.0.1 / localhost)."""
         import json
 
         path = (
-            _GIT_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "src" / "resources" / "connectionpoints.json"
+            _GIT_ROOT
+            / "OPC_UA_Clients"
+            / "Release2"
+            / "IJT_Web_Client"
+            / "src"
+            / "resources"
+            / "connectionpoints.default.json"
         )
         if not path.exists():
             if (_GIT_ROOT / ".git").exists():
-                pytest.fail(f"connectionpoints.json missing from git repo at {path}")
-            pytest.skip(f"connectionpoints.json not found at {path} (no .git — Docker / non-checkout environment)")
+                pytest.fail(f"connectionpoints.default.json missing from git repo at {path}")
+            pytest.skip(
+                f"connectionpoints.default.json not found at {path} (no .git — Docker / non-checkout environment)"
+            )
 
         data = json.loads(path.read_text(encoding="utf-8"))
         points = data.get("connectionpoints", [])
 
         assert len(points) == 1, (
-            f"connectionpoints.json must contain exactly 1 entry (the LOCAL endpoint), "
+            f"connectionpoints.default.json must contain exactly 1 entry (the LOCAL endpoint), "
             f"but found {len(points)} entries: "
             + ", ".join(p.get("name", "?") for p in points)
-            + "\n  Remove personal/team endpoints before committing."
+            + "\n  Remove personal/team endpoints from the committed default."
         )
 
         name = points[0].get("name", "").strip().lower()
         address = points[0].get("address", "")
         is_local = name in self._LOCAL_NAMES or "127.0.0.1" in address or "localhost" in address
         assert is_local, (
-            f"The single entry in connectionpoints.json must be the LOCAL endpoint "
+            f"The single entry in connectionpoints.default.json must be the LOCAL endpoint "
             f"(name 'LOCAL' or address 127.0.0.1/localhost), got: name={points[0].get('name')!r}, "
             f"address={address!r}"
         )
+
+    @pytest.mark.parametrize(
+        "runtime_path",
+        [
+            "OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/connectionpoints.json",
+            "OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/settings.json",
+        ],
+    )
+    def test_runtime_resource_files_are_gitignored(self, runtime_path):
+        gitignore_text = (_GIT_ROOT / ".gitignore").read_text(encoding="utf-8-sig")
+        assert runtime_path in gitignore_text, f"{runtime_path} must be ignored because it is mutable local state"
+
+    @pytest.mark.skipif(
+        not _git_available(),
+        reason="git not installed — skipping default resource tracking checks",
+    )
+    @pytest.mark.parametrize(
+        "default_path",
+        [
+            "OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/connectionpoints.default.json",
+            "OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/settings.default.json",
+        ],
+    )
+    def test_default_resource_files_are_tracked(self, default_path):
+        assert (_GIT_ROOT / default_path).exists(), f"{default_path} must exist as the committed template"
 
 
 # ===========================================================================
