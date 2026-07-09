@@ -11,6 +11,8 @@
     "test:integration:python": "python run_all_tests.py --integration",
     "test:live:python": "python -m pytest tests/test_opcua_live.py -v",
     "test:unit:js": "vitest run",
+    "test:unit:js:coverage": "vitest run --coverage --exclude src/javascripts/views/envelope/tests/unit/automatic-stepwise-performance.test.mjs",
+    "test:unit:js:performance": "vitest run src/javascripts/views/envelope/tests/unit/automatic-stepwise-performance.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --project=smoke --reporter=line",
     "test:e2e:regression": "playwright test --project=regression --reporter=line",

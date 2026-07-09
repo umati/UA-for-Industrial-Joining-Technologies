@@ -32,6 +32,14 @@ The Web JavaScript lint gate also owns the connection-layer randomness guard:
 Connection/session identifiers must use Web Crypto APIs such as
 `crypto.randomUUID()` or `crypto.getRandomValues()`. Existing non-security uses
 such as WebSocket retry jitter remain outside this guard.
+The Web Client JavaScript runner treats the private Envelope submodule as
+optional by default. `--private-modules auto` runs Envelope lint, tests, and
+performance budgets only when the submodule is checked out locally; public CI
+and public clones skip those checks cleanly when the private module is absent.
+Use `--private-modules require` only in authorized private validation where a
+missing Envelope checkout should fail the run. Coverage remains enforced on the
+public JavaScript suite; Envelope performance-budget tests run separately without
+coverage instrumentation because coverage overhead invalidates timing budgets.
 The `pre-commit` CI job runs the repository hook configuration on all files and
 is part of the required check set. It skips only npm-backed JavaScript hooks
 because the dedicated Web and Node JavaScript jobs already run those checks

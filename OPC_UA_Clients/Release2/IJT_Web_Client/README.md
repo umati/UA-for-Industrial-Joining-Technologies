@@ -62,3 +62,19 @@ a web browser. The backend is Python with WebSockets. The frontend is Node.js.
 ## Testing
 
 - **Run tests:** `python run_all_tests.py`
+
+### Optional private Envelope module
+
+The Envelope view is an optional private Git submodule mounted at:
+
+```text
+src\javascripts\views\envelope
+```
+
+Public IJT checkouts continue to work when this private module is absent. The Web Client runner defaults to:
+
+```powershell
+python run_all_tests.py --private-modules auto
+```
+
+In `auto` mode, private Envelope checks run only when the submodule is checked out locally. Use `--private-modules skip` to force public-only validation, or `--private-modules require` when an authorized developer or private CI job must fail if the Envelope module is missing.

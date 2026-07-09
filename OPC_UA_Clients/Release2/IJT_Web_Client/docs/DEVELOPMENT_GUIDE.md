@@ -35,16 +35,16 @@ Keep personal controller endpoints and local UI preferences in the generated run
 ## Validation Commands
 
 ```bash
-# Lint
-npx eslint src/javascripts config.js --config eslint.config.mjs --max-warnings 0
+# Public baseline validation
+python run_all_tests.py --private-modules skip
 
-# JS unit tests
-npx vitest run
+# JavaScript lane; runs optional private Envelope checks when the submodule is present
+python run_all_tests.py --phase1-js
 
-# Python unit tests (fast, no server)
-python -m pytest tests/python/unit/ -q --timeout=30
+# JavaScript lane; require the private Envelope submodule and fail if it is absent
+python run_all_tests.py --phase1-js --private-modules require
 
-# All tests
+# Full local runner
 python run_all_tests.py
 
 # Backend starts

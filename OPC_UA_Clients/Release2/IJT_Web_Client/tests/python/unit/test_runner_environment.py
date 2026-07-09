@@ -324,6 +324,91 @@ def test_npm_install_repairs_incomplete_node_modules(monkeypatch, tmp_path):
     assert calls
 
 
+def test_optional_private_module_stage_skips_when_disabled(monkeypatch):
+    runner = _load_runner()
+    skips = []
+    monkeypatch.setattr(runner, "_banner", lambda _title: None)
+    monkeypatch.setattr(runner, "_skip", lambda message: skips.append(message))
+
+    result = runner._stage_optional_private_module_static("skip")
+
+    assert result.skipped is True
+    assert result.rc == 0
+    assert "disabled via --private-modules=skip" in result.notes[0]
+    assert "disabled" in skips[0]
+
+
+def test_optional_private_module_stage_skips_when_unavailable_in_auto_mode(monkeypatch, tmp_path):
+    runner = _load_runner()
+    skips = []
+    monkeypatch.setattr(runner, "_banner", lambda _title: None)
+    monkeypatch.setattr(runner, "_skip", lambda message: skips.append(message))
+    monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_DIR", tmp_path / "missing-envelope")
+    monkeypatch.setattr(
+        runner,
+        "_OPTIONAL_PRIVATE_ENVELOPE_ENTRYPOINT",
+        tmp_path / "missing-envelope" / "ui" / "envelope-graphics.mjs",
+    )
+
+    result = runner._stage_optional_private_module_static("auto")
+
+    assert result.skipped is True
+    assert result.rc == 0
+    assert "not checked out" in result.notes[0]
+    assert "skipping optional private checks" in skips[0]
+
+
+def test_optional_private_module_stage_fails_when_required_but_unavailable(monkeypatch, tmp_path):
+    runner = _load_runner()
+    failures = []
+    monkeypatch.setattr(runner, "_banner", lambda _title: None)
+    monkeypatch.setattr(runner, "_fail", lambda message: failures.append(message))
+    monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_DIR", tmp_path / "missing-envelope")
+    monkeypatch.setattr(
+        runner,
+        "_OPTIONAL_PRIVATE_ENVELOPE_ENTRYPOINT",
+        tmp_path / "missing-envelope" / "ui" / "envelope-graphics.mjs",
+    )
+
+    result = runner._stage_optional_private_module_static("require")
+
+    assert result.skipped is False
+    assert result.rc == 1
+    assert "not checked out" in result.notes[0]
+    assert failures
+
+
+def test_optional_private_module_stage_runs_lint_and_tests_when_available(monkeypatch, tmp_path):
+    runner = _load_runner()
+    envelope_dir = tmp_path / "envelope"
+    (envelope_dir / "ui").mkdir(parents=True)
+    (envelope_dir / "ui" / "envelope-graphics.mjs").write_text("export {}\n", encoding="utf-8")
+    (envelope_dir / "package.json").write_text("{}\n", encoding="utf-8")
+    (envelope_dir / "node_modules").mkdir()
+    calls = []
+
+    monkeypatch.setattr(runner, "_banner", lambda _title: None)
+    monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_DIR", envelope_dir)
+    monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_ENTRYPOINT", envelope_dir / "ui" / "envelope-graphics.mjs")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: "npm" if name in {"npm", "npm.cmd"} else None)
+    monkeypatch.setattr(runner, "_missing_node_requirements", lambda **kwargs: [])
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs.get("cwd")))
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_optional_private_module_static("auto")
+
+    assert result.rc == 0
+    assert result.skipped is False
+    assert calls == [
+        (["npm", "run", "lint:all"], envelope_dir),
+        (["npm", "run", "test"], envelope_dir),
+    ]
+
+
 def test_runner_results_dir_can_be_isolated_per_parallel_suite(monkeypatch):
     isolated = _PROJECT_ROOT / "test-results" / "webclient-live-e2e-smoke"
     monkeypatch.setenv("IJT_WEB_TEST_RESULTS_DIR", str(isolated))
@@ -359,7 +444,7 @@ def test_python_unit_stage_writes_ci_junit_and_coverage_paths(monkeypatch, tmp_p
 
 def test_js_unit_stage_writes_ci_junit_and_cobertura_coverage(monkeypatch):
     runner = _load_runner()
-    captured = {}
+    captured = {"calls": []}
     original_exists = Path.exists
 
     monkeypatch.setattr(runner, "_banner", lambda title: None)
@@ -372,7 +457,7 @@ def test_js_unit_stage_writes_ci_junit_and_cobertura_coverage(monkeypatch):
         return original_exists(self)
 
     def fake_run(cmd, **kwargs):
-        captured["cmd"] = cmd
+        captured["calls"].append({"cmd": cmd, "label": kwargs.get("label")})
         return 0
 
     monkeypatch.setattr(Path, "exists", fake_exists)
@@ -381,8 +466,118 @@ def test_js_unit_stage_writes_ci_junit_and_cobertura_coverage(monkeypatch):
     result = runner._stage_js_unit()
 
     assert result.rc == 0
-    assert "--coverage.reporter=cobertura" in captured["cmd"]
-    assert any(str(part).endswith("vitest.xml") for part in captured["cmd"])
+    assert len(captured["calls"]) == 2
+    assert captured["calls"][0]["label"] == "vitest --coverage"
+    assert captured["calls"][1]["label"] == "vitest performance budgets"
+    assert captured["calls"][0]["cmd"][:4] == [runner.shutil.which("npm"), "run", "test:unit:js:coverage", "--"]
+    assert "--coverage.reporter=cobertura" in captured["calls"][0]["cmd"]
+    assert any(str(part).endswith("vitest.xml") for part in captured["calls"][0]["cmd"])
+    assert captured["calls"][1]["cmd"][:3] == [runner.shutil.which("npm"), "run", "test:unit:js:performance"]
+
+
+def test_js_unit_stage_skips_private_performance_file_when_submodule_is_absent(monkeypatch, tmp_path):
+    runner = _load_runner()
+    calls = []
+    skips = []
+    original_exists = Path.exists
+
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_skip", lambda message: skips.append(message))
+    monkeypatch.setattr(runner.shutil, "which", lambda name: name)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
+    monkeypatch.setattr(
+        runner, "_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST", tmp_path / "missing-performance.test.mjs"
+    )
+
+    def fake_exists(self):
+        if "node_modules" in str(self):
+            return True
+        return original_exists(self)
+
+    def fake_run(cmd, **kwargs):
+        calls.append({"cmd": cmd, "label": kwargs.get("label")})
+        return 0
+
+    monkeypatch.setattr(Path, "exists", fake_exists)
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_js_unit()
+
+    assert result.rc == 0
+    assert len(calls) == 1
+    assert calls[0]["label"] == "vitest --coverage"
+    assert result.notes == ["optional private Envelope performance tests not checked out"]
+    assert skips == ["optional private Envelope performance tests not checked out"]
+
+
+def test_js_unit_stage_respects_private_modules_skip_for_performance_file(monkeypatch, tmp_path):
+    runner = _load_runner()
+    calls = []
+    skips = []
+    original_exists = Path.exists
+    performance_file = tmp_path / "automatic-stepwise-performance.test.mjs"
+    performance_file.write_text("export {}\n", encoding="utf-8")
+
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_skip", lambda message: skips.append(message))
+    monkeypatch.setattr(runner.shutil, "which", lambda name: name)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
+    monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST", performance_file)
+
+    def fake_exists(self):
+        if "node_modules" in str(self):
+            return True
+        return original_exists(self)
+
+    def fake_run(cmd, **kwargs):
+        calls.append({"cmd": cmd, "label": kwargs.get("label")})
+        return 0
+
+    monkeypatch.setattr(Path, "exists", fake_exists)
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_js_unit("skip")
+
+    assert result.rc == 0
+    assert len(calls) == 1
+    assert calls[0]["label"] == "vitest --coverage"
+    assert result.notes == ["optional private Envelope performance tests disabled via --private-modules=skip"]
+    assert skips == ["optional private Envelope performance tests disabled (--private-modules=skip)"]
+
+
+def test_js_unit_stage_requires_private_performance_file_when_private_modules_required(monkeypatch, tmp_path):
+    runner = _load_runner()
+    calls = []
+    failures = []
+    original_exists = Path.exists
+
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_fail", lambda message: failures.append(message))
+    monkeypatch.setattr(runner.shutil, "which", lambda name: name)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
+    monkeypatch.setattr(
+        runner, "_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST", tmp_path / "missing-performance.test.mjs"
+    )
+
+    def fake_exists(self):
+        if "node_modules" in str(self):
+            return True
+        return original_exists(self)
+
+    def fake_run(cmd, **kwargs):
+        calls.append({"cmd": cmd, "label": kwargs.get("label")})
+        return 0
+
+    monkeypatch.setattr(Path, "exists", fake_exists)
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_js_unit("require")
+
+    assert result.rc == 1
+    assert len(calls) == 1
+    assert calls[0]["label"] == "vitest --coverage"
+    assert result.notes == ["optional private Envelope performance tests not checked out"]
+    assert failures == ["optional private Envelope performance tests not checked out"]
 
 
 def test_js_lint_eslint_skip_mentions_production_image_probes(monkeypatch, tmp_path):
@@ -1440,6 +1635,7 @@ def _phase1_lane_runner(monkeypatch, tmp_path, argv):
     monkeypatch.setattr(runner, "_stage_python_unit", stage("python-unit"))
     monkeypatch.setattr(runner, "_stage_js_lint", stage("js-lint"))
     monkeypatch.setattr(runner, "_stage_js_unit", stage("js-unit"))
+    monkeypatch.setattr(runner, "_stage_optional_private_module_static", lambda _mode: stage("private-module-static")())
     monkeypatch.setattr(runner, "_stage_infra_lint", stage("infra-lint"))
     return runner, calls
 
@@ -1455,7 +1651,7 @@ def test_phase1_js_runs_js_lane_without_python(monkeypatch, tmp_path):
     runner, calls = _phase1_lane_runner(monkeypatch, tmp_path, ["--phase1-js"])
 
     assert runner.main() == 0
-    assert calls == ["versions", "npm-install", "js-lint", "js-unit"]
+    assert calls == ["versions", "npm-install", "js-lint", "js-unit", "private-module-static"]
 
 
 def test_phase1_lane_flags_reject_conflicting_modes(monkeypatch, tmp_path):

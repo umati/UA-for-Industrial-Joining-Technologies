@@ -23,15 +23,21 @@ _SRC_DIR = _PROJECT_ROOT / "src"
 # Pattern: only lowercase letters, digits, hyphens, and dots allowed.
 # Rejects PascalCase (MyFile.mjs) or camelCase (myFile.mjs).
 _KEBAB_OR_LOWER_RE = re.compile(r"^[a-z0-9][a-z0-9\-\.]*$")
+_SKIP_DIR_NAMES = {"__pycache__", "node_modules"}
+
+
+def _is_scanned_path(path: Path) -> bool:
+    relative = path.relative_to(_SRC_DIR)
+    return not any(part.startswith(".") or part in _SKIP_DIR_NAMES for part in relative.parts)
 
 
 def _collect_mjs_files() -> list[Path]:
-    return list(_SRC_DIR.rglob("*.mjs"))
+    return [path for path in _SRC_DIR.rglob("*.mjs") if _is_scanned_path(path)]
 
 
 def _collect_directories() -> list[Path]:
-    """All directories under src/ (excluding hidden and __pycache__)."""
-    return [p for p in _SRC_DIR.rglob("*") if p.is_dir() and not p.name.startswith(".") and p.name != "__pycache__"]
+    """All source directories under src/, excluding hidden, cache, and dependency folders."""
+    return [path for path in _SRC_DIR.rglob("*") if path.is_dir() and _is_scanned_path(path)]
 
 
 # ===========================================================================
@@ -53,6 +59,12 @@ def test_all_mjs_filenames_are_kebab_case():
     )
 
 
+def test_mjs_filename_scan_excludes_dependency_folders():
+    dependency_file = _SRC_DIR / "javascripts" / "views" / "envelope" / "node_modules" / "pkg" / "BadName.mjs"
+
+    assert not _is_scanned_path(dependency_file)
+
+
 # ===========================================================================
 # 2. Directory names under src/ must be lowercase / kebab-case
 # ===========================================================================
@@ -70,6 +82,12 @@ def test_all_src_directories_are_kebab_case():
         "The following directories have non-kebab/non-lowercase names "
         "(will break case-sensitive Linux imports):\n  " + "\n  ".join(violations)
     )
+
+
+def test_directory_scan_excludes_dependency_folders():
+    dependency_dir = _SRC_DIR / "javascripts" / "views" / "envelope" / "node_modules" / "BadPackage"
+
+    assert not _is_scanned_path(dependency_dir)
 
 
 # ===========================================================================

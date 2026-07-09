@@ -14,6 +14,7 @@ Optional stages activate automatically when available:
   Docker smoke  — if Docker daemon is running  (BuildKit build + compose-up + readiness + down)
   Live OPC UA   — if server reachable at OPCUA_TEST_ENDPOINT  (default: opc.tcp://localhost:40463)
   Playwright E2E — if WebSocket backend reachable at WS_TEST_URL (default: ws://localhost:8001)
+  Private Envelope static checks — if the optional private module is checked out locally
 
 Force flags (override auto-detection):
   --integration  force live OPC UA stage even if server unreachable
@@ -44,6 +45,8 @@ Environment variables (all optional):
   IJT_DOCKER_TIMEOUT    seconds to wait for Docker HTTP readiness (default: 90)
   IJT_DOCKER_BUILD_TIMEOUT
                          seconds to wait for Docker image build (default: 1200)
+  IJT_PRIVATE_MODULES     auto|skip|require policy for optional private-module checks
+                          (default: auto)
 """
 
 from __future__ import annotations
@@ -141,6 +144,14 @@ _PYTHON_TARGET_REQUIRED_MODULES = (
 # aligned with package.json/package-lock.json when Playwright deps change.
 _PLAYWRIGHT_REQUIRED_PACKAGES = ("@playwright/test", "playwright")
 _PLAYWRIGHT_REQUIRED_BINS = ("playwright",)
+_OPTIONAL_PRIVATE_MODULE_CHOICES = ("auto", "skip", "require")
+_OPTIONAL_PRIVATE_ENVELOPE_DIR = ROOT / "src" / "javascripts" / "views" / "envelope"
+_OPTIONAL_PRIVATE_ENVELOPE_ENTRYPOINT = _OPTIONAL_PRIVATE_ENVELOPE_DIR / "ui" / "envelope-graphics.mjs"
+_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST = (
+    _OPTIONAL_PRIVATE_ENVELOPE_DIR / "tests" / "unit" / "automatic-stepwise-performance.test.mjs"
+)
+_OPTIONAL_PRIVATE_ENVELOPE_REQUIRED_PACKAGES = ("eslint", "stylelint", "vitest")
+_OPTIONAL_PRIVATE_ENVELOPE_REQUIRED_BINS = ("eslint", "stylelint", "vitest")
 
 
 def _path_from_env(name: str, default: Path) -> Path:
@@ -300,21 +311,24 @@ def _compose_project_name() -> str:
     return f"ijt_web_client_{digest}"
 
 
-def _npm_install_args(npm: str) -> list[str]:
+def _npm_install_args(npm: str, *, project_root: Path | None = None) -> list[str]:
     """Return deterministic install args for CI and developer-friendly args locally."""
-    command = "ci" if IS_CI and (ROOT / "package-lock.json").exists() else "install"
+    root = project_root or ROOT
+    command = "ci" if IS_CI and (root / "package-lock.json").exists() else "install"
     return [npm, command, *_NPM_INSTALL_FLAGS]
 
 
-def _node_package_path(package: str) -> Path:
+def _node_package_path(package: str, *, project_root: Path | None = None) -> Path:
+    root = project_root or ROOT
     if package.startswith("@"):
         scope, name = package.split("/", 1)
-        return ROOT / "node_modules" / scope / name
-    return ROOT / "node_modules" / package
+        return root / "node_modules" / scope / name
+    return root / "node_modules" / package
 
 
-def _node_bin_path(name: str) -> Path | None:
-    bin_dir = ROOT / "node_modules" / ".bin"
+def _node_bin_path(name: str, *, project_root: Path | None = None) -> Path | None:
+    root = project_root or ROOT
+    bin_dir = root / "node_modules" / ".bin"
     candidates = [f"{name}.cmd", f"{name}.exe", name] if IS_WINDOWS else [name]
     for candidate in candidates:
         path = bin_dir / candidate
@@ -336,9 +350,14 @@ def _missing_node_requirements(
     *,
     packages: tuple[str, ...] = (),
     bins: tuple[str, ...] = (),
+    project_root: Path | None = None,
 ) -> list[str]:
-    missing = [f"package:{package}" for package in packages if not _node_package_path(package).exists()]
-    missing.extend(f"bin:{name}" for name in bins if _node_bin_path(name) is None)
+    missing = [
+        f"package:{package}"
+        for package in packages
+        if not _node_package_path(package, project_root=project_root).exists()
+    ]
+    missing.extend(f"bin:{name}" for name in bins if _node_bin_path(name, project_root=project_root) is None)
     return missing
 
 
@@ -1426,9 +1445,10 @@ def _stage_js_lint() -> StageResult:
     return StageResult("js-lint", overall_rc, duration=time.monotonic() - t0, notes=notes)
 
 
-def _stage_js_unit() -> StageResult:
+def _stage_js_unit(private_modules: str = "auto") -> StageResult:
     _banner("STAGE 3  JavaScript unit tests (vitest)")
     t0 = time.monotonic()
+    notes: list[str] = []
     npm = shutil.which("npm") or shutil.which("npm.cmd")
     if not npm:
         _warn("npm not found — skipping JS unit tests")
@@ -1451,24 +1471,144 @@ def _stage_js_unit() -> StageResult:
         vitest_xml = str(results_dir / "vitest.xml").replace("\\", "/")
         rc = _run(
             [
-                npx,
-                "vitest",
+                npm,
                 "run",
+                "test:unit:js:coverage",
+                "--",
                 "--reporter=verbose",
                 "--reporter=junit",
                 f"--outputFile.junit={vitest_xml}",
-                "--coverage",
                 "--coverage.reporter=lcov",
                 "--coverage.reporter=json",
                 "--coverage.reporter=cobertura",
             ],
             label="vitest --coverage",
         )
+        if rc == 0:
+            normalized_private_mode = private_modules.strip().lower()
+            if normalized_private_mode == "skip":
+                _skip("optional private Envelope performance tests disabled (--private-modules=skip)")
+                notes.append("optional private Envelope performance tests disabled via --private-modules=skip")
+            elif _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST.is_file():
+                rc = _run(
+                    [npm, "run", "test:unit:js:performance"],
+                    label="vitest performance budgets",
+                )
+            elif normalized_private_mode == "require":
+                _fail("optional private Envelope performance tests not checked out")
+                rc = 1
+                notes.append("optional private Envelope performance tests not checked out")
+            else:
+                _skip("optional private Envelope performance tests not checked out")
+                notes.append("optional private Envelope performance tests not checked out")
     else:
         if npx and not has_coverage:
             _skip("@vitest/coverage-v8 not installed — coverage skipped (npm install --save-dev @vitest/coverage-v8)")
         rc = _run([npm, "run", "test:unit:js"], label="vitest")
-    return StageResult("js-unit", rc, duration=time.monotonic() - t0)
+    return StageResult("js-unit", rc, duration=time.monotonic() - t0, notes=notes)
+
+
+def _optional_private_envelope_missing_reason() -> str | None:
+    if not _OPTIONAL_PRIVATE_ENVELOPE_DIR.exists():
+        return "optional private Envelope module not checked out"
+    if not (_OPTIONAL_PRIVATE_ENVELOPE_DIR / "package.json").is_file():
+        return "optional private Envelope module is missing package.json"
+    if not _OPTIONAL_PRIVATE_ENVELOPE_ENTRYPOINT.is_file():
+        return "optional private Envelope module entry point is missing"
+    return None
+
+
+def _stage_optional_private_module_static(mode: str) -> StageResult:
+    _banner("STAGE 3b  Optional private Envelope static checks")
+    t0 = time.monotonic()
+    normalized_mode = mode.strip().lower()
+    if normalized_mode == "skip":
+        _skip("optional private Envelope checks disabled (--private-modules=skip)")
+        return StageResult(
+            "private-module-static",
+            0,
+            skipped=True,
+            duration=time.monotonic() - t0,
+            notes=["disabled via --private-modules=skip"],
+        )
+
+    missing_reason = _optional_private_envelope_missing_reason()
+    if missing_reason:
+        if normalized_mode == "require":
+            _fail(missing_reason)
+            return StageResult(
+                "private-module-static",
+                1,
+                duration=time.monotonic() - t0,
+                notes=[missing_reason],
+            )
+        _skip(f"{missing_reason} — skipping optional private checks")
+        return StageResult(
+            "private-module-static",
+            0,
+            skipped=True,
+            duration=time.monotonic() - t0,
+            notes=[missing_reason],
+        )
+
+    npm = shutil.which("npm") or shutil.which("npm.cmd")
+    if not npm:
+        _warn("npm not found — cannot validate optional private Envelope module")
+        return StageResult(
+            "private-module-static",
+            1,
+            duration=time.monotonic() - t0,
+            notes=["npm not found"],
+        )
+
+    missing_requirements = _missing_node_requirements(
+        packages=_OPTIONAL_PRIVATE_ENVELOPE_REQUIRED_PACKAGES,
+        bins=_OPTIONAL_PRIVATE_ENVELOPE_REQUIRED_BINS,
+        project_root=_OPTIONAL_PRIVATE_ENVELOPE_DIR,
+    )
+    envelope_node_modules = _OPTIONAL_PRIVATE_ENVELOPE_DIR / "node_modules"
+    if not envelope_node_modules.exists() or missing_requirements:
+        if missing_requirements:
+            _info("Optional Envelope npm requirements missing: " + ", ".join(missing_requirements))
+        rc = _run(
+            _npm_install_args(npm, project_root=_OPTIONAL_PRIVATE_ENVELOPE_DIR),
+            cwd=_OPTIONAL_PRIVATE_ENVELOPE_DIR,
+            label="Envelope npm dependencies",
+        )
+        if rc != 0:
+            return StageResult(
+                "private-module-static",
+                rc,
+                duration=time.monotonic() - t0,
+                notes=["Envelope npm install failed"],
+            )
+        missing_requirements = _missing_node_requirements(
+            packages=_OPTIONAL_PRIVATE_ENVELOPE_REQUIRED_PACKAGES,
+            bins=_OPTIONAL_PRIVATE_ENVELOPE_REQUIRED_BINS,
+            project_root=_OPTIONAL_PRIVATE_ENVELOPE_DIR,
+        )
+        if missing_requirements:
+            return StageResult(
+                "private-module-static",
+                1,
+                duration=time.monotonic() - t0,
+                notes=["missing Envelope npm requirements after install: " + ", ".join(missing_requirements)],
+            )
+
+    lint_rc = _run([npm, "run", "lint:all"], cwd=_OPTIONAL_PRIVATE_ENVELOPE_DIR, label="Envelope lint")
+    test_rc = _run([npm, "run", "test"], cwd=_OPTIONAL_PRIVATE_ENVELOPE_DIR, label="Envelope tests")
+    overall_rc = lint_rc if lint_rc != 0 else test_rc
+    notes: list[str] = []
+    if lint_rc != 0:
+        notes.append("Envelope lint failed")
+    if test_rc != 0:
+        notes.append("Envelope tests failed")
+    return StageResult(
+        "private-module-static",
+        overall_rc,
+        duration=time.monotonic() - t0,
+        notes=notes,
+    )
 
 
 def _stage_python_live(python: Path) -> StageResult:
@@ -2863,6 +3003,7 @@ STAGES = [
     "python-unit",
     "js-lint",
     "js-unit",
+    "private-module-static",
     "infra-lint",
     "python-live",
     "python-opcua",
@@ -2987,6 +3128,12 @@ def main() -> int:
         "--compatibility-smoke-only", action="store_true", help="Run only Web Client Compatibility Smoke"
     )
     parser.add_argument("--list", action="store_true", help="Print available stages and exit")
+    parser.add_argument(
+        "--private-modules",
+        choices=_OPTIONAL_PRIVATE_MODULE_CHOICES,
+        default=os.getenv("IJT_PRIVATE_MODULES", "auto"),
+        help="Optional private-module policy: auto=run when available, skip=never run, require=fail if unavailable",
+    )
     parser.add_argument(
         "--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{_opcua_server_port()}")
     )
@@ -3189,7 +3336,8 @@ def main() -> int:
         if args.phase1_js:
             results.append(_stage_npm_install())
             results.append(_stage_js_lint())
-            results.append(_stage_js_unit())
+            results.append(_stage_js_unit(args.private_modules))
+            results.append(_stage_optional_private_module_static(args.private_modules))
         elif args.phase1_python:
             results.append(_stage_pip_install(python))
             results.append(_stage_python_lint(python))
@@ -3201,7 +3349,8 @@ def main() -> int:
             results.append(_stage_python_lint(python))
             results.append(_stage_python_unit(python))
             results.append(_stage_js_lint())
-            results.append(_stage_js_unit())
+            results.append(_stage_js_unit(args.private_modules))
+            results.append(_stage_optional_private_module_static(args.private_modules))
             results.append(_stage_infra_lint())
 
     # ── Live + Integration tests (Phase 2 — skipped when --phase1) ────────────
