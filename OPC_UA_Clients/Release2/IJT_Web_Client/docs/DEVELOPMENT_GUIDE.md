@@ -44,6 +44,9 @@ python run_all_tests.py --phase1-js
 # JavaScript lane; require the private Envelope submodule and fail if it is absent
 python run_all_tests.py --phase1-js --private-modules require
 
+# Authorized developers: initialize optional private Envelope from the IJT repo root
+git submodule update --checkout --init --recursive -- OPC_UA_Clients\Release2\IJT_Web_Client\src\javascripts\views\envelope
+
 # Full local runner
 python run_all_tests.py
 
@@ -52,6 +55,15 @@ python index.py
 
 # Frontend serves
 # open http://localhost:3000
+```
+
+The private Envelope submodule is opt-in for Git updates so normal IJT pulls work
+without private repository access. If you want recursive pulls to update Envelope
+on your authenticated machine, set local-only Git config from the IJT repo root:
+
+```bash
+git config submodule.OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope.update checkout
+git config submodule.recurse true
 ```
 
 ## Definition of Done

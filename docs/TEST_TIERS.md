@@ -40,6 +40,11 @@ Use `--private-modules require` only in authorized private validation where a
 missing Envelope checkout should fail the run. Coverage remains enforced on the
 public JavaScript suite; Envelope performance-budget tests run separately without
 coverage instrumentation because coverage overhead invalidates timing budgets.
+The Envelope submodule is also configured with `update = none`, so normal IJT
+pulls and public CI checkouts do not require private repository access. Authorized
+developers can initialize it explicitly with `git submodule update --checkout
+--init --recursive -- OPC_UA_Clients\Release2\IJT_Web_Client\src\javascripts\views\envelope`
+or let Web Client `setup_project.py` perform its best-effort sync.
 The `pre-commit` CI job runs the repository hook configuration on all files and
 is part of the required check set. It skips only npm-backed JavaScript hooks
 because the dedicated Web and Node JavaScript jobs already run those checks

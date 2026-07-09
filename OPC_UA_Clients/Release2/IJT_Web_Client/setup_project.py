@@ -226,7 +226,7 @@ def _sync_optional_private_submodules(update_remote: bool = True) -> None:
                 check=True,
                 timeout=60,
             )
-            update_cmd = [git, "submodule", "update", "--init", "--recursive"]
+            update_cmd = [git, "submodule", "update", "--checkout", "--init", "--recursive"]
             if update_remote:
                 update_cmd.append("--remote")
             update_cmd.extend(["--", git_path])

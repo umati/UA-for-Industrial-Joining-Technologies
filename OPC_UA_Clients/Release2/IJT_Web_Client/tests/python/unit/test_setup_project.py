@@ -17,6 +17,7 @@ All tests are pure unit tests (no server, no network, no venv creation).
 External calls are patched via unittest.mock / monkeypatch.
 """
 
+import configparser
 import socket
 import subprocess
 import sys
@@ -207,6 +208,15 @@ def test_backup_existing_optional_module_path_leaves_git_checkout(tmp_path):
     assert target.exists()
 
 
+def test_optional_private_submodule_is_opt_in_for_plain_git_updates():
+    config = configparser.ConfigParser()
+    config.read(sp.REPO_ROOT / ".gitmodules", encoding="utf-8")
+
+    section = 'submodule "OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope"'
+
+    assert config.get(section, "update") == "none"
+
+
 def test_sync_optional_private_submodules_backs_up_loose_folder_before_update(tmp_path, monkeypatch):
     repo_root = tmp_path / "repo"
     target = repo_root / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "src" / "javascripts" / "views" / "envelope"
@@ -239,7 +249,7 @@ def test_sync_optional_private_submodules_backs_up_loose_folder_before_update(tm
     assert (backup / "legacy.mjs").exists()
     assert (target / "ui" / "envelope-graphics.mjs").exists()
     assert ["/usr/bin/git", "submodule", "sync", "--", target.relative_to(repo_root).as_posix()] in calls
-    assert any("update" in cmd and "--remote" in cmd for cmd in calls)
+    assert any("update" in cmd and "--checkout" in cmd and "--remote" in cmd for cmd in calls)
 
 
 # =============================================================================

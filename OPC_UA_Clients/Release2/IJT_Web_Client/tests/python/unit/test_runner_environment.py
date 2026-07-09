@@ -442,14 +442,17 @@ def test_python_unit_stage_writes_ci_junit_and_coverage_paths(monkeypatch, tmp_p
     assert f"--cov-report=html:{tmp_path / 'htmlcov-py'}" in captured["cmd"]
 
 
-def test_js_unit_stage_writes_ci_junit_and_cobertura_coverage(monkeypatch):
+def test_js_unit_stage_writes_ci_junit_and_cobertura_coverage(monkeypatch, tmp_path):
     runner = _load_runner()
     captured = {"calls": []}
     original_exists = Path.exists
+    performance_file = tmp_path / "automatic-stepwise-performance.test.mjs"
+    performance_file.write_text("export {}\n", encoding="utf-8")
 
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner.shutil, "which", lambda name: name)
     monkeypatch.setattr(runner, "_RESULTS_DIR", _PROJECT_ROOT / "test-results")
+    monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST", performance_file)
 
     def fake_exists(self):
         if "node_modules" in str(self):

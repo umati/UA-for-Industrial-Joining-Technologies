@@ -78,3 +78,18 @@ python run_all_tests.py --private-modules auto
 ```
 
 In `auto` mode, private Envelope checks run only when the submodule is checked out locally. Use `--private-modules skip` to force public-only validation, or `--private-modules require` when an authorized developer or private CI job must fail if the Envelope module is missing.
+
+The submodule is configured as opt-in for Git updates, so a normal IJT pull does not require private Envelope access. Authorized developers can initialize it through `python setup_project.py` or, from the IJT repo root, explicitly with:
+
+```powershell
+git submodule update --checkout --init --recursive -- OPC_UA_Clients\Release2\IJT_Web_Client\src\javascripts\views\envelope
+```
+
+Authorized developers who want their local Git client to update Envelope during recursive pulls can opt in locally after authenticating to the private repo:
+
+```powershell
+git config submodule.OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope.update checkout
+git config submodule.recurse true
+```
+
+That local config should not be committed; the shared IJT default remains safe for public users.
