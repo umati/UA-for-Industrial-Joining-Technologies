@@ -1,7 +1,8 @@
 import SingleTraceData from './single-trace-data.mjs'
 import ChartManager from './chart-handler.mjs'
 import { createOptionalTraceExtensionLoader } from './optional-trace-extension-loader.mjs'
-import { detectRundownEndX, detectRundownZoomRange, isRundownStep } from './rundown-detector.mjs'
+import { detectRundownZoomRange } from './rundown-detector.mjs'
+import { getCanonicalX, getStepCanonicalXRange, getStepXAxisValues } from './trace-x-axis.mjs'
 
 const limitGeometryExtension = createOptionalTraceExtensionLoader('../envelope/core/limit-curve-geometry.mjs')
 
@@ -331,7 +332,7 @@ export default class TraceDisplay {
     // Store it
     this.allTraces.push(newResultandTrace)
 
-    if (this.alignOnRundownEnd && this.alignTracesOnRundownEnd()) {
+    if (this.alignOnRundownEnd && this.alignTracesByStepStart(2, 0)) {
       this.update()
     } else {
       this.align(newResultandTrace, this.alignStep)
@@ -357,47 +358,9 @@ export default class TraceDisplay {
     const remainingInterval = range.maxX - range.snugX
     const paddedLeft = range.snugX - (remainingInterval * 0.2)
     const zoomLeft = Math.max(range.minX, paddedLeft)
-    const displayOffset = Number(trace?.displayOffset)
-    const offset = Number.isFinite(displayOffset) ? displayOffset : 0
-    this.chartManager.setXZoom(zoomLeft - offset, range.maxX - offset)
-  }
-
-  alignTracesOnRundownEnd () {
-    let aligned = false
-    const diagnostics = []
-    for (const trace of this.allTraces) {
-      const rundownEndX = detectRundownEndX(trace, this.xDimensionName)
-      if (rundownEndX === null) {
-        trace.displayOffset = 0
-        diagnostics.push({
-          resultId: trace?.resultId,
-          rundownEndX: null,
-          displayOffset: trace.displayOffset,
-          renderedRundownEndX: null
-        })
-        continue
-      }
-      trace.displayOffset = rundownEndX
-      aligned = true
-      diagnostics.push({
-        resultId: trace?.resultId,
-        rundownEndX,
-        displayOffset: trace.displayOffset,
-        renderedRundownEndX: null
-      })
-    }
-    if (aligned) {
-      this.refreshAllData()
-    }
-    for (const diagnostic of diagnostics) {
-      const trace = this.allTraces.find((item) => item?.resultId === diagnostic.resultId)
-      const rundownStep = (trace?.steps ?? []).find(isRundownStep)
-      const renderedPoints = rundownStep?.graphic?.mainDataset?.data
-      const renderedEndPoint = Array.isArray(renderedPoints) ? renderedPoints[renderedPoints.length - 1] : null
-      diagnostic.renderedRundownEndX = Number.isFinite(Number(renderedEndPoint?.x)) ? Number(renderedEndPoint.x) : null
-    }
-    this.traceManager?.onRundownAlignmentUpdated?.(diagnostics)
-    return aligned
+    const xAxisShift = Number(trace?.xAxisShift)
+    const shift = Number.isFinite(xAxisShift) ? xAxisShift : 0
+    this.chartManager.setXZoom(zoomLeft - shift, range.maxX - shift)
   }
 
   zoomToLatestTraceXRange () {
@@ -412,17 +375,16 @@ export default class TraceDisplay {
   getTraceXAxisRange (trace) {
     let minX = Infinity
     let maxX = -Infinity
-    const displayOffset = Number(trace?.displayOffset) || 0
+    const xAxisShift = Number(trace?.xAxisShift) || 0
 
     for (const step of trace?.steps ?? []) {
       const values = this.getStepXAxisValues(step)
-      const startTimeOffset = this.xDimensionName === 'time' ? Number(step?.startTimeOffset) || 0 : 0
-      for (const value of values) {
-        const xValue = Number(value)
-        if (!Number.isFinite(xValue)) {
+      for (let sampleIndex = 0; sampleIndex < values.length; sampleIndex++) {
+        const canonicalX = this.getCanonicalX(step, sampleIndex)
+        if (canonicalX === null) {
           continue
         }
-        const displayedX = xValue + startTimeOffset - displayOffset
+        const displayedX = canonicalX - xAxisShift
         if (displayedX < minX) {
           minX = displayedX
         }
@@ -442,10 +404,15 @@ export default class TraceDisplay {
   }
 
   getStepXAxisValues (step) {
-    if (this.xDimensionName === 'time') {
-      return Array.isArray(step?.time) ? step.time : []
-    }
-    return Array.isArray(step?.angle) ? step.angle : []
+    return getStepXAxisValues(step, this.xDimensionName)
+  }
+
+  getCanonicalX (step, sampleIndex) {
+    return getCanonicalX(step, sampleIndex, this.xDimensionName)
+  }
+
+  getStepCanonicalXRange (step) {
+    return getStepCanonicalXRange(step, this.xDimensionName)
   }
 
   handleOldTraces (refreshCallback) {
@@ -525,9 +492,9 @@ export default class TraceDisplay {
   alignByIndex (trace, index) { // Temp solution until programStepId is correct in simulator
     const step = trace.steps[index]
     if (index === -1) {
-      trace.displayOffset = 0
+      this.alignTraceToX(trace, 0, 0)
     } else {
-      trace.displayOffset = this.findExtremes(step).min
+      this.alignTraceToStepSample(trace, step, 0, 0)
     }
   }
 
@@ -535,9 +502,9 @@ export default class TraceDisplay {
     const step = trace.findStepByProgramStepId(programStepId)
     if (step) {
       if (step === 'all') {
-        trace.displayOffset = 0
+        this.alignTraceToX(trace, 0, 0)
       } else {
-        trace.displayOffset = this.findExtremes(step).min
+        this.alignTraceToStepSample(trace, step, 0, 0)
       }
     }
   }
@@ -573,17 +540,72 @@ export default class TraceDisplay {
       return false
     }
     if (step === 'all') {
-      trace.displayOffset = 0
+      trace.xAxisShift = 0
       return true
     }
     const range = this.findExtremes(step)
-    const normalizedReferenceX = Number.isFinite(referenceX) ? referenceX : 0
-    const displayOffset = range.min - normalizedReferenceX
-    if (!Number.isFinite(displayOffset)) {
+    if (!Number.isFinite(range.min)) {
       return false
     }
-    trace.displayOffset = displayOffset
+    return this.alignTraceToX(trace, range.min, referenceX)
+  }
+
+  computeXAxisShift (anchorX, referenceX = 0) {
+    const normalizedAnchorX = Number(anchorX)
+    if (!Number.isFinite(normalizedAnchorX)) {
+      return null
+    }
+    const numericReferenceX = Number(referenceX)
+    const normalizedReferenceX = Number.isFinite(numericReferenceX) ? numericReferenceX : 0
+    return normalizedAnchorX - normalizedReferenceX
+  }
+
+  alignTraceToX (trace, anchorX, referenceX = 0) {
+    const xAxisShift = this.computeXAxisShift(anchorX, referenceX)
+    if (xAxisShift === null) {
+      return false
+    }
+    trace.xAxisShift = xAxisShift
     return true
+  }
+
+  alignTraceToStepSample (trace, stepOrSelector, sampleIndex, referenceX = 0) {
+    const step = typeof stepOrSelector === 'object'
+      ? stepOrSelector
+      : this.findStepByProgramStepIdOrStepNumber(trace, stepOrSelector)
+    if (!step || step === 'all') {
+      return false
+    }
+    const canonicalX = this.getCanonicalX(step, sampleIndex)
+    if (canonicalX === null) {
+      return false
+    }
+    return this.alignTraceToX(trace, canonicalX, referenceX)
+  }
+
+  alignTracesByStepStart (programStepIdOrStepNumber, referenceX = 0) {
+    return this.alignTracesByStepSample(programStepIdOrStepNumber, 0, referenceX)
+  }
+
+  alignTracesByStepSample (programStepIdOrStepNumber, sampleIndex, referenceX = 0) {
+    let aligned = false
+    for (const trace of this.allTraces) {
+      const before = Number(trace?.xAxisShift)
+      const traceAligned = programStepIdOrStepNumber === 'all'
+        ? this.alignTraceToX(trace, 0, 0)
+        : this.alignTraceToStepSample(trace, programStepIdOrStepNumber, sampleIndex, referenceX)
+      if (!traceAligned) {
+        trace.xAxisShift = 0
+      }
+      const after = Number(trace?.xAxisShift)
+      if (!Number.isFinite(before) || !Number.isFinite(after) || Math.abs(before - after) > 1e-9) {
+        aligned = true
+      }
+    }
+    if (aligned) {
+      this.refreshAllData()
+    }
+    return aligned
   }
 
   zoomByIndex (trace, index) {
@@ -693,11 +715,7 @@ export default class TraceDisplay {
 
   //  Point handling //////////////////////////////////////////////////////////////
   findExtremes (step) {
-    let valueList = step.angle
-    if (this.xDimensionName !== 'angle') {
-      valueList = step.time
-    }
-    return { min: Math.min(...valueList), max: Math.max(...valueList) }
+    return this.getStepCanonicalXRange(step) || { min: Number.NaN, max: Number.NaN }
   }
 
   findTrace (Id) {

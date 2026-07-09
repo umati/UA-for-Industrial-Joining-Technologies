@@ -2,14 +2,15 @@
 import Step from './step.mjs'
 
 export default class SingleTraceData {
-  constructor (result, owner, chartManager, identityCounter, colorFunction, displayOffset = 0) {
+  constructor (result, owner, chartManager, identityCounter, colorFunction, xAxisShift = 0) {
     this.chartManager = chartManager
     this.steps = []
     this.result = result
     this.resultId = result.ResultMetaData.ResultId
     // this.colorFunction = colorFunction
     this.trace = result?.ResultContent[0].Trace
-    this.displayOffset = displayOffset
+    // Invariant for all rendered trace x-coordinates: displayedX = canonicalX - xAxisShift.
+    this.xAxisShift = xAxisShift
     this.owner = owner
     this.selected = false
     this.highLights = []
@@ -17,7 +18,7 @@ export default class SingleTraceData {
 
     for (const resultStep of this.trace.StepTraces) {
       const nr = this.steps.length
-      const newStep = new Step(resultStep, this, nr, this.chartManager, this.resultId, colorFunction(), displayOffset)
+      const newStep = new Step(resultStep, this, nr, this.chartManager, this.resultId, colorFunction(), xAxisShift)
       this.steps.push(newStep)
     }
   }
@@ -93,7 +94,7 @@ export default class SingleTraceData {
 
   refreshTraceData () {
     for (const traceStep of this.steps) {
-      traceStep.refresh(this.displayOffset)
+      traceStep.refresh(this.xAxisShift)
     }
   }
 

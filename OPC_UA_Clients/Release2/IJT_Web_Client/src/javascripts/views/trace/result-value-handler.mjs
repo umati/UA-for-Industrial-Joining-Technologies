@@ -31,11 +31,11 @@ export default class ResultValueHandler {
    *
    * @param {*} color
    */
-  createStepValues (graphic, color, displayOffset) {
+  createStepValues (graphic, color, xAxisShift) {
     this.graphic = graphic
     if (this.values) {
       for (const value of this.values) {
-        const point = this.interpretPoint(value, displayOffset)
+        const point = this.interpretPoint(value, xAxisShift)
         this.chartManager.createStepValue(value, point, color, this.graphic)
       }
     }
@@ -46,9 +46,9 @@ export default class ResultValueHandler {
    * Responsible for deciding if the value should be displayed or hidden
    * @date 2/23/2024 - 6:22:16 PM
    *
-   * @param {*} displayOffset
+   * @param {*} xAxisShift
    */
-  calculatePoints (displayOffset) {
+  calculatePoints (xAxisShift) {
     for (const value of this.values) {
       if ((this.step.xDimensionName === 'angle' && parseInt(value.PhysicalQuantity) === 1) ||
         (this.step.xDimensionName === 'time' && parseInt(value.PhysicalQuantity) === 3) ||
@@ -56,7 +56,7 @@ export default class ResultValueHandler {
         this.graphic.hideValue(value)
       }
 
-      this.updatePoint(value, displayOffset)
+      this.updatePoint(value, xAxisShift)
     }
   }
 
@@ -65,10 +65,10 @@ export default class ResultValueHandler {
    * @date 2/23/2024 - 6:23:33 PM
    *
    * @param {*} value
-   * @param {*} displayOffset
+   * @param {*} xAxisShift
    */
-  updatePoint (value, displayOffset) {
-    const points = this.interpretPoint(value, displayOffset)
+  updatePoint (value, xAxisShift) {
+    const points = this.interpretPoint(value, xAxisShift)
     this.graphic.updateValue(value, points)
   }
 
@@ -77,7 +77,7 @@ export default class ResultValueHandler {
    * @param {*} value This structure contains a target and might contain a upper and lower limit
    * @returns a structure with target, limits and name where the values have been recalculated to the selected mode of displaying the trace
    */
-  interpretPoint (value, displayOffset) {
+  interpretPoint (value, xAxisShift) {
     let x; let y; let xHigh; let yHigh; let xLow; let yLow; let xTarget; let yTarget; let xOffset = 0
     switch (parseInt(value.PhysicalQuantity)) {
       case 1: // Time
@@ -132,7 +132,7 @@ export default class ResultValueHandler {
     const limits = []
     let target
     const limitYOffset = 5
-    const stepOffset = displayOffset - xOffset
+    const stepOffset = xAxisShift - xOffset
 
     if (xHigh !== null && xHigh !== undefined) {
       limits.push({ x: xHigh - stepOffset, y: y + limitYOffset, name: '[maxlimit]', type: 'limit' })

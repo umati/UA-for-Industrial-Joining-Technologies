@@ -1,5 +1,6 @@
 // import ChartManager from './chart-handler.mjs'
 import ResultValueHandler from './result-value-handler.mjs'
+import { getCanonicalX } from './trace-x-axis.mjs'
 
 const PHYSICAL_QUANTITY = Object.freeze({
   TIME: 1,
@@ -9,7 +10,7 @@ const PHYSICAL_QUANTITY = Object.freeze({
 })
 
 export default class Step {
-  constructor (step, owner, nr, chartManager, resultId, color, displayOffset) {
+  constructor (step, owner, nr, chartManager, resultId, color, xAxisShift) {
     this.name = step.StepResultId.link.Name
     this.stepId = step.StepResultId
     this.resultId = resultId
@@ -50,8 +51,8 @@ export default class Step {
     this.graphic = chartManager.createGraphic(this.name, this.resultId, this.stepId, this.color)
     this.graphic.display(!this.hidden, !this.hidden && this.showValuesSelected, !this.hidden && this.showLimitSelected)
 
-    this.calculateData(displayOffset)
-    this.resultValueHandler.createStepValues(this.graphic, this.color, displayOffset)
+    this.calculateData(xAxisShift)
+    this.resultValueHandler.createStepValues(this.graphic, this.color, xAxisShift)
     this.resultValueHandler.calculatePoints(0, this.showLimitSelected)
   }
 
@@ -86,20 +87,19 @@ export default class Step {
   /**
    * This function changes the angle values in the graph if offset
    * is set to some other point than the start value.
-   * displayOffset is used to calculate this and taken from the owner of this class
+   * xAxisShift is the canonical x-axis origin subtracted from all rendered x values.
    * For example snug is often used as 0 angle
    * @date 2/16/2024 - 9:18:15 AM
    *
-   * @param {*} displayOffset the angle you want all x values to decrease
+   * @param {*} xAxisShift the x-axis origin shift you want all x values to decrease
    */
-  calculateData (displayOffset) {
-    let xValues = this[this.xDimensionName].map((x) => { return parseFloat(x) })
+  calculateData (xAxisShift) {
+    const xValues = this[this.xDimensionName].map((x, index) => {
+      const canonicalX = getCanonicalX(this, index, this.xDimensionName)
+      return canonicalX === null ? Number.NaN : canonicalX
+    })
     const yValues = this[this.yDimensionName].map((y) => { return this.absoluteFunction(parseFloat(y)) })
 
-    if (this.xDimensionName === 'time') {
-      const startTimeOffset = parseFloat(this.startTimeOffset)
-      xValues = xValues.map((x) => { return x + startTimeOffset })
-    }
     this.graphic.clearPoints()
 
     if (xValues.length !== yValues.length) { // Error handling
@@ -111,7 +111,8 @@ export default class Step {
 
     for (let i = 0; i < xValues.length; i++) {
       this.graphic.addPoint({
-        x: xValues[i] - displayOffset,
+        // Invariant: displayedX = canonicalX - xAxisShift.
+        x: xValues[i] - xAxisShift,
         y: parseFloat(yValues[i])
       })
     }

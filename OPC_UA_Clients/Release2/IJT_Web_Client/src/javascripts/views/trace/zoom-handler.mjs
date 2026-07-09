@@ -1,6 +1,8 @@
 const ZOOM_THRESHOLD = 0.005
 const MOUSE_WHEEL_SENSITIVITY = 500
 const TOUCHPAD_SENSITIVITY = 100
+const TOUCHPAD_PAN_DELTA_THRESHOLD = 80
+const WHEEL_LINE_HEIGHT_PX = 16
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2
 
@@ -107,13 +109,12 @@ export default class ZoomHandler {
    * @returns Nothing
    */
   onmousewheel = (evt, coord) => {
-    let deltaY = (evt.deltaY / MOUSE_WHEEL_SENSITIVITY) + 1
-
-    if (evt.ctrlKey) { // Only way to differentiate between touchpad and mousewheel???
-      deltaY = (evt.deltaY / TOUCHPAD_SENSITIVITY) + 1
+    if (this.isTouchpadPanEvent(evt)) {
+      this.panByWheel(evt)
+      return
     }
 
-    const deltaX = deltaY
+    const { x: deltaX, y: deltaY } = this.resolveWheelZoomScale(evt)
 
     if ((deltaX < MIN_ZOOM) || (deltaX > MAX_ZOOM) || (deltaY < MIN_ZOOM) || (deltaY > MAX_ZOOM)) {
       return // Ignore random very large zooms
@@ -131,6 +132,59 @@ export default class ZoomHandler {
       y: coord.y + (currentZoom.bottom - coord.y) * deltaY
     }
     this.chartManager.zoom(new1, new2)
+  }
+
+  resolveWheelZoomScale (evt) {
+    const deltaY = Number(evt.deltaY) || 0
+    if (evt.ctrlKey) {
+      const deltaX = Number(evt.deltaX) || 0
+      const yScale = (deltaY / TOUCHPAD_SENSITIVITY) + 1
+      const xScale = deltaX === 0 ? yScale : (deltaX / TOUCHPAD_SENSITIVITY) + 1
+      return { x: xScale, y: yScale }
+    }
+    const scale = (deltaY / MOUSE_WHEEL_SENSITIVITY) + 1
+    return { x: scale, y: scale }
+  }
+
+  isTouchpadPanEvent (evt) {
+    if (evt.ctrlKey) {
+      return false
+    }
+    const deltaX = Math.abs(Number(evt.deltaX) || 0)
+    const deltaY = Math.abs(Number(evt.deltaY) || 0)
+    return deltaX > 0 || (evt.deltaMode === 0 && deltaY > 0 && deltaY < TOUCHPAD_PAN_DELTA_THRESHOLD)
+  }
+
+  normalizeWheelDeltaToPixels (evt) {
+    const factor = evt.deltaMode === 1
+      ? WHEEL_LINE_HEIGHT_PX
+      : (evt.deltaMode === 2 ? this.chartManager.getWindowDimensions().height : 1)
+    return {
+      x: (Number(evt.deltaX) || 0) * factor,
+      y: (Number(evt.deltaY) || 0) * factor
+    }
+  }
+
+  panByWheel (evt) {
+    const currentZoom = this.chartManager.getZoom()
+    const windowDimensions = this.chartManager.getWindowDimensions()
+    const delta = this.normalizeWheelDeltaToPixels(evt)
+    const widthPx = Number(windowDimensions?.width)
+    const heightPx = Number(windowDimensions?.height)
+    const width = currentZoom.right - currentZoom.left
+    const height = currentZoom.bottom - currentZoom.top
+
+    if (!Number.isFinite(widthPx) || !Number.isFinite(heightPx) || widthPx <= 0 || heightPx <= 0 ||
+      !Number.isFinite(width) || !Number.isFinite(height)) {
+      return
+    }
+
+    const xShift = (delta.x / widthPx) * width
+    const yShift = (delta.y / heightPx) * height
+    this.chartManager.zoom(
+      { x: currentZoom.left + xShift, y: currentZoom.top + yShift },
+      { x: currentZoom.right + xShift, y: currentZoom.bottom + yShift }
+    )
   }
 
   /**

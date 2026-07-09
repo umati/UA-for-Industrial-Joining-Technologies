@@ -120,8 +120,8 @@ function makeTraceDisplay (TraceDisplay, allTraces, xDimensionName = 'angle') {
   return traceDisplay
 }
 
-function makeTrace ({ displayOffset = 0, steps }) {
-  return { displayOffset, steps }
+function makeTrace ({ xAxisShift = 0, steps }) {
+  return { xAxisShift, steps }
 }
 
 describe('TraceDisplay fullscreen x-axis zoom', () => {
@@ -133,7 +133,7 @@ describe('TraceDisplay fullscreen x-axis zoom', () => {
         steps: [{ angle: [-200, 400], time: [0, 1] }]
       })
       const latestTrace = makeTrace({
-        displayOffset: 100,
+        xAxisShift: 100,
         steps: [
           { angle: [100, 110], time: [0, 1] },
           { angle: [120, 150], time: [2, 3] }
@@ -155,7 +155,7 @@ describe('TraceDisplay fullscreen x-axis zoom', () => {
     try {
       const TraceDisplay = await loadTraceDisplayConstructor()
       const latestTrace = makeTrace({
-        displayOffset: 10,
+        xAxisShift: 10,
         steps: [
           { angle: [0, 1], time: [0, 5], startTimeOffset: '20' },
           { angle: [2, 3], time: [0, 7], startTimeOffset: '30' }

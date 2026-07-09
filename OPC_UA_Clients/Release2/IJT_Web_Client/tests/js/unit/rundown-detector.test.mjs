@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { detectRundownEndX, detectRundownZoomRange } from '../../../src/javascripts/views/trace/rundown-detector.mjs'
+import { detectRundownZoomRange } from '../../../src/javascripts/views/trace/rundown-detector.mjs'
 import TraceDisplay from '../../../src/javascripts/views/trace/trace-display.mjs'
 
 function makeStep ({ torque, angle, time, startTimeOffset = '0', name = 'Step', stepType = null }) {
@@ -83,7 +83,7 @@ describe('detectRundownZoomRange', () => {
     expect(detectRundownZoomRange(trace, 'angle')).toBeNull()
   })
 
-  it('aligns displayed traces on rundown end when available', () => {
+  it('aligns rundown end by aligning the following step start', () => {
     const traceWithRundown = makeTrace([
       makeStep({
         torque: [0, 1, 2, 6, 30, 60],
@@ -106,25 +106,19 @@ describe('detectRundownZoomRange', () => {
       })
     ])
     const display = Object.create(TraceDisplay.prototype)
-    const onRundownAlignmentUpdated = vi.fn()
     Object.assign(display, {
       allTraces: [traceWithRundown, traceWithoutRundown],
       xDimensionName: 'angle',
-      refreshAllData: vi.fn(),
-      traceManager: { onRundownAlignmentUpdated }
+      refreshAllData: vi.fn()
     })
 
-    expect(display.alignTracesOnRundownEnd()).toBe(true)
-    expect(traceWithRundown.displayOffset).toBe(5)
-    expect(traceWithoutRundown.displayOffset).toBe(0)
+    expect(display.alignTracesByStepStart(2, 0)).toBe(true)
+    expect(traceWithRundown.xAxisShift).toBe(5)
+    expect(traceWithoutRundown.xAxisShift).toBe(0)
     expect(display.refreshAllData).toHaveBeenCalledOnce()
-    expect(onRundownAlignmentUpdated).toHaveBeenCalledWith([
-      expect.objectContaining({ rundownEndX: 5, displayOffset: 5 }),
-      expect.objectContaining({ rundownEndX: null, displayOffset: 0 })
-    ])
   })
 
-  it('detects the explicit rundown step end for angle and time axes', () => {
+  it('uses canonical time including step start offsets for generic alignment', () => {
     const trace = makeTrace([
       makeStep({
         torque: [0, 1],
@@ -141,22 +135,30 @@ describe('detectRundownZoomRange', () => {
         name: 'Tightening'
       })
     ])
+    const display = Object.create(TraceDisplay.prototype)
+    Object.assign(display, {
+      xDimensionName: 'time'
+    })
 
-    expect(detectRundownEndX(trace, 'angle')).toBe(7)
-    expect(detectRundownEndX(trace, 'time')).toBe(13)
+    expect(display.alignByProgramStepIdOrStepNumber(trace, 2, 0)).toBe(true)
+    expect(trace.xAxisShift).toBe(20)
   })
 
-  it('detects rundown steps from StepType metadata even when the display name is generic', () => {
+  it('aligns to a caller-selected sample index without searching for the index', () => {
     const trace = makeTrace([
       makeStep({
-        torque: [0, 1],
-        angle: [0, 466.93],
-        time: [0, 1],
-        name: 'Step 2',
-        stepType: 'rundown'
+        torque: [10, 20, 30, 40],
+        angle: [0, 5, 12, 20],
+        time: [0, 1, 2, 3],
+        name: 'Tightening'
       })
     ])
+    const display = Object.create(TraceDisplay.prototype)
+    Object.assign(display, {
+      xDimensionName: 'angle'
+    })
 
-    expect(detectRundownEndX(trace, 'angle')).toBe(466.93)
+    expect(display.alignTraceToStepSample(trace, 1, 2, 0)).toBe(true)
+    expect(trace.xAxisShift).toBe(12)
   })
 })
