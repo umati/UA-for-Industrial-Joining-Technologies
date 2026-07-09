@@ -10,7 +10,7 @@ companion specifications.
 
 ## Prerequisites
 
-- .NET 10 SDK
+- .NET SDK matching the project `TargetFramework` values (currently .NET 10)
 - Python 3.14+, for the project test runner
 - A running OPC UA IJT server, such as the [IJT Server Simulator](../../../OPC_UA_Servers/Release2)
   - Default OPC UA endpoint: `opc.tcp://localhost:40451`
@@ -53,3 +53,6 @@ companion specifications.
 ## Testing
 
 - **Run tests:** `python run_all_tests.py`
+  - Local runs without a .NET SDK matching the project `TargetFramework` values are reported as **SKIP** (warning + JUnit skip) so other local lanes can continue.
+  - GitHub Actions keeps prerequisites strict and fails when the required .NET SDK is missing.
+  - To force strict local behavior, set `IJT_CSHARP_STRICT_DOTNET_PREREQS=1`.

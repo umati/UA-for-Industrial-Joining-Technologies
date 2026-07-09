@@ -1251,6 +1251,26 @@ def test_delegate_to_runner_reports_child_failure(monkeypatch, capsys) -> None:
     assert "ONE OR MORE SUITES FAILED" in output
 
 
+def test_delegate_to_runner_propagates_child_skip(monkeypatch) -> None:
+    child_output = "Result: PASS   Checks: 0 passed, 0 failed, 1 skipped\n"
+
+    def _fake_run_captured(*_args, **_kwargs):
+        return 0, child_output
+
+    monkeypatch.setattr(_runner, "_run_captured", _fake_run_captured)
+
+    result = _runner._delegate_to_runner(
+        name="csharp-client-static",
+        runner_dir=Path(__file__).resolve().parents[1],
+        phase_args=["--phase1"],
+        label="csharp runner (phase1)",
+    )
+
+    assert result.ok is True
+    assert result.skipped is True
+    assert result.counts == "1 skipped"
+
+
 def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
     results = [
         _runner.SuiteResult("server-smoke", True, duration=1.0, counts="10 passed"),

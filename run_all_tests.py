@@ -615,6 +615,14 @@ def _test_outcome_counts_from_detail(counts: str) -> Counter[str]:
     return totals
 
 
+def _counts_are_only_skipped(counts: str) -> bool:
+    """Return True when a child runner reports skipped checks/tests and nothing executed."""
+    totals = _test_outcome_counts_from_detail(counts)
+    if not totals or totals["skipped"] == 0:
+        return False
+    return sum(value for key, value in totals.items() if key != "skipped") == 0
+
+
 def _test_outcome_counts_from_results(results: list[SuiteResult]) -> Counter[str]:
     """Sum parsed test outcome counts across all suites."""
     totals: Counter[str] = Counter()
@@ -682,12 +690,15 @@ def _delegate_to_runner(
         env=env,
         timeout=run_timeout,
     )
+    counts = _parse_suite_counts(out)
+    skipped = rc == 0 and _counts_are_only_skipped(counts)
     return SuiteResult(
         name=name,
         ok=(rc == 0),
+        skipped=skipped,
         duration=time.monotonic() - t0,
         output=out,
-        counts=_parse_suite_counts(out),
+        counts=counts,
     )
 
 

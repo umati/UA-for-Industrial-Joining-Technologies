@@ -205,7 +205,7 @@ def test_python_lint_fails_on_fixable_pip_audit_cve(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner, "_skip", lambda msg: None)
 
-    def fake_run(cmd, **kwargs):
+    def fake_run_captured(cmd, **kwargs):
         if "pip_audit" in cmd:
             report = Path(cmd[cmd.index("-o") + 1])
             report.parent.mkdir(parents=True, exist_ok=True)
@@ -222,10 +222,10 @@ def test_python_lint_fails_on_fixable_pip_audit_cve(monkeypatch, tmp_path):
                 ),
                 encoding="utf-8",
             )
-            return 1
-        return 0
+            return 1, ""
+        return 0, ""
 
-    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_run_captured", fake_run_captured)
 
     result = runner._stage_python_lint(Path(sys.executable))
 
@@ -244,7 +244,7 @@ def test_python_lint_allows_advisory_only_pip_audit_cve(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner, "_skip", lambda msg: None)
 
-    def fake_run(cmd, **kwargs):
+    def fake_run_captured(cmd, **kwargs):
         if "pip_audit" in cmd:
             report = Path(cmd[cmd.index("-o") + 1])
             report.parent.mkdir(parents=True, exist_ok=True)
@@ -252,10 +252,10 @@ def test_python_lint_allows_advisory_only_pip_audit_cve(monkeypatch, tmp_path):
                 json.dumps({"dependencies": [{"name": "package", "vulns": [{"id": "CVE-X", "fix_versions": []}]}]}),
                 encoding="utf-8",
             )
-            return 1
-        return 0
+            return 1, ""
+        return 0, ""
 
-    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_run_captured", fake_run_captured)
 
     result = runner._stage_python_lint(Path(sys.executable))
 
@@ -273,12 +273,113 @@ def test_python_lint_fails_when_pip_audit_reports_cves_without_json(monkeypatch,
     monkeypatch.setattr(runner, "_is_https_reachable", lambda host: True)
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner, "_skip", lambda msg: None)
-    monkeypatch.setattr(runner, "_run", lambda cmd, **kwargs: 1 if "pip_audit" in cmd else 0)
+    monkeypatch.setattr(
+        runner,
+        "_run_captured",
+        lambda cmd, **kwargs: (1, "internal parsing failure") if "pip_audit" in cmd else (0, ""),
+    )
 
     result = runner._stage_python_lint(Path(sys.executable))
 
     assert result.rc == 1
     assert any("report missing" in note for note in result.notes)
+
+
+def test_python_lint_retries_pip_audit_before_failing(monkeypatch, tmp_path):
+    runner = _load_runner()
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
+    monkeypatch.setattr(runner, "_TMP_DIR", tmp_path / "tmp")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+    monkeypatch.setattr(runner, "_py_module_available", lambda name: name == "pip_audit")
+    monkeypatch.setattr(runner, "_cmd_available", lambda name: False)
+    monkeypatch.setattr(runner, "_is_https_reachable", lambda host: True)
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_skip", lambda msg: None)
+    monkeypatch.setattr(runner, "_warn", lambda msg: None)
+
+    attempts = {"count": 0}
+
+    def fake_run_captured(cmd, **kwargs):
+        if "pip_audit" not in cmd:
+            return 0, ""
+        attempts["count"] += 1
+        report = Path(cmd[cmd.index("-o") + 1])
+        report.parent.mkdir(parents=True, exist_ok=True)
+        if attempts["count"] == 1:
+            return 1, "ReadTimeout while connecting to pypi.org"
+        report.write_text(
+            json.dumps(
+                {
+                    "dependencies": [
+                        {
+                            "name": "urllib3",
+                            "vulns": [{"id": "CVE-2026-44431", "fix_versions": ["2.7.0"]}],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        return 1, ""
+
+    monkeypatch.setattr(runner, "_run_captured", fake_run_captured)
+
+    result = runner._stage_python_lint(Path(sys.executable))
+
+    assert attempts["count"] == 2
+    assert result.rc == 1
+    assert any("fixable CVE" in note for note in result.notes)
+
+
+def test_python_lint_skips_pip_audit_after_repeated_network_failures(monkeypatch, tmp_path):
+    runner = _load_runner()
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
+    monkeypatch.setattr(runner, "_TMP_DIR", tmp_path / "tmp")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+    monkeypatch.setattr(runner, "_py_module_available", lambda name: name == "pip_audit")
+    monkeypatch.setattr(runner, "_cmd_available", lambda name: False)
+    monkeypatch.setattr(runner, "_is_https_reachable", lambda host: True)
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_skip", lambda msg: None)
+    monkeypatch.setattr(runner, "_warn", lambda msg: None)
+    monkeypatch.setattr(
+        runner,
+        "_run_captured",
+        lambda cmd, **kwargs: (1, "ReadTimeout while connecting to pypi.org") if "pip_audit" in cmd else (0, ""),
+    )
+
+    result = runner._stage_python_lint(Path(sys.executable))
+
+    assert result.rc == 0
+    assert any("pip-audit skipped (network timeout)" in note for note in result.notes)
+
+
+def test_python_lint_skips_pip_audit_when_network_leaves_partial_report(monkeypatch, tmp_path):
+    runner = _load_runner()
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
+    monkeypatch.setattr(runner, "_TMP_DIR", tmp_path / "tmp")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+    monkeypatch.setattr(runner, "_py_module_available", lambda name: name == "pip_audit")
+    monkeypatch.setattr(runner, "_cmd_available", lambda name: False)
+    monkeypatch.setattr(runner, "_is_https_reachable", lambda host: True)
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_skip", lambda msg: None)
+    monkeypatch.setattr(runner, "_warn", lambda msg: None)
+
+    def fake_run_captured(cmd, **kwargs):
+        if "pip_audit" not in cmd:
+            return 0, ""
+        report = Path(cmd[cmd.index("-o") + 1])
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text("{", encoding="utf-8")
+        return 1, "ReadTimeout while connecting to pypi.org"
+
+    monkeypatch.setattr(runner, "_run_captured", fake_run_captured)
+
+    result = runner._stage_python_lint(Path(sys.executable))
+
+    assert result.rc == 0
+    assert any("pip-audit skipped (network)" in note for note in result.notes)
 
 
 def test_npm_install_uses_ci_in_ci_when_lockfile_exists(monkeypatch):

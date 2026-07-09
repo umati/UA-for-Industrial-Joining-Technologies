@@ -55,7 +55,6 @@ _SLN = _PROJECT_DIR / "IJT_CSharp_Client.sln"
 _TEST_PROJ = _PROJECT_DIR / "Tests" / "IJT_CSharp_Client.Tests" / "IJT_CSharp_Client.Tests.csproj"
 _RESULTS_DIR = _PROJECT_DIR / "test-results"
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40451"
-_MIN_DOTNET_MAJOR = 10
 _COVERAGE_THRESHOLD = 95.0
 _PHASE1_TEST_FILTER = (
     "(FullyQualifiedName!~LiveIntegration)&(Category!=Live)&(Category!=OpcUaSecurity)"
@@ -124,6 +123,18 @@ def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
 
 def _dotnet_available() -> bool:
     return shutil.which("dotnet") is not None
+
+
+def _is_github_actions_environment() -> bool:
+    return os.environ.get("GITHUB_ACTIONS") == "true"
+
+
+def _strict_dotnet_prerequisites() -> bool:
+    return os.environ.get("IJT_CSHARP_STRICT_DOTNET_PREREQS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -569,29 +580,69 @@ def _write_junit_xml(path: Path, results: list[StepResult]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_prerequisites() -> bool:
-    if not _dotnet_available():
-        print(
-            "ERROR: 'dotnet' was not found in PATH.\n"
-            "  Install the .NET SDK from https://dotnet.microsoft.com/download\n"
-            "  and ensure 'dotnet' is on your PATH.",
-            file=sys.stderr,
-        )
-        return False
-    ver = _dotnet_version()
+def _dotnet_major(version: str) -> int:
     try:
-        major = int(ver.split(".")[0])
+        return int(version.split(".")[0])
     except (ValueError, IndexError):
-        major = 0
-    if major < _MIN_DOTNET_MAJOR:
-        print(
-            f"ERROR: dotnet {ver} found, but >= {_MIN_DOTNET_MAJOR} is required.\n"
-            "  Install a newer .NET SDK from https://dotnet.microsoft.com/download",
-            file=sys.stderr,
+        return 0
+
+
+def _target_framework_major(target_framework: str) -> int:
+    match = re.match(r"^net(?P<major>\d+)(?:\.\d+)?(?:-.+)?$", target_framework.strip())
+    if not match:
+        return 0
+    return int(match.group("major"))
+
+
+def _iter_source_csharp_projects() -> tuple[Path, ...]:
+    return tuple(
+        sorted(
+            path
+            for path in _PROJECT_DIR.rglob("*.csproj")
+            if not {"bin", "obj"}.intersection(path.relative_to(_PROJECT_DIR).parts)
         )
-        return False
+    )
+
+
+def _target_frameworks(project_path: Path) -> tuple[str, ...]:
+    text = project_path.read_text(encoding="utf-8")
+    frameworks: list[str] = []
+    for tag in ("TargetFramework", "TargetFrameworks"):
+        for match in re.finditer(rf"<{tag}>\s*([^<]+?)\s*</{tag}>", text):
+            frameworks.extend(part.strip() for part in match.group(1).split(";") if part.strip())
+    return tuple(frameworks)
+
+
+def _required_dotnet_major(projects: tuple[Path, ...] | None = None) -> int:
+    majors: list[int] = []
+    for project in projects or _iter_source_csharp_projects():
+        majors.extend(
+            major
+            for major in (
+                _target_framework_major(framework) for framework in _target_frameworks(project)
+            )
+            if major
+        )
+    return max(majors, default=0)
+
+
+def _check_prerequisites() -> tuple[bool, str]:
+    if not _dotnet_available():
+        return (
+            False,
+            "'dotnet' was not found in PATH. Install the .NET SDK and ensure it is on PATH.",
+        )
+    required_major = _required_dotnet_major()
+    ver = _dotnet_version()
+    major = _dotnet_major(ver)
+    if required_major and major < required_major:
+        return (
+            False,
+            f"dotnet {ver or 'unknown'} found, but >= {required_major} is required "
+            "by the C# project TargetFramework.",
+        )
     print(f"dotnet {ver}")
-    return True
+    return True, ""
 
 
 # ---------------------------------------------------------------------------
@@ -1241,11 +1292,42 @@ def main() -> int:
     run_phase2 = (
         not args.phase1 and not run_opcua_security and not run_opcua_security_build_contract
     )
+    results: list[StepResult] = []
+    t_start = time.monotonic()
+    junit_xml_path = _PROJECT_DIR / args.junit_xml
 
     _banner("IJT C# Client — Test Suite")
 
-    if not _check_prerequisites():
-        return 1
+    prereq_ok, prereq_detail = _check_prerequisites()
+    if not prereq_ok:
+        if _is_github_actions_environment() or _strict_dotnet_prerequisites():
+            print(
+                f"ERROR: {prereq_detail}\n"
+                "  Install a newer .NET SDK from https://dotnet.microsoft.com/download",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"WARN: {prereq_detail}\n"
+            "  Skipping IJT C# Client tests in local mode (install .NET SDK 10+ to run).",
+            file=sys.stderr,
+        )
+        skipped = StepResult(
+            "dotnet prerequisites",
+            "BOOTSTRAP",
+            "SKIP",
+            prereq_detail,
+            total=1,
+            skipped=1,
+        )
+        results.append(skipped)
+        _row(skipped.phase, skipped.label, skipped.status, skipped.detail)
+        _footer(True, time.monotonic() - t_start, results)
+        junit_xml_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_junit_xml(junit_xml_path, results)
+        if not preserve_artifacts:
+            _cleanup_caches(_PROJECT_DIR, include_build_artifacts=clean_build_artifacts)
+        return 0
 
     # In matrix (--opcua-security) mode the shared _RESULTS_DIR is populated by
     # both targets running concurrently; wiping it would clobber a sibling
@@ -1255,13 +1337,9 @@ def main() -> int:
         shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    results: list[StepResult] = []
-    t_start = time.monotonic()
-
     skip_restore = os.environ.get("SKIP_DOTNET_RESTORE", "0").strip() in {"1", "true", "yes"}
 
     # Default junit path; overridden below for matrix mode.
-    junit_xml_path = _PROJECT_DIR / args.junit_xml
 
     # -- OPC UA security build contract --------------------------------------
     if run_opcua_security_build_contract:

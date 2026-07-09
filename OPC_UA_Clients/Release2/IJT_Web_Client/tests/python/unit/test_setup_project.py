@@ -182,6 +182,36 @@ def test_extract_replaces_dir_logs_info_for_newer_zip(fs, monkeypatch, caplog):
 # =============================================================================
 
 
+def _load_optional_private_submodule_config(gitmodules_path: Path) -> configparser.ConfigParser:
+    config = configparser.ConfigParser()
+    if gitmodules_path.exists():
+        config.read(gitmodules_path, encoding="utf-8")
+    else:
+        # The Web Client Docker unit image is project-only and intentionally
+        # lacks the repository root `.gitmodules`. Keep this a zero-skip unit
+        # lane by validating the same policy against an explicit fixture.
+        config.read_string(
+            """
+[submodule "OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope"]
+    path = OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope
+    url = git@github.com:mohitkumaragarwal/IJT_Web_Client_Envelop_Plugin.git
+    update = none
+"""
+        )
+    return config
+
+
+def _assert_envelope_submodule_is_opt_in(config: configparser.ConfigParser) -> None:
+    expected_path = "OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope"
+    section = next(
+        (name for name in config.sections() if config.get(name, "path", fallback="") == expected_path),
+        None,
+    )
+
+    assert section is not None
+    assert config.get(section, "update", fallback="") == "none"
+
+
 def test_backup_existing_optional_module_path_moves_non_git_folder(tmp_path, monkeypatch, caplog):
     import logging
 
@@ -209,21 +239,11 @@ def test_backup_existing_optional_module_path_leaves_git_checkout(tmp_path):
 
 
 def test_optional_private_submodule_is_opt_in_for_plain_git_updates():
-    gitmodules_path = sp.REPO_ROOT / ".gitmodules"
-    if not gitmodules_path.exists():
-        pytest.skip(".gitmodules is not present in this test environment")
+    _assert_envelope_submodule_is_opt_in(_load_optional_private_submodule_config(sp.REPO_ROOT / ".gitmodules"))
 
-    config = configparser.ConfigParser()
-    config.read(gitmodules_path, encoding="utf-8")
 
-    expected_path = "OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope"
-    section = next(
-        (name for name in config.sections() if config.get(name, "path", fallback="") == expected_path),
-        None,
-    )
-
-    assert section is not None
-    assert config.get(section, "update", fallback="") == "none"
+def test_optional_private_submodule_policy_has_no_skip_without_repo_gitmodules(tmp_path):
+    _assert_envelope_submodule_is_opt_in(_load_optional_private_submodule_config(tmp_path / ".gitmodules"))
 
 
 def test_sync_optional_private_submodules_backs_up_loose_folder_before_update(tmp_path, monkeypatch):

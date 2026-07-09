@@ -126,17 +126,25 @@ repos:
         # exclude_dirs prunes the venv/cache/test forests.
         files: '(\.py$|^pyproject\.toml$|^\.pre-commit-config\.yaml$)'
 
-  # JS linting for the Node Client (ESLint + custom CSS checker).
-  # Both hooks use `npm --prefix` so they run with the project's own node_modules
-  # (exact same versions as during development) without requiring a global install.
+  # JS linting for the Node/Web Clients.
+  # npm-backed hooks use scripts/precommit_npm_hook.py so a fresh local checkout
+  # installs project-local node_modules from the committed lockfile when missing
+  # or stale. No global eslint/stylelint install is required.
   # pass_filenames: false — the npm scripts handle their own file globs.
   - repo: local
     hooks:
       - id: eslint-node-client
         name: ESLint (Node Client)
         language: system
-        entry: npm
-        args: ['--prefix', 'OPC_UA_Clients/Release1/IJT_Node_Client', 'run', 'lint:js']
+        entry: python
+        args:
+          - scripts/precommit_npm_hook.py
+          - --project
+          - OPC_UA_Clients/Release1/IJT_Node_Client
+          - --script
+          - lint:js
+          - --required-bin
+          - eslint
         pass_filenames: false
         files: '^OPC_UA_Clients/Release1/IJT_Node_Client/.*\.(js|mjs)$'
 
@@ -155,16 +163,30 @@ repos:
       - id: eslint-web-client
         name: ESLint (Web Client)
         language: system
-        entry: npm
-        args: ['--prefix', 'OPC_UA_Clients/Release2/IJT_Web_Client', 'run', 'lint']
+        entry: python
+        args:
+          - scripts/precommit_npm_hook.py
+          - --project
+          - OPC_UA_Clients/Release2/IJT_Web_Client
+          - --script
+          - lint
+          - --required-bin
+          - eslint
         pass_filenames: false
         files: '^OPC_UA_Clients/Release2/IJT_Web_Client/(src/javascripts|config).*\.(js|mjs)$'
 
       - id: stylelint-web-client
         name: Stylelint (Web Client)
         language: system
-        entry: npm
-        args: ['--prefix', 'OPC_UA_Clients/Release2/IJT_Web_Client', 'run', 'lint:css']
+        entry: python
+        args:
+          - scripts/precommit_npm_hook.py
+          - --project
+          - OPC_UA_Clients/Release2/IJT_Web_Client
+          - --script
+          - lint:css
+          - --required-bin
+          - stylelint
         pass_filenames: false
         files: '^OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/css/.*\.css$'
 

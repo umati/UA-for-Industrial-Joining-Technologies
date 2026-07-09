@@ -128,6 +128,9 @@ _REQUIREMENTS = ROOT / "requirements.txt"
 _REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
 _PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
 _NPM_INSTALL_FLAGS = ["--legacy-peer-deps", "--no-audit", "--no-fund"]
+_PIP_AUDIT_MAX_ATTEMPTS = 2
+_PIP_AUDIT_HTTP_TIMEOUT_SECONDS = 20
+_PIP_AUDIT_PROCESS_TIMEOUT_SECONDS = 180 if IS_CI else 90
 # Minimum smoke-import contract for focused live/browser targets. Keep this
 # aligned with requirements.txt and requirements-dev.txt when target deps change.
 _PYTHON_TARGET_REQUIRED_MODULES = (
@@ -622,6 +625,31 @@ def _is_https_reachable(host: str, timeout: float = 5.0) -> bool:
         return True
     except Exception:
         return False
+
+
+def _looks_like_transient_network_failure(output: str) -> bool:
+    lowered = output.lower()
+    return any(
+        token in lowered
+        for token in (
+            "readtimeout",
+            "read timed out",
+            "connecttimeout",
+            "connect timeout",
+            "sslerror",
+            "tls",
+            "certificate_verify_failed",
+            "temporary failure in name resolution",
+            "name or service not known",
+            "newconnectionerror",
+            "max retries exceeded",
+            "connection reset",
+            "connection aborted",
+            "network is unreachable",
+            "proxyerror",
+            "timed out",
+        )
+    )
 
 
 def _requirements_hash() -> str:
@@ -1166,28 +1194,44 @@ def _stage_python_lint(python: Path) -> StageResult:
                 }
             )
             pip_audit_report = results_dir / "pip-audit.json"
-            rc = _run(
-                [
-                    python,
-                    "-m",
-                    "pip_audit",
-                    "--format",
-                    "json",
-                    "-o",
-                    str(pip_audit_report),
-                    "--progress-spinner",
-                    "off",
-                    "--timeout",
-                    "5",
-                    "--cache-dir",
-                    str(pip_audit_cache),
-                ],
-                label="pip-audit",
-                env=pip_audit_env,
-                timeout=90 if IS_CI else 30,
-                timeout_message="[SKIP] pip-audit skipped — network/TLS timeout",
-            )
-            if rc == -1:
+            rc = 1
+            pip_audit_output = ""
+            pip_audit_network_skipped = False
+            for attempt in range(1, _PIP_AUDIT_MAX_ATTEMPTS + 1):
+                with contextlib.suppress(OSError):
+                    pip_audit_report.unlink(missing_ok=True)
+                rc, pip_audit_output = _run_captured(
+                    [
+                        python,
+                        "-m",
+                        "pip_audit",
+                        "--format",
+                        "json",
+                        "-o",
+                        str(pip_audit_report),
+                        "--progress-spinner",
+                        "off",
+                        "--timeout",
+                        str(_PIP_AUDIT_HTTP_TIMEOUT_SECONDS),
+                        "--cache-dir",
+                        str(pip_audit_cache),
+                    ],
+                    label=f"pip-audit ({attempt}/{_PIP_AUDIT_MAX_ATTEMPTS})",
+                    env=pip_audit_env,
+                    timeout=_PIP_AUDIT_PROCESS_TIMEOUT_SECONDS,
+                )
+                if rc == 0 or pip_audit_report.exists():
+                    break
+                network_failure = rc == -1 or _looks_like_transient_network_failure(pip_audit_output)
+                if network_failure and attempt < _PIP_AUDIT_MAX_ATTEMPTS:
+                    _warn(f"pip-audit transient network/TLS failure on attempt {attempt}; retrying")
+                    continue
+                if network_failure:
+                    pip_audit_network_skipped = True
+                break
+
+            if pip_audit_network_skipped:
+                _skip("pip-audit skipped — network/TLS timeout")
                 notes.append("pip-audit skipped (network timeout)")
             elif rc in (0, 1):
                 # Parse the JSON report to split fixable CVEs (must-fix) from
@@ -1198,8 +1242,12 @@ def _stage_python_lint(python: Path) -> StageResult:
                 # masked fixable CVEs in transitive deps like urllib3.
                 if not pip_audit_report.exists():
                     if rc != 0:
-                        overall_rc = rc
-                        notes.append("pip-audit: report missing after CVE exit")
+                        if _looks_like_transient_network_failure(pip_audit_output):
+                            _skip("pip-audit skipped — network/TLS unavailable during scan")
+                            notes.append("pip-audit skipped (network)")
+                        else:
+                            overall_rc = rc
+                            notes.append("pip-audit: report missing after CVE exit")
                 else:
                     try:
                         data = json.loads(pip_audit_report.read_text(encoding="utf-8"))
@@ -1215,13 +1263,21 @@ def _stage_python_lint(python: Path) -> StageResult:
                         # pip-audit also returned a non-zero rc — otherwise the
                         # report is missing/empty for a benign reason (rc=0).
                         if rc != 0:
-                            overall_rc = rc
-                            notes.append(f"pip-audit: could not parse report ({exc})")
+                            if _looks_like_transient_network_failure(pip_audit_output):
+                                _skip("pip-audit skipped — network/TLS interrupted report generation")
+                                notes.append("pip-audit skipped (network)")
+                            else:
+                                overall_rc = rc
+                                notes.append(f"pip-audit: could not parse report ({exc})")
             elif rc not in (0, 1):
                 # Tool error (not "vulns found"). Surface it so the runner
                 # does not swallow real failures as advisory.
-                overall_rc = rc
-                notes.append(f"pip-audit: exit code {rc}")
+                if _looks_like_transient_network_failure(pip_audit_output):
+                    _skip("pip-audit skipped — network/TLS unavailable during scan")
+                    notes.append("pip-audit skipped (network)")
+                else:
+                    overall_rc = rc
+                    notes.append(f"pip-audit: exit code {rc}")
     else:
         _skip("pip-audit not installed — pip install pip-audit")
         notes.append("pip-audit not installed")
