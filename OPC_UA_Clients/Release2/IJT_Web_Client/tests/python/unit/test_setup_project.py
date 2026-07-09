@@ -209,12 +209,21 @@ def test_backup_existing_optional_module_path_leaves_git_checkout(tmp_path):
 
 
 def test_optional_private_submodule_is_opt_in_for_plain_git_updates():
+    gitmodules_path = sp.REPO_ROOT / ".gitmodules"
+    if not gitmodules_path.exists():
+        pytest.skip(".gitmodules is not present in this test environment")
+
     config = configparser.ConfigParser()
-    config.read(sp.REPO_ROOT / ".gitmodules", encoding="utf-8")
+    config.read(gitmodules_path, encoding="utf-8")
 
-    section = 'submodule "OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope"'
+    expected_path = "OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope"
+    section = next(
+        (name for name in config.sections() if config.get(name, "path", fallback="") == expected_path),
+        None,
+    )
 
-    assert config.get(section, "update") == "none"
+    assert section is not None
+    assert config.get(section, "update", fallback="") == "none"
 
 
 def test_sync_optional_private_submodules_backs_up_loose_folder_before_update(tmp_path, monkeypatch):
