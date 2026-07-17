@@ -10,7 +10,8 @@ import {
   serializeResultForStorage
 } from './result-serialization.mjs'
 import {
-  DEFAULT_IGNORE_LOOSENINGS
+  DEFAULT_IGNORE_LOOSENINGS,
+  RESULT_SESSION_STORAGE_KEY
 } from './result-storage-constants.mjs'
 import { isLooseningResult } from './loosening-result-filter.mjs'
 import ResultDataType from '../models/results/result-data-type.mjs'
@@ -343,6 +344,25 @@ export class ResultManager extends ObservableManagerBase {
       }
     }
     this.unresolved = this.unresolved.filter((item) => item !== result)
+  }
+
+  /**
+   * Clear all results from the manager and notify about the evictions
+   */
+  clear () {
+    const allResults = this.getAllResultsChronological()
+    for (const key of Object.keys(this.results)) {
+      this.results[key] = []
+    }
+    this.unresolved = []
+    this.lastResult = null
+    for (const result of allResults) {
+      this.notifyEvictedResult(result, 'user-clear')
+    }
+    // Clear persisted results from localStorage
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(RESULT_SESSION_STORAGE_KEY)
+    }
   }
 
   enforceStorageLimit () {
