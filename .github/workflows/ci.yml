@@ -108,7 +108,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -122,7 +122,7 @@ jobs:
         run: python run_all_tests.py --phase1-python
 
       - name: "Publish Test Reports — Python"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always()
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
@@ -169,7 +169,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -177,7 +177,7 @@ jobs:
         with:
           python-version: "3.14"
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: "24"
 
@@ -187,7 +187,7 @@ jobs:
         run: python run_all_tests.py --phase1-js
 
       - name: "Publish Test Reports — JS"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always()
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
@@ -236,7 +236,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_Console_Client
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -282,7 +282,7 @@ jobs:
         run: python -m mypy . --ignore-missing-imports --no-error-summary
 
       - name: Publish Test Reports
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always()
         with:
           name: "Console Client — Tests"
@@ -339,11 +339,11 @@ jobs:
         working-directory: OPC_UA_Clients/Release1/IJT_Node_Client
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: "24"
 
@@ -368,7 +368,7 @@ jobs:
         run: npm audit --audit-level=high --json > test-results/npm-audit.json
 
       - name: Publish Test Reports
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always()
         with:
           name: "Node Client — Tests"
@@ -422,7 +422,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_Web_Client
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -496,7 +496,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -707,7 +707,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -801,7 +801,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -866,7 +866,7 @@ jobs:
       checks: write
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -887,7 +887,7 @@ jobs:
           path: all-results/
 
       - name: "Report — Web Client Python Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always() && needs.web-client-python.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
@@ -899,7 +899,7 @@ jobs:
           fail-on-empty: false
 
       - name: "Report — Web Client JS Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always() && needs.web-client-js.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
@@ -911,7 +911,7 @@ jobs:
           fail-on-empty: false
 
       - name: "Report — Console Client Python Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always() && needs.console-client.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
@@ -923,7 +923,7 @@ jobs:
           fail-on-empty: false
 
       - name: "Report — Node Client JS Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always() && needs.node-client.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
@@ -935,7 +935,7 @@ jobs:
           fail-on-empty: false
 
       - name: "Report — Test Client Python Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always() && needs.test-client.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
@@ -947,7 +947,7 @@ jobs:
           fail-on-empty: false
 
       - name: "Report — C# Client Unit Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always() && needs.csharp-unit.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
@@ -959,7 +959,7 @@ jobs:
           fail-on-empty: false
 
       - name: "Report — OPC UA Server Smoke (Windows)"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         if: always() && needs.server-smoke-windows.result != 'skipped'
         continue-on-error: true  # checks:write unavailable on forked PRs
         with:
@@ -1047,7 +1047,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -1078,7 +1078,7 @@ jobs:
       security-events: write  # required to upload SARIF to Code Scanning
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -1109,7 +1109,7 @@ jobs:
     env:
       SKIP: eslint-node-client,css-node-client,eslint-web-client,stylelint-web-client
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -1144,7 +1144,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
