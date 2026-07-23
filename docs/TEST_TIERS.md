@@ -48,8 +48,7 @@ or let Web Client `setup_project.py` perform its best-effort sync.
 Internal/private validation is separated into
 `.github/workflows/internal-private-envelope.yml`, which runs only by manual
 dispatch in protected environment `private-envelope-validation` with a private
-GitHub App credential pair (`IJT_PRIVATE_ENVELOPE_APP_ID` and
-`IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY`) and enforces
+GitHub App private key secret (`IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY`) and enforces
 `--private-modules require`.
 The `pre-commit` CI job runs the repository hook configuration on all files and
 is part of the required check set. It skips only npm-backed JavaScript hooks

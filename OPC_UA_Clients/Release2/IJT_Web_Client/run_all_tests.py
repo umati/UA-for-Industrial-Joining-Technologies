@@ -1546,7 +1546,10 @@ def _stage_js_unit(private_modules: str = "auto") -> StageResult:
             if normalized_private_mode == "skip":
                 _skip("optional private Envelope performance tests disabled (--private-modules=skip)")
                 notes.append("optional private Envelope performance tests disabled via --private-modules=skip")
-            elif _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST.is_file() and _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_DATA.is_file():
+            elif (
+                _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST.is_file()
+                and _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_DATA.is_file()
+            ):
                 rc = _run(
                     [npm, "run", "test:unit:js:performance"],
                     label="vitest performance budgets",

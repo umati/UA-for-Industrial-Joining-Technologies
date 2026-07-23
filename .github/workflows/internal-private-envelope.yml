@@ -18,13 +18,12 @@ jobs:
       - name: Check GitHub App secret availability
         id: app_secret_check
         env:
-          IJT_PRIVATE_ENVELOPE_APP_ID: ${{ secrets.IJT_PRIVATE_ENVELOPE_APP_ID }}
           IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY: ${{ secrets.IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY }}
         run: |
-          if [ -n "${IJT_PRIVATE_ENVELOPE_APP_ID}" ] && [ -n "${IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY}" ]; then
+          if [ -n "${IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY}" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::Missing IJT_PRIVATE_ENVELOPE_APP_ID and/or IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY in environment 'private-envelope-validation'."
+            echo "::error::Missing IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY in environment 'private-envelope-validation'."
             exit 1
           fi
 
@@ -33,7 +32,7 @@ jobs:
         if: steps.app_secret_check.outputs.available == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
         with:
-          app-id: ${{ secrets.IJT_PRIVATE_ENVELOPE_APP_ID }}
+          client-id: Iv23li545ZVwTp1aSPF7
           private-key: ${{ secrets.IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY }}
           owner: mohitkumaragarwal
           repositories: IJT_Web_Client_Envelop_Plugin
