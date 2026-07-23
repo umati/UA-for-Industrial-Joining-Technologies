@@ -48,6 +48,10 @@ permissions:
   contents: read
   deployments: write
 
+concurrency:
+  group: maintenance-retention-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -70,6 +74,10 @@ jobs:
           deleted_count=0
           deleted_bytes=0
           kept_count=0
+          cache_records="$(mktemp)"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/caches" --paginate \
+            --jq '.actions_caches[] | [.id, .key, .ref, .last_accessed_at, .size_in_bytes] | @tsv' > "${cache_records}"
 
           while IFS=$'\t' read -r cache_id cache_key cache_ref last_accessed size_bytes; do
             [ -n "${cache_id}" ] || continue
@@ -80,15 +88,14 @@ jobs:
               deleted_count=$((deleted_count + 1))
               deleted_bytes=$((deleted_bytes + size_bytes))
               if [ "${DRY_RUN}" != "true" ]; then
-                gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/caches/${cache_id}" >/dev/null
+                if ! gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/caches/${cache_id}" >/dev/null; then
+                  echo "::warning::Could not delete cache ${cache_id}; it may already be gone."
+                fi
               fi
             else
               kept_count=$((kept_count + 1))
             fi
-          done < <(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/caches" --paginate \
-              --jq '.actions_caches[] | [.id, .key, .ref, .last_accessed_at, .size_in_bytes] | @tsv'
-          )
+          done < "${cache_records}"
 
           {
             echo "## Actions cache retention"
@@ -117,6 +124,10 @@ jobs:
           kept_young_count=0
           kept_active_count=0
           index=0
+          run_records="$(mktemp)"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" --paginate \
+            --jq '.workflow_runs[] | [.id, .name, .status, (.conclusion // ""), .created_at, .event, (.head_branch // "")] | @tsv' > "${run_records}"
 
           while IFS=$'\t' read -r run_id run_name run_status conclusion created_at event branch; do
             [ -n "${run_id}" ] || continue
@@ -146,12 +157,11 @@ jobs:
             echo "Delete workflow run ${run_id}: ${run_name}, ${event}/${branch}, ${conclusion}, created ${created_at}"
             deleted_count=$((deleted_count + 1))
             if [ "${DRY_RUN}" != "true" ]; then
-              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" >/dev/null
+              if ! gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" >/dev/null; then
+                echo "::warning::Could not delete workflow run ${run_id}; it may already be gone or protected by GitHub."
+              fi
             fi
-          done < <(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" --paginate \
-              --jq '.workflow_runs[] | [.id, .name, .status, (.conclusion // ""), .created_at, .event, (.head_branch // "")] | @tsv'
-          )
+          done < "${run_records}"
 
           {
             echo
@@ -182,6 +192,10 @@ jobs:
           kept_recent_count=0
           kept_young_count=0
           index=0
+          deployment_records="$(mktemp)"
+
+          gh api "repos/${GITHUB_REPOSITORY}/deployments" --paginate \
+            --jq '.[] | select(.environment == "docker-hub") | [.id, .created_at, .ref, .sha] | @tsv' > "${deployment_records}"
 
           while IFS=$'\t' read -r deployment_id created_at ref sha; do
             [ -n "${deployment_id}" ] || continue
@@ -201,15 +215,17 @@ jobs:
             echo "Delete docker-hub deployment ${deployment_id}: ${ref} ${sha}, created ${created_at}"
             deleted_count=$((deleted_count + 1))
             if [ "${DRY_RUN}" != "true" ]; then
-              gh api -X POST "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" \
+              if ! gh api -X POST "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" \
                 -f state=inactive \
-                -f auto_inactive=false >/dev/null
-              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}" >/dev/null
+                -f auto_inactive=false >/dev/null; then
+                echo "::warning::Could not mark docker-hub deployment ${deployment_id} inactive; it may already be gone."
+                continue
+              fi
+              if ! gh api -X DELETE "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}" >/dev/null; then
+                echo "::warning::Could not delete docker-hub deployment ${deployment_id}; it may already be gone or protected by GitHub."
+              fi
             fi
-          done < <(
-            gh api "repos/${GITHUB_REPOSITORY}/deployments" --paginate \
-              --jq '.[] | select(.environment == "docker-hub") | [.id, .created_at, .ref, .sha] | @tsv'
-          )
+          done < "${deployment_records}"
 
           {
             echo
