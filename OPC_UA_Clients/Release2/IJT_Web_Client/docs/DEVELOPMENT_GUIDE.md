@@ -35,6 +35,9 @@ Keep personal controller endpoints and local UI preferences in the generated run
 ## Validation Commands
 
 ```bash
+# Install dependencies and activate shared local Git hooks
+npm ci
+
 # Public baseline validation
 python run_all_tests.py --private-modules skip
 
@@ -65,6 +68,17 @@ on your authenticated machine, set local-only Git config from the IJT repo root:
 git config submodule.OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope.update checkout
 git config submodule.recurse true
 ```
+
+## Local Git hooks
+
+The Web Client has repo-tracked Husky hooks under `.husky/`. They are installed by `npm ci` from this package and configured against the IJT Git root, because this package is nested under `OPC_UA_Clients\Release2\IJT_Web_Client`.
+
+| Hook | Purpose |
+|------|---------|
+| `pre-commit` | Auto-fixes changed tracked JavaScript and CSS files through `npm run lint:precommit`, then re-stages fixes only during actual Git hook execution. |
+| `pre-push` | Runs `npm run lint:test:prepush`, currently the stable lint gate. Full unit and integration coverage remain CI/runner owned because the current local unit baseline includes unrelated failures. |
+
+Hook files must stay LF-normalized through `.gitattributes`; do not add shell hook files without matching `text eol=lf` coverage.
 
 ## Definition of Done
 
