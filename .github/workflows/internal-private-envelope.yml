@@ -24,8 +24,8 @@ jobs:
           if [ -n "${IJT_PRIVATE_ENVELOPE_APP_ID}" ] && [ -n "${IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY}" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::Set IJT_PRIVATE_ENVELOPE_APP_ID and IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY in environment 'private-envelope-validation'."
-            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Missing IJT_PRIVATE_ENVELOPE_APP_ID and/or IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY in environment 'private-envelope-validation'."
+            exit 1
           fi
 
       - name: Create GitHub App installation token
@@ -42,13 +42,25 @@ jobs:
         if: steps.app_secret_check.outputs.available == 'true'
         with:
           persist-credentials: false
-          submodules: recursive
+          submodules: false
           token: ${{ steps.app_token.outputs.token }}
+
+      - name: Initialize private Envelope submodule explicitly
+        if: steps.app_secret_check.outputs.available == 'true'
+        run: |
+          GH_APP_TOKEN="${{ steps.app_token.outputs.token }}"
+          git -c "url.https://x-access-token:${GH_APP_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --checkout --init --recursive -- OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         if: steps.app_secret_check.outputs.available == 'true'
         with:
           python-version: "3.14"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        if: steps.app_secret_check.outputs.available == 'true'
+        with:
+          node-version: "24"
 
       - name: Run root Web Client static suite with private modules required
         if: steps.app_secret_check.outputs.available == 'true'

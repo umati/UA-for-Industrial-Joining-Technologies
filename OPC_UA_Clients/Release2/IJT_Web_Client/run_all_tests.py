@@ -3199,6 +3199,12 @@ def main() -> int:
     parser.add_argument("--ws-url", default=os.getenv("WS_TEST_URL", "ws://localhost:8001"))
     parser.add_argument("--ui-url", default=os.getenv("UI_TEST_BASE_URL", "http://127.0.0.1:3000"))
     args = parser.parse_args()
+    private_modules_mode = args.private_modules.strip().lower()
+    if private_modules_mode not in _OPTIONAL_PRIVATE_MODULE_CHOICES:
+        parser.error("invalid --private-modules mode: choose one of skip, auto, require")
+    args.private_modules = private_modules_mode
+    # Keep policy consistent across all subprocess stages (pytest, npm, etc.).
+    os.environ["IJT_PRIVATE_MODULES"] = private_modules_mode
 
     targeted_flags = [
         args.python_opcua_only,
