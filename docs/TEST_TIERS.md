@@ -32,12 +32,11 @@ The Web JavaScript lint gate also owns the connection-layer randomness guard:
 Connection/session identifiers must use Web Crypto APIs such as
 `crypto.randomUUID()` or `crypto.getRandomValues()`. Existing non-security uses
 such as WebSocket retry jitter remain outside this guard.
-The Web Client JavaScript runner treats the private Envelope submodule as
-optional by default. `--private-modules auto` runs Envelope lint, tests, and
-performance budgets only when the submodule is checked out locally; public CI
-and public clones skip those checks cleanly when the private module is absent.
-Use `--private-modules require` only in authorized private validation where a
-missing Envelope checkout should fail the run. Coverage remains enforced on the
+The Web Client runner defaults to `--private-modules skip` so public CI and
+public clones stay deterministic and Envelope-independent. Use
+`--private-modules auto` only when you intentionally want opportunistic local
+checks, and use `--private-modules require` in authorized internal validation
+where a missing Envelope checkout must fail. Coverage remains enforced on the
 public JavaScript suite; Envelope performance-budget tests run separately without
 coverage instrumentation because coverage overhead invalidates timing budgets.
 The Envelope submodule is also configured with `update = none`, so normal IJT
@@ -45,6 +44,12 @@ pulls and public CI checkouts do not require private repository access. Authoriz
 developers can initialize it explicitly with `git submodule update --checkout
 --init --recursive -- OPC_UA_Clients\Release2\IJT_Web_Client\src\javascripts\views\envelope`
 or let Web Client `setup_project.py` perform its best-effort sync.
+Internal/private validation is separated into
+`.github/workflows/internal-private-envelope.yml`, which runs only by manual
+dispatch in protected environment `private-envelope-validation` with a private
+GitHub App credential pair (`IJT_PRIVATE_ENVELOPE_APP_ID` and
+`IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY`) and enforces
+`--private-modules require`.
 The `pre-commit` CI job runs the repository hook configuration on all files and
 is part of the required check set. It skips only npm-backed JavaScript hooks
 because the dedicated Web and Node JavaScript jobs already run those checks

@@ -41,10 +41,13 @@ npm ci
 # Public baseline validation
 python run_all_tests.py --private-modules skip
 
-# JavaScript lane; runs optional private Envelope checks when the submodule is present
+# JavaScript lane; public deterministic baseline (private modules skipped by default)
 python run_all_tests.py --phase1-js
 
-# JavaScript lane; require the private Envelope submodule and fail if it is absent
+# JavaScript lane; opportunistic private checks when the submodule is present
+python run_all_tests.py --phase1-js --private-modules auto
+
+# JavaScript lane; require the private Envelope submodule and fail if absent
 python run_all_tests.py --phase1-js --private-modules require
 
 # Authorized developers: initialize optional private Envelope from the IJT repo root

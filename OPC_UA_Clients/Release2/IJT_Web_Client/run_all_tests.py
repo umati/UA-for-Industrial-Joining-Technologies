@@ -46,7 +46,7 @@ Environment variables (all optional):
   IJT_DOCKER_BUILD_TIMEOUT
                          seconds to wait for Docker image build (default: 1200)
   IJT_PRIVATE_MODULES     auto|skip|require policy for optional private-module checks
-                          (default: auto)
+                          (default: skip)
 """
 
 from __future__ import annotations
@@ -3187,8 +3187,11 @@ def main() -> int:
     parser.add_argument(
         "--private-modules",
         choices=_OPTIONAL_PRIVATE_MODULE_CHOICES,
-        default=os.getenv("IJT_PRIVATE_MODULES", "auto"),
-        help="Optional private-module policy: auto=run when available, skip=never run, require=fail if unavailable",
+        default=os.getenv("IJT_PRIVATE_MODULES", "skip"),
+        help=(
+            "Optional private-module policy: skip=never run (default), "
+            "auto=run when available, require=fail if unavailable"
+        ),
     )
     parser.add_argument(
         "--opcua-endpoint", default=os.getenv("OPCUA_TEST_ENDPOINT", f"opc.tcp://localhost:{_opcua_server_port()}")

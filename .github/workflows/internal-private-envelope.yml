@@ -1,0 +1,55 @@
+name: Internal — Private Envelope Validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  private-envelope-validation:
+    name: Root Runner — Web Client Static (Private Required)
+    environment: private-envelope-validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check GitHub App secret availability
+        id: app_secret_check
+        env:
+          IJT_PRIVATE_ENVELOPE_APP_ID: ${{ secrets.IJT_PRIVATE_ENVELOPE_APP_ID }}
+          IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY: ${{ secrets.IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY }}
+        run: |
+          if [ -n "${IJT_PRIVATE_ENVELOPE_APP_ID}" ] && [ -n "${IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Set IJT_PRIVATE_ENVELOPE_APP_ID and IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY in environment 'private-envelope-validation'."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub App installation token
+        id: app_token
+        if: steps.app_secret_check.outputs.available == 'true'
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2
+        with:
+          app-id: ${{ secrets.IJT_PRIVATE_ENVELOPE_APP_ID }}
+          private-key: ${{ secrets.IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY }}
+          owner: mohitkumaragarwal
+          repositories: IJT_Web_Client_Envelop_Plugin
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        if: steps.app_secret_check.outputs.available == 'true'
+        with:
+          persist-credentials: false
+          submodules: recursive
+          token: ${{ steps.app_token.outputs.token }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        if: steps.app_secret_check.outputs.available == 'true'
+        with:
+          python-version: "3.14"
+
+      - name: Run root Web Client static suite with private modules required
+        if: steps.app_secret_check.outputs.available == 'true'
+        run: python run_all_tests.py --suite web-client-static --private-modules require

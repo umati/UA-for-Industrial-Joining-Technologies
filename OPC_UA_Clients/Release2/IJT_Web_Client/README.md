@@ -74,10 +74,13 @@ src\javascripts\views\envelope
 Public IJT checkouts continue to work when this private module is absent. The Web Client runner defaults to:
 
 ```powershell
-python run_all_tests.py --private-modules auto
+python run_all_tests.py --private-modules skip
 ```
 
-In `auto` mode, private Envelope checks run only when the submodule is checked out locally. Use `--private-modules skip` to force public-only validation, or `--private-modules require` when an authorized developer or private CI job must fail if the Envelope module is missing.
+`skip` keeps public/local baseline validation deterministic. In `auto` mode,
+private Envelope checks run only when the submodule is checked out locally.
+Use `--private-modules require` when an authorized developer or private CI job
+must fail if the Envelope module is missing.
 
 The submodule is configured as opt-in for Git updates, so a normal IJT pull does not require private Envelope access. Authorized developers can initialize it through `python setup_project.py` or, from the IJT repo root, explicitly with:
 

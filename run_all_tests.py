@@ -30,6 +30,10 @@ Usage:
   python run_all_tests.py                    # full run (Phase 1 + Phase 2)
   python run_all_tests.py --phase1           # static + unit tests only (no server)
   python run_all_tests.py --phase2           # server smoke + live tests
+  python run_all_tests.py --private-modules require
+      # force internal private-module checks in delegated Web Client suite(s)
+  python run_all_tests.py --internal-private-modules
+      # convenience alias for --private-modules require
   python run_all_tests.py --phase2 --opcua-security
       # Phase 2 plus C#/Console OPC UA security targets
   python run_all_tests.py --suite repo-static-markdown-leak-check # single suite by name
@@ -44,6 +48,8 @@ Usage:
   python run_all_tests.py --help
 
 Environment variables:
+  IJT_PRIVATE_MODULES  skip|auto|require policy forwarded to delegated
+                       sub-runners (default: skip)
   IJT_SUITE_TIMEOUT     Per-suite timeout in seconds (default: 600)
   IJT_DOCKER_BUILD_TIMEOUT
                         Docker image build timeout in seconds (default: 1200)
@@ -218,6 +224,7 @@ _RUNNER_SCRIPT_PATHS: tuple[Path, ...] = (
     WEB_CLIENT_DIR / "run_all_tests.py",
     SERVER_DIR / "run_all_tests.py",
 )
+_PRIVATE_MODULE_POLICY_CHOICES: tuple[str, ...] = ("skip", "auto", "require")
 _OPTIONAL_IMPORT_GUARD_PATHS: tuple[Path, ...] = _RUNNER_SCRIPT_PATHS + (
     TEST_CLIENT_DIR / "scripts" / "make_specification_test_summary.py",
     TEST_CLIENT_DIR / "scripts" / "reporting" / "specification_test_summary.py",
@@ -2707,6 +2714,20 @@ def _build_parser() -> argparse.ArgumentParser:
             "GITHUB_ACTIONS=true or IS_DOCKER=true may use sys.executable directly."
         ),
     )
+    parser.add_argument(
+        "--private-modules",
+        choices=_PRIVATE_MODULE_POLICY_CHOICES,
+        default=None,
+        help=(
+            "Forward private-module policy to delegated runners: skip=default, "
+            "auto=run optional checks when present, require=fail when unavailable"
+        ),
+    )
+    parser.add_argument(
+        "--internal-private-modules",
+        action="store_true",
+        help="Convenience alias for --private-modules=require",
+    )
     return parser
 
 
@@ -2759,6 +2780,8 @@ def _validate_suite_arg(parser: argparse.ArgumentParser, args: argparse.Namespac
         parser.error(
             "--opcua-security is not needed with --suite; select the OPC UA security suite directly"
         )
+    if args.internal_private_modules and args.private_modules:
+        parser.error("--internal-private-modules cannot be combined with --private-modules")
 
 
 def _configure_stdio_utf8() -> None:
@@ -2784,6 +2807,18 @@ def main() -> int:
         # GitHub Actions or Docker.
         os.environ["CI"] = "1"
 
+    private_module_mode = (
+        "require"
+        if args.internal_private_modules
+        else (args.private_modules or os.getenv("IJT_PRIVATE_MODULES", "skip"))
+    )
+    private_module_mode = private_module_mode.strip().lower()
+    if private_module_mode not in _PRIVATE_MODULE_POLICY_CHOICES:
+        parser.error(
+            "invalid private-module mode. Use one of: " + ", ".join(_PRIVATE_MODULE_POLICY_CHOICES)
+        )
+    os.environ["IJT_PRIVATE_MODULES"] = private_module_mode
+
     if args.list:
         _print_suite_list()
         return 0
@@ -2800,6 +2835,7 @@ def main() -> int:
     ci_active = IS_CI or bool(os.getenv("CI"))
     ci_note = " (forced via --ci-mode)" if args.ci_mode else ""
     log.info("CI        : %s%s", ci_active, ci_note)
+    log.info("Private modules: %s", private_module_mode)
     log.info("Timeout   : %ds per suite", SUITE_TIMEOUT)
 
     # Pre-flight tool checks -- warn only, suites fail naturally if tools missing

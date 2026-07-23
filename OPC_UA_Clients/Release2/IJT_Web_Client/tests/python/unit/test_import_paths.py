@@ -12,6 +12,7 @@ Checks:
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -19,6 +20,8 @@ import pytest
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _SRC_DIR = _PROJECT_ROOT / "src"
+_PRIVATE_MODULE_MODE = os.getenv("IJT_PRIVATE_MODULES", "skip").strip().lower()
+_INCLUDE_PRIVATE_ENVELOPE = _PRIVATE_MODULE_MODE in {"auto", "require"}
 
 # Pattern: only lowercase letters, digits, hyphens, and dots allowed.
 # Rejects PascalCase (MyFile.mjs) or camelCase (myFile.mjs).
@@ -28,6 +31,14 @@ _SKIP_DIR_NAMES = {"__pycache__", "node_modules"}
 
 def _is_scanned_path(path: Path) -> bool:
     relative = path.relative_to(_SRC_DIR)
+    if (
+        not _INCLUDE_PRIVATE_ENVELOPE
+        and len(relative.parts) >= 3
+        and relative.parts[0] == "javascripts"
+        and relative.parts[1] == "views"
+        and relative.parts[2] == "envelope"
+    ):
+        return False
     return not any(part.startswith(".") or part in _SKIP_DIR_NAMES for part in relative.parts)
 
 
