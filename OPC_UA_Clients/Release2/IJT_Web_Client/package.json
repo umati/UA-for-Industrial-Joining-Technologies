@@ -24,6 +24,9 @@
     "lint:css": "stylelint src/resources/css/*.css",
     "lint:css:fix": "stylelint src/resources/css/*.css --fix",
     "lint:all": "npm run lint && npm run lint:css",
+    "lint:precommit": "node ./scripts/precommit-fix-uncommitted.mjs",
+    "lint:test:prepush": "npm run lint:all",
+    "prepare": "cd ../../.. && husky OPC_UA_Clients/Release2/IJT_Web_Client/.husky",
     "clean": "node -e \"require('fs').rmSync('test-results', {recursive: true, force: true})\""
   },
   "author": "Joakim Gustafsson <joakim.gustafsson@atlascopco.com>",
@@ -40,6 +43,7 @@
     "eslint-plugin-n": "^18.0.0",
     "eslint-plugin-promise": "^7.2.1",
     "globals": "^17.4.0",
+    "husky": "^9.1.7",
     "neostandard": "^0.13.0",
     "serve": "^14.2.6",
     "stylelint": "^17.6.0",
