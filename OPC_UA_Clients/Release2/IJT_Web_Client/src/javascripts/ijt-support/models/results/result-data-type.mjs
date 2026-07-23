@@ -62,10 +62,6 @@ export default class ResultDataType extends IJTBaseModel {
     return assemblyType === 2 || assemblyType === '2'
   }
 
-  isLooseningResult () {
-    return this.isLoosening()
-  }
-
   replaceReference (child, newChild, children) {
     const index = children.indexOf(child)
     children[index] = newChild

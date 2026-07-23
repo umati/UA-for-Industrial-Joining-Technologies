@@ -111,7 +111,7 @@ export class ResultManager extends ObservableManagerBase {
   }
 
   shouldDropResult (result) {
-    return this.shouldIgnoreLooseningResults() && result.isLooseningResult()
+    return this.shouldIgnoreLooseningResults() && result.isLoosening()
   }
 
   getAllResultsChronological () {
