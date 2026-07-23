@@ -38,7 +38,8 @@ public clones stay deterministic and Envelope-independent. Use
 checks, and use `--private-modules require` in authorized internal validation
 where a missing Envelope checkout must fail. Coverage remains enforced on the
 public JavaScript suite; Envelope performance-budget tests run separately without
-coverage instrumentation because coverage overhead invalidates timing budgets.
+coverage instrumentation because coverage overhead invalidates timing budgets,
+and are skipped when the local-only performance fixture data is not available.
 The Envelope submodule is also configured with `update = none`, so normal IJT
 pulls and public CI checkouts do not require private repository access. Authorized
 developers can initialize it explicitly with `git submodule update --checkout

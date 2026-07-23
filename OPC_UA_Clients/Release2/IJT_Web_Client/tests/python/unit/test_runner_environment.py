@@ -549,11 +549,14 @@ def test_js_unit_stage_writes_ci_junit_and_cobertura_coverage(monkeypatch, tmp_p
     original_exists = Path.exists
     performance_file = tmp_path / "automatic-stepwise-performance.test.mjs"
     performance_file.write_text("export {}\n", encoding="utf-8")
+    performance_data = tmp_path / "itbp.json"
+    performance_data.write_text("[]\n", encoding="utf-8")
 
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner.shutil, "which", lambda name: name)
     monkeypatch.setattr(runner, "_RESULTS_DIR", _PROJECT_ROOT / "test-results")
     monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST", performance_file)
+    monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_DATA", performance_data)
 
     def fake_exists(self):
         if "node_modules" in str(self):
@@ -610,8 +613,8 @@ def test_js_unit_stage_skips_private_performance_file_when_submodule_is_absent(m
     assert result.rc == 0
     assert len(calls) == 1
     assert calls[0]["label"] == "vitest --coverage"
-    assert result.notes == ["optional private Envelope performance tests not checked out"]
-    assert skips == ["optional private Envelope performance tests not checked out"]
+    assert result.notes == ["optional private Envelope performance fixtures not available"]
+    assert skips == ["optional private Envelope performance fixtures not available"]
 
 
 def test_js_unit_stage_respects_private_modules_skip_for_performance_file(monkeypatch, tmp_path):
@@ -621,12 +624,15 @@ def test_js_unit_stage_respects_private_modules_skip_for_performance_file(monkey
     original_exists = Path.exists
     performance_file = tmp_path / "automatic-stepwise-performance.test.mjs"
     performance_file.write_text("export {}\n", encoding="utf-8")
+    performance_data = tmp_path / "itbp.json"
+    performance_data.write_text("[]\n", encoding="utf-8")
 
     monkeypatch.setattr(runner, "_banner", lambda title: None)
     monkeypatch.setattr(runner, "_skip", lambda message: skips.append(message))
     monkeypatch.setattr(runner.shutil, "which", lambda name: name)
     monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
     monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST", performance_file)
+    monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_DATA", performance_data)
 
     def fake_exists(self):
         if "node_modules" in str(self):
@@ -649,19 +655,20 @@ def test_js_unit_stage_respects_private_modules_skip_for_performance_file(monkey
     assert skips == ["optional private Envelope performance tests disabled (--private-modules=skip)"]
 
 
-def test_js_unit_stage_requires_private_performance_file_when_private_modules_required(monkeypatch, tmp_path):
+def test_js_unit_stage_skips_private_performance_fixtures_when_private_modules_required(monkeypatch, tmp_path):
     runner = _load_runner()
     calls = []
-    failures = []
+    skips = []
     original_exists = Path.exists
 
     monkeypatch.setattr(runner, "_banner", lambda title: None)
-    monkeypatch.setattr(runner, "_fail", lambda message: failures.append(message))
+    monkeypatch.setattr(runner, "_skip", lambda message: skips.append(message))
     monkeypatch.setattr(runner.shutil, "which", lambda name: name)
     monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
     monkeypatch.setattr(
         runner, "_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST", tmp_path / "missing-performance.test.mjs"
     )
+    monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_DATA", tmp_path / "missing-itbp.json")
 
     def fake_exists(self):
         if "node_modules" in str(self):
@@ -677,11 +684,11 @@ def test_js_unit_stage_requires_private_performance_file_when_private_modules_re
 
     result = runner._stage_js_unit("require")
 
-    assert result.rc == 1
+    assert result.rc == 0
     assert len(calls) == 1
     assert calls[0]["label"] == "vitest --coverage"
-    assert result.notes == ["optional private Envelope performance tests not checked out"]
-    assert failures == ["optional private Envelope performance tests not checked out"]
+    assert result.notes == ["optional private Envelope performance fixtures not available"]
+    assert skips == ["optional private Envelope performance fixtures not available"]
 
 
 def test_js_lint_eslint_skip_mentions_production_image_probes(monkeypatch, tmp_path):

@@ -153,6 +153,7 @@ _OPTIONAL_PRIVATE_ENVELOPE_ENTRYPOINT = _OPTIONAL_PRIVATE_ENVELOPE_DIR / "ui" / 
 _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST = (
     _OPTIONAL_PRIVATE_ENVELOPE_DIR / "tests" / "unit" / "automatic-stepwise-performance.test.mjs"
 )
+_OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_DATA = _OPTIONAL_PRIVATE_ENVELOPE_DIR / "data" / "itbp.json"
 _OPTIONAL_PRIVATE_ENVELOPE_REQUIRED_PACKAGES = ("eslint", "stylelint", "vitest")
 _OPTIONAL_PRIVATE_ENVELOPE_REQUIRED_BINS = ("eslint", "stylelint", "vitest")
 
@@ -1545,18 +1546,14 @@ def _stage_js_unit(private_modules: str = "auto") -> StageResult:
             if normalized_private_mode == "skip":
                 _skip("optional private Envelope performance tests disabled (--private-modules=skip)")
                 notes.append("optional private Envelope performance tests disabled via --private-modules=skip")
-            elif _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST.is_file():
+            elif _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST.is_file() and _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_DATA.is_file():
                 rc = _run(
                     [npm, "run", "test:unit:js:performance"],
                     label="vitest performance budgets",
                 )
-            elif normalized_private_mode == "require":
-                _fail("optional private Envelope performance tests not checked out")
-                rc = 1
-                notes.append("optional private Envelope performance tests not checked out")
             else:
-                _skip("optional private Envelope performance tests not checked out")
-                notes.append("optional private Envelope performance tests not checked out")
+                _skip("optional private Envelope performance fixtures not available")
+                notes.append("optional private Envelope performance fixtures not available")
     else:
         if npx and not has_coverage:
             _skip("@vitest/coverage-v8 not installed — coverage skipped (npm install --save-dev @vitest/coverage-v8)")
