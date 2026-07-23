@@ -13,7 +13,6 @@ import {
   DEFAULT_IGNORE_LOOSENINGS,
   RESULT_SESSION_STORAGE_KEY
 } from './result-storage-constants.mjs'
-import { isLooseningResult } from './loosening-result-filter.mjs'
 import ResultDataType from '../models/results/result-data-type.mjs'
 import TighteningDataType from '../models/results/tightening-data-type.mjs'
 import BatchDataModel from '../models/results/batch-data-type.mjs'
@@ -112,7 +111,7 @@ export class ResultManager extends ObservableManagerBase {
   }
 
   shouldDropResult (result) {
-    return this.shouldIgnoreLooseningResults() && isLooseningResult(result)
+    return this.shouldIgnoreLooseningResults() && result.isLooseningResult()
   }
 
   getAllResultsChronological () {
