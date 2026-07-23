@@ -111,7 +111,16 @@ export class ResultManager extends ObservableManagerBase {
   }
 
   shouldDropResult (result) {
-    return this.shouldIgnoreLooseningResults() && result.isLoosening()
+    if (!this.shouldIgnoreLooseningResults()) {
+      return false
+    }
+
+    if (typeof result?.isLoosening === 'function') {
+      return result.isLoosening()
+    }
+
+    const assemblyType = result?.ResultMetaData?.AssemblyType
+    return assemblyType === 2 || assemblyType === '2'
   }
 
   getAllResultsChronological () {

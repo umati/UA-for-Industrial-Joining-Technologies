@@ -75,7 +75,7 @@ describe('ResultManager', () => {
     const cb = vi.fn()
     rm.subscribe(cb)
     const loosening = makeResult('loosen-1', '1')
-    loosening.ResultMetaData.Tags = ['loosening']
+    loosening.ResultMetaData.AssemblyType = 2
 
     const added = rm.addResult(loosening)
 
@@ -91,7 +91,7 @@ describe('ResultManager', () => {
     const cb = vi.fn()
     rm.subscribe(cb)
     const tightening = makeResult('tighten-1', '1')
-    tightening.ResultMetaData.Tags = ['tightening']
+    tightening.ResultMetaData.AssemblyType = 1
 
     const added = rm.addResult(tightening)
 

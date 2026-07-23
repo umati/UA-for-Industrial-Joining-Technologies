@@ -10,7 +10,7 @@
     "test:unit:python": "python run_all_tests.py",
     "test:integration:python": "python run_all_tests.py --integration",
     "test:live:python": "python -m pytest tests/test_opcua_live.py -v",
-    "test:unit:js": "vitest run",
+    "test:unit:js": "vitest run --exclude src/javascripts/views/envelope/tests/unit/automatic-stepwise-performance.test.mjs",
     "test:unit:js:coverage": "vitest run --coverage --exclude src/javascripts/views/envelope/tests/unit/automatic-stepwise-performance.test.mjs",
     "test:unit:js:performance": "vitest run src/javascripts/views/envelope/tests/unit/automatic-stepwise-performance.test.mjs",
     "test:e2e": "playwright test",
@@ -26,7 +26,7 @@
     "lint:all": "npm run lint && npm run lint:css",
     "lint:precommit": "node ./scripts/precommit-fix-uncommitted.mjs",
     "lint:test:prepush": "npm run lint:all",
-    "prepare": "cd ../../.. && husky OPC_UA_Clients/Release2/IJT_Web_Client/.husky",
+    "prepare": "node ./scripts/install-husky-if-available.mjs",
     "clean": "node -e \"require('fs').rmSync('test-results', {recursive: true, force: true})\""
   },
   "author": "Joakim Gustafsson <joakim.gustafsson@atlascopco.com>",
