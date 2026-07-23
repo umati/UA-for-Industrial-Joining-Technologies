@@ -36,6 +36,7 @@ jobs:
           private-key: ${{ secrets.IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY }}
           owner: mohitkumaragarwal
           repositories: IJT_Web_Client_Envelop_Plugin
+          permission-contents: read
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         if: steps.app_secret_check.outputs.available == 'true'
@@ -46,8 +47,9 @@ jobs:
 
       - name: Initialize private Envelope submodule explicitly
         if: steps.app_secret_check.outputs.available == 'true'
+        env:
+          GH_APP_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
-          GH_APP_TOKEN="${{ steps.app_token.outputs.token }}"
           git -c "url.https://x-access-token:${GH_APP_TOKEN}@github.com/.insteadOf=https://github.com/" \
             submodule update --checkout --init --recursive -- OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope
 
