@@ -43,7 +43,7 @@ FROM base AS test
 ENV NODE_ENV=development
 
 RUN pip install --no-cache-dir -c /tmp/constraints.txt -r requirements-dev.txt && \
-    (npm ci --no-audit --no-fund || npm install --legacy-peer-deps --no-audit --no-fund)
+    (npm ci --ignore-scripts --no-audit --no-fund || npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund)
 
 # Vendor the shared readiness module so tests/python/_live_server_readiness.py
 # can import ``ijt_live_readiness`` inside the Docker test container. The
@@ -61,7 +61,7 @@ FROM base AS production
 
 ENV NODE_ENV=production
 
-RUN npm ci --omit=dev --no-audit --no-fund || npm install --legacy-peer-deps --omit=dev --no-audit --no-fund
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund || npm install --legacy-peer-deps --omit=dev --ignore-scripts --no-audit --no-fund
 
 # Copy the rest of the project
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/. .

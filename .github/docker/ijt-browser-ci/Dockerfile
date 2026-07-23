@@ -147,7 +147,7 @@ RUN python -m pip install --upgrade pip \
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/package.json /opt/ijt-browser-ci/web-client-deps/package.json
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json /opt/ijt-browser-ci/web-client-deps/package-lock.json
 RUN cd /opt/ijt-browser-ci/web-client-deps \
- && npm ci --legacy-peer-deps --no-audit --no-fund \
+ && npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund \
  && npx playwright install --with-deps chromium \
  && rm -rf /opt/ijt-browser-ci/web-client-deps/node_modules
 
