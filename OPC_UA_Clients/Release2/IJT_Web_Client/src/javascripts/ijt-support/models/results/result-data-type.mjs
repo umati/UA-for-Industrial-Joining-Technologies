@@ -1,3 +1,4 @@
+import { EntityTypes } from '../entities/entity-data-type.mjs'
 import IJTBaseModel from '../ijt-base-model.mjs'
 
 // The purpose of this class is to handle the actual subscription or reading of a value and via socketIO send the result to the webpage
@@ -60,6 +61,16 @@ export default class ResultDataType extends IJTBaseModel {
   isLoosening () {
     const assemblyType = this.ResultMetaData?.AssemblyType
     return assemblyType === 2 || assemblyType === '2'
+  }
+
+  getAssociatedEntity (category) {
+    if (!this.ResultMetaData?.AssociatedEntities) {
+      return
+    }
+    const mapping = EntityTypes
+    return this.ResultMetaData?.AssociatedEntities.find(
+      (entity) => { return entity.EntityType === category || mapping[entity.EntityType] === category }
+    )
   }
 
   replaceReference (child, newChild, children) {

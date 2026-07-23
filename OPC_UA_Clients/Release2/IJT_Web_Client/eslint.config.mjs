@@ -8,7 +8,6 @@ export default [
       '.venv/**',
       '.state/**',
       '.tmp-pip/**',
-      'src/javascripts/views/envelope/ui/**',
       'src/javascripts/views/envelope/automate.mjs',
       'src/javascripts/views/envelope/**/*.test.mjs'
     ],
