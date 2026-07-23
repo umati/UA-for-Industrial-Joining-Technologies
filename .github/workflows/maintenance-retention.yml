@@ -1,0 +1,228 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Maintenance — GitHub Actions Retention
+#
+# Keeps disposable GitHub Actions state bounded without deleting protected
+# validation evidence. Caches are rebuildable performance artifacts. Deployment
+# cleanup is limited to old docker-hub records; protected/internal environments
+# are intentionally preserved.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Maintenance — GitHub Actions Retention"
+
+on:
+  schedule:
+    - cron: '17 3 * * 0'   # weekly on Sunday at 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List records without deleting them"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      cache_max_age_days:
+        description: "Delete Actions caches not accessed for this many days"
+        required: false
+        default: "14"
+      keep_docker_deployments:
+        description: "Always keep this many newest docker-hub deployments"
+        required: false
+        default: "50"
+      docker_deployment_max_age_days:
+        description: "Delete older docker-hub deployments after this many days, except the newest kept records"
+        required: false
+        default: "30"
+      keep_workflow_runs:
+        description: "Always keep this many newest workflow runs"
+        required: false
+        default: "500"
+      workflow_run_max_age_days:
+        description: "Delete older completed workflow runs after this many days, except the newest kept records"
+        required: false
+        default: "60"
+
+permissions:
+  actions: write
+  contents: read
+  deployments: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  retention:
+    name: Cleanup disposable Actions state
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Delete stale Actions caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          CACHE_MAX_AGE_DAYS: ${{ inputs.cache_max_age_days || '14' }}
+        run: |
+          set -euo pipefail
+
+          cutoff_epoch="$(date -u -d "${CACHE_MAX_AGE_DAYS} days ago" +%s)"
+          deleted_count=0
+          deleted_bytes=0
+          kept_count=0
+
+          while IFS=$'\t' read -r cache_id cache_key cache_ref last_accessed size_bytes; do
+            [ -n "${cache_id}" ] || continue
+            last_epoch="$(date -u -d "${last_accessed}" +%s)"
+
+            if [ "${last_epoch}" -lt "${cutoff_epoch}" ]; then
+              echo "Delete cache ${cache_id}: ${cache_key} (${cache_ref}), last accessed ${last_accessed}, ${size_bytes} bytes"
+              deleted_count=$((deleted_count + 1))
+              deleted_bytes=$((deleted_bytes + size_bytes))
+              if [ "${DRY_RUN}" != "true" ]; then
+                gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/caches/${cache_id}" >/dev/null
+              fi
+            else
+              kept_count=$((kept_count + 1))
+            fi
+          done < <(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/caches" --paginate \
+              --jq '.actions_caches[] | [.id, .key, .ref, .last_accessed_at, .size_in_bytes] | @tsv'
+          )
+
+          {
+            echo "## Actions cache retention"
+            echo
+            echo "| Setting | Value |"
+            echo "|---|---:|"
+            echo "| Dry run | ${DRY_RUN} |"
+            echo "| Max age days | ${CACHE_MAX_AGE_DAYS} |"
+            echo "| Deleted candidates | ${deleted_count} |"
+            echo "| Deleted candidate size | $((deleted_bytes / 1024 / 1024)) MB |"
+            echo "| Kept recent caches | ${kept_count} |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Delete old completed workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          KEEP_WORKFLOW_RUNS: ${{ inputs.keep_workflow_runs || '500' }}
+          WORKFLOW_RUN_MAX_AGE_DAYS: ${{ inputs.workflow_run_max_age_days || '60' }}
+        run: |
+          set -euo pipefail
+
+          cutoff_epoch="$(date -u -d "${WORKFLOW_RUN_MAX_AGE_DAYS} days ago" +%s)"
+          deleted_count=0
+          kept_recent_count=0
+          kept_young_count=0
+          kept_active_count=0
+          index=0
+
+          while IFS=$'\t' read -r run_id run_name run_status conclusion created_at event branch; do
+            [ -n "${run_id}" ] || continue
+            index=$((index + 1))
+
+            if [ "${run_id}" = "${GITHUB_RUN_ID}" ]; then
+              kept_active_count=$((kept_active_count + 1))
+              continue
+            fi
+
+            if [ "${index}" -le "${KEEP_WORKFLOW_RUNS}" ]; then
+              kept_recent_count=$((kept_recent_count + 1))
+              continue
+            fi
+
+            if [ "${run_status}" != "completed" ]; then
+              kept_active_count=$((kept_active_count + 1))
+              continue
+            fi
+
+            created_epoch="$(date -u -d "${created_at}" +%s)"
+            if [ "${created_epoch}" -ge "${cutoff_epoch}" ]; then
+              kept_young_count=$((kept_young_count + 1))
+              continue
+            fi
+
+            echo "Delete workflow run ${run_id}: ${run_name}, ${event}/${branch}, ${conclusion}, created ${created_at}"
+            deleted_count=$((deleted_count + 1))
+            if [ "${DRY_RUN}" != "true" ]; then
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" >/dev/null
+            fi
+          done < <(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" --paginate \
+              --jq '.workflow_runs[] | [.id, .name, .status, (.conclusion // ""), .created_at, .event, (.head_branch // "")] | @tsv'
+          )
+
+          {
+            echo
+            echo "## Workflow run retention"
+            echo
+            echo "| Setting | Value |"
+            echo "|---|---:|"
+            echo "| Dry run | ${DRY_RUN} |"
+            echo "| Newest runs always kept | ${KEEP_WORKFLOW_RUNS} |"
+            echo "| Max age days for older completed runs | ${WORKFLOW_RUN_MAX_AGE_DAYS} |"
+            echo "| Deleted candidates | ${deleted_count} |"
+            echo "| Kept by newest-run buffer | ${kept_recent_count} |"
+            echo "| Kept by age | ${kept_young_count} |"
+            echo "| Kept active/current | ${kept_active_count} |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Delete old docker-hub deployment records
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          KEEP_DOCKER_DEPLOYMENTS: ${{ inputs.keep_docker_deployments || '50' }}
+          DOCKER_DEPLOYMENT_MAX_AGE_DAYS: ${{ inputs.docker_deployment_max_age_days || '30' }}
+        run: |
+          set -euo pipefail
+
+          cutoff_epoch="$(date -u -d "${DOCKER_DEPLOYMENT_MAX_AGE_DAYS} days ago" +%s)"
+          deleted_count=0
+          kept_recent_count=0
+          kept_young_count=0
+          index=0
+
+          while IFS=$'\t' read -r deployment_id created_at ref sha; do
+            [ -n "${deployment_id}" ] || continue
+            index=$((index + 1))
+            created_epoch="$(date -u -d "${created_at}" +%s)"
+
+            if [ "${index}" -le "${KEEP_DOCKER_DEPLOYMENTS}" ]; then
+              kept_recent_count=$((kept_recent_count + 1))
+              continue
+            fi
+
+            if [ "${created_epoch}" -ge "${cutoff_epoch}" ]; then
+              kept_young_count=$((kept_young_count + 1))
+              continue
+            fi
+
+            echo "Delete docker-hub deployment ${deployment_id}: ${ref} ${sha}, created ${created_at}"
+            deleted_count=$((deleted_count + 1))
+            if [ "${DRY_RUN}" != "true" ]; then
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" \
+                -f state=inactive \
+                -f auto_inactive=false >/dev/null
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}" >/dev/null
+            fi
+          done < <(
+            gh api "repos/${GITHUB_REPOSITORY}/deployments" --paginate \
+              --jq '.[] | select(.environment == "docker-hub") | [.id, .created_at, .ref, .sha] | @tsv'
+          )
+
+          {
+            echo
+            echo "## docker-hub deployment retention"
+            echo
+            echo "| Setting | Value |"
+            echo "|---|---:|"
+            echo "| Dry run | ${DRY_RUN} |"
+            echo "| Newest records always kept | ${KEEP_DOCKER_DEPLOYMENTS} |"
+            echo "| Max age days for older records | ${DOCKER_DEPLOYMENT_MAX_AGE_DAYS} |"
+            echo "| Deleted candidates | ${deleted_count} |"
+            echo "| Kept by newest-record buffer | ${kept_recent_count} |"
+            echo "| Kept by age | ${kept_young_count} |"
+            echo
+            echo "Protected/internal deployment environments are not touched by this workflow."
+          } >> "${GITHUB_STEP_SUMMARY}"

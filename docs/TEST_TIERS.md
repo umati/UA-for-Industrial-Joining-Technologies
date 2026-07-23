@@ -133,6 +133,25 @@ fails with `pytest.fail()` (loud, never silent). This applies to:
 
 ---
 
+## Maintenance retention (`maintenance-retention.yml`)
+
+Disposable GitHub Actions state is managed with a rolling-retention workflow
+rather than ad-hoc bulk deletion:
+
+| Surface | Retention policy |
+|---------|------------------|
+| Actions caches | Delete caches not accessed for 14 days by default. These are rebuildable performance artifacts. |
+| Workflow runs | Keep the newest 500 runs and delete older completed runs after 60 days by default. Current and in-progress runs are preserved. |
+| `docker-hub` deployments | Keep the newest 50 records and delete older records after 30 days by default. These records are UI/audit noise from frequent Docker publication checks. |
+| Protected/internal deployments | Preserve all non-`docker-hub` environments, including `private-envelope-validation`, because they are useful security and validation evidence. |
+| Artifacts | Individual artifact uploads keep explicit `retention-days` values in their owning workflow, currently 14 days for routine CI evidence. |
+
+Run the workflow manually with `dry_run: true` before changing retention inputs.
+Do not broaden deployment cleanup without confirming the environment is
+disposable.
+
+---
+
 ## Skip Marker Standards
 
 Every skip must be explicit and auditable. Prefer `pytest.fail()` over `pytest.skip()`
