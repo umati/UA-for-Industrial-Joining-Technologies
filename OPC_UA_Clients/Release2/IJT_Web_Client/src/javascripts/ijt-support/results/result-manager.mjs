@@ -380,16 +380,29 @@ export class ResultManager extends ObservableManagerBase {
     if (removeCount <= 0) {
       return
     }
+    const removedCount = this.evictOldestResults(removeCount, 'storage-limit')
+    if (removedCount > 0) {
+      ijtLog.info(`Result storage capped at ${maxStoredResults}. Removed ${removedCount} oldest result(s).`)
+    }
+  }
 
-    const toRemove = chronological.slice(0, removeCount)
+  evictOldestResults (count = 1, reason = 'storage-limit') {
+    const requested = Number.parseInt(count, 10)
+    if (!Number.isFinite(requested) || requested <= 0) {
+      return 0
+    }
+    const chronological = this.getAllResultsChronological()
+    if (chronological.length === 0) {
+      return 0
+    }
+    const toRemove = chronological.slice(0, Math.min(requested, chronological.length))
     for (const result of toRemove) {
       this.removeStoredResult(result)
-      this.notifyEvictedResult(result, 'storage-limit')
+      this.notifyEvictedResult(result, reason)
     }
-
     const refreshed = this.getAllResultsChronological()
     this.lastResult = refreshed.length > 0 ? refreshed[refreshed.length - 1] : null
-    ijtLog.info(`Result storage capped at ${maxStoredResults}. Removed ${toRemove.length} oldest result(s).`)
+    return toRemove.length
   }
 
   /**

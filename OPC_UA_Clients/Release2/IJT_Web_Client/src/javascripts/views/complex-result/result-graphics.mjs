@@ -10,6 +10,9 @@ import {
  * This illustrates how a nested result can be displayed
  */
 const RESULT_SESSION_SAVE_DEBOUNCE_MS = 800
+const STORAGE_QUOTA_ERROR_CODES = new Set([22, 1014])
+const STORAGE_QUOTA_ERROR_NAMES = new Set(['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'])
+const RESULT_SESSION_QUOTA_EVICT_BATCH_SIZE = 1
 
 export default class ResultGraphics extends BasicScreen {
   constructor (resultManager, methodManager = null, addressSpace = null, eventManager = null, settingsProvider = null) {
@@ -367,6 +370,21 @@ export default class ResultGraphics extends BasicScreen {
     }
   }
 
+  isStorageQuotaExceededError (error) {
+    if (!error) {
+      return false
+    }
+    const name = typeof error.name === 'string' ? error.name : ''
+    if (STORAGE_QUOTA_ERROR_NAMES.has(name)) {
+      return true
+    }
+    if (STORAGE_QUOTA_ERROR_CODES.has(Number(error.code))) {
+      return true
+    }
+    const message = typeof error.message === 'string' ? error.message : ''
+    return /quota/i.test(message)
+  }
+
   scheduleSessionPersist () {
     if (!this.isSessionAutoSaveEnabled()) {
       return
@@ -388,17 +406,41 @@ export default class ResultGraphics extends BasicScreen {
     if (!this.canUseLocalStorage()) {
       return
     }
-    try {
-      const exported = this.resultManager.exportBundle()
-      if (exported.exportedCount <= 0) {
-        window.localStorage.removeItem(RESULT_SESSION_STORAGE_KEY)
+    const maxAttempts = Math.max(1, this.resultManager?.getAllResultsChronological?.()?.length || 1)
+    let discardedCount = 0
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const exported = this.resultManager.exportBundle()
+        if (exported.exportedCount <= 0) {
+          window.localStorage.removeItem(RESULT_SESSION_STORAGE_KEY)
+          if (discardedCount > 0) {
+            this.refreshDrawing(this.selectResult)
+            this.setStatusBanner('results', 'info', `Local session storage was full. Discarded ${discardedCount} oldest trace${discardedCount === 1 ? '' : 's'} to keep autosave running.`)
+          }
+          return
+        }
+        const text = JSON.stringify(exported.bundle)
+        window.localStorage.setItem(RESULT_SESSION_STORAGE_KEY, text)
+        if (discardedCount > 0) {
+          this.refreshDrawing(this.selectResult)
+          this.setStatusBanner('results', 'info', `Local session storage was full. Discarded ${discardedCount} oldest trace${discardedCount === 1 ? '' : 's'} to keep autosave running.`)
+        }
         return
+      } catch (error) {
+        if (!this.isStorageQuotaExceededError(error)) {
+          ijtLog.warn('Result session persistence failed:', error?.message || error)
+          return
+        }
+        const evictedCount = this.resultManager?.evictOldestResults?.(RESULT_SESSION_QUOTA_EVICT_BATCH_SIZE, 'session-storage-quota') || 0
+        if (evictedCount <= 0) {
+          ijtLog.warn('Result session persistence failed: local session storage quota exceeded and no older traces could be discarded.')
+          this.setStatusBanner('results', 'error', 'Local session storage is full. Autosave could not free space.')
+          return
+        }
+        discardedCount += evictedCount
       }
-      const text = JSON.stringify(exported.bundle)
-      window.localStorage.setItem(RESULT_SESSION_STORAGE_KEY, text)
-    } catch (error) {
-      ijtLog.warn('Result session persistence failed:', error?.message || error)
     }
+    ijtLog.warn('Result session persistence failed: local session storage quota recovery reached retry limit.')
   }
 
   restoreSessionFromLocalStorage () {
