@@ -357,10 +357,10 @@ from helpers.result_collector import ResultCollector
 async with ResultCollector(client, ns_indices, is_simulator=True) as rc:
     # Trigger a result via SimulateSingleResult or external trigger
     await trigger(...)
-    result = await rc.collect_single()      # SINGLE_RESULT (Classification=1)
-    result = await rc.collect_combined(cls) # SYNC/BATCH/JOB/etc.
+    result = await rc.collect_single()  # SINGLE_RESULT (Classification=1)
+    result = await rc.collect_combined(cls)  # SYNC/BATCH/JOB/etc.
     result = await rc.collect_partial(cls)  # IsPartial=True result
-    result = await rc.collect_job()         # JOB_RESULT
+    result = await rc.collect_job()  # JOB_RESULT
 # result is None on timeout; test should skip in that case
 ```
 
@@ -382,7 +382,7 @@ except ua.UaError as exc:
 ```python
 from helpers.node_discovery import _browse_refs, _node_from_ref, find_child_by_browse_name
 
-refs = await _browse_refs(node, timeout=15.0)          # list of ReferenceDescription
+refs = await _browse_refs(node, timeout=15.0)  # list of ReferenceDescription
 child = await find_child_by_browse_name(node, "Name", ns_index)
 ```
 
@@ -402,7 +402,7 @@ await asyncio.wait_for(
     sf.call_method(
         method.nodeid,
         ua.Variant(ResultType.ONE_STEP_OK_RESULT, ua.VariantType.UInt32),
-        ua.Variant(True, ua.VariantType.Boolean),   # include_traces = True
+        ua.Variant(True, ua.VariantType.Boolean),  # include_traces = True
     ),
     timeout=15,
 )
@@ -497,6 +497,7 @@ For servers that cannot simulate their own results, implement a trigger adapter:
 ```python
 # my_server/trigger.py
 from helpers.trigger import ResultTrigger, TriggerOutcome, ResultType
+
 
 class MyServerTrigger(ResultTrigger):
     async def trigger_single(self, result_type: ResultType, include_traces=False):
@@ -635,7 +636,7 @@ accessing fields like `OverallResultValues`, `StepResults`, `Trace`:
 
 ```python
 for jr in result_data.ResultContent or []:
-    jr = getattr(jr, "Value", jr)   # unwrap ua.Variant wrapper
+    jr = getattr(jr, "Value", jr)  # unwrap ua.Variant wrapper
     # Now jr is JoiningResultDataType — access fields directly
     overall = getattr(jr, "OverallResultValues", []) or []
     trace = getattr(jr, "Trace", None)
@@ -650,17 +651,17 @@ including `OverallResultValues`, `StepResults`, `StepResultValues`, `StepTraces`
 
 ```python
 eu = getattr(jr, "EngineeringUnits", None)
-eu = getattr(eu, "Value", eu)          # unwrap nested Variant
+eu = getattr(eu, "Value", eu)  # unwrap nested Variant
 unit_id = getattr(eu, "UnitId", None)
 
 for v in getattr(jr, "OverallResultValues", []) or []:
-    v = getattr(v, "Value", v)         # unwrap nested Variant
+    v = getattr(v, "Value", v)  # unwrap nested Variant
     tag = getattr(v, "ValueTag", None)
 
 for step in getattr(jr, "StepResults", []) or []:
     step = getattr(step, "Value", step)  # unwrap nested Variant
     for sv in getattr(step, "StepResultValues", []) or []:
-        sv = getattr(sv, "Value", sv)    # unwrap nested Variant
+        sv = getattr(sv, "Value", sv)  # unwrap nested Variant
 
 for error in getattr(jr, "Errors", []) or []:
     error = getattr(error, "Value", error)

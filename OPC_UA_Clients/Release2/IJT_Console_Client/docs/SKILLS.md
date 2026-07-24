@@ -157,6 +157,7 @@ python3 setup_client.py --url="opc.tcp://<ip>:<port>"
 Centralized patch in `IJT_Web_Client/tests/python/_asyncua_compat.py`. The patch is **capability-gated**: it inspects `UaClient._send_request`'s `timeout` parameter default. If the default is still a hard-coded number, the patch is applied; if upstream changes it to `None` or removes the method, the patch is skipped and a `DeprecationWarning` marks the shim for removal. The patch is not gated on asyncua version string — the repo-pinned master SHA can self-report a pre-release version while still keeping the affected signature.
 ```python
 from tests.python._asyncua_compat import apply_send_request_timeout_patch
+
 apply_send_request_timeout_patch()
 ```
 The patch wraps `UaClient._send_request` to use `self._timeout` instead of the hard-coded fallback (1 s).
