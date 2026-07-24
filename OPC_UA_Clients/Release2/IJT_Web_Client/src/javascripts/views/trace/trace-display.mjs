@@ -324,6 +324,7 @@ export default class TraceDisplay {
     }
     this.result = model
 
+    const hadExistingTraces = this.allTraces.length > 0
     this.handleOldTraces(this.traceInterface.refreshTraceCallback())
 
     // Create new trace and align it
@@ -345,7 +346,9 @@ export default class TraceDisplay {
     // Select it
     this.selectTrace(newResultandTrace)
 
-    this.zoomToExcludeRundown(newResultandTrace)
+    if (!hadExistingTraces) {
+      this.zoomToExcludeRundown(newResultandTrace)
+    }
     this.traceInterface?.pulseTraceViewport?.()
     this.update()
   }
