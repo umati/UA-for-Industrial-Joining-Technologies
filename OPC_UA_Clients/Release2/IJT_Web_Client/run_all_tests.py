@@ -1117,11 +1117,13 @@ def _stage_python_lint(python: Path) -> StageResult:
         )
         if rc not in (0, 1):  # 0 = clean, 1 = lint findings
             overall_rc = rc
+            notes.append(f"ruff check failed (exit {rc})")
         rc_fmt = _run(
             [ruff, "format", "--check", ".", "--cache-dir", str(_TMP_DIR / "ruff-cache")], label="ruff format --check"
         )
         if rc_fmt != 0:
             overall_rc = rc_fmt
+            notes.append(f"ruff format --check failed (exit {rc_fmt})")
     else:
         _skip("ruff not found — pip install ruff")
         notes.append("ruff not installed")
@@ -1148,6 +1150,7 @@ def _stage_python_lint(python: Path) -> StageResult:
         )
         if rc != 0:
             overall_rc = rc
+            notes.append(f"mypy failed (exit {rc})")
     else:
         _skip("mypy not installed — pip install mypy")
         notes.append("mypy not installed")
@@ -1174,6 +1177,7 @@ def _stage_python_lint(python: Path) -> StageResult:
         )
         if rc != 0:
             overall_rc = rc
+            notes.append(f"bandit failed (exit {rc})")
     else:
         _skip("bandit not installed — pip install bandit")
         notes.append("bandit not installed")

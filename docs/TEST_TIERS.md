@@ -32,6 +32,9 @@ The Web JavaScript lint gate also owns the connection-layer randomness guard:
 Connection/session identifiers must use Web Crypto APIs such as
 `crypto.randomUUID()` or `crypto.getRandomValues()`. Existing non-security uses
 such as WebSocket retry jitter remain outside this guard.
+> **Audience:** Internal contributors and maintainers. The private-module and
+> private-envelope workflow details in this section are operational guidance,
+> not end-user setup instructions.
 The Web Client runner defaults to `--private-modules skip` so public CI and
 public clones stay deterministic and Envelope-independent. Use
 `--private-modules auto` only when you intentionally want opportunistic local

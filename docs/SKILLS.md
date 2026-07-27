@@ -510,6 +510,11 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 
 ## Documentation Index (All Files)
 
+Documentation scope rule: keep public `README.md` files focused on quick setup,
+run, and basic test commands. Put private-module behavior, CI internals,
+security workflow details, and troubleshooting policy in `docs/SKILLS.md`,
+project `docs/SKILLS.md`, and `docs/TEST_TIERS.md`.
+
 | Path | Covers |
 |------|--------|
 | `docs/SKILLS.md` (this file) | Repo-level developer reference, sub-project summary, CI/CD |

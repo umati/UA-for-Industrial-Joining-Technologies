@@ -17,13 +17,6 @@ a web browser. The backend is Python with WebSockets. The frontend is Node.js.
 - A running OPC UA IJT server, such as the [IJT Server Simulator](../../../OPC_UA_Servers/Release2)
   - Default OPC UA endpoint: `opc.tcp://localhost:40451`
 
-### Prerequisites for local browser tests
-
-- Local Playwright browser tests need Chromium downloaded from `https://cdn.playwright.dev` over HTTPS.
-- On corporate networks, set `HTTPS_PROXY` for the proxy path or `PLAYWRIGHT_DOWNLOAD_HOST` for an approved mirror before running `npx playwright install chromium`.
-- For offline machines, prepopulate a browser cache and set `PLAYWRIGHT_BROWSERS_PATH` to that mirror/cache location.
-- For CI-equivalent browser dependencies, the Integration `live-webclient-browser` job runs each suite **inside** the owned `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci` image (digest pinned via [`.github/docker/ijt-browser-ci/image-pin.json`](../../../.github/docker/ijt-browser-ci/image-pin.json)) started with `docker run --network=none`; Chromium and its Linux system dependencies are baked into the image at build time against the locked `@playwright/test` version in [`package.json`](./package.json). Local Linux developers can reproduce the same browser/system-deps surface via `npx playwright install chromium --with-deps`, but local Web E2E itself does **not** require Docker or GHCR access. See [`docs/TEST_TIERS.md`](../../../docs/TEST_TIERS.md) for the full tier description.
-
 ## Option 1 - Local Setup
 
 - **Run:** `python setup_project.py`
@@ -62,37 +55,10 @@ a web browser. The backend is Python with WebSockets. The frontend is Node.js.
 ## Testing
 
 - **Run tests:** `python run_all_tests.py`
+- For advanced contributor workflows and CI behavior details, see [`docs/DEVELOPMENT_GUIDE.md`](./docs/DEVELOPMENT_GUIDE.md).
 
-### Optional private Envelope module
+### Browser test prerequisites (optional)
 
-The Envelope view is an optional private Git submodule mounted at:
-
-```text
-src\javascripts\views\envelope
-```
-
-Public IJT checkouts continue to work when this private module is absent. The Web Client runner defaults to:
-
-```powershell
-python run_all_tests.py --private-modules skip
-```
-
-`skip` keeps public/local baseline validation deterministic. In `auto` mode,
-private Envelope checks run only when the submodule is checked out locally.
-Use `--private-modules require` when an authorized developer or private CI job
-must fail if the Envelope module is missing.
-
-The submodule is configured as opt-in for Git updates, so a normal IJT pull does not require private Envelope access. Authorized developers can initialize it through `python setup_project.py` or, from the IJT repo root, explicitly with:
-
-```powershell
-git submodule update --checkout --init --recursive -- OPC_UA_Clients\Release2\IJT_Web_Client\src\javascripts\views\envelope
-```
-
-Authorized developers who want their local Git client to update Envelope during recursive pulls can opt in locally after authenticating to the private repo:
-
-```powershell
-git config submodule.OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope.update checkout
-git config submodule.recurse true
-```
-
-That local config should not be committed; the shared IJT default remains safe for public users.
+- For local browser E2E checks, install Chromium once: `npx playwright install chromium`.
+- If your network uses a proxy or mirror, configure Playwright download environment variables accordingly.
+- CI-specific browser execution details are documented in [`docs/TEST_TIERS.md`](../../../docs/TEST_TIERS.md).
