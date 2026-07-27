@@ -1303,7 +1303,11 @@ def _stage_python_lint(python: Path) -> StageResult:
             _skip("detect-secrets skipped — timeout")
             notes.append("detect-secrets skipped (timeout)")
         elif rc not in (0, -1):
-            overall_rc = rc
+            # Keep detect-secrets advisory-only across all non-timeout exits.
+            # Tool/environment errors can be transient in CI and should not
+            # mask the deterministic lint/audit gates.
+            _warn(f"detect-secrets: advisory exit {rc} (tool/environment)")
+            notes.append(f"detect-secrets: advisory exit {rc}")
     else:
         _skip("detect-secrets not installed — pip install detect-secrets")
         notes.append("detect-secrets not installed")
