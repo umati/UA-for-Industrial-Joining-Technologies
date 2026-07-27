@@ -177,9 +177,14 @@ Runner-managed and Dockerfile `npm install` / `npm ci` commands use `--no-audit 
 **Fix:** Monkey-patch `_send_request` to use `self._timeout` (set to 60s):
 ```python
 import asyncua.client.ua_client as _ua_client_mod
+
 original_send = _ua_client_mod.UaClient._send_request
+
+
 async def _patched_send(self, request, timeout=None, message_type=None):
     return await original_send(self, request, self._timeout, message_type)
+
+
 _ua_client_mod.UaClient._send_request = _patched_send
 ```
 This is applied globally in `conftest.py` or the test module setup.
@@ -210,7 +215,7 @@ for attempt in range(5):
 **Root cause:** Hundreds of rapid OPC UA reads trigger server to drop subscription.
 **Fix in `tests/python/live/test_opcua_live.py`:** Use direct NodeIds (not tree traversal) + dedicated client per test:
 ```python
-sim_node = client.get_node('ns=1;s=TighteningSystem/Simulations/SimulateResults')
+sim_node = client.get_node("ns=1;s=TighteningSystem/Simulations/SimulateResults")
 ```
 
 ---
@@ -256,10 +261,12 @@ IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 _ENV_IS_PRE_ISOLATED = IS_DOCKER or IS_GITHUB_ACTIONS
 
+
 def _get_python_path():
     if _ENV_IS_PRE_ISOLATED:
         return Path(sys.executable)  # environment-provided isolated Python
     return VENV_DIR / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
+
 
 # In _is_runtime_ready():
 venv_ok = True if _ENV_IS_PRE_ISOLATED else VENV_DIR.exists()
@@ -284,6 +291,7 @@ Any file in `scripts/` that imports from `src/python/` must add project root to 
 ```python
 from pathlib import Path
 import sys
+
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))

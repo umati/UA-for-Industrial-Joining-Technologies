@@ -8,11 +8,16 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DORNY_ACTION = "dorny/test-reporter"
 DOCKER_BUILD_PUSH_ACTION = "docker/build-push-action"
+_WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 
 # These workflow contracts should assert stable policy, not Renovate-managed
 # action revisions. If a workflow action is intentionally digest/SHA-pinned,
 # match the action name plus the 40-character commit SHA shape.
 _SHA_PINNED_ACTION_RE = re.compile(r"(?P<action>[^@\s]+/[^@\s]+)@[0-9a-f]{40}")
+_SHA_PINNED_ACTION_LINE_RE = re.compile(
+    r"uses:\s*(?P<action>[^@\s]+/[^@\s]+)@[0-9a-f]{40}\s+#\s*(?P<version>v\S+)"
+)
+_FULL_SEMVER_TAG_RE = re.compile(r"^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 
 
 def _is_sha_pinned_action(uses: str | None, action: str) -> bool:
@@ -25,6 +30,34 @@ def _is_sha_pinned_action(uses: str | None, action: str) -> bool:
 def _workflow(name: str):
     path = REPO_ROOT / ".github" / "workflows" / name
     return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def test_sha_pinned_workflow_actions_use_exact_version_comments() -> None:
+    offenders: list[str] = []
+    for workflow_path in sorted(_WORKFLOWS_DIR.glob("*.yml")):
+        for line_number, line in enumerate(
+            workflow_path.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            if "uses:" not in line or not re.search(r"@[0-9a-f]{40}\b", line):
+                continue
+            match = _SHA_PINNED_ACTION_LINE_RE.search(line)
+            if not match:
+                offenders.append(
+                    f"{workflow_path.relative_to(REPO_ROOT)}:{line_number}: missing version comment"
+                )
+                continue
+            version = match.group("version")
+            if not _FULL_SEMVER_TAG_RE.fullmatch(version):
+                offenders.append(
+                    f"{workflow_path.relative_to(REPO_ROOT)}:{line_number}: "
+                    f"use exact semver tag, not {version}"
+                )
+
+    assert not offenders, (
+        "SHA-pinned workflow actions must include exact version comments "
+        "(for example `# v7.0.1`, not `# v7`) so zizmor ref-version-mismatch "
+        "does not reopen after dependency updates:\n" + "\n".join(offenders)
+    )
 
 
 def _summary_step(workflow_name: str):
