@@ -52,7 +52,9 @@ Internal/private validation is separated into
 `.github/workflows/internal-private-envelope.yml`, which runs only by manual
 dispatch in protected environment `private-envelope-validation` with a private
 GitHub App private key secret (`IJT_PRIVATE_ENVELOPE_APP_PRIVATE_KEY`) and enforces
-`--private-modules require`.
+`--private-modules require`. The GitHub App installation must be authorized for
+`ijt-opcua-modules/IJT_Web_Client_Envelop_Plugin`, because the validation token
+is scoped to that private organization repo.
 The `pre-commit` CI job runs the repository hook configuration on all files and
 is part of the required check set. It skips only npm-backed JavaScript hooks
 because the dedicated Web and Node JavaScript jobs already run those checks

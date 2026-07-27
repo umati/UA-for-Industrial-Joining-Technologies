@@ -194,7 +194,7 @@ def _load_optional_private_submodule_config(gitmodules_path: Path) -> configpars
             """
 [submodule "OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope"]
     path = OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope
-    url = git@github.com:mohitkumaragarwal/IJT_Web_Client_Envelop_Plugin.git
+    url = git@github.com:ijt-opcua-modules/IJT_Web_Client_Envelop_Plugin.git
     update = none
 """
         )
