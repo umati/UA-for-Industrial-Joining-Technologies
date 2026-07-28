@@ -53,7 +53,7 @@ export default class Step {
 
     this.calculateData(xAxisShift)
     this.resultValueHandler.createStepValues(this.graphic, this.color, xAxisShift)
-    this.resultValueHandler.calculatePoints(0, this.showLimitSelected)
+    this.resultValueHandler.calculatePoints(xAxisShift)
   }
 
   get xDimensionName () {
