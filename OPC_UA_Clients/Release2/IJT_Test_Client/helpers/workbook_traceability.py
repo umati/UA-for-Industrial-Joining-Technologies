@@ -20,9 +20,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORKBOOK_PATH = (
     PROJECT_ROOT / "docs" / "TestCases_OPC 40450-1 UA CS for Joining Systems - Part 1 - Base 1.01.0.xlsm"
 )
-INFRA_SHEET_COUNT = 6
+INFRA_SHEET_COUNT = 3
 HEADER_COLUMNS = 11
-EXPECTED_WORKBOOK_CASE_COUNT = 1122
+EXPECTED_WORKBOOK_CASE_COUNT = 1007
 
 
 @dataclass(frozen=True)
