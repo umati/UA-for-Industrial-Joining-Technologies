@@ -34,6 +34,9 @@ import {
 
 /** Default view level shown when a new endpoint tab is opened (Detailed = 3). */
 const DEFAULT_VIEW_LEVEL = 3
+const ENVELOPE_EXPORT_REQUEST_COMMAND = 'run envelope limits export'
+const ENVELOPE_EXPORT_RESPONSE_COMMAND = 'run envelope limits export result'
+const ENVELOPE_EXPORT_TIMEOUT_MS = 20_000
 
 export default class EndpointGraphics extends BasicScreen {
   constructor (title, settings) {
@@ -76,11 +79,152 @@ export default class EndpointGraphics extends BasicScreen {
     })
   }
 
+  resolveControllerIpFromEndpoint () {
+    const endpointUrl = String(this.connectionManager?.endpointUrl || this.endpointUrl || '').trim()
+    if (!endpointUrl) {
+      return ''
+    }
+    const match = endpointUrl.match(/^[a-z]+:\/\/([^/:\]]+|\[[^\]]+\])/i)
+    if (!match?.[1]) {
+      return ''
+    }
+    return match[1].replace(/^\[/, '').replace(/\]$/, '')
+  }
+
+  normalizeControllerIp (value) {
+    const text = String(value || '').trim()
+    if (!text) {
+      return ''
+    }
+    const match = text.match(/^[a-z]+:\/\/([^/:\]]+|\[[^\]]+\])/i)
+    if (match?.[1]) {
+      return match[1].replace(/^\[/, '').replace(/\]$/, '')
+    }
+    return text
+  }
+
+  runEnvelopeLimitsExportViaWebSocket ({ jsonText, filename }) {
+    const webSocketManager = this.connectionManager?.webSocketManager
+    if (!webSocketManager) {
+      return Promise.reject(new Error('WebSocket manager not available for envelope export runner.'))
+    }
+
+    const endpointUrl = this.connectionManager?.endpointUrl || this.endpointUrl
+    const controllerIp = this.normalizeControllerIp(this.resolveControllerIpFromEndpoint())
+    const uniqueId = `envelope-export-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`
+
+    return new Promise((resolve, reject) => {
+      let settled = false
+      let timeoutHandle = null
+
+      const cleanup = () => {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle)
+        }
+        webSocketManager.unsubscribe(endpointUrl, ENVELOPE_EXPORT_RESPONSE_COMMAND, onResponse)
+      }
+
+      const finishResolve = (value) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        resolve(value)
+      }
+
+      const finishReject = (error) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
+      }
+
+      const onResponse = (msg, responseUniqueId) => {
+        if (responseUniqueId !== uniqueId) {
+          return
+        }
+
+        if (msg?.exception) {
+          finishReject(new Error(msg.exception))
+          return
+        }
+
+        if (msg?.ok === false) {
+          const detailParts = []
+          if (typeof msg?.error === 'string' && msg.error.trim().length > 0) {
+            detailParts.push(msg.error.trim())
+          }
+          if (msg?.exitCode !== undefined && msg.exitCode !== null) {
+            detailParts.push(`exitCode=${msg.exitCode}`)
+          }
+          if (typeof msg?.scriptPath === 'string' && msg.scriptPath.trim().length > 0) {
+            detailParts.push(`scriptPath=${msg.scriptPath}`)
+          }
+          if (typeof msg?.stderr === 'string' && msg.stderr.trim().length > 0) {
+            detailParts.push(`stderr=${msg.stderr.trim()}`)
+          }
+          if (typeof msg?.stdout === 'string' && msg.stdout.trim().length > 0) {
+            detailParts.push(`stdout=${msg.stdout.trim()}`)
+          }
+          if (typeof msg?.command === 'string' && msg.command.trim().length > 0) {
+            detailParts.push(`command=${msg.command}`)
+          }
+          finishReject(new Error(detailParts.join(' | ') || 'Envelope export runner failed.'))
+          return
+        }
+
+        finishResolve(msg || { ok: true })
+      }
+
+      timeoutHandle = setTimeout(() => {
+        finishReject(new Error(
+          'Timed out waiting for envelope export runner response. ' +
+          `Expected websocket command '${ENVELOPE_EXPORT_RESPONSE_COMMAND}'.`
+        ))
+      }, ENVELOPE_EXPORT_TIMEOUT_MS)
+
+      webSocketManager.subscribe(endpointUrl, ENVELOPE_EXPORT_RESPONSE_COMMAND, onResponse)
+      ijtLog.info('[Envelope Export] websocket payload', {
+        endpointUrl,
+        controllerIp,
+        uniqueId
+      })
+      webSocketManager.send(ENVELOPE_EXPORT_REQUEST_COMMAND, endpointUrl, uniqueId, {
+        filename,
+        json: jsonText,
+        controllerIp,
+        endpointUrl
+      })
+    })
+  }
+
+  ensureEnvelopeExportRunnerHook () {
+    if (typeof this.settings?.runEnvelopeLimitsExport === 'function') {
+      return
+    }
+
+    const existingSettings = (this.settings && typeof this.settings === 'object') ? this.settings : {}
+    this.settings = {
+      ...existingSettings,
+      runEnvelopeLimitsExport: async ({ jsonText, filename }) => {
+        ijtLog.info('[Envelope Export] invoking websocket host runner', {
+          endpointUrl: this.connectionManager?.endpointUrl || this.endpointUrl,
+          filename
+        })
+        return this.runEnvelopeLimitsExportViaWebSocket({ jsonText, filename })
+      }
+    }
+  }
+
   async loadOptionalEnvelopeTab (tabGenerator, resultManager, methodManager, addressSpace) {
     const modulePath = '/src/javascripts/views/envelope/ui/envelope-graphics.mjs'
     try {
       const { default: EnvelopeScreen } = await import(modulePath)
       if (EnvelopeScreen) {
+        this.ensureEnvelopeExportRunnerHook()
         const envelopeScreen = new EnvelopeScreen(
           this.connectionManager,
           resultManager,

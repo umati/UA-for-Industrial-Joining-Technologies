@@ -13,8 +13,12 @@ __all__ = ["IJTInterface"]
 import asyncio
 import json
 import os
+import re
+import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 from python.connection import Connection
 from python.ijt_logger import ijt_log
@@ -48,6 +52,9 @@ class IJTInterface:
         "connectionpoints.json": "connectionpoints.default.json",
         "settings.json": "settings.default.json",
     }
+    _ENVELOPE_EXPORT_REQUEST_COMMAND = "run envelope limits export"
+    _ENVELOPE_EXPORT_RESPONSE_COMMAND = "run envelope limits export result"
+    _ENVELOPE_EXPORT_FILENAME_RE = re.compile(r"^envelope-limits-[A-Za-z0-9_-]+\\.json$")
 
     def __init__(self) -> None:
         self.connection_list: Dict[str, Optional[Connection]] = {}
@@ -291,6 +298,165 @@ class IJTInterface:
         return {}
 
     @staticmethod
+    def _resolve_host_from_endpoint(endpoint_url: str) -> str:
+        parsed = urlparse(str(endpoint_url or ""))
+        return parsed.hostname or ""
+
+    @classmethod
+    def _resolve_envelope_export_temp_filename(cls, requested_filename: Optional[str]) -> str:
+        if isinstance(requested_filename, str):
+            candidate = Path(requested_filename).name
+            if cls._ENVELOPE_EXPORT_FILENAME_RE.match(candidate):
+                return candidate
+        return f"envelope-limits-{int(time.time() * 1000)}.json"
+
+    @classmethod
+    def _resolve_envelope_export_script_path(cls, requested_path: Optional[str] = None) -> Path:
+        if requested_path:
+            candidate = Path(requested_path).expanduser().resolve()
+            if candidate.exists():
+                return candidate
+
+        env_path = os.getenv("IJT_ENVELOPE_EXPORT_SCRIPT")
+        if env_path:
+            env_candidate = Path(env_path).expanduser().resolve()
+            if env_candidate.exists():
+                return env_candidate
+
+        root = cls._SOURCE_ROOT.parent
+        candidate = root / "src" / "javascripts" / "views" / "envelope" / "python" / "test_enveloping_limit.py"
+        if candidate.exists():
+            return candidate
+
+        raise FileNotFoundError(
+            "Could not resolve envelope export python script. "
+            "Set IJT_ENVELOPE_EXPORT_SCRIPT or send scriptPath in websocket payload."
+        )
+
+    async def handle_run_envelope_limits_export(self, data: dict) -> dict:
+        controller_ip = str(data.get("controllerIp") or "").strip()
+        endpoint_url = str(data.get("endpointUrl") or data.get("endpoint") or "").strip()
+        if controller_ip and "://" in controller_ip:
+            controller_ip = self._resolve_host_from_endpoint(controller_ip)
+        if not controller_ip:
+            controller_ip = self._resolve_host_from_endpoint(endpoint_url)
+        if not controller_ip:
+            return {"ok": False, "error": "Unable to resolve controller IP for envelope export."}
+
+        raw_json = data.get("json")
+        if not isinstance(raw_json, str) or not raw_json.strip():
+            return {"ok": False, "error": "Envelope export payload is missing json."}
+
+        try:
+            parsed_export_payload = json.loads(raw_json)
+        except Exception as exc:
+            return {
+                "ok": False,
+                "error": f"Envelope export payload is not valid JSON: {exc}",
+            }
+
+        limits = parsed_export_payload.get("limits") if isinstance(parsed_export_payload, dict) else None
+        if not isinstance(limits, list) or not limits:
+            return {
+                "ok": False,
+                "error": "No limits found in envelope export payload. Please create/select limits before export.",
+            }
+
+        has_knots = False
+        for limit in limits:
+            if not isinstance(limit, dict):
+                continue
+            knots = limit.get("definition", {}).get("knots")
+            if isinstance(knots, list) and knots:
+                has_knots = True
+                break
+        if not has_knots:
+            return {
+                "ok": False,
+                "error": "Limits were exported, but all are empty (no knots). Please define limit knots before export.",
+            }
+
+        export_filename = self._resolve_envelope_export_temp_filename(data.get("filename"))
+        json_path = Path(tempfile.gettempdir()) / export_filename
+        try:
+            json_path.write_text(json.dumps(parsed_export_payload, indent=2), encoding="utf-8")
+            os.utime(json_path, None)
+        except Exception as exc:
+            ijt_log.error(f"Error writing envelope export JSON to temp folder: {exc}")
+            return {"ok": False, "error": f"Failed to write envelope export JSON to temp folder: {exc}"}
+
+        script_path = self._resolve_envelope_export_script_path(data.get("scriptPath"))
+        python_executable = os.getenv("IJT_ENVELOPE_PYTHON", os.getenv("PYTHON_EXECUTABLE", "python"))
+
+        command = [
+            python_executable,
+            str(script_path),
+            "--controller-ip",
+            controller_ip,
+        ]
+        command_text = " ".join(command)
+
+        async def _run_command(exec_command: list[str]) -> tuple[int, str, str, str]:
+            process = await asyncio.create_subprocess_exec(
+                *exec_command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout_bytes, stderr_bytes = await process.communicate()
+            stdout_text = (stdout_bytes or b"").decode("utf-8", errors="replace").strip()
+            stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
+            return_code = process.returncode if process.returncode is not None else 1
+            return return_code, stdout_text, stderr_text, " ".join(exec_command)
+
+        ijt_log.info(
+            "Envelope export runner starting: "
+            f"script={script_path}, controller_ip={controller_ip}, json_path={json_path}, command={command_text}"
+        )
+
+        try:
+            exit_code, stdout_text, stderr_text, executed_command = await _run_command(command)
+
+            if exit_code != 0:
+                ijt_log.error(
+                    "Envelope export runner failed: "
+                    f"exit_code={exit_code}, stderr={stderr_text}"
+                )
+                return {
+                    "ok": False,
+                    "error": (
+                        f"Envelope export runner failed (exit {exit_code}). "
+                        f"{stderr_text or stdout_text or 'No process output.'}"
+                    ),
+                    "exitCode": exit_code,
+                    "stdout": stdout_text,
+                    "stderr": stderr_text,
+                    "jsonPath": str(json_path),
+                    "scriptPath": str(script_path),
+                    "command": executed_command,
+                }
+
+            ijt_log.info("Envelope export runner completed successfully.")
+            return {
+                "ok": True,
+                "message": "Python envelope export runner completed.",
+                "exitCode": 0,
+                "stdout": stdout_text,
+                "stderr": stderr_text,
+                "jsonPath": str(json_path),
+                "scriptPath": str(script_path),
+                "command": executed_command,
+            }
+        except Exception as exc:
+            ijt_log.error(f"Envelope export runner exception: {exc}")
+            return {
+                "ok": False,
+                "error": str(exc),
+                "jsonPath": str(json_path),
+                "scriptPath": str(script_path),
+                "command": command_text,
+            }
+
+    @staticmethod
     def _build_response(
         command: Optional[str],
         endpoint: Optional[str],
@@ -341,6 +507,8 @@ class IJTInterface:
             elif command == "set settings":
                 await self.handle_set_settings(data)
                 return
+            elif command == self._ENVELOPE_EXPORT_REQUEST_COMMAND:
+                return_values = await self.handle_run_envelope_limits_export(data)
             elif command == "read product instance uri":
                 return_values = await self.call_connection(data, "read_product_instance_uri")
             elif command == "connect to":
@@ -353,7 +521,12 @@ class IJTInterface:
             ijt_log.error(f"Exception in IJTInterface.handle: {exc}")
             return_values = {"exception": str(exc)}
 
-        response = self._build_response(command, endpoint, data.get("uniqueid"), return_values)
+        response_command = (
+            self._ENVELOPE_EXPORT_RESPONSE_COMMAND
+            if command == self._ENVELOPE_EXPORT_REQUEST_COMMAND
+            else command
+        )
+        response = self._build_response(response_command, endpoint, data.get("uniqueid"), return_values)
         await websocket.send(json.dumps(response))
 
     async def disconnect(self) -> None:
