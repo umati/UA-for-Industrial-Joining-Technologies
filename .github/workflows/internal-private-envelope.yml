@@ -50,7 +50,7 @@ jobs:
         env:
           GH_APP_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
-          git -c "url.https://x-access-token:${GH_APP_TOKEN}@://github.com" \
+          git -c "url.https://x-access-token:${GH_APP_TOKEN}@github.com/.insteadOf=https://github.com/" \
             submodule update --checkout --init --recursive -- OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
@@ -67,4 +67,5 @@ jobs:
         if: steps.app_secret_check.outputs.available == 'true'
         env:
           PYTHONPATH: ${{ github.workspace }}/OPC_UA_Clients/Release2/IJT_Web_Client:${{ github.workspace }}/OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope/python
-        run: python run_all_tests.py --suite web-client-static --private-modules require
+        run: |
+          python run_all_tests.py --suite web-client-static --private-modules require -- -o pythonpath="src/javascripts/views/envelope/python"
