@@ -21,7 +21,7 @@ def test_default_workbook_cases_load_all_tc_headers():
 
     assert total == EXPECTED_WORKBOOK_CASE_COUNT
     first_case = cases[CU.JOINING_SYSTEM_BASE][0]
-    assert first_case.sheet == "Joining System Base"
+    assert first_case.sheet == "JS Base"
     assert first_case.row == 4
     assert first_case.tc_no == 1
     assert first_case.case_type == "positive"
