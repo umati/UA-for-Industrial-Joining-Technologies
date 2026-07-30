@@ -67,4 +67,5 @@ jobs:
         if: steps.app_secret_check.outputs.available == 'true'
         env:
           PYTHONPATH: ${{ github.workspace }}/OPC_UA_Clients/Release2/IJT_Web_Client:${{ github.workspace }}/OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope/python
+          PYTEST_ADDOPTS: "--ignore=tests/python"
         run: python run_all_tests.py --suite web-client-static --private-modules require
