@@ -1582,7 +1582,7 @@ def _optional_private_envelope_missing_reason() -> str | None:
     return None
 
 
-def _stage_optional_private_module_static(mode: str) -> StageResult:
+def _stage_optional_private_module_static(mode: str, python: Path) -> StageResult:
     _banner("STAGE 3b  Optional private Envelope static checks")
     t0 = time.monotonic()
     normalized_mode = mode.strip().lower()
@@ -1661,12 +1661,25 @@ def _stage_optional_private_module_static(mode: str) -> StageResult:
 
     lint_rc = _run([npm, "run", "lint:all"], cwd=_OPTIONAL_PRIVATE_ENVELOPE_DIR, label="Envelope lint")
     test_rc = _run([npm, "run", "test"], cwd=_OPTIONAL_PRIVATE_ENVELOPE_DIR, label="Envelope tests")
-    overall_rc = lint_rc if lint_rc != 0 else test_rc
+    # Run the Envelope module's own Python unit suite (mirrors the JS `npm test`
+    # lane). It lives outside IJT's `testpaths=["tests"]`, so pass the directory
+    # explicitly; its conftest wires the tool dir onto sys.path.
+    py_test_rc = 0
+    envelope_py_tests = _OPTIONAL_PRIVATE_ENVELOPE_DIR / "python" / "tests"
+    if envelope_py_tests.is_dir():
+        py_test_rc = _run(
+            [str(python), "-m", "pytest", str(envelope_py_tests)],
+            cwd=ROOT,
+            label="Envelope Python tests",
+        )
+    overall_rc = lint_rc or test_rc or py_test_rc
     notes: list[str] = []
     if lint_rc != 0:
         notes.append("Envelope lint failed")
     if test_rc != 0:
         notes.append("Envelope tests failed")
+    if py_test_rc != 0:
+        notes.append("Envelope Python tests failed")
     return StageResult(
         "private-module-static",
         overall_rc,
@@ -3410,7 +3423,7 @@ def main() -> int:
             results.append(_stage_npm_install())
             results.append(_stage_js_lint())
             results.append(_stage_js_unit(args.private_modules))
-            results.append(_stage_optional_private_module_static(args.private_modules))
+            results.append(_stage_optional_private_module_static(args.private_modules, python))
         elif args.phase1_python:
             results.append(_stage_pip_install(python))
             results.append(_stage_python_lint(python))
@@ -3423,7 +3436,7 @@ def main() -> int:
             results.append(_stage_python_unit(python))
             results.append(_stage_js_lint())
             results.append(_stage_js_unit(args.private_modules))
-            results.append(_stage_optional_private_module_static(args.private_modules))
+            results.append(_stage_optional_private_module_static(args.private_modules, python))
             results.append(_stage_infra_lint())
 
     # ── Live + Integration tests (Phase 2 — skipped when --phase1) ────────────

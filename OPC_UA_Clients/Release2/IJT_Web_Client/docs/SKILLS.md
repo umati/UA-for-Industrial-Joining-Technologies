@@ -605,6 +605,8 @@ python .\setup_project.py --skip-private-modules
 
 `--private-modules-pinned` initializes the submodule at the IJT-pinned commit. `--skip-private-modules` leaves private modules untouched.
 
+When the submodule is present and `run_all_tests.py` runs with `--private-modules auto` or `require`, its private-module lane validates the Envelope module with `npm run lint:all`, `npm test`, and the Envelope Python unit tests (`src/javascripts/views/envelope/python/tests`). The Envelope repo also ships its own `run_all_tests.py` at its root, which runs those same lanes standalone for authorized developers working directly in the Envelope checkout.
+
 ## Environment Variables
 
 | Variable | Default | Description |
