@@ -11,6 +11,7 @@ JSON resource files (``connectionpoints.json``, ``settings.json``) under
 __all__ = ["IJTInterface"]
 
 import asyncio
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,25 @@ from typing import Any, Dict, Optional
 
 from python.connection import Connection
 from python.ijt_logger import ijt_log
+
+
+class _PluginCommandRegistry:
+    """Collects websocket command handlers contributed by optional host plugins.
+
+    An optional host plugin (shipped as a private view submodule) exposes a
+    ``register(registry)`` function and calls :meth:`add_command` to attach an
+    async handler ``async (interface, data) -> dict`` to a websocket command.
+    """
+
+    def __init__(self) -> None:
+        self.commands: dict[str, Any] = {}
+
+    def add_command(self, command: str, handler: Any) -> None:
+        if not isinstance(command, str) or not command.strip():
+            raise ValueError("Plugin command name must be a non-empty string.")
+        if not callable(handler):
+            raise ValueError(f"Plugin command handler for '{command}' must be callable.")
+        self.commands[command] = handler
 
 
 class IJTInterface:
@@ -49,9 +69,60 @@ class IJTInterface:
         "settings.json": "settings.default.json",
     }
 
+    # Optional host plugins. A private view plugin (checked out as a git
+    # submodule) may drop a host module at
+    # ``javascripts/views/<plugin>/host/ijt_plugin_host.py`` that exposes a
+    # ``register(registry)`` function. When no such module is present — e.g. a
+    # public checkout without private submodules — no extra commands are added
+    # and the interface behaves exactly as its built-in command set.
+    _PLUGIN_HOST_GLOB: str = "javascripts/views/*/host/ijt_plugin_host.py"
+    _plugin_commands_cache: Optional[dict] = None
+
     def __init__(self) -> None:
         self.connection_list: Dict[str, Optional[Connection]] = {}
         self.disconnected = False
+        self._plugin_commands: dict[str, Any] = self._get_plugin_commands()
+
+    @classmethod
+    def _get_plugin_commands(cls) -> dict:
+        """Return the discovered host-plugin commands, loading them once."""
+        if cls._plugin_commands_cache is None:
+            cls._plugin_commands_cache = cls._load_optional_plugin_hosts()
+        return cls._plugin_commands_cache
+
+    @classmethod
+    def _load_optional_plugin_hosts(cls) -> dict:
+        """Discover and register optional host-plugin websocket commands.
+
+        Missing or broken plugins are logged and skipped so the core interface
+        always starts. Returns a mapping of command name to async handler.
+        """
+        registry = _PluginCommandRegistry()
+        for host_module_path in sorted(cls._SOURCE_ROOT.glob(cls._PLUGIN_HOST_GLOB)):
+            cls._register_plugin_host(host_module_path, registry)
+        if registry.commands:
+            ijt_log.info(f"Registered optional host-plugin commands: {sorted(registry.commands)}")
+        return registry.commands
+
+    @staticmethod
+    def _register_plugin_host(host_module_path: Path, registry: "_PluginCommandRegistry") -> None:
+        """Import a single host-plugin module and let it register its commands."""
+        plugin_name = host_module_path.parent.parent.name
+        module_name = f"ijt_host_plugin_{plugin_name}"
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, host_module_path)
+            if spec is None or spec.loader is None:
+                ijt_log.warning(f"Could not load host-plugin spec: {host_module_path}")
+                return
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            register = getattr(module, "register", None)
+            if not callable(register):
+                ijt_log.warning(f"Host plugin has no register(registry): {host_module_path}")
+                return
+            register(registry)
+        except Exception as exc:
+            ijt_log.error(f"Failed to load host plugin {host_module_path}: {exc}")
 
     @classmethod
     def _resource_path(cls, filename: str) -> Path:
@@ -347,6 +418,8 @@ class IJTInterface:
                 return_values = await self.handle_connect_to(endpoint, websocket)
             elif command == "terminate connection":
                 return_values = await self.handle_terminate_connection(endpoint)
+            elif command in self._plugin_commands:
+                return_values = await self._plugin_commands[command](self, data)
             else:
                 return_values = await self.call_connection(data, command)
         except Exception as exc:
