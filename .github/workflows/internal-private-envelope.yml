@@ -65,4 +65,6 @@ jobs:
 
       - name: Run root Web Client static suite with private modules required
         if: steps.app_secret_check.outputs.available == 'true'
+        env:
+          PYTHONPATH: ${{ github.workspace }}/OPC_UA_Clients/Release2/IJT_Web_Client
         run: python run_all_tests.py --suite web-client-static --private-modules require
