@@ -431,7 +431,7 @@ def test_optional_private_module_stage_skips_when_disabled(monkeypatch):
     monkeypatch.setattr(runner, "_banner", lambda _title: None)
     monkeypatch.setattr(runner, "_skip", lambda message: skips.append(message))
 
-    result = runner._stage_optional_private_module_static("skip")
+    result = runner._stage_optional_private_module_static("skip", Path("/usr/bin/python"))
 
     assert result.skipped is True
     assert result.rc == 0
@@ -451,7 +451,7 @@ def test_optional_private_module_stage_skips_when_unavailable_in_auto_mode(monke
         tmp_path / "missing-envelope" / "ui" / "envelope-graphics.mjs",
     )
 
-    result = runner._stage_optional_private_module_static("auto")
+    result = runner._stage_optional_private_module_static("auto", Path("/usr/bin/python"))
 
     assert result.skipped is True
     assert result.rc == 0
@@ -471,7 +471,7 @@ def test_optional_private_module_stage_fails_when_required_but_unavailable(monke
         tmp_path / "missing-envelope" / "ui" / "envelope-graphics.mjs",
     )
 
-    result = runner._stage_optional_private_module_static("require")
+    result = runner._stage_optional_private_module_static("require", Path("/usr/bin/python"))
 
     assert result.skipped is False
     assert result.rc == 1
@@ -500,7 +500,7 @@ def test_optional_private_module_stage_runs_lint_and_tests_when_available(monkey
 
     monkeypatch.setattr(runner, "_run", fake_run)
 
-    result = runner._stage_optional_private_module_static("auto")
+    result = runner._stage_optional_private_module_static("auto", Path("/usr/bin/python"))
 
     assert result.rc == 0
     assert result.skipped is False
@@ -1746,7 +1746,9 @@ def _phase1_lane_runner(monkeypatch, tmp_path, argv):
     monkeypatch.setattr(runner, "_stage_python_unit", stage("python-unit"))
     monkeypatch.setattr(runner, "_stage_js_lint", stage("js-lint"))
     monkeypatch.setattr(runner, "_stage_js_unit", stage("js-unit"))
-    monkeypatch.setattr(runner, "_stage_optional_private_module_static", lambda _mode: stage("private-module-static")())
+    monkeypatch.setattr(
+        runner, "_stage_optional_private_module_static", lambda _mode, _python: stage("private-module-static")()
+    )
     monkeypatch.setattr(runner, "_stage_infra_lint", stage("infra-lint"))
     return runner, calls
 
