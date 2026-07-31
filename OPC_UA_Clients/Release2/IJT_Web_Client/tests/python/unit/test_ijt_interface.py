@@ -955,3 +955,144 @@ async def test_safe_terminate_is_noop_when_connection_is_none():
     """_safe_terminate returns immediately when called with None connection."""
     interface = IJTInterface()
     await interface._safe_terminate("opc.tcp://host:4840", None)
+
+
+# ===========================================================================
+# _PluginCommandRegistry — validation (lines 37, 39)
+# ===========================================================================
+
+
+def test_plugin_registry_rejects_empty_command_name():
+    """add_command raises ValueError on empty command name."""
+    from python.ijt_interface import _PluginCommandRegistry
+
+    registry = _PluginCommandRegistry()
+    with pytest.raises(ValueError, match="non-empty string"):
+        registry.add_command("", lambda: None)
+
+
+def test_plugin_registry_rejects_whitespace_only_command_name():
+    """add_command raises ValueError on whitespace-only command name."""
+    from python.ijt_interface import _PluginCommandRegistry
+
+    registry = _PluginCommandRegistry()
+    with pytest.raises(ValueError, match="non-empty string"):
+        registry.add_command("   ", lambda: None)
+
+
+def test_plugin_registry_rejects_non_callable_handler():
+    """add_command raises ValueError when handler is not callable."""
+    from python.ijt_interface import _PluginCommandRegistry
+
+    registry = _PluginCommandRegistry()
+    with pytest.raises(ValueError, match="callable"):
+        registry.add_command("my command", "not a function")
+
+
+def test_plugin_registry_accepts_valid_command():
+    """add_command stores a valid command handler."""
+    from python.ijt_interface import _PluginCommandRegistry
+
+    registry = _PluginCommandRegistry()
+    handler = lambda iface, data: None
+    registry.add_command("valid command", handler)
+    assert registry.commands["valid command"] is handler
+
+
+# ===========================================================================
+# _register_plugin_host — error branches (lines 115-116, 121-122, 124-125)
+# ===========================================================================
+
+
+def test_register_plugin_host_skips_bad_spec(tmp_path):
+    """_register_plugin_host skips when importlib returns None spec."""
+    from unittest.mock import patch
+
+    from python.ijt_interface import IJTInterface, _PluginCommandRegistry
+
+    bad_module = tmp_path / "views" / "bad" / "host" / "ijt_plugin_host.py"
+    bad_module.parent.mkdir(parents=True)
+    bad_module.write_text("x = 1", encoding="utf-8")
+
+    registry = _PluginCommandRegistry()
+    with patch("importlib.util.spec_from_file_location", return_value=None):
+        IJTInterface._register_plugin_host(bad_module, registry)
+
+    assert len(registry.commands) == 0
+
+
+def test_register_plugin_host_skips_module_without_register(tmp_path):
+    """_register_plugin_host skips when module has no register() function."""
+    from python.ijt_interface import IJTInterface, _PluginCommandRegistry
+
+    no_register = tmp_path / "views" / "noop" / "host" / "ijt_plugin_host.py"
+    no_register.parent.mkdir(parents=True)
+    no_register.write_text("VERSION = 1\n", encoding="utf-8")
+
+    registry = _PluginCommandRegistry()
+    IJTInterface._register_plugin_host(no_register, registry)
+
+    assert len(registry.commands) == 0
+
+
+def test_register_plugin_host_skips_module_that_raises(tmp_path):
+    """_register_plugin_host logs and continues when module import raises."""
+    from python.ijt_interface import IJTInterface, _PluginCommandRegistry
+
+    broken = tmp_path / "views" / "broken" / "host" / "ijt_plugin_host.py"
+    broken.parent.mkdir(parents=True)
+    broken.write_text("raise RuntimeError('import boom')\n", encoding="utf-8")
+
+    registry = _PluginCommandRegistry()
+    IJTInterface._register_plugin_host(broken, registry)
+
+    assert len(registry.commands) == 0
+
+
+# ===========================================================================
+# handle() — plugin command dispatch (line 422)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_dispatches_registered_plugin_command(fake_websocket, decode_last_message):
+    """handle() dispatches commands registered by optional host plugins."""
+
+    interface = IJTInterface()
+
+    async def mock_plugin_handler(_iface, data):
+        return {"plugin_ok": True, "received": data.get("payload")}
+
+    interface._plugin_commands = {"custom plugin action": mock_plugin_handler}
+
+    await interface.handle(
+        fake_websocket,
+        {"command": "custom plugin action", "endpoint": "opc.tcp://host:4840", "uniqueid": 99, "payload": "test"},
+    )
+
+    payload = decode_last_message(fake_websocket)
+    assert payload["command"] == "custom plugin action"
+    assert payload["uniqueid"] == 99
+    assert payload["data"]["plugin_ok"] is True
+    assert payload["data"]["received"] == "test"
+
+
+@pytest.mark.asyncio
+async def test_handle_plugin_command_exception_returns_error(fake_websocket, decode_last_message):
+    """handle() wraps plugin command exceptions in error response."""
+
+    async def failing_handler(_iface, _data):
+        raise RuntimeError("plugin crash")
+
+    interface = IJTInterface()
+    interface._plugin_commands = {"failing plugin": failing_handler}
+
+    await interface.handle(
+        fake_websocket,
+        {"command": "failing plugin", "endpoint": "opc.tcp://host:4840", "uniqueid": 50},
+    )
+
+    payload = decode_last_message(fake_websocket)
+    assert "exception" in payload["data"]
+    assert "plugin crash" in payload["data"]["exception"]
+    assert payload["error"]["code"] == "OPCUA_REQUEST_FAILED"
