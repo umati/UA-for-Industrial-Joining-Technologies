@@ -8,5 +8,9 @@ asyncua
 pytz~=2026.1
 aiofiles~=25.1
 orjson~=3.11
-cryptography~=49.0
-pyOpenSSL~=26.0
+# cryptography and pyOpenSSL are intentionally omitted here: they are
+# transitive dependencies of asyncua and must always resolve compatibly.
+# pyOpenSSL places an upper-bound ceiling on the cryptography version it
+# accepts, so ceiling-pinning either package independently causes impossible
+# resolves whenever Renovate bumps one without the other.
+# Security floors are enforced via constraints.txt instead.
