@@ -9,7 +9,15 @@
   "prHourlyLimit": 2,
   "packageRules": [
     {
-      "description": "GitHub Actions are owned by Dependabot's weekly grouped SHA-refresh PR. Disable Renovate for github-actions so the two bots do not create duplicate digest PRs.",
+      "description": "Group cryptography and pyOpenSSL together: pyOpenSSL places an explicit upper-bound ceiling on the cryptography version it accepts (e.g. pyOpenSSL 26.3.0 requires cryptography<50). Bumping them independently creates impossible pip resolves. A single combined PR ensures both floors are updated only when a new pyOpenSSL release extends its cryptography upper bound.",
+      "matchPackageNames": ["cryptography", "pyOpenSSL"],
+      "groupName": "cryptography + pyOpenSSL (coupled release)",
+      "groupSlug": "cryptography-pyopenssl",
+      "minimumReleaseAge": "7 days",
+      "automerge": false,
+      "addLabels": ["dependencies", "needs-manual-review"]
+    },
+    {
       "matchManagers": ["github-actions"],
       "enabled": false
     },

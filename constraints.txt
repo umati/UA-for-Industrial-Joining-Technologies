@@ -8,6 +8,16 @@
 #   * replace with a tagged PyPI release once one ships including this fix.
 asyncua @ https://github.com/FreeOpcUa/opcua-asyncio/archive/35a77c6b128a4f1226a685cde3b46abd59975258.zip
 
+# cryptography and pyOpenSSL share a tightly-coupled version contract:
+# each pyOpenSSL release caps the cryptography minor it accepts (e.g.
+# pyOpenSSL 26.3.0 requires cryptography<50).  Pinning them with ~= ceilings
+# in requirements.txt causes impossible pip resolves whenever one is bumped
+# without the other.  Instead we list only security floors here and let pip's
+# resolver enforce mutual compatibility.  Bump these floors together when a
+# new pyOpenSSL release extends its cryptography upper bound.
+cryptography>=49.0.0
+pyOpenSSL>=26.0.0
+
 # CVE-2026-45409 / GHSA-65pc-fj4g-8rjx
 idna>=3.15
 
