@@ -1274,8 +1274,11 @@ def _start_server(args):
         )
         return None
 
-    browser_host = os.getenv("WS_HOST") or socket.gethostbyname(socket.gethostname())
-    browser_url = f"http://{browser_host}:{http_port}"
+    # Always open the browser on localhost — binding to 0.0.0.0 means every local
+    # interface works, but socket.gethostbyname(gethostname()) can return a virtual
+    # adapter IP (Hyper-V, VPN, WSL2) that is unreachable from a browser tab.
+    # WS_HOST overrides this for Docker or deliberate remote-access scenarios.
+    browser_url = f"http://{os.getenv('WS_HOST', 'localhost')}:{http_port}"
 
     log.info("Starting local server on %s ...", browser_url)
 

@@ -29,6 +29,7 @@ pip install pre-commit          # or: pip install -r requirements-dev.txt
 pre-commit install              # installs hooks into .git/hooks/
 ```
 The three Python runners (Console, Web, Test) call `pre-commit install` automatically on first local, non-CI run. For CSharp, Node, and Server runners — or direct git use — run it manually once after cloning.
+For the simplest all-in-one pre-commit check before committing, run `python run_precommit_all.py` from the IJT repo root; it runs the root hooks and the Envelope hooks when the submodule is present.
 
 **What happens on `git commit`:**
 1. `ruff-format` rewrites Python files with wrong indentation/quotes/blank-lines

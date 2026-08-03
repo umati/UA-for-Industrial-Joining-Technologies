@@ -30,6 +30,11 @@ of OPC UA IJT clients and servers, supporting documents, and specification testi
   **UaExpert**, or use one of the reference clients in this repository.
   - **Default endpoint:** `opc.tcp://localhost:40451`
 
+## Before Committing
+
+- Run `python run_precommit_all.py` from the IJT repo root to check IJT hooks and, when present, Envelope hooks in one step.
+- Run `python run_all_tests.py` for the full test and quality gate suite.
+
 ## Specifications and References
 
 - [OPC UA IJT Group Presentation](IJT_Documents/OPC_UA_IJT_Group_Presentation.pdf)

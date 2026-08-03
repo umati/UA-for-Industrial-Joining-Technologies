@@ -2186,6 +2186,30 @@ class TestStartServer:
             sp._start_server(self._args())
         assert any("Invalid HTTP_PORT" in r.message for r in caplog.records)
 
+    def test_default_browser_url_uses_localhost(self, monkeypatch):
+        monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx")
+        monkeypatch.setattr(sp, "_is_port_in_use", lambda *a, **kw: False)
+        monkeypatch.setattr(sp, "IS_WINDOWS", False)
+        monkeypatch.delenv("IS_DOCKER", raising=False)
+        monkeypatch.delenv("WS_HOST", raising=False)
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: MagicMock())
+        opened = []
+        monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url))
+        sp._start_server(self._args())
+        assert opened == ["http://localhost:3000"]
+
+    def test_ws_host_env_overrides_browser_url(self, monkeypatch):
+        monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx")
+        monkeypatch.setattr(sp, "_is_port_in_use", lambda *a, **kw: False)
+        monkeypatch.setattr(sp, "IS_WINDOWS", False)
+        monkeypatch.delenv("IS_DOCKER", raising=False)
+        monkeypatch.setenv("WS_HOST", "192.168.1.50")
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: MagicMock())
+        opened = []
+        monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url))
+        sp._start_server(self._args())
+        assert opened == ["http://192.168.1.50:3000"]
+
 
 # =============================================================================
 # _run_index
