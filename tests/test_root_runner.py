@@ -2446,7 +2446,7 @@ def test_ci_pre_commit_gate_is_required_and_reported() -> None:
     assert "pre-commit" in workflow["jobs"]["all-required"]["needs"]
     pre_commit_env = workflow["jobs"]["pre-commit"]["env"]
     assert pre_commit_env["SKIP"] == (
-        "eslint-node-client,css-node-client,eslint-web-client,stylelint-web-client"
+        "eslint-node-client,css-node-client,eslint-web-client,stylelint-web-client,eslint-envelope,stylelint-envelope"
     )
     install_steps = [
         step

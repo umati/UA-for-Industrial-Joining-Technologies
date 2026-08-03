@@ -1185,7 +1185,7 @@ def _validate_package_json():
         sys.exit(1)
 
 
-def _install_js_packages(dev_mode: bool = False):
+def _install_js_packages():
     npm = _get_npm_path()
     if not npm:
         log.error("npm not found. Node.js environment setup failed.")
@@ -1193,14 +1193,8 @@ def _install_js_packages(dev_mode: bool = False):
 
     _validate_package_json()
 
-    # Set HUSKY=0 for end users so the prepare script does not install git hooks.
-    # Contributors pass --dev to opt in to hook installation.
     env = os.environ.copy()
-    if not dev_mode:
-        env["HUSKY"] = "0"
-        log.info("Installing JavaScript packages (HUSKY=0 — git hooks skipped for end users)...")
-    else:
-        log.info("Installing JavaScript packages with git hooks (contributor mode)...")
+    log.info("Installing JavaScript packages...")
 
     try:
         if Path("package-lock.json").exists():
@@ -1221,6 +1215,39 @@ def _install_js_packages(dev_mode: bool = False):
         log.info("Installed neostandard version:\n%s", neostandard_version)
     except subprocess.CalledProcessError as e:
         log.warning("Failed to retrieve installed JS package versions: %s", e)
+
+
+# ---------------------------------------------------------------------------
+# Envelope pre-commit hook installer (contributor mode)
+# ---------------------------------------------------------------------------
+def _install_envelope_precommit_hooks() -> None:
+    """Install pre-commit hooks inside each optional private submodule.
+
+    Runs only in contributor mode (``--dev``).  Guards softly: if pre-commit
+    is not on PATH or the submodule is not yet synced, a warning is emitted
+    instead of failing setup.
+    """
+    import shutil
+
+    for name, rel in OPTIONAL_PRIVATE_SUBMODULES:
+        envelope_dir = REPO_ROOT / rel
+        if not (envelope_dir / ".pre-commit-config.yaml").exists():
+            log.debug("Skipping pre-commit install in %s — config not found at %s.", name, envelope_dir)
+            continue
+        pre_commit_bin = shutil.which("pre-commit")
+        if not pre_commit_bin:
+            log.warning(
+                "pre-commit not found on PATH — skipping hook install in the %s submodule. "
+                "Run: pip install pre-commit && cd %s && pre-commit install",
+                name,
+                envelope_dir,
+            )
+            continue
+        try:
+            subprocess.check_call([pre_commit_bin, "install"], cwd=envelope_dir)
+            log.info("pre-commit hooks installed in %s submodule at %s.", name, envelope_dir)
+        except subprocess.CalledProcessError as exc:
+            log.warning("pre-commit install failed in %s submodule: %s", name, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1619,7 +1646,7 @@ def main():
         "--dev",
         action="store_true",
         help=(
-            "Contributor mode: install git pre-commit hooks (husky + lint-staged).\n"
+            "Contributor mode: install git pre-commit hooks (pre-commit).\n"
             "Use this if you intend to make and commit changes to the project.\n"
             "End users who only run the Web Client should omit this flag."
         ),
@@ -1764,7 +1791,9 @@ def main():
     _install_python_packages()
 
     _create_nodeenv()
-    _install_js_packages(dev_mode=args.dev)
+    _install_js_packages()
+    if args.dev:
+        _install_envelope_precommit_hooks()
     _create_env_template()
 
     _load_dotenv_if_available()

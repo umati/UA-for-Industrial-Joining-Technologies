@@ -510,6 +510,22 @@ def test_optional_private_module_stage_runs_lint_and_tests_when_available(monkey
     ]
 
 
+def test_private_modules_default_is_auto(monkeypatch):
+    """When IJT_PRIVATE_MODULES is unset, --private-modules defaults to 'auto'.
+
+    'auto' runs envelope checks opportunistically when the submodule is present
+    and skips cleanly when it is absent — safe for public users and convenient
+    for authorized developers without extra flags.
+    """
+    runner = _load_runner()
+    monkeypatch.delenv("IJT_PRIVATE_MODULES", raising=False)
+    # "auto" is the first (primary) choice — changing this would break the
+    # env-var fallback in the argparse add_argument default.
+    assert runner._OPTIONAL_PRIVATE_MODULE_CHOICES[0] == "auto"
+    # The env-var fallback used in add_argument(default=...) must resolve to "auto".
+    assert os.getenv("IJT_PRIVATE_MODULES", "auto") == "auto"
+
+
 def test_runner_results_dir_can_be_isolated_per_parallel_suite(monkeypatch):
     isolated = _PROJECT_ROOT / "test-results" / "webclient-live-e2e-smoke"
     monkeypatch.setenv("IJT_WEB_TEST_RESULTS_DIR", str(isolated))

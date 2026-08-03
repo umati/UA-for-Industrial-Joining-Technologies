@@ -2004,11 +2004,13 @@ class TestInstallJsPackages:
         with pytest.raises(SystemExit):
             sp._install_js_packages()
 
-    def test_dev_mode_omits_husky_zero(self, tmp_path, monkeypatch):
+    def test_npm_ci_does_not_set_husky_env(self, tmp_path, monkeypatch):
+        """Husky is removed from this project; npm ci must never set HUSKY=0."""
         (tmp_path / "package-lock.json").write_text("{}")
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm")
         monkeypatch.setattr(sp, "_validate_package_json", lambda: None)
+        monkeypatch.delenv("HUSKY", raising=False)
         envs = []
 
         def _capture(cmd, env=None, **kw):
@@ -2016,9 +2018,9 @@ class TestInstallJsPackages:
 
         monkeypatch.setattr(subprocess, "check_call", _capture)
         monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "")
-        sp._install_js_packages(dev_mode=True)
+        sp._install_js_packages()
         for env in envs:
-            assert env.get("HUSKY") != "0"
+            assert "HUSKY" not in env
 
     def test_version_log_failure_is_warning(self, tmp_path, monkeypatch, caplog):
         import logging
@@ -2039,8 +2041,73 @@ class TestInstallJsPackages:
 
 
 # =============================================================================
-# _start_server
+# _install_envelope_precommit_hooks
 # =============================================================================
+
+
+class TestInstallEnvelopePrecommitHooks:
+    """_install_envelope_precommit_hooks: config absent, pre-commit missing, installs, failure."""
+
+    def _patch_submodule(self, monkeypatch, tmp_path: Path) -> Path:
+        """Point OPTIONAL_PRIVATE_SUBMODULES at a single test envelope dir."""
+        envelope_rel = Path("envelope")
+        monkeypatch.setattr(sp, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(sp, "OPTIONAL_PRIVATE_SUBMODULES", (("Envelope", envelope_rel),))
+        return tmp_path / "envelope"
+
+    def test_skips_when_config_absent(self, tmp_path, monkeypatch):
+
+        envelope_dir = self._patch_submodule(monkeypatch, tmp_path)
+        envelope_dir.mkdir()
+        # .pre-commit-config.yaml intentionally NOT created
+        calls = []
+        monkeypatch.setattr(subprocess, "check_call", lambda *a, **kw: calls.append(a))
+        sp._install_envelope_precommit_hooks()
+        assert not calls
+
+    def test_warns_when_precommit_not_on_path(self, tmp_path, monkeypatch, caplog):
+        import logging
+        import shutil as _shutil
+
+        envelope_dir = self._patch_submodule(monkeypatch, tmp_path)
+        envelope_dir.mkdir()
+        (envelope_dir / ".pre-commit-config.yaml").write_text("repos: []\n")
+        monkeypatch.setattr(_shutil, "which", lambda name: None)
+        calls = []
+        monkeypatch.setattr(subprocess, "check_call", lambda *a, **kw: calls.append(a))
+        with caplog.at_level(logging.WARNING, logger="setup_project"):
+            sp._install_envelope_precommit_hooks()
+        assert not calls
+        assert any("pre-commit not found" in r.message for r in caplog.records)
+
+    def test_installs_hooks_when_available(self, tmp_path, monkeypatch):
+        import shutil as _shutil
+
+        envelope_dir = self._patch_submodule(monkeypatch, tmp_path)
+        envelope_dir.mkdir()
+        (envelope_dir / ".pre-commit-config.yaml").write_text("repos: []\n")
+        monkeypatch.setattr(_shutil, "which", lambda name: "/usr/bin/pre-commit" if name == "pre-commit" else None)
+        calls = []
+        monkeypatch.setattr(subprocess, "check_call", lambda cmd, cwd=None, **kw: calls.append((list(cmd), cwd)))
+        sp._install_envelope_precommit_hooks()
+        assert calls == [(["/usr/bin/pre-commit", "install"], envelope_dir)]
+
+    def test_warns_on_install_failure(self, tmp_path, monkeypatch, caplog):
+        import logging
+        import shutil as _shutil
+
+        envelope_dir = self._patch_submodule(monkeypatch, tmp_path)
+        envelope_dir.mkdir()
+        (envelope_dir / ".pre-commit-config.yaml").write_text("repos: []\n")
+        monkeypatch.setattr(_shutil, "which", lambda name: "/usr/bin/pre-commit" if name == "pre-commit" else None)
+
+        def _fail(cmd, **kw):
+            raise subprocess.CalledProcessError(1, cmd)
+
+        monkeypatch.setattr(subprocess, "check_call", _fail)
+        with caplog.at_level(logging.WARNING, logger="setup_project"):
+            sp._install_envelope_precommit_hooks()  # must not raise
+        assert any("pre-commit install failed" in r.message for r in caplog.records)
 
 
 class TestStartServer:
@@ -2530,7 +2597,7 @@ class TestMain:
         monkeypatch.setattr(sp, "_ENV_IS_PRE_ISOLATED", True)
         monkeypatch.setattr(sp, "_install_python_packages", lambda: calls.append("py_pkgs"))
         monkeypatch.setattr(sp, "_create_nodeenv", lambda: None)
-        monkeypatch.setattr(sp, "_install_js_packages", lambda dev_mode=False: None)
+        monkeypatch.setattr(sp, "_install_js_packages", lambda: None)
         monkeypatch.setattr(sp, "_create_env_template", lambda: None)
         monkeypatch.setattr(sp, "_load_dotenv_if_available", lambda: None)
         monkeypatch.setattr(sp, "_ensure_opc_server_running", lambda *a, **kw: True)
@@ -2560,7 +2627,7 @@ class TestMain:
         monkeypatch.setattr(sp, "_create_virtualenv", lambda cmd: calls.append("venv"))
         monkeypatch.setattr(sp, "_install_python_packages", lambda: None)
         monkeypatch.setattr(sp, "_create_nodeenv", lambda: None)
-        monkeypatch.setattr(sp, "_install_js_packages", lambda dev_mode=False: None)
+        monkeypatch.setattr(sp, "_install_js_packages", lambda: None)
         monkeypatch.setattr(sp, "_create_env_template", lambda: None)
         monkeypatch.setattr(sp, "_load_dotenv_if_available", lambda: None)
         monkeypatch.setattr(sp, "_ensure_opc_server_running", lambda *a, **kw: True)

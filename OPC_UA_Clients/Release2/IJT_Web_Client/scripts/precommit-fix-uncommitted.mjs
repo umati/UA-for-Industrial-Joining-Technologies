@@ -1,3 +1,13 @@
+/**
+ * ESLint + Stylelint auto-fix for all modified tracked files.
+ *
+ * Called by the root IJT pre-commit config via precommit_npm_hook.py.
+ * Intentionally runs on ALL tracked modified files (staged + unstaged) rather
+ * than just staged files, so that a commit cannot leave the working tree with
+ * lint issues in unstaged hunks.
+ *
+ * Set PRECOMMIT_AUTO_STAGE=0 to disable automatic re-staging of fixed files.
+ */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -64,6 +74,6 @@ if (cssFiles.length > 0) {
   runNodeTool(stylelintBin, ['--fix', ...cssFiles])
 }
 
-if (process.env.PRECOMMIT_AUTO_STAGE === '1') {
+if (process.env.PRECOMMIT_AUTO_STAGE !== '0') {
   execFileSync('git', ['add', '--', ...lintTargets], { stdio: 'inherit' })
 }

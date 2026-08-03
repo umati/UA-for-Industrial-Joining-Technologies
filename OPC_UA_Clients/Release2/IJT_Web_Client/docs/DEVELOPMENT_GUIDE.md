@@ -35,16 +35,16 @@ Keep personal controller endpoints and local UI preferences in the generated run
 ## Validation Commands
 
 ```bash
-# Install dependencies and activate shared local Git hooks
+# Install JavaScript dependencies (no hook side-effects)
 npm ci
 
-# Public baseline validation
+# Public baseline validation (no envelope required)
 python run_all_tests.py --private-modules skip
 
-# JavaScript lane; public deterministic baseline (private modules skipped by default)
+# JavaScript lane; public deterministic baseline
 python run_all_tests.py --phase1-js
 
-# JavaScript lane; opportunistic private checks when the submodule is present
+# JavaScript lane; run envelope checks when the submodule is present (default)
 python run_all_tests.py --phase1-js --private-modules auto
 
 # JavaScript lane; require the private Envelope submodule and fail if absent
@@ -74,14 +74,25 @@ git config submodule.recurse true
 
 ## Local Git hooks
 
-The Web Client has repo-tracked Husky hooks under `.husky/`. They are installed by `npm ci` from this package and configured against the IJT Git root, because this package is nested under `OPC_UA_Clients\Release2\IJT_Web_Client`.
+Pre-commit hooks are managed by [pre-commit](https://pre-commit.com/) from the **IJT repository root** — a single hook manager covers all sub-projects including this Web Client.
 
-| Hook | Purpose |
-|------|---------|
-| `pre-commit` | Auto-fixes changed tracked JavaScript and CSS files through `npm run lint:precommit`, then re-stages fixes only during actual Git hook execution. |
-| `pre-push` | Runs `npm run lint:test:prepush`, currently the stable lint gate. Full unit and integration coverage remain CI/runner owned because the current local unit baseline includes unrelated failures. |
+Install once after cloning:
 
-Hook files must stay LF-normalized through `.gitattributes`; do not add shell hook files without matching `text eol=lf` coverage.
+```bash
+pip install pre-commit
+pre-commit install        # installs into root .git/hooks
+```
+
+| Hook (IJT root `.pre-commit-config.yaml`) | Covers |
+|---|---|
+| `eslint-web-client` | ESLint auto-fix on **all tracked modified** `.mjs` / `.js` files (staged + unstaged) via `scripts/precommit-fix-uncommitted.mjs` |
+| `stylelint-web-client` | Stylelint auto-fix on **all tracked modified** `.css` files (staged + unstaged) |
+| `eslint-envelope` | Same as above for Envelope JS files (no-op when submodule absent) |
+| `stylelint-envelope` | Same as above for Envelope CSS files (no-op when submodule absent) |
+
+> **All tracked modified files, not just staged** — `scripts/precommit-fix-uncommitted.mjs` uses `git status --porcelain` to collect every modified tracked file (staged and unstaged). This prevents a commit leaving the working tree with lint issues in unstaged hunks. Fixed files are automatically re-staged. Set `PRECOMMIT_AUTO_STAGE=0` to opt out of auto-staging.
+
+**Why not Husky?** The Web Client previously used Husky for its `pre-commit` hook. Husky v9 sets `git config core.hooksPath` to its own directory, which silently overrides the root `.git/hooks/` where `pre-commit install` writes — the two hook managers conflict. Pre-commit is the single source of truth.
 
 ## Definition of Done
 

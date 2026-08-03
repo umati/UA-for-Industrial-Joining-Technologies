@@ -3208,10 +3208,11 @@ def main() -> int:
     parser.add_argument(
         "--private-modules",
         choices=_OPTIONAL_PRIVATE_MODULE_CHOICES,
-        default=os.getenv("IJT_PRIVATE_MODULES", "skip"),
+        default=os.getenv("IJT_PRIVATE_MODULES", "auto"),
         help=(
-            "Optional private-module policy: skip=never run (default), "
-            "auto=run when available, require=fail if unavailable"
+            "Optional private-module policy: auto=default "
+            "(run when submodule is present, silently skip when absent), "
+            "skip=never run optional checks, require=fail if unavailable"
         ),
     )
     parser.add_argument(

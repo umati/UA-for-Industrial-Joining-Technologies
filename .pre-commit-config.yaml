@@ -190,6 +190,42 @@ repos:
         pass_filenames: false
         files: '^OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/css/.*\.css$'
 
+      # Envelope plugin — ESLint (JS) and Stylelint (CSS).
+      # Uses the Envelope's own eslint.config.mjs and stylelint config so the
+      # rules match the Envelope's CI exactly.
+      # Only fires when Envelope .mjs/.css files are staged; the hook is a
+      # natural no-op when the submodule is not checked out (no files at that
+      # path can be staged in the IJT repo).
+      - id: eslint-envelope
+        name: ESLint (Envelope)
+        language: system
+        entry: python
+        args:
+          - scripts/precommit_npm_hook.py
+          - --project
+          - OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope
+          - --script
+          - lint
+          - --required-bin
+          - eslint
+        pass_filenames: false
+        files: '^OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope/.*\.mjs$'
+
+      - id: stylelint-envelope
+        name: Stylelint (Envelope)
+        language: system
+        entry: python
+        args:
+          - scripts/precommit_npm_hook.py
+          - --project
+          - OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope
+          - --script
+          - lint:css
+          - --required-bin
+          - stylelint
+        pass_filenames: false
+        files: '^OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope/.*\.css$'
+
       # GitHub Actions workflow/report policy guard — runs the IJT root-runner,
       # browser image-pin, and reporting workflow tests when a workflow, image
       # pin contract, root workflow guard, or integration baseline file is

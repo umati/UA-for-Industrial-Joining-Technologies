@@ -49,7 +49,8 @@ Usage:
 
 Environment variables:
   IJT_PRIVATE_MODULES  skip|auto|require policy forwarded to delegated
-                       sub-runners (default: skip)
+                       sub-runners (default: auto — run optional checks when
+                       the submodule is present, silently skip when absent)
   IJT_SUITE_TIMEOUT     Per-suite timeout in seconds (default: 600)
   IJT_DOCKER_BUILD_TIMEOUT
                         Docker image build timeout in seconds (default: 1200)
@@ -2719,8 +2720,9 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=_PRIVATE_MODULE_POLICY_CHOICES,
         default=None,
         help=(
-            "Forward private-module policy to delegated runners: skip=default, "
-            "auto=run optional checks when present, require=fail when unavailable"
+            "Forward private-module policy to delegated runners: auto=default "
+            "(run optional checks when the submodule is present, silently skip when absent), "
+            "skip=never run optional checks, require=fail when unavailable"
         ),
     )
     parser.add_argument(
@@ -2810,7 +2812,7 @@ def main() -> int:
     private_module_mode = (
         "require"
         if args.internal_private_modules
-        else (args.private_modules or os.getenv("IJT_PRIVATE_MODULES", "skip"))
+        else (args.private_modules or os.getenv("IJT_PRIVATE_MODULES", "auto"))
     )
     private_module_mode = private_module_mode.strip().lower()
     if private_module_mode not in _PRIVATE_MODULE_POLICY_CHOICES:
