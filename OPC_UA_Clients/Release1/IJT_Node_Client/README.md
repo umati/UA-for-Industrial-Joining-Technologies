@@ -9,7 +9,8 @@ Release 1 reference OPC UA IJT client built with Node.js, Express, Socket.io, an
 
 ## Prerequisites
 
-- Node.js 24+
+- Node.js 24.15+
+- Use the repo-root `.nvmrc` to stay aligned with CI patch updates in major 24.
 - A running Release 1 OPC UA server, such as the [Release 1 Server Simulator](../../../OPC_UA_Servers/Release1)
   - Default OPC UA endpoint: `opc.tcp://localhost:40451`
   - The Release 1 and Release 2 server simulators cannot run at the same time on the default port.

@@ -11,7 +11,9 @@ a web browser. The backend is Python with WebSockets. The frontend is Node.js.
 ## Prerequisites
 
 - Python 3.14+
-- Node.js 24+
+- Use the local `.python-version` file to match CI exactly.
+- Node.js 24.15+
+- Use the repo-root `.nvmrc` to stay aligned with CI patch updates in major 24.
 - Internet connection for first-time dependency installation
 - Docker, only if using the Docker option
 - A running OPC UA IJT server, such as the [IJT Server Simulator](../../../OPC_UA_Servers/Release2)

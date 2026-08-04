@@ -295,7 +295,7 @@ UA-for-Industrial-Joining-Technologies/
 ## Sub-Project Summary
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
-- **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt, Node.js 24+, Vitest, ESLint, Docker
+- **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt, Node.js 24.15+, Vitest, ESLint, Docker
 - **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), and split live suites for Python OPC UA, Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and Playwright regression. Each live/browser suite owns its own OPC UA/WS/UI ports; root Phase 2 runs Docker as a separate `web-client-docker-smoke` suite.
 - **One test command**: `python run_all_tests.py`
 - **Docker**: standalone smoke is healthy on HTTP:3000 + WS:8001; root Phase 2 isolates Docker smoke on HTTP:3008 + WS:8011
@@ -324,7 +324,7 @@ UA-for-Industrial-Joining-Technologies/
 - **Details**: read `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md`
 
 ### IJT Node Client (`OPC_UA_Clients/Release1/IJT_Node_Client/`)
-- **Stack**: Node.js 24+, node-opcua, Socket.io, Vitest, Playwright
+- **Stack**: Node.js 24.15+, node-opcua, Socket.io, Vitest, Playwright
 - **Purpose**: Node.js + browser OPC UA IJT client (Release 1)
 - **One test command**: `python run_all_tests.py` (quiet npm ci + vitest + eslint + explicit npm audit)
 - **E2E tests**: 27 Playwright specs in `tests/e2e/` — skip gracefully in CI (no server); run locally with `node index.js` then `npx playwright test`

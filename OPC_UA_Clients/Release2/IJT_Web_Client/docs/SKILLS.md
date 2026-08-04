@@ -8,7 +8,7 @@
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_Web_Client/` |
 | **Purpose** | Reference OPC UA IJT client: Python WebSocket backend + Node.js browser frontend |
-| **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt, Node.js 24+, Vite/Vitest, ESLint |
+| **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt, Node.js 24.15+, Vite/Vitest, ESLint |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
 | **Docker** | Standalone container healthy on HTTP:3000 + WS:8001; root Phase 2 isolates Docker smoke on HTTP:3008 + WS:8011 (non-root `appuser`) |
 

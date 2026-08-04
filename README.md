@@ -30,6 +30,12 @@ of OPC UA IJT clients and servers, supporting documents, and specification testi
   **UaExpert**, or use one of the reference clients in this repository.
   - **Default endpoint:** `opc.tcp://localhost:40451`
 
+## Runtime Baselines
+
+- Node.js runtime for CI and local development is centralized in root `.nvmrc` (major `24`).
+- Python runtime for CI and local development is centralized in root `.python-version` (`3.14`).
+- Package runtime floors remain enforced in project manifests (`engines` / `requires-python`) to prevent unsupported environments.
+
 ## Before Committing
 
 - Run `python run_precommit_all.py` from the IJT repo root to check IJT hooks and, when present, Envelope hooks in one step.
