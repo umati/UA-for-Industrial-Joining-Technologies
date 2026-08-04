@@ -38,7 +38,7 @@ of OPC UA IJT clients and servers, supporting documents, and specification testi
 
 ## Before Committing
 
-- Run `python run_precommit_all.py` from the IJT repo root to check IJT hooks and, when present, Envelope hooks in one step.
+- Run `python run_precommit_all.py` from the IJT repo root. It runs IJT + Envelope pre-commit hooks and blocks on high-severity dependency CVEs across Node (Node Client, Web Client, Envelope lockfiles) and Python requirements (IJT + Envelope requirement files).
 - Run `python run_all_tests.py` for the full test and quality gate suite.
 
 ## Specifications and References

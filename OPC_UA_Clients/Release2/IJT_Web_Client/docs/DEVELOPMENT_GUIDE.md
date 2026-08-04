@@ -56,6 +56,9 @@ git submodule update --checkout --init --recursive -- OPC_UA_Clients\Release2\IJ
 # Full local runner
 python run_all_tests.py
 
+# One-command pre-push quality + dependency security gate from IJT repo root
+python run_precommit_all.py
+
 # Backend starts
 python index.py
 
@@ -91,6 +94,10 @@ pre-commit install        # installs into root .git/hooks
 | `stylelint-envelope` | Same as above for Envelope CSS files (no-op when submodule absent) |
 
 > **All tracked modified files, not just staged** — `scripts/precommit-fix-uncommitted.mjs` uses `git status --porcelain` to collect every modified tracked file (staged and unstaged). This prevents a commit leaving the working tree with lint issues in unstaged hunks. Fixed files are automatically re-staged. Set `PRECOMMIT_AUTO_STAGE=0` to opt out of auto-staging.
+
+`python run_precommit_all.py` from the IJT repo root is the default local pre-push gate. It runs pre-commit hooks first, then dependency vulnerability checks:
+1. `npm audit --package-lock-only --audit-level=high` for Node Client, Web Client, and Envelope lockfiles.
+2. `pip-audit` across IJT and Envelope Python requirement files.
 
 **Why not Husky?** The Web Client previously used Husky for its `pre-commit` hook. Husky v9 sets `git config core.hooksPath` to its own directory, which silently overrides the root `.git/hooks/` where `pre-commit install` writes — the two hook managers conflict. Pre-commit is the single source of truth.
 
