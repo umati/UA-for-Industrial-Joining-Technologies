@@ -4,17 +4,34 @@ Run pre-commit for the IJT repo, then for the Envelope submodule when present.
 
 This is the simplest "before commit" helper for contributors: one command
 handles the root repo and, when checked out, the private Envelope submodule.
+
+All external tool dependencies (pre-commit, pip-audit, npm) are auto-installed
+if missing; npm audit is skipped if npm is unavailable.
 """
 
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import logging
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+# Add scripts/ to path for dependency_helpers
+if str(Path(__file__).parent / "scripts") not in sys.path:
+    sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+
+from dependency_helpers import (
+    ensure_python_package,
+    find_cmd,
+)
+
+log = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s: %(message)s",
+)
 
 REPO_ROOT = Path(__file__).resolve().parent
 WEB_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
@@ -44,61 +61,62 @@ PRECOMMIT_ARGS = ("run", "--all-files", "--show-diff-on-failure", "--color=alway
 
 
 def _precommit_command() -> list[str]:
-    if importlib.util.find_spec("pre_commit") is None:
-        raise RuntimeError("pre-commit is not installed. Run `pip install pre-commit` first.")
+    """Get pre-commit command, auto-installing if needed."""
+    if not ensure_python_package("pre-commit", import_name="pre_commit"):
+        raise RuntimeError(
+            "pre-commit could not be installed. Manual install: pip install pre-commit"
+        )
     return [sys.executable, "-m", "pre_commit"]
 
 
 def _run_precommit(cwd: Path, label: str) -> int:
-    print(f"[pre-commit] {label}: {cwd}")
+    """Run pre-commit in the given directory."""
+    log.info("[pre-commit] %s: %s", label, cwd)
     cmd = [*_precommit_command(), *PRECOMMIT_ARGS]
     completed = subprocess.run(cmd, cwd=cwd)  # noqa: S603 - fixed internal command list
     return completed.returncode
 
 
-def _npm_command() -> str | None:
-    candidates = ("npm.cmd", "npm.exe", "npm") if os.name == "nt" else ("npm",)
-    for candidate in candidates:
-        resolved = shutil.which(candidate)
-        if resolved:
-            return resolved
-    return None
-
-
 def _run_npm_lock_audit(cwd: Path, label: str) -> int:
+    """Run npm audit on package-lock.json. Returns 0 if audit passes or is skipped."""
     package_lock = cwd / "package-lock.json"
     package_json = cwd / "package.json"
     if not package_json.exists():
-        print(f"[security] {label} skipped: {package_json} not found")
+        log.info("[security] %s skipped: %s not found", label, package_json)
         return 0
     if not package_lock.exists():
-        print(f"[security] {label} skipped: {package_lock} not found")
+        log.info("[security] %s skipped: %s not found", label, package_lock)
         return 0
-    npm = _npm_command()
+
+    npm = find_cmd("npm.cmd", "npm.exe", "npm")
     if npm is None:
-        print(
-            "Error: npm was not found on PATH. Install Node.js/npm or open "
-            "a shell where npm is available.",
-            file=sys.stderr,
+        log.warning(
+            "[security] %s skipped: npm not found in PATH. Install Node.js to enable npm audit.",
+            label,
         )
-        return 1
-    print(f"[security] {label}: npm audit --package-lock-only --audit-level=high")
+        return 0
+
+    log.info("[security] %s: npm audit --package-lock-only --audit-level=high", label)
     cmd = [npm, "audit", "--package-lock-only", "--audit-level=high"]
     completed = subprocess.run(cmd, cwd=cwd)  # noqa: S603 - fixed internal command list
     return completed.returncode
 
 
 def _run_python_requirements_audit() -> int:
-    if importlib.util.find_spec("pip_audit") is None:
-        print(
-            "Error: pip-audit is not installed. Run `pip install pip-audit` first.", file=sys.stderr
+    """Run pip-audit on all Python requirements. Auto-installs pip-audit if missing."""
+    if not ensure_python_package("pip-audit", import_name="pip_audit"):
+        log.warning(
+            "[security] Python requirements audit skipped: pip-audit could not be installed. "
+            "Manual install: pip install pip-audit"
         )
-        return 1
+        return 0
+
     requirements = [req for req in PYTHON_AUDIT_REQUIREMENTS if req.exists()]
     if not requirements:
-        print("[security] Python requirements audit skipped: no requirements files found")
+        log.info("[security] Python requirements audit skipped: no requirements files found")
         return 0
-    print("[security] Python requirements: pip-audit --requirement ...")
+
+    log.info("[security] Python requirements: pip-audit --requirement ...")
     cache_dir = REPO_ROOT / "tmp" / "pip-audit-cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     temp_dir = REPO_ROOT / "tmp" / "pip-audit-temp"

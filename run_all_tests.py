@@ -84,6 +84,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+if str(Path(__file__).parent / "scripts") not in sys.path:
+    sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+
 from reporting.timing_artifacts import local_runner_timing_payload, write_timing_bundle
 
 # ---------------------------------------------------------------------------
@@ -744,15 +747,20 @@ def _try_native_binary() -> bool:
         return False
 
 
-def _ensure_docker_running() -> None:
-    """Ensure Docker daemon is up; on Windows, launch Docker Desktop if needed."""
+def _ensure_docker_running() -> bool:
+    """Ensure Docker daemon is up; on Windows, launch Docker Desktop if needed.
+
+    Returns:
+        True if Docker is running, False if unavailable or cannot be started.
+        Does NOT exit — caller decides whether to skip or error based on return value.
+    """
     docker = _find_cmd(["docker", "docker.exe"])
     if not docker:
-        log.error(
+        log.warning(
             "docker not found in PATH. "
             "Install Docker Desktop: https://www.docker.com/products/docker-desktop"
         )
-        sys.exit(1)
+        return False
 
     with contextlib.suppress(Exception):
         r = subprocess.run(
@@ -763,11 +771,11 @@ def _ensure_docker_running() -> None:
         )
         if r.returncode == 0:
             log.info("Docker daemon is running.")
-            return
+            return True
 
     if not IS_WINDOWS:
-        log.error("Docker daemon is not running. Please start Docker and retry.")
-        sys.exit(1)
+        log.warning("Docker daemon is not running. Please start Docker and retry.")
+        return False
 
     # Windows -- attempt to launch Docker Desktop
     candidates = [
@@ -783,10 +791,10 @@ def _ensure_docker_running() -> None:
     ]
     exe = next((p for p in candidates if p.exists()), None)
     if not exe:
-        log.error(
+        log.warning(
             "Docker Desktop not found. Install from: https://www.docker.com/products/docker-desktop"
         )
-        sys.exit(1)
+        return False
 
     log.info("Launching Docker Desktop: %s", exe)
     subprocess.Popen(
@@ -806,10 +814,10 @@ def _ensure_docker_running() -> None:
             )
             if r.returncode == 0:
                 log.info("Docker Desktop started.")
-                return
+                return True
 
-    log.error("Docker Desktop did not start within 60s.")
-    sys.exit(1)
+    log.warning("Docker Desktop did not start within 60s.")
+    return False
 
 
 def _docker_daemon_running(docker: str) -> bool:
@@ -857,7 +865,7 @@ def _docker_linux_engine_skip_note(docker: str) -> str | None:
     return "Docker daemon OSType could not be determined"
 
 
-def _start_server(no_rebuild: bool = False) -> bool:
+def _start_server(no_rebuild: bool = False) -> bool | None:
     """Start the OPC UA server. Tries native binary first, Docker as fallback.
 
     Resolution order:
@@ -865,9 +873,11 @@ def _start_server(no_rebuild: bool = False) -> bool:
       2. Native binary (Windows .exe / Linux ELF) → fastest, no Docker needed.
       3. Docker compose up → cross-platform fallback.
 
-    Returns True if *this call* started something (caller must call ``_stop_server``).
-    Returns False if the server was already running.
-    Calls ``sys.exit(1)`` only if Docker is the chosen path and compose fails.
+    Returns:
+        True if *this call* started something (caller must call ``_stop_server``).
+        False if the server was already running.
+        None if Docker is not available and native binary failed (skip the test suite).
+    Raises SystemExit only if Docker is chosen and compose command fails catastrophically.
     """
     # 1. Already running?
     if _wait_for_port(OPCUA_PORT, timeout=3, missing_ok=True):
@@ -880,7 +890,13 @@ def _start_server(no_rebuild: bool = False) -> bool:
 
     # 3. Docker fallback
     log.info("Native binary not available — using Docker.")
-    _ensure_docker_running()  # exits on failure if Docker unavailable
+    if not _ensure_docker_running():
+        log.warning(
+            "Docker is not available and native binary failed. "
+            "Returning None to allow test suite to skip gracefully."
+        )
+        return None
+
     docker = _find_cmd(["docker", "docker.exe"])
     if not docker:
         log.error("Docker binary disappeared after _ensure_docker_running succeeded.")
@@ -1647,6 +1663,8 @@ def _suite_server_smoke() -> SuiteResult:
     Starts a server on the native port (OPCUA_PORT / 40451), runs smoke_test.py,
     then stops the server.  Uses the same _start_server / _stop_server helpers
     that previously backed the full Phase 2 shared server.
+
+    Skips gracefully if neither native binary nor Docker is available.
     """
     name = "server-smoke"
     t0 = time.monotonic()
@@ -1659,7 +1677,19 @@ def _suite_server_smoke() -> SuiteResult:
     started_server = False
 
     try:
-        started_server = _start_server()
+        server_start_result = _start_server()
+
+        # None means Docker not available and native binary failed
+        if server_start_result is None:
+            return SuiteResult(
+                name,
+                True,
+                time.monotonic() - t0,
+                skipped=True,
+                notes=["Native OPC UA binary and Docker not available; skipping server smoke test"],
+            )
+
+        started_server = server_start_result
 
         if not _ensure_server_smoke_requirements(python, outputs, "pip install (smoke)"):
             return SuiteResult(

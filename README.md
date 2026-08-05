@@ -24,8 +24,25 @@ of OPC UA IJT clients and servers, supporting documents, and specification testi
 | [IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client) | Provides a C#/.NET client and reusable generated OPC UA type libraries |
 | [IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client) | Provides a specification test client for validating OPC UA IJT server behavior |
 
-## Getting Started
+## Quick Start
 
+### Prerequisites
+- **Python 3.14** (check with `python --version`)
+- **Node.js 24** (check with `node --version`)
+- Docker (optional; server/Docker tests skip gracefully if unavailable)
+
+### Running Tests
+```bash
+# Full test suite (static checks + live tests)
+python run_all_tests.py
+
+# Pre-commit validation (lint + format + CVE checks)
+python run_precommit_all.py
+```
+
+**Note:** Missing optional tools (Docker, .NET, npm)? Tests skip gracefully. Exit code `0` means all available tests passed.
+
+### Explore the Repository
 - Start the **[IJT Server Simulator](OPC_UA_Servers/Release2)** and connect with any OPC UA client such as
   **UaExpert**, or use one of the reference clients in this repository.
   - **Default endpoint:** `opc.tcp://localhost:40451`

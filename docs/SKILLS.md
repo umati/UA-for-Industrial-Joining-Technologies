@@ -31,6 +31,26 @@ pre-commit install              # installs hooks into .git/hooks/
 The three Python runners (Console, Web, Test) call `pre-commit install` automatically on first local, non-CI run. For CSharp, Node, and Server runners — or direct git use — run it manually once after cloning.
 For the simplest all-in-one pre-commit check before committing, run `python run_precommit_all.py` from the IJT repo root. It runs the root hooks and Envelope hooks (when present), then runs dependency vulnerability gates: `npm audit --package-lock-only --audit-level=high` for Node Client, Web Client, and Envelope lockfiles, plus `pip-audit` across IJT + Envelope Python requirement files.
 
+---
+
+### Graceful Handling of Missing Optional Tools
+
+All IJT test runners (`run_all_tests.py`, `run_precommit_all.py`) use `scripts/dependency_helpers.py` to gracefully handle missing optional dependencies. This enables running tests on fresh VMs with only Python 3.14 and Node.js 24 as prerequisites.
+
+**Behavior:**
+- Missing Docker? → Skip Docker-dependent test suites; continue with available tests.
+- Missing .NET SDK? → Skip C# test suites; continue with Python/Node tests.
+- Missing npm? → Skip npm-dependent tests; continue with available tests.
+- Missing Python packages? → Auto-install on first run (no manual pip install needed).
+
+**Exit code `0`** means all available tests passed (some may have been skipped). This prevents fresh VM setups from requiring all optional tools, keeping developers productive even in limited environments.
+
+Each test runner returns tri-state values (True/False/None) to allow flexible handling: `True` = tool available, `False` = already running (no duplicate), `None` = unavailable (graceful skip). No hard `sys.exit(1)` errors on missing dependencies.
+
+**For CI**, environment variables enable strict mode:
+- `IJT_CSHARP_STRICT_DOTNET_PREREQS=1` → Fail if .NET SDK missing (used by GitHub Actions)
+- Envelope private-module checks default to `auto` (skip when submodule absent), can be forced with `require` flag.
+
 **What happens on `git commit`:**
 1. `ruff-format` rewrites Python files with wrong indentation/quotes/blank-lines
 2. `ruff --fix` applies safe lint fixes
