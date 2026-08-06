@@ -2207,6 +2207,13 @@ def test_e2e_fixture_passes_runtime_websocket_query():
     assert "wsPort" in source
     assert "new AppPage(page, runtime.appUrl)" in source
     assert "app.goto({ waitForAppReady: true })" in source
+    assert "function localConnectionPoints" in source
+    assert "app: async ({ page, ws }, use, testInfo)" in source
+    autoconnect_seed = (
+        "ws.send('set connectionpoints', localConnectionPoints(runtime.opcuaEndpoint, { autoconnect: true }))"
+    )
+    assert autoconnect_seed in source
+    assert "ws.send('set connectionpoints', original.data)" in source
 
 
 def test_index_marks_backend_backed_app_ready_after_settings_are_applied():
@@ -2240,6 +2247,7 @@ def test_connected_fixture_has_own_timeout_budget():
     assert "CONNECTED_FIXTURE_TIMEOUT_MS = 150_000" in source
     assert "CONNECT_TO_LOCAL_TIMEOUT_MS = 120_000" in source
     assert "connected: [async" in source
+    assert "connected: [async ({ app }, use)" in source
     assert "app.connectToLocal({ timeout: CONNECT_TO_LOCAL_TIMEOUT_MS })" in source
 
 

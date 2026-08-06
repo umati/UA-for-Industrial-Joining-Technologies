@@ -57,6 +57,19 @@ function runtimeAppUrl (wsUrl) {
   return `/?${params.toString()}`
 }
 
+function localConnectionPoints (endpoint, { autoconnect }) {
+  return {
+    schema_version: 1,
+    connectionpoints: [
+      {
+        name: 'LOCAL',
+        address: endpoint,
+        autoconnect
+      }
+    ]
+  }
+}
+
 async function waitForBackendReachable (wsUrl, timeoutMs = 10_000, intervalMs = 500) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -76,23 +89,25 @@ export const test = base.extend({
     await use(up)
   },
 
-  /** Bare AppPage — page loaded but NOT connected to any server. */
-  app: async ({ page }, use, testInfo) => {
+  /** AppPage with a test-local LOCAL endpoint profile available for browser specs. */
+  app: async ({ page, ws }, use, testInfo) => {
     const runtime = runtimeForWorker(testInfo)
+    const original = await ws.send('get connectionpoints')
+    await ws.send('set connectionpoints', localConnectionPoints(runtime.opcuaEndpoint, { autoconnect: true }))
     const app = new AppPage(page, runtime.appUrl)
-    await app.goto({ waitForAppReady: true })
-    await use(app)
+    try {
+      await app.goto({ waitForAppReady: true })
+      await use(app)
+    } finally {
+      await ws.send('set connectionpoints', original.data)
+    }
   },
 
   /**
    * AppPage already connected to the LOCAL endpoint.
    * Fails the test when the backend is not running.
    */
-  connected: [async ({ page, backendUp }, use, testInfo) => {
-    const runtime = runtimeForWorker(testInfo)
-    expect(backendUp, `Backend WebSocket must be reachable at ${runtime.wsUrl}`).toBe(true)
-    const app = new AppPage(page, runtime.appUrl)
-    await app.goto({ waitForAppReady: true })
+  connected: [async ({ app }, use) => {
     await app.connectToLocal({ timeout: CONNECT_TO_LOCAL_TIMEOUT_MS })
     await use(app)
   }, { timeout: CONNECTED_FIXTURE_TIMEOUT_MS }],

@@ -514,6 +514,11 @@ marker is set only after the WebSocket connects, Settings are loaded, and the
 initial view level has been applied. Smoke tests that intentionally run without
 a backend should keep using the basic DOM shell wait, not the backend-ready
 marker.
+The shared backend-backed `app` fixture must seed a test-local `LOCAL`
+connection point with `autoconnect=true` before page load so endpoint tabs exist
+without depending on a developer's runtime profile. Servers E2E is the exception:
+it owns a separate isolated `LOCAL` profile with `autoconnect=false` because it
+tests the Servers management page itself.
 
 CI Browser Features uses GitHub matrix sharding plus one Playwright worker per
 shard by default. Do not reintroduce two active parallelism layers in CI.

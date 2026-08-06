@@ -479,9 +479,11 @@ default 1200s) so the child runner can emit Playwright artifacts and timing
 JSON before the root process terminates the lane. Timeout-killed feature runs
 may retry once with a single worker; assertion failures are never retried into
 green.
-Browser E2E app fixtures wait for the backend-backed app-ready marker before
-using endpoint tabs, and Servers E2E seeds/restores isolated connection points
-so personal runtime `connectionpoints.json` entries cannot leak into CI.
+Browser E2E app fixtures seed a test-local `LOCAL` endpoint with
+`autoconnect=true`, then wait for the backend-backed app-ready marker before
+using endpoint tabs. Servers E2E remains deliberately non-autoconnect and
+seeds/restores its own isolated connection points so personal runtime
+`connectionpoints.json` entries cannot leak into CI.
 The separate `web-client-compatibility-smoke.yml` workflow is the
 Web Client — Browser Compatibility Smoke detection layer. It runs only on
 schedule/manual dispatch with a matrix that currently contains one cell:
