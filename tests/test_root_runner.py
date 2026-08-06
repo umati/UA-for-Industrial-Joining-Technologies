@@ -1150,6 +1150,7 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
     assert calls[4]["extra_env"]["IJT_PLAYWRIGHT_FEATURE_WORKERS"] == str(
         _runner.WEB_CLIENT_E2E_FEATURE_WORKERS
     )
+    assert calls[4]["timeout"] == _runner.WEB_CLIENT_E2E_FEATURES_TIMEOUT
     assert calls[6]["extra_env"]["IJT_WEB_TEST_RESULTS_DIR"] == str(
         _runner.WEB_CLIENT_RESULTS_DIR / "docker-smoke"
     )
@@ -1743,12 +1744,12 @@ def test_root_feature_worker_count_handles_whitespace_env_var(monkeypatch) -> No
     assert runner.WEB_CLIENT_E2E_FEATURE_WORKERS == 4
 
 
-def test_root_feature_worker_count_defaults_to_two_in_ci(monkeypatch) -> None:
+def test_root_feature_worker_count_defaults_to_one_in_ci(monkeypatch) -> None:
     monkeypatch.delenv("IJT_PLAYWRIGHT_FEATURE_WORKERS", raising=False)
     monkeypatch.setenv("CI", "true")
     runner = _load_runner_at("run_all_tests.py", "ijt_root_runner_feature_workers_ci")
 
-    assert runner.WEB_CLIENT_E2E_FEATURE_WORKERS == 2
+    assert runner.WEB_CLIENT_E2E_FEATURE_WORKERS == 1
 
 
 def test_root_int_env_helper_rejects_garbage(monkeypatch) -> None:

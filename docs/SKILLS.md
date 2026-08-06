@@ -428,7 +428,7 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `web-client-live-websocket-api` | local root runner + `integration.yml` | OPC UA 40466 / WS 8002 | Python WebSocket backend contract and integration tests |
 | `web-client-live-websocket-connection` | local root runner + `integration.yml` | OPC UA 40467 / WS 8003 | WebSocket lifecycle tests isolated from backend contract tests |
 | `web-client-e2e-smoke` | local root runner + `integration.yml` | HTTP 3004 | Playwright smoke project; GitHub Integration runs it inside the owned `ghcr.io/.../ijt-browser-ci` image from the reviewed `image-pin.json` digest under `docker run --network=none` |
-| `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs with owned browser/backend/server workers; GitHub Integration uses two Browser Features shards inside the owned `ijt-browser-ci` image under `docker run --network=none` |
+| `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs with owned browser/backend/server workers; GitHub Integration uses two Browser Features shards with one Playwright worker per shard inside the owned `ijt-browser-ci` image under `docker run --network=none`; local runs keep the four-worker pool |
 | `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec; GitHub Integration runs it inside the owned `ijt-browser-ci` image under `docker run --network=none` |
 | Web Client — Browser Compatibility Smoke | Web runner + `web-client-compatibility-smoke.yml` | OPC UA 40468 / WS 8004 / HTTP 3007 | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
 | `web-client-docker-smoke` | local root runner | HTTP 3008 / WS 8011 | Web Client production Docker image/readiness smoke with isolated host ports and scoped Compose project |
@@ -445,9 +445,14 @@ backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and
 Playwright regression are separate suites with owned service ports. Docker
 validation remains `web-client-docker-smoke` with its own timeout when Docker is
 running.
-The Playwright feature suite is parallelized across four owned backend/server
-pairs. Worker 0 uses the base ports, and workers 1–3 use the next contiguous
-ports, so browser workers never share a WebSocket backend or OPC UA simulator.
+The Playwright feature suite can parallelize across four owned backend/server
+pairs for local/manual validation. Worker 0 uses the base ports, and workers
+1–3 use the next contiguous ports, so browser workers never share a WebSocket
+backend or OPC UA simulator. CI Browser Features intentionally defaults to one
+Playwright worker per GitHub shard to avoid double parallelism: GitHub already
+splits Browser Features into two shards, so each shard gets a single isolated
+backend/server pair unless `IJT_PLAYWRIGHT_FEATURE_WORKERS` explicitly
+overrides it.
 GitHub integration runs the same Web Client live/e2e suites through the root
 runner matrix, split by execution surface. The non-browser Web Client live
 suites stay on `windows-latest` because they validate Python/backend behavior
@@ -465,9 +470,18 @@ deliberately does NOT declare a job-level `container:` image because
 GitHub creates container-job runtimes before any workflow step runs, so
 a registry pull failure (transient MCR outage, network reroute, etc.)
 would take the whole job down with no in-job retry, fallback, or
-diagnostics possible. Browser Features remains split into two
-Playwright shards; CI defaults to two feature workers per shard,
-while local root runs keep the default four-worker feature pool.
+diagnostics possible. Browser Features remains split into two Playwright
+shards; CI defaults to one feature worker per shard, while local root runs keep
+the default four-worker feature pool. Feature-suite inner timeouts are owned by
+the Web Client runner (`IJT_PLAYWRIGHT_FEATURE_TIMEOUT`, default 600s), while
+the root runner uses a larger outer guard (`IJT_WEB_E2E_FEATURES_TIMEOUT`,
+default 1200s) so the child runner can emit Playwright artifacts and timing
+JSON before the root process terminates the lane. Timeout-killed feature runs
+may retry once with a single worker; assertion failures are never retried into
+green.
+Browser E2E app fixtures wait for the backend-backed app-ready marker before
+using endpoint tabs, and Servers E2E seeds/restores isolated connection points
+so personal runtime `connectionpoints.json` entries cannot leak into CI.
 The separate `web-client-compatibility-smoke.yml` workflow is the
 Web Client — Browser Compatibility Smoke detection layer. It runs only on
 schedule/manual dispatch with a matrix that currently contains one cell:

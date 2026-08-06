@@ -14,6 +14,7 @@ export function initializeEndpointTabState (button, endpointUrl, sessionId = '')
   button.setAttribute('data-opcua-session-id', sessionId || '')
   button.setAttribute('data-opcua-connection-state', ENDPOINT_TAB_STATE.CONNECTING)
   button.setAttribute('data-opcua-subscription-state', ENDPOINT_TAB_STATE.PENDING)
+  button.setAttribute('data-opcua-tightening-system-state', ENDPOINT_TAB_STATE.PENDING)
 }
 
 export function setEndpointTabState (button, name, connected) {
@@ -32,4 +33,5 @@ export function markEndpointTabClosing (button) {
   }
   button.setAttribute('data-opcua-connection-state', ENDPOINT_TAB_STATE.CLOSING)
   button.setAttribute('data-opcua-subscription-state', ENDPOINT_TAB_STATE.CLOSING)
+  button.setAttribute('data-opcua-tightening-system-state', ENDPOINT_TAB_STATE.CLOSING)
 }

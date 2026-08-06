@@ -37,11 +37,13 @@ Environment variables (all optional):
   IJT_PLAYWRIGHT_WORKERS
                          worker count passed to playwright.config.mjs
   IJT_PLAYWRIGHT_FEATURE_WORKERS
-                         feature-suite Playwright worker count (default: 4 local, 2 in CI)
+                         feature-suite Playwright worker count (default: 4 local, 1 in CI)
   IJT_PLAYWRIGHT_SHARD   "N/M" to run only shard N of M (passed to playwright
                          --shard=N/M); empty/unset disables sharding.  When set,
                          the JUnit output filename gets a "-shard-NofM" suffix
                          so multiple shards can co-exist in the same artifact.
+  IJT_PLAYWRIGHT_FEATURE_TIMEOUT
+                         feature-suite inner timeout in seconds (default: 600)
   IJT_DOCKER_TIMEOUT    seconds to wait for Docker HTTP readiness (default: 90)
   IJT_DOCKER_BUILD_TIMEOUT
                          seconds to wait for Docker image build (default: 1200)
@@ -2012,7 +2014,7 @@ def _stage_playwright_features(
         title="STAGE 7a  Playwright E2E — features",
         ws_url=ws_url,
         ui_url=ui_url,
-        timeout=600,
+        timeout=_PLAYWRIGHT_FEATURE_TIMEOUT,
         workers=workers,
         extra_env=feature_env,
     )
@@ -2183,7 +2185,8 @@ _DOCKER_BUILD_TIMEOUT = _parse_int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
 _DOCKER_COMPOSE_WAIT_TIMEOUT = _parse_int_env("IJT_DOCKER_COMPOSE_WAIT_TIMEOUT", 180)
 _DOCKER_HTTP_PORT = _parse_int_env("WEB_CLIENT_HTTP_PORT", 3000)
 _DOCKER_WS_PORT = _parse_int_env("WEB_CLIENT_WS_PORT", 8001)
-_PLAYWRIGHT_FEATURE_WORKERS = _parse_int_env("IJT_PLAYWRIGHT_FEATURE_WORKERS", 2 if IS_CI else 4)
+_PLAYWRIGHT_FEATURE_WORKERS = _parse_int_env("IJT_PLAYWRIGHT_FEATURE_WORKERS", 1 if IS_CI else 4)
+_PLAYWRIGHT_FEATURE_TIMEOUT = _parse_int_env("IJT_PLAYWRIGHT_FEATURE_TIMEOUT", 600)
 
 
 def _parse_playwright_shard(raw: str | None) -> tuple[str | None, str]:
@@ -2770,7 +2773,7 @@ def _run_with_owned_services(
             _stop_opcua_server(srv_proc)
 
 
-def _run_playwright_features_with_owned_pool(
+def _run_playwright_features_with_owned_pool_once(
     *,
     python: Path,
     name: str,
@@ -2778,7 +2781,7 @@ def _run_playwright_features_with_owned_pool(
     ui_url: str,
     workers: int,
 ) -> StageResult:
-    """Run Playwright feature specs against one owned backend/server pair per worker."""
+    """Run Playwright feature specs once against one owned backend/server pair per worker."""
     workers = max(1, workers)
     if workers == 1 or os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL"):
         return _run_with_owned_services(
@@ -2851,6 +2854,45 @@ def _run_playwright_features_with_owned_pool(
             _stop_websocket_backend(proc)
         for instance in reversed(servers):
             _stop_opcua_server_instance(instance)
+
+
+def _run_playwright_features_with_owned_pool(
+    *,
+    python: Path,
+    name: str,
+    ws_url: str,
+    ui_url: str,
+    workers: int,
+) -> StageResult:
+    """Run feature specs with safe CI parallelism and a timeout-only fallback.
+
+    CI already shards this suite at the workflow matrix level, so the CI default
+    is one Playwright worker per shard. Local multi-worker runs remain available.
+    If a multi-worker run times out, retry once with a fresh single-worker
+    service pair; assertion failures are returned immediately and never hidden.
+    """
+    workers = max(1, workers)
+    result = _run_playwright_features_with_owned_pool_once(
+        python=python,
+        name=name,
+        ws_url=ws_url,
+        ui_url=ui_url,
+        workers=workers,
+    )
+    if workers <= 1 or result.rc != -1:
+        return result
+
+    retry = _run_playwright_features_with_owned_pool_once(
+        python=python,
+        name=name,
+        ws_url=ws_url,
+        ui_url=ui_url,
+        workers=1,
+    )
+    retry.notes.insert(0, f"Retried with 1 Playwright worker after {workers}-worker timeout")
+    if result.notes:
+        retry.notes.extend(f"First attempt: {note}" for note in result.notes)
+    return retry
 
 
 # ---------------------------------------------------------------------------

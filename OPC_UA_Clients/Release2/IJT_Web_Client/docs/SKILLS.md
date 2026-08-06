@@ -435,12 +435,13 @@ Docker smoke: missing Docker or a stopped daemon is reported as a skipped suite.
 Calling this Web runner directly with `--docker-only` remains an explicit Docker
 validation request and fails if Docker cannot run.
 The Playwright feature suite runs with `IJT_PLAYWRIGHT_FEATURE_WORKERS=4`
-locally and defaults to two feature workers in CI. Each worker gets a dedicated
-WebSocket backend and OPC UA simulator by offsetting the base `WS_TEST_URL` and
-`OPCUA_TEST_ENDPOINT` ports; the browser URL carries the worker-specific
-WebSocket port through query parameters. `IJT_PLAYWRIGHT_WORKERS` is the only
-environment variable consumed by `playwright.config.mjs`; the runner sets it
-when it launches a Playwright project.
+locally and defaults to one feature worker per GitHub shard in CI. Each worker
+gets a dedicated WebSocket backend and OPC UA simulator by offsetting the base
+`WS_TEST_URL` and `OPCUA_TEST_ENDPOINT` ports; the browser URL carries the
+worker-specific WebSocket port through query parameters.
+`IJT_PLAYWRIGHT_WORKERS` is the only environment variable consumed by
+`playwright.config.mjs`; the runner sets it when it launches a Playwright
+project.
 Local browser install prerequisites live in `README.md`; corporate/offline
 users need the documented `HTTPS_PROXY`, `PLAYWRIGHT_DOWNLOAD_HOST`, or
 `PLAYWRIGHT_BROWSERS_PATH` path before running local Playwright installs.
@@ -507,6 +508,22 @@ the production default through `window.__IJT_RUNTIME__`, and tests can override
 `wsHost`, `wsPort`, or `wsProtocol` through the page URL. This is required for
 the Playwright feature worker pool; do not replace it with static service ports.
 
+Browser E2E fixtures that use the backend must wait for the explicit
+`window.__IJT_APP_READY__` marker before interacting with endpoint tabs. The
+marker is set only after the WebSocket connects, Settings are loaded, and the
+initial view level has been applied. Smoke tests that intentionally run without
+a backend should keep using the basic DOM shell wait, not the backend-ready
+marker.
+
+CI Browser Features uses GitHub matrix sharding plus one Playwright worker per
+shard by default. Do not reintroduce two active parallelism layers in CI.
+Local/manual feature runs can still use the four-worker owned backend/server
+pool. The feature suite's child timeout is configured by
+`IJT_PLAYWRIGHT_FEATURE_TIMEOUT` and the root runner uses the larger
+`IJT_WEB_E2E_FEATURES_TIMEOUT` so Playwright artifacts are written before the
+root process kills the suite. Retry only timeout-killed feature runs; do not
+retry assertion failures into green.
+
 ### Web Test Backend Manager
 
 `tests/test_infra/backend_manager.py` is the foundation for managed live-suite
@@ -521,12 +538,18 @@ suite.
 ### Playwright Endpoint Readiness
 
 Endpoint tab buttons expose durable readiness attributes:
-`data-opcua-connection-state` and `data-opcua-subscription-state`.
-Playwright helpers must wait on those attributes becoming `connected`.
+`data-opcua-connection-state`, `data-opcua-subscription-state`, and
+`data-opcua-tightening-system-state`. Playwright helpers must wait on those
+attributes becoming `connected`.
 Browser WebSocket disconnects mark existing endpoint tabs disconnected; when
 the WebSocket reconnects, active endpoint managers reissue their OPC UA connect
 request and drive the same attributes back to `connected` after the backend
-confirms connection and subscription.
+confirms connection, subscription, and IJT Tightening System discovery.
+End users should see the compact endpoint readiness pill near the endpoint URL:
+`Ready` means connected, subscribed, and IJT Tightening System discovered.
+Keep the detailed checks in the expandable diagnostics panel with a distinct
+`Readiness diagnostics` header and separate diagnostic rows; do not restore a
+full endpoint `Connection` tab for the three readiness labels.
 Do not use visual CSS classes such as `.onColor` as connection readiness
 signals; those classes are presentation details for the status display.
 Joint Demo Playwright actions must also wait until the active

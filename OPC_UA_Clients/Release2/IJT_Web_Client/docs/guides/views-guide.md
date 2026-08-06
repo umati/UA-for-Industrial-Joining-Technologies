@@ -26,7 +26,7 @@ Tabs are managed by `GraphicSupport/TabGenerator.mjs`.
 - `Servers/`:
   endpoint list and connect/disconnect flow.
 - `TabSetup/`:
-  endpoint-specific tab composition.
+  endpoint-specific tab composition and compact endpoint readiness diagnostics.
 - `AddressSpace/`:
   browse/read visualization of the address space
 - `Methods/`:
@@ -45,6 +45,24 @@ Tabs are managed by `GraphicSupport/TabGenerator.mjs`.
   domain-focused editing and visualization screens.
 - `GraphicSupport/`:
   reusable UI primitives (tabs, basic controls, settings).
+
+## Endpoint Readiness UX
+
+Endpoint screens expose the user-facing state near the endpoint URL, not as a
+dedicated full-page Connection tab. The readiness pill is the primary signal:
+
+- `Ready`: OPC UA connection established, subscription active, and IJT
+  Tightening System discovered.
+- `Connecting`: endpoint connection/setup is still in progress.
+- `Limited`: OPC UA connected but subscription or IJT model discovery is not
+  complete.
+- `Disconnected`: endpoint is not connected or is closing.
+
+Keep detailed Connection, Subscription, and IJT Tightening System checks inside
+the expandable diagnostics panel. The panel title must stay visually distinct
+from the diagnostic rows so it does not read like a fourth status check. Do not
+reintroduce a full endpoint Connection tab just to display those three
+diagnostic labels.
 
 ## Styling Rules (current project)
 

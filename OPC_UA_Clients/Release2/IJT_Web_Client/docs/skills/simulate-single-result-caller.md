@@ -76,7 +76,7 @@ Confirm `activate()` in `method-graphics.mjs` includes the SimulateResults folde
 1. Check method exists in `methodManager.getMethodNames()`.
 2. Check defaults in `settings.json` for invalid type/value shapes.
 3. Check call output from `MethodGUICreator` message display.
-4. Check backend connection/subscription status from Connection tab.
+4. Check the endpoint readiness pill and the `Readiness diagnostics` popup near the endpoint URL. `Ready` means connection, subscription, and IJT Tightening System discovery are complete.
 
 ## Safety Rules
 

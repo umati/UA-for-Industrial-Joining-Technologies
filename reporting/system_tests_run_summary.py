@@ -648,7 +648,7 @@ def integration_drift_warnings(baseline, suite_counts, run_id):
         entry = baseline_suite(baseline, key)
         if not entry or counts[0] is None:
             continue
-        total, _passed, _failed, skipped = counts
+        total, _passed, failed, skipped = counts
         # Support both legacy "tests" and new "min_tests" field names
         expected_tests = entry.get("min_tests") or entry.get("tests")
         if expected_tests is not None:
@@ -662,11 +662,19 @@ def integration_drift_warnings(baseline, suite_counts, run_id):
                         f"python tests/tools/update_integration_baseline.py --run {run_id} "
                         f"--suite {key}"
                     )
-                    warnings.append(
-                        f"⚠️ **{label}**: {total:,} tests ({delta:+d} vs minimum "
-                        f"{expected_tests:,}) — tests may have disappeared."
-                        f" Investigate and re-anchor with `{reanchor_command}`."
-                    )
+                    if failed:
+                        warnings.append(
+                            f"⚠️ **{label}**: {total:,} tests ({delta:+d} vs minimum "
+                            f"{expected_tests:,}) — run is failing or incomplete, so artifacts "
+                            "may be missing. Fix or rerun failing jobs before considering a "
+                            "baseline re-anchor."
+                        )
+                    else:
+                        warnings.append(
+                            f"⚠️ **{label}**: {total:,} tests ({delta:+d} vs minimum "
+                            f"{expected_tests:,}) — tests may have disappeared."
+                            f" Investigate and re-anchor with `{reanchor_command}`."
+                        )
                 # Suspicious positive drift: warn if growth exceeds threshold
                 elif delta > max(growth_warn_abs, expected_tests * growth_warn_pct // 100):
                     reanchor_command = (

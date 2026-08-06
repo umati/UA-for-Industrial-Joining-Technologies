@@ -366,6 +366,22 @@ def test_integration_drift_warnings_minimum_mode_negative_drift():
     assert "(-20 vs minimum 700)" in warnings[0]
 
 
+def test_integration_drift_warnings_negative_drift_with_failures_does_not_reanchor():
+    """Failed/incomplete artifact sets should not ask users to re-anchor baselines."""
+    baseline = {
+        "drift_policy": {"mode": "minimum", "growth_warn_percent": 25, "growth_warn_absolute": 50},
+        "suites": {"wc_browser": {"min_tests": 66, "skipped": 0}},
+        "skip_tolerance_default": 0,
+    }
+    suite_counts = [("wc_browser", "Web Client Browser", (1, 0, 1, 0))]
+
+    warnings = system_tests_run_summary.integration_drift_warnings(baseline, suite_counts, "12345")
+
+    assert len(warnings) == 1
+    assert "run is failing or incomplete" in warnings[0]
+    assert "re-anchor with" not in warnings[0]
+
+
 def test_integration_drift_warnings_minimum_mode_normal_positive_drift():
     """minimum mode silently accepts normal positive drift."""
     baseline = {

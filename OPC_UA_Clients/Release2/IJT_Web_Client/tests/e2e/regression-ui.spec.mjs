@@ -14,8 +14,9 @@
 import { test, expect } from './e2e-fixtures.mjs'
 import { RESULT_TYPE } from './page-objects.mjs'
 
-test('full UI regression — connect, simulate, events, all result types', async ({ connected: app }) => {
+test('full UI regression — connect, simulate, events, all result types', async ({ app }) => {
   test.setTimeout(240_000)
+  await app.connectToLocal({ timeout: 120_000 })
 
   // ── 1. Simulate all four result/event types ─────────────────────────────
   const methods = await app.openMethods()

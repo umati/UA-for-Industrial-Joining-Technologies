@@ -108,6 +108,8 @@ export const VIEW_LEVEL = {
   SETTINGS: '5',
 }
 
+const APP_BOOT_TIMEOUT_MS = 15_000
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AppPage — top-level page helper
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,11 +120,22 @@ export class AppPage {
   }
 
   /** Navigate to the app root and wait for basic render. */
-  async goto () {
-    await this.page.goto(this.appUrl)
-    await this.page.waitForLoadState('domcontentloaded')
-    // Give JS time to bootstrap
-    await this.page.waitForTimeout(500)
+  async goto ({ timeout = APP_BOOT_TIMEOUT_MS, waitForAppReady = false } = {}) {
+    let lastError
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      await this.page.goto(this.appUrl)
+      await this.page.waitForLoadState('domcontentloaded')
+      try {
+        await this.page.locator(SEL.MAIN_DROPDOWN).waitFor({ state: 'visible', timeout })
+        if (waitForAppReady) {
+          await this.page.waitForFunction(() => window.__IJT_APP_READY__ === true, null, { timeout })
+        }
+        return
+      } catch (error) {
+        lastError = error
+      }
+    }
+    throw lastError
   }
 
   /** Switch the main view-level dropdown (1=Basic … 5=Settings). */

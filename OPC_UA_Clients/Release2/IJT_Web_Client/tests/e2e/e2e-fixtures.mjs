@@ -20,6 +20,8 @@ export { expect }
 export const WS_URL = process.env.WS_TEST_URL ?? 'ws://localhost:8001'
 export const OPCUA_ENDPOINT = process.env.OPCUA_TEST_ENDPOINT ?? 'opc.tcp://localhost:40451'
 const BACKEND_WORKERS = Number.parseInt(process.env.IJT_E2E_BACKEND_WORKERS ?? '1', 10)
+const CONNECTED_FIXTURE_TIMEOUT_MS = 150_000
+const CONNECT_TO_LOCAL_TIMEOUT_MS = 120_000
 
 function withPortOffset (value, offset) {
   if (!Number.isFinite(BACKEND_WORKERS) || BACKEND_WORKERS <= 1 || offset <= 0) return value
@@ -78,7 +80,7 @@ export const test = base.extend({
   app: async ({ page }, use, testInfo) => {
     const runtime = runtimeForWorker(testInfo)
     const app = new AppPage(page, runtime.appUrl)
-    await app.goto()
+    await app.goto({ waitForAppReady: true })
     await use(app)
   },
 
@@ -86,14 +88,14 @@ export const test = base.extend({
    * AppPage already connected to the LOCAL endpoint.
    * Fails the test when the backend is not running.
    */
-  connected: async ({ page, backendUp }, use, testInfo) => {
+  connected: [async ({ page, backendUp }, use, testInfo) => {
     const runtime = runtimeForWorker(testInfo)
     expect(backendUp, `Backend WebSocket must be reachable at ${runtime.wsUrl}`).toBe(true)
     const app = new AppPage(page, runtime.appUrl)
-    await app.goto()
-    await app.connectToLocal()
+    await app.goto({ waitForAppReady: true })
+    await app.connectToLocal({ timeout: CONNECT_TO_LOCAL_TIMEOUT_MS })
     await use(app)
-  },
+  }, { timeout: CONNECTED_FIXTURE_TIMEOUT_MS }],
 
   /**
    * A live WebSocket test client connected to the backend.

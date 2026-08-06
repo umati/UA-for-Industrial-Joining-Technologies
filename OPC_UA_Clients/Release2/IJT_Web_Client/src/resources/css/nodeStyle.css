@@ -291,6 +291,112 @@ html {
   border-bottom: var(--ui-line-width) solid var(--ui-line-color);
 }
 
+.endpointHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(52vw, 760px);
+  color: var(--ui-text-main);
+  white-space: nowrap;
+}
+
+.endpointHeaderUrl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--type-12);
+}
+
+.endpointReadinessDetails {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.endpointReadinessSummary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.endpointReadinessSummary::-webkit-details-marker {
+  display: none;
+}
+
+.endpointReadinessPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 82px;
+  border: 1px solid var(--ui-control-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: var(--type-12);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.endpointReadinessPill--ready {
+  color: var(--connection-pill-on-text);
+  background-color: var(--connection-pill-on-bg);
+}
+
+.endpointReadinessPill--connecting,
+.endpointReadinessPill--limited {
+  color: var(--ui-text-main);
+  background-color: var(--ui-control-bg);
+}
+
+.endpointReadinessPill--disconnected {
+  color: var(--connection-pill-off-text);
+  background-color: var(--connection-pill-off-bg);
+}
+
+.endpointReadinessPanel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 1200;
+  min-width: 260px;
+  padding: 0;
+  border: 1px solid var(--ui-control-border);
+  border-radius: 8px;
+  color: var(--ui-text-main);
+  background: rgb(16 20 26 / 96%);
+  box-shadow: 0 8px 18px rgb(0 0 0 / 30%);
+}
+
+.endpointReadinessPanelTitle {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--ui-control-border);
+  border-radius: 8px 8px 0 0;
+  font-size: var(--type-12);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgb(255 255 255 / 6%);
+}
+
+.endpointReadinessChecks {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 10px 12px 12px;
+}
+
+.endpointReadinessChecks dt,
+.endpointReadinessChecks dd {
+  margin: 0;
+}
+
+.endpointReadinessChecks dt {
+  color: var(--demo-muted-text);
+}
+
+.endpointReadinessChecks dd {
+  font-weight: 700;
+  text-align: right;
+}
+
 .tab {
   float: left;
   border: var(--ui-line-width) solid var(--ui-line-color);

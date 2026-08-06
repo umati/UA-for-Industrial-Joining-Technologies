@@ -35,6 +35,7 @@
 
     let topLevelTabs
     let settings
+    window.__IJT_APP_READY__ = false
 
     window.addEventListener('DOMContentLoaded', () => {
       // Initialize the UI.
@@ -88,6 +89,7 @@
           topLevelTabs.getRightInfo().select.oldValue = topLevelTabs.getRightInfo().select.value
           topLevelTabs.getRightInfo().select.value = s.initialViewLevel
           topLevelTabs.getRightInfo().select.onchange()
+          window.__IJT_APP_READY__ = true
         }
       )
 

@@ -40,6 +40,20 @@ a web browser. The backend is Python with WebSockets. The frontend is Node.js.
 - Runtime files are ignored by Git. You can add personal OPC UA endpoints or UI settings locally without pushing them.
 - To reset local configuration, delete the runtime JSON file and restart the Web Client backend.
 
+## Endpoint readiness in the browser
+
+Endpoint tabs show a compact readiness pill near the endpoint URL:
+
+- **Ready** means the endpoint is usable for IJT work: OPC UA connection is established, event/result subscription is active, and the IJT Tightening System was discovered.
+- **Connecting** means the app is still preparing the endpoint.
+- **Limited** means OPC UA is connected but subscription or IJT model discovery is incomplete.
+- **Disconnected** means the endpoint is not connected.
+
+Click the pill to expand **Readiness diagnostics**. The popup keeps that title
+visually separate from the Connection, Subscription, and IJT Tightening System
+rows so the checks read as diagnostics, not another tab or primary workflow.
+The former full Connection tab is intentionally not shown by default.
+
 ## Option 2 - Docker
 
 - **Run with Docker helper:** `python run_docker_setup.py`

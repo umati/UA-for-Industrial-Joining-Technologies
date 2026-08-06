@@ -21,11 +21,11 @@ import EventGraphics from 'views/events/event-graphics.mjs'
 import MethodGraphics from 'views/methods/method-graphics.mjs'
 import AssetGraphics from 'views/assets/asset-graphics.mjs'
 import EntityCacheView from 'views/entities/entities.mjs'
-import ConnectionGraphics from 'views/connection/connection-graphics.mjs'
 import TabGenerator from 'views/graphic-support/tab-generator.mjs'
 import BasicScreen from 'views/graphic-support/basic-screen.mjs'
 import { createDemoTabs } from 'views/tab-setup/demo-tabs.mjs'
 import { createDetailsTabs } from 'views/tab-setup/details-tabs.mjs'
+import { createEndpointReadiness } from 'views/tab-setup/endpoint-readiness.mjs'
 import {
   initializeEndpointTabState,
   markEndpointTabClosing,
@@ -71,6 +71,9 @@ export default class EndpointGraphics extends BasicScreen {
     this.connectionManager.subscribe(states.SUBSCRIPTION, (connected) => {
       setEndpointTabState(button, 'subscription', connected)
     })
+    this.connectionManager.subscribe(states.TIGHTENING_SYSTEM, (connected) => {
+      setEndpointTabState(button, 'tightening-system', connected)
+    })
     this.connectionManager.subscribe(states.ATTEMPT_CLOSE, () => {
       markEndpointTabClosing(button)
     })
@@ -105,16 +108,16 @@ export default class EndpointGraphics extends BasicScreen {
 
     const tabGenerator = new TabGenerator(this.backGround, DEFAULT_VIEW_LEVEL)
     this.tabGenerator = tabGenerator
-    const urlDiv = document.createElement('div')
-    urlDiv.innerText = endpointUrl
-    tabGenerator.setRightInfo(urlDiv)
 
     const modelManager = new ModelManager(entityCache, jointManager)
 
     // Initiate the different tab handlers
 
     this.connectionManager = new ConnectionManager(webSocketManager, endpointUrl)
-    const connectionGraphics = new ConnectionGraphics(this.connectionManager)
+    tabGenerator.setRightInfo(createEndpointReadiness({
+      connectionManager: this.connectionManager,
+      endpointUrl
+    }))
 
     const addressSpace = new AddressSpace(this.connectionManager)
     const addressSpaceGraphics = new AddressSpaceGraphics(addressSpace)
@@ -179,7 +182,6 @@ export default class EndpointGraphics extends BasicScreen {
       currentViewLevel: DEFAULT_VIEW_LEVEL
     })
 
-    tabGenerator.generateTab(connectionGraphics, 2)
     if (demosTabGraphics) {
       tabGenerator.generateTab(demosTabGraphics, 2, true)
     }

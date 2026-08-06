@@ -26,16 +26,19 @@ describe('endpoint tab state attributes', () => {
     expect(button.attributes['data-opcua-session-id']).toBe('session-1')
     expect(button.attributes['data-opcua-connection-state']).toBe(ENDPOINT_TAB_STATE.CONNECTING)
     expect(button.attributes['data-opcua-subscription-state']).toBe(ENDPOINT_TAB_STATE.PENDING)
+    expect(button.attributes['data-opcua-tightening-system-state']).toBe(ENDPOINT_TAB_STATE.PENDING)
   })
 
-  it('sets connection and subscription states from manager events', () => {
+  it('sets connection, subscription, and tightening-system states from manager events', () => {
     const button = makeAttributeTarget()
 
     setEndpointTabState(button, 'connection', true)
     setEndpointTabState(button, 'subscription', false)
+    setEndpointTabState(button, 'tightening-system', true)
 
     expect(button.attributes['data-opcua-connection-state']).toBe(ENDPOINT_TAB_STATE.CONNECTED)
     expect(button.attributes['data-opcua-subscription-state']).toBe(ENDPOINT_TAB_STATE.DISCONNECTED)
+    expect(button.attributes['data-opcua-tightening-system-state']).toBe(ENDPOINT_TAB_STATE.CONNECTED)
   })
 
   it('marks both readiness states as closing', () => {
@@ -45,6 +48,7 @@ describe('endpoint tab state attributes', () => {
 
     expect(button.attributes['data-opcua-connection-state']).toBe(ENDPOINT_TAB_STATE.CLOSING)
     expect(button.attributes['data-opcua-subscription-state']).toBe(ENDPOINT_TAB_STATE.CLOSING)
+    expect(button.attributes['data-opcua-tightening-system-state']).toBe(ENDPOINT_TAB_STATE.CLOSING)
   })
 
   it('ignores invalid targets', () => {

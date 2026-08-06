@@ -54,6 +54,12 @@ Environment variables:
   IJT_SUITE_TIMEOUT     Per-suite timeout in seconds (default: 600)
   IJT_DOCKER_BUILD_TIMEOUT
                         Docker image build timeout in seconds (default: 1200)
+  IJT_WEB_E2E_FEATURES_TIMEOUT
+                        Override timeout for the web-client-e2e-features suite
+                        (default: 1200). This is an outer guard; the Web
+                        Client runner owns the inner Playwright timeout so it
+                        can still write traces/JUnit before the root runner
+                        kills a stuck child process.
   IJT_WEB_E2E_REGRESSION_TIMEOUT
                         Override timeout for the web-client-e2e-regression
                         suite (default: 1800). This suite owns its budget
@@ -285,7 +291,7 @@ def _int_env(name: str, default: int) -> int:
 
 WEB_CLIENT_E2E_FEATURE_WORKERS = _int_env(
     "IJT_PLAYWRIGHT_FEATURE_WORKERS",
-    2 if os.getenv("CI") else 4,
+    1 if os.getenv("CI") else 4,
 )
 WEB_CLIENT_RESULTS_DIR = WEB_CLIENT_DIR / "test-results"
 
@@ -300,6 +306,7 @@ IS_CI = bool(os.getenv("CI"))
 
 SUITE_TIMEOUT = _int_env("IJT_SUITE_TIMEOUT", 600)  # 10 min default
 DOCKER_BUILD_TIMEOUT = _int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
+WEB_CLIENT_E2E_FEATURES_TIMEOUT = _int_env("IJT_WEB_E2E_FEATURES_TIMEOUT", 1200)
 # Web Client Playwright regression suite owns its budget independently of the
 # generic SUITE_TIMEOUT: it boots an OPC UA server, a WebSocket bridge, the UI
 # dev server, then runs the full `--project=regression` Playwright journey
@@ -2102,7 +2109,12 @@ def _suite_webclient_live_e2e_smoke() -> SuiteResult:
 
 
 def _suite_webclient_live_e2e_features() -> SuiteResult:
-    """Web Client Playwright feature specs with owned runtime ports."""
+    """Web Client Playwright feature specs with owned runtime ports.
+
+    The root timeout is intentionally larger than the Web Client runner's inner
+    Playwright timeout. That lets the child runner produce JUnit, traces, and
+    backend logs before the root runner's process-tree guard kills anything.
+    """
     return _delegate_to_runner(
         name="web-client-e2e-features",
         runner_dir=WEB_CLIENT_DIR,
@@ -2115,6 +2127,7 @@ def _suite_webclient_live_e2e_features() -> SuiteResult:
             ui_port=WEB_CLIENT_UI_PORT_E2E_FEATURES,
             feature_workers=WEB_CLIENT_E2E_FEATURE_WORKERS,
         ),
+        timeout=WEB_CLIENT_E2E_FEATURES_TIMEOUT,
     )
 
 

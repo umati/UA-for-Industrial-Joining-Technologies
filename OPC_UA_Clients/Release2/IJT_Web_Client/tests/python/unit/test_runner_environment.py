@@ -2206,6 +2206,60 @@ def test_e2e_fixture_passes_runtime_websocket_query():
     assert "wsHost" in source
     assert "wsPort" in source
     assert "new AppPage(page, runtime.appUrl)" in source
+    assert "app.goto({ waitForAppReady: true })" in source
+
+
+def test_index_marks_backend_backed_app_ready_after_settings_are_applied():
+    source = (_PROJECT_ROOT / "index.html").read_text(encoding="utf-8")
+
+    ready_marker = "window.__IJT_APP_READY__ = true"
+    settings_apply = "topLevelTabs.getRightInfo().select.onchange()"
+
+    assert "window.__IJT_APP_READY__ = false" in source
+    assert ready_marker in source
+    assert source.index(settings_apply) < source.index(ready_marker)
+
+
+def test_e2e_app_goto_waits_for_shell_and_optional_app_ready_marker():
+    source = (_PROJECT_ROOT / "tests" / "e2e" / "page-objects.mjs").read_text(encoding="utf-8")
+    start = source.index("async goto")
+    end = source.index("/** Switch the main view-level", start)
+    body = source[start:end]
+
+    assert "APP_BOOT_TIMEOUT_MS" in source
+    assert "attempt <= 2" in body
+    assert "SEL.MAIN_DROPDOWN" in body
+    assert "state: 'visible'" in body
+    assert "waitForAppReady = false" in body
+    assert "window.__IJT_APP_READY__ === true" in body
+
+
+def test_connected_fixture_has_own_timeout_budget():
+    source = (_PROJECT_ROOT / "tests" / "e2e" / "e2e-fixtures.mjs").read_text(encoding="utf-8")
+
+    assert "CONNECTED_FIXTURE_TIMEOUT_MS = 150_000" in source
+    assert "CONNECT_TO_LOCAL_TIMEOUT_MS = 120_000" in source
+    assert "connected: [async" in source
+    assert "app.connectToLocal({ timeout: CONNECT_TO_LOCAL_TIMEOUT_MS })" in source
+
+
+def test_endpoint_readiness_replaces_full_connection_tab():
+    source = (_PROJECT_ROOT / "src" / "javascripts" / "views" / "tab-setup" / "endpoint-graphics.mjs").read_text(
+        encoding="utf-8"
+    )
+
+    assert "createEndpointReadiness" in source
+    assert "tabGenerator.setRightInfo(createEndpointReadiness" in source
+    assert "ConnectionGraphics" not in source
+    assert "generateTab(connectionGraphics" not in source
+
+
+def test_regression_spec_connects_after_extending_timeout():
+    source = (_PROJECT_ROOT / "tests" / "e2e" / "regression-ui.spec.mjs").read_text(encoding="utf-8")
+
+    assert "async ({ connected:" not in source
+    assert "test.setTimeout(240_000)" in source
+    assert "await app.connectToLocal({ timeout: 120_000 })" in source
 
 
 def test_docker_smoke_builds_web_image_from_repo_root():
@@ -2257,6 +2311,30 @@ def test_playwright_feature_stage_passes_worker_pool_environment(monkeypatch):
     assert captured["env"]["IJT_E2E_BACKEND_WORKERS"] == "4"
     assert captured["env"]["OPCUA_TEST_ENDPOINT"] == "opc.tcp://localhost:40469"
     assert captured["timeout"] == 600
+
+
+def test_playwright_feature_stage_uses_configurable_timeout(monkeypatch):
+    monkeypatch.setenv("IJT_PLAYWRIGHT_FEATURE_TIMEOUT", "725")
+    runner = _load_runner()
+    captured = {}
+
+    monkeypatch.setattr(runner, "_node_bin_path", lambda name: "playwright.cmd")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+
+    def fake_run(cmd, **kwargs):
+        captured["timeout"] = kwargs["timeout"]
+        return 0
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_playwright_features(
+        "ws://localhost:8005",
+        "http://127.0.0.1:3005",
+        workers=1,
+    )
+
+    assert result.rc == 0
+    assert captured["timeout"] == 725
 
 
 def test_playwright_feature_pool_owns_one_backend_pair_per_worker(monkeypatch):
@@ -2330,6 +2408,55 @@ def test_playwright_feature_pool_owns_one_backend_pair_per_worker(monkeypatch):
     }
     assert stopped_ws_ports == [9002, 9001, 9000]
     assert stopped_opcua_ports == [4102, 4101, 4100]
+
+
+def test_playwright_feature_pool_retries_timeout_once_with_single_worker(monkeypatch):
+    runner = _load_runner()
+    calls = []
+
+    def fake_once(**kwargs):
+        calls.append(kwargs["workers"])
+        if kwargs["workers"] == 3:
+            return runner.StageResult("playwright-features", -1, notes=["first attempt timed out"])
+        return runner.StageResult("playwright-features", 0, notes=["retry passed"])
+
+    monkeypatch.setattr(runner, "_run_playwright_features_with_owned_pool_once", fake_once)
+
+    result = runner._run_playwright_features_with_owned_pool(
+        python=Path("python"),
+        name="playwright-features",
+        ws_url="ws://localhost:9000",
+        ui_url="http://127.0.0.1:3005",
+        workers=3,
+    )
+
+    assert result.rc == 0
+    assert calls == [3, 1]
+    assert result.notes[0] == "Retried with 1 Playwright worker after 3-worker timeout"
+    assert "First attempt: first attempt timed out" in result.notes
+
+
+def test_playwright_feature_pool_does_not_retry_assertion_failures(monkeypatch):
+    runner = _load_runner()
+    calls = []
+
+    def fake_once(**kwargs):
+        calls.append(kwargs["workers"])
+        return runner.StageResult("playwright-features", 1, notes=["assertion failed"])
+
+    monkeypatch.setattr(runner, "_run_playwright_features_with_owned_pool_once", fake_once)
+
+    result = runner._run_playwright_features_with_owned_pool(
+        python=Path("python"),
+        name="playwright-features",
+        ws_url="ws://localhost:9000",
+        ui_url="http://127.0.0.1:3005",
+        workers=3,
+    )
+
+    assert result.rc == 1
+    assert calls == [3]
+    assert result.notes == ["assertion failed"]
 
 
 def test_config_uses_runtime_websocket_port_not_static_service_port():

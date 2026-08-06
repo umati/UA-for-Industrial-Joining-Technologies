@@ -99,13 +99,16 @@ The committed baseline (`tests/baselines/integration-test-counts.json`) uses
 
 | Condition | Behaviour |
 |-----------|-----------|
-| Actual < `min_tests` | ⚠️ Warning — tests may have disappeared |
+| Actual < `min_tests` and suite is green/complete | ⚠️ Warning — tests may have disappeared |
+| Actual < `min_tests` and suite has failures | ⚠️ Warning — artifacts may be incomplete; fix/rerun before re-anchor |
 | Actual > `min_tests` (normal growth) | Silent — no action needed |
 | Actual > `min_tests` + max(50, 25%) | ⚠️ Warning — unusually large increase |
 | Skipped > baseline + `skip_tolerance` | ⚠️ Warning — skip drift |
 
 Re-anchor with `python tests/tools/update_integration_baseline.py --run <id> --suite <key>`
-only when intentionally removing tests. Normal test additions need no baseline update.
+only when intentionally removing tests from a green/complete run. Normal test
+additions need no baseline update, and failing/incomplete runs must be fixed or
+rerun before any re-anchor decision.
 
 ### Integration Jobs
 
@@ -232,9 +235,13 @@ run their live/integration tests in parallel without port conflicts.
 > image is used:
 > container-job images are pulled by GitHub before any step runs, so a
 > registry outage would take the whole job down with no in-job retry,
-> fallback, or diagnostics. Browser Features keeps two shards; CI
-> defaults to two feature workers per shard, and local root validation
-> defaults to four workers.
+> fallback, or diagnostics. Browser Features keeps two GitHub shards; CI
+> defaults to one Playwright worker per shard to avoid double parallelism, and
+> local root validation defaults to four workers. The Web Client runner owns
+> the feature-suite inner timeout (`IJT_PLAYWRIGHT_FEATURE_TIMEOUT`, default
+> 600s), and the root runner uses a larger outer guard
+> (`IJT_WEB_E2E_FEATURES_TIMEOUT`, default 1200s) so browser artifacts are
+> written before root-level termination.
 > Web Client — Browser Compatibility Smoke is intentionally separate from Integration:
 > `.github/workflows/web-client-compatibility-smoke.yml` runs only at `04:30 UTC`
 > or by manual dispatch, reuses the Web Client runner-owned Windows
@@ -262,7 +269,7 @@ run their live/integration tests in parallel without port conflicts.
 | Web Client Python backend | OPC UA 40466 / WS 8002 | `.venv_test` | WebSocket backend contract and Python integration tests |
 | Web Client Python lifecycle | OPC UA 40467 / WS 8003 | `.venv_test` | WebSocket connection lifecycle tests isolated from backend contract tests |
 | Web Client Playwright smoke | HTTP 3004 | `.venv_test` + Playwright | Browser smoke project only |
-| Web Client Playwright features | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | `.venv_test` + Playwright | Feature specs with four owned backend/server worker pairs |
+| Web Client Playwright features | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | `.venv_test` + Playwright | Feature specs with isolated backend/server worker pairs; CI shards default to one worker, local/manual runs keep the four-worker pool |
 | Web Client Playwright regression | OPC UA 40480 / WS 8010 / HTTP 3006 | `.venv_test` + Playwright | Regression spec with owned backend and UI ports |
 | Web Client — Browser Compatibility Smoke | OPC UA 40468 / WS 8004 / HTTP 3007 | `.venv_test` + Playwright + real browser channel | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
 | Web Client Docker smoke | Standalone HTTP 3000 / WS 8001; root runner HTTP 3008 / WS 8011 | Docker | Builds the Web Client production image through `--docker-only`; root runner gives it isolated host ports and a scoped Compose project so it can run alongside live/browser suites; root runner skips when Docker is unavailable |
