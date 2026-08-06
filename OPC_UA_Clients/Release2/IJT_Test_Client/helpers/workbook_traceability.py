@@ -126,7 +126,7 @@ def load_workbook_cases(workbook_path: Path | None = None) -> dict[str, tuple[Wo
     """Load all workbook TC header rows grouped by CU key."""
     source = workbook_path or DEFAULT_WORKBOOK_PATH
     cu_keys = ordered_cu_keys()
-    workbook = load_workbook(source, read_only=True, keep_vba=True, data_only=False)
+    workbook = load_workbook(source, read_only=True, keep_vba=False, data_only=False)
     try:
         cu_sheets = workbook.worksheets[INFRA_SHEET_COUNT:]
         if len(cu_sheets) != len(cu_keys):

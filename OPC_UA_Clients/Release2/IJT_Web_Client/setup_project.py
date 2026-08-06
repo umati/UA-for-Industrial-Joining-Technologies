@@ -211,6 +211,28 @@ def _sync_optional_private_submodules(update_remote: bool = True) -> None:
     env.setdefault("GIT_TERMINAL_PROMPT", "0")
     env.setdefault("GCM_INTERACTIVE", "Never")
 
+    def _run_optional_git(cmd: list[str], timeout: int) -> None:
+        subprocess.run(
+            cmd,
+            cwd=REPO_ROOT,
+            env=env,
+            check=True,
+            timeout=timeout,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+    def _optional_git_failure_reason(exc: subprocess.CalledProcessError | subprocess.TimeoutExpired) -> str:
+        if isinstance(exc, subprocess.TimeoutExpired):
+            return "Git timed out while trying to reach the optional private repository."
+        stderr = (exc.stderr or "").lower()
+        if "could not read password" in stderr or "authentication failed" in stderr:
+            return "GitHub authentication is not available for the optional private repository."
+        if "repository not found" in stderr:
+            return "The optional private repository is not accessible with the current GitHub account."
+        return f"Git exited with status {exc.returncode} while syncing the optional private repository."
+
     for name, relative_path in OPTIONAL_PRIVATE_SUBMODULES:
         git_path = relative_path.as_posix()
         target = REPO_ROOT / relative_path
@@ -219,18 +241,15 @@ def _sync_optional_private_submodules(update_remote: bool = True) -> None:
         log.info("Syncing optional private %s submodule at %s...", name, relative_path)
         try:
             _backup_existing_optional_module_path(name, target)
-            subprocess.run(
+            _run_optional_git(
                 [git, "submodule", "sync", "--", git_path],
-                cwd=REPO_ROOT,
-                env=env,
-                check=True,
                 timeout=60,
             )
             update_cmd = [git, "submodule", "update", "--checkout", "--init", "--recursive"]
             if update_remote:
                 update_cmd.append("--remote")
             update_cmd.extend(["--", git_path])
-            subprocess.run(update_cmd, cwd=REPO_ROOT, env=env, check=True, timeout=180)
+            _run_optional_git(update_cmd, timeout=180)
             if (target / "ui" / "envelope-graphics.mjs").exists():
                 log.info("Optional private %s submodule is ready.", name)
             else:
@@ -242,9 +261,9 @@ def _sync_optional_private_submodules(update_remote: bool = True) -> None:
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
             log.warning(
                 "Optional private %s submodule is unavailable. Continuing without it. "
-                "Authorized developers should authenticate to GitHub and rerun setup. Details: %s",
+                "%s Authorized developers should authenticate to GitHub and rerun setup.",
                 name,
-                exc,
+                _optional_git_failure_reason(exc),
             )
 
 
@@ -1034,8 +1053,8 @@ def _install_python_packages():
     python = _get_python_path()
     log.info("Using Python executable: %s", python)
 
-    # Upgrade pip first
-    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip"])
+    # Keep pip bootstrap deterministic but avoid noisy version-check chatter.
+    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip", "--disable-pip-version-check"])
 
     req_file = Path("requirements.txt")
     if not req_file.exists():
@@ -1408,8 +1427,17 @@ def _is_runtime_ready():
         "raise SystemExit(0) if ok else SystemExit('asyncua ' + v + ' is too old; need >= 1.2b2')"
     )
     try:
-        _run_command([str(python), "-c", _dep_check_cmd])
-    except Exception:
+        subprocess.run(
+            [str(python), "-c", _dep_check_cmd],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError as exc:
+        details = (exc.stderr or exc.stdout or "").strip()
+        if details:
+            log.debug("Runtime dependency check details: %s", details)
         log.info(
             "Runtime dependency check failed in %s. Triggering full setup.",
             python,

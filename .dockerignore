@@ -38,3 +38,11 @@ scripts/*
 **/.pytest_cache/
 **/.ruff_cache/
 **/.mypy_cache/
+
+# Local runtime resources are generated from committed *.default.json templates
+# and may contain developer-specific/private endpoints. Never bake them into
+# Docker images built from the repo root.
+OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/connectionpoints.json
+OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/connectionpoints.json.*
+OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/settings.json
+OPC_UA_Clients/Release2/IJT_Web_Client/src/resources/settings.json.*

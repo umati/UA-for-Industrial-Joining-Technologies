@@ -642,6 +642,40 @@ async def test_handle_connect_to_creates_new_connection(fake_websocket):
     assert interface.connection_list[ep] is mock_conn
 
 
+@pytest.mark.asyncio
+async def test_handle_test_connection_reuses_existing_open_connection_without_terminating():
+    interface = IJTInterface()
+    ep = "opc.tcp://host:4840"
+    existing = AsyncMock()
+    existing.is_connection_open = AsyncMock(return_value=True)
+    existing.terminate = AsyncMock()
+    interface.connection_list[ep] = existing
+
+    result = await interface.handle_test_connection(ep)
+
+    assert result == {"command": "connection established", "endpoint": ep}
+    existing.terminate.assert_not_awaited()
+    assert interface.connection_list[ep] is existing
+
+
+@pytest.mark.asyncio
+async def test_handle_test_connection_uses_temporary_connection_without_storing(fake_websocket):
+    from unittest.mock import patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://new-host:4840"
+    temporary = AsyncMock()
+    temporary.connect = AsyncMock(return_value={"command": "connection established", "endpoint": ep})
+    temporary.terminate = AsyncMock()
+
+    with patch("python.ijt_interface.Connection", return_value=temporary):
+        result = await interface.handle_test_connection(ep)
+
+    assert result == {"command": "connection established", "endpoint": ep}
+    temporary.terminate.assert_awaited_once()
+    assert ep not in interface.connection_list
+
+
 # ===========================================================================
 # handle() — "get connectionpoints" command (line 278)
 # ===========================================================================
@@ -666,13 +700,13 @@ async def test_handle_get_connectionpoints_command(fake_websocket, decode_last_m
 
 
 # ===========================================================================
-# handle() — "set connectionpoints" returns early, no send (lines 280-281)
+# handle() — "set connectionpoints" returns response payload
 # ===========================================================================
 
 
 @pytest.mark.asyncio
-async def test_handle_set_connectionpoints_returns_early_no_websocket_send(fake_websocket):
-    """handle() returns early after 'set connectionpoints' — no websocket.send call."""
+async def test_handle_set_connectionpoints_returns_response(fake_websocket, decode_last_message):
+    """handle() returns an explicit response after 'set connectionpoints'."""
     from unittest.mock import AsyncMock, patch
 
     interface = IJTInterface()
@@ -680,11 +714,114 @@ async def test_handle_set_connectionpoints_returns_early_no_websocket_send(fake_
     with patch.object(
         interface,
         "handle_set_connection_points",
-        new=AsyncMock(return_value=None),
+        new=AsyncMock(return_value={"saved": True, "count": 0}),
     ):
         await interface.handle(fake_websocket, {"command": "set connectionpoints", "endpoint": ""})
 
-    assert fake_websocket.sent_messages == []
+    payload = decode_last_message(fake_websocket)
+    assert payload["command"] == "set connectionpoints"
+    assert payload["data"] == {"saved": True, "count": 0}
+
+
+@pytest.mark.asyncio
+async def test_handle_set_connectionpoints_rejects_invalid_endpoint():
+    interface = IJTInterface()
+    result = await interface.handle_set_connection_points(
+        {
+            "connectionpoints": [
+                {"name": "Bad", "address": "http://invalid", "autoconnect": False},
+            ]
+        }
+    )
+    assert "exception" in result
+
+
+@pytest.mark.asyncio
+async def test_handle_set_connectionpoints_rejects_duplicate_endpoint():
+    interface = IJTInterface()
+    result = await interface.handle_set_connection_points(
+        {
+            "connectionpoints": [
+                {"name": "First", "address": "opc.tcp://host:4840", "autoconnect": False},
+                {"name": "Second", "address": "opc.tcp://HOST:4840", "autoconnect": False},
+            ]
+        }
+    )
+    assert "duplicates endpoint address" in result["exception"]
+
+
+@pytest.mark.asyncio
+async def test_handle_get_connectionpoints_normalizes_schema(tmp_path, monkeypatch):
+    interface = IJTInterface()
+    monkeypatch.setattr(interface, "_resource_path", lambda filename: tmp_path / filename)
+    monkeypatch.setattr(interface, "_ensure_runtime_resource", lambda filename: tmp_path / filename)
+    (tmp_path / "connectionpoints.json").write_text(
+        json.dumps({"connectionpoints": [{"Name": "LOCAL", "Address": "opc.tcp://x:4840"}]}),
+        encoding="utf-8",
+    )
+    data = await interface.handle_get_connection_points()
+    assert data.get("schema_version") == 1
+    assert isinstance(data.get("connectionpoints"), list)
+
+
+@pytest.mark.asyncio
+async def test_handle_get_connectionpoints_recovers_from_backup_when_runtime_json_is_corrupt(tmp_path, monkeypatch):
+    interface = IJTInterface()
+    monkeypatch.setattr(interface, "_resource_path", lambda filename: tmp_path / filename)
+    monkeypatch.setattr(interface, "_ensure_runtime_resource", lambda filename: tmp_path / filename)
+    (tmp_path / "connectionpoints.json").write_text("{broken json", encoding="utf-8")
+    (tmp_path / "connectionpoints.json.bak").write_text(
+        json.dumps(
+            {"connectionpoints": [{"name": "Backup", "address": "opc.tcp://backup:4840", "autoconnect": False}]}
+        ),
+        encoding="utf-8",
+    )
+
+    data = await interface.handle_get_connection_points()
+
+    assert "exception" not in data
+    assert data["connectionpoints"][0]["name"] == "Backup"
+    assert data["connectionpoints"][0]["address"] == "opc.tcp://backup:4840"
+
+
+@pytest.mark.asyncio
+async def test_handle_get_default_connectionpoints_reads_default_template(tmp_path, monkeypatch):
+    interface = IJTInterface()
+    default_file = tmp_path / "connectionpoints.default.json"
+    default_file.write_text(
+        json.dumps(
+            {"connectionpoints": [{"name": "LOCAL", "address": "opc.tcp://127.0.0.1:40451", "autoconnect": True}]}
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(interface, "_resource_default_path", lambda filename: default_file)
+
+    data = await interface.handle_get_default_connection_points()
+
+    assert data["schema_version"] == 1
+    assert data["connectionpoints"][0]["name"] == "LOCAL"
+
+
+@pytest.mark.asyncio
+async def test_handle_reset_connectionpoints_persists_defaults(tmp_path, monkeypatch):
+    interface = IJTInterface()
+    runtime_file = tmp_path / "connectionpoints.json"
+    default_file = tmp_path / "connectionpoints.default.json"
+    default_file.write_text(
+        json.dumps(
+            {"connectionpoints": [{"name": "LOCAL", "address": "opc.tcp://127.0.0.1:40451", "autoconnect": True}]}
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(interface, "_resource_path", lambda filename: runtime_file)
+    monkeypatch.setattr(interface, "_resource_default_path", lambda filename: default_file)
+
+    result = await interface.handle_reset_connection_points()
+
+    assert result["saved"] is True
+    assert runtime_file.exists()
+    saved = json.loads(runtime_file.read_text(encoding="utf-8"))
+    assert saved["connectionpoints"][0]["name"] == "LOCAL"
 
 
 # ===========================================================================
@@ -738,6 +875,27 @@ async def test_handle_connect_to_command(fake_websocket, decode_last_message):
     assert payload["data"]["command"] == "connection established"
 
 
+@pytest.mark.asyncio
+async def test_handle_test_connection_command(fake_websocket, decode_last_message):
+    """handle() routes 'test connection' to non-invasive endpoint probing."""
+    from unittest.mock import patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://host:4840"
+
+    with patch.object(
+        interface,
+        "handle_test_connection",
+        new=AsyncMock(return_value={"command": "connection established", "endpoint": ep}),
+    ):
+        await interface.handle(fake_websocket, {"command": "test connection", "endpoint": ep, "uniqueid": "test-1"})
+
+    payload = decode_last_message(fake_websocket)
+    assert payload["command"] == "test connection"
+    assert payload["uniqueid"] == "test-1"
+    assert payload["data"]["command"] == "connection established"
+
+
 # ===========================================================================
 # handle() — inner exception sets return_values (lines 295-297)
 # ===========================================================================
@@ -781,7 +939,7 @@ def test_ijt_interface_del_is_callable():
 @pytest.mark.asyncio
 async def test_handle_get_connection_points_returns_data_when_file_exists(tmp_path):
     """handle_get_connection_points reads and normalises JSON via a patched hermetic path."""
-    cp_data = {"ConnectionPoint1": {"Url": "opc.tcp://localhost:4840", "Name": "Test"}}
+    cp_data = {"connectionpoints": [{"Name": "Test", "Address": "opc.tcp://localhost:4840", "AutoConnect": True}]}
     cp_file = tmp_path / "connectionpoints.json"
     cp_file.write_text(json.dumps(cp_data), encoding="utf-8")
 
@@ -791,9 +949,10 @@ async def test_handle_get_connection_points_returns_data_when_file_exists(tmp_pa
     result = await interface.handle_get_connection_points()
 
     assert "exception" not in result
-    assert "connectionpoint1" in result  # key normalised to lower-case
-    assert result["connectionpoint1"]["url"] == "opc.tcp://localhost:4840"
-    assert result["connectionpoint1"]["name"] == "Test"
+    assert result.get("schema_version") == 1
+    assert isinstance(result.get("connectionpoints"), list)
+    assert result["connectionpoints"][0]["address"] == "opc.tcp://localhost:4840"
+    assert result["connectionpoints"][0]["name"] == "Test"
 
 
 @pytest.mark.asyncio
@@ -844,7 +1003,7 @@ def test_runtime_local_endpoint_is_inserted_when_missing(monkeypatch):
     assert result["connectionpoints"][0] == {
         "name": "LOCAL",
         "address": "opc.tcp://localhost:40463",
-        "autoconnect": True,
+        "autoconnect": False,
     }
     assert result["connectionpoints"][1]["name"] == "REMOTE"
 
@@ -859,7 +1018,7 @@ def test_runtime_local_endpoint_handles_non_dict_payload(monkeypatch):
             {
                 "name": "LOCAL",
                 "address": "opc.tcp://localhost:40463",
-                "autoconnect": True,
+                "autoconnect": False,
             }
         ]
     }

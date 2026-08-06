@@ -642,6 +642,22 @@ production/browser use unless you intentionally want to replace the served `LOCA
 The committed `connectionpoints.default.json` keeps only the shared `LOCAL` endpoint. The backend creates
 the ignored runtime `connectionpoints.json` from that template, so developers can add local controller endpoints
 without breaking repository hygiene checks.
+`connectionpoints.json` uses a normalized schema with `schema_version` and a `connectionpoints` list. Server-profile
+saves must acknowledge success or failure over WebSocket, validate each endpoint row, and write atomically through
+`connectionpoints.json.tmp` before replacing the runtime file. Keep one `.bak` backup when replacing an existing file.
+If the runtime JSON is corrupt or partially written, the backend should load the `.bak` backup before returning an
+exception. Duplicate endpoint addresses are not valid server profiles; preserve the first valid row and reject/filter
+later duplicates case-insensitively.
+The Servers UI must treat endpoint reachability as per-row state: unreachable endpoints may show `Failed`, but they
+must not block saving other valid rows or adding a new valid OPC UA endpoint. Invalid rows should show inline status
+messages in the row status column, and save requests must clear their in-flight state if the backend does not
+acknowledge within the bounded timeout. Keep the user workflow simple: add or edit rows, optionally use `Test` to
+check reachability without opening a tab, click `Save`, and use `Export`, `Import`, or `Reset to defaults` for profile
+handoff and recovery. The `Test` action must use the backend's non-invasive `test connection` command; it must not
+send normal `connect to` / `terminate connection` messages that would replace or close an established endpoint tab.
+Tests should cover backend schema normalization/validation, backup recovery, default reset, duplicate
+rejection/filtering, frontend invalid-row status behavior, save acknowledgement timeout cleanup, and the
+export/import/reset/test controls.
 
 Runner-owned OPC UA simulator launches write `opcua-server-<port>.out.log` and
 `opcua-server-<port>.err.log` under `test-results/` (or `IJT_WEB_TEST_RESULTS_DIR`

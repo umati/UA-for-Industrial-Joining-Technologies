@@ -34,7 +34,7 @@ function workerOffset (testInfo) {
   return testInfo.parallelIndex ?? testInfo.workerIndex ?? 0
 }
 
-function runtimeForWorker (testInfo) {
+export function runtimeForWorker (testInfo) {
   const offset = workerOffset(testInfo)
   const wsUrl = withPortOffset(WS_URL, offset)
   const opcuaEndpoint = withPortOffset(OPCUA_ENDPOINT, offset)

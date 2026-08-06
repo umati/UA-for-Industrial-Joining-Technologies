@@ -281,6 +281,66 @@ def test_sync_optional_private_submodules_backs_up_loose_folder_before_update(tm
     assert any("update" in cmd and "--checkout" in cmd and "--remote" in cmd for cmd in calls)
 
 
+def test_sync_optional_private_submodules_captures_auth_failure_output(tmp_path, monkeypatch, caplog):
+    repo_root = tmp_path / "repo"
+    git_path = "OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope"
+    (repo_root / ".gitmodules").parent.mkdir(parents=True, exist_ok=True)
+    (repo_root / ".gitmodules").write_text(f"path = {git_path}\n", encoding="utf-8")
+    monkeypatch.setattr(sp, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(sp, "_ENV_IS_PRE_ISOLATED", False)
+    monkeypatch.setattr(sp.shutil, "which", lambda name: "/usr/bin/git" if name == "git" else None)
+
+    kwargs_seen: list[dict] = []
+
+    def _fake_run(cmd, **kwargs):
+        kwargs_seen.append(kwargs)
+        if "update" in cmd:
+            raise subprocess.CalledProcessError(
+                128,
+                cmd,
+                stderr="fatal: could not read Password for 'https://github.com': terminal prompts disabled\n",
+            )
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(sp.subprocess, "run", _fake_run)
+
+    with caplog.at_level("WARNING"):
+        sp._sync_optional_private_submodules()
+
+    assert all(kwargs["stdout"] == subprocess.PIPE for kwargs in kwargs_seen)
+    assert all(kwargs["stderr"] == subprocess.PIPE for kwargs in kwargs_seen)
+    assert "GitHub authentication is not available" in caplog.text
+    assert "fatal:" not in caplog.text
+
+
+def test_sync_optional_private_submodules_preserves_git_credential_helpers(tmp_path, monkeypatch):
+    repo_root = tmp_path / "repo"
+    git_path = "OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope"
+    (repo_root / ".gitmodules").parent.mkdir(parents=True, exist_ok=True)
+    (repo_root / ".gitmodules").write_text(f"path = {git_path}\n", encoding="utf-8")
+    monkeypatch.setattr(sp, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(sp, "_ENV_IS_PRE_ISOLATED", False)
+    monkeypatch.setattr(sp.shutil, "which", lambda name: "/usr/bin/git" if name == "git" else None)
+    monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
+    monkeypatch.delenv("GIT_CONFIG_KEY_0", raising=False)
+    monkeypatch.delenv("GIT_CONFIG_VALUE_0", raising=False)
+
+    env_seen: list[dict[str, str]] = []
+
+    def _fake_run(cmd, **kwargs):
+        env_seen.append(kwargs["env"])
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(sp.subprocess, "run", _fake_run)
+
+    sp._sync_optional_private_submodules()
+
+    assert env_seen
+    assert all("GIT_CONFIG_COUNT" not in env for env in env_seen)
+    assert all("GIT_CONFIG_KEY_0" not in env for env in env_seen)
+    assert all("GIT_CONFIG_VALUE_0" not in env for env in env_seen)
+
+
 # =============================================================================
 # _find_simulator_executable
 # =============================================================================
@@ -454,13 +514,13 @@ class TestIsRuntimeReady:
         monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm" if npm else None)
         monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx" if npx else None)
         if deps_ok:
-            monkeypatch.setattr(sp, "_run_command", lambda cmd, **_kw: None)
+            monkeypatch.setattr(sp.subprocess, "run", lambda cmd, **_kw: subprocess.CompletedProcess(cmd, 0))
         else:
 
             def _fail(*a, **_kw):
-                raise Exception("missing dep")
+                raise subprocess.CalledProcessError(1, a[0], stderr="ModuleNotFoundError: No module named 'asyncua'")
 
-            monkeypatch.setattr(sp, "_run_command", _fail)
+            monkeypatch.setattr(sp.subprocess, "run", _fail)
         monkeypatch.setattr(sp, "_get_last_setup_age_days", lambda: age_days)
         monkeypatch.monkeypatch_env = monkeypatch.setenv("ENV_MAX_AGE_DAYS", "14")
 
@@ -483,6 +543,28 @@ class TestIsRuntimeReady:
     def test_not_ready_when_deps_missing(self, monkeypatch, fs):
         self._patch_basics(monkeypatch, Path("/fake"), deps_ok=False)
         assert sp._is_runtime_ready() is False
+
+    def test_dependency_probe_captures_missing_dependency_traceback(self, monkeypatch, fs, caplog):
+        self._patch_basics(monkeypatch, Path("/fake"), deps_ok=True)
+        calls: list[dict] = []
+
+        def _fail(cmd, **kwargs):
+            calls.append(kwargs)
+            raise subprocess.CalledProcessError(
+                1,
+                cmd,
+                stderr="Traceback...\nModuleNotFoundError: No module named 'asyncua'\n",
+            )
+
+        monkeypatch.setattr(sp.subprocess, "run", _fail)
+
+        with caplog.at_level("INFO"):
+            assert sp._is_runtime_ready() is False
+
+        assert calls[0]["stdout"] == subprocess.PIPE
+        assert calls[0]["stderr"] == subprocess.PIPE
+        assert "Runtime dependency check failed" in caplog.text
+        assert "Traceback" not in caplog.text
 
     def test_not_ready_when_env_stale(self, monkeypatch, fs):
         self._patch_basics(monkeypatch, Path("/fake"), age_days=30)
@@ -725,7 +807,7 @@ class TestVenvScenarios:
         monkeypatch.setattr(sp, "_get_python_path", lambda: fake_python)
         monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm")
         monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx")
-        monkeypatch.setattr(sp, "_run_command", lambda cmd, **_kw: None)
+        monkeypatch.setattr(sp.subprocess, "run", lambda cmd, **_kw: subprocess.CompletedProcess(cmd, 0))
         monkeypatch.setattr(sp, "_get_last_setup_age_days", lambda: 1)
         monkeypatch.setenv("ENV_MAX_AGE_DAYS", "14")
         assert sp._is_runtime_ready() is True
@@ -2368,7 +2450,7 @@ class TestIsRuntimeReadyExtended:
         monkeypatch.setattr(sp, "_get_python_path", lambda: python_path)
         monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm")
         monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx")
-        monkeypatch.setattr(sp, "_run_command", lambda cmd, **kw: None)
+        monkeypatch.setattr(sp.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0))
         monkeypatch.setattr(sp, "_get_last_setup_age_days", lambda: None)  # triggers fallback
         monkeypatch.setattr(sp, "_get_environment_age_days", lambda: 3)
         monkeypatch.setenv("ENV_MAX_AGE_DAYS", "14")
@@ -2385,7 +2467,7 @@ class TestIsRuntimeReadyExtended:
         monkeypatch.setattr(sp, "_get_python_path", lambda: python_path)
         monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm")
         monkeypatch.setattr(sp, "_get_npx_path", lambda: "/usr/bin/npx")
-        monkeypatch.setattr(sp, "_run_command", lambda cmd, **kw: None)
+        monkeypatch.setattr(sp.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0))
         monkeypatch.setattr(sp, "_get_last_setup_age_days", lambda: None)
         monkeypatch.setattr(sp, "_get_environment_age_days", lambda: 30)
         monkeypatch.setenv("ENV_MAX_AGE_DAYS", "14")

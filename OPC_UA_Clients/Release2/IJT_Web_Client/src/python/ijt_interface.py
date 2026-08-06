@@ -68,6 +68,7 @@ class IJTInterface:
         "connectionpoints.json": "connectionpoints.default.json",
         "settings.json": "settings.default.json",
     }
+    _CONNECTIONPOINTS_SCHEMA_VERSION: int = 1
 
     # Optional host plugins. A private view plugin (checked out as a git
     # submodule) may drop a host module at
@@ -170,13 +171,19 @@ class IJTInterface:
         if not isinstance(points, list):
             points = []
 
-        local_point = {"name": "LOCAL", "address": endpoint, "autoconnect": True}
+        local_point = {"name": "LOCAL", "address": endpoint, "autoconnect": False}
         updated_points: list[Any] = []
         replaced = False
 
         for point in points:
             if isinstance(point, dict) and str(point.get("name", "")).lower() in {"local", "localhost"}:
-                updated_points.append(local_point)
+                updated_points.append(
+                    {
+                        **local_point,
+                        "name": point.get("name", "LOCAL") or "LOCAL",
+                        "autoconnect": point.get("autoconnect", False) is True,
+                    }
+                )
                 replaced = True
             else:
                 updated_points.append(point)
@@ -186,6 +193,57 @@ class IJTInterface:
 
         updated_payload["connectionpoints"] = updated_points
         return updated_payload
+
+    @staticmethod
+    def _is_valid_endpoint_address(address: Any) -> bool:
+        if not isinstance(address, str):
+            return False
+        value = address.strip()
+        if not value:
+            return False
+        return value.startswith("opc.tcp://")
+
+    @classmethod
+    def _normalize_connectionpoints_payload(cls, payload: Any) -> dict:
+        if not isinstance(payload, dict):
+            payload = {}
+        lowered = cls._normalize_json_keys_lower(payload)
+        raw_points = lowered.get("connectionpoints")
+        if not isinstance(raw_points, list):
+            raw_points = [
+                value for key, value in lowered.items() if key.startswith("connectionpoint") and isinstance(value, dict)
+            ]
+        points: list[dict[str, Any]] = []
+        for raw_point in raw_points:
+            if not isinstance(raw_point, dict):
+                continue
+            address = raw_point.get("address", raw_point.get("url", ""))
+            points.append(
+                {
+                    "name": str(raw_point.get("name", "")).strip(),
+                    "address": str(address).strip(),
+                    "autoconnect": bool(raw_point.get("autoconnect", False)),
+                }
+            )
+        return {
+            "schema_version": cls._CONNECTIONPOINTS_SCHEMA_VERSION,
+            "connectionpoints": points,
+        }
+
+    def _read_connectionpoints_payload_with_backup(self, path: Path) -> dict:
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception as primary_exc:
+            backup_path = path.with_suffix(path.suffix + ".bak")
+            if not backup_path.exists():
+                raise primary_exc
+            try:
+                ijt_log.warning(f"Connection points file is unreadable; loading backup {backup_path}: {primary_exc}")
+                return json.loads(backup_path.read_text(encoding="utf-8"))
+            except Exception as backup_exc:
+                raise RuntimeError(
+                    f"Could not read connection points file or backup: {primary_exc}; backup: {backup_exc}"
+                ) from backup_exc
 
     async def ensure_connection_open(self, connection: Connection) -> bool:
         """Coroutine. Ensure a connection is open, reconnecting if necessary.
@@ -259,14 +317,25 @@ class IJTInterface:
         """
         try:
             path = self._ensure_runtime_resource("connectionpoints.json")
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            payload = self._normalize_json_keys_lower(payload)
+            payload = self._read_connectionpoints_payload_with_backup(path)
+            payload = self._normalize_connectionpoints_payload(payload)
             return self._apply_runtime_local_endpoint(payload)
         except Exception as exc:
             ijt_log.error(f"Error reading connection points: {exc}")
             return {"exception": str(exc)}
 
-    async def handle_set_connection_points(self, data: dict) -> None:
+    async def handle_get_default_connection_points(self) -> dict:
+        """Return the committed default connection-points configuration."""
+        try:
+            default_path = self._resource_default_path("connectionpoints.json")
+            payload = json.loads(default_path.read_text(encoding="utf-8"))
+            payload = self._normalize_connectionpoints_payload(payload)
+            return self._apply_runtime_local_endpoint(payload)
+        except Exception as exc:
+            ijt_log.error(f"Error reading default connection points: {exc}")
+            return {"exception": str(exc)}
+
+    async def handle_set_connection_points(self, data: dict) -> dict:
         """Coroutine. Persist the supplied connection-points configuration to disk.
 
         Args:
@@ -275,11 +344,45 @@ class IJTInterface:
         """
         path = self._resource_path("connectionpoints.json")
         try:
-            normalized_data = self._normalize_json_keys_lower(data)
+            normalized_data = self._normalize_connectionpoints_payload(data)
+            points = normalized_data.get("connectionpoints")
+            if not isinstance(points, list):
+                return {"exception": "Invalid payload: 'connectionpoints' must be a list."}
+            for index, point in enumerate(points):
+                if not str(point.get("name", "")).strip():
+                    return {"exception": f"Invalid payload: row {index + 1} has empty name."}
+                if not self._is_valid_endpoint_address(point.get("address")):
+                    return {"exception": f"Invalid payload: row {index + 1} has invalid endpoint address."}
+            seen_addresses: set[str] = set()
+            for index, point in enumerate(points):
+                address_key = str(point.get("address", "")).strip().lower()
+                if address_key in seen_addresses:
+                    return {"exception": f"Invalid payload: row {index + 1} duplicates endpoint address."}
+                seen_addresses.add(address_key)
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(normalized_data, indent=2) + "\n", encoding="utf-8")
+            tmp_path = path.with_suffix(path.suffix + ".tmp")
+            bak_path = path.with_suffix(path.suffix + ".bak")
+            with tmp_path.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps(normalized_data, indent=2) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            if path.exists():
+                path.replace(bak_path)
+            tmp_path.replace(path)
+            return {"saved": True, "count": len(points)}
         except Exception as exc:
             ijt_log.error(f"Error writing connection points: {exc}")
+            return {"exception": str(exc)}
+
+    async def handle_reset_connection_points(self) -> dict:
+        """Reset the runtime connection-points file to the committed defaults."""
+        defaults = await self.handle_get_default_connection_points()
+        if "exception" in defaults:
+            return defaults
+        result = await self.handle_set_connection_points(defaults)
+        if "exception" in result:
+            return result
+        return {**result, "connectionpoints": defaults.get("connectionpoints", [])}
 
     async def handle_get_settings(self) -> dict:
         """Coroutine. Read and return the saved application settings.
@@ -346,6 +449,25 @@ class IJTInterface:
             ijt_log.error(f"Exception in connect to '{endpoint}': {exc}")
             return {"exception": str(exc)}
 
+    async def handle_test_connection(self, endpoint: str) -> dict:
+        """Probe an OPC UA endpoint without replacing or closing any open tab connection."""
+        existing_connection = self.connection_list.get(endpoint)
+        if existing_connection:
+            try:
+                if await existing_connection.is_connection_open():
+                    return {"command": "connection established", "endpoint": endpoint}
+            except Exception as exc:
+                ijt_log.debug(f"Existing connection probe failed for '{endpoint}': {exc}")
+
+        connection = Connection(endpoint, None)
+        try:
+            return await connection.connect()
+        except Exception as exc:
+            ijt_log.error(f"Exception in test connection for '{endpoint}': {exc}")
+            return {"exception": str(exc)}
+        finally:
+            await connection.terminate()
+
     async def handle_terminate_connection(self, endpoint: str) -> dict:
         """Coroutine. Terminate the OPC UA connection for the given endpoint.
 
@@ -404,9 +526,12 @@ class IJTInterface:
         try:
             if command == "get connectionpoints":
                 return_values = await self.handle_get_connection_points()
+            elif command == "get default connectionpoints":
+                return_values = await self.handle_get_default_connection_points()
             elif command == "set connectionpoints":
-                await self.handle_set_connection_points(data)
-                return
+                return_values = await self.handle_set_connection_points(data)
+            elif command == "reset connectionpoints":
+                return_values = await self.handle_reset_connection_points()
             elif command == "get settings":
                 return_values = await self.handle_get_settings()
             elif command == "set settings":
@@ -416,6 +541,8 @@ class IJTInterface:
                 return_values = await self.call_connection(data, "read_product_instance_uri")
             elif command == "connect to":
                 return_values = await self.handle_connect_to(endpoint, websocket)
+            elif command == "test connection":
+                return_values = await self.handle_test_connection(endpoint)
             elif command == "terminate connection":
                 return_values = await self.handle_terminate_connection(endpoint)
             elif command in self._plugin_commands:

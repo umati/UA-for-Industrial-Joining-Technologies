@@ -35,7 +35,7 @@
 
 .serversScreen .serverRow {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(260px, 2fr) 120px 110px;
+  grid-template-columns: minmax(120px, 1fr) minmax(260px, 2fr) 120px 90px minmax(130px, 1fr) 110px;
   align-items: center;
   gap: var(--space-8);
   margin: 0;
@@ -49,6 +49,8 @@
 .serversScreen .serverName,
 .serversScreen .serverEndpoint,
 .serversScreen .serverConnect,
+.serversScreen .serverTest,
+.serversScreen .serverStatus,
 .serversScreen .serverDelete {
   width: auto;
   padding: 0;
@@ -70,9 +72,29 @@
   color: var(--ui-text-main);
 }
 
-.serversScreen .serverConnect {
+.serversScreen .serverName input.inputError,
+.serversScreen .serverEndpoint input.inputError {
+  border-color: var(--status-error, #ff6b6b);
+  box-shadow: 0 0 0 1px var(--status-error, #ff6b6b);
+}
+
+.serversScreen .serverConnect,
+.serversScreen .serverTest {
   display: flex;
   justify-content: center;
+}
+
+.serversScreen .serverStatus {
+  font-size: 0.9em;
+}
+
+.serversScreen .serversMessage {
+  margin-top: var(--space-8);
+  color: var(--ui-text-main);
+}
+
+.serversScreen .serversImportInput {
+  display: none;
 }
 
 .serversScreen .serversActions {
@@ -103,6 +125,8 @@
   }
 
   .serversScreen .serverConnect,
+  .serversScreen .serverTest,
+  .serversScreen .serverStatus,
   .serversScreen .serverDelete,
   .serversScreen .serverName,
   .serversScreen .serverEndpoint {
