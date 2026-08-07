@@ -32,6 +32,21 @@ The backend creates `connectionpoints.json` and `settings.json` locally when the
 
 Keep personal controller endpoints and local UI preferences in the generated runtime files only. If a default should apply to every fresh checkout, change the matching `*.default.json` template and keep the runtime file ignored.
 
+`setup_project.py` keeps direct launches independent from tests: it restores the
+normal `LOCAL` profile from the committed template while preserving additional
+profiles, uses `OPCUA_SERVER_URL` only as an explicit direct-runtime server
+override, and removes `OPCUA_TEST_ENDPOINT` and `IJT_RUNTIME_RESOURCES_DIR` from
+the backend launch environment. Runner-managed backends use isolated resource
+directories and dedicated ports. Each Playwright backend worker owns a separate
+runtime-resource directory seeded with its matching `LOCAL` endpoint before the
+backend starts. Browser fixtures also reassert that worker baseline before use
+and restore the prior profile afterward, so failed or restarted workers cannot
+leak Servers-page edits into another worker or a developer runtime profile.
+
+With a lockfile present, setup retries transient `npm ci` failures. If Windows
+still cannot clean stale generated packages, setup removes `node_modules` and
+performs one final deterministic `npm ci` rather than switching install modes.
+
 ## Validation Commands
 
 ```bash

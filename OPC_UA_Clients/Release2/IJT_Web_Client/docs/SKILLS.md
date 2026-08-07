@@ -686,16 +686,24 @@ This client's split live suites auto-launch dedicated server instances on
 assigned root-runner ports (starting at **40463**) through the copy-and-patch
 mechanism: copy the binary, patch `server_configuration.json`, and manage the
 process lifecycle. Port 40451 is never used by this test runner.
+Every managed WebSocket backend, including single-worker runs, receives its own
+result-scoped `IJT_RUNTIME_RESOURCES_DIR`. Multi-worker feature runs seed one
+profile directory per WebSocket port before backend startup; fixtures reassert
+the expected worker `LOCAL` endpoint at test start and restore the prior profile
+at teardown. Worker restart or teardown failure therefore cannot expose another
+worker's empty or Servers-edited profile.
 When the runner sets `OPCUA_TEST_ENDPOINT`, browser fixtures explicitly seed their isolated `LOCAL`
 connection point and restore the exact saved runtime profile afterward. The WebSocket backend must never
-rewrite or persist a server profile from `OPCUA_TEST_ENDPOINT` or `OPCUA_SERVER_URL`; those variables are
-test-process configuration, while `connectionpoints.json` remains the sole source of truth for browser profiles.
+rewrite or persist a server profile from `OPCUA_TEST_ENDPOINT`; that variable is test-process configuration.
+`OPCUA_SERVER_URL` is the explicit direct-launch server override. Direct setup removes test-only endpoint and
+resource-directory variables from the backend environment and restores `LOCAL` from the committed template
+while preserving additional personal profiles.
 The committed `connectionpoints.default.json` keeps only the shared `LOCAL` endpoint. The backend creates
 the ignored runtime `connectionpoints.json` from that template, so developers can add local controller endpoints
 without breaking repository hygiene checks.
 `connectionpoints.json` uses a normalized schema with `schema_version` and a `connectionpoints` list. Server-profile
 saves must acknowledge success or failure over WebSocket, validate each endpoint row, and write atomically through
-`connectionpoints.json.tmp` before replacing the runtime file. Keep one `.bak` backup when replacing an existing file.
+a unique per-write temporary file before replacing the runtime file. Keep one `.bak` backup when replacing an existing file.
 The Servers **Test** action is a single, non-invasive connection probe. It must disable its row while active and
 reject duplicate clicks, while normal user connections retain their resilient retry policy.
 If the runtime JSON is corrupt or partially written, the backend should load the `.bak` backup before returning an

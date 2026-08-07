@@ -14,6 +14,8 @@ import asyncio
 import importlib.util
 import json
 import os
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -493,15 +495,26 @@ class IJTInterface:
                     return {"exception": f"Invalid payload: row {index + 1} duplicates endpoint address."}
                 seen_addresses.add(address_key)
             path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = path.with_suffix(path.suffix + ".tmp")
+            tmp_path = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
             bak_path = path.with_suffix(path.suffix + ".bak")
             with tmp_path.open("w", encoding="utf-8", newline="\n") as handle:
                 handle.write(json.dumps(normalized_data, indent=2) + "\n")
                 handle.flush()
                 os.fsync(handle.fileno())
-            if path.exists():
-                path.replace(bak_path)
-            tmp_path.replace(path)
+            for attempt in range(5):
+                try:
+                    if path.exists():
+                        path.replace(bak_path)
+                    os.replace(tmp_path, path)
+                    break
+                except FileNotFoundError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
             return {"saved": True, "count": len(points)}
         except Exception as exc:
             ijt_log.error(f"Error writing connection points: {exc}")

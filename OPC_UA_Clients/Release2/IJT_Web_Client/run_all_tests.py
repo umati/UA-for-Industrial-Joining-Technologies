@@ -880,6 +880,7 @@ def _maybe_start_websocket_backend(
     *,
     opcua_endpoint: str | None = None,
     log_name: str = "websocket-backend.log",
+    runtime_resources_dir: Path | None = None,
 ) -> tuple[bool, bool, subprocess.Popen | None]:
     """Ensure the local WebSocket backend is listening for Playwright E2E."""
     endpoint = (
@@ -905,6 +906,11 @@ def _maybe_start_websocket_backend(
     env = _subprocess_env({"WS_PORT": str(port)})
     if opcua_endpoint:
         env["OPCUA_TEST_ENDPOINT"] = opcua_endpoint
+    if runtime_resources_dir is not None:
+        from tests.test_infra.backend_manager import seed_runtime_resources
+
+        seed_runtime_resources(runtime_resources_dir, endpoint)
+        env["IJT_RUNTIME_RESOURCES_DIR"] = str(runtime_resources_dir)
     _info(f"Starting WebSocket backend for Playwright E2E on :{port}")
     with open(log_path, "w", encoding="utf-8") as log_file:
         proc = subprocess.Popen(
@@ -2761,7 +2767,12 @@ def _run_with_owned_services(
 
         if need_ws:
             ws_host, ws_port = _parse_ws_host_port(ws_url)
-            ws_started, ws_ready, ws_proc = _maybe_start_websocket_backend(python, ws_host, ws_port)
+            ws_started, ws_ready, ws_proc = _maybe_start_websocket_backend(
+                python,
+                ws_host,
+                ws_port,
+                runtime_resources_dir=_RESULTS_DIR / f"runtime-resources-{ws_port}",
+            )
             if not ws_ready:
                 return _with_simulator_launch_notes(StageResult(name, 1, notes=["WebSocket backend not reachable"]))
 
@@ -2833,6 +2844,7 @@ def _run_playwright_features_with_owned_pool_once(
                 ws_port,
                 opcua_endpoint=opcua_endpoint,
                 log_name=f"websocket-backend-{ws_port}.log",
+                runtime_resources_dir=_RESULTS_DIR / f"runtime-resources-{ws_port}",
             )
             if not started or not ready:
                 return StageResult(name, 1, notes=[f"WebSocket worker {index} failed to start on port {ws_port}"])
@@ -3540,7 +3552,12 @@ def main() -> int:
                     ws_started = False
                     ws_proc: subprocess.Popen | None = None
                     if not ws_ready:
-                        ws_started, ws_ready, ws_proc = _maybe_start_websocket_backend(python, ws_host, ws_port)
+                        ws_started, ws_ready, ws_proc = _maybe_start_websocket_backend(
+                            python,
+                            ws_host,
+                            ws_port,
+                            runtime_resources_dir=_RESULTS_DIR / f"runtime-resources-{ws_port}",
+                        )
                     try:
                         if not _srv_port_open:
                             _skip("playwright-e2e: OPC UA server not available")

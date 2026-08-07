@@ -17,6 +17,25 @@ from typing import Any
 UA_NAMESPACE_URI = "http://opcfoundation.org/UA/"
 
 
+def seed_runtime_resources(runtime_dir: Path, opcua_endpoint: str, *, autoconnect: bool = True) -> None:
+    """Create a deterministic server profile for one managed test backend."""
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": 1,
+        "connectionpoints": [
+            {
+                "name": "LOCAL",
+                "address": opcua_endpoint,
+                "autoconnect": autoconnect,
+            }
+        ],
+    }
+    target = runtime_dir / "connectionpoints.json"
+    temporary = runtime_dir / f"connectionpoints.json.{os.getpid()}.{time.time_ns()}.tmp"
+    temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
+    os.replace(temporary, target)
+
+
 class BackendHealthError(RuntimeError):
     """Raised when the managed backend is not healthy."""
 
@@ -244,10 +263,12 @@ class WebTestBackendManager:
         if self._port_open(self.ws_port):
             raise BackendHealthError(f"WebSocket backend port {self.ws_port} is already in use")
         self.results_root.mkdir(parents=True, exist_ok=True)
+        runtime_resources = self.results_root / "runtime-resources"
+        seed_runtime_resources(runtime_resources, self.opcua_endpoint)
         env = os.environ.copy()
         env["WS_PORT"] = str(self.ws_port)
         env["OPCUA_TEST_ENDPOINT"] = self.opcua_endpoint
-        env["IJT_RUNTIME_RESOURCES_DIR"] = str(self.results_root / "runtime-resources")
+        env["IJT_RUNTIME_RESOURCES_DIR"] = str(runtime_resources)
         with (self.results_root / "websocket.log").open("a", encoding="utf-8") as websocket_log:
             self._ws_proc = subprocess.Popen(  # noqa: S603 - command is internal test infrastructure.
                 [self.python_executable, "index.py"],

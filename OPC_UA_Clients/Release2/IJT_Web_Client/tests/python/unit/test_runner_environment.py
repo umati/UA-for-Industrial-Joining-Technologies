@@ -2210,10 +2210,12 @@ def test_e2e_fixture_passes_runtime_websocket_query():
     assert "function localConnectionPoints" in source
     assert "app: async ({ page, ws }, use, testInfo)" in source
     assert "async function setConnectionPoints" in source
+    assert "async function assertWorkerConnectionPoints" in source
     assert "response.data?.saved !== true" in source
     assert "const connectionPoints = localConnectionPoints(runtime.opcuaEndpoint, { autoconnect: true })" in source
     assert "await setConnectionPoints(ws, connectionPoints)" in source
-    assert "ws.send('set connectionpoints', original.data)" in source
+    assert "await assertWorkerConnectionPoints(ws, runtime.opcuaEndpoint)" in source
+    assert "await setConnectionPoints(ws, original.data)" in source
 
 
 def test_index_marks_backend_backed_app_ready_after_settings_are_applied():
@@ -2348,7 +2350,7 @@ def test_playwright_feature_stage_uses_configurable_timeout(monkeypatch):
 def test_playwright_feature_pool_owns_one_backend_pair_per_worker(monkeypatch):
     runner = _load_runner()
     launched_opcua_ports: list[int] = []
-    launched_ws: list[tuple[int, str | None, str]] = []
+    launched_ws: list[tuple[int, str | None, str, Path | None]] = []
     stopped_opcua_ports: list[int] = []
     stopped_ws_ports: list[int] = []
     stage_call = {}
@@ -2367,8 +2369,16 @@ def test_playwright_feature_pool_owns_one_backend_pair_per_worker(monkeypatch):
         launched_opcua_ports.append(port)
         return runner._OpcuaServerInstance(port=port, proc=FakeProc(port), tmp_dir=None)
 
-    def fake_start_ws(python, host, port, *, opcua_endpoint=None, log_name="websocket-backend.log"):
-        launched_ws.append((port, opcua_endpoint, log_name))
+    def fake_start_ws(
+        python,
+        host,
+        port,
+        *,
+        opcua_endpoint=None,
+        log_name="websocket-backend.log",
+        runtime_resources_dir=None,
+    ):
+        launched_ws.append((port, opcua_endpoint, log_name, runtime_resources_dir))
         return True, True, FakeProc(port)
 
     def fake_stage(ws_url, ui_url, *, workers=None, extra_env=None):
@@ -2401,9 +2411,24 @@ def test_playwright_feature_pool_owns_one_backend_pair_per_worker(monkeypatch):
     assert result.rc == 0
     assert launched_opcua_ports == [4100, 4101, 4102]
     assert launched_ws == [
-        (9000, "opc.tcp://localhost:4100", "websocket-backend-9000.log"),
-        (9001, "opc.tcp://localhost:4101", "websocket-backend-9001.log"),
-        (9002, "opc.tcp://localhost:4102", "websocket-backend-9002.log"),
+        (
+            9000,
+            "opc.tcp://localhost:4100",
+            "websocket-backend-9000.log",
+            runner._RESULTS_DIR / "runtime-resources-9000",
+        ),
+        (
+            9001,
+            "opc.tcp://localhost:4101",
+            "websocket-backend-9001.log",
+            runner._RESULTS_DIR / "runtime-resources-9001",
+        ),
+        (
+            9002,
+            "opc.tcp://localhost:4102",
+            "websocket-backend-9002.log",
+            runner._RESULTS_DIR / "runtime-resources-9002",
+        ),
     ]
     assert stage_call == {
         "ws_url": "ws://localhost:9000",

@@ -86,6 +86,10 @@ SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_S
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
 SETUP_LOCK_FILE = STATE_DIR / "setup.lock"
 RUNTIME_STATE_FILE = STATE_DIR / "runtime_processes.json"
+DIRECT_RUNTIME_ENDPOINT = "opc.tcp://localhost:40451"
+RESOURCE_DIR = PROJECT_DIR / "src" / "resources"
+CONNECTIONPOINTS_DEFAULT_FILE = RESOURCE_DIR / "connectionpoints.default.json"
+CONNECTIONPOINTS_RUNTIME_FILE = RESOURCE_DIR / "connectionpoints.json"
 OPTIONAL_PRIVATE_SUBMODULES: tuple[tuple[str, Path], ...] = (
     (
         "Envelope",
@@ -834,7 +838,7 @@ def _ensure_opc_server_running(endpoint: str, *, allow_launch: bool, context: st
         log.warning(
             "%s: OPC UA endpoint %s is unreachable from WSL. "
             "WSL mode skips auto-launch of the Windows simulator. "
-            "Start the simulator manually on Windows and set OPCUA_TEST_ENDPOINT "
+            "Start the simulator manually on Windows and set OPCUA_SERVER_URL "
             "to a Windows-reachable host (not '%s' if needed), e.g. opc.tcp://<windows-host>:%s.",
             context,
             endpoint,
@@ -1215,16 +1219,39 @@ def _install_js_packages():
     env = os.environ.copy()
     log.info("Installing JavaScript packages...")
 
-    try:
-        if Path("package-lock.json").exists():
-            log.info("Found package-lock.json. Running 'npm ci'...")
-            subprocess.check_call([str(npm), "ci"], env=env)
-        else:
-            log.warning("package-lock.json not found. Running 'npm install' with --legacy-peer-deps...")
+    if Path("package-lock.json").exists():
+        log.info("Found package-lock.json. Running 'npm ci'...")
+        command = [str(npm), "ci"]
+        for attempt in range(1, 4):
+            try:
+                subprocess.check_call(command, env=env)
+                break
+            except subprocess.CalledProcessError as exc:
+                if attempt == 3:
+                    log.error("JavaScript package installation failed after %s attempts: %s", attempt, exc.cmd)
+                    sys.exit(1)
+                if attempt == 2:
+                    node_modules = Path("node_modules")
+                    log.warning(
+                        "npm ci failed twice; removing the generated node_modules directory before the final retry."
+                    )
+                    _force_rmtree(node_modules)
+                    if node_modules.exists():
+                        log.error(
+                            "Could not clean node_modules. Stop processes using files under %s and rerun setup.",
+                            node_modules.resolve(),
+                        )
+                        sys.exit(1)
+                else:
+                    log.warning("npm ci failed; retrying after a short delay.")
+                time.sleep(1.0)
+    else:
+        log.warning("package-lock.json not found. Running 'npm install' with --legacy-peer-deps...")
+        try:
             subprocess.check_call([str(npm), "install", "--legacy-peer-deps"], env=env)
-    except subprocess.CalledProcessError as e:
-        log.error("JavaScript package installation failed. Command failed: %s", e.cmd)
-        sys.exit(1)
+        except subprocess.CalledProcessError as exc:
+            log.error("JavaScript package installation failed. Command failed: %s", exc.cmd)
+            sys.exit(1)
 
     # Log a couple of versions to assist troubleshooting
     try:
@@ -1329,6 +1356,62 @@ def _start_server(args):
         return None
 
 
+def _direct_runtime_environment() -> dict[str, str]:
+    """Return a launch environment without test-only resource or endpoint overrides."""
+    env = os.environ.copy()
+    env.pop("IJT_RUNTIME_RESOURCES_DIR", None)
+    env.pop("OPCUA_TEST_ENDPOINT", None)
+    return env
+
+
+def _direct_runtime_endpoint() -> str:
+    """Return the direct-launch endpoint, independent from test-runner configuration."""
+    return os.getenv("OPCUA_SERVER_URL", DIRECT_RUNTIME_ENDPOINT)
+
+
+def _restore_direct_runtime_connectionpoints() -> None:
+    """Restore the normal LOCAL profile while preserving additional user profiles."""
+    default_payload = json.loads(CONNECTIONPOINTS_DEFAULT_FILE.read_text(encoding="utf-8"))
+    default_points = default_payload.get("connectionpoints", [])
+    default_local = next(
+        (point for point in default_points if str(point.get("name", "")).strip().upper() == "LOCAL"),
+        {
+            "name": "LOCAL",
+            "address": DIRECT_RUNTIME_ENDPOINT,
+            "autoconnect": False,
+        },
+    )
+
+    existing_points: list[dict[str, Any]] = []
+    if CONNECTIONPOINTS_RUNTIME_FILE.exists():
+        try:
+            existing_payload = json.loads(CONNECTIONPOINTS_RUNTIME_FILE.read_text(encoding="utf-8"))
+            raw_points = existing_payload.get("connectionpoints", [])
+            if isinstance(raw_points, list):
+                existing_points = [point for point in raw_points if isinstance(point, dict)]
+        except (OSError, json.JSONDecodeError) as exc:
+            log.warning("Replacing unreadable runtime connection profile: %s", exc)
+
+    non_local_points = [point for point in existing_points if str(point.get("name", "")).strip().upper() != "LOCAL"]
+    payload = {
+        "schema_version": default_payload.get("schema_version", 1),
+        "connectionpoints": [default_local, *non_local_points],
+    }
+    serialized = json.dumps(payload, indent=2) + "\n"
+    if CONNECTIONPOINTS_RUNTIME_FILE.exists():
+        with contextlib.suppress(OSError):
+            if CONNECTIONPOINTS_RUNTIME_FILE.read_text(encoding="utf-8") == serialized:
+                return
+
+    CONNECTIONPOINTS_RUNTIME_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = CONNECTIONPOINTS_RUNTIME_FILE.with_name(
+        f"{CONNECTIONPOINTS_RUNTIME_FILE.name}.{os.getpid()}.{time.time_ns()}.tmp"
+    )
+    temporary.write_text(serialized, encoding="utf-8", newline="\n")
+    os.replace(temporary, CONNECTIONPOINTS_RUNTIME_FILE)
+    log.info("Restored direct-launch LOCAL endpoint to %s.", default_local["address"])
+
+
 def _run_index():
     python = _get_python_path()
     try:
@@ -1349,7 +1432,11 @@ def _run_index():
             popen_kwargs = {}
             if IS_WINDOWS:
                 popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-            return subprocess.Popen([str(python), "index.py"], **popen_kwargs)
+            return subprocess.Popen(
+                [str(python), "index.py"],
+                env=_direct_runtime_environment(),
+                **popen_kwargs,
+            )
         except Exception as e:
             log.error("Failed to run index.py: %s", e)
     else:
@@ -1780,7 +1867,8 @@ def main():
         if args.run_tests or args.integration_tests:
             _run_tests_in_venv(integration=args.integration_tests)
             return
-        endpoint = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
+        _restore_direct_runtime_connectionpoints()
+        endpoint = _direct_runtime_endpoint()
         _ensure_opc_server_running(
             endpoint,
             allow_launch=True,
@@ -1831,7 +1919,8 @@ def main():
     if args.run_tests or args.integration_tests:
         _run_tests_in_venv(integration=args.integration_tests)
         return
-    endpoint = os.getenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40451")
+    _restore_direct_runtime_connectionpoints()
+    endpoint = _direct_runtime_endpoint()
     _ensure_opc_server_running(
         endpoint,
         allow_launch=True,

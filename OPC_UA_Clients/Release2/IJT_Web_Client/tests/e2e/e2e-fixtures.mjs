@@ -77,6 +77,17 @@ async function setConnectionPoints (ws, connectionPoints) {
   }
 }
 
+async function assertWorkerConnectionPoints (ws, endpoint) {
+  const response = await ws.send('get connectionpoints')
+  const points = response.data?.connectionpoints
+  const local = Array.isArray(points) ? points.find((point) => point?.name === 'LOCAL') : null
+  if (local?.address !== endpoint) {
+    throw new Error(
+      `Worker profile mismatch: expected LOCAL ${endpoint}, received ${local?.address ?? 'missing'}`
+    )
+  }
+}
+
 async function waitForBackendReachable (wsUrl, timeoutMs = 10_000, intervalMs = 500) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -102,12 +113,13 @@ export const test = base.extend({
     const original = await ws.send('get connectionpoints')
     const connectionPoints = localConnectionPoints(runtime.opcuaEndpoint, { autoconnect: true })
     await setConnectionPoints(ws, connectionPoints)
+    await assertWorkerConnectionPoints(ws, runtime.opcuaEndpoint)
     const app = new AppPage(page, runtime.appUrl)
     try {
       await app.goto({ waitForAppReady: true })
       await use(app)
     } finally {
-      await ws.send('set connectionpoints', original.data)
+      await setConnectionPoints(ws, original.data)
     }
   },
 

@@ -17,6 +17,7 @@ from tests.test_infra.backend_manager import (
     BackendHealthError,
     HealthStatus,
     WebTestBackendManager,
+    seed_runtime_resources,
 )
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -85,6 +86,39 @@ def _manager(workspace, **kwargs) -> WebTestBackendManager:
         results_root=workspace / "results",
         **kwargs,
     )
+
+
+def test_seed_runtime_resources_overwrites_stale_worker_profile(workspace):
+    runtime_dir = workspace / "runtime-resources"
+    runtime_dir.mkdir(exist_ok=True)
+    (runtime_dir / "connectionpoints.json").write_text(
+        json.dumps(
+            {
+                "connectionpoints": [
+                    {
+                        "name": "LOCAL",
+                        "address": "opc.tcp://localhost:49999",
+                        "autoconnect": False,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    seed_runtime_resources(runtime_dir, "opc.tcp://localhost:41463")
+
+    payload = json.loads((runtime_dir / "connectionpoints.json").read_text(encoding="utf-8"))
+    assert payload == {
+        "schema_version": 1,
+        "connectionpoints": [
+            {
+                "name": "LOCAL",
+                "address": "opc.tcp://localhost:41463",
+                "autoconnect": True,
+            }
+        ],
+    }
 
 
 def test_health_probe_runs_full_connect_namespaces_terminate_contract(monkeypatch, workspace):

@@ -18,6 +18,7 @@ External calls are patched via unittest.mock / monkeypatch.
 """
 
 import configparser
+import json
 import socket
 import subprocess
 import sys
@@ -2086,6 +2087,31 @@ class TestInstallJsPackages:
         with pytest.raises(SystemExit):
             sp._install_js_packages()
 
+    def test_npm_ci_recovers_by_cleaning_generated_modules(self, tmp_path, monkeypatch):
+        (tmp_path / "package-lock.json").write_text("{}")
+        node_modules = tmp_path / "node_modules"
+        node_modules.mkdir()
+        (node_modules / "locked-package").mkdir()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm")
+        monkeypatch.setattr(sp, "_validate_package_json", lambda: None)
+        monkeypatch.setattr(sp.time, "sleep", lambda _seconds: None)
+        calls = 0
+
+        def _fail_twice(_cmd, **_kwargs):
+            nonlocal calls
+            calls += 1
+            if calls < 3:
+                raise subprocess.CalledProcessError(1, ["npm", "ci"])
+
+        monkeypatch.setattr(subprocess, "check_call", _fail_twice)
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "")
+
+        sp._install_js_packages()
+
+        assert calls == 3
+        assert not node_modules.exists()
+
     def test_npm_ci_does_not_set_husky_env(self, tmp_path, monkeypatch):
         """Husky is removed from this project; npm ci must never set HUSKY=0."""
         (tmp_path / "package-lock.json").write_text("{}")
@@ -2343,6 +2369,95 @@ class TestRunIndex:
         with caplog.at_level(logging.ERROR, logger="setup_project"):
             result = sp._run_index()
         assert result is None
+
+
+# =============================================================================
+# Direct runtime isolation
+# =============================================================================
+
+
+def test_direct_runtime_endpoint_ignores_test_endpoint(monkeypatch):
+    monkeypatch.setenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40471")
+    monkeypatch.delenv("OPCUA_SERVER_URL", raising=False)
+
+    assert sp._direct_runtime_endpoint() == "opc.tcp://localhost:40451"
+
+
+def test_direct_runtime_endpoint_allows_explicit_runtime_override(monkeypatch):
+    monkeypatch.setenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40471")
+    monkeypatch.setenv("OPCUA_SERVER_URL", "opc.tcp://controller:4840")
+
+    assert sp._direct_runtime_endpoint() == "opc.tcp://controller:4840"
+
+
+def test_direct_runtime_environment_removes_test_only_overrides(monkeypatch):
+    monkeypatch.setenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40471")
+    monkeypatch.setenv("IJT_RUNTIME_RESOURCES_DIR", "test-results/runtime-resources")
+    monkeypatch.setenv("OPCUA_SERVER_URL", "opc.tcp://controller:4840")
+
+    env = sp._direct_runtime_environment()
+
+    assert "OPCUA_TEST_ENDPOINT" not in env
+    assert "IJT_RUNTIME_RESOURCES_DIR" not in env
+    assert env["OPCUA_SERVER_URL"] == "opc.tcp://controller:4840"
+
+
+def test_restore_direct_runtime_local_profile_preserves_other_profiles(tmp_path, monkeypatch):
+    default_file = tmp_path / "connectionpoints.default.json"
+    runtime_file = tmp_path / "connectionpoints.json"
+    default_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "connectionpoints": [
+                    {
+                        "name": "LOCAL",
+                        "address": "opc.tcp://localhost:40451",
+                        "autoconnect": False,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    runtime_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "connectionpoints": [
+                    {
+                        "name": "LOCAL",
+                        "address": "opc.tcp://localhost:40471",
+                        "autoconnect": True,
+                    },
+                    {
+                        "name": "CONTROLLER",
+                        "address": "opc.tcp://controller:4840",
+                        "autoconnect": False,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sp, "CONNECTIONPOINTS_DEFAULT_FILE", default_file)
+    monkeypatch.setattr(sp, "CONNECTIONPOINTS_RUNTIME_FILE", runtime_file)
+
+    sp._restore_direct_runtime_connectionpoints()
+
+    saved = json.loads(runtime_file.read_text(encoding="utf-8"))
+    assert saved["connectionpoints"] == [
+        {
+            "name": "LOCAL",
+            "address": "opc.tcp://localhost:40451",
+            "autoconnect": False,
+        },
+        {
+            "name": "CONTROLLER",
+            "address": "opc.tcp://controller:4840",
+            "autoconnect": False,
+        },
+    ]
 
 
 # =============================================================================
@@ -2617,6 +2732,7 @@ class TestMain:
         monkeypatch.setattr(sp, "_warn_if_untested_python", lambda *a: None)
         monkeypatch.setattr(sp, "_remove_stale_venvs", lambda *a: None)
         monkeypatch.setattr(sp, "_cleanup_local_project_artifacts", lambda *a: None)
+        monkeypatch.setattr(sp, "_restore_direct_runtime_connectionpoints", lambda: None)
 
     def test_bootstrap_wsl_flag(self, monkeypatch):
         calls = []

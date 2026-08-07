@@ -38,7 +38,11 @@ a web browser. The backend is Python with WebSockets. The frontend is Node.js.
   - `connectionpoints.json`
   - `settings.json`
 - Runtime files are ignored by Git. You can add personal OPC UA endpoints or UI settings locally without pushing them.
-- To reset local configuration, delete the runtime JSON file and restart the Web Client backend.
+- Direct setup restores the `LOCAL` profile from `connectionpoints.default.json`
+  (`opc.tcp://localhost:40451`) while preserving additional personal endpoints.
+  Test runners use separate runtime-resource directories and never persist their
+  dedicated ports into this normal profile.
+- To reset all local configuration, delete the runtime JSON file and restart the Web Client backend.
 
 ## Endpoint readiness in the browser
 
@@ -64,7 +68,7 @@ The former full Connection tab is intentionally not shown by default.
 ## Option 3 - WSL
 
 - **Run in WSL:** `RUN_PROJECT_SETUP=1 bash scripts/bootstrap_wsl.sh`
-  - Set endpoint when the OPC UA server runs on Windows: `export OPCUA_TEST_ENDPOINT="opc.tcp://<windows-host-or-ip>:40451"`
+  - Set endpoint when the OPC UA server runs on Windows: `export OPCUA_SERVER_URL="opc.tcp://<windows-host-or-ip>:40451"`
   - Start services: `python3 setup_project.py --detach`
   - Access: `http://localhost:3000`
 

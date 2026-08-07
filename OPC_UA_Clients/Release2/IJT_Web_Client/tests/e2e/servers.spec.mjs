@@ -9,8 +9,8 @@ import { AppPage } from './page-objects.mjs'
 
 const serverTest = test.extend({
   isolatedApp: async ({ page, ws }, use, testInfo) => {
-    const original = await ws.send('get connectionpoints')
     const runtime = runtimeForWorker(testInfo)
+    const original = await ws.send('get connectionpoints')
     await ws.send('set connectionpoints', isolatedConnectionPoints(runtime.opcuaEndpoint))
 
     const app = new AppPage(page, runtime.appUrl)
@@ -25,6 +25,7 @@ const serverTest = test.extend({
 
 function isolatedConnectionPoints (endpoint) {
   return {
+    schema_version: 1,
     connectionpoints: [
       {
         name: 'LOCAL',
