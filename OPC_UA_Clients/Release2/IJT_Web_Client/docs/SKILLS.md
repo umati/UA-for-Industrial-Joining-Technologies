@@ -151,6 +151,7 @@ python scripts/run_docker_tests.py --live-docker
 All auto-detected — present=run, absent=skip with install hint.
 Network-backed advisory tools fail fast: pip-audit uses the PyPI JSON endpoint preflight, local cache, spinner disabled, and short timeouts; Semgrep uses the real `p/default` rules endpoint. Network/TLS/timeout outcomes are advisory skips, but fixable `pip-audit` CVEs fail the Python check and advisory-only CVEs pass with an explicit note. `mypy` scans explicit Python source roots instead of `.` so runner temp/state directories cannot break local checks on Windows.
 Runner-managed and Dockerfile `npm install` / `npm ci` commands use `--no-audit --no-fund`, disable the npm update notifier, and keep direct runner npm subprocesses on project `tmp/npm-cache` so repeated local/CI logs stay readable; JS CVEs are still checked by the separate explicit `npm audit` step.
+Pyright resolves application imports through `src/` and shared readiness imports through the repository `scripts/` directory. Console and Test Clients use the same shared-script path contract. Missing-import findings caused by incomplete type-checker paths are configuration defects, not acceptable advisory noise.
 
 | Tool | What it checks |
 |------|---------------|
@@ -247,8 +248,10 @@ sim_node = client.get_node("ns=1;s=TighteningSystem/Simulations/SimulateResults"
 - Runs as **non-root `appuser`** (uid/gid 1001)
 - Packages pre-installed globally via `RUN pip install ...` (no venv needed in container)
 - `IS_DOCKER=true` and `GITHUB_ACTIONS=true` mark Python as pre-isolated
+- Docker mode takes precedence over WSL detection, including Docker Desktop environments that expose Microsoft kernel markers
 - `IJT_OPCUA_HOST_REWRITE=true` is a separate opt-in for Docker Compose flows
   where a container must reach an OPC UA simulator running on the host
+- Production images omit developer-only npm packages; setup skips ESLint and neostandard version probes when `NODE_ENV=production`
 
 ### Local smoke runner (`run_all_tests.py --docker-only`)
 - `docker build` runs first; `--cache-from ijt_web_client:latest` is **only added when the image already exists locally** — without this guard BuildKit tries to pull from Docker Hub and fails with an auth error on fresh machines.
@@ -680,7 +683,15 @@ When the submodule is present and `run_all_tests.py` runs with `--private-module
 | `IJT_DOCKER_TIMEOUT` | `90` | Docker HTTP readiness timeout in seconds |
 | `OPCUA_WATCHDOG_INTERVAL_SEC` | `3600` | Optional asyncua watchdog interval override; invalid values fall back to the default |
 
+The main and subscription OPC UA clients both request a 600,000 ms session timeout, matching the simulator's supported maximum. The repository-wide readiness probe uses the same value. Per-request and connection-handshake timeouts remain separate and shorter.
+
 ### Server Auto-Launch & Port Isolation
+
+Local multi-worker browser feature runs monitor every runner-owned native
+simulator process. If one worker simulator exits while Playwright is active,
+the owner restarts that port-specific instance so the backend's bounded
+connection retries can recover. The runner records the exit and restart in its
+notes; browser fixtures never own native process lifecycle.
 
 This client's split live suites auto-launch dedicated server instances on
 assigned root-runner ports (starting at **40463**) through the copy-and-patch

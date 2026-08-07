@@ -46,6 +46,26 @@ leak Servers-page edits into another worker or a developer runtime profile.
 With a lockfile present, setup retries transient `npm ci` failures. If Windows
 still cannot clean stale generated packages, setup removes `node_modules` and
 performs one final deterministic `npm ci` rather than switching install modes.
+Docker detection takes precedence over WSL markers exposed by Docker Desktop.
+Production images intentionally omit developer-only JavaScript packages, so
+setup does not probe ESLint or neostandard versions when `NODE_ENV=production`.
+
+Both Web Client OPC UA sessions explicitly request the simulator-supported
+600,000 ms session timeout instead of relying on asyncua's one-hour default.
+The repository-wide readiness probe uses the same value. This avoids harmless
+server-revision warnings without changing the shorter per-request and
+connection-handshake limits.
+
+Pyright path configuration must resolve both `src/` and the repository-wide
+`scripts/` directory. Console and Test Client live fixtures use the same shared
+readiness module, so their Pyright paths must also include the repository
+scripts directory. Keep actionable type findings at zero; do not suppress
+missing imports caused by incomplete project paths.
+
+Local multi-worker Playwright runs own one simulator per worker. The runner
+monitors those owned processes throughout the feature stage and restarts an
+instance if the native simulator exits unexpectedly. Keep this recovery in the
+owner process; browser tests must not launch or manage simulator binaries.
 
 ## Validation Commands
 

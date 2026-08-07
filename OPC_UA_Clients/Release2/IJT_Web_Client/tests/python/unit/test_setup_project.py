@@ -225,6 +225,7 @@ def test_backup_existing_optional_module_path_moves_non_git_folder(tmp_path, mon
         backup = sp._backup_existing_optional_module_path("Envelope", target)
 
     assert backup == tmp_path / "envelope.backup-before-submodule-20260708-180500"
+    assert backup is not None
     assert not target.exists()
     assert (backup / "local-change.mjs").read_text(encoding="utf-8") == "export const local = true;\n"
     assert any("not a Git checkout" in record.message for record in caplog.records)
@@ -381,6 +382,16 @@ def test_find_simulator_returns_none_when_no_exe(fs, monkeypatch):
 # =============================================================================
 # _ensure_opc_server_running — all branches
 # =============================================================================
+
+
+def test_detect_wsl_returns_false_in_docker_even_with_wsl_markers(monkeypatch):
+    monkeypatch.setenv("WSL_DISTRO_NAME", "docker-desktop")
+    assert sp._detect_wsl(is_docker=True) is False
+
+
+def test_detect_wsl_uses_environment_marker_outside_docker(monkeypatch):
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
+    assert sp._detect_wsl(is_docker=False) is True
 
 
 class TestEnsureOpcServerRunning:
@@ -2146,6 +2157,20 @@ class TestInstallJsPackages:
         with caplog.at_level(logging.WARNING, logger="setup_project"):
             sp._install_js_packages()
         assert any("Failed to retrieve" in r.message for r in caplog.records)
+
+    def test_production_install_skips_absent_developer_tool_version_checks(self, tmp_path, monkeypatch):
+        (tmp_path / "package-lock.json").write_text("{}")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("NODE_ENV", "production")
+        monkeypatch.setattr(sp, "_get_npm_path", lambda: "/usr/bin/npm")
+        monkeypatch.setattr(sp, "_validate_package_json", lambda: None)
+        monkeypatch.setattr(subprocess, "check_call", lambda *a, **kw: None)
+        version_calls = []
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: version_calls.append(a))
+
+        sp._install_js_packages()
+
+        assert version_calls == []
 
 
 # =============================================================================

@@ -128,6 +128,11 @@ def test_start_server_uses_shared_readiness_module() -> None:
     )
 
 
+def test_shared_session_probe_requests_server_supported_timeout() -> None:
+    source = _read(SHARED_MODULE)
+    assert "client.session_timeout = 600_000" in source
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # The shared readiness module must be importable before client dependencies
 # are installed.

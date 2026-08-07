@@ -305,6 +305,10 @@ def opcua_session_probe_once(
         # asyncua's Client is positional ``(url, timeout)``; using kwargs here
         # breaks call-site fakes that pin the constructor shape.
         client = _AsyncuaClient(endpoint_url, connect_timeout)
+        # The IJT simulator revises asyncua's one-hour default to its supported
+        # ten-minute maximum. Request that value directly so readiness probes do
+        # not emit a harmless warning on every managed server startup.
+        client.session_timeout = 600_000
         try:
             await client.connect()
         finally:

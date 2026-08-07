@@ -64,6 +64,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import zipfile
 from dataclasses import dataclass, field
@@ -2548,12 +2549,56 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
 
 def _stop_opcua_server_instance(instance: _OpcuaServerInstance) -> None:
     if instance.proc is not None:
-        instance.proc.terminate()
-        try:
-            instance.proc.wait(timeout=10)
-        except Exception:
-            instance.proc.kill()
+        poll = getattr(instance.proc, "poll", None)
+        if not callable(poll) or poll() is None:
+            instance.proc.terminate()
+            try:
+                instance.proc.wait(timeout=10)
+            except Exception:
+                instance.proc.kill()
     shutil.rmtree(instance.tmp_dir, ignore_errors=True) if instance.tmp_dir else None
+
+
+def _simulator_process_exited(instance: _OpcuaServerInstance) -> bool:
+    """Return whether an owned simulator exited, tolerating lightweight test fakes."""
+    poll = getattr(instance.proc, "poll", None)
+    return callable(poll) and poll() is not None
+
+
+def _watch_owned_simulators(
+    servers: list[_OpcuaServerInstance],
+    executable: str,
+    stop_event: threading.Event,
+    servers_lock: threading.Lock,
+) -> None:
+    """Restart worker simulators that exit while Playwright is still running."""
+    while not stop_event.wait(0.5):
+        for index in range(len(servers)):
+            with servers_lock:
+                instance = servers[index]
+            if not _simulator_process_exited(instance):
+                continue
+
+            exit_code = getattr(instance.proc, "returncode", None)
+            note = (
+                f"OPC UA worker on port {instance.port} exited unexpectedly "
+                f"with code {exit_code}; restarting the owned simulator"
+            )
+            _warn(note)
+            _record_simulator_launch_note(note)
+            _stop_opcua_server_instance(instance)
+            if stop_event.is_set():
+                return
+
+            replacement = _launch_simulator_instance(instance.port, executable)
+            if replacement is None:
+                failure = f"OPC UA worker on port {instance.port} could not be restarted"
+                _warn(failure)
+                _record_simulator_launch_note(failure)
+                stop_event.wait(2.0)
+                continue
+            with servers_lock:
+                servers[index] = replacement
 
 
 def _find_simulator_executable() -> str | None:
@@ -2825,6 +2870,9 @@ def _run_playwright_features_with_owned_pool_once(
 
     servers: list[_OpcuaServerInstance] = []
     ws_procs: list[subprocess.Popen | None] = []
+    simulator_watch_stop = threading.Event()
+    simulator_servers_lock = threading.Lock()
+    simulator_watch_thread: threading.Thread | None = None
     try:
         for index in range(workers):
             opcua_port = opcua_base_port + index
@@ -2850,6 +2898,14 @@ def _run_playwright_features_with_owned_pool_once(
                 return StageResult(name, 1, notes=[f"WebSocket worker {index} failed to start on port {ws_port}"])
             ws_procs.append(proc)
 
+        simulator_watch_thread = threading.Thread(
+            target=_watch_owned_simulators,
+            args=(servers, exe, simulator_watch_stop, simulator_servers_lock),
+            name="ijt-playwright-simulator-watchdog",
+            daemon=True,
+        )
+        simulator_watch_thread.start()
+
         return _with_simulator_launch_notes(
             _stage_playwright_features(
                 ws_url,
@@ -2862,9 +2918,14 @@ def _run_playwright_features_with_owned_pool_once(
             )
         )
     finally:
+        simulator_watch_stop.set()
+        if simulator_watch_thread is not None:
+            simulator_watch_thread.join()
         for proc in reversed(ws_procs):
             _stop_websocket_backend(proc)
-        for instance in reversed(servers):
+        with simulator_servers_lock:
+            owned_servers = list(servers)
+        for instance in reversed(owned_servers):
             _stop_opcua_server_instance(instance)
 
 

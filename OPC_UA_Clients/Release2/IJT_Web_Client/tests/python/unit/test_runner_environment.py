@@ -2443,6 +2443,56 @@ def test_playwright_feature_pool_owns_one_backend_pair_per_worker(monkeypatch):
     assert stopped_opcua_ports == [4102, 4101, 4100]
 
 
+def test_owned_simulator_watchdog_restarts_exited_worker(monkeypatch):
+    runner = _load_runner()
+    stopped_ports = []
+    launched_ports = []
+
+    class FakeProc:
+        def __init__(self, returncode):
+            self.returncode = returncode
+
+        def poll(self):
+            return self.returncode
+
+    class StopAfterOnePass:
+        def __init__(self):
+            self.wait_calls = 0
+
+        def wait(self, _timeout):
+            self.wait_calls += 1
+            return self.wait_calls > 1
+
+        @staticmethod
+        def is_set():
+            return False
+
+    servers = [runner._OpcuaServerInstance(port=4100, proc=FakeProc(17), tmp_dir=None)]
+    replacement = runner._OpcuaServerInstance(port=4100, proc=FakeProc(None), tmp_dir=None)
+    monkeypatch.setattr(
+        runner,
+        "_stop_opcua_server_instance",
+        lambda instance: stopped_ports.append(instance.port),
+    )
+
+    def fake_launch(port, _executable):
+        launched_ports.append(port)
+        return replacement
+
+    monkeypatch.setattr(runner, "_launch_simulator_instance", fake_launch)
+
+    runner._watch_owned_simulators(
+        servers,
+        "simulator.exe",
+        StopAfterOnePass(),
+        runner.threading.Lock(),
+    )
+
+    assert stopped_ports == [4100]
+    assert launched_ports == [4100]
+    assert servers == [replacement]
+
+
 def test_playwright_feature_pool_retries_timeout_once_with_single_worker(monkeypatch):
     runner = _load_runner()
     calls = []

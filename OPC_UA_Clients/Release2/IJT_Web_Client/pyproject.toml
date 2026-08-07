@@ -99,6 +99,14 @@ exclude = [
 # run_all_tests.py passes --cache-dir explicitly for robust local operation.
 cache_dir = "tmp/mypy-cache"
 
+[tool.pyright]
+# Runtime readiness helpers add the repository-wide scripts directory to
+# sys.path before importing the shared module.
+extraPaths = ["src", "../../../scripts"]
+# asyncua re-exports Client and generated ua constants at runtime but does not
+# declare those names in __all__.
+reportPrivateImportUsage = "none"
+
 [tool.pylint.main]
 # Exclude pyfakefs/pytest bookkeeping dirs that may be locked on Windows.
 ignore-paths = ["^pytest-cache-files-.*", "^\\.venv.*", "^\\.venv_test.*", "^\\.venv_ci.*"]

@@ -64,10 +64,20 @@ log = logging.getLogger(__name__)
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 _ENV_IS_PRE_ISOLATED = IS_DOCKER or IS_GITHUB_ACTIONS
-IS_WSL = bool(os.getenv("WSL_DISTRO_NAME")) or (
-    os.path.exists("/proc/version")
-    and "microsoft" in Path("/proc/version").read_text(encoding="utf-8", errors="ignore").lower()
-)
+
+
+def _detect_wsl(is_docker: bool) -> bool:
+    """Detect WSL without misclassifying Docker Desktop's Linux VM."""
+    return not is_docker and (
+        bool(os.getenv("WSL_DISTRO_NAME"))
+        or (
+            os.path.exists("/proc/version")
+            and "microsoft" in Path("/proc/version").read_text(encoding="utf-8", errors="ignore").lower()
+        )
+    )
+
+
+IS_WSL = _detect_wsl(IS_DOCKER)
 # Venv naming convention:
 #   .venv          — runtime launch (this script, Windows/Linux/macOS/WSL non-Docker)
 #   .venv_test     — test runner (run_all_tests.py, full dev deps)
@@ -1253,14 +1263,17 @@ def _install_js_packages():
             log.error("JavaScript package installation failed. Command failed: %s", exc.cmd)
             sys.exit(1)
 
-    # Log a couple of versions to assist troubleshooting
-    try:
-        eslint_version = subprocess.check_output([str(npm), "list", "eslint", "--depth=0"], text=True)
-        neostandard_version = subprocess.check_output([str(npm), "list", "neostandard", "--depth=0"], text=True)
-        log.info("Installed ESLint version:\n%s", eslint_version)
-        log.info("Installed neostandard version:\n%s", neostandard_version)
-    except subprocess.CalledProcessError as e:
-        log.warning("Failed to retrieve installed JS package versions: %s", e)
+    # Production images intentionally omit developer-only lint packages.
+    if env.get("NODE_ENV", "").lower() == "production":
+        log.info("Production JavaScript dependencies installed; skipping developer tool version checks.")
+    else:
+        try:
+            eslint_version = subprocess.check_output([str(npm), "list", "eslint", "--depth=0"], text=True)
+            neostandard_version = subprocess.check_output([str(npm), "list", "neostandard", "--depth=0"], text=True)
+            log.info("Installed ESLint version:\n%s", eslint_version)
+            log.info("Installed neostandard version:\n%s", neostandard_version)
+        except subprocess.CalledProcessError as e:
+            log.warning("Failed to retrieve installed JS package versions: %s", e)
 
 
 # ---------------------------------------------------------------------------

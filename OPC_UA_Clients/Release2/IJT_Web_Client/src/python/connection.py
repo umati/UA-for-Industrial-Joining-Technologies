@@ -25,6 +25,7 @@ from python.serialize_data import serialize_full_event, serialize_tuple, seriali
 _OPCUA_TIMEOUT_S = 60  # per-request timeout for long-running operations (method calls, reads)
 _OPCUA_TIMEOUT_SHORT_S = 15  # wall-clock limit for OPC UA session establishment (SecureChannel + Session handshake)
 _OPCUA_TIMEOUT_BROWSE_S = 30  # per-loader wall-clock limit for OPC UA type-definition loading
+_OPCUA_SESSION_TIMEOUT_MS = 600_000  # simulator-supported maximum; avoids negotiated-timeout warnings
 _OPCUA_WATCHDOG_INTERVAL_DEFAULT = "3600"
 _SUBSCRIPTION_PERIOD_MS = 100
 _CONNECT_RETRIES_DEFAULT = "8"
@@ -191,6 +192,7 @@ class Connection:
             timeout=_OPCUA_TIMEOUT_S,
             watchdog_intervall=_opcua_watchdog_interval(),
         )
+        self.client.session_timeout = _OPCUA_SESSION_TIMEOUT_MS
 
         # Security policy: asyncua Client defaults to no-security (SecurityPolicy.None_,
         # MessageSecurityMode.None_), which is exactly what this client requires.
@@ -239,6 +241,7 @@ class Connection:
                         timeout=_OPCUA_TIMEOUT_S,
                         watchdog_intervall=_opcua_watchdog_interval(),
                     )
+                    self.subscription_client.session_timeout = _OPCUA_SESSION_TIMEOUT_MS
                     sub_client_name = f"urn:{computer_name}:IJT:WebClient:Sub"
                     self.subscription_client.name = sub_client_name
                     self.subscription_client.description = sub_client_name

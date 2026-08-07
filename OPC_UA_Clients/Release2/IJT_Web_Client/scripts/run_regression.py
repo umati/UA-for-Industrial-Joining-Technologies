@@ -330,6 +330,7 @@ class WsHarness:
                 await self._reader_task
 
     async def _reader(self):
+        assert self.ws is not None
         async for message in self.ws:
             payload = json.loads(message)
             self.raw.append(payload)

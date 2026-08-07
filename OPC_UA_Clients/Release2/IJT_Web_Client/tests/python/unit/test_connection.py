@@ -104,6 +104,7 @@ async def test_connect_uses_explicit_single_probe_attempt(monkeypatch):
 
     assert "after 1 attempts" in result["exception"]
     assert mock_client.connect.await_count == 1
+    assert mock_client.session_timeout == 600_000
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +240,8 @@ async def test_connect_configures_long_watchdog_interval(monkeypatch):
     assert result.get("command") == "connection established"
     assert client_factory.call_args_list[0].kwargs["watchdog_intervall"] == 120.0
     assert client_factory.call_args_list[1].kwargs["watchdog_intervall"] == 120.0
+    assert main_mock.session_timeout == 600_000
+    assert sub_mock.session_timeout == 600_000
 
 
 @pytest.mark.asyncio
