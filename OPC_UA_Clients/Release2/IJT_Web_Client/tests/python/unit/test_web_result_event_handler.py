@@ -331,16 +331,23 @@ async def test_event_notification_calls_log_without_client():
 
 
 @pytest.mark.asyncio
-async def test_concurrent_event_notifications_simulate_job_result():
-    """Regression: SimulateJobResult fires ~10+ events before returning.
-    All concurrent event_notification calls must complete without errors,
-    and all events must be enqueued and sent via WebSocket.
+async def test_concurrent_live_and_requested_result_event_notifications():
+    """Concurrent live and requested result events are delivered without loss.
+
+    SimulateJobResult and RequestResults can both emit result events while a
+    WebSocket connection is active. All notifications must be serialized and
+    sent without concurrent OPC UA requests from the event callback.
     Previously failed because log_result_event_details did read_server_time()
     on the shared OPC UA client, causing concurrent request conflicts."""
     ws = AsyncMock()
     handler = ResultEventHandler(ws, "opc.tcp://localhost:40451")
 
-    events = [_make_result_event() for _ in range(12)]  # realistic SimulateJobResult count
+    events = []
+    for index in range(24):
+        event = _make_result_event()
+        event.EventType = ua.NodeId(1007 if index % 2 == 0 else 1035, 2)  # type: ignore[arg-type]
+        event.EventId = f"result-event-{index}".encode()
+        events.append(event)
 
     async def _fast_log(event, server_url, client_received_time):
         return f"evt-{id(event)}"
@@ -351,7 +358,7 @@ async def test_concurrent_event_notifications_simulate_job_result():
 
     # Allow queue to drain
     await asyncio.sleep(0.2)
-    assert ws.send.call_count == 12, (
-        f"Expected 12 events sent, got {ws.send.call_count} — concurrent event notifications failed"
+    assert ws.send.call_count == len(events), (
+        f"Expected {len(events)} events sent, got {ws.send.call_count} — concurrent event notifications failed"
     )
     await handler.close()

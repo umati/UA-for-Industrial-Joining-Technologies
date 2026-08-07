@@ -105,8 +105,8 @@ New manual skip sites should use `helpers.skip_reasons` so raw JUnit/Excel
 reasons start with one of the review categories: `NOT SUPPORTED`, `BLOCKED`,
 `ACCEPTED POLICY`, or `ENVIRONMENT`.
 It also records workbook traceability from the checked-in Test Cases workbook:
-the `workbook` section contains the expected 1,122 test-case header rows,
-positive/negative classification, CTT/review/spec-link metadata, and the CU key
+the `workbook` section contains the expected 369 test-case header rows,
+positive/negative classification, CTT-automation/review/spec-link metadata, and the CU key
 each row belongs to. Rows are linked to tests by CU by default
 (`mapping_precision = "cu"`). Add `@pytest.mark.workbook_ref("Sheet", [row])`
 or multiple rows when a test validates specific workbook rows.

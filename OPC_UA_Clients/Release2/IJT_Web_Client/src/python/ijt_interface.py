@@ -68,7 +68,57 @@ class IJTInterface:
         "connectionpoints.json": "connectionpoints.default.json",
         "settings.json": "settings.default.json",
     }
+    _RUNTIME_RESOURCES_DIR_ENV: str = "IJT_RUNTIME_RESOURCES_DIR"
     _CONNECTIONPOINTS_SCHEMA_VERSION: int = 1
+    _METHOD_GROUPS: tuple[dict[str, Any], ...] = (
+        {
+            "id": "simulations",
+            "label": "Simulations",
+            "description": "Simulation methods.",
+            "paths": (),
+        },
+        {
+            "id": "simulate-results",
+            "parentId": "simulations",
+            "label": "Simulate Results",
+            "description": "Simulate joining results.",
+            "paths": (
+                "TighteningSystem/Simulations/SimulateResults",
+                "TighteningSystem/Simulations",
+            ),
+        },
+        {
+            "id": "simulate-events-and-conditions",
+            "parentId": "simulations",
+            "label": "Simulate Events and Conditions",
+            "description": "Simulate events and conditions.",
+            "paths": ("TighteningSystem/Simulations/SimulateEventsAndConditions",),
+        },
+        {
+            "id": "asset-management",
+            "label": "Asset Management",
+            "description": "Asset management methods.",
+            "paths": ("TighteningSystem/AssetManagement/MethodSet",),
+        },
+        {
+            "id": "joining-process-management",
+            "label": "Joining Process Management",
+            "description": "Joining process management methods.",
+            "paths": ("TighteningSystem/JoiningProcessManagement",),
+        },
+        {
+            "id": "joint-management",
+            "label": "Joint Management",
+            "description": "Joint management methods.",
+            "paths": ("TighteningSystem/JointManagement",),
+        },
+        {
+            "id": "result-management",
+            "label": "Result Management",
+            "description": "Result management methods.",
+            "paths": ("TighteningSystem/ResultManagement",),
+        },
+    )
 
     # Optional host plugins. A private view plugin (checked out as a git
     # submodule) may drop a host module at
@@ -127,6 +177,9 @@ class IJTInterface:
 
     @classmethod
     def _resource_path(cls, filename: str) -> Path:
+        runtime_directory = os.getenv(cls._RUNTIME_RESOURCES_DIR_ENV, "").strip()
+        if runtime_directory:
+            return Path(runtime_directory) / filename
         for directory_name in cls._RESOURCE_DIR_CANDIDATES:
             resource_dir = cls._SOURCE_ROOT / directory_name
             if resource_dir.exists():
@@ -134,7 +187,126 @@ class IJTInterface:
         return cls._SOURCE_ROOT / cls._RESOURCE_DIR_CANDIDATES[0] / filename
 
     def _resource_default_path(self, filename: str) -> Path:
-        return self._resource_path(self._DEFAULT_RESOURCE_FILENAMES.get(filename, filename))
+        default_filename = self._DEFAULT_RESOURCE_FILENAMES.get(filename, filename)
+        for directory_name in self._RESOURCE_DIR_CANDIDATES:
+            resource_dir = self._SOURCE_ROOT / directory_name
+            if resource_dir.exists():
+                return resource_dir / default_filename
+        return self._SOURCE_ROOT / self._RESOURCE_DIR_CANDIDATES[0] / default_filename
+
+    @classmethod
+    def _build_method_defaults_metadata(cls) -> dict[str, Any]:
+        by_name: dict[str, Any] = {}
+        by_path: dict[str, Any] = {}
+        for group in cls._METHOD_GROUPS:
+            for path in group.get("paths", ()):
+                by_path[path] = {"groupId": group["id"]}
+        by_path["TighteningSystem/Simulations/SendSimulatedBulkResults"] = {"groupId": "simulate-results"}
+
+        def add_path(path: str, argument_defaults: dict[str, Any], notes: list[str] | None = None) -> None:
+            by_path[path] = {
+                **by_path.get(path, {}),
+                "argumentDefaults": argument_defaults,
+                "notes": notes or [],
+            }
+
+        def add_name(
+            name: str,
+            argument_defaults: dict[str, Any],
+            notes: list[str] | None = None,
+            group_id: str | None = None,
+        ) -> None:
+            by_name[name] = {
+                "argumentDefaults": argument_defaults,
+                "notes": notes or [],
+            }
+            if group_id:
+                by_name[name]["groupId"] = group_id
+
+        add_path(
+            "TighteningSystem/Simulations/SimulateResults/SimulateSingleResult",
+            {"Result Type": 2, "Include Traces": True},
+            ["Defaults to a representative multi-step OK result with traces enabled."],
+        )
+        add_path(
+            "TighteningSystem/Simulations/SimulateResults/SimulateBulkResults",
+            {
+                "Result Type": 2,
+                "Include Traces": True,
+                "From Sequence Number": 100,
+                "To Sequence Number": 150,
+                "Duration Between Results": 100,
+                "Update Result Variables": True,
+            },
+        )
+        add_path(
+            "TighteningSystem/Simulations/SimulateResults/SimulateBatch_Or_Sync_Result",
+            {
+                "Classification": 3,
+                "Number Of Child Results": 3,
+                "Send Child Results as References (Recommended)": True,
+                "Include Traces For Child Results": True,
+            },
+        )
+        add_path(
+            "TighteningSystem/ResultManagement/RequestResults",
+            {
+                "FromSequenceNumber": 0,
+                "ToSequenceNumber": 0,
+                "FromTime": "2000-01-01T00:00:00Z",
+                "ToTime": "9999-01-01T00:00:00Z",
+                "RequestedMinimumDurationBetweenResults": 0.0,
+            },
+        )
+        add_name("SimulateEvents", {"Event Type": 1})
+        add_name("SimulateConditions", {"Event Type": 1})
+        add_name("SimulateBulkEvents", {"Event Type": 1, "Count": 3})
+        add_name("SendSimulatedBulkResults", {}, group_id="simulate-results")
+        add_name(
+            "SetTime",
+            {"Time": {"source": "currentUtc"}},
+            ["Prefills Time with the current UTC timestamp."],
+        )
+        add_name(
+            "GetJoiningProcessList",
+            {"ProductInstanceUri": {"source": "productid", "allowEmpty": True}},
+            ["Prefills ProductInstanceUri from Settings or live tool discovery when available."],
+        )
+        add_name(
+            "GetJointList",
+            {"ProductInstanceUri": {"source": "productid", "allowEmpty": True}},
+            ["Prefills ProductInstanceUri from Settings or live tool discovery when available."],
+        )
+        add_name(
+            "GetJoint",
+            {"ProductInstanceUri": {"source": "productid", "allowEmpty": False}},
+            ["Uses the resolved ProductInstanceUri by default to reduce manual copy/paste."],
+        )
+        add_name(
+            "EnableAsset",
+            {"ProductInstanceUri": {"source": "productid", "allowEmpty": False}, "Enabled": True},
+        )
+
+        return {"byName": by_name, "byPath": by_path}
+
+    @classmethod
+    def build_method_metadata(cls) -> dict[str, Any]:
+        defaults = cls._build_method_defaults_metadata()
+        return {
+            "command": "get method metadata",
+            "groups": list(cls._METHOD_GROUPS),
+            "defaults": defaults,
+            "globalDefaults": {
+                "booleanDefault": True,
+                "integerFallback": 1,
+                "stringFallback": "Sample",
+                "notes": [
+                    "Boolean method inputs default to true unless a method-specific default overrides them.",
+                    "Integer method inputs fall back to 1 when no stronger default exists.",
+                    "String method inputs fall back to an editable sample value when no stronger default exists.",
+                ],
+            },
+        }
 
     def _ensure_runtime_resource(self, filename: str) -> Path:
         path = self._resource_path(filename)
@@ -156,43 +328,6 @@ class IJTInterface:
         if isinstance(payload, list):
             return [cls._normalize_json_keys_lower(item) for item in payload]
         return payload
-
-    @classmethod
-    def _apply_runtime_local_endpoint(cls, payload: Any) -> Any:
-        endpoint = os.getenv("OPCUA_TEST_ENDPOINT") or os.getenv("OPCUA_SERVER_URL")
-        if not endpoint:
-            return payload
-
-        if not isinstance(payload, dict):
-            payload = {}
-
-        updated_payload = dict(payload)
-        points = updated_payload.get("connectionpoints")
-        if not isinstance(points, list):
-            points = []
-
-        local_point = {"name": "LOCAL", "address": endpoint, "autoconnect": False}
-        updated_points: list[Any] = []
-        replaced = False
-
-        for point in points:
-            if isinstance(point, dict) and str(point.get("name", "")).lower() in {"local", "localhost"}:
-                updated_points.append(
-                    {
-                        **local_point,
-                        "name": point.get("name", "LOCAL") or "LOCAL",
-                        "autoconnect": point.get("autoconnect", False) is True,
-                    }
-                )
-                replaced = True
-            else:
-                updated_points.append(point)
-
-        if not replaced:
-            updated_points.insert(0, local_point)
-
-        updated_payload["connectionpoints"] = updated_points
-        return updated_payload
 
     @staticmethod
     def _is_valid_endpoint_address(address: Any) -> bool:
@@ -318,8 +453,7 @@ class IJTInterface:
         try:
             path = self._ensure_runtime_resource("connectionpoints.json")
             payload = self._read_connectionpoints_payload_with_backup(path)
-            payload = self._normalize_connectionpoints_payload(payload)
-            return self._apply_runtime_local_endpoint(payload)
+            return self._normalize_connectionpoints_payload(payload)
         except Exception as exc:
             ijt_log.error(f"Error reading connection points: {exc}")
             return {"exception": str(exc)}
@@ -329,8 +463,7 @@ class IJTInterface:
         try:
             default_path = self._resource_default_path("connectionpoints.json")
             payload = json.loads(default_path.read_text(encoding="utf-8"))
-            payload = self._normalize_connectionpoints_payload(payload)
-            return self._apply_runtime_local_endpoint(payload)
+            return self._normalize_connectionpoints_payload(payload)
         except Exception as exc:
             ijt_log.error(f"Error reading default connection points: {exc}")
             return {"exception": str(exc)}
@@ -395,7 +528,9 @@ class IJTInterface:
         try:
             path = self._ensure_runtime_resource("settings.json")
             payload = json.loads(path.read_text(encoding="utf-8"))
-            return self._normalize_json_keys_lower(payload)
+            normalized = self._normalize_json_keys_lower(payload)
+            normalized["methodmetadata"] = self.build_method_metadata()
+            return normalized
         except FileNotFoundError:
             return {"exception": "File not found: Resources/settings.default.json"}
         except Exception as exc:
@@ -461,7 +596,7 @@ class IJTInterface:
 
         connection = Connection(endpoint, None)
         try:
-            return await connection.connect()
+            return await connection.connect(max_retries=1)
         except Exception as exc:
             ijt_log.error(f"Exception in test connection for '{endpoint}': {exc}")
             return {"exception": str(exc)}
@@ -534,6 +669,8 @@ class IJTInterface:
                 return_values = await self.handle_reset_connection_points()
             elif command == "get settings":
                 return_values = await self.handle_get_settings()
+            elif command == "get method metadata":
+                return_values = self.build_method_metadata()
             elif command == "set settings":
                 await self.handle_set_settings(data)
                 return

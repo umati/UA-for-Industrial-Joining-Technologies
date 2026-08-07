@@ -174,6 +174,158 @@ describe('MethodManager — method registry', () => {
     manager.methodObject = {}
     expect(manager.getMethod('NonExistentMethod')).toBeUndefined()
   })
+
+  it('applies metadata grouping and defaults to discovered methods', () => {
+    const manager = new MethodManager(makeFakeAddressSpace())
+    manager.methodObject = {
+      SimulateSingleResult: {
+        methodNode: { nodeIdString: 'ns=1;s=TighteningSystem/Simulations/SimulateResults/SimulateSingleResult' },
+        nodeIdString: 'ns=1;s=TighteningSystem/Simulations/SimulateResults/SimulateSingleResult'
+      }
+    }
+
+    manager.setMethodMetadata({
+      groups: [
+        { id: 'simulations', label: 'Simulations', description: 'Simulation methods', paths: [] },
+        { id: 'simulate-results', parentId: 'simulations', label: 'Simulate Results', paths: ['TighteningSystem/Simulations/SimulateResults'] }
+      ],
+      defaults: {
+        byName: {},
+        byPath: {
+          'TighteningSystem/Simulations/SimulateResults/SimulateSingleResult': {
+            groupId: 'simulate-results',
+            argumentDefaults: { 'Result Type': 2 }
+          }
+        }
+      }
+    })
+
+    expect(manager.getMethod('SimulateSingleResult').metadata.groupId).toBe('simulate-results')
+    expect(manager.getMethod('SimulateSingleResult').metadata.defaults['Result Type']).toBe(2)
+    expect(manager.getGroupedMethods()[0]).toMatchObject({
+      id: 'simulate-results',
+      label: 'Simulate Results',
+      parentId: 'simulations',
+      parentLabel: 'Simulations'
+    })
+  })
+
+  it('groups every method beneath the Simulations object with Simulations', () => {
+    const manager = new MethodManager(makeFakeAddressSpace())
+    manager.methodObject = {
+      SendSimulatedBulkResults: {
+        methodNode: { nodeIdString: 'ns=1;s=TighteningSystem/Simulations/SendSimulatedBulkResults' },
+        nodeIdString: 'ns=1;s=TighteningSystem/Simulations/SendSimulatedBulkResults'
+      }
+    }
+
+    manager.setMethodMetadata({
+      groups: [
+        { id: 'simulations', label: 'Simulations', paths: [] },
+        { id: 'simulate-results', parentId: 'simulations', label: 'Simulate Results', paths: ['TighteningSystem/Simulations/SimulateResults', 'TighteningSystem/Simulations'] }
+      ],
+      defaults: { byName: { SendSimulatedBulkResults: { groupId: 'simulate-results' } }, byPath: {} }
+    })
+
+    expect(manager.getMethod('SendSimulatedBulkResults').metadata.groupId).toBe('simulate-results')
+    expect(manager.getGroupedMethods()).toEqual([
+      expect.objectContaining({
+        id: 'simulate-results',
+        parentId: 'simulations',
+        methods: [expect.objectContaining({ name: 'SendSimulatedBulkResults' })]
+      })
+    ])
+  })
+
+  it('keeps SendSimulatedBulkResults in Simulate Results with older metadata', () => {
+    const manager = new MethodManager(makeFakeAddressSpace())
+    manager.methodObject = {
+      SendSimulatedBulkResults: {
+        methodNode: { nodeIdString: 'ns=1;i=9876' },
+        nodeIdString: 'ns=1;i=9876'
+      }
+    }
+
+    manager.setMethodMetadata({
+      groups: [],
+      defaults: { byName: {}, byPath: {} }
+    })
+
+    expect(manager.getMethod('SendSimulatedBulkResults').metadata.groupId).toBe('simulate-results')
+    expect(manager.getGroupedMethods()[0]).toMatchObject({
+      id: 'simulate-results',
+      parentId: 'simulations',
+      parentLabel: 'Simulations'
+    })
+  })
+
+  it('keeps result and event simulation methods in separate child sections', () => {
+    const manager = new MethodManager(makeFakeAddressSpace())
+    manager.methodObject = {
+      SimulateSingleResult: {
+        methodNode: { nodeIdString: 'ns=1;s=TighteningSystem/Simulations/SimulateResults/SimulateSingleResult' },
+        nodeIdString: 'ns=1;s=TighteningSystem/Simulations/SimulateResults/SimulateSingleResult'
+      },
+      SimulateEvents: {
+        methodNode: { nodeIdString: 'ns=1;s=TighteningSystem/Simulations/SimulateEventsAndConditions/SimulateEvents' },
+        nodeIdString: 'ns=1;s=TighteningSystem/Simulations/SimulateEventsAndConditions/SimulateEvents'
+      }
+    }
+
+    manager.setMethodMetadata({
+      groups: [
+        { id: 'simulations', label: 'Simulations', paths: [] },
+        { id: 'simulate-results', parentId: 'simulations', label: 'Simulate Results', paths: ['TighteningSystem/Simulations/SimulateResults'] },
+        { id: 'simulate-events-and-conditions', parentId: 'simulations', label: 'Simulate Events and Conditions', paths: ['TighteningSystem/Simulations/SimulateEventsAndConditions'] }
+      ],
+      defaults: { byName: {}, byPath: {} }
+    })
+
+    expect(manager.getMethod('SimulateSingleResult').metadata.groupId).toBe('simulate-results')
+    expect(manager.getMethod('SimulateEvents').metadata.groupId).toBe('simulate-events-and-conditions')
+    expect(manager.getGroupedMethods().map(group => group.id)).toEqual([
+      'simulate-results',
+      'simulate-events-and-conditions'
+    ])
+  })
+
+  it('provides valid RequestResults defaults without backend metadata', () => {
+    const manager = new MethodManager(makeFakeAddressSpace())
+    manager.methodObject = {
+      RequestResults: {
+        methodNode: { nodeIdString: 'ns=1;s=TighteningSystem/ResultManagement/RequestResults' },
+        nodeIdString: 'ns=1;s=TighteningSystem/ResultManagement/RequestResults'
+      }
+    }
+
+    manager.setMethodMetadata({ groups: [], defaults: { byName: {}, byPath: {} } })
+
+    expect(manager.getMethod('RequestResults').metadata.defaults).toMatchObject({
+      FromSequenceNumber: 0,
+      ToSequenceNumber: 0,
+      FromTime: '2000-01-01T00:00:00Z',
+      ToTime: '9999-01-01T00:00:00Z',
+      RequestedMinimumDurationBetweenResults: 0
+    })
+  })
+
+  it('keeps the configured domain group order instead of discovery order', () => {
+    const manager = new MethodManager(makeFakeAddressSpace())
+    manager.methodObject = {
+      GetJoint: { nodeIdString: 'ns=1;s=TighteningSystem/JointManagement/GetJoint', methodNode: {} },
+      SimulateSingleResult: { nodeIdString: 'ns=1;s=TighteningSystem/Simulations/SimulateResults/SimulateSingleResult', methodNode: {} }
+    }
+    manager.setMethodMetadata({
+      groups: [
+        { id: 'simulations', label: 'Simulations', paths: [] },
+        { id: 'simulate-results', parentId: 'simulations', label: 'Simulate Results', paths: ['TighteningSystem/Simulations/SimulateResults'] },
+        { id: 'joints', label: 'Joint Management', paths: ['TighteningSystem/JointManagement'] }
+      ],
+      defaults: { byName: {}, byPath: {} }
+    })
+
+    expect(manager.getGroupedMethods().map(group => group.id)).toEqual(['simulate-results', 'joints'])
+  })
 })
 
 // ---------------------------------------------------------------------------

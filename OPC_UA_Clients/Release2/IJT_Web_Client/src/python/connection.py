@@ -8,6 +8,7 @@ the front-end.
 """
 
 import asyncio
+import datetime
 import json
 import os
 import socket
@@ -147,7 +148,7 @@ class Connection:
         state = getattr(protocol, "state", None)
         return str(state).lower() == "open"
 
-    async def connect(self) -> dict[str, Any]:
+    async def connect(self, max_retries: int | None = None) -> dict[str, Any]:
         """Coroutine. Establish an OPC UA session and load type definitions.
 
         Rewrites ``127.0.0.1``/``localhost`` to ``host.docker.internal`` only
@@ -155,7 +156,9 @@ class Connection:
         only means the Python environment is container-provided; it does not
         imply that the OPC UA server is reachable through the Docker host.
         Retries up to ``OPCUA_CONNECT_RETRIES`` times (default 8) with
-        exponential back-off.
+        exponential back-off. Callers performing a short connection probe can
+        pass ``max_retries=1`` to avoid repeatedly attempting an endpoint the
+        user has explicitly asked to test.
 
         Returns:
             A dict ``{"command": "connection established", "endpoint": …}`` on
@@ -199,7 +202,8 @@ class Connection:
         # "Wrong format" — historically this code swallowed that error in a
         # try/except no-op, which has been removed for clarity.
 
-        retries = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT)))
+        configured_retries = max(1, int(os.getenv("OPCUA_CONNECT_RETRIES", _CONNECT_RETRIES_DEFAULT)))
+        retries = configured_retries if max_retries is None else max(1, max_retries)
         base_delay = max(0.2, float(os.getenv("OPCUA_CONNECT_DELAY_SEC", _CONNECT_DELAY_DEFAULT)))
         max_delay = max(
             base_delay,
@@ -429,6 +433,7 @@ class Connection:
                     f"{ns_joining_base}:JoiningSystemEventType",
                 ]
             )
+            requested_result_event_node = sub_client.get_node(ua.NodeId(ua.Int32(1035), ns_joining_base))
 
             # Type definitions are already loaded during connect() for both
             # self.client and self.subscription_client through the IJT
@@ -436,14 +441,19 @@ class Connection:
 
             event_type = data.get("eventtype", "").lower().strip()
 
-            if not event_type or "resultevent" in event_type or "joiningresultevent" in event_type:
+            if (
+                not event_type
+                or "resultevent" in event_type
+                or "joiningresultevent" in event_type
+                or "requestedresultevent" in event_type
+            ):
                 if self.sub_result_event == "sub":
                     self.sub_result_event = await sub_client.create_subscription(
                         _SUBSCRIPTION_PERIOD_MS, self.handler_result_event
                     )
                     self.handle_result_events = await self.sub_result_event.subscribe_events(  # type: ignore[attr-defined]
                         obj_node,
-                        [result_event_node, joining_result_event_node],
+                        [result_event_node, joining_result_event_node, requested_result_event_node],
                         queuesize=200,
                     )
 
@@ -657,6 +667,8 @@ class Connection:
             12: ua.VariantType.String,
             13: ua.VariantType.DateTime,
             21: ua.VariantType.LocalizedText,
+            290: ua.VariantType.Double,  # Duration alias
+            294: ua.VariantType.DateTime,  # UtcTime alias
             31918: ua.VariantType.String,  # TrimmedString
         }
         return mapping.get(nodeid, ua.VariantType.String)
@@ -783,6 +795,12 @@ class Connection:
                         elif value is None:
                             value = ua.LocalizedText(Text="", Locale="en")
 
+                    if variant_type == ua.VariantType.DateTime and isinstance(value, str):
+                        normalized_datetime = value.replace("Z", "+00:00")
+                        value = datetime.datetime.fromisoformat(normalized_datetime)
+                        if value.tzinfo is not None:
+                            value = value.astimezone(datetime.UTC).replace(tzinfo=None)
+
                     # Sanitize None for strings
                     if value is None and variant_type == ua.VariantType.String:
                         value = ""
@@ -839,8 +857,12 @@ class Connection:
                 return {"exception": "OPC UA server has too many open sessions. Restart the server and reconnect."}
             if "BadSecureChannelClosed" in err_str or "Unhandled exception" in err_str or "sending request" in err_str:
                 if await self.is_connection_open():
-                    ijt_log.info("[methodcall] Session alive — method executed; results in event stream")
-                    return {"output": []}
+                    return {
+                        "exception": (
+                            "OPC UA request failed while the session remained open; "
+                            "the method completion state is unknown. Retry the request."
+                        )
+                    }
                 return {"exception": "Connection to OPC UA server was lost. Please reconnect."}
             return {"exception": f"OPC UA error: {ua_err}"}
         except Exception as e:
@@ -848,7 +870,11 @@ class Connection:
             ijt_log.error(f"[methodcall] General Exception: {e}")
             if "Unhandled exception" in err_str or "sending request" in err_str:
                 if await self.is_connection_open():
-                    ijt_log.info("[methodcall] Session alive — method executed; results in event stream")
-                    return {"output": []}
+                    return {
+                        "exception": (
+                            "OPC UA request failed while the session remained open; "
+                            "the method completion state is unknown. Retry the request."
+                        )
+                    }
                 return {"exception": "Connection to OPC UA server was lost. Please reconnect."}
             return {"exception": f"Method call exception: {e}"}

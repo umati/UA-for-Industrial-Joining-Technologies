@@ -1,10 +1,34 @@
 const METHOD_NODE_CLASS = 4 // OPC UA NodeClass for Method nodes
 import { ijtLog } from '../ijt-logger.mjs'
 
+const COMPATIBILITY_GROUPS = Object.freeze({
+  SendSimulatedBulkResults: {
+    id: 'simulate-results',
+    label: 'Simulate Results',
+    description: 'Simulate joining results.',
+    parentId: 'simulations',
+    parentLabel: 'Simulations',
+    parentDescription: 'Simulation methods.'
+  }
+})
+
+const COMPATIBILITY_METHOD_DEFAULTS = Object.freeze({
+  RequestResults: {
+    argumentDefaults: {
+      FromSequenceNumber: 0,
+      ToSequenceNumber: 0,
+      FromTime: '2000-01-01T00:00:00Z',
+      ToTime: '9999-01-01T00:00:00Z',
+      RequestedMinimumDurationBetweenResults: 0
+    }
+  }
+})
+
 export class MethodManager {
   constructor (addressSpace) {
     this.addressSpace = addressSpace
     this.methodObject = {}
+    this.methodMetadata = { groups: [], defaults: { byName: {}, byPath: {} }, globalDefaults: {} }
   }
 
   /**
@@ -56,8 +80,109 @@ export class MethodManager {
     }
     const methodList = await Promise.all(methodPromises)
     for (const methodItem of methodList) {
-      this.methodObject[methodItem.methodNode.displayName] = { parentNode: folderNode, methodNode: methodItem.methodNode, arguments: methodItem.arguments }
+      const pathText = String(methodItem.methodNode?.nodeIdString || methodItem.methodNode?.nodeId || '')
+      this.methodObject[methodItem.methodNode.displayName] = {
+        parentNode: folderNode,
+        methodNode: methodItem.methodNode,
+        arguments: methodItem.arguments,
+        nodeIdString: pathText,
+        metadata: this._buildMethodPresentation(pathText, methodItem.methodNode.displayName)
+      }
     }
+  }
+
+  setMethodMetadata (metadata = {}) {
+    this.methodMetadata = {
+      groups: Array.isArray(metadata.groups) ? metadata.groups : [],
+      defaults: {
+        byName: metadata?.defaults?.byName || {},
+        byPath: metadata?.defaults?.byPath || {}
+      },
+      globalDefaults: metadata?.globalDefaults || {}
+    }
+    for (const [name, methodData] of Object.entries(this.methodObject || {})) {
+      const pathText = methodData.nodeIdString || methodData.methodNode?.nodeIdString || methodData.methodNode?.nodeId || ''
+      methodData.metadata = this._buildMethodPresentation(pathText, name)
+    }
+  }
+
+  _normalizeMethodPath (pathText = '') {
+    return String(pathText)
+      .replace(/^ns=\d+;s=/, '')
+      .trim()
+  }
+
+  _buildMethodPresentation (pathText, displayName) {
+    const normalizedPath = this._normalizeMethodPath(pathText)
+    const byName = this.methodMetadata?.defaults?.byName?.[displayName] || {}
+    const byPath = this.methodMetadata?.defaults?.byPath?.[normalizedPath] || {}
+    const groups = Array.isArray(this.methodMetadata?.groups) ? this.methodMetadata.groups : []
+    const compatibilityGroup = COMPATIBILITY_GROUPS[displayName]
+    const compatibilityDefaults = COMPATIBILITY_METHOD_DEFAULTS[displayName] || {}
+    const explicitGroupId = byPath?.groupId || byName?.groupId || compatibilityGroup?.id
+    const group = groups.find(candidate => candidate?.id === explicitGroupId) ||
+      groups
+        .flatMap(candidate => (Array.isArray(candidate?.paths) ? candidate.paths : [])
+          .filter(prefix => normalizedPath.startsWith(prefix))
+          .map(prefix => ({ candidate, prefix })))
+        .sort((left, right) => right.prefix.length - left.prefix.length)[0]?.candidate ||
+      null
+    return {
+      path: normalizedPath,
+      groupId: group?.id || explicitGroupId || 'other-methods',
+      groupLabel: group?.label || compatibilityGroup?.label || 'Additional Methods',
+      groupDescription: group?.description || compatibilityGroup?.description || '',
+      parentId: group?.parentId || compatibilityGroup?.parentId || null,
+      parentLabel: compatibilityGroup?.parentLabel || '',
+      parentDescription: compatibilityGroup?.parentDescription || '',
+      defaults: {
+        ...(compatibilityDefaults.argumentDefaults || {}),
+        ...(byName.argumentDefaults || {}),
+        ...(byPath.argumentDefaults || {})
+      },
+      notes: [...(compatibilityDefaults.notes || []), ...(byName.notes || []), ...(byPath.notes || [])]
+    }
+  }
+
+  getGroupedMethods () {
+    const groups = new Map()
+    const definitions = new Map()
+    for (const definition of this.methodMetadata.groups) {
+      definitions.set(definition.id, definition)
+    }
+    for (const definition of this.methodMetadata.groups) {
+      groups.set(definition.id, {
+        id: definition.id,
+        label: definition.label,
+        description: definition.description || '',
+        parentId: definition.parentId || null,
+        parentLabel: definitions.get(definition.parentId)?.label || '',
+        parentDescription: definitions.get(definition.parentId)?.description || '',
+        methods: []
+      })
+    }
+    for (const [name, methodData] of Object.entries(this.methodObject || {})) {
+      const metadata = methodData.metadata || this._buildMethodPresentation(methodData.nodeIdString, name)
+      const groupId = metadata.groupId || 'other-methods'
+      if (!groups.has(groupId)) {
+        groups.set(groupId, {
+          id: groupId,
+          label: metadata.groupLabel || 'Additional Methods',
+          description: metadata.groupDescription || '',
+          parentId: metadata.parentId || null,
+          parentLabel: metadata.parentLabel || '',
+          parentDescription: metadata.parentDescription || '',
+          methods: []
+        })
+      }
+      groups.get(groupId).methods.push({ name, methodData })
+    }
+    return [...groups.values()]
+      .filter(group => group.methods.length > 0)
+      .map(group => ({
+        ...group,
+        methods: group.methods.sort((a, b) => a.name.localeCompare(b.name))
+      }))
   }
 
   /**

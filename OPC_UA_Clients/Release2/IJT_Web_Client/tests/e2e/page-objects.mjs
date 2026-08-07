@@ -263,13 +263,13 @@ export class MethodsPage {
     await this.page.locator(SEL.METHOD_AREA).first().waitFor({ state: 'visible', timeout })
   }
 
-  /** Find a method area that contains a label matching any of the given names. */
+  /** Find a method area that contains a summary matching any of the given names. */
   async findMethodArea (nameOrAliases) {
     const names = Array.isArray(nameOrAliases) ? nameOrAliases : [nameOrAliases]
     for (const name of names) {
       const area = this.page
         .locator(SEL.METHOD_AREA)
-        .filter({ has: this.page.locator('label', { hasText: name }) })
+        .filter({ has: this.page.locator('.methodCardTitle', { hasText: name }) })
         .first()
       if ((await area.count()) > 0) return { area, name }
     }
@@ -294,6 +294,16 @@ export class MethodsPage {
     if (!found) throw new Error(`Method not found: ${JSON.stringify(nameOrAliases)}`)
     const messages = this.page.locator(SEL.MESSAGE_ITEMS)
     const beforeCount = waitForMessage ? await messages.count() : 0
+    await found.area.evaluate((area) => {
+      let parent = area.parentElement
+      while (parent) {
+        if (parent.tagName === 'DETAILS') parent.open = true
+        parent = parent.parentElement
+      }
+    })
+    if (!(await found.area.evaluate(area => area.open))) {
+      await found.area.locator('.methodCardSummary').click()
+    }
     await found.area.locator(SEL.METHOD_CALL_BTN).first().click()
     if (waitForMessage) {
       await this.page.waitForFunction(
@@ -306,13 +316,13 @@ export class MethodsPage {
     return found.name
   }
 
-  /** Return all visible method area labels. */
+  /** Return every discovered method title, including methods in collapsed groups. */
   async getMethodNames () {
     const areas = this.page.locator(SEL.METHOD_AREA)
     const count = await areas.count()
     const names = []
     for (let i = 0; i < count; i++) {
-      const label = await areas.nth(i).locator('label').first().textContent()
+      const label = await areas.nth(i).locator('.methodCardTitle').first().textContent()
       if (label) names.push(label.trim())
     }
     return names
@@ -357,13 +367,8 @@ export class EventsPage {
 
   /** Returns true if any event item contains the given substring. */
   async hasEventContaining (text) {
-    const items = this.page.locator(SEL.MESSAGE_ITEMS)
-    const count = await items.count()
-    for (let i = 0; i < count; i++) {
-      const t = await items.nth(i).textContent()
-      if (t?.includes(text)) return true
-    }
-    return false
+    const items = await this.page.locator(SEL.MESSAGE_ITEMS).allTextContents()
+    return items.some(item => item.includes(text))
   }
 
   async toggleQueue () {

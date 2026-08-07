@@ -43,6 +43,18 @@ The result model turns OPC UA result payloads into a predictable object graph us
 
 So downstream code can branch by class behavior instead of parsing raw payload each time.
 
+## Result Event Sources
+
+The Events page preserves the source of each result while using the same result payload model:
+
+- `ResultEvent` is a live result notification.
+- `RequestedResultEvent` is a stored result returned after `RequestResults` or
+  `RequestUnacknowledgedResults`.
+
+`RequestedResultEventType` (IJT Base NodeId `1035`) is routed through
+`JoiningSystemResultReadyEventModel`, because its `Result` payload has the
+same shape as a live joining-system result.
+
 ## Common Result Shape
 
 After parsing, a result object usually looks like:

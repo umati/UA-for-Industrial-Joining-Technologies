@@ -72,10 +72,21 @@ export function createEndpointReadiness ({ connectionManager, endpointUrl, docum
   const root = documentRef.createElement('div')
   root.classList.add('endpointHeader')
 
+  const endpointIdentity = documentRef.createElement('div')
+  endpointIdentity.classList.add('endpointHeaderIdentity')
+  root.appendChild(endpointIdentity)
+
+  const endpointTitle = documentRef.createElement('span')
+  endpointTitle.classList.add('endpointHeaderLabel')
+  endpointTitle.textContent = 'Endpoint'
+  endpointIdentity.appendChild(endpointTitle)
+
   const endpointLabel = documentRef.createElement('span')
   endpointLabel.classList.add('endpointHeaderUrl')
   endpointLabel.textContent = endpointUrl || ''
-  root.appendChild(endpointLabel)
+  endpointLabel.title = endpointUrl || ''
+  endpointLabel.setAttribute('data-opcua-endpoint-url', endpointUrl || '')
+  endpointIdentity.appendChild(endpointLabel)
 
   const details = documentRef.createElement('details')
   details.classList.add('endpointReadinessDetails')

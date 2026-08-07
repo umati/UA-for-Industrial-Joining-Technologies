@@ -10,6 +10,9 @@ export default class BaseEventType extends IJTBaseModel {
       }
       return `${evtName}]`
     } else if (this.Result) {
+      if (Number(this.EventType?.Identifier) === 1035) {
+        return 'RequestedResultEvent'
+      }
       return 'ResultEvent'
     }
   }

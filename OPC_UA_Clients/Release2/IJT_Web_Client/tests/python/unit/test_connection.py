@@ -90,6 +90,22 @@ async def test_connect_returns_exception_when_all_retries_fail(monkeypatch):
     assert "exception" in result
 
 
+@pytest.mark.asyncio
+async def test_connect_uses_explicit_single_probe_attempt(monkeypatch):
+    monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "8")
+
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock(side_effect=ConnectionRefusedError("refused"))
+    mock_client.set_security_string = MagicMock(return_value=None)
+
+    with patch("python.connection.Client", return_value=mock_client):
+        conn = _make_connection()
+        result = await conn.connect(max_retries=1)
+
+    assert "after 1 attempts" in result["exception"]
+    assert mock_client.connect.await_count == 1
+
+
 # ---------------------------------------------------------------------------
 # connect — explicit Docker-host URL rewrite
 # ---------------------------------------------------------------------------
@@ -1014,6 +1030,7 @@ def _make_sub_client():
     sub_client = MagicMock()
     sub_client.get_namespace_index = AsyncMock(return_value=2)
     sub_client.nodes.root.get_child = AsyncMock(return_value=MagicMock())
+    sub_client.get_node.return_value = MagicMock()
     sub_client.create_subscription = AsyncMock(return_value=mock_sub)
     return sub_client, mock_sub
 
@@ -1034,6 +1051,9 @@ async def test_subscribe_creates_both_subscriptions_when_no_eventtype():
     assert sub_client.create_subscription.await_count == 2
     assert conn.sub_result_event is mock_sub
     assert conn.sub_joining_event is mock_sub
+    requested_event_type = sub_client.get_node.call_args.args[0]
+    assert requested_event_type.Identifier == 1035
+    assert requested_event_type.NamespaceIndex == 2
 
 
 @pytest.mark.asyncio
@@ -1368,6 +1388,26 @@ async def test_methodcall_list_of_ints_hits_array_else_branch():
     assert captured[0].VariantType == ua.VariantType.Int32
 
 
+@pytest.mark.asyncio
+async def test_methodcall_converts_iso_datetime_to_opc_ua_datetime():
+    """ISO timestamps from the browser must become DateTime variants."""
+    from asyncua import ua
+
+    mock_arg_desc = MagicMock()
+    mock_arg_desc.DataType.Identifier = 13
+    conn, captured = _make_methodcall_conn(expected_args=[mock_arg_desc])
+
+    with patch("python.connection.serialize_full_event", return_value=[]):
+        with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+            result = await conn.methodcall(
+                {**_MC_PAYLOAD, "arguments": [{"dataType": 13, "value": "2000-01-01T00:00:00Z"}]}
+            )
+
+    assert "output" in result
+    assert captured[0].VariantType == ua.VariantType.DateTime
+    assert captured[0].Value.isoformat() == "2000-01-01T00:00:00"
+
+
 # ---------------------------------------------------------------------------
 # methodcall — string digit → int conversion (line 758)
 # ---------------------------------------------------------------------------
@@ -1479,8 +1519,8 @@ async def test_methodcall_uaerror_bad_too_many_sessions_returns_specific_message
 
 
 @pytest.mark.asyncio
-async def test_methodcall_uaerror_secure_channel_closed_connection_alive_returns_output():
-    """ua.UaError with 'BadSecureChannelClosed' returns {'output': []} when session alive (line 794)."""
+async def test_methodcall_uaerror_secure_channel_closed_connection_alive_returns_unknown_state():
+    """A transport failure stays visible when the session remains open."""
     from asyncua import ua
 
     conn, _ = _make_methodcall_conn(expected_args=[], call_method_exc=ua.UaError("BadSecureChannelClosed"))
@@ -1489,7 +1529,8 @@ async def test_methodcall_uaerror_secure_channel_closed_connection_alive_returns
     with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
         result = await conn.methodcall({**_MC_PAYLOAD, "arguments": []})
 
-    assert result == {"output": []}
+    assert "exception" in result
+    assert "completion state is unknown" in result["exception"]
 
 
 @pytest.mark.asyncio
@@ -1527,8 +1568,8 @@ async def test_methodcall_uaerror_generic_returns_opc_ua_error_message():
 
 
 @pytest.mark.asyncio
-async def test_methodcall_generic_exception_unhandled_connection_alive_returns_output():
-    """Generic Exception containing 'Unhandled exception' returns {'output': []} when alive (lines 801-803)."""
+async def test_methodcall_generic_exception_unhandled_connection_alive_returns_unknown_state():
+    """An unhandled request failure stays visible when the session remains open."""
     conn, _ = _make_methodcall_conn(
         expected_args=[],
         call_method_exc=RuntimeError("Unhandled exception while sending request"),
@@ -1538,7 +1579,8 @@ async def test_methodcall_generic_exception_unhandled_connection_alive_returns_o
     with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
         result = await conn.methodcall({**_MC_PAYLOAD, "arguments": []})
 
-    assert result == {"output": []}
+    assert "exception" in result
+    assert "completion state is unknown" in result["exception"]
 
 
 @pytest.mark.asyncio

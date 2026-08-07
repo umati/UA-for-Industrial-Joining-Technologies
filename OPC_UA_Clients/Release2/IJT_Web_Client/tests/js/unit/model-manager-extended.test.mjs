@@ -238,6 +238,7 @@ describe('ModelManager — createModelFromEvent', () => {
     const model = mm.createModelFromEvent(msg)
     expect(model).toBeDefined()
     expect(model.Result).toBeDefined()
+    expect(model.getEventName()).toBe('ResultEvent')
   })
 
   it('creates JoiningSystemResultReadyEvent for EventType 1002', () => {
@@ -248,6 +249,18 @@ describe('ModelManager — createModelFromEvent', () => {
     }
     const model = mm.createModelFromEvent(msg)
     expect(model).toBeDefined()
+  })
+
+  it('creates JoiningSystemResultReadyEvent for RequestedResultEventType 1035', () => {
+    const mm = makeMM()
+    const msg = {
+      EventType: { Identifier: 1035 },
+      Result: { ResultMetaData: { ResultId: 'requested-r1', Classification: '1' } }
+    }
+    const model = mm.createModelFromEvent(msg)
+    expect(model).toBeDefined()
+    expect(model.Result).toBeDefined()
+    expect(model.getEventName()).toBe('RequestedResultEvent')
   })
 
   it('creates DefaultNode for unknown EventType', () => {

@@ -497,6 +497,20 @@ updates the stable issue key
 Joint Demo feature tests wait for the active `ProductInstanceUri` to resolve
 before calling demo methods; the Web UI does not fire Joint Demo methods while
 only a bundled sample Settings URI is available.
+The Web Client Methods screen groups methods by domain: Simulations, Asset
+Management, Joining Process Management, Joint Management, and Result
+Management. Simulations contains `Simulate Results` and `Simulate Events and
+Conditions` child sections. Backend-served method metadata controls grouping
+hints and smart defaults such as prefilling `ProductInstanceUri` from live Tool
+discovery, then Settings fallback, while keeping method arguments visible.
+Per-method scalar values can be saved and restored locally without replaying
+structured entity references. Methods results are expected to remain fully
+inspectable as formatted JSON payloads in
+the UI.
+Endpoint headers must identify the target with a visible `Endpoint` label and
+high-contrast URL treatment beside the derived readiness pill. Preserve the
+full URL in the native title and `data-opcua-endpoint-url` hook so long targets
+remain inspectable and browser automation has a durable semantic selector.
 
 > Release 1 Node Client always uses 40451 (fixed — no dynamic port support).
 > Server self-tests (smoke) correctly use 40451 — they test the server in its native configuration.

@@ -227,6 +227,21 @@ describe('ServerGraphics connectionpoints editing', () => {
     expect(screen.rows.children[0].children[4].innerText).toBe('Failed: Test timed out')
   })
 
+  it('prevents duplicate test requests while a test is in progress', () => {
+    const ws = makeWebSocketManager()
+    const screen = new ServerGraphics(ws, { containerList: [], generateTab: vi.fn() }, {})
+    const point = { name: 'Slow', address: 'opc.tcp://slow:4840', autoconnect: false }
+    screen.makeConnectionPointRow(point, ws, {}, {})
+
+    screen.testConnectionPoint(point, ws)
+    screen.testConnectionPoint(point, ws)
+
+    expect(ws.sent.filter((item) => item.command === 'test connection')).toHaveLength(1)
+    expect(screen.rows.children[0].children[3].children[0].disabled).toBe(true)
+    expect(screen.rows.children[0].children[3].children[0].innerText).toBe('Testing...')
+    expect(screen.messages.innerText).toContain('Test already in progress')
+  })
+
   it('shows readable test connection failures inline', () => {
     const ws = makeWebSocketManager({
       acknowledgeTestConnection: true,

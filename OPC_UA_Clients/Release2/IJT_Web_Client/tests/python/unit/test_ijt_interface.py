@@ -134,7 +134,59 @@ async def test_get_settings_uses_resource_file(local_temp_dir, fake_websocket, d
 
     payload = decode_last_message(fake_websocket)
     assert payload["data"]["initialviewlevel"] == 3
+    assert payload["data"]["methodmetadata"]["groups"][0]["id"] == "simulations"
     assert payload["uniqueid"] == 11
+
+
+@pytest.mark.asyncio
+@pytest.mark.core
+async def test_get_method_metadata_returns_stable_domain_groups(fake_websocket, decode_last_message):
+    interface = IJTInterface()
+
+    await interface.handle(
+        fake_websocket,
+        {"command": "get method metadata", "endpoint": "common", "uniqueid": 12},
+    )
+
+    payload = decode_last_message(fake_websocket)
+    metadata = payload["data"]
+    assert payload["command"] == "get method metadata"
+    assert [group["id"] for group in metadata["groups"]] == [
+        "simulations",
+        "simulate-results",
+        "simulate-events-and-conditions",
+        "asset-management",
+        "joining-process-management",
+        "joint-management",
+        "result-management",
+    ]
+    assert metadata["groups"][1]["parentId"] == "simulations"
+    assert metadata["groups"][1]["paths"] == [
+        "TighteningSystem/Simulations/SimulateResults",
+        "TighteningSystem/Simulations",
+    ]
+    assert metadata["groups"][2]["parentId"] == "simulations"
+    assert metadata["groups"][2]["paths"] == ["TighteningSystem/Simulations/SimulateEventsAndConditions"]
+    assert metadata["defaults"]["byPath"]["TighteningSystem/Simulations/SendSimulatedBulkResults"]["groupId"] == (
+        "simulate-results"
+    )
+    assert metadata["defaults"]["byName"]["SendSimulatedBulkResults"]["groupId"] == "simulate-results"
+    assert metadata["globalDefaults"]["stringFallback"] == "Sample"
+    request_results_defaults = metadata["defaults"]["byPath"]["TighteningSystem/ResultManagement/RequestResults"][
+        "argumentDefaults"
+    ]
+    assert request_results_defaults == {
+        "FromSequenceNumber": 0,
+        "ToSequenceNumber": 0,
+        "FromTime": "2000-01-01T00:00:00Z",
+        "ToTime": "9999-01-01T00:00:00Z",
+        "RequestedMinimumDurationBetweenResults": 0.0,
+    }
+    assert metadata["defaults"]["byName"]["SetTime"]["argumentDefaults"]["Time"] == {"source": "currentUtc"}
+    assert metadata["defaults"]["byName"]["GetJointList"]["argumentDefaults"]["ProductInstanceUri"] == {
+        "source": "productid",
+        "allowEmpty": True,
+    }
 
 
 @pytest.mark.asyncio
@@ -371,6 +423,18 @@ def test_resource_path_returns_path_in_existing_directory():
     result = IJTInterface._resource_path("settings.json")
     assert result.name == "settings.json"
     assert result.parent.exists()
+
+
+def test_resource_path_uses_isolated_runtime_directory_without_moving_defaults(tmp_path, monkeypatch):
+    """Test backends must not read or write the developer's runtime profile."""
+    monkeypatch.setenv("IJT_RUNTIME_RESOURCES_DIR", str(tmp_path))
+
+    runtime_path = IJTInterface._resource_path("connectionpoints.json")
+    default_path = IJTInterface()._resource_default_path("connectionpoints.json")
+
+    assert runtime_path == tmp_path / "connectionpoints.json"
+    assert default_path.name == "connectionpoints.default.json"
+    assert default_path != runtime_path
 
 
 def test_resource_path_fallback_when_no_candidate_directory():
@@ -672,6 +736,7 @@ async def test_handle_test_connection_uses_temporary_connection_without_storing(
         result = await interface.handle_test_connection(ep)
 
     assert result == {"command": "connection established", "endpoint": ep}
+    temporary.connect.assert_awaited_once_with(max_retries=1)
     temporary.terminate.assert_awaited_once()
     assert ep not in interface.connection_list
 
@@ -956,8 +1021,8 @@ async def test_handle_get_connection_points_returns_data_when_file_exists(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_handle_get_connection_points_uses_runtime_local_endpoint(tmp_path, monkeypatch):
-    """OPCUA_TEST_ENDPOINT makes the browser LOCAL tab match the runner server."""
+async def test_handle_get_connection_points_preserves_persisted_local_endpoint(tmp_path, monkeypatch):
+    """Test-runner endpoint variables must not rewrite the user's LOCAL profile."""
     cp_data = {
         "connectionpoints": [
             {
@@ -979,49 +1044,10 @@ async def test_handle_get_connection_points_uses_runtime_local_endpoint(tmp_path
     assert result["connectionpoints"] == [
         {
             "name": "LOCAL",
-            "address": "opc.tcp://localhost:40463",
+            "address": "opc.tcp://127.0.0.1:40451",
             "autoconnect": True,
         }
     ]
-
-
-def test_runtime_local_endpoint_is_inserted_when_missing(monkeypatch):
-    monkeypatch.setenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40463")
-
-    result = IJTInterface._apply_runtime_local_endpoint(
-        {
-            "connectionpoints": [
-                {
-                    "name": "REMOTE",
-                    "address": "opc.tcp://example.com:4840",
-                    "autoconnect": False,
-                }
-            ]
-        }
-    )
-
-    assert result["connectionpoints"][0] == {
-        "name": "LOCAL",
-        "address": "opc.tcp://localhost:40463",
-        "autoconnect": False,
-    }
-    assert result["connectionpoints"][1]["name"] == "REMOTE"
-
-
-def test_runtime_local_endpoint_handles_non_dict_payload(monkeypatch):
-    monkeypatch.setenv("OPCUA_TEST_ENDPOINT", "opc.tcp://localhost:40463")
-
-    result = IJTInterface._apply_runtime_local_endpoint([])
-
-    assert result == {
-        "connectionpoints": [
-            {
-                "name": "LOCAL",
-                "address": "opc.tcp://localhost:40463",
-                "autoconnect": False,
-            }
-        ]
-    }
 
 
 # ===========================================================================

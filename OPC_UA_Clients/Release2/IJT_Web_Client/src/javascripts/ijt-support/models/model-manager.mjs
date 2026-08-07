@@ -35,6 +35,7 @@ const EVENT_TYPE_ID = Object.freeze({
   RESULT_READY: 1006,
   RESULT_RESPONSE: 1007,
   JOINING_RESULT: 1002,
+  REQUESTED_RESULT: 1035,
 })
 
 const MODEL_CONSTRUCTORS = {
@@ -171,6 +172,7 @@ export class ModelManager {
         model = new JoiningSystemResultReadyEvent(msg, this)
         break
       case (EVENT_TYPE_ID.JOINING_RESULT): // Some non tightening related result
+      case (EVENT_TYPE_ID.REQUESTED_RESULT):
         model = new JoiningSystemResultReadyEvent(msg, this)
         break
       default:

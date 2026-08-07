@@ -60,6 +60,7 @@ export default class ServerGraphics extends BasicScreen {
     this._saveInFlight = false
     this._saveDebounceTimer = null
     this._connectionStates = new Map()
+    this._testsInFlight = new Set()
 
     const column = this.makeNamedArea('Servers', 'leftArea', this.backGround)
 
@@ -165,6 +166,16 @@ export default class ServerGraphics extends BasicScreen {
     const statusNode = row.children[4]
     if (statusNode) {
       statusNode.innerText = text
+    }
+  }
+
+  _setTestButtonState (endpoint, inProgress) {
+    for (const row of this.rows.children) {
+      const addressInput = row.children[1]?.children?.[0]
+      const testButton = row.children[3]?.children?.[0]
+      if (!addressInput || !testButton || String(addressInput.value).trim() !== String(endpoint).trim()) continue
+      testButton.disabled = inProgress
+      testButton.innerText = inProgress ? 'Testing...' : 'Test'
     }
   }
 
@@ -311,8 +322,15 @@ export default class ServerGraphics extends BasicScreen {
       this._setConnectionState(point.address, 'Failed', 'Invalid endpoint')
       return
     }
+    const endpoint = point.address.trim()
+    if (this._testsInFlight.has(endpoint)) {
+      this.showMessage(`Test already in progress for ${endpoint}.`)
+      return
+    }
+    this._testsInFlight.add(endpoint)
     const testUniqueId = globalThis.crypto?.randomUUID?.() || `test-${Date.now()}`
-    this._setConnectionState(point.address, 'Testing')
+    this._setConnectionState(endpoint, 'Testing')
+    this._setTestButtonState(endpoint, true)
     let testTimeout = null
     let settled = false
     const cleanup = () => {
@@ -320,13 +338,15 @@ export default class ServerGraphics extends BasicScreen {
         clearTimeout(testTimeout)
         testTimeout = null
       }
-      socket.unsubscribe(point.address, 'test connection', onTestResponse)
+      socket.unsubscribe(endpoint, 'test connection', onTestResponse)
     }
     const finish = (status, errorText = '') => {
       if (settled) return
       settled = true
       cleanup()
-      this._setConnectionState(point.address, status, errorText)
+      this._testsInFlight.delete(endpoint)
+      this._setTestButtonState(endpoint, false)
+      this._setConnectionState(endpoint, status, errorText)
     }
     const onTestResponse = (msg, uniqueid) => {
       if (uniqueid !== testUniqueId) return
@@ -336,11 +356,11 @@ export default class ServerGraphics extends BasicScreen {
       }
       finish('Reachable')
     }
-    socket.subscribe(point.address, 'test connection', onTestResponse)
+    socket.subscribe(endpoint, 'test connection', onTestResponse)
     testTimeout = setTimeout(() => {
       finish('Failed', 'Test timed out')
     }, CONNECTION_TEST_TIMEOUT_MS)
-    socket.send('test connection', point.address, testUniqueId, {})
+    socket.send('test connection', endpoint, testUniqueId, {})
   }
 
   /**

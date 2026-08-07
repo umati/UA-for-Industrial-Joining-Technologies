@@ -591,6 +591,29 @@ Namespace assertions must use real namespace URIs such as
 Simulator method buttons must render valid default values for required numeric
 arguments. `SimulateEvents` and `SimulateConditions` default to event type `1`,
 and `SimulateBulkEvents` defaults to event type `1` and count `3`.
+The Methods page groups server calls by address-space domain: `Simulations`,
+Asset Management, Joining Process Management, Joint Management, and Result
+Management. Simulations is a parent domain with `Simulate Results` and
+`Simulate Events and Conditions` child sections. Direct result methods such as
+`SendSimulatedBulkResults` belong to Simulate Results. Method guidance and
+argument defaults come from backend-shipped metadata that augments committed
+settings defaults, so new methods can gain grouping and UX hints without
+hardcoding all presentation rules in the browser.
+Keep method inputs visible; improve usability with prefilled defaults instead
+of hiding arguments. `ProductInstanceUri`-based methods should prefer the
+live `Tool.ProductInstanceUri` value, then Settings as fallback, including
+`GetJoiningProcessList` and `GetJointList`. Operators can choose Recommended
+defaults or Last used values per method; saved values are browser-local,
+method-scoped, and deliberately restore only scalar inputs and LocalizedText so
+stale structured entity references are never silently replayed. Results output
+in the Methods page must show formatted JSON payloads so operators can inspect
+returned values, not just pass/fail status. `EntityDataType[]` editors retain
+their selected identifiers until explicitly removed or the method card is
+reset.
+Endpoint headers must present the endpoint as a labeled, high-contrast identity
+block beside readiness. Use `data-opcua-endpoint-url` for automation, preserve
+the complete URL in the native title, and do not rely on visual truncation as
+the only representation of an endpoint.
 
 ---
 
@@ -663,16 +686,18 @@ This client's split live suites auto-launch dedicated server instances on
 assigned root-runner ports (starting at **40463**) through the copy-and-patch
 mechanism: copy the binary, patch `server_configuration.json`, and manage the
 process lifecycle. Port 40451 is never used by this test runner.
-When the runner sets `OPCUA_TEST_ENDPOINT`, the WebSocket backend serves that endpoint as the browser
-`LOCAL` connection point for Playwright so UI tests connect to the same isolated server as direct tests.
-`OPCUA_SERVER_URL` follows the same runtime override path for local validation; leave it unset for normal
-production/browser use unless you intentionally want to replace the served `LOCAL` endpoint.
+When the runner sets `OPCUA_TEST_ENDPOINT`, browser fixtures explicitly seed their isolated `LOCAL`
+connection point and restore the exact saved runtime profile afterward. The WebSocket backend must never
+rewrite or persist a server profile from `OPCUA_TEST_ENDPOINT` or `OPCUA_SERVER_URL`; those variables are
+test-process configuration, while `connectionpoints.json` remains the sole source of truth for browser profiles.
 The committed `connectionpoints.default.json` keeps only the shared `LOCAL` endpoint. The backend creates
 the ignored runtime `connectionpoints.json` from that template, so developers can add local controller endpoints
 without breaking repository hygiene checks.
 `connectionpoints.json` uses a normalized schema with `schema_version` and a `connectionpoints` list. Server-profile
 saves must acknowledge success or failure over WebSocket, validate each endpoint row, and write atomically through
 `connectionpoints.json.tmp` before replacing the runtime file. Keep one `.bak` backup when replacing an existing file.
+The Servers **Test** action is a single, non-invasive connection probe. It must disable its row while active and
+reject duplicate clicks, while normal user connections retain their resilient retry policy.
 If the runtime JSON is corrupt or partially written, the backend should load the `.bak` backup before returning an
 exception. Duplicate endpoint addresses are not valid server profiles; preserve the first valid row and reject/filter
 later duplicates case-insensitively.

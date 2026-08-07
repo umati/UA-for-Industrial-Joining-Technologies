@@ -39,7 +39,7 @@ unit stage and is currently 95%.
 - `run_all_tests.py` writes JUnit XML to `test-results/pytest-live.xml` by default (or `--junit-xml FILE`).
 - Live CU coverage output is `test-results/cu-coverage-report.json`; unit-stage plugin output is redirected to `test-results/cu-coverage-report-unit.json` when CU-marked tests are collected.
 - In each `by_cu` row, `outcome` is the raw execution rollup kept for compatibility; `compliance` is the conservative report status consumed by GitHub/Excel. New tooling should read `compliance`.
-- The live CU coverage report includes workbook traceability for the checked-in Test Cases workbook: 1,122 expected TC header rows grouped by official CU, positive/negative classification, CTT/review/spec-link metadata, and optional exact row links from `@pytest.mark.workbook_ref("Sheet", [row])`.
+- The live CU coverage report includes workbook traceability for the checked-in Test Cases workbook: 369 expected TC header rows grouped by official CU, positive/negative classification, CTT-automation/review/spec-link metadata, and optional exact row links from `@pytest.mark.workbook_ref("Sheet", [row])`.
 - Unit-only and collect-only pytest sessions must not write or overwrite the live CU coverage report.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
 - Default is `always` locally and in CI; the Excel post-step is non-fatal. When tests fail, the workbook is diagnostic and includes a red warning banner.

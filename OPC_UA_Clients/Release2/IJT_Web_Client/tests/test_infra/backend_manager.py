@@ -247,6 +247,7 @@ class WebTestBackendManager:
         env = os.environ.copy()
         env["WS_PORT"] = str(self.ws_port)
         env["OPCUA_TEST_ENDPOINT"] = self.opcua_endpoint
+        env["IJT_RUNTIME_RESOURCES_DIR"] = str(self.results_root / "runtime-resources")
         with (self.results_root / "websocket.log").open("a", encoding="utf-8") as websocket_log:
             self._ws_proc = subprocess.Popen(  # noqa: S603 - command is internal test infrastructure.
                 [self.python_executable, "index.py"],

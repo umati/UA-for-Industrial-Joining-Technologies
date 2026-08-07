@@ -1,6 +1,7 @@
 import BasicScreen from '../graphic-support/basic-screen.mjs' // Basic functionality application code for the screen functionality
 import CommonPropertyView from './common-property-view.mjs' // The machine properties view
 import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
+import { toolsFromProductInstanceUriResponse } from '../../ijt-support/tools/product-instance-uri.mjs'
 
 const SAMPLE_PRODUCT_INSTANCE_URIS = new Set([
   'www.company.com/ProductABC123',
@@ -101,8 +102,8 @@ export default class JointDemo extends BasicScreen {
     const socketHandler = this.methodManager?.addressSpace?.socketHandler
     if (!socketHandler) return
 
-    socketHandler.readProductInstanceUri().then(({ message }) => {
-      this._detectedTools = (message && message.tools) || []
+    socketHandler.readProductInstanceUri().then((response) => {
+      this._detectedTools = toolsFromProductInstanceUriResponse(response)
       this._renderToolsTable()
       this._updateActiveUriLabel()
       return this._loadJointsFromServer()

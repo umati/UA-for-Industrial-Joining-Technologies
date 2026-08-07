@@ -70,6 +70,13 @@ function localConnectionPoints (endpoint, { autoconnect }) {
   }
 }
 
+async function setConnectionPoints (ws, connectionPoints) {
+  const response = await ws.send('set connectionpoints', connectionPoints)
+  if (response.data?.exception || response.data?.saved !== true) {
+    throw new Error(`Could not save test-local connection profile: ${response.data?.exception ?? 'unknown error'}`)
+  }
+}
+
 async function waitForBackendReachable (wsUrl, timeoutMs = 10_000, intervalMs = 500) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -93,7 +100,8 @@ export const test = base.extend({
   app: async ({ page, ws }, use, testInfo) => {
     const runtime = runtimeForWorker(testInfo)
     const original = await ws.send('get connectionpoints')
-    await ws.send('set connectionpoints', localConnectionPoints(runtime.opcuaEndpoint, { autoconnect: true }))
+    const connectionPoints = localConnectionPoints(runtime.opcuaEndpoint, { autoconnect: true })
+    await setConnectionPoints(ws, connectionPoints)
     const app = new AppPage(page, runtime.appUrl)
     try {
       await app.goto({ waitForAppReady: true })

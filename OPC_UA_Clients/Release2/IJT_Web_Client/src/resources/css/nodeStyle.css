@@ -295,15 +295,46 @@ html {
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: min(52vw, 760px);
+  max-width: min(62vw, 900px);
+  min-width: 0;
   color: var(--ui-text-main);
   white-space: nowrap;
 }
 
+.endpointHeaderIdentity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.endpointHeaderLabel {
+  color: var(--demo-muted-text);
+  font-size: var(--type-12);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+
 .endpointHeaderUrl {
+  display: inline-block;
+  max-width: min(46vw, 680px);
+  padding: 3px 8px;
+  border: 1px solid var(--ui-control-border);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--ui-text-main);
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: var(--type-12);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--type-14);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.endpointHeaderUrl:hover {
+  background: rgb(255 255 255 / 10%);
 }
 
 .endpointReadinessDetails {
@@ -395,6 +426,21 @@ html {
 .endpointReadinessChecks dd {
   font-weight: 700;
   text-align: right;
+}
+
+@media (width <= 760px) {
+  .endpointHeader {
+    max-width: 58vw;
+    gap: 6px;
+  }
+
+  .endpointHeaderUrl {
+    max-width: 36vw;
+  }
+
+  .endpointHeaderLabel {
+    font-size: var(--type-10);
+  }
 }
 
 .tab {

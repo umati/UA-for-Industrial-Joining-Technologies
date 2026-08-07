@@ -246,6 +246,9 @@ class TestRuntimeResourceDefaults:
             f"(name 'LOCAL' or address 127.0.0.1/localhost), got: name={points[0].get('name')!r}, "
             f"address={address!r}"
         )
+        assert address.rstrip("/") in {"opc.tcp://127.0.0.1:40451", "opc.tcp://localhost:40451"}, (
+            f"The default LOCAL endpoint must use the IJT simulator port 40451, got {address!r}"
+        )
 
     @pytest.mark.parametrize(
         "runtime_path",

@@ -100,7 +100,7 @@ describe('endpoint readiness derivation', () => {
 })
 
 describe('endpoint readiness component', () => {
-  it('renders endpoint URL, compact pill, and diagnostics', () => {
+  it('renders a labeled, inspectable endpoint URL, compact pill, and diagnostics', () => {
     const doc = makeDocument()
     const manager = makeConnectionManager()
 
@@ -110,7 +110,11 @@ describe('endpoint readiness component', () => {
       documentRef: doc
     })
 
-    expect(findByClass(root, 'endpointHeaderUrl').textContent).toBe('opc.tcp://localhost:40451')
+    const endpointUrl = findByClass(root, 'endpointHeaderUrl')
+    expect(findByClass(root, 'endpointHeaderLabel').textContent).toBe('Endpoint')
+    expect(endpointUrl.textContent).toBe('opc.tcp://localhost:40451')
+    expect(endpointUrl.title).toBe('opc.tcp://localhost:40451')
+    expect(endpointUrl.attributes['data-opcua-endpoint-url']).toBe('opc.tcp://localhost:40451')
     expect(findByClass(root, 'endpointReadinessPill').textContent).toBe('Disconnected')
     expect(findByClass(root, 'endpointReadinessPanel')).toBeTruthy()
   })

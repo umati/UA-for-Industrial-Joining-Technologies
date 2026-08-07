@@ -33,6 +33,7 @@ export default class Settings extends BasicScreen {
     this.resultSessionAutoSave = DEFAULT_RESULT_SESSION_AUTO_SAVE
     this.resultSessionAutoRestore = DEFAULT_RESULT_SESSION_AUTO_RESTORE
     this.ignoreLoosenings = DEFAULT_IGNORE_LOOSENINGS
+    this.methodMetadata = {}
 
     this.settings = { // default values
       productid: 'www.company.com/ProductABC123',
@@ -154,6 +155,9 @@ export default class Settings extends BasicScreen {
       }
       if (normalizedMsg.methoddefaults !== undefined) {
         this.methodDefaults = normalizedMsg.methoddefaults
+      }
+      if (normalizedMsg.methodmetadata !== undefined) {
+        this.methodMetadata = normalizedMsg.methodmetadata
       }
       if (normalizedMsg.initialviewlevel !== undefined) {
         this.initialViewLevel = normalizedMsg.initialviewlevel

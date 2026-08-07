@@ -2209,10 +2209,10 @@ def test_e2e_fixture_passes_runtime_websocket_query():
     assert "app.goto({ waitForAppReady: true })" in source
     assert "function localConnectionPoints" in source
     assert "app: async ({ page, ws }, use, testInfo)" in source
-    autoconnect_seed = (
-        "ws.send('set connectionpoints', localConnectionPoints(runtime.opcuaEndpoint, { autoconnect: true }))"
-    )
-    assert autoconnect_seed in source
+    assert "async function setConnectionPoints" in source
+    assert "response.data?.saved !== true" in source
+    assert "const connectionPoints = localConnectionPoints(runtime.opcuaEndpoint, { autoconnect: true })" in source
+    assert "await setConnectionPoints(ws, connectionPoints)" in source
     assert "ws.send('set connectionpoints', original.data)" in source
 
 

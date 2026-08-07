@@ -2,6 +2,11 @@
  * The purpose of this class is to display a GUI for filling in arguments and calling a method
  */
 import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
+import {
+  clearMethodValues,
+  loadMethodValues,
+  saveMethodValues
+} from '../../ijt-support/methods/method-preset-store.mjs'
 
 /** Result-type options for SimulateSingleResult / SimulateBulkResults */
 const RESULT_TYPE_OPTIONS = [
@@ -32,8 +37,12 @@ export default class MethodGUICreator {
    * Given method data, create a button and input fields in an area
    * @param {*} methodData data about the method from the method manager
    */
-  createMethodArea (pathName) {
+  createMethodArea (pathName, { profile = 'last-used' } = {}) {
     const methodData = this.methodManager.getMethod(pathName)
+    const methodMetadata = methodData?.metadata || {}
+    const methodStorageKey = methodData?.nodeIdString || methodData?.methodNode?.nodeIdString || pathName
+    const storedValues = loadMethodValues(methodStorageKey)
+    const savedValues = profile === 'last-used' ? storedValues : null
 
     const buttonPress = (button) => {
       // Load argument values
@@ -41,23 +50,33 @@ export default class MethodGUICreator {
       for (const argValue of button.listOfValuegrabbers) {
         values.push(argValue())
       }
+      saveMethodValues(methodStorageKey, values)
       // This is when the actual call is made
       this.methodManager.call(methodData, values).then(
         (success) => {
-          this.screen.messageDisplay(JSON.stringify(success))
+          this.screen.messageDisplay(this.formatMethodResult(pathName, success))
         },
         (fail) => {
-          this.screen.messageDisplay(JSON.stringify(fail))
+          this.screen.messageDisplay(this.formatMethodResult(pathName, fail))
         }
       )
     }
 
     // Setting up method area
     const methodNode = methodData.methodNode
-    const area = this.screen.createArea(methodNode.displayName)
+    const area = document.createElement('details')
     area.classList.add('methodBorder')
-    const titleLabel = this.screen.createLabel(methodNode.displayName)
-    area.appendChild(titleLabel)
+    const summary = document.createElement('summary')
+    summary.classList.add('methodCardSummary')
+    const titleLabel = document.createElement('span')
+    titleLabel.classList.add('methodCardTitle')
+    titleLabel.textContent = methodNode.displayName
+    summary.appendChild(titleLabel)
+    area.appendChild(summary)
+
+    const content = document.createElement('div')
+    content.classList.add('methodCardContent')
+    area.appendChild(content)
 
     try {
       let defaults
@@ -65,20 +84,63 @@ export default class MethodGUICreator {
         defaults = this.settings.methodDefaults[methodData.methodNode.nodeIdString]
       }
 
+      if (Array.isArray(methodMetadata.notes) && methodMetadata.notes.length > 0) {
+        const notes = document.createElement('div')
+        notes.classList.add('methodHints')
+        notes.textContent = methodMetadata.notes.join(' ')
+        content.appendChild(notes)
+      }
+
+      const profileArea = document.createElement('div')
+      profileArea.classList.add('methodPresetRow')
+      const profileLabel = this.screen.createLabel('Values')
+      profileLabel.classList.add('methodLabel')
+      const profileSelect = document.createElement('select')
+      profileSelect.classList.add('methodInput')
+      const defaultOption = document.createElement('option')
+      defaultOption.value = 'defaults'
+      defaultOption.textContent = 'Recommended defaults'
+      const savedOption = document.createElement('option')
+      savedOption.value = 'last-used'
+      savedOption.textContent = 'Last used values'
+      savedOption.disabled = !storedValues
+      profileSelect.add(defaultOption)
+      profileSelect.add(savedOption)
+      profileSelect.value = profile
+      profileSelect.addEventListener('change', () => {
+        const replacement = this.createMethodArea(pathName, { profile: profileSelect.value })
+        area.replaceWith(replacement)
+      })
+      profileArea.append(profileLabel, profileSelect)
+      content.appendChild(profileArea)
+
       // Setting up argument windows
       const listOfValuegrabbers = []
       for (let index = 0; index < methodData.arguments.length; index++) {
         const arg = methodData.arguments[index]
         const lineArea = this.screen.createArea()
         lineArea.classList.add('methodRowDistance')
-        area.appendChild(lineArea)
-        listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, defaults?.arguments?.[index], undefined, methodData.methodNode.displayName, index))
+        content.appendChild(lineArea)
+        const metadataDefault = this.getMetadataDefault(methodMetadata?.defaults, arg?.Name)
+        const savedValue = this.getSavedArgumentValue(savedValues?.[index], arg)
+        const configuredDefault = profile === 'last-used' && typeof savedValue !== 'undefined'
+          ? savedValue
+          : defaults?.arguments?.[index]
+        listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, configuredDefault, undefined, methodData.methodNode.displayName, index, metadataDefault))
       }
 
       // Create the actual button for the call
-      const button = this.screen.createButton('Call', area, buttonPress)
+      const button = this.screen.createButton('Call', content, buttonPress)
 
       button.listOfValuegrabbers = listOfValuegrabbers
+      this.screen.createButton('Save values', content, () => {
+        saveMethodValues(methodStorageKey, listOfValuegrabbers.map(grabber => grabber()))
+      })
+      this.screen.createButton('Clear saved values', content, () => {
+        clearMethodValues(methodStorageKey)
+        const replacement = this.createMethodArea(pathName, { profile: 'defaults' })
+        area.replaceWith(replacement)
+      })
 
       if (defaults?.autocall) {
         buttonPress(button)
@@ -88,9 +150,19 @@ export default class MethodGUICreator {
       const errorArea = this.screen.createArea()
       errorArea.innerText = `${error.name} : ${error.message}`
       ijtLog.error(`${error.name} : ${error.message}`)
-      area.appendChild(errorArea)
+      content.appendChild(errorArea)
     }
     return area
+  }
+
+  getSavedArgumentValue (savedArgument, arg) {
+    if (!savedArgument || typeof savedArgument !== 'object') return undefined
+    const expectedType = String(arg?.DataType?.Identifier ?? '')
+    const savedType = String(savedArgument?.type?.Identifier ?? '')
+    if (expectedType && savedType && expectedType !== savedType) return undefined
+    const value = savedArgument.value
+    if (Array.isArray(value) || (value && typeof value === 'object' && expectedType !== '21')) return undefined
+    return value
   }
 
   /**
@@ -103,27 +175,77 @@ export default class MethodGUICreator {
     const normalizedName = String(name).replace(/\s+/g, '').toLowerCase()
     const normalizedMethod = String(methodName).replace(/[_\s]+/g, '').toLowerCase()
     // Simulation — result type & traces
-    if (name === 'Result Type') return 2
-    if (name === 'Classification') return 3
-    if (name === 'Include Traces') return true
-    if (name === 'Include Traces For Child Results') return true
+    if (normalizedName === 'resulttype') return 2
+    if (normalizedName === 'classification' || normalizedName.endsWith('classification')) return 3
+    if (normalizedName === 'productinstanceuri') {
+      return this.resolveMetadataDefault({ source: 'productid', allowEmpty: true })
+    }
+    if (normalizedName === 'includetraces') return true
+    if (normalizedName === 'includetracesforchildresults') return true
     if (normalizedName === 'eventtype') return 1
     if ((normalizedMethod === 'simulateevents' || normalizedMethod === 'simulateconditions') && argumentIndex === 0) return 1
     if (normalizedMethod === 'simulatebulkevents') return argumentIndex === 0 ? 1 : 3
     // Batch/Sync/Job — child count & references
-    if (name === 'Number Of Child Results') return 3
-    if (name === 'Send Child Results as References (Recommended)') return true
-    if (name === 'Send Child Results as References') return true
+    if (normalizedName === 'numberofchildresults') return 3
+    if (normalizedName === 'sendchildresultsasreferencesrecommended') return true
+    if (normalizedName === 'sendchildresultsasreferences') return true
     // Bulk results defaults
-    if (name === 'From Sequence Number') return 100
-    if (name === 'To Sequence Number') return 150
-    if (name === 'Duration Between Results') return 100
-    if (name === 'Number Of Results') return 3
-    if (name === 'Update Result Variables') return true
+    if (normalizedName === 'fromsequencenumber') return 100
+    if (normalizedName === 'tosequencenumber') return 150
+    if (normalizedName === 'durationbetweenresults') return 100
+    if (normalizedName === 'numberofresults') return 3
+    if (normalizedName === 'updateresultvariables') return true
     // Joining process management defaults
-    if (name === 'Counter Size' || name === 'Counter Value') return 1
-    if (name === 'Increment Count' || name === 'Decrement Count') return 1
+    if (normalizedName === 'countersize' || normalizedName === 'countervalue') return 1
+    if (normalizedName === 'incrementcount' || normalizedName === 'decrementcount') return 1
+    if (['2', '3', '4', '5', '6', '7', '8', '9', '10', '11'].includes(String(arg?.DataType?.Identifier))) {
+      return this.methodManager?.methodMetadata?.globalDefaults?.integerFallback ?? 1
+    }
+    if (String(arg?.DataType?.Identifier) === '12') {
+      return this.methodManager?.methodMetadata?.globalDefaults?.stringFallback ?? 'Sample'
+    }
     return defaultValue
+  }
+
+  getMetadataDefault (defaults, argumentName) {
+    if (!defaults || !argumentName) return undefined
+    if (Object.hasOwn(defaults, argumentName)) return defaults[argumentName]
+
+    const normalizedArgumentName = String(argumentName).replace(/[^a-z0-9]/gi, '').toLowerCase()
+    const matchingKey = Object.keys(defaults)
+      .map(key => ({ key, normalized: key.replace(/[^a-z0-9]/gi, '').toLowerCase() }))
+      .filter(candidate => candidate.normalized === normalizedArgumentName ||
+        normalizedArgumentName.endsWith(candidate.normalized))
+      .sort((left, right) => right.normalized.length - left.normalized.length)[0]?.key
+    return matchingKey ? defaults[matchingKey] : undefined
+  }
+
+  resolveMetadataDefault (metadataDefault) {
+    if (metadataDefault && typeof metadataDefault === 'object' && metadataDefault.source === 'currentUtc') {
+      return new Date().toISOString()
+    }
+    if (metadataDefault && typeof metadataDefault === 'object' && metadataDefault.source === 'productid') {
+      const value = String(
+        this.settings?.methodProductInstanceUri ||
+        this.settings?.productId ||
+        this.settings?.productid ||
+        ''
+      ).trim()
+      if (value && !value.includes('www.company.com/ProductABC123')) {
+        return value
+      }
+      return metadataDefault.allowEmpty ? '' : value
+    }
+    return metadataDefault
+  }
+
+  formatMethodResult (methodName, payload) {
+    const result = {
+      method: methodName,
+      timestamp: new Date().toISOString(),
+      payload
+    }
+    return JSON.stringify(result, null, 2)
   }
 
   /**
@@ -134,8 +256,13 @@ export default class MethodGUICreator {
    * @param {*} callback optional onchange callback
    * @returns a function that returns {value, type} when called
    */
-  createMethodInput (arg, area, defaultValue = '', callback, methodName = '', argumentIndex = 0) {
+  createMethodInput (arg, area, defaultValue = '', callback, methodName = '', argumentIndex = 0, metadataDefault) {
     const dataTypeId = String(arg?.DataType?.Identifier ?? '')
+    const normalizedArgumentName = String(arg?.Name ?? '').replace(/[^a-z0-9]/gi, '').toLowerCase()
+    const resolvedMetadataDefault = this.resolveMetadataDefault(metadataDefault)
+    if ((defaultValue === '' || typeof defaultValue === 'undefined') && typeof resolvedMetadataDefault !== 'undefined') {
+      defaultValue = resolvedMetadataDefault
+    }
     defaultValue = this._applyNamedDefaults(arg, defaultValue, methodName, argumentIndex)
 
     // Argument label
@@ -196,22 +323,33 @@ export default class MethodGUICreator {
       case '3010': {
         const selectionArea = document.createElement('div')
         area.appendChild(selectionArea)
-        let entityList = []
+        const entityList = []
         const entityListDiv = document.createElement('div')
         selectionArea.appendChild(entityListDiv)
+
+        const renderEntities = () => {
+          entityListDiv.replaceChildren()
+          entityListDiv.classList.toggle('rows', entityList.length > 0)
+          for (const [entityIndex, ent] of entityList.entries()) {
+            const entityArea = document.createElement('div')
+            entityArea.classList.add('methodEntityIdentifier')
+            const entityName = ent.name ?? ent.Name ?? ''
+            const entityId = ent.entityId ?? ent.EntityId ?? ''
+            entityArea.appendChild(this.screen.createLabel(`${entityName} (${entityId})`))
+            this.screen.createButton('Remove', entityArea, () => {
+              entityList.splice(entityIndex, 1)
+              renderEntities()
+            })
+            entityListDiv.appendChild(entityArea)
+          }
+        }
 
         this.screen.createButton('Add identifier', selectionArea, () => {
           const selectionDiv = this.entityManager?.makeSelectableEntityView((x, entity) => {
             selectionArea.removeChild(selectionDiv)
             selectionArea.removeChild(selectionAreaBackground)
-            entityListDiv.classList.add('rows')
             entityList.push(entity)
-            entityListDiv.innerHTML = ''
-            for (const ent of entityList) {
-              const entityArea = this.screen.createLabel(`${ent.Name}(${ent.EntityId})`)
-              entityArea.classList.add('indent')
-              entityListDiv.appendChild(entityArea)
-            }
+            renderEntities()
           }, 'Select an identifier entity')
           const selectionAreaBackground = document.createElement('div')
           selectionAreaBackground.classList.add('idSelectDialogGrayBackground')
@@ -223,16 +361,14 @@ export default class MethodGUICreator {
         return function () {
           const value = entityList.map((entity) => ({
             value: {
-              Name: entity.name,
-              Description: entity.description,
-              EntityId: entity.entityId,
-              EntityOriginId: entity.entityOriginId,
-              IsExternal: entity.isExternal,
-              EntityType: entity.entityType,
+              Name: entity.name ?? entity.Name,
+              Description: entity.description ?? entity.Description,
+              EntityId: entity.entityId ?? entity.EntityId,
+              EntityOriginId: entity.entityOriginId ?? entity.EntityOriginId,
+              IsExternal: entity.isExternal ?? entity.IsExternal,
+              EntityType: entity.entityType ?? entity.EntityType,
             },
           }))
-          entityList = []
-          entityListDiv.innerText = ''
           return { type: { Identifier: '3010', NamespaceIndex: '3' }, structure: 'EntityDataType', value }
         }
       }
@@ -288,7 +424,7 @@ export default class MethodGUICreator {
       // ── UInt32 (7) / Int32 (6) — with special dropdown for 'Result Type' ──
       case '6': // Int32
       case '7': { // UInt32
-        if (arg?.Name === 'Result Type') {
+        if (normalizedArgumentName === 'resulttype') {
           const drop = this.screen.createDropdown('', null)
           drop.classList.add('inputStyle', 'methodInput', 'methodDropdownWrap')
           for (const [label, val] of RESULT_TYPE_OPTIONS) {
@@ -309,7 +445,7 @@ export default class MethodGUICreator {
 
       // ── Byte (3) — with special dropdown for 'Classification' ─────────────
       case '3': {
-        if (arg?.Name === 'Classification') {
+        if (normalizedArgumentName === 'classification' || normalizedArgumentName.endsWith('classification')) {
           const drop = this.screen.createDropdown('', null)
           drop.classList.add('inputStyle', 'methodInput', 'methodDropdownWrap')
           for (const [label, val] of CLASSIFICATION_OPTIONS) {

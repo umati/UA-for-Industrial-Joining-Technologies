@@ -25,9 +25,19 @@
   height: 100%;
 }
 
+.methodsScreen .lefthalf > .tightUL {
+  min-height: 0;
+  overflow: hidden auto;
+}
+
+.methodsScreen .lefthalf > .tightUL > .doublecolumnleft {
+  min-height: min-content;
+  overflow: visible;
+}
+
 
 .methodsScreen .methodLabel {
-  width: 42%;
+  width: auto;
   color: var(--ui-text-main);
   font-size: var(--demo-font-small);
 }
@@ -99,19 +109,169 @@
 }
 
 .methodsScreen .methodBorder {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  flex: 0 0 auto;
   margin: 0;
-  padding: var(--space-10) var(--space-12);
   border: 1px solid var(--connection-card-border);
   border-radius: 8px;
   background-color: rgb(0 0 0 / 20%);
+  overflow: hidden;
 }
 
-.methodsScreen .methodBorder > .labelStyle:first-child {
-  display: block;
-  margin-bottom: var(--space-8);
+.methodsScreen .methodCardSummary {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
+  padding: 0 var(--space-10);
+  cursor: pointer;
+  list-style: none;
+  color: #f8fafc;
+}
+
+.methodsScreen .methodCardSummary::-webkit-details-marker,
+.methodsScreen .methodGroupSummary::-webkit-details-marker {
+  display: none;
+}
+
+.methodsScreen .methodCardSummary::marker,
+.methodsScreen .methodGroupSummary::marker {
+  content: "";
+}
+
+.methodsScreen .methodCardSummary::before {
+  content: ">";
+  margin-right: var(--space-8);
+  color: #facc15;
+  transition: transform 120ms ease;
+}
+
+.methodsScreen .methodBorder[open] > .methodCardSummary::before {
+  transform: rotate(90deg);
+}
+
+.methodsScreen .methodCardTitle {
   color: var(--ui-text-main);
   font-size: var(--demo-font-body);
   font-weight: 700;
+}
+
+.methodsScreen .methodCardContent {
+  padding: 0 var(--space-12) var(--space-10);
+}
+
+.methodsScreen .methodFilter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-10);
+}
+
+.methodsScreen .methodFilterLabel {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.methodsScreen .methodFilter .methodInput {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.methodsScreen .methodGroup {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  flex: 0 0 auto;
+  margin-bottom: var(--space-14);
+  border: 1px solid var(--connection-card-border);
+  border-radius: 8px;
+  background-color: rgb(0 0 0 / 14%);
+  overflow: visible;
+}
+
+.methodsScreen .methodGroup[hidden],
+.methodsScreen .methodBorder[hidden] {
+  display: none;
+}
+
+.methodsScreen .methodGroupSummary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: var(--control-height);
+  padding: 0 var(--space-12);
+  cursor: pointer;
+  list-style: none;
+  color: #f8fafc;
+}
+
+.methodsScreen .methodGroupSummary::before {
+  content: ">";
+  color: #facc15;
+  transition: transform 120ms ease;
+}
+
+.methodsScreen .methodGroup[open] > .methodGroupSummary::before {
+  transform: rotate(90deg);
+}
+
+.methodsScreen .methodGroupContent {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--space-8);
+  padding: 0 var(--space-10) var(--space-10);
+}
+
+.methodsScreen .methodGroupTitle {
+  color: var(--ui-text-main);
+  font-size: var(--demo-font-body);
+  font-weight: 700;
+}
+
+.methodsScreen .methodGroupCount {
+  margin-left: auto;
+  color: #dbe5f0;
+  font-size: var(--demo-font-small);
+}
+
+.methodsScreen .methodGroupDescription,
+.methodsScreen .methodHints {
+  margin: 0;
+  color: #dbe5f0;
+  font-size: var(--demo-font-small);
+  line-height: 1.4;
+}
+
+.methodsScreen .methodHints {
+  margin-bottom: var(--space-6);
+}
+
+.methodsScreen .methodPresetRow,
+.methodsScreen .methodEntityIdentifier {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) 0;
+}
+
+.methodsScreen .methodPresetRow .methodInput {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.methodsScreen .methodEntityIdentifier {
+  justify-content: space-between;
+}
+
+.methodsScreen .methodEntityIdentifier .myButton {
+  min-height: auto;
+  padding: 2px var(--space-8);
 }
 
 .methodsScreen .methodDiv {
@@ -120,10 +280,18 @@
 }
 
 .methodsScreen .methodRowDistance {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(170px, 0.85fr) minmax(220px, 1.15fr);
   align-items: center;
   gap: var(--control-gap);
   padding: var(--space-4) 0;
+}
+
+.methodsScreen .methodRowDistance > .methodInput,
+.methodsScreen .methodRowDistance > .inputStyle,
+.methodsScreen .methodRowDistance > .methodInputRight {
+  width: 100%;
+  min-width: 0;
 }
 
 .methodsScreen .messages > li {
@@ -134,6 +302,8 @@
   background-color: var(--connection-message-bg);
   color: var(--ui-text-main);
   font-size: var(--demo-font-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .methodsScreen .scrollableInfoArea > .myHeader + .tightUL,
