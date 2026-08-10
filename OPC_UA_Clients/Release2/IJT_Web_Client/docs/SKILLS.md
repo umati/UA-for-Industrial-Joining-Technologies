@@ -195,6 +195,8 @@ subscription). Browser WebSocket closure cancels in-flight connect/retry work,
 and failed or cancelled attempts disconnect both sessions before retrying with
 fresh clients. Explicit endpoint termination is cancellation-safe so WebSocket
 closure cannot interrupt it between unsubscribe and session disconnect.
+Flattened Web Docker images must copy both shared session-policy modules into
+`/app/scripts`; keep their root `.dockerignore` allowlist entries in sync.
 
 asyncua 2.0.1 and current upstream master discard generated
 `Annotated[..., "AllowSubtypes"]` metadata. They also route every preserved

@@ -605,3 +605,15 @@ def test_web_docker_test_image_vendors_shared_readiness_module() -> None:
         "Client test Dockerfile uses the repo root as build context, and the "
         "root .dockerignore excludes everything by default."
     )
+
+
+def test_web_docker_image_vendors_shared_session_policy() -> None:
+    dockerignore = _read(DOCKERIGNORE)
+    dockerfile = _read(WEB_CLIENT_DOCKERFILE)
+
+    for filename in (
+        "scripts/opcua_session_policy.py",
+        "scripts/opcua_session_policy_loader.py",
+    ):
+        assert filename in dockerfile, f"The Web Client Docker image must vendor {filename}."
+        assert f"!{filename}" in dockerignore, f"The root Docker context must include {filename}."

@@ -138,6 +138,17 @@ class TestDockerfileInstructions:
         text = _DOCKERFILE.read_text(encoding="utf-8")
         assert "npm_config_update_notifier=false" in text
 
+    def test_shared_session_policy_is_available_in_all_image_stages(self):
+        """Production and test images must include repo-owned OPC UA session policy files."""
+        text = _DOCKERFILE.read_text(encoding="utf-8")
+        test_stage = text.index("FROM base AS test")
+        for filename in {
+            "scripts/opcua_session_policy.py",
+            "scripts/opcua_session_policy_loader.py",
+        }:
+            assert filename in text
+            assert text.index(filename) < test_stage
+
 
 class TestDockerIgnore:
     def test_local_runtime_directories_are_excluded_from_build_context(self):

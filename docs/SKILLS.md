@@ -548,7 +548,7 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 | Serialized, idempotent client lifecycle | Web/Console connect and cleanup paths are locked; repeated healthy endpoint connects are reused, browser closure cancels in-flight Web retries, and every partial main/subscription connect is disconnected before references are cleared |
 | Subscribe events on Server node, not method nodes | Subscribing on individual nodes causes `BadNoSubscription` under load |
 | Use provided Python only in pre-isolated environments (`IS_DOCKER=true` or `GITHUB_ACTIONS=true`) | Docker and GitHub Actions already provide isolation; local runs use IJT-owned venvs |
-| Root `scripts/` owns cross-client runtime policy | Session lifecycle, modern type loading, and generated-type compatibility must stay identical across Web, Console, and Test clients |
+| Root `scripts/` owns cross-client runtime policy | Session lifecycle, modern type loading, and generated-type compatibility must stay identical across clients; flattened Web Docker images vendor the shared policy modules into `/app/scripts` |
 | `Python/network_utils.py` canonical | Shared network helpers live in this module; all imports use `from Python.network_utils import ...` |
 | `ruff target-version = "py313"` (not py314) | ruff 0.15.x bug #24041: `ruff format` with py314 strips parens from `except (A, B):` → Python 2 syntax. py313 is the workaround; guard test `test_ruff_format_guard.py` in Console + Test Client unit suites catches any regression. Restore to py314 once upstream fixes #24041 |
 | No custom EventFilter | Full `ResultDataType` payload arrives in event without custom filter |

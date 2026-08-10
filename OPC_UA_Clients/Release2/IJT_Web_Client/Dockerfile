@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY constraints.txt /tmp/constraints.txt
 COPY constraints.txt ./constraints.txt
+COPY scripts/opcua_session_policy.py \
+     scripts/opcua_session_policy_loader.py /app/scripts/
 
 # Upgrade pip and install Python bootstrap deps.
 # asyncua is pinned in repo-root constraints.txt to the shared released version

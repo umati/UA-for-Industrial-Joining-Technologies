@@ -121,6 +121,11 @@ wire codec by field category: Variant for abstract numeric subtypes and
 ExtensionObject for structured subtypes. Do not add legacy loader sequences or
 client-local monkey-patches.
 
+Web Docker images use a flattened `/app` layout rather than the full repository
+tree. The Dockerfile must vendor `opcua_session_policy.py` and
+`opcua_session_policy_loader.py` into `/app/scripts`, and the root
+`.dockerignore` must allow both files into the build context.
+
 Pyright path configuration must resolve both `src/` and the repository-wide
 `scripts/` directory. Console and Test Client live fixtures use the same shared
 readiness module, so their Pyright paths must also include the repository

@@ -37,8 +37,9 @@ from python.connection import Connection  # noqa: E402, I001
 
 
 def test_session_policy_loader_requires_full_repo_checkout():
-    with pytest.raises(ModuleNotFoundError, match="shared IJT OPC UA session policy module was not found"):
-        locate_repo_scripts_dir(r"C:\temp\IJT_Web_Client\src\python\connection.py")
+    with patch("opcua_session_policy_loader.Path.is_file", return_value=False):
+        with pytest.raises(ModuleNotFoundError, match="shared IJT OPC UA session policy module was not found"):
+            locate_repo_scripts_dir(__file__)
 
 
 # ---------------------------------------------------------------------------
