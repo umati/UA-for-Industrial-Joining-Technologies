@@ -2,6 +2,12 @@ import ControlMessageSplitScreen from '../graphic-support/control-message-split-
 import MethodGUICreator from './method-gui-creator.mjs'
 import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
 import { firstProductInstanceUri } from '../../ijt-support/tools/product-instance-uri.mjs'
+import { toolsFromProductInstanceUriResponse } from '../../ijt-support/tools/product-instance-uri.mjs'
+import {
+  joiningProcessIdFromEntry,
+  joiningProcessOriginIdFromEntry,
+  joiningProcessSelectionNameFromEntry
+} from '../../ijt-support/methods/method-discovery-cache.mjs'
 /**
  * The purpose of this class is to generate an HTML representation of method
  * invocations for OPC UA Industrial Joining Technologies
@@ -14,7 +20,15 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
     this.methodManager = methodManager
     this.settings = settings
     this.entityManager = entityManager
-    this.methodGUICreator = new MethodGUICreator(this, methodManager, entityManager, settings)
+    this.methodState = {
+      productInstanceUri: '',
+      detectedTools: [],
+      detectedJoints: [],
+      detectedJoiningProcesses: [],
+      discoveryLoaded: false
+    }
+    this.methodGUICreator = new MethodGUICreator(this, methodManager, entityManager, settings, this.methodState)
+    this.activationPromise = null
     this.ensureStatusBanner('methods')
     this.setStatusBanner('methods', 'info', 'Waiting for endpoint connection.')
 
@@ -45,6 +59,16 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
   * given folders, and set up invokation buttons for all found methods
   */
   activate () {
+    if (this.activationPromise) {
+      return this.activationPromise
+    }
+    this.activationPromise = this._activate().finally(() => {
+      this.activationPromise = null
+    })
+    return this.activationPromise
+  }
+
+  _activate () {
     const methodFolders = [ // These folders should be searched for methods
       [{ namespaceindex: this.addressSpace.nsTighteningServer, identifier: 'Simulations' }],
       [{ namespaceindex: this.addressSpace.nsTighteningServer, identifier: 'Simulations' },
@@ -58,7 +82,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
         { namespaceindex: this.addressSpace.nsTighteningServer, identifier: 'SimulateEventsAndConditions' }],
     ]
 
-    this.methodManager.setupMethodsInFolders(methodFolders).then(() => {
+    return this.methodManager.setupMethodsInFolders(methodFolders).then(() => {
       return this.settings.settingPromise().then(() => {
         return this.resolveMethodProductInstanceUri()
       }).then(() => {
@@ -86,12 +110,71 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
     }
     try {
       const response = await socketHandler.readProductInstanceUri()
+      this.methodState.detectedTools = toolsFromProductInstanceUriResponse(response)
       const productInstanceUri = firstProductInstanceUri(response)
-      if (productInstanceUri) {
-        this.settings.methodProductInstanceUri = productInstanceUri
-      }
+      this.methodState.productInstanceUri = productInstanceUri
+      await this.resolveDetectedJoints()
+      await this.resolveDetectedJoiningProcesses()
+      this.methodState.discoveryLoaded = true
     } catch (error) {
+      this.methodState.productInstanceUri = ''
+      this.methodState.detectedTools = []
+      this.methodState.detectedJoints = []
+      this.methodState.detectedJoiningProcesses = []
+      this.methodState.discoveryLoaded = false
       ijtLog.warn('Could not resolve Tool.ProductInstanceUri for method defaults:', error)
+    }
+  }
+
+  async resolveDetectedJoints () {
+    const getJointListMethod = this.methodManager?.getMethod('GetJointList')
+    const productInstanceUri = String(this.methodState.productInstanceUri || '').trim()
+    if (!getJointListMethod || !productInstanceUri) {
+      this.methodState.detectedJoints = []
+      return
+    }
+    try {
+      const output = await this.methodManager.call(getJointListMethod, [
+        {
+          value: productInstanceUri,
+          type: getJointListMethod.arguments?.[0]?.DataType || { Identifier: '12' }
+        }
+      ])
+      const list = Array.isArray(output) && Array.isArray(output[0]) ? output[0] : output
+      this.methodState.detectedJoints = (Array.isArray(list) ? list : [])
+        .map(entry => String(entry?.Value?.JointId ?? entry?.JointId ?? entry?.Value?.Id ?? entry?.Id ?? entry ?? '').trim())
+        .filter(Boolean)
+    } catch (error) {
+      this.methodState.detectedJoints = []
+      ijtLog.warn('Could not resolve JointIds for method pickers:', error)
+    }
+  }
+
+  async resolveDetectedJoiningProcesses () {
+    const getJoiningProcessListMethod = this.methodManager?.getMethod('GetJoiningProcessList')
+    const productInstanceUri = String(this.methodState.productInstanceUri || '').trim()
+    if (!getJoiningProcessListMethod || !productInstanceUri) {
+      this.methodState.detectedJoiningProcesses = []
+      return
+    }
+    try {
+      const output = await this.methodManager.call(getJoiningProcessListMethod, [
+        {
+          value: productInstanceUri,
+          type: getJoiningProcessListMethod.arguments?.[0]?.DataType || { Identifier: '12' }
+        }
+      ])
+      const list = Array.isArray(output) && Array.isArray(output[0]) ? output[0] : output
+      this.methodState.detectedJoiningProcesses = (Array.isArray(list) ? list : [])
+        .map(entry => ({
+          joiningProcessId: joiningProcessIdFromEntry(entry),
+          joiningProcessOriginId: joiningProcessOriginIdFromEntry(entry),
+          selectionName: joiningProcessSelectionNameFromEntry(entry)
+        }))
+        .filter(entry => entry.joiningProcessId || entry.joiningProcessOriginId || entry.selectionName)
+    } catch (error) {
+      this.methodState.detectedJoiningProcesses = []
+      ijtLog.warn('Could not resolve JoiningProcesses for method pickers:', error)
     }
   }
 

@@ -539,6 +539,17 @@ def test_millisecond_formatter_without_datefmt():
     assert result[10] == " " and result[19] == "."
 
 
+def test_endpoint_logger_prefixes_server_identity():
+    from python.ijt_logger import endpoint_logger
+
+    adapter = endpoint_logger("opc.tcp://controller-a:4840")
+    message, kwargs = adapter.process("Method status: Good", {})
+
+    assert message == "[opc.tcp://controller-a:4840] Method status: Good"
+    assert kwargs == {}
+    assert endpoint_logger("opc.tcp://controller-a:4840") is adapter
+
+
 @pytest.mark.skipif(not HAS_ASYNCUA, reason="asyncua or pytz not installed")
 @pytest.mark.asyncio
 async def test_log_result_event_details_no_end_time():

@@ -7,12 +7,12 @@
 # or
 #   pip install -c constraints.txt -r requirements-dev.txt
 
-# asyncua is pinned to upstream master SHA 35a77c6b (post-1.2b2; 2026-05-11):
-#   * fixes Python 3.14.4 NameError: 'Optional' is not defined inside
-#     get_type_hints() from PyPI 1.2b2's generated uaprotocol_auto.py.
-#   * self-reports as version 1.2b2 because upstream pyproject.toml is unchanged.
-#   * replace with a tagged PyPI release once one ships including this fix.
-asyncua @ https://github.com/FreeOpcUa/opcua-asyncio/archive/35a77c6b128a4f1226a685cde3b46abd59975258.zip
+# asyncua is pinned to the latest released PyPI build across IJT Python clients.
+# Current target:
+#   * asyncua 2.0.1 (released baseline replacing the earlier temporary SHA pin)
+#   * keeps Python 3.14 support in a tagged build instead of an unreleased commit
+# Validate method calls, custom structures, subscriptions, and type loading when bumping.
+asyncua==2.0.1
 
 # cryptography and pyOpenSSL share a tightly-coupled version contract:
 # each pyOpenSSL release caps the cryptography minor it accepts.

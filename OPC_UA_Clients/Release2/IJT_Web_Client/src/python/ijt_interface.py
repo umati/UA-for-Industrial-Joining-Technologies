@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from python.connection import Connection
-from python.ijt_logger import ijt_log
+from python.ijt_logger import endpoint_logger, ijt_log
 
 
 class _PluginCommandRegistry:
@@ -133,6 +133,8 @@ class IJTInterface:
 
     def __init__(self) -> None:
         self.connection_list: Dict[str, Optional[Connection]] = {}
+        self._connection_locks: dict[str, asyncio.Lock] = {}
+        self._active_connect_tasks: set[asyncio.Task[Any]] = set()
         self.disconnected = False
         self._plugin_commands: dict[str, Any] = self._get_plugin_commands()
 
@@ -392,14 +394,16 @@ class IJTInterface:
             ``True`` if the connection is (or was successfully restored to)
             open; ``False`` if reconnection failed.
         """
+        endpoint = getattr(connection, "server_url", "")
+        log = endpoint_logger(endpoint if isinstance(endpoint, str) else "unknown endpoint")
         try:
             if await connection.is_connection_open():
                 return True
-            ijt_log.info("Connection is not open. Reconnecting...")
+            log.info("Connection is not open. Reconnecting...")
             result = await connection.connect()
             return "exception" not in result
         except Exception as exc:
-            ijt_log.error(f"Error reconnecting client: {exc}")
+            log.error(f"Error reconnecting client: {exc}")
             return False
 
     async def call_connection(self, data: dict, func: str) -> dict:
@@ -419,6 +423,7 @@ class IJTInterface:
         """
         endpoint = data.get("endpoint") or ""
         connection = self.connection_list.get(endpoint)
+        log = endpoint_logger(endpoint)
 
         if not connection:
             msg = f"No connection found for endpoint: {endpoint}"
@@ -429,19 +434,19 @@ class IJTInterface:
             return {"exception": "Failed to ensure connection is open"}
 
         if func not in self._ALLOWED_METHODS:
-            ijt_log.error(f"Method '{func}' is not in the allowed method list.")
+            log.error(f"Method '{func}' is not in the allowed method list.")
             return {"exception": f"Method '{func}' not allowed"}
 
         try:
             method = getattr(connection, func)
         except AttributeError:
-            ijt_log.error(f"Method '{func}' not found in Connection object.")
+            log.error(f"Method '{func}' not found in Connection object.")
             return {"exception": f"Method '{func}' not found"}
 
         try:
             return await method(data)
         except Exception as exc:
-            ijt_log.error(f"Exception in method call '{func}': {exc}")
+            log.error(f"Exception in method call '{func}': {exc}")
             return {"exception": str(exc)}
 
     async def handle_get_connection_points(self) -> dict:
@@ -566,10 +571,25 @@ class IJTInterface:
             ijt_log.error(f"Error writing settings: {exc}")
 
     async def handle_connect_to(self, endpoint: str, websocket) -> dict:
-        """Coroutine. Open (or re-open) an OPC UA connection for the given endpoint.
+        """Open or reuse an endpoint session owned by this WebSocket."""
+        if self.disconnected:
+            return {"exception": "WebSocket session is disconnected."}
 
-        If a connection for ``endpoint`` already exists it is terminated before
-        the new one is established, ensuring a clean state.
+        connect_task = asyncio.current_task()
+        if connect_task is not None:
+            self._active_connect_tasks.add(connect_task)
+        try:
+            return await self._handle_connect_to(endpoint, websocket)
+        finally:
+            if connect_task is not None:
+                self._active_connect_tasks.discard(connect_task)
+
+    async def _handle_connect_to(self, endpoint: str, websocket) -> dict:
+        """Coroutine. Open or reuse the OPC UA connection for the given endpoint.
+
+        Repeated browser connect commands are idempotent while the existing
+        session is healthy. Closed sessions are terminated and replaced. A
+        per-endpoint lock prevents concurrent requests from opening duplicates.
 
         Args:
             endpoint: OPC UA server URL (e.g. ``"opc.tcp://192.168.1.1:4840"``).
@@ -579,23 +599,42 @@ class IJTInterface:
             The result dict from :meth:`~Python.connection.Connection.connect`,
             or ``{"exception": "…"}`` on failure.
         """
-        ijt_log.info("SOCKET: connect")
-        if endpoint in self.connection_list and self.connection_list[endpoint]:
-            ijt_log.info("Endpoint already connected. Closing old connection first.")
-            try:
-                await self.connection_list[endpoint].terminate()  # type: ignore[union-attr]
-                await asyncio.sleep(0.2)
-            except Exception as exc:
-                ijt_log.warning(f"Error terminating old connection: {exc}")
-            self.connection_list[endpoint] = None
+        log = endpoint_logger(endpoint)
+        log.info("SOCKET: connect")
+        connection_lock = self._connection_locks.setdefault(endpoint, asyncio.Lock())
+        async with connection_lock:
+            if self.disconnected:
+                return {"exception": "WebSocket session is disconnected."}
+            existing_connection = self.connection_list.get(endpoint)
+            result: dict[str, Any] | None = None
+            if existing_connection:
+                try:
+                    if await existing_connection.is_connection_open():
+                        existing_connection.websocket = websocket
+                        result = {"command": "connection established", "endpoint": endpoint}
+                except Exception as exc:
+                    log.warning(f"Could not verify existing connection state: {exc}")
 
-        try:
-            connection = Connection(endpoint, websocket)
-            self.connection_list[endpoint] = connection
-            return await connection.connect()
-        except Exception as exc:
-            ijt_log.error(f"Exception in connect to '{endpoint}': {exc}")
-            return {"exception": str(exc)}
+                if result is None:
+                    log.info("Existing endpoint session is closed. Cleaning it up before reconnecting.")
+                    await self._safe_terminate(endpoint, existing_connection)
+                    self.connection_list[endpoint] = None
+
+            if result is None:
+                connection = Connection(endpoint, websocket)
+                self.connection_list[endpoint] = connection
+                try:
+                    result = await connection.connect()
+                except Exception as exc:
+                    log.error(f"Exception in connect: {exc}")
+                    result = {"exception": str(exc)}
+
+                if "exception" in result:
+                    await self._safe_terminate(endpoint, connection)
+                    if self.connection_list.get(endpoint) is connection:
+                        self.connection_list[endpoint] = None
+        assert result is not None
+        return result
 
     async def handle_test_connection(self, endpoint: str) -> dict:
         """Probe an OPC UA endpoint without replacing or closing any open tab connection."""
@@ -605,13 +644,13 @@ class IJTInterface:
                 if await existing_connection.is_connection_open():
                     return {"command": "connection established", "endpoint": endpoint}
             except Exception as exc:
-                ijt_log.debug(f"Existing connection probe failed for '{endpoint}': {exc}")
+                endpoint_logger(endpoint).debug(f"Existing connection probe failed: {exc}")
 
         connection = Connection(endpoint, None)
         try:
             return await connection.connect(max_retries=1)
         except Exception as exc:
-            ijt_log.error(f"Exception in test connection for '{endpoint}': {exc}")
+            endpoint_logger(endpoint).error(f"Exception in test connection: {exc}")
             return {"exception": str(exc)}
         finally:
             await connection.terminate()
@@ -625,7 +664,7 @@ class IJTInterface:
         Returns:
             An empty dict ``{}`` (termination errors are logged, not raised).
         """
-        ijt_log.info("SOCKET: terminate")
+        endpoint_logger(endpoint).info("SOCKET: terminate")
         if endpoint in self.connection_list and self.connection_list[endpoint]:
             await self._safe_terminate(endpoint, self.connection_list[endpoint])
             self.connection_list[endpoint] = None
@@ -700,7 +739,8 @@ class IJTInterface:
             else:
                 return_values = await self.call_connection(data, command)
         except Exception as exc:
-            ijt_log.error(f"Exception in IJTInterface.handle: {exc}")
+            log = endpoint_logger(endpoint) if endpoint and endpoint != "common" else ijt_log
+            log.error(f"Exception in IJTInterface.handle: {exc}")
             return_values = {"exception": str(exc)}
 
         response = self._build_response(command, endpoint, data.get("uniqueid"), return_values)
@@ -717,6 +757,13 @@ class IJTInterface:
         self.disconnected = True
         ijt_log.info("Disconnecting all OPC UA connections for websocket session...")
 
+        current_task = asyncio.current_task()
+        connect_tasks = [task for task in self._active_connect_tasks if task is not current_task and not task.done()]
+        for task in connect_tasks:
+            task.cancel()
+        if connect_tasks:
+            await asyncio.gather(*connect_tasks, return_exceptions=True)
+
         tasks = []
         for endpoint, connection in list(self.connection_list.items()):
             if connection:
@@ -726,6 +773,7 @@ class IJTInterface:
             await asyncio.gather(*tasks, return_exceptions=True)
 
         self.connection_list.clear()
+        self._connection_locks.clear()
         ijt_log.info("All OPC UA connections cleaned up.")
 
     async def _safe_terminate(self, endpoint: str, connection: Optional[Connection]) -> None:
@@ -738,11 +786,12 @@ class IJTInterface:
         """
         if not connection:
             return
+        log = endpoint_logger(endpoint)
         try:
             await connection.terminate()
-            ijt_log.info(f"Disconnected from {endpoint}")
+            log.info("Connection removed from websocket session")
         except Exception as exc:
-            ijt_log.warning(f"Error disconnecting from {endpoint}: {exc}")
+            log.warning(f"Error disconnecting from websocket session: {exc}")
 
     def __del__(self) -> None:
         # Avoid noisy destructor warnings during normal garbage collection.

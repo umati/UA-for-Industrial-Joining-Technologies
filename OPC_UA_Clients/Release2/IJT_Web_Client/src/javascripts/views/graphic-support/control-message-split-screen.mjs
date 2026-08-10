@@ -16,7 +16,11 @@ export default class ControlMessageSplitScreen extends ControlSplitScreen {
 
   messageDisplay (msg) {
     const item = document.createElement('li')
-    item.textContent = msg
+    if (msg && typeof msg === 'object' && typeof msg.nodeType === 'number') {
+      item.appendChild(msg)
+    } else {
+      item.textContent = msg
+    }
     this.messages.appendChild(item)
     this.messages.scrollTo(0, this.messages.scrollHeight)
     item.scrollIntoView()

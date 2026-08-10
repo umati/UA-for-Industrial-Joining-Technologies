@@ -95,7 +95,7 @@ IJT_Web_Client/
 │   │   │   ├── test_shared_client_contract.py
 │   │   │   └── test_index_handler.py
 │   │   └── live/                   # Needs OPC UA server; runner injects OPCUA_TEST_ENDPOINT (marker: live)
-│   │       ├── test_opcua_methods.py   # 70 method tests (asyncua monkey-patch)
+│   │       ├── test_opcua_methods.py   # Live method and custom-structure coverage
 │   │       └── test_opcua_live.py      # Event subscription tests
 │   ├── js/unit/                    # Vitest JS unit tests (26 files, 577 tests in the current full JS run)
 │   ├── e2e/                        # Playwright E2E specs
@@ -171,33 +171,50 @@ Pyright resolves application imports through `src/` and shared readiness imports
 
 ---
 
-## Known asyncua Bugs & Workarounds
+## asyncua 2.0.1 Runtime Contract
 
-### 1. `UaClient.call()` hardcoded 1-second timeout
-**File:** `tests/python/live/test_opcua_methods.py` lines 34–75
-**Fix:** Monkey-patch `_send_request` to use `self._timeout` (set to 60s):
-```python
-import asyncua.client.ua_client as _ua_client_mod
+### Shared session and type loading
 
-original_send = _ua_client_mod.UaClient._send_request
+Production and live-test clients use the repository-wide
+`scripts/opcua_session_policy.py` through `opcua_session_policy_loader.py`.
+The policy applies the common 600,000 ms session timeout and loads custom types
+only with `load_data_type_definitions()`. Do not restore deprecated
+`load_type_definitions()` calls or client-specific loader sequences.
 
+Connection state must also come from the shared policy. asyncua 2.x represents
+socket and client states as enums: `str(UASocketState.OPEN)` is
+`"UASocketState.OPEN"`, not `"open"`. The shared `is_client_connected()` helper
+therefore requires an active session (`has_session`) and
+`UaClientState.CONNECTED`, comparing enum values rather than enum string
+representations. Do not add client-local `protocol.state` string comparisons.
+Web and Console connect/cleanup operations are lifecycle-locked; repeated Web
+endpoint connects reuse a healthy session, while failed handshakes, type loads,
+and subscription-client setup explicitly disconnect partial clients before
+references are cleared. A Web endpoint normally owns two sessions (main and
+subscription). Browser WebSocket closure cancels in-flight connect/retry work,
+and failed or cancelled attempts disconnect both sessions before retrying with
+fresh clients. Explicit endpoint termination is cancellation-safe so WebSocket
+closure cannot interrupt it between unsubscribe and session disconnect.
 
-async def _patched_send(self, request, timeout=None, message_type=None):
-    return await original_send(self, request, self._timeout, message_type)
+asyncua 2.0.1 and current upstream master discard generated
+`Annotated[..., "AllowSubtypes"]` metadata. They also route every preserved
+subtype through ExtensionObject encoding, although abstract `ua.Number` fields
+such as `SignalDataType.SignalValue` are encoded as Variants. The shared adapter
+preserves the metadata, uses Variant encoding only for numeric subtype fields,
+and retains ExtensionObject encoding for structured subtype fields. Root binary
+round-trip tests guard both categories.
 
+The former `_send_request` timeout shim is removed because asyncua 2.0.1 no
+longer has the affected hard-coded timeout signature.
 
-_ua_client_mod.UaClient._send_request = _patched_send
-```
-This is applied globally in `conftest.py` or the test module setup.
-
-### 2. `create_subscription()` rejects `max_notif_per_publish` kwarg
+### `create_subscription()` rejects `max_notif_per_publish` kwarg
 **Fix:** Use explicit parameters object:
 ```python
 params = ua.CreateSubscriptionParameters(MaxNotificationsPerPublish=3)
 sub = await client.create_subscription(params, handler)
 ```
 
-### 3. `BadTooManyOperations` on SimulateBulkResults
+### `BadTooManyOperations` on SimulateBulkResults
 **Root cause:** Server flag `BULK_RESULTS_IN_PROGRESS` blocks concurrent calls.
 **Fix:** Retry loop (5 attempts, 1s sleep) in `test_bulk`:
 ```python
@@ -212,7 +229,7 @@ for attempt in range(5):
         raise
 ```
 
-### 4. `BadNoSubscription` kills subscription during tree traversal
+### `BadNoSubscription` kills subscription during tree traversal
 **Root cause:** Hundreds of rapid OPC UA reads trigger server to drop subscription.
 **Fix in `tests/python/live/test_opcua_live.py`:** Use direct NodeIds (not tree traversal) + dedicated client per test:
 ```python
@@ -227,6 +244,29 @@ sim_node = client.get_node("ns=1;s=TighteningSystem/Simulations/SimulateResults"
 - **Enable all filters by default** — no custom EventFilter needed; the event payload contains the full `ResultDataType` structure.
 - `SimulateBulkResults` and `SimulateJobResult` both run in **detached threads** — the method returns `OpcUa_Good` immediately before any events fire. Use `_wait_events` with a quiescence phase (see `_wait_events` in `test_opcua_methods.py`) to ensure all async events are collected before asserting on `events[-1]`.
 - `IsSimulated=True` only when Simulate* methods are called. When connecting to a real controller, `IsSimulated=False`.
+
+## Method Call Result Rules
+
+- Invoke methods through the raw OPC UA Call service and normalize its complete
+  `CallMethodResult`; do not use `Node.call_method()` in the Web backend.
+- Treat service/transport errors separately from per-method status. An
+  `Uncertain` or Bad method status may still include valid output arguments,
+  input-argument results, and diagnostic information.
+- Always preserve server-returned outputs on non-Good statuses. IJT methods use
+  those outputs for the domain Status and StatusMessage that explain the failure.
+- Keep the browser contract generic: `callStatus`, `statusCode`, `returnValue`,
+  `outputArguments`, `inputArgumentResults`, `inputArgumentDiagnosticInfos`, and
+  the serialized full result in `rawOutput`.
+
+## Multi-Server Logging Rules
+
+- Keep one configured backend logger (`ijt_log`). Do not add per-server handlers
+  or independently configured logger instances.
+- Use the cached `endpoint_logger()` adapter for server-specific records. It
+  prefixes the immutable OPC UA endpoint while forwarding every record to
+  `ijt_log`.
+- Prefer endpoint identity over the editable server display name because names
+  may be duplicated or changed.
 
 ## Joint Management Rules
 
@@ -322,7 +362,7 @@ test image intentionally contains the Web Client project without the repository
 root `.git` metadata and root-level files.
 | Action versions | `actions/checkout@v6`, `setup-python@v6`, `setup-node@v6` (all current) |
 | Python version | `3.14` (stable in actions manifest) |
-| asyncua | pinned in repo-root `constraints.txt` to upstream SHA 35a77c6b (self-reports 1.2b2) — fixes Python 3.14.4 NameError(Optional) inside get_type_hints() |
+| asyncua | pinned through repo-root `constraints.txt` to released `2.0.1`; keep Web/Test/Console clients aligned and revalidate method calls, structures, subscriptions, and type loading on each bump |
 
 ---
 
@@ -603,9 +643,12 @@ argument defaults come from backend-shipped metadata that augments committed
 settings defaults, so new methods can gain grouping and UX hints without
 hardcoding all presentation rules in the browser.
 Keep method inputs visible; improve usability with prefilled defaults instead
-of hiding arguments. `ProductInstanceUri`-based methods should prefer the
-live `Tool.ProductInstanceUri` value, then Settings as fallback, including
-`GetJoiningProcessList` and `GetJointList`. Operators can choose Recommended
+of hiding arguments. `ProductInstanceUri`-based methods use the live
+`Tool.ProductInstanceUri`, including `GetJoiningProcessList` and `GetJointList`.
+Live tool, joint, joining-process, and URI discovery belongs to the endpoint's
+`MethodGraphics` instance, never shared Settings; otherwise concurrent server
+tabs overwrite each other's defaults. Concurrent activation signals share one
+discovery operation. Operators can choose Recommended
 defaults or Last used values per method; saved values are browser-local,
 method-scoped, and deliberately restore only scalar inputs and LocalizedText so
 stale structured entity references are never silently replayed. Results output

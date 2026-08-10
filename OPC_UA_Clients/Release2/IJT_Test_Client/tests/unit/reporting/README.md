@@ -25,11 +25,11 @@ so both sides cannot drift:
 |---|---|---|
 | `run_ts` | `2026-05-13 14:00 UTC` | Avoids `datetime.now()` injection into the rendered header |
 | `server_url` | `opc.tcp://fixture.ijt.test:40451` | Avoids env leak from `OPCUA_SERVER_URL` |
-| `report_environment` | `FROZEN_ENV` (a `ReportEnvironment` instance) | Bundles every runtime-derived value the renderer would otherwise read live: short git SHA, Python version, `asyncua` version, host OS string, `GITHUB_*` run-logs URL, and `now_utc` for age math. Production callers leave the kwarg as `None` and the renderer captures these via `ReportEnvironment.from_runtime()`. |
+| `report_environment` | `FROZEN_ENV` (a `ReportEnvironment` instance) | Bundles every runtime-derived value the renderer would otherwise read live: short git SHA, Python version, `asyncua` version, host OS string, run-logs URL, capability profile/server identity, and `now_utc` for age math. Production callers leave the kwarg as `None` and the renderer captures these via `ReportEnvironment.from_runtime()`. |
 
 The renderer routes **every** runtime-derived value through the
 `ReportEnvironment` seam (no `datetime.now()`, `platform.*`,
-`importlib.metadata`, git, or `os.environ.get("GITHUB_*")` calls outside
+`importlib.metadata`, git, capability-file selection, or process-environment reads outside
 that seam). Two companion tests in
 [`test_render_specification_test_summary.py`](test_render_specification_test_summary.py)
 guard the seam:

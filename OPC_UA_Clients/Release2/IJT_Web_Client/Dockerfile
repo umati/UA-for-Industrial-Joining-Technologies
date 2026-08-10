@@ -12,8 +12,8 @@ COPY constraints.txt /tmp/constraints.txt
 COPY constraints.txt ./constraints.txt
 
 # Upgrade pip and install Python bootstrap deps.
-# asyncua is pinned in repo-root constraints.txt to upstream SHA 35a77c6b
-# (post-1.2b2; 2026-05-11) for Python 3.14.4 compatibility.
+# asyncua is pinned in repo-root constraints.txt to the shared released version
+# so Docker builds match local and CI installs across IJT clients.
 RUN pip install --upgrade pip --no-cache-dir && \
     pip install --no-cache-dir -c /tmp/constraints.txt \
         asyncua \

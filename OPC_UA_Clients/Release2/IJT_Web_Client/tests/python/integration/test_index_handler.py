@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 import json
 from typing import Any
@@ -10,6 +11,7 @@ class FakeWebSocket:
         self.remote_address = ("127.0.0.1", 5000)
         self._messages = list(messages)
         self.sent = []
+        self._closed = asyncio.Event()
 
     def __aiter__(self):
         self._iter = iter(self._messages)
@@ -23,6 +25,9 @@ class FakeWebSocket:
 
     async def send(self, value):
         self.sent.append(value)
+
+    async def wait_closed(self):
+        await self._closed.wait()
 
 
 class FakeIJTInterface:
@@ -44,6 +49,7 @@ class FakeIJTInterface:
 @pytest.mark.asyncio
 async def test_handler_routes_message_and_disconnects(monkeypatch):
     idx = importlib.import_module("index")
+    idx.shutdown_started = False
     idx.opcuaHandler = None  # type: ignore[attr-defined]
     monkeypatch.setattr(idx, "IJTInterface", FakeIJTInterface)
 
@@ -61,6 +67,7 @@ async def test_handler_routes_message_and_disconnects(monkeypatch):
 @pytest.mark.asyncio
 async def test_handler_disconnects_on_invalid_json(monkeypatch):
     idx = importlib.import_module("index")
+    idx.shutdown_started = False
     idx.opcuaHandler = None  # type: ignore[attr-defined]
     monkeypatch.setattr(idx, "IJTInterface", FakeIJTInterface)
 

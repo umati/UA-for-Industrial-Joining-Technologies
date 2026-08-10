@@ -14,6 +14,8 @@ import pytest
 
 _ = pytest.importorskip("asyncua", reason="asyncua not installed")
 
+from asyncua import ua  # noqa: E402
+
 from python.connection import Connection  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -32,6 +34,17 @@ def _mock_client_fails():
     mock.connect = AsyncMock(side_effect=ConnectionRefusedError("refused"))
     mock.set_security_string = MagicMock(return_value=None)
     return mock
+
+
+def _capture_raw_method_call(object_node, method_node, captured):
+    object_node.nodeid = ua.NodeId("Object", 1)
+    method_node.nodeid = ua.NodeId("Method", 1)
+
+    async def _call(requests):
+        captured.extend(requests[0].InputArguments)
+        return [ua.CallMethodResult(StatusCode=ua.StatusCode())]
+
+    object_node.session.call = AsyncMock(side_effect=_call)
 
 
 # ===========================================================================
@@ -169,11 +182,7 @@ class TestMethodcallArgumentSanitization:
         mock_obj = MagicMock()
         captured: list = []
 
-        async def _capture(_method, *args):
-            captured.extend(args)
-            return []
-
-        mock_obj.call_method = _capture
+        _capture_raw_method_call(mock_obj, mock_method, captured)
 
         mock_client = MagicMock()
         mock_client.get_node = MagicMock(side_effect=[mock_obj, mock_method])
@@ -189,7 +198,8 @@ class TestMethodcallArgumentSanitization:
                     }
                 )
 
-        assert "output" in result
+        assert result["callStatus"] == "Succeeded"
+        assert result["outputArguments"] == []
         assert len(captured) == 1
         assert captured[0].Value == "", f"Expected empty string sanitization of None, got {captured[0].Value!r}"
 
@@ -211,11 +221,7 @@ class TestMethodcallArgumentSanitization:
         mock_obj = MagicMock()
         captured: list = []
 
-        async def _capture(_method, *args):
-            captured.extend(args)
-            return []
-
-        mock_obj.call_method = _capture
+        _capture_raw_method_call(mock_obj, mock_method, captured)
 
         mock_client = MagicMock()
         mock_client.get_node = MagicMock(side_effect=[mock_obj, mock_method])
@@ -231,6 +237,7 @@ class TestMethodcallArgumentSanitization:
                     }
                 )
 
-        assert "output" in result
+        assert result["callStatus"] == "Succeeded"
+        assert result["outputArguments"] == []
         assert len(captured) == 1
         assert isinstance(captured[0].Value, ua.LocalizedText)

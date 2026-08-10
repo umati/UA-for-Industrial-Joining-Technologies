@@ -34,7 +34,9 @@ def test_runs_root_then_envelope_when_config_exists(tmp_path, monkeypatch):
     (envelope / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
     monkeypatch.setattr(module, "REPO_ROOT", root)
     monkeypatch.setattr(module, "ENVELOPE_DIR", envelope)
+    monkeypatch.setattr(module, "PYTHON_AUDIT_REQUIREMENTS", ())
     monkeypatch.setattr(module, "_precommit_command", lambda: ["pre-commit"])
+    monkeypatch.setattr(module, "_run_npm_lock_audit", lambda *args: 0)
     calls = []
 
     def _run(cmd, cwd):
@@ -68,7 +70,9 @@ def test_skips_envelope_when_config_missing(tmp_path, monkeypatch):
     envelope.mkdir(parents=True)
     monkeypatch.setattr(module, "REPO_ROOT", root)
     monkeypatch.setattr(module, "ENVELOPE_DIR", envelope)
+    monkeypatch.setattr(module, "PYTHON_AUDIT_REQUIREMENTS", ())
     monkeypatch.setattr(module, "_precommit_command", lambda: ["pre-commit"])
+    monkeypatch.setattr(module, "_run_npm_lock_audit", lambda *args: 0)
     calls = []
 
     def _run(cmd, cwd):

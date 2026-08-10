@@ -54,6 +54,7 @@ def pytest_configure(config):
             )
         if _basetemp_chosen is not None:
             config.option.basetemp = str(_basetemp_chosen)
+            os.environ["IJT_ACTIVE_PYTEST_BASETEMP"] = str(_basetemp_chosen.resolve())
 
 
 @dataclass

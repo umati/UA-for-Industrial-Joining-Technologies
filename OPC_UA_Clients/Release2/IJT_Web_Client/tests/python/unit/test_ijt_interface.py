@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 import json
 from pathlib import Path
@@ -255,6 +256,19 @@ def test_build_response_adds_error_block_on_exception_data():
 def test_build_response_no_error_block_on_clean_data():
     resp = IJTInterface._build_response("read", "ep", 1, {"value": 99})
     assert "error" not in resp
+
+
+def test_build_response_treats_uncertain_method_status_as_completed_response():
+    data = {
+        "callStatus": "Uncertain",
+        "statusDescription": "The operation was uncertain.",
+        "outputArguments": [4, "Joining process not found."],
+    }
+
+    resp = IJTInterface._build_response("methodcall", "ep", 1, data)
+
+    assert "error" not in resp
+    assert resp["data"] == data
 
 
 def test_build_response_zero_uniqueid_is_included():
@@ -648,6 +662,7 @@ async def test_handle_connect_to_terminates_existing_connection(fake_websocket):
     ep = "opc.tcp://host:4840"
 
     old_conn = AsyncMock()
+    old_conn.is_connection_open.return_value = False
     old_conn.terminate = AsyncMock(return_value=None)
     interface.connection_list[ep] = old_conn
 
@@ -671,6 +686,7 @@ async def test_handle_connect_to_terminates_existing_connection_even_on_terminat
     ep = "opc.tcp://host:4840"
 
     old_conn = AsyncMock()
+    old_conn.is_connection_open.return_value = False
     old_conn.terminate = AsyncMock(side_effect=RuntimeError("already gone"))
     interface.connection_list[ep] = old_conn
 
@@ -704,6 +720,92 @@ async def test_handle_connect_to_creates_new_connection(fake_websocket):
 
     assert result.get("command") == "connection established"
     assert interface.connection_list[ep] is mock_conn
+
+
+@pytest.mark.asyncio
+async def test_disconnect_cancels_inflight_endpoint_connect(fake_websocket):
+    """WebSocket cleanup must stop retries before terminating endpoint clients."""
+    from unittest.mock import AsyncMock, patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://slow-host:4840"
+    connect_started = asyncio.Event()
+
+    async def _blocking_connect():
+        connect_started.set()
+        await asyncio.Event().wait()
+
+    mock_conn = AsyncMock()
+    mock_conn.connect = AsyncMock(side_effect=_blocking_connect)
+
+    with patch("python.ijt_interface.Connection", return_value=mock_conn):
+        connect_task = asyncio.create_task(interface.handle_connect_to(ep, fake_websocket))
+        await connect_started.wait()
+        await interface.disconnect()
+        with pytest.raises(asyncio.CancelledError):
+            await connect_task
+
+    mock_conn.terminate.assert_awaited_once()
+    assert interface.disconnected is True
+
+
+@pytest.mark.asyncio
+async def test_disconnected_interface_rejects_new_endpoint_connect(fake_websocket):
+    interface = IJTInterface()
+    await interface.disconnect()
+
+    result = await interface.handle_connect_to("opc.tcp://host:4840", fake_websocket)
+
+    assert result == {"exception": "WebSocket session is disconnected."}
+
+
+@pytest.mark.asyncio
+async def test_handle_connect_to_reuses_existing_open_connection(fake_websocket):
+    interface = IJTInterface()
+    ep = "opc.tcp://host:4840"
+    existing = AsyncMock()
+    existing.is_connection_open.return_value = True
+    interface.connection_list[ep] = existing
+
+    result = await interface.handle_connect_to(ep, fake_websocket)
+
+    assert result == {"command": "connection established", "endpoint": ep}
+    existing.connect.assert_not_awaited()
+    existing.terminate.assert_not_awaited()
+    assert existing.websocket is fake_websocket
+
+
+@pytest.mark.asyncio
+async def test_concurrent_connect_requests_create_only_one_endpoint_session(fake_websocket):
+    from unittest.mock import patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://host:4840"
+    connect_started = asyncio.Event()
+    release_connect = asyncio.Event()
+    connection = AsyncMock()
+    connection.is_connection_open.return_value = True
+
+    async def delayed_connect():
+        connect_started.set()
+        await release_connect.wait()
+        return {"command": "connection established", "endpoint": ep}
+
+    connection.connect.side_effect = delayed_connect
+
+    with patch("python.ijt_interface.Connection", return_value=connection) as connection_factory:
+        first = asyncio.create_task(interface.handle_connect_to(ep, fake_websocket))
+        await connect_started.wait()
+        second = asyncio.create_task(interface.handle_connect_to(ep, fake_websocket))
+        release_connect.set()
+        results = await asyncio.gather(first, second)
+
+    assert results == [
+        {"command": "connection established", "endpoint": ep},
+        {"command": "connection established", "endpoint": ep},
+    ]
+    connection_factory.assert_called_once_with(ep, fake_websocket)
+    connection.connect.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -1128,6 +1230,8 @@ async def test_handle_connect_to_returns_exception_when_connect_raises(fake_webs
 
     assert "exception" in result
     assert "OPCUA handshake failed" in result["exception"]
+    mock_conn.terminate.assert_awaited_once()
+    assert interface.connection_list[ep] is None
 
 
 # ===========================================================================

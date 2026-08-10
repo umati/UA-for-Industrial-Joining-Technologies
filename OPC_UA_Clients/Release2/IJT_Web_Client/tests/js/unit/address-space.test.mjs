@@ -224,10 +224,20 @@ describe('AddressSpace — methodCall', () => {
   it('resolves with the parsed output', async () => {
     const output = { key: 'value', count: 7 }
     socketHandler.methodCall.mockResolvedValue({
-      message: { output: JSON.stringify(output) }
+      message: {
+        callStatus: 'Succeeded',
+        returnValue: null,
+        outputArguments: [JSON.stringify(output)],
+        rawOutput: [JSON.stringify(output)]
+      }
     })
     const result = await addressSpace.methodCall('loc', 'method', [])
-    expect(result).toEqual(output)
+    expect(result).toEqual({
+      callStatus: 'Succeeded',
+      returnValue: null,
+      outputArguments: [output],
+      rawOutput: ['{"key":"value","count":7}']
+    })
   })
 
   it('rejects when socketHandler.methodCall rejects', async () => {

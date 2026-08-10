@@ -8,7 +8,7 @@
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_Console_Client/` |
 | **Purpose** | Minimal reference OPC UA IJT console client — events, methods, results |
-| **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt, asyncio |
+| **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt (shared released version across Web/Test/Console), asyncio |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
 | **Server default** | `opc.tcp://localhost:40451` |
 
@@ -151,16 +151,20 @@ python3 setup_client.py --url="opc.tcp://<ip>:<port>"
 
 ---
 
-## asyncua Known Issues (Python 3.14)
+## asyncua 2.0.1 Runtime Contract
 
-### `UaClient.call()` hardcoded 1-second timeout
-Centralized patch in `IJT_Web_Client/tests/python/_asyncua_compat.py`. The patch is **capability-gated**: it inspects `UaClient._send_request`'s `timeout` parameter default. If the default is still a hard-coded number, the patch is applied; if upstream changes it to `None` or removes the method, the patch is skipped and a `DeprecationWarning` marks the shim for removal. The patch is not gated on asyncua version string — the repo-pinned master SHA can self-report a pre-release version while still keeping the affected signature.
-```python
-from tests.python._asyncua_compat import apply_send_request_timeout_patch
+The Console, Web, and Test clients share
+`scripts/opcua_session_policy.py`. It applies the common session lifecycle and
+loads generated types only through asyncua's modern
+`load_data_type_definitions()` API. Do not add deprecated
+`load_type_definitions()` calls or a Console-specific loader fallback.
 
-apply_send_request_timeout_patch()
-```
-The patch wraps `UaClient._send_request` to use `self._timeout` instead of the hard-coded fallback (1 s).
+The same policy preserves generated `AllowSubtypes` metadata and selects the
+correct wire codec: Variant for abstract numeric subtype fields and
+ExtensionObject for structured subtype fields. This is required for
+`SignalDataType` and nested result payloads with asyncua 2.0.1. The obsolete
+`_send_request` timeout shim was removed because the released client no longer
+has the affected signature.
 
 ### `BadTooManyOperations` on bulk simulation
 Retry 5× with 1s sleep before raising.

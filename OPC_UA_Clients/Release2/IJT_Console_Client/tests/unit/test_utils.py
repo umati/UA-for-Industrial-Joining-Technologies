@@ -57,7 +57,7 @@ def test_nodeid_guid():
 
 def test_nodeid_opaque():
     data = b"\xde\xad"
-    # asyncua 1.2b2 renamed NodeIdType.Opaque → NodeIdType.ByteString
+    # asyncua uses NodeIdType.ByteString for opaque NodeIds
     node = ua.NodeId(data, 0, ua.NodeIdType.ByteString)
     result = nodeid_to_str(node)
     assert result == f"ns=0;b={data}"
@@ -84,7 +84,7 @@ def test_nodeid_fallback_on_int():
 
 
 def test_localizedtext_returns_text():
-    # asyncua 1.2b2: LocalizedText(Text, Locale) — Text is first arg
+    # asyncua LocalizedText(Text, Locale) — Text is first arg
     lt = ua.LocalizedText("Hello", "en")
     assert localizedtext_to_str(lt) == "Hello"
 

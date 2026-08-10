@@ -15,6 +15,12 @@ from python.ijt_logger import ijt_log
 # IJT-specific OPC UA extension type identifiers (namespace-qualified IDs from IJT companion spec)
 _JOINING_PROCESS_ID_DATA_TYPE = 3029  # ua.JoiningProcessIdentificationDataType
 _ENTITY_DATA_TYPE_ARRAY = 3010  # ua.EntityDataType[]
+_STRUCTURED_CALL_DATA_TYPES = frozenset(
+    {
+        _JOINING_PROCESS_ID_DATA_TYPE,
+        _ENTITY_DATA_TYPE_ARRAY,
+    }
+)
 
 # Correct OPC UA built-in data type ID → asyncua VariantType mapping (OPC UA Part 6, Table 1)
 _BUILTIN_TYPE_MAP: dict[int, ua.VariantType] = {
@@ -33,6 +39,11 @@ _BUILTIN_TYPE_MAP: dict[int, ua.VariantType] = {
     13: ua.VariantType.DateTime,
     31918: ua.VariantType.String,  # TrimmedString (IJT custom scalar type)
 }
+
+
+def is_structured_call_type(data_type: Any) -> bool:
+    """Return whether a data type requires an IJT custom call-input builder."""
+    return data_type in _STRUCTURED_CALL_DATA_TYPES
 
 
 def create_call_structure(argument: dict[str, Any]) -> Any:

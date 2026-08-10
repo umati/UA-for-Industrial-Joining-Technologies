@@ -232,6 +232,28 @@ describe('ResultDataType', () => {
     expect(r.isReference).toBe(false)
   })
 
+  it('identifies numeric and string loosening assembly types', () => {
+    const mm = makeMM()
+    expect(new ResultDataType({ ResultMetaData: { AssemblyType: 2 } }, mm).isLoosening()).toBe(true)
+    expect(new ResultDataType({ ResultMetaData: { AssemblyType: '2' } }, mm).isLoosening()).toBe(true)
+    expect(new ResultDataType({ ResultMetaData: { AssemblyType: 1 } }, mm).isLoosening()).toBe(false)
+  })
+
+  it('finds associated entities by numeric or normalized category', () => {
+    const mm = makeMM()
+    const tool = { EntityType: 4, EntityId: 'Tool-1' }
+    const joint = { EntityType: 'joint', EntityId: 'Joint-1' }
+    const r = new ResultDataType({
+      ResultMetaData: { AssociatedEntities: [tool, joint] }
+    }, mm)
+
+    expect(r.getAssociatedEntity(4)).toMatchObject(tool)
+    expect(r.getAssociatedEntity('tool')).toMatchObject(tool)
+    expect(r.getAssociatedEntity('joint')).toMatchObject(joint)
+    expect(r.getAssociatedEntity('missing')).toBeUndefined()
+    expect(new ResultDataType({ ResultMetaData: {} }, mm).getAssociatedEntity('tool')).toBeUndefined()
+  })
+
   it('replaceReference swaps the child at the correct index', () => {
     const mm = makeMM()
     const r = new ResultDataType({ ResultMetaData: { ResultId: 'r1' } }, mm)

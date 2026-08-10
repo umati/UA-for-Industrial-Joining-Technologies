@@ -199,7 +199,7 @@ def test_local_ci_mode_uses_isolated_python_client_venvs() -> None:
     assert "if _ENV_IS_PRE_ISOLATED:" in web_setup
 
 
-def test_live_clients_preserve_legacy_then_data_type_loader_order() -> None:
+def test_live_clients_use_shared_modern_data_type_loader_only() -> None:
     console_client = (_runner.CONSOLE_DIR / "opcua_client.py").read_text(encoding="utf-8")
     web_connection = (_runner.WEB_CLIENT_DIR / "src" / "python" / "connection.py").read_text(
         encoding="utf-8"
@@ -209,25 +209,14 @@ def test_live_clients_preserve_legacy_then_data_type_loader_order() -> None:
     ).read_text(encoding="utf-8")
     test_client_conftest = (_runner.TEST_CLIENT_DIR / "conftest.py").read_text(encoding="utf-8")
 
-    assert '_load_ijt_type_definitions(self.client, "console client")' in console_client
-    assert '_load_ijt_type_definitions(self.client, "method client")' in web_connection
-    assert (
-        '_load_ijt_type_definitions(self.subscription_client, "subscription client")'
-        in web_connection
-    )
+    assert "await _load_ijt_type_definitions(self.client)" in console_client
+    assert "await _load_ijt_type_definitions(self.client)" in web_connection
+    assert "await _load_ijt_type_definitions(self.subscription_client)" in web_connection
+    assert "await load_ijt_type_definitions(c)" in web_live
+    assert "await load_shared_ijt_type_definitions(client)" in test_client_conftest
 
-    web_legacy_loader = web_live.index("await c.load_type_definitions()")
-    web_data_loader = web_live.index("await c.load_data_type_definitions()")
-    assert web_legacy_loader < web_data_loader
-    assert "OPC Binary dictionary" in web_live
-    assert "load_type_definitions is deprecated upstream and dispatches" not in web_live
-
-    test_client_legacy_loader = test_client_conftest.index("await client.load_type_definitions()")
-    test_client_data_loader = test_client_conftest.index(
-        "await client.load_data_type_definitions()"
-    )
-    assert test_client_legacy_loader < test_client_data_loader
-    assert "OPC Binary dictionary" in test_client_conftest
+    for source in (console_client, web_connection, web_live, test_client_conftest):
+        assert "load_type_definitions()" not in source
 
 
 def test_live_clients_do_not_duplicate_modern_loader_calls() -> None:
@@ -264,16 +253,13 @@ def test_live_clients_do_not_duplicate_modern_loader_calls() -> None:
     )
     assert stale_subscription_loader not in web_connection
 
-    # The exact legacy+modern loader count is intentional here: asyncua 1.2b2
-    # still needs both loader APIs for generated IJT types, while duplicates
-    # reopen the old slow/flaky fixture path.
-    assert web_live.count("await c.load_type_definitions()") == 1
-    assert web_live.count("await c.load_data_type_definitions()") == 1
+    # Web live tests use the same shared modern loader as production.
+    assert web_live.count("await load_ijt_type_definitions(c)") == 1
+    assert "await c.load_data_type_definitions()" not in web_live
 
-    # Test Client conftest: exactly one legacy + one modern call in the
-    # session-scoped client fixture.
-    assert test_client_conftest.count("await client.load_type_definitions()") == 1
-    assert test_client_conftest.count("await client.load_data_type_definitions()") == 1
+    # Test Client conftest invokes the shared loader exactly once.
+    assert test_client_conftest.count("await load_shared_ijt_type_definitions(client)") == 1
+    assert "await client.load_data_type_definitions()" not in test_client_conftest
 
 
 def test_opcua_security_jobs_do_not_force_compose_rebuilds() -> None:

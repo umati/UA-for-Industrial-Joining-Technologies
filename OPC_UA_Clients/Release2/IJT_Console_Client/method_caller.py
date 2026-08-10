@@ -28,6 +28,65 @@ class OPCUAMethodCaller:
 
         return status, message
 
+    @staticmethod
+    def _normalize_method_result(ret):
+        status, message = OPCUAMethodCaller._parse_outputs(ret)
+        return {
+            "status": status,
+            "status_message": message,
+            "raw": ret,
+        }
+
+    async def _read_product_instance_uri(self):
+        product_instance_uri = await read_tool_identifier(self.client)
+        if not product_instance_uri:
+            return None
+        return str(product_instance_uri)
+
+    @staticmethod
+    def _extract_joint_list(ret):
+        if isinstance(ret, (tuple, list)) and len(ret) >= 1 and isinstance(ret[0], list):
+            return ret[0]
+        return []
+
+    @staticmethod
+    def _parse_status_after_items(ret):
+        if isinstance(ret, (tuple, list)) and len(ret) >= 3:
+            return OPCUAMethodCaller._parse_outputs((ret[1], ret[2]))
+        return OPCUAMethodCaller._parse_outputs(ret)
+
+    async def get_joint_list(self, object_nodeid: str, method_nodeid: str):
+        """Return the current joint list for the active tool.
+
+        This mirrors the Web Client method defaults flow: first resolve the live
+        Tool.ProductInstanceUri, then call JointManagement/GetJointList so demo
+        applications can discover usable JointIds before mapping them to joining
+        process selections.
+        """
+        try:
+            product_instance_uri = await self._read_product_instance_uri()
+            if not product_instance_uri:
+                ijt_log.error("GetJointList failed: ProductInstanceUri is NULL")
+                return None
+
+            obj = self.client.get_node(object_nodeid)
+            mth = self.client.get_node(method_nodeid)
+            args = [ua.Variant(product_instance_uri, ua.VariantType.String)]
+
+            ijt_log.info(f"Calling GetJointList: PIUri={product_instance_uri}")
+            ret = await obj.call_method(mth, *args)
+            status, message = self._parse_status_after_items(ret)
+            return {
+                "status": status,
+                "status_message": message,
+                "joints": self._extract_joint_list(ret),
+                "raw": ret,
+            }
+        except Exception as e:
+            ijt_log.error(f"GetJointList failed: {e}")
+            ijt_log.error(traceback.format_exc())
+            return None
+
     async def select_joint(
         self,
         object_nodeid: str,
@@ -37,12 +96,10 @@ class OPCUAMethodCaller:
     ):
         try:
             # 1) Auto-load ProductInstanceUri (required)
-            product_instance_uri = await read_tool_identifier(self.client)
+            product_instance_uri = await self._read_product_instance_uri()
             if not product_instance_uri:
                 ijt_log.error("SelectJoint failed: ProductInstanceUri is NULL")
                 return None
-
-            product_instance_uri = str(product_instance_uri)  # type: ignore[assignment]
 
             obj = self.client.get_node(object_nodeid)
             mth = self.client.get_node(method_nodeid)
@@ -59,15 +116,7 @@ class OPCUAMethodCaller:
             )
 
             ret = await obj.call_method(mth, *args)
-
-            # Parse outputs
-            status, message = self._parse_outputs(ret)
-
-            return {
-                "status": status,
-                "status_message": message,
-                "raw": ret,
-            }
+            return self._normalize_method_result(ret)
 
         except Exception as e:
             ijt_log.error(f"SelectJoint failed: {e}")
@@ -76,11 +125,10 @@ class OPCUAMethodCaller:
 
     async def enable_asset(self, object_nodeid, method_nodeid, enable: bool):
         try:
-            pi = await read_tool_identifier(self.client)
+            pi = await self._read_product_instance_uri()
             if not pi:
                 ijt_log.error("ProductInstanceUri is NULL")
                 return None
-            pi = str(pi)  # type: ignore[assignment]
 
             obj = self.client.get_node(object_nodeid)
             mth = self.client.get_node(method_nodeid)
@@ -93,8 +141,7 @@ class OPCUAMethodCaller:
             ijt_log.info(f"Calling EnableAsset: PIUri={pi}, enable={enable}")
             ret = await obj.call_method(mth, *args)
 
-            status, msg = self._parse_outputs(ret)
-            return {"status": status, "status_message": msg, "raw": ret}
+            return self._normalize_method_result(ret)
 
         except Exception as e:
             ijt_log.error(f"EnableAsset failed: {e}")
@@ -103,11 +150,10 @@ class OPCUAMethodCaller:
 
     async def start_selected_joining(self, object_nodeid, method_nodeid, deselect_after_joining: bool):
         try:
-            pi = await read_tool_identifier(self.client)
+            pi = await self._read_product_instance_uri()
             if not pi:
                 ijt_log.error("ProductInstanceUri is NULL")
                 return None
-            pi = str(pi)  # type: ignore[assignment]
 
             obj = self.client.get_node(object_nodeid)
             mth = self.client.get_node(method_nodeid)
@@ -116,12 +162,11 @@ class OPCUAMethodCaller:
                 ua.Variant(pi, ua.VariantType.String),
                 ua.Variant(bool(deselect_after_joining), ua.VariantType.Boolean),
             ]
-
             ijt_log.info(f"Calling StartSelectedJoining: PIUri={pi}, deselect={deselect_after_joining}")
             ret = await obj.call_method(mth, *args)
+            ret = await obj.call_method(mth, *args)
 
-            status, msg = self._parse_outputs(ret)
-            return {"status": status, "status_message": msg, "raw": ret}
+            return self._normalize_method_result(ret)
 
         except Exception as e:
             ijt_log.error(f"StartSelectedJoining failed: {e}")

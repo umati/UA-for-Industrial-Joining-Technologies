@@ -80,6 +80,40 @@
   min-height: var(--control-height);
 }
 
+.methodsScreen .methodCompositeInput {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.methodsScreen .joiningProcessIdInput {
+  padding: var(--space-6);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.methodsScreen .methodSubLabel {
+  color: #dbe5f0;
+  font-size: var(--demo-font-small);
+  font-weight: 600;
+}
+
+.methodsScreen .methodHelpText {
+  margin: 0;
+  color: #b8c4d3;
+  font-size: var(--demo-font-small);
+  line-height: 1.4;
+}
+
+.methodsScreen .methodInputSource {
+  grid-column: 2;
+  margin: calc(var(--space-4) * -1) 0 0;
+  color: #8fb3d9;
+  font-size: var(--demo-font-small);
+}
+
 .methodsScreen .myButton {
   background-color: var(--demo-button-bg);
   color: var(--ui-text-main);
@@ -269,6 +303,38 @@
   justify-content: space-between;
 }
 
+.methodsScreen .methodArrayInput {
+  padding: var(--space-6);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.methodsScreen .methodStructureInput {
+  padding: var(--space-6);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.methodsScreen .methodArrayList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.methodsScreen .methodArrayRow,
+.methodsScreen .methodArrayControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.methodsScreen .methodArrayRow .methodInput {
+  flex: 1 1 auto;
+  width: auto;
+}
+
 .methodsScreen .methodEntityIdentifier .myButton {
   min-height: auto;
   padding: 2px var(--space-8);
@@ -304,6 +370,103 @@
   font-size: var(--demo-font-small);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.methodsScreen .methodResultCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.methodsScreen .methodResultTitle {
+  margin: 0;
+  color: var(--ui-text-main);
+  font-size: var(--demo-font-body);
+}
+
+.methodsScreen .methodResultTimestamp {
+  margin: 0;
+  color: #b8c4d3;
+  font-size: var(--demo-font-small);
+}
+
+.methodsScreen .methodResultList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+}
+
+.methodsScreen .methodResultRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(0, 1.2fr);
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.methodsScreen .methodResultTerm,
+.methodsScreen .methodResultDetail {
+  margin: 0;
+}
+
+.methodsScreen .methodResultTerm {
+  color: #dbe5f0;
+  font-weight: 600;
+}
+
+.methodsScreen .methodResultValue {
+  margin: 0;
+  padding: var(--space-6);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 3%);
+  color: var(--ui-text-main);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.methodsScreen .methodResultDescription {
+  margin: var(--space-4) 0 0;
+  color: #b8c4d3;
+  font-size: var(--demo-font-small);
+}
+
+.methodsScreen .methodResultDebug summary {
+  cursor: pointer;
+  color: #dbe5f0;
+  font-weight: 600;
+}
+
+.methodsScreen .methodSchemaCard {
+  margin: 0 0 var(--space-8);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.methodsScreen .methodSchemaCard > summary {
+  cursor: pointer;
+  padding: var(--space-6) var(--space-8);
+  color: #dbe5f0;
+  font-weight: 600;
+}
+
+.methodsScreen .methodSchemaBody {
+  display: grid;
+  gap: var(--space-8);
+  padding: 0 var(--space-8) var(--space-8);
+}
+
+.methodsScreen .methodSchemaTitle {
+  margin: 0 0 var(--space-4);
+  color: var(--ui-text-main);
+  font-size: var(--demo-font-small);
+}
+
+.methodsScreen .methodSchemaList {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #dbe5f0;
 }
 
 .methodsScreen .scrollableInfoArea > .myHeader + .tightUL,

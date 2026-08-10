@@ -92,6 +92,44 @@ describe('MethodManager.call — node ID forwarding', () => {
     expect(calledArgs[0]).toMatchObject({ dataType: 12, value: 'hello' })
   })
 
+  it('preserves normalized backend method result contract from addressSpace.methodCall', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace(async () => ({
+      callStatus: 'Succeeded',
+      returnValue: null,
+      outputArguments: [['a', 'b']],
+      rawOutput: [['a', 'b']]
+    }))
+    const manager = new MethodManager(fakeAddressSpace)
+
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('Method', 'ns=1;s=TS/Method'),
+      arguments: [],
+    }
+
+    const result = await manager.call(methodData, [])
+    expect(result.callStatus).toBe('Succeeded')
+  })
+
+  it('normalizes discovered schema metadata for inputs outputs and return value', () => {
+    const manager = new MethodManager(makeFakeAddressSpace())
+    manager.methodObject = {
+      GenericMethod: {
+        parentNode: makeNode('TS', 'ns=1;s=TS'),
+        methodNode: { displayName: 'GenericMethod', nodeIdString: 'ns=1;s=GenericMethod' },
+        arguments: [{ Name: 'InputA', DataType: { Identifier: 12 }, FieldDefinitions: [{ name: 'FieldA', dataType: 12 }] }],
+        outputArguments: [{ Name: 'OutputA', DataType: { Identifier: 21 } }],
+        returnArgument: { Name: 'ReturnStatus', DataType: { Identifier: 6 } },
+        nodeIdString: 'ns=1;s=GenericMethod'
+      }
+    }
+    manager.setMethodMetadata({ groups: [], defaults: { byName: {}, byPath: {} } })
+
+    const method = manager.getMethod('GenericMethod')
+    expect(method.arguments[0].FieldDefinitions).toEqual([{ name: 'FieldA', dataType: 12 }])
+    expect(method.returnArgument.Name).toBe('ReturnStatus')
+  })
+
   it('maps UInt32 input values through parseInt', async () => {
     const fakeAddressSpace = makeFakeAddressSpace()
     const manager = new MethodManager(fakeAddressSpace)
@@ -467,6 +505,7 @@ describe('MethodManager — setupMethod', () => {
 
     expect(result.methodNode).toBe(methodNode)
     expect(result.arguments).toEqual([])
+    expect(result.outputArguments).toEqual([])
   })
 
   it('returns methodNode and parsed args when InputArguments found', async () => {
@@ -474,20 +513,70 @@ describe('MethodManager — setupMethod', () => {
       BrowseName: { Name: 'InputArguments' },
       NodeId: 'ns=1;s=InputArgs'
     }
+    const outputArgRelation = {
+      BrowseName: { Name: 'OutputArguments' },
+      NodeId: 'ns=1;s=OutputArgs'
+    }
     const methodNode = makeNode('TestMethod', 'ns=1;s=Method', 4)
-    methodNode.getChildRelations = vi.fn(() => [inputArgRelation])
+    methodNode.getChildRelations = vi.fn(() => [inputArgRelation, outputArgRelation])
 
     const inputArgNode = {
       data: { attributes: { Value: ['arg1', 'arg2'] } }
     }
+    const outputArgNode = {
+      data: { attributes: { Value: ['out1', 'out2'] } }
+    }
 
     const fakeAddressSpace = makeFakeAddressSpace()
-    fakeAddressSpace.relationsToNodes = vi.fn(async () => [inputArgNode])
+    fakeAddressSpace.relationsToNodes = vi.fn(async (relations) => {
+      if (relations[0] === inputArgRelation) return [inputArgNode]
+      if (relations[0] === outputArgRelation) return [outputArgNode]
+      return []
+    })
 
     const manager = new MethodManager(fakeAddressSpace)
     const result = await manager.setupMethod(methodNode)
 
-    expect(result.arguments).toEqual(['arg1', 'arg2'])
+    expect(result.arguments).toEqual([
+      expect.objectContaining({ Name: '', FieldDefinitions: [] }),
+      expect.objectContaining({ Name: '', FieldDefinitions: [] })
+    ])
+    expect(result.outputArguments).toEqual([
+      expect.objectContaining({ Name: '', FieldDefinitions: [] }),
+      expect.objectContaining({ Name: '', FieldDefinitions: [] })
+    ])
+    expect(result.argumentMetadata).toEqual([
+      { valueRank: -1, arrayDimensions: null, fieldDefinitions: [] },
+      { valueRank: -1, arrayDimensions: null, fieldDefinitions: [] }
+    ])
+  })
+
+  it('finds OutputArguments exposed as components', async () => {
+    const outputArgRelation = {
+      BrowseName: { Name: 'OutputArguments' },
+      NodeId: 'ns=1;s=OutputArgs'
+    }
+    const methodNode = makeNode('TestMethod', 'ns=1;s=Method', 4)
+    methodNode.getChildRelations = vi.fn((type) => {
+      if (type === 'hasProperty') return []
+      if (type === 'component') return [outputArgRelation]
+      return []
+    })
+
+    const outputArgNode = {
+      data: { attributes: { Value: ['status', 'message'] } }
+    }
+
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.relationsToNodes = vi.fn(async () => [outputArgNode])
+
+    const manager = new MethodManager(fakeAddressSpace)
+    const result = await manager.setupMethod(methodNode)
+
+    expect(result.outputArguments).toEqual([
+      expect.objectContaining({ Name: '', FieldDefinitions: [] }),
+      expect.objectContaining({ Name: '', FieldDefinitions: [] })
+    ])
   })
 
   it('warns when an argument value is falsy', async () => {
@@ -506,7 +595,9 @@ describe('MethodManager — setupMethod', () => {
     const result = await manager.setupMethod(methodNode)
 
     // null is filtered out, 'validArg' is included
-    expect(result.arguments).toEqual(['validArg'])
+    expect(result.arguments).toEqual([
+      expect.objectContaining({ Name: '', FieldDefinitions: [] })
+    ])
   })
 })
 
@@ -559,5 +650,105 @@ describe('MethodManager.call — additional type cases', () => {
   it('maps type 1 (Boolean) false from non-true string', async () => {
     const result = await callWithType(1, 'false')
     expect(result.value).toBe(false)
+  })
+
+  it('maps empty UI value to empty string array when the server declares a scalar String argument with array ValueRank', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('Method', 'ns=1;s=TS/Method'),
+      arguments: [{ Name: 'AnyStringArray', DataType: { Identifier: 12 }, ValueRank: 1 }],
+    }
+
+    await manager.call(methodData, [{ type: { Identifier: 12 }, value: '' }])
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+    expect(calledArgs[0]).toEqual({ dataType: 12, value: [] })
+  })
+
+  it('maps empty UI value to empty string array when the server declares a TrimmedString argument with array ValueRank', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('Method', 'ns=1;s=TS/Method'),
+      arguments: [{ Name: 'IdentifierNames', DataType: { Identifier: 31918 }, ValueRank: 1 }],
+    }
+
+    await manager.call(methodData, [{ type: { Identifier: 31918 }, value: [] }])
+
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+    expect(calledArgs[0]).toEqual({ dataType: 31918, value: [] })
+  })
+
+  it('keeps non-empty scalar UI value as a single string item when the server declares a scalar String argument with array ValueRank', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('Method', 'ns=1;s=TS/Method'),
+      arguments: [{ Name: 'AnyStringArray', DataType: { Identifier: 12 }, ValueRank: 1 }],
+    }
+
+    await manager.call(methodData, [{ type: { Identifier: 12 }, value: 'BatchId:001' }])
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+
+    expect(calledArgs[0]).toEqual({ dataType: 12, value: ['BatchId:001'] })
+  })
+
+  it('preserves structured arrays instead of coercing their rows to strings', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+    const entity = {
+      value: {
+        Name: 'Tool',
+        Description: { Text: 'Joining tool', Locale: 'en' },
+        EntityId: 'Tool-1',
+        EntityOriginId: '',
+        IsExternal: false,
+        EntityType: 0
+      }
+    }
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('Method', 'ns=1;s=TS/Method'),
+      arguments: [{ Name: 'Entities', DataType: { Identifier: 3010 }, ValueRank: 1 }],
+    }
+
+    await manager.call(methodData, [{ type: { Identifier: 3010 }, value: [entity] }])
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+
+    expect(calledArgs[0]).toEqual({ dataType: 3010, value: [entity] })
+  })
+
+  it('casts numeric array items without changing the server-declared data type', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('Method', 'ns=1;s=TS/Method'),
+      arguments: [{ Name: 'SequenceNumbers', DataType: { Identifier: 7 }, ValueRank: 1 }],
+    }
+
+    await manager.call(methodData, [{ type: { Identifier: 12 }, value: ['10', '20'] }])
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+
+    expect(calledArgs[0]).toEqual({ dataType: 7, value: [10, 20] })
+  })
+
+  it('keeps a scalar value scalar when ValueRank permits either scalar or one-dimensional array', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('Method', 'ns=1;s=TS/Method'),
+      arguments: [{ Name: 'Identifier', DataType: { Identifier: 12 }, ValueRank: -3 }],
+    }
+
+    await manager.call(methodData, [{ type: { Identifier: 12 }, value: 'Id-1' }])
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+
+    expect(calledArgs[0]).toEqual({ dataType: 12, value: 'Id-1' })
   })
 })

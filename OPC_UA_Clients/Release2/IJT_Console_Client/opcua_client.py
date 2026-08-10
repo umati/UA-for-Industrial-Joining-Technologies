@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import socket
+import sys
 import time
 import traceback
 from dataclasses import dataclass
@@ -12,11 +13,27 @@ from asyncua import Client, ua
 from asyncua.crypto import security_policies
 from asyncua.ua.uaerrors import UaError
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from opcua_session_policy_loader import load_shared_session_policy
+
 from event_handler import EventHandler
 from event_types import get_event_types
 from ijt_logger import ijt_log
 from method_caller import OPCUAMethodCaller
 from result_event_handler import ResultEventHandler
+
+_session_policy = load_shared_session_policy(__file__)
+apply_session_policy = _session_policy.apply_session_policy
+connect_opcua_client = _session_policy.connect_client
+disconnect_opcua_client = _session_policy.disconnect_client
+is_opcua_client_connected = _session_policy.is_client_connected
+load_shared_ijt_type_definitions = _session_policy.load_ijt_type_definitions
 
 _OPCUA_TIMEOUT_S = 60
 _SUBSCRIPTION_PERIOD_MS = 100
@@ -24,6 +41,7 @@ _QUEUE_SIZE = 200
 _CONNECT_RETRIES_DEFAULT = "8"
 _CONNECT_DELAY_DEFAULT = "1.0"
 _CONNECT_MAX_DELAY_DEFAULT = "4.0"
+_DISCONNECT_TIMEOUT_S = 5
 
 # Reduce asyncua late-response noise during shutdown windows.
 logging.getLogger("asyncua").setLevel(logging.CRITICAL)
@@ -105,18 +123,9 @@ def _preserve_test_artifacts() -> bool:
     return os.environ.get("IJT_PRESERVE_TEST_ARTIFACTS", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
-async def _load_ijt_type_definitions(client: Client, label: str) -> None:
-    """Load IJT custom structures through legacy and modern asyncua loaders."""
-    try:
-        await client.load_type_definitions()
-    except Exception as exc:
-        ijt_log.warning(
-            "Legacy OPC Binary type-definition load failed for %s; continuing "
-            "with OPC UA 1.04 DataTypeDefinition loading: %s",
-            label,
-            exc,
-        )
-    await client.load_data_type_definitions()
+async def _load_ijt_type_definitions(client: Client) -> None:
+    """Load IJT custom structures through the shared modern asyncua path."""
+    await load_shared_ijt_type_definitions(client)
 
 
 class OPCUAClient:
@@ -127,7 +136,7 @@ class OPCUAClient:
         # 60-second service-call timeout — methods like SimulateJobResult fire
         # many separate OPC UA publish messages before returning; the default
         # asyncua 4-second window is far too short.
-        self.client = Client(server_url, timeout=_OPCUA_TIMEOUT_S)
+        self.client = apply_session_policy(Client(server_url, timeout=_OPCUA_TIMEOUT_S))
         self.sub_result_event = None
         self.sub_joining_event = None
         # Handlers are created inside subscribe_to_events() which runs in an async
@@ -135,6 +144,7 @@ class OPCUAClient:
         self.handler_result_event = None
         self.handler_joining_event = None
         self.methods = OPCUAMethodCaller(self.client)
+        self._lifecycle_lock = asyncio.Lock()
 
     def setup_client_metadata(self) -> None:
         computer_name = socket.getfqdn()
@@ -144,6 +154,13 @@ class OPCUAClient:
         self.client.product_uri = "urn:IJT:ConsoleClient"  # type: ignore[union-attr]
 
     async def connect(self):
+        async with self._lifecycle_lock:
+            await self._connect()
+
+    async def _connect(self):
+        if is_opcua_client_connected(self.client):
+            return
+
         await self.clear_old_logs()
         self.setup_client_metadata()
         await self.configure_security()
@@ -157,12 +174,19 @@ class OPCUAClient:
         for attempt in range(1, max_attempts + 1):
             try:
                 start_time = time.time()
-                await self.client.connect()  # type: ignore[union-attr]
-                await _load_ijt_type_definitions(self.client, "console client")  # type: ignore[arg-type]
+                await connect_opcua_client(self.client)  # type: ignore[arg-type]
+                await _load_ijt_type_definitions(self.client)  # type: ignore[arg-type]
                 duration = time.time() - start_time
                 ijt_log.info(f"Connected to OPC UA server at {self.server_url} in {duration:.2f}s")
                 return
             except Exception as e:
+                try:
+                    await asyncio.wait_for(
+                        disconnect_opcua_client(self.client),
+                        timeout=_DISCONNECT_TIMEOUT_S,
+                    )
+                except Exception as cleanup_err:
+                    ijt_log.warning(f"Failed to clean up client after connect attempt: {cleanup_err}")
                 ijt_log.warning(f"Connection attempt {attempt}/{max_attempts} failed for {self.server_url}: {e}")
                 ijt_log.error(traceback.format_exc())
                 if attempt < max_attempts:
@@ -311,6 +335,10 @@ class OPCUAClient:
             await self.cleanup()
 
     async def cleanup(self):
+        async with self._lifecycle_lock:
+            await self._cleanup()
+
+    async def _cleanup(self):
         try:
             for sub, name in [
                 (self.sub_result_event, "ResultEvent"),
@@ -331,7 +359,7 @@ class OPCUAClient:
 
             if self.client is not None:
                 try:
-                    await self.client.disconnect()
+                    await asyncio.wait_for(disconnect_opcua_client(self.client), timeout=_DISCONNECT_TIMEOUT_S)
                     ijt_log.info("Disconnected from OPC UA server.")
                 except UaError as ua_err:
                     if "No request found" in str(ua_err):

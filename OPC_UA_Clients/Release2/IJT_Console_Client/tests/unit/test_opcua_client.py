@@ -11,6 +11,9 @@ _CONSOLE_ROOT_PATH = __import__("pathlib").Path(__file__).resolve().parent.paren
 import sys
 
 sys.path.insert(0, str(_CONSOLE_ROOT_PATH))
+sys.path.insert(0, str(_CONSOLE_ROOT_PATH.parent.parent.parent / "scripts"))
+
+from opcua_session_policy_loader import locate_repo_scripts_dir
 
 from opcua_client import (
     _OPCUA_TIMEOUT_S,
@@ -93,6 +96,22 @@ def test_init_creates_method_caller():
     with patch("opcua_client.Client"):
         c = OPCUAClient("opc.tcp://localhost:40451")
     assert c.methods is not None
+
+
+@pytest.mark.asyncio
+async def test_connect_is_idempotent_when_shared_policy_reports_active_session():
+    with patch("opcua_client.Client"):
+        c = OPCUAClient("opc.tcp://localhost:40451")
+
+    with (
+        patch("opcua_client.is_opcua_client_connected", return_value=True),
+        patch("opcua_client.connect_opcua_client", new_callable=AsyncMock) as connect_client,
+        patch.object(c, "clear_old_logs", new_callable=AsyncMock) as clear_logs,
+    ):
+        await c.connect()
+
+    connect_client.assert_not_awaited()
+    clear_logs.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -244,3 +263,9 @@ def test_named_constants_importable():
     assert isinstance(_OPCUA_TIMEOUT_S, (int, float))
     assert isinstance(_SUBSCRIPTION_PERIOD_MS, (int, float))
     assert isinstance(_QUEUE_SIZE, int)
+
+
+def test_shared_session_policy_loader_finds_repo_scripts():
+    scripts_dir = locate_repo_scripts_dir(__file__)
+    assert scripts_dir.name == "scripts"
+    assert (scripts_dir / "opcua_session_policy.py").is_file()

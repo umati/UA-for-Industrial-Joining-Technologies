@@ -134,10 +134,10 @@ cache_dir = "tmp/mypy-cache"
 # Reporting tests import local CLI helpers from scripts/. Runtime readiness
 # imports the repository-wide module after adding <repo>/scripts to sys.path.
 extraPaths = ["scripts", "../../../scripts"]
-# asyncua 1.2b2 uses class-based OPC UA primitive types (Int32, UInt32, etc.)
+# asyncua uses class-based OPC UA primitive types (Int32, UInt32, etc.)
 # that inherit from int/str/bytes. Plain int literals are not directly assignable
-# to these types in pyright's type system, but are equivalent at runtime. Remove
-# reportArgumentType suppression when asyncua ships stable 1.2.0 with corrected stubs.
+# to these types in pyright's type system, but are equivalent at runtime.
+# Remove reportArgumentType suppression when upstream typing is corrected.
 reportArgumentType = "none"
 # asyncua does not declare __all__ for its re-exported OPC UA constants
 # (AttributeIds, StatusCodes, ObjectIds, etc.) — they are importable at runtime.

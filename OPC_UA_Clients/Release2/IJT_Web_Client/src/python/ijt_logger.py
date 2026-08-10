@@ -7,6 +7,7 @@ output from third-party libraries such as *asyncua*.
 
 import logging
 from datetime import datetime
+from functools import lru_cache
 
 
 class MillisecondFormatter(logging.Formatter):
@@ -34,6 +35,13 @@ class MillisecondFormatter(logging.Formatter):
         return ct.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
+class EndpointLoggerAdapter(logging.LoggerAdapter):
+    """Prefix records with the immutable OPC UA endpoint identity."""
+
+    def process(self, msg, kwargs):
+        return f"[{self.extra['endpoint']}] {msg}", kwargs
+
+
 _formatter = MillisecondFormatter(
     "[%(asctime)s] [%(levelname)s] %(filename)s:%(funcName)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S.%f",
@@ -46,6 +54,13 @@ ijt_log = logging.getLogger("ijt_logger")
 ijt_log.setLevel(logging.INFO)
 ijt_log.addHandler(_handler)
 ijt_log.propagate = False
+
+
+@lru_cache(maxsize=128)
+def endpoint_logger(endpoint: str) -> EndpointLoggerAdapter:
+    """Return the shared logger adapted to one OPC UA endpoint identity."""
+    return EndpointLoggerAdapter(ijt_log, {"endpoint": endpoint})
+
 
 # Reduce verbosity of external libraries
 logging.getLogger("asyncua").setLevel(logging.ERROR)

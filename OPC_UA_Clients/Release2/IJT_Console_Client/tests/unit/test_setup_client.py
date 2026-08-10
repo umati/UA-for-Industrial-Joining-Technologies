@@ -1311,7 +1311,7 @@ class TestInstallPythonPackages:
         monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
         calls = []
         monkeypatch.setattr(subprocess, "check_call", lambda args, **kw: calls.append(list(args)))
-        monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "1.2.0\n")
+        monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "2.0.1\n")
         sc._install_python_packages()
         assert any("requirements.txt" in str(c) for c in calls)
         assert any("asyncua" in str(c) for c in calls)
@@ -1328,7 +1328,7 @@ class TestInstallPythonPackages:
                 raise subprocess.CalledProcessError(1, args)
 
         monkeypatch.setattr(subprocess, "check_call", selective_check_call)
-        monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "1.2.0\n")
+        monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "2.0.1\n")
         sc._install_python_packages()  # must not raise
 
     def test_asyncua_too_old_calls_sys_exit(self, fs, monkeypatch):

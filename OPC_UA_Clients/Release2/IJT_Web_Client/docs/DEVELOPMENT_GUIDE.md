@@ -50,11 +50,76 @@ Docker detection takes precedence over WSL markers exposed by Docker Desktop.
 Production images intentionally omit developer-only JavaScript packages, so
 setup does not probe ESLint or neostandard versions when `NODE_ENV=production`.
 
+## Methods page contracts
+
+The Methods page now relies on two explicit contracts instead of frontend-only
+guessing:
+
+1. **Normalized method-call result contract**
+   - Backend `methodcall()` returns:
+     - `callStatus`
+     - `statusCode`
+     - `returnValue`
+     - `outputArguments`
+     - `inputArgumentResults`
+     - `inputArgumentDiagnosticInfos`
+     - `rawOutput`
+   - Frontend result rendering should consume this contract first and only keep
+     legacy payload-shape handling as compatibility fallback.
+   - The backend calls the OPC UA Call service directly so the complete
+     `CallMethodResult` remains available. Do not replace this with
+     `Node.call_method()`: asyncua checks each method StatusCode and raises before
+     returning output arguments for `Uncertain` or Bad responses.
+   - Service/transport failures remain exceptions. Per-method `Uncertain` and Bad
+     statuses are normalized as valid responses with status metadata, diagnostics,
+     and every output argument the server supplied.
+
+2. **Schema-driven input metadata**
+   - Method arguments are discovered from server `InputArguments`.
+   - Output arguments are discovered from server `OutputArguments`.
+   - Return metadata may be discovered separately from `ReturnValue`.
+   - Structure editors may consume `FieldDefinitions` when available.
+
+Rules to preserve:
+
+- Keep method argument and output labels exactly as the server exposes them.
+- Do not append datatype IDs in result labels.
+- Keep `ProductInstanceUri` defaults driven by live server discovery.
+- Keep discovered tools, joints, joining processes, and `ProductInstanceUri` in
+  the owning endpoint's `MethodGraphics` state. Shared Settings contains user
+  configuration only; storing live discovery there causes one server tab to
+  overwrite another.
+- Coalesce concurrent activation signals into one discovery operation. A later
+  reconnect may refresh discovery, but duplicate signals from one connection
+  generation must not duplicate list-method calls.
+- Keep `LocalizedText` rendered as one user-facing line, not exploded into
+  Encoding/Locale/Text rows.
+- Keep optional array arguments represented as arrays all the way to the Python
+  backend.
+- Keep `Uncertain` and Bad method output arguments visible; they commonly carry
+  the IJT Status and StatusMessage that explain a rejected request.
+
+## Multi-server logging
+
+The backend owns one configured `ijt_log` logger, handler, and formatter.
+`endpoint_logger()` returns a cached standard-library `LoggerAdapter` for each
+OPC UA endpoint; adapters add context only and do not create independent loggers
+or handlers. All `Connection` records must use the endpoint adapter so
+simultaneous server activity is distinguishable. Use the immutable endpoint as
+the identity rather than the editable, potentially duplicated display name.
+
 Both Web Client OPC UA sessions explicitly request the simulator-supported
 600,000 ms session timeout instead of relying on asyncua's one-hour default.
 The repository-wide readiness probe uses the same value. This avoids harmless
 server-revision warnings without changing the shorter per-request and
 connection-handshake limits.
+
+All Python clients and Web live fixtures load generated IJT structures through
+the shared modern `load_data_type_definitions()` policy. The shared adapter also
+preserves asyncua's generated `AllowSubtypes` metadata and selects the OPC UA
+wire codec by field category: Variant for abstract numeric subtypes and
+ExtensionObject for structured subtypes. Do not add legacy loader sequences or
+client-local monkey-patches.
 
 Pyright path configuration must resolve both `src/` and the repository-wide
 `scripts/` directory. Console and Test Client live fixtures use the same shared
@@ -66,6 +131,33 @@ Local multi-worker Playwright runs own one simulator per worker. The runner
 monitors those owned processes throughout the feature stage and restarts an
 instance if the native simulator exits unexpectedly. Keep this recovery in the
 owner process; browser tests must not launch or manage simulator binaries.
+
+## OPC UA Connection Lifecycle
+
+All Web, Console, and Test Client runtime code uses
+`scripts/opcua_session_policy.py`. Connection health is session-aware:
+`is_client_connected()` checks asyncua 2.x `has_session` and
+`UaClientState.CONNECTED` enum values. Never compare
+`str(client.uaclient.protocol.state)` with `"open"`; an open asyncua socket is
+rendered as `"UASocketState.OPEN"` and that comparison misclassifies every
+successful session as closed.
+
+Web connection and endpoint operations are serialized. Repeated or concurrent
+browser connect commands reuse a healthy endpoint session instead of replacing
+it. Reconnects replace only a closed session, and all failed main-client,
+subscription-client, or type-loading paths disconnect partial clients before
+clearing references. These rules prevent reconnect loops and
+`BadTooManySessions` exhaustion.
+
+Each connected endpoint normally owns two OPC UA sessions: one for method/read
+traffic and one for subscriptions. When the browser WebSocket closes, the
+backend races that close signal against the active request, cancels in-flight
+connect/retry work, and then terminates both clients. Every failed or cancelled
+connect attempt also closes both clients before retrying with fresh client
+objects. Do not let a failed WebSocket notification leave a subscription client
+alive. Termination itself is cancellation-safe: if browser closure cancels an
+explicit `terminate connection` request, both session disconnects finish before
+the cancellation is allowed to propagate.
 
 ## Validation Commands
 

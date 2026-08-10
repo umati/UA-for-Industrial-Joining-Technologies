@@ -350,12 +350,17 @@ class ReportEnvironment:
     host_os: str
     run_logs_url: str
     now_utc: datetime
+    server_name: str
+    active_profile: str
     glossary_url: str = "OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md"
     repro_command: str = "python run_all_tests.py"
 
     @classmethod
     def from_runtime(cls) -> ReportEnvironment:
         """Build a :class:`ReportEnvironment` from the current process state."""
+        capabilities = _load_capabilities()
+        server_raw = capabilities.get("server")
+        server = server_raw if isinstance(server_raw, dict) else {}
         return cls(
             git_sha=_short_git_sha(_PROJECT_ROOT),
             python_version=platform.python_version(),
@@ -363,6 +368,8 @@ class ReportEnvironment:
             host_os=platform.platform(),
             run_logs_url=_run_logs_url(),
             now_utc=_utc_now(),
+            server_name=str(server.get("name") or "Server under test"),
+            active_profile=_active_profile_key(capabilities),
             glossary_url=_glossary_url(),
         )
 
@@ -576,7 +583,10 @@ def _cu_note_summary(cu_key: str, tests_by_cu: dict[str, list[dict[str, Any]]]) 
     return "; ".join(notes)
 
 
-def _build_report_context(cu_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+def _build_report_context(
+    cu_payload: dict[str, Any] | None,
+    env: ReportEnvironment,
+) -> dict[str, Any] | None:
     if not cu_payload:
         return None
 
@@ -584,12 +594,8 @@ def _build_report_context(cu_payload: dict[str, Any] | None) -> dict[str, Any] |
     profiles = _load_profiles()
     by_cu = cu_payload.get("by_cu", {}) if isinstance(cu_payload.get("by_cu"), dict) else {}
     supported = _supported_set(cu_payload)
-    capabilities = _load_capabilities()
-    active_profile = _active_profile_key(capabilities)
+    active_profile = env.active_profile
     active = profiles.get(active_profile)
-    server_raw = capabilities.get("server")
-    server: dict[str, Any] = server_raw if isinstance(server_raw, dict) else {}
-    server_name = str(server.get("name") or "Server under test")
     all_cu_keys = _ordered_cu_keys(by_cu, facets)
     facet_map = _cu_facet_map(facets)
     tests_by_cu = _cu_test_index(cu_payload)
@@ -652,7 +658,7 @@ def _build_report_context(cu_payload: dict[str, Any] | None) -> dict[str, Any] |
         "tests_by_cu": tests_by_cu,
         "active_profile": active_profile,
         "active": active,
-        "server_name": server_name,
+        "server_name": env.server_name,
         "all_cu_keys": all_cu_keys,
         "facet_map": facet_map,
         "active_label": active_label,
@@ -895,7 +901,7 @@ def _render_profile_facet_summary(
     env: ReportEnvironment | None = None,
 ) -> tuple[list[str], dict[str, Any] | None]:
     resolved_env = env if env is not None else ReportEnvironment.from_runtime()
-    context = _build_report_context(cu_payload)
+    context = _build_report_context(cu_payload, resolved_env)
     if context is None:
         return [], None
 
@@ -995,8 +1001,9 @@ def render_specification_test_summary(
 
     The keyword-only ``report_environment`` parameter bundles every
     runtime-derived value the report would otherwise read from
-    ``platform``, ``importlib.metadata``, the local git checkout, or the
-    ``GITHUB_*`` environment variables (see :class:`ReportEnvironment`).
+    ``platform``, ``importlib.metadata``, the local git checkout, capability
+    configuration, or process environment variables (see
+    :class:`ReportEnvironment`).
     Production callers leave it as ``None`` and the renderer builds it from
     live state via :meth:`ReportEnvironment.from_runtime`. Byte-identity
     tests and the capture helper pass a frozen instance so the rendered

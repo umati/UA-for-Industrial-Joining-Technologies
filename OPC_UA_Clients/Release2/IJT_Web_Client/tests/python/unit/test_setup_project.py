@@ -1960,19 +1960,19 @@ class TestInstallPythonPackages:
             sp._install_python_packages()
 
     def test_success_path(self, tmp_path, monkeypatch):
-        (tmp_path / "requirements.txt").write_text("asyncua>=1.2b2\n")
+        (tmp_path / "requirements.txt").write_text("asyncua>=2.0.1\n")
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(sp, "_get_python_path", lambda: Path("/usr/bin/python3.14"))
         calls = []
         monkeypatch.setattr(subprocess, "check_call", lambda *a, **kw: calls.append(list(a[0])))
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "1.2b2\n")
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "2.0.1\n")
         sp._install_python_packages()
         assert any("pip" in " ".join(cmd) for cmd in calls)
 
     def test_crypto_upgrade_exception_is_debug_only(self, tmp_path, monkeypatch, caplog):
         import logging
 
-        (tmp_path / "requirements.txt").write_text("asyncua>=1.2b2\n")
+        (tmp_path / "requirements.txt").write_text("asyncua>=2.0.1\n")
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(sp, "_get_python_path", lambda: Path("/usr/bin/python3.14"))
 
@@ -1981,7 +1981,7 @@ class TestInstallPythonPackages:
                 raise RuntimeError("crypto failed")
 
         monkeypatch.setattr(subprocess, "check_call", _fail_crypto)
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "1.2b2\n")
+        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "2.0.1\n")
         with caplog.at_level(logging.DEBUG, logger="setup_project"):
             sp._install_python_packages()
         # No sys.exit; debug log only
@@ -2475,13 +2475,64 @@ def test_restore_direct_runtime_local_profile_preserves_other_profiles(tmp_path,
         {
             "name": "LOCAL",
             "address": "opc.tcp://localhost:40451",
-            "autoconnect": False,
+            "autoconnect": True,
         },
         {
             "name": "CONTROLLER",
             "address": "opc.tcp://controller:4840",
             "autoconnect": False,
         },
+    ]
+
+
+def test_restore_direct_runtime_local_profile_uses_direct_runtime_address_but_preserves_autoconnect(
+    tmp_path, monkeypatch
+):
+    default_file = tmp_path / "connectionpoints.default.json"
+    runtime_file = tmp_path / "connectionpoints.json"
+    default_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "connectionpoints": [
+                    {
+                        "name": "LOCAL",
+                        "address": "opc.tcp://localhost:40451",
+                        "autoconnect": False,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    runtime_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "connectionpoints": [
+                    {
+                        "name": "LOCAL",
+                        "address": "opc.tcp://localhost:49999",
+                        "autoconnect": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sp, "CONNECTIONPOINTS_DEFAULT_FILE", default_file)
+    monkeypatch.setattr(sp, "CONNECTIONPOINTS_RUNTIME_FILE", runtime_file)
+    monkeypatch.setenv("OPCUA_SERVER_URL", "opc.tcp://controller:4840")
+
+    sp._restore_direct_runtime_connectionpoints()
+
+    saved = json.loads(runtime_file.read_text(encoding="utf-8"))
+    assert saved["connectionpoints"] == [
+        {
+            "name": "LOCAL",
+            "address": "opc.tcp://controller:4840",
+            "autoconnect": True,
+        }
     ]
 
 

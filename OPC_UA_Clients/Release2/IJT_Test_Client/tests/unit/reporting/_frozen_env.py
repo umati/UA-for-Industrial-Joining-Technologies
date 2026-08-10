@@ -39,9 +39,11 @@ FIXED_SERVER_URL = "opc.tcp://fixture.ijt.test:40451"
 FROZEN_ENV = ReportEnvironment(
     git_sha="15bc900",
     python_version="3.14.3",
-    asyncua_version="1.2b2",
+    asyncua_version="2.0.1",
     host_os="Windows-11-10.0.26200-SP0",
     run_logs_url="Not Applicable",
     glossary_url="OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md",
     now_utc=datetime(2026, 5, 13, 14, 0, 0, tzinfo=timezone.utc),
+    server_name="My IJT Server",
+    active_profile="full_specification_coverage",
 )

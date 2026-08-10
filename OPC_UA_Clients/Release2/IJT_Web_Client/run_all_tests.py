@@ -93,6 +93,13 @@ _REPO_ROOT = _runner_parents[3] if len(_runner_parents) > 3 else ROOT
 _BANDIT_CONFIG = _REPO_ROOT / "pyproject.toml"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+_SHARED_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if not _SHARED_SCRIPTS_DIR.is_dir():
+    _SHARED_SCRIPTS_DIR = ROOT / "scripts"
+if str(_SHARED_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SHARED_SCRIPTS_DIR))
+
+from ijt_live_readiness import COMPOSE_WAIT_TIMEOUT_WARM_SECONDS  # noqa: E402
 
 from tests.python._live_server_readiness import (  # noqa: E402
     MAX_SIMULATOR_LAUNCH_ATTEMPTS,
@@ -721,7 +728,16 @@ def _prepare_tmp_dir() -> None:
     """
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     now = time.time()
+    active_basetemp: Path | None = None
+    configured_basetemp = os.getenv("IJT_ACTIVE_PYTEST_BASETEMP")
+    if configured_basetemp:
+        with contextlib.suppress(OSError):
+            active_basetemp = Path(configured_basetemp).resolve()
     for child in _TMP_DIR.iterdir():
+        if active_basetemp is not None:
+            with contextlib.suppress(OSError):
+                if child.resolve() == active_basetemp:
+                    continue
         name = child.name
         always_safe = name in {
             "pytest",
@@ -2189,7 +2205,6 @@ def _parse_int_env(name: str, default: int) -> int:
 # environments; override with IJT_DOCKER_TIMEOUT=<seconds> for slow CI runners.
 _DOCKER_TIMEOUT = _parse_int_env("IJT_DOCKER_TIMEOUT", 90)
 _DOCKER_BUILD_TIMEOUT = _parse_int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
-_DOCKER_COMPOSE_WAIT_TIMEOUT = _parse_int_env("IJT_DOCKER_COMPOSE_WAIT_TIMEOUT", 180)
 _DOCKER_HTTP_PORT = _parse_int_env("WEB_CLIENT_HTTP_PORT", 3000)
 _DOCKER_WS_PORT = _parse_int_env("WEB_CLIENT_WS_PORT", 8001)
 _PLAYWRIGHT_FEATURE_WORKERS = _parse_int_env("IJT_PLAYWRIGHT_FEATURE_WORKERS", 1 if IS_CI else 4)
@@ -3075,13 +3090,21 @@ def _stage_docker_smoke() -> StageResult:
         "WEB_CLIENT_WS_PORT": str(ws_port),
     }
     rc = _run(
-        compose_cmd + ["up", "-d", "--no-build", "--wait", "--wait-timeout", str(_DOCKER_COMPOSE_WAIT_TIMEOUT)],
+        compose_cmd
+        + [
+            "up",
+            "-d",
+            "--no-build",
+            "--wait",
+            "--wait-timeout",
+            str(COMPOSE_WAIT_TIMEOUT_WARM_SECONDS),
+        ],
         label="docker compose up -d --wait",
         # Outer subprocess timeout: see _start_opcua_docker_server above. We
         # bound the whole compose-up call to (--wait-timeout + 60s docker
         # slack) so a hung daemon or pull cannot freeze docker-smoke.
         env=compose_env,
-        timeout=_DOCKER_COMPOSE_WAIT_TIMEOUT + 60,
+        timeout=COMPOSE_WAIT_TIMEOUT_WARM_SECONDS + 60,
     )
     if rc != 0:
         _capture_compose_failure_logs(

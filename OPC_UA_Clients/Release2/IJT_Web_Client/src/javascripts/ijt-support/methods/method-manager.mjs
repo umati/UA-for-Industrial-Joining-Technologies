@@ -1,6 +1,53 @@
 const METHOD_NODE_CLASS = 4 // OPC UA NodeClass for Method nodes
 import { ijtLog } from '../ijt-logger.mjs'
 
+const INTEGER_DATA_TYPE_IDS = new Set([2, 3, 4, 5, 6, 7, 8, 9])
+const FLOAT_DATA_TYPE_IDS = new Set([10, 11])
+const STRING_DATA_TYPE_IDS = new Set([12, 31918])
+
+function castScalarInputValue (dataTypeId, value) {
+  if (INTEGER_DATA_TYPE_IDS.has(dataTypeId)) {
+    return Number.parseInt(value, 10)
+  }
+  if (FLOAT_DATA_TYPE_IDS.has(dataTypeId)) {
+    return Number.parseFloat(value)
+  }
+  if (STRING_DATA_TYPE_IDS.has(dataTypeId) || dataTypeId === 13) {
+    return String(value ?? '')
+  }
+  if (dataTypeId === 1) {
+    return value === true || value === 'true'
+  }
+  return value
+}
+
+function castInputValue (dataTypeId, value, valueRank) {
+  const allowsArray = valueRank >= 0 || valueRank === -2 || valueRank === -3
+  const requiresArray = valueRank >= 0
+
+  if (allowsArray && Array.isArray(value)) {
+    return value.map(item => castScalarInputValue(dataTypeId, item))
+  }
+  if (requiresArray) {
+    return value === '' || value == null
+      ? []
+      : [castScalarInputValue(dataTypeId, value)]
+  }
+  return castScalarInputValue(dataTypeId, value)
+}
+
+function normalizeSchemaArgument (argument = {}) {
+  return {
+    ...argument,
+    Name: argument?.Name || '',
+    DataType: argument?.DataType || {},
+    ValueRank: argument?.ValueRank ?? -1,
+    ArrayDimensions: argument?.ArrayDimensions ?? null,
+    Description: argument?.Description || null,
+    FieldDefinitions: Array.isArray(argument?.FieldDefinitions) ? argument.FieldDefinitions : []
+  }
+}
+
 const COMPATIBILITY_GROUPS = Object.freeze({
   SendSimulatedBulkResults: {
     id: 'simulate-results',
@@ -84,7 +131,9 @@ export class MethodManager {
       this.methodObject[methodItem.methodNode.displayName] = {
         parentNode: folderNode,
         methodNode: methodItem.methodNode,
-        arguments: methodItem.arguments,
+        arguments: methodItem.arguments.map(normalizeSchemaArgument),
+        outputArguments: methodItem.outputArguments.map(normalizeSchemaArgument),
+        returnArgument: methodItem.returnArgument ? normalizeSchemaArgument(methodItem.returnArgument) : undefined,
         nodeIdString: pathText,
         metadata: this._buildMethodPresentation(pathText, methodItem.methodNode.displayName)
       }
@@ -187,30 +236,77 @@ export class MethodManager {
 
   /**
    * Given a method node, set it up and sort out the data so that it becomes
-   * easy to invoke (using the InputArguments children).
+   * easy to invoke (using the InputArguments / OutputArguments children).
    * @param {object} methodNode
-   * @returns {Promise<{methodNode: object, arguments: object[]}>}
+   * @returns {Promise<{methodNode: object, arguments: object[], outputArguments: object[], returnArgument?: object}>}
    */
   async setupMethod (methodNode) {
-    const allProperties = methodNode.getChildRelations('hasProperty')
-    const inputArguments = allProperties.find(
+    const childRelations = [
+      ...methodNode.getChildRelations('hasProperty'),
+      ...methodNode.getChildRelations('component')
+    ]
+    const uniqueRelations = childRelations.filter((relation, index, relations) =>
+      index === relations.findIndex(candidate => candidate?.NodeId === relation?.NodeId)
+    )
+    const inputArguments = uniqueRelations.find(
       x => x.BrowseName.Name === 'InputArguments')
+    const outputArguments = uniqueRelations.find(
+      x => x.BrowseName.Name === 'OutputArguments')
+    const returnValue = uniqueRelations.find(
+      x => x.BrowseName.Name === 'ReturnValue')
 
     const inputArgumentsNode = inputArguments
       ? await this.addressSpace.relationsToNodes([inputArguments])
+      : []
+    const outputArgumentsNode = outputArguments
+      ? await this.addressSpace.relationsToNodes([outputArguments])
+      : []
+    const returnValueNode = returnValue
+      ? await this.addressSpace.relationsToNodes([returnValue])
       : []
 
     const simplifiedArguments = []
     for (const arg of inputArgumentsNode) {
       for (const argContent of arg.data.attributes.Value) {
         if (argContent) {
-          simplifiedArguments.push(argContent)
+          simplifiedArguments.push(normalizeSchemaArgument(argContent))
         } else {
           ijtLog.warn('Method arguments could not be found:', arg?.data?.value)
         }
       }
     }
-    return { methodNode, arguments: simplifiedArguments }
+
+    const simplifiedOutputArguments = []
+    for (const arg of outputArgumentsNode) {
+      for (const argContent of arg.data.attributes.Value) {
+        if (argContent) {
+          simplifiedOutputArguments.push(normalizeSchemaArgument(argContent))
+        } else {
+          ijtLog.warn('Method output arguments could not be found:', arg?.data?.value)
+        }
+      }
+    }
+
+    let simplifiedReturnArgument
+    for (const arg of returnValueNode) {
+      const returnDefinition = arg?.data?.attributes?.Value?.[0]
+      if (returnDefinition) {
+        simplifiedReturnArgument = normalizeSchemaArgument(returnDefinition)
+        break
+      }
+    }
+
+    return {
+      methodNode,
+      arguments: simplifiedArguments,
+      outputArguments: simplifiedOutputArguments,
+      returnArgument: simplifiedReturnArgument,
+      argumentMetadata: simplifiedArguments.map(arg => ({
+        valueRank: arg?.ValueRank,
+        arrayDimensions: arg?.ArrayDimensions,
+        fieldDefinitions: arg?.FieldDefinitions
+      }))
+    }
   }
 
   /**
@@ -237,39 +333,16 @@ export class MethodManager {
    */
   async call (methodData, inputs) {
     const inputArguments = []
-    for (const row of inputs) {
-      let castValue
-      const typeNr = row.type.Identifier
-      switch (parseInt(typeNr)) {
-        case 3029: {
-          castValue = row.value
-          break
-        }
-        case 7: // UInt32
-        case 8: // Int64
-        case 9: // UInt64
-        case 3: // Byte
-        case 10: // Byte
-        case 11: // Int32
-        case 5: // Double
-        case 4: // Float
-          castValue = parseInt(row.value)
-          break
-        case 12: // String
-        case 13: // DateTime
-          castValue = String(row.value ?? '')
-          break
-        case 21: // LocalizedText â€” pass {Text, Locale} object through to Python
-          castValue = row.value
-          break
-        case 1: // Boolean
-          castValue = row.value === true || row.value === 'true'
-          break
-        default:
-          castValue = row.value
-      }
+    for (const [index, row] of inputs.entries()) {
+      const argumentDefinition = methodData.arguments?.[index]
+      const valueRank = Number(argumentDefinition?.ValueRank)
+      const schemaTypeId = Number(argumentDefinition?.DataType?.Identifier)
+      const rowTypeId = Number(row.type.Identifier)
+      const dataTypeId = Number.isInteger(schemaTypeId) ? schemaTypeId : rowTypeId
+      const castValue = castInputValue(dataTypeId, row.value, valueRank)
+
       inputArguments.push({
-        dataType: parseInt(typeNr),
+        dataType: dataTypeId,
         value: castValue
       })
     }

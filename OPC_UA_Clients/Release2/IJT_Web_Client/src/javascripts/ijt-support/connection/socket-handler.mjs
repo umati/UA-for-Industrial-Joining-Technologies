@@ -166,7 +166,7 @@ export class SocketHandler {
             delete this.callMapping[uniqueid]
             delete this.failMapping[uniqueid]
             if (failCall) {
-              failCall({ error: msg.exception, node: returnNode })
+              failCall({ error: msg.exception, message: msg, node: returnNode })
             }
           } else {
             const callbackFunction = this.callMapping[uniqueid]

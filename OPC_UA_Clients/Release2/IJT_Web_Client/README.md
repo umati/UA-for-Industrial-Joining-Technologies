@@ -77,6 +77,16 @@ The former full Connection tab is intentionally not shown by default.
 - **Run tests:** `python run_all_tests.py`
 - For advanced contributor workflows and CI behavior details, see [`docs/DEVELOPMENT_GUIDE.md`](./docs/DEVELOPMENT_GUIDE.md).
 
+## Methods page behavior
+
+- Method input and output labels follow the connected server.
+- `ProductInstanceUri` defaults are resolved and retained independently for each active server.
+- Method results remain visible as structured output in the Results view.
+- `Uncertain` and Bad method responses retain any Status, StatusMessage, or
+  other output arguments returned by the server.
+- Backend records for server-specific operations include the OPC UA endpoint,
+  so concurrent server activity can be distinguished in the console.
+
 ### Browser test prerequisites (optional)
 
 - For local browser E2E checks, install Chromium once: `npx playwright install chromium`.

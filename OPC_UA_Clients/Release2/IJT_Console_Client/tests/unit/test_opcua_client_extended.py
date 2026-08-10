@@ -60,16 +60,15 @@ def _endpoint_with_username_token(token_security_policy_uri: str) -> ua.Endpoint
 
 
 @pytest.mark.asyncio
-async def test_load_ijt_type_definitions_continues_after_legacy_loader_failure():
+async def test_load_ijt_type_definitions_uses_modern_loader_only():
     client = AsyncMock()
-    client.load_type_definitions = AsyncMock(side_effect=RuntimeError("legacy unavailable"))
+    client.load_type_definitions = AsyncMock()
     client.load_data_type_definitions = AsyncMock()
 
-    with patch("opcua_client.ijt_log") as mock_log:
-        await _load_ijt_type_definitions(client, "unit")
+    await _load_ijt_type_definitions(client)
 
+    client.load_type_definitions.assert_not_awaited()
     client.load_data_type_definitions.assert_awaited_once()
-    assert "legacy unavailable" in str(mock_log.warning.call_args)
 
 
 @pytest.mark.asyncio
@@ -523,7 +522,14 @@ async def test_cleanup_ua_error_no_request_found_is_warning():
     mock_inner.disconnect = AsyncMock(side_effect=UaError("No request found for request handle"))
     c.client = mock_inner
 
-    with patch("opcua_client.ijt_log") as mock_log:
+    with (
+        patch("opcua_client.ijt_log") as mock_log,
+        patch(
+            "opcua_client.disconnect_opcua_client",
+            new_callable=AsyncMock,
+            side_effect=UaError("No request found for request handle"),
+        ),
+    ):
         await c.cleanup()
 
     warning_calls = [str(call) for call in mock_log.warning.call_args_list]
@@ -540,7 +546,10 @@ async def test_cleanup_ua_error_other_is_warning():
     mock_inner.disconnect = AsyncMock(side_effect=UaError("Connection reset"))
     c.client = mock_inner
 
-    with patch("opcua_client.ijt_log") as mock_log:
+    with (
+        patch("opcua_client.ijt_log") as mock_log,
+        patch("opcua_client.disconnect_opcua_client", new_callable=AsyncMock, side_effect=UaError("Connection reset")),
+    ):
         await c.cleanup()
 
     mock_log.warning.assert_called()
@@ -556,7 +565,12 @@ async def test_cleanup_generic_disconnect_exception_is_warning():
     mock_inner.disconnect = AsyncMock(side_effect=OSError("connection dropped"))
     c.client = mock_inner
 
-    with patch("opcua_client.ijt_log") as mock_log:
+    with (
+        patch("opcua_client.ijt_log") as mock_log,
+        patch(
+            "opcua_client.disconnect_opcua_client", new_callable=AsyncMock, side_effect=OSError("connection dropped")
+        ),
+    ):
         await c.cleanup()
 
     mock_log.warning.assert_called()

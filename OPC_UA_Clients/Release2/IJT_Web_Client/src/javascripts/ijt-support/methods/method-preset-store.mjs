@@ -29,7 +29,9 @@ export function loadMethodValues (methodKey) {
 export function saveMethodValues (methodKey, values) {
   try {
     if (!Array.isArray(values)) return false
-    safeStorage()?.setItem(methodPresetStorageKey(methodKey), JSON.stringify(values))
+    const storage = safeStorage()
+    if (!storage) return false
+    storage.setItem(methodPresetStorageKey(methodKey), JSON.stringify(values))
     return true
   } catch (error) {
     ijtLog.warn('Could not save method values:', error)
@@ -39,10 +41,37 @@ export function saveMethodValues (methodKey, values) {
 
 export function clearMethodValues (methodKey) {
   try {
-    safeStorage()?.removeItem(methodPresetStorageKey(methodKey))
+    const storage = safeStorage()
+    if (!storage) return false
+    storage.removeItem(methodPresetStorageKey(methodKey))
     return true
   } catch (error) {
     ijtLog.warn('Could not clear saved method values:', error)
+    return false
+  }
+}
+
+export function loadMethodPreferences (methodKey) {
+  try {
+    const raw = safeStorage()?.getItem(`${methodPresetStorageKey(methodKey)}.prefs`)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch (error) {
+    ijtLog.warn('Could not read method preferences:', error)
+    return {}
+  }
+}
+
+export function saveMethodPreferences (methodKey, preferences) {
+  try {
+    if (!preferences || typeof preferences !== 'object') return false
+    const storage = safeStorage()
+    if (!storage) return false
+    storage.setItem(`${methodPresetStorageKey(methodKey)}.prefs`, JSON.stringify(preferences))
+    return true
+  } catch (error) {
+    ijtLog.warn('Could not save method preferences:', error)
     return false
   }
 }

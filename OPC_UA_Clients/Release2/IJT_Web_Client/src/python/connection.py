@@ -12,47 +12,65 @@ import datetime
 import json
 import os
 import socket
+import sys
+from pathlib import Path
 from typing import Any
 
 from asyncua import Client, ua
+from asyncua.common.methods import to_variant
 
-from python.call_structure import create_call_structure
+
+def _find_repo_root() -> Path:
+    current = Path(__file__).resolve()
+    for base in (current, *current.parents):
+        if (base / "scripts" / "opcua_session_policy_loader.py").is_file():
+            return base
+    raise ModuleNotFoundError(
+        "The IJT Web Client requires the full UA-for-Industrial-Joining-Technologies "
+        "repository checkout. Missing top-level scripts\\opcua_session_policy_loader.py."
+    )
+
+
+_REPO_ROOT = _find_repo_root()
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from opcua_session_policy_loader import load_shared_session_policy  # noqa: E402
+
+_session_policy = load_shared_session_policy(__file__)
+apply_session_policy = _session_policy.apply_session_policy
+connect_opcua_client = _session_policy.connect_client
+disconnect_opcua_client = _session_policy.disconnect_client
+is_opcua_client_connected = _session_policy.is_client_connected
+load_ijt_type_definitions = _session_policy.load_ijt_type_definitions
+
+from python.call_structure import create_call_structure, is_structured_call_type
 from python.event_handler import EventHandler
-from python.ijt_logger import ijt_log
+from python.ijt_logger import endpoint_logger, ijt_log
 from python.result_event_handler import ResultEventHandler
 from python.serialize_data import serialize_full_event, serialize_tuple, serialize_value
 
 _OPCUA_TIMEOUT_S = 60  # per-request timeout for long-running operations (method calls, reads)
 _OPCUA_TIMEOUT_SHORT_S = 15  # wall-clock limit for OPC UA session establishment (SecureChannel + Session handshake)
 _OPCUA_TIMEOUT_BROWSE_S = 30  # per-loader wall-clock limit for OPC UA type-definition loading
-_OPCUA_SESSION_TIMEOUT_MS = 600_000  # simulator-supported maximum; avoids negotiated-timeout warnings
 _OPCUA_WATCHDOG_INTERVAL_DEFAULT = "3600"
 _SUBSCRIPTION_PERIOD_MS = 100
 _CONNECT_RETRIES_DEFAULT = "8"
 _CONNECT_DELAY_DEFAULT = "1.0"
 _CONNECT_MAX_DELAY_DEFAULT = "4.0"
 _EXPONENTIAL_BACKOFF_BASE = 2
+_DISCONNECT_TIMEOUT_S = 5
 
 
-async def _load_ijt_type_definitions(client: Any, label: str) -> None:
-    """Load IJT custom structures through both asyncua type-definition paths.
-
-    ``load_data_type_definitions()`` is asyncua's modern OPC UA 1.04 path.  The
-    IJT simulator still leaves some Result/Event payload structures available
-    only through the legacy OPC Binary dictionary path, so seed that path first
-    and then load modern definitions without overwriting the working classes.
-    """
-    try:
-        await asyncio.wait_for(client.load_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S)
-    except Exception as exc:
-        ijt_log.warning(
-            "Legacy OPC Binary type-definition load failed for %s; continuing "
-            "with OPC UA 1.04 DataTypeDefinition loading: %s",
-            label,
-            exc,
-        )
-
-    await asyncio.wait_for(client.load_data_type_definitions(), timeout=_OPCUA_TIMEOUT_BROWSE_S)
+async def _load_ijt_type_definitions(client: Any) -> None:
+    """Load IJT custom structures through the shared modern asyncua path."""
+    await asyncio.wait_for(
+        load_ijt_type_definitions(client),
+        timeout=_OPCUA_TIMEOUT_BROWSE_S,
+    )
 
 
 def id_object_to_string(inp: Any) -> str:
@@ -78,6 +96,40 @@ def id_object_to_string(inp: Any) -> str:
     return str(inp)
 
 
+def _serialize_status_code(status_code: ua.StatusCode) -> dict[str, Any]:
+    """Return a stable JSON contract for an OPC UA operation status."""
+    return {
+        "name": status_code.name,
+        "value": status_code.value,
+        "isGood": status_code.is_good(),
+        "isUncertain": status_code.is_uncertain(),
+        "isBad": status_code.is_bad(),
+    }
+
+
+async def _call_method_preserving_result(
+    parent_node: Any,
+    method_node: Any,
+    input_arguments: list[Any],
+) -> ua.CallMethodResult:
+    """Call a method without discarding non-Good per-method results.
+
+    asyncua's high-level ``Node.call_method`` checks the per-method StatusCode
+    and raises before returning the accompanying output arguments. The Call
+    service itself only raises for service/transport failures and returns the
+    complete ``CallMethodResult`` for each requested method.
+    """
+    request = ua.CallMethodRequest(
+        ObjectId=parent_node.nodeid,
+        MethodId=method_node.nodeid,
+        InputArguments=to_variant(*input_arguments),
+    )
+    results = await parent_node.session.call([request])
+    if len(results) != 1:
+        raise ua.UaError(f"Call service returned {len(results)} results for one requested method")
+    return results[0]
+
+
 def _opcua_watchdog_interval() -> float:
     """Return asyncua watchdog interval in seconds.
 
@@ -96,6 +148,30 @@ def _opcua_watchdog_interval() -> float:
         return float(_OPCUA_WATCHDOG_INTERVAL_DEFAULT)
 
 
+def _serialize_datatype_nodeid(nodeid: Any) -> dict[str, Any] | None:
+    """Convert a datatype node id to a minimal JSON-safe object."""
+    if nodeid is None:
+        return None
+    namespace = getattr(nodeid, "NamespaceIndex", None)
+    identifier = getattr(nodeid, "Identifier", None)
+    return {
+        "NamespaceIndex": namespace,
+        "Identifier": identifier,
+    }
+
+
+def _serialize_argument_definition(argument: Any) -> dict[str, Any]:
+    """Normalize an OPC UA Argument definition for the browser."""
+    return {
+        "Name": getattr(argument, "Name", ""),
+        "DataType": _serialize_datatype_nodeid(getattr(argument, "DataType", None)),
+        "ValueRank": getattr(argument, "ValueRank", None),
+        "ArrayDimensions": getattr(argument, "ArrayDimensions", None),
+        "Description": serialize_full_event(getattr(argument, "Description", None)),
+        "FieldDefinitions": [],
+    }
+
+
 class Connection:
     """
     This class encapsulates the actions that can be taken to communicate
@@ -104,6 +180,7 @@ class Connection:
 
     def __init__(self, server_url: str, websocket: Any) -> None:
         self.server_url = server_url
+        self.log = endpoint_logger(server_url)
         self.websocket = websocket
         self.terminated = False
 
@@ -127,6 +204,7 @@ class Connection:
         # that concurrent method-call responses and subscription publish
         # messages never share the same asyncua request pipeline.
         self.subscription_client: Any = None
+        self._lifecycle_lock = asyncio.Lock()
 
     async def is_connection_open(self) -> bool:
         """Coroutine. Check whether the underlying OPC UA secure channel is open.
@@ -135,21 +213,19 @@ class Connection:
             ``True`` if the channel protocol state is ``"open"``, ``False``
             otherwise (e.g. never connected, disconnected, or faulted).
 
-        Note:
-            This reads `client.uaclient.protocol.state` — an INTERNAL asyncua
-            attribute path with no public alternative as of master SHA
-            35a77c6b (2026-05-11).  Wrapped in defensive `getattr` chain so an
-            upstream rename returns False instead of raising AttributeError.
-            Revisit if a public connection-status API is added upstream.
+        State interpretation is centralized in the shared session policy so
+        enum-backed asyncua 2.x states and older socket-state shapes are handled
+        consistently by every IJT Python client.
         """
-        if not hasattr(self, "client") or self.client is None:
-            return False
-        # FRAGILE: internal asyncua attribute chain (no public equivalent yet).
-        protocol = getattr(getattr(self.client, "uaclient", None), "protocol", None)
-        state = getattr(protocol, "state", None)
-        return str(state).lower() == "open"
+        return is_opcua_client_connected(getattr(self, "client", None))
 
     async def connect(self, max_retries: int | None = None) -> dict[str, Any]:
+        """Establish the connection once, serializing concurrent reconnect requests."""
+        async with self._lifecycle_lock:
+            result = await self._connect(max_retries=max_retries)
+        return result
+
+    async def _connect(self, max_retries: int | None = None) -> dict[str, Any]:
         """Coroutine. Establish an OPC UA session and load type definitions.
 
         Rewrites ``127.0.0.1``/``localhost`` to ``host.docker.internal`` only
@@ -177,7 +253,7 @@ class Connection:
         server_url = self.server_url
         if os.getenv("IJT_OPCUA_HOST_REWRITE") == "true" and server_url:
             if "://127.0.0.1" in server_url or "://localhost" in server_url:
-                ijt_log.info("[Docker host bridge] Rewriting server_url to host.docker.internal")
+                self.log.info("[Docker host bridge] Rewriting server_url to host.docker.internal")
                 server_url = server_url.replace("://127.0.0.1", "://host.docker.internal")
                 server_url = server_url.replace("://localhost", "://host.docker.internal")
 
@@ -187,12 +263,7 @@ class Connection:
         # PublishRequest.  Under this load the CallResponse can arrive well after
         # the old 10-second window, causing asyncua to raise
         # "Unhandled exception while sending request to OPC UA server".
-        self.client = Client(
-            server_url,
-            timeout=_OPCUA_TIMEOUT_S,
-            watchdog_intervall=_opcua_watchdog_interval(),
-        )
-        self.client.session_timeout = _OPCUA_SESSION_TIMEOUT_MS
+        self.client = None
 
         # Security policy: asyncua Client defaults to no-security (SecurityPolicy.None_,
         # MessageSecurityMode.None_), which is exactly what this client requires.
@@ -215,6 +286,13 @@ class Connection:
 
         for attempt in range(retries):
             try:
+                self.client = apply_session_policy(
+                    Client(
+                        server_url,
+                        timeout=_OPCUA_TIMEOUT_S,
+                        watchdog_intervall=_opcua_watchdog_interval(),
+                    )
+                )
                 computer_name = socket.getfqdn()
                 self.client.name = f"urn:{computer_name}:IJT:WebClient"
                 self.client.description = f"urn:{computer_name}:IJT:WebClient"
@@ -224,39 +302,52 @@ class Connection:
                 # _OPCUA_TIMEOUT_SHORT_S caps the connection handshake itself;
                 # _OPCUA_TIMEOUT_S (set on the Client above) governs subsequent
                 # per-request operations such as method calls and reads.
-                await asyncio.wait_for(self.client.connect(), timeout=_OPCUA_TIMEOUT_SHORT_S)
+                await asyncio.wait_for(connect_opcua_client(self.client), timeout=_OPCUA_TIMEOUT_SHORT_S)
 
                 # Small wait to avoid races right after SecureChannel/Session creation
                 await asyncio.sleep(0.1)
 
-                await _load_ijt_type_definitions(self.client, "method client")
+                await _load_ijt_type_definitions(self.client)
                 self.root = self.client.get_root_node()
 
                 # Connect the dedicated subscription client (separate OPC UA session).
                 # This eliminates concurrent-request issues when SimulateJobResult
                 # fires many Publish messages while a CallResponse is still in-flight.
                 try:
-                    self.subscription_client = Client(
-                        server_url,
-                        timeout=_OPCUA_TIMEOUT_S,
-                        watchdog_intervall=_opcua_watchdog_interval(),
+                    self.subscription_client = apply_session_policy(
+                        Client(
+                            server_url,
+                            timeout=_OPCUA_TIMEOUT_S,
+                            watchdog_intervall=_opcua_watchdog_interval(),
+                        )
                     )
-                    self.subscription_client.session_timeout = _OPCUA_SESSION_TIMEOUT_MS
                     sub_client_name = f"urn:{computer_name}:IJT:WebClient:Sub"
                     self.subscription_client.name = sub_client_name
                     self.subscription_client.description = sub_client_name
                     self.subscription_client.application_uri = sub_client_name
                     await asyncio.wait_for(
-                        self.subscription_client.connect(),
+                        connect_opcua_client(self.subscription_client),
                         timeout=_OPCUA_TIMEOUT_SHORT_S,
                     )
                     await asyncio.sleep(0.1)
-                    await _load_ijt_type_definitions(self.subscription_client, "subscription client")
-                    ijt_log.info("Subscription client connected.")
+                    await _load_ijt_type_definitions(self.subscription_client)
+                    self.log.info("Subscription client connected.")
                 except Exception as sub_err:
-                    ijt_log.warning(
+                    failed_subscription_client = self.subscription_client
+                    if failed_subscription_client is not None:
+                        try:
+                            await asyncio.wait_for(
+                                disconnect_opcua_client(failed_subscription_client),
+                                timeout=_DISCONNECT_TIMEOUT_S,
+                            )
+                        except Exception as cleanup_err:
+                            self.log.warning(
+                                "Failed to clean up the subscription client after connection failure: %s",
+                                cleanup_err,
+                            )
+                    self.log.warning(
                         "Subscription client failed to connect — falling back to "
-                        "single-session mode; OPC UA events will not be received. "
+                        "single-session mode. "
                         "Check server connectivity and session limits. Error: %s",
                         sub_err,
                     )
@@ -271,59 +362,100 @@ class Connection:
                     await self.websocket.send(json.dumps(event))
 
                 return event
+            except asyncio.CancelledError:
+                await self._cleanup_failed_connect_attempt()
+                raise
             except Exception as e:
                 last_error = e
+                await self._cleanup_failed_connect_attempt()
                 delay = min(max_delay, base_delay * (_EXPONENTIAL_BACKOFF_BASE**attempt))
-                ijt_log.error(f"Connect attempt {attempt + 1}/{retries} failed for {self.server_url}: {e}")
+                self.log.error(f"Connect attempt {attempt + 1}/{retries} failed: {e}")
                 if attempt + 1 < retries:
                     await asyncio.sleep(delay)
 
         error_detail = f": {last_error}" if last_error is not None else ""
+        self.client = None
+        self.root = None
         return {"exception": f"Failed to connect after {retries} attempts to {self.server_url}{error_detail}"}
 
+    async def _cleanup_failed_connect_attempt(self) -> None:
+        """Close every OPC UA session created by an incomplete connect attempt."""
+        clients = (
+            ("main", self.client),
+            ("subscription", self.subscription_client),
+        )
+        self.client = None
+        self.subscription_client = None
+        self.root = None
+
+        for label, client in clients:
+            if client is None:
+                continue
+            try:
+                await asyncio.wait_for(
+                    disconnect_opcua_client(client),
+                    timeout=_DISCONNECT_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                self.log.warning(f"{label.capitalize()} client cleanup timed out after failed connect.")
+            except Exception as exc:
+                self.log.warning(f"{label.capitalize()} client cleanup failed after failed connect: {exc}")
+
     async def terminate(self) -> None:
+        """Serialize termination and finish cleanup even if its caller is cancelled."""
+        async with self._lifecycle_lock:
+            cleanup_task = asyncio.create_task(self._terminate())
+            try:
+                await asyncio.shield(cleanup_task)
+            except asyncio.CancelledError:
+                await cleanup_task
+                raise
+
+    async def _terminate(self) -> None:
         """Coroutine. Gracefully shut down all subscriptions and the OPC UA session.
 
         Deletes active event subscriptions, disconnects the asyncua client,
         and closes both event-handler queue workers.  Idempotent — subsequent
         calls are no-ops.
         """
+        if self.terminated:
+            return
+        self.terminated = True
+
         try:
-            if self.terminated:
-                return
-            self.terminated = True
-
-            if not hasattr(self, "client") or not self.client:
-                ijt_log.warning("Client is None. Skipping termination.")
-                return
-
-            ijt_log.info(
-                f"Protocol state before disconnect: {getattr(self.client.uaclient.protocol, 'state', 'unknown')}"
-            )
+            if self.client is not None:
+                client_state = getattr(getattr(self.client, "uaclient", None), "state", "unknown")
+                self.log.info(f"Client state before disconnect: {client_state}")
 
             # Unsubscribe/delete subscriptions while channel is still open.
             await self._unsubscribe_and_cleanup()
             await asyncio.sleep(0.5)
 
             # Disconnect client safely
-            try:
-                await asyncio.wait_for(self.client.disconnect(), timeout=2)
-                ijt_log.info("Client disconnected successfully.")
-            except asyncio.TimeoutError:
-                ijt_log.warning("Disconnect timed out.")
-            except Exception as e:
-                ijt_log.warning(f"Disconnect failed: {e}")
+            if self.client is not None:
+                try:
+                    await asyncio.wait_for(
+                        disconnect_opcua_client(self.client),
+                        timeout=_DISCONNECT_TIMEOUT_S,
+                    )
+                    self.log.info("Client disconnected successfully.")
+                except asyncio.TimeoutError:
+                    self.log.warning("Disconnect timed out.")
+                except Exception as e:
+                    self.log.warning(f"Disconnect failed: {e}")
 
             # Disconnect the dedicated subscription client
             if self.subscription_client:
                 try:
-                    await asyncio.wait_for(self.subscription_client.disconnect(), timeout=2)
-                    ijt_log.info("Subscription client disconnected successfully.")
+                    await asyncio.wait_for(
+                        disconnect_opcua_client(self.subscription_client),
+                        timeout=_DISCONNECT_TIMEOUT_S,
+                    )
+                    self.log.info("Subscription client disconnected successfully.")
                 except asyncio.TimeoutError:
-                    ijt_log.warning("Subscription client disconnect timed out.")
+                    self.log.warning("Subscription client disconnect timed out.")
                 except Exception as e:
-                    ijt_log.warning(f"Subscription client disconnect failed: {e}")
-                self.subscription_client = None
+                    self.log.warning(f"Subscription client disconnect failed: {e}")
 
             # Shutdown event handlers
             if self.handler_joining_event:
@@ -331,14 +463,17 @@ class Connection:
             if self.handler_result_event:
                 await self.handler_result_event.close()
 
-            ijt_log.info(f"Disconnected from {self.server_url}")
+            self.log.info("Disconnected")
 
         except Exception as e:
-            ijt_log.error(f"General error during termination: {e}")
+            self.log.error(f"General error during termination: {e}")
         finally:
-            ijt_log.info(f"Terminate: Connection to {self.server_url} cleaned up")
+            self.client = None
+            self.subscription_client = None
+            self.root = None
+            self.log.info("Terminate: connection cleaned up")
 
-        ijt_log.info("Disconnect completed - late OPC UA messages ignored.")
+        self.log.info("Disconnect completed - late OPC UA messages ignored.")
 
     async def _unsubscribe_and_cleanup(self) -> None:
         """Coroutine. Delete OPC UA subscriptions while the channel is still open.
@@ -348,7 +483,7 @@ class Connection:
         the shutdown sequence continues regardless.
         """
         if not await self.is_connection_open():
-            ijt_log.info("Connection already not open, skipping unsubscribe/delete subscription.")
+            self.log.info("Connection already not open, skipping unsubscribe/delete subscription.")
             self.sub_result_event = "sub"
             self.sub_joining_event = "sub"
             return
@@ -361,26 +496,26 @@ class Connection:
         if self.sub_result_event != "sub":
             try:
                 if hasattr(self.sub_result_event, "subscription_id"):
-                    ijt_log.info("Deleting ResultEvent subscription.")
+                    self.log.info("Deleting ResultEvent subscription.")
                     await asyncio.wait_for(
                         delete_client.delete_subscriptions([self.sub_result_event.subscription_id]),  # type: ignore[union-attr]
                         timeout=5.0,
                     )
             except Exception as e:
-                ijt_log.warning(f"Delete subscription failed (ResultEvent). Continuing shutdown: {e}")
+                self.log.warning(f"Delete subscription failed (ResultEvent). Continuing shutdown: {e}")
             self.sub_result_event = "sub"
 
         # Joining Event
         if self.sub_joining_event != "sub":
             try:
                 if hasattr(self.sub_joining_event, "subscription_id"):
-                    ijt_log.info("Deleting JoiningEvent subscription.")
+                    self.log.info("Deleting JoiningEvent subscription.")
                     await asyncio.wait_for(
                         delete_client.delete_subscriptions([self.sub_joining_event.subscription_id]),  # type: ignore[union-attr]
                         timeout=5.0,
                     )
             except Exception as e:
-                ijt_log.warning(f"Delete subscription failed (JoiningEvent). Continuing shutdown: {e}")
+                self.log.warning(f"Delete subscription failed (JoiningEvent). Continuing shutdown: {e}")
             self.sub_joining_event = "sub"
 
     async def subscribe(self, data: dict) -> dict[str, Any]:
@@ -471,8 +606,8 @@ class Connection:
 
             return {}
         except Exception as e:
-            ijt_log.error(f"Exception in Subscribe {self.server_url}")
-            ijt_log.error(f"Exception: {e}")
+            self.log.error("Exception in Subscribe")
+            self.log.error(f"Exception: {e}")
             return {"exception": f"Subscribe exception: {e}"}
 
     async def read(self, data: dict) -> dict[str, Any]:
@@ -540,8 +675,8 @@ class Connection:
                 "nodeid": node_id,
             }
         except Exception as e:
-            ijt_log.error(f"Exception in Read ({last_read_state}): {id_object_to_string(node_id)}")
-            ijt_log.error("Exception: " + str(e))
+            self.log.error(f"Exception in Read ({last_read_state}): {id_object_to_string(node_id)}")
+            self.log.error("Exception: " + str(e))
             return {"exception": f"Read Exception ({last_read_state}): {str(e)}"}
 
     async def pathtoid(self, data: dict) -> dict[str, Any]:
@@ -579,14 +714,14 @@ class Connection:
             # Prefer the public Client.translate_browsepaths() API over the
             # internal client.uaclient.translate_browsepaths_to_nodeids()
             # method — avoids the `.uaclient` private-attribute dependency.
-            # As of master SHA 35a77c6b (2026-05-11) the public method signature
+            # In the current released asyncua line the public method signature
             # is translate_browsepaths(starting_node: NodeId, [RelativePath]).
             # It wraps BrowsePath construction internally.
             result = await self.client.translate_browsepaths(node.nodeid, [relative_path])
             return {"nodeid": serialize_full_event(result[0].Targets[0].TargetId)}
         except Exception as e:
-            ijt_log.error("Exception in PathToId path")
-            ijt_log.error("Exception: " + str(e))
+            self.log.error("Exception in PathToId path")
+            self.log.error("Exception: " + str(e))
             return {"exception": "PathToId Exception: " + str(e)}
 
     async def namespaces(self, _data: dict) -> dict[str, Any]:
@@ -603,8 +738,8 @@ class Connection:
             namespaces_reply = await self.client.get_namespace_array()
             return {"namespaces": namespaces_reply}
         except Exception as e:
-            ijt_log.error("Exception in Namespaces")
-            ijt_log.error("Exception: " + str(e))
+            self.log.error("Exception in Namespaces")
+            self.log.error("Exception: " + str(e))
             return {"exception": "Exception in Namespaces: " + str(e)}
 
     async def browse(self, data: dict) -> dict[str, Any]:
@@ -641,7 +776,7 @@ class Connection:
                 nodes.append(entry)
             return {"nodes": nodes}
         except Exception as e:
-            ijt_log.error(f"Exception in browse for node {node_id}: {e}")
+            self.log.error(f"Exception in browse for node {node_id}: {e}")
             return {"exception": f"Browse exception: {e}"}
 
     def map_nodeid_to_varianttype(self, nodeid: int) -> ua.VariantType:
@@ -709,13 +844,13 @@ class Connection:
                                 "path": f"{tools_path}/{tool_name}",
                             }
                         )
-                        ijt_log.info(f"[read_product_instance_uri] {tool_name} → {pi_value}")
+                        self.log.info(f"[read_product_instance_uri] {tool_name} → {pi_value}")
                     except Exception as child_err:
-                        ijt_log.debug(f"[read_product_instance_uri] Skipping '{tool_name}': {child_err}")
+                        self.log.debug(f"[read_product_instance_uri] Skipping '{tool_name}': {child_err}")
                 if tools:
                     break  # found tools — no need to try alternative path
             except Exception as path_err:
-                ijt_log.debug(f"[read_product_instance_uri] Path '{tools_path}' not accessible: {path_err}")
+                self.log.debug(f"[read_product_instance_uri] Path '{tools_path}' not accessible: {path_err}")
 
         return {"tools": tools}
 
@@ -726,7 +861,9 @@ class Connection:
         inspects the server-declared ``InputArguments``, converts each
         front-end argument to the appropriate ``ua.Variant`` (including
         arrays, ``LocalizedText``, ``ExtensionObject``, …), calls the method,
-        and returns the serialized output.
+        and returns the complete serialized CallMethodResult. Per-method
+        Uncertain and Bad statuses are returned with their output arguments;
+        only service/transport failures use the exception-only path.
 
         Args:
             data: Command payload with:
@@ -739,8 +876,10 @@ class Connection:
                   ``"dataType"`` (int) and ``"value"`` (Any).
 
         Returns:
-            ``{"output": <serialized result>}`` on success, or
-            ``{"exception": "…"}`` on failure.
+            A normalized result containing the call status, status code, output
+            arguments, input-argument results/diagnostics, and raw full result.
+            Service/transport failures return an exception-only or normalized
+            failure payload.
 
         Raises:
             Does not propagate exceptions — all OPC UA errors and general
@@ -760,9 +899,9 @@ class Connection:
             obj_id = f"ns={object_node['NamespaceIndex']};s={object_node['Identifier']}"
             method_id = f"ns={method_node['NamespaceIndex']};s={method_node['Identifier']}"
 
-            ijt_log.info(f"[methodcall] object_node: {obj_id}")
-            ijt_log.info(f"[methodcall] method_node: {method_id}")
-            ijt_log.info(f"[methodcall] Arguments: {json.dumps(arguments)}")
+            self.log.info(f"[methodcall] object_node: {obj_id}")
+            self.log.info(f"[methodcall] method_node: {method_id}")
+            self.log.info(f"[methodcall] Arguments: {json.dumps(arguments)}")
 
             obj = self.client.get_node(obj_id)
             method = self.client.get_node(method_id)
@@ -771,7 +910,7 @@ class Connection:
             expected_args = await input_args_node.get_value()
 
             if len(arguments) != len(expected_args):
-                ijt_log.warning(
+                self.log.warning(
                     f"[methodcall] Argument count mismatch: expected {len(expected_args)}, got {len(arguments)}"
                 )
 
@@ -781,12 +920,19 @@ class Connection:
                     expected_type_node = expected_args[i].DataType
                     value = arg["value"]
 
-                    ijt_log.info(f"[methodcall] Argument {i + 1} expected type NodeId: {expected_type_node}")
-                    ijt_log.info(
+                    self.log.info(f"[methodcall] Argument {i + 1} expected type NodeId: {expected_type_node}")
+                    self.log.info(
                         f"[methodcall] Argument {i + 1} Identifier type: {type(expected_type_node.Identifier)}"
                     )
 
-                    variant_type = self.map_nodeid_to_varianttype(arg["dataType"]) or ua.VariantType.String
+                    declared_data_type = arg.get("dataType")
+                    expected_data_type_identifier = getattr(expected_type_node, "Identifier", None)
+                    effective_data_type = (
+                        expected_data_type_identifier
+                        if isinstance(expected_data_type_identifier, int)
+                        else declared_data_type
+                    )
+                    variant_type = self.map_nodeid_to_varianttype(effective_data_type) or ua.VariantType.String
 
                     # Convert LocalizedText dict from GUI to ua.LocalizedText
                     if variant_type == ua.VariantType.LocalizedText:
@@ -810,18 +956,30 @@ class Connection:
 
                     # Optional: warn on empty strings
                     if isinstance(value, str) and value.strip() == "" and variant_type == ua.VariantType.String:
-                        ijt_log.warning(f"[methodcall] Argument {i + 1} is empty string - server may reject it.")
+                        self.log.warning(f"[methodcall] Argument {i + 1} is empty string - server may reject it.")
 
+                    if is_structured_call_type(effective_data_type):
+                        structured_value = create_call_structure(
+                            {
+                                **arg,
+                                "dataType": effective_data_type,
+                                "value": value,
+                            }
+                        )
+                        input_args.append(structured_value)
+                        self.log.info(
+                            f"[methodcall] Argument {i + 1} mapped to structured type {effective_data_type} with value {value}"
+                        )
                     # Handle arrays
-                    if isinstance(value, list):
+                    elif isinstance(value, list):
                         if variant_type == ua.VariantType.String:
                             input_args.append(ua.Variant(value, variant_type, is_array=True))
-                            ijt_log.info(
+                            self.log.info(
                                 f"[methodcall] Argument {i + 1} mapped to Array of {variant_type.name} with value {value}"
                             )
                         else:
                             input_args.append(ua.Variant(value, variant_type, is_array=True))
-                            ijt_log.info(f"[methodcall] Argument {i + 1} mapped to Array of {variant_type.name}")
+                            self.log.info(f"[methodcall] Argument {i + 1} mapped to Array of {variant_type.name}")
                     else:
                         # Type correction logic
                         if isinstance(value, str) and value.isdigit():
@@ -840,22 +998,52 @@ class Connection:
                             pass
 
                         input_args.append(ua.Variant(value, variant_type))
-                        ijt_log.info(f"[methodcall] Argument {i + 1} mapped to {variant_type.name} with value {value}")
+                        self.log.info(f"[methodcall] Argument {i + 1} mapped to {variant_type.name} with value {value}")
                 except Exception as map_err:
-                    ijt_log.warning(
+                    self.log.warning(
                         f"[methodcall] Failed to map argument {i + 1}, fallback to original type: {map_err}"
                     )
                     input_args.append(create_call_structure(arg))
 
-            ijt_log.info("[methodcall] Calling method on object...")
-            out = await obj.call_method(method, *input_args)
-            serialized_output = serialize_full_event(out)
-            ijt_log.info(f"[methodcall] Method output: {serialized_output}")
-            return {"output": serialized_output}
+            self.log.info("[methodcall] Calling method on object...")
+            call_result = await _call_method_preserving_result(obj, method, input_args)
+            status_code = call_result.StatusCode
+            output_values = [
+                output.Value if isinstance(output, ua.Variant) else output
+                for output in (call_result.OutputArguments or [])
+            ]
+            normalized_output_arguments = serialize_full_event(output_values)
+            serialized_result = serialize_full_event(call_result)
+            if status_code.is_good():
+                call_status = "Succeeded"
+            elif status_code.is_uncertain():
+                call_status = "Uncertain"
+            else:
+                call_status = "Failed"
+            method_result = {
+                "callStatus": call_status,
+                "statusCode": _serialize_status_code(status_code),
+                "returnValue": None,
+                "outputArguments": normalized_output_arguments,
+                "inputArgumentResults": [
+                    _serialize_status_code(result) for result in (call_result.InputArgumentResults or [])
+                ],
+                "inputArgumentDiagnosticInfos": serialize_full_event(call_result.InputArgumentDiagnosticInfos or []),
+                "rawOutput": serialized_result,
+            }
+            if not status_code.is_good():
+                status_error = ua.UaStatusCodeError(status_code.value)
+                method_result["statusDescription"] = f"OPC UA method status: {status_error}"
+            self.log.info(
+                "[methodcall] Method status: %s; output: %s",
+                status_code.name,
+                normalized_output_arguments,
+            )
+            return method_result
 
         except ua.UaError as ua_err:
             err_str = str(ua_err)
-            ijt_log.error(f"[methodcall] UAError: {ua_err}")
+            self.log.error(f"[methodcall] UAError: {ua_err}")
             if "BadTooManySessions" in err_str:
                 return {"exception": "OPC UA server has too many open sessions. Restart the server and reconnect."}
             if "BadSecureChannelClosed" in err_str or "Unhandled exception" in err_str or "sending request" in err_str:
@@ -867,10 +1055,16 @@ class Connection:
                         )
                     }
                 return {"exception": "Connection to OPC UA server was lost. Please reconnect."}
-            return {"exception": f"OPC UA error: {ua_err}"}
+            return {
+                "callStatus": "Failed",
+                "returnValue": None,
+                "outputArguments": [],
+                "rawOutput": None,
+                "exception": f"OPC UA error: {ua_err}",
+            }
         except Exception as e:
             err_str = str(e)
-            ijt_log.error(f"[methodcall] General Exception: {e}")
+            self.log.error(f"[methodcall] General Exception: {e}")
             if "Unhandled exception" in err_str or "sending request" in err_str:
                 if await self.is_connection_open():
                     return {
@@ -880,4 +1074,10 @@ class Connection:
                         )
                     }
                 return {"exception": "Connection to OPC UA server was lost. Please reconnect."}
-            return {"exception": f"Method call exception: {e}"}
+            return {
+                "callStatus": "Failed",
+                "returnValue": None,
+                "outputArguments": [],
+                "rawOutput": None,
+                "exception": f"Method call exception: {e}",
+            }

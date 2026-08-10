@@ -2,8 +2,7 @@
 Live OPC UA method-call tests — IJT Tightening Server (OPCUA_TEST_ENDPOINT)
 
 Infrastructure mirrors IJT_Console_Client/opcua_client.py exactly:
-  * load_type_definitions() first for the IJT simulator's OPC Binary
-    dictionary, then load_data_type_definitions() for OPC UA 1.04 metadata
+  * shared session policy and modern DataTypeDefinition loading
   * server_node = root.get_child(["0:Objects","0:Server"])
   * Event types resolved by namespace URI (same as Console Client event_types.py)
   * TWO persistent module-scoped subscriptions — result events + system events
@@ -44,9 +43,11 @@ import pytest
 import pytest_asyncio
 from asyncua import ua
 
-from .._asyncua_compat import apply_send_request_timeout_patch
-
-apply_send_request_timeout_patch()
+from python.connection import (
+    connect_opcua_client,
+    disconnect_opcua_client,
+    load_ijt_type_definitions,
+)
 
 # asyncio_default_fixture_loop_scope = module is set in pyproject.toml for all async tests
 
@@ -118,17 +119,8 @@ async def ijt_session():
     system_h = SystemHandler()
 
     c = Client(OPCUA_URL, timeout=60)  # generous timeout for heavy simulation calls
-    await c.connect()
-
-    # Compatibility bridge for the IJT simulator's custom Result/Event payloads:
-    # asyncua's modern loader reads OPC UA 1.04 DataTypeDefinition attributes,
-    # while the simulator still exposes some IJT structures only through the
-    # legacy OPC Binary dictionary path. Keep the legacy load first so the
-    # following modern load does not overwrite working classes.
-    await c.load_type_definitions()
-
-    # Same as Console Client connect(): load modern data type definitions
-    await c.load_data_type_definitions()
+    await connect_opcua_client(c)
+    await load_ijt_type_definitions(c)
 
     root = c.nodes.root
     server_node = await root.get_child(["0:Objects", "0:Server"])
@@ -163,10 +155,8 @@ async def ijt_session():
         ]
     )
 
-    # Type definitions are already loaded above through the IJT compatibility
-    # bridge (load_type_definitions() then load_data_type_definitions()).
-    # asyncua's load_data_type_definitions() defaults to overwrite_existing=False
-    # so a second call here would only re-walk ~200 nodes for no benefit.
+    # Type definitions are loaded once above. A second modern-loader call would
+    # only re-walk the complete type hierarchy.
 
     # Create persistent subscriptions with queuesize=200 (same as Console Client).
     # MaxNotificationsPerPublish=3 prevents large PublishResponse payloads when the
@@ -203,7 +193,7 @@ async def ijt_session():
         except OSError:
             pass  # server already gone — teardown must not fail
     try:
-        await c.disconnect()
+        await disconnect_opcua_client(c)
     except OSError:
         pass  # server already gone — teardown must not fail
 
@@ -919,7 +909,9 @@ class TestJoiningProcess:
     async def test_get_process_list(self, ijt_session):
         c, *_ = ijt_session
         pi = await _required_pi_uri(c)
-        assert await _call(c, _JP, f"{_JP}/GetJoiningProcessList", _v(pi, ua.VariantType.String)) is not None
+        result = await _call(c, _JP, f"{_JP}/GetJoiningProcessList", _v(pi, ua.VariantType.String))
+        assert result is not None
+        assert _method_items(result), "GetJoiningProcessList must return at least one structured output item"
 
     async def test_get_selected_program(self, ijt_session):
         c, *_ = ijt_session
@@ -1002,6 +994,7 @@ class TestJoiningProcess:
         except (OSError, ua.UaStatusCodeError) as exc:
             pytest.fail(f"StartSelectedJoining must return a method result after SelectJoiningProcess, got {exc}")
         assert result is not None
+        assert isinstance(result, list), f"StartSelectedJoining must return output argument list, got {type(result)!r}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1096,6 +1089,7 @@ class TestJointManagement:
                 _v("", ua.VariantType.String),           # JointOriginId (optional, empty)
             )
             assert result is not None
+            assert isinstance(result, list), f"SelectJoint must return output argument list, got {type(result)!r}"
         except OSError:
             pass  # Uncertain status is a valid server response
 
@@ -1111,14 +1105,49 @@ class TestAssetIdentifiers:
 
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
+    async def _optional_string_array_argument(self, c, method_path: str):
+        method = _node(c, method_path)
+        args_node = await method.get_child("0:InputArguments")
+        args = await args_node.get_value()
+        if len(args) < 2:
+            return []
+        arg = args[1]
+        if getattr(getattr(arg, "DataType", None), "Identifier", None) != 12:
+            return []
+        value_rank = getattr(arg, "ValueRank", -1)
+        return [ua.Variant([], ua.VariantType.String)] if value_rank >= 0 or value_rank == -3 else []
+
     async def test_get_identifiers(self, ijt_session):
         """GetIdentifiers must return without raising."""
         c, *_ = ijt_session
         try:
-            result = await _call(c, _ASSET, f"{_ASSET}/GetIdentifiers", _v(await _pi_uri(c), ua.VariantType.String))
+            result = await _call(
+                c,
+                _ASSET,
+                f"{_ASSET}/GetIdentifiers",
+                _v(await _pi_uri(c), ua.VariantType.String),
+                *await self._optional_string_array_argument(c, f"{_ASSET}/GetIdentifiers"),
+            )
             assert result is not None
+            assert isinstance(result, list)
         except (OSError, ua.UaStatusCodeError):
             pass  # Empty / Uncertain result or server-side arg mismatch is acceptable
+
+    async def test_get_io_signals(self, ijt_session):
+        """GetIOSignals with optional empty String[] must return without raising."""
+        c, *_ = ijt_session
+        try:
+            result = await _call(
+                c,
+                _ASSET,
+                f"{_ASSET}/GetIOSignals",
+                _v(await _pi_uri(c), ua.VariantType.String),
+                *await self._optional_string_array_argument(c, f"{_ASSET}/GetIOSignals"),
+            )
+            assert result is not None
+            assert isinstance(result, list)
+        except (OSError, ua.UaStatusCodeError):
+            pass
 
     async def test_send_text_identifiers(self, ijt_session):
         """SendTextIdentifiers with a sample string array must not raise."""

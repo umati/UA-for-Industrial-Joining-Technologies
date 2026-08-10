@@ -34,6 +34,23 @@ def _make_simulator_executable(tmp_path: Path) -> Path:
     return executable
 
 
+def test_prepare_tmp_dir_never_removes_active_pytest_basetemp(monkeypatch, tmp_path):
+    runner = _load_runner()
+    tmp_root = tmp_path / "tmp"
+    active_basetemp = tmp_root / "pytest_session_123"
+    active_basetemp.mkdir(parents=True)
+    marker = active_basetemp / "active.txt"
+    marker.write_text("in use", encoding="utf-8")
+    os.utime(active_basetemp, (0, 0))
+
+    monkeypatch.setattr(runner, "_TMP_DIR", tmp_root)
+    monkeypatch.setenv("IJT_ACTIVE_PYTEST_BASETEMP", str(active_basetemp))
+
+    runner._prepare_tmp_dir()
+
+    assert marker.read_text(encoding="utf-8") == "in use"
+
+
 def _patch_simulator_launch_common(monkeypatch, runner, tmp_path: Path) -> Path:
     instance_dir = tmp_path / "instance"
     state_dir = tmp_path / "state"
@@ -1657,6 +1674,14 @@ def test_target_only_dependencies_run_before_target_stage(monkeypatch, tmp_path)
 
 
 def test_compatibility_smoke_target_uses_owned_services_without_chromium_install(monkeypatch):
+    for name in (
+        "OPCUA_SERVER_PORT",
+        "OPCUA_TEST_ENDPOINT",
+        "OPCUA_SERVER_URL",
+        "WS_TEST_URL",
+        "UI_TEST_BASE_URL",
+    ):
+        monkeypatch.delenv(name, raising=False)
     runner = _load_runner()
     calls = []
 

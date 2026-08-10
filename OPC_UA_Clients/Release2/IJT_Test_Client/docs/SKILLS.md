@@ -107,7 +107,7 @@ from the IJT specification.
 Endpoint:       opc.tcp://localhost:40451   (override: OPCUA_SERVER_URL env var)
 Binary:         OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe
 Python:         3.14+  (normal test venv at .venv_test/; local --ci-mode venv at .venv_ci/)
-Key packages:   asyncua (pin lives in repo-root constraints.txt; current SHA 35a77c6b self-reports 1.2b2), PyYAML>=6.0, pytest>=9.0.2, pytest-asyncio>=1.3.0, pytest-timeout>=2.4.0
+Key packages:   asyncua (pin lives in repo-root constraints.txt; keep Web/Test/Console aligned on the same released version, currently 2.0.1), PyYAML>=6.0, pytest>=9.0.2, pytest-asyncio>=1.3.0, pytest-timeout>=2.4.0
 Run tests:      .venv_test/bin/python -m pytest -v          (Linux, normal mode)
                 .venv_test\Scripts\python -m pytest -v      (Windows, normal mode)
 Auto-launch:    set OPCUA_SIMULATOR_EXE=<path>  to auto-start server if not running
@@ -349,6 +349,21 @@ Store real profiles outside the repository or sanitize before committing.
 ---
 
 ## Core Design Patterns
+
+### Shared asyncua session and generated-type policy
+
+All Test Client fixtures use the repository-wide session policy. The
+session-scoped client loads IJT structures exactly once through modern
+`load_data_type_definitions()`; module-scoped method and subscription clients
+reuse the globally registered generated classes. Never restore deprecated
+`load_type_definitions()` calls or swallow modern loader failures.
+
+The shared compatibility adapter preserves
+`Annotated[..., "AllowSubtypes"]` metadata that asyncua 2.0.1 currently drops.
+Abstract numeric subtype fields are encoded/decoded as Variants, while
+structured subtype fields remain ExtensionObjects. Root regression tests cover
+both binary round trips, and live coverage includes `SignalDataType`,
+`ResultDataType`, and RequestedResult payloads.
 
 ### ResultCollector — events-primary result delivery
 ```python

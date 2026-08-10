@@ -84,6 +84,8 @@ def _make_ws(remote_address=("127.0.0.1", 12345)):
     ws.remote_address = remote_address
     ws.send = AsyncMock()
     ws.close = AsyncMock()
+    ws.closed_event = asyncio.Event()
+    ws.wait_closed = AsyncMock(side_effect=ws.closed_event.wait)
     return ws
 
 
@@ -142,6 +144,35 @@ class TestHandler:
         # First arg is the websocket, second is the parsed payload dict
         call_args = mock_iface.handle.await_args
         assert call_args[0][1] == payload
+
+    @pytest.mark.asyncio
+    async def test_browser_close_cancels_inflight_request_before_cleanup(self):
+        """A refresh must not leave a long-running OPC UA connect task alive."""
+        payload = {"command": "connect to", "endpoint": "opc.tcp://host:4840"}
+        ws = _make_ws_iter([json.dumps(payload)])
+        handle_started = asyncio.Event()
+        handle_cancelled = asyncio.Event()
+
+        async def _blocking_handle(*_args):
+            handle_started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                handle_cancelled.set()
+
+        with patch("index.IJTInterface") as MockIJT:
+            mock_iface = AsyncMock()
+            mock_iface.handle = AsyncMock(side_effect=_blocking_handle)
+            mock_iface.disconnect = AsyncMock()
+            MockIJT.return_value = mock_iface
+
+            handler_task = asyncio.create_task(index.handler(ws))
+            await handle_started.wait()
+            ws.closed_event.set()
+            await asyncio.wait_for(handler_task, timeout=1)
+
+        assert handle_cancelled.is_set()
+        mock_iface.disconnect.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_json_decode_error_sends_error_response(self):

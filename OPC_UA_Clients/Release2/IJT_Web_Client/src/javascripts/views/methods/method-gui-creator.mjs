@@ -4,7 +4,9 @@
 import { ijtLog } from '../../ijt-support/ijt-logger.mjs'
 import {
   clearMethodValues,
+  loadMethodPreferences,
   loadMethodValues,
+  saveMethodPreferences,
   saveMethodValues
 } from '../../ijt-support/methods/method-preset-store.mjs'
 
@@ -25,11 +27,38 @@ const CLASSIFICATION_OPTIONS = [
   ['SYNC (2)', 2],
 ]
 
+const JOINING_PROCESS_IDENTIFICATION_MODES = Object.freeze([
+  {
+    label: 'Specific Id',
+    index: 0,
+    placeholder: 'Enter the exact JoiningProcess Id',
+    help: 'Use the explicit JoiningProcess Id returned by the server.'
+  },
+  {
+    label: 'OriginId',
+    index: 1,
+    placeholder: 'Enter the external/origin id',
+    help: 'Use the external or origin identifier mapped by the server.'
+  },
+  {
+    label: 'Selection name',
+    index: 2,
+    placeholder: 'Enter the selection name',
+    help: 'Use a human-readable selection name configured on the server.'
+  }
+])
+
 export default class MethodGUICreator {
-  constructor (screen, methodManager, entityManager, settings) {
+  constructor (screen, methodManager, entityManager, settings, methodState = null) {
     this.methodManager = methodManager
     this.entityManager = entityManager
     this.settings = settings
+    this.methodState = methodState || {
+      productInstanceUri: '',
+      detectedTools: [],
+      detectedJoints: [],
+      detectedJoiningProcesses: []
+    }
     this.screen = screen
   }
 
@@ -42,6 +71,7 @@ export default class MethodGUICreator {
     const methodMetadata = methodData?.metadata || {}
     const methodStorageKey = methodData?.nodeIdString || methodData?.methodNode?.nodeIdString || pathName
     const storedValues = loadMethodValues(methodStorageKey)
+    const storedPreferences = loadMethodPreferences(methodStorageKey)
     const savedValues = profile === 'last-used' ? storedValues : null
 
     const buttonPress = (button) => {
@@ -54,10 +84,10 @@ export default class MethodGUICreator {
       // This is when the actual call is made
       this.methodManager.call(methodData, values).then(
         (success) => {
-          this.screen.messageDisplay(this.formatMethodResult(pathName, success))
+          this.screen.messageDisplay(this.formatMethodResult(pathName, success, methodData))
         },
         (fail) => {
-          this.screen.messageDisplay(this.formatMethodResult(pathName, fail))
+          this.screen.messageDisplay(this.formatMethodResult(pathName, fail, methodData))
         }
       )
     }
@@ -91,6 +121,11 @@ export default class MethodGUICreator {
         content.appendChild(notes)
       }
 
+      const schemaSection = this.buildMethodSchemaSection(methodData)
+      if (schemaSection) {
+        content.appendChild(schemaSection)
+      }
+
       const profileArea = document.createElement('div')
       profileArea.classList.add('methodPresetRow')
       const profileLabel = this.screen.createLabel('Values')
@@ -114,6 +149,13 @@ export default class MethodGUICreator {
       profileArea.append(profileLabel, profileSelect)
       content.appendChild(profileArea)
 
+      if (this.methodState.detectedTools?.length || this.methodState.detectedJoints?.length || this.methodState.detectedJoiningProcesses?.length) {
+        const discoveryHint = document.createElement('p')
+        discoveryHint.classList.add('methodHelpText')
+        discoveryHint.textContent = 'Live tool, joint, and joining-process discovery is available where the current method signature supports it.'
+        content.appendChild(discoveryHint)
+      }
+
       // Setting up argument windows
       const listOfValuegrabbers = []
       for (let index = 0; index < methodData.arguments.length; index++) {
@@ -126,7 +168,12 @@ export default class MethodGUICreator {
         const configuredDefault = profile === 'last-used' && typeof savedValue !== 'undefined'
           ? savedValue
           : defaults?.arguments?.[index]
-        listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, configuredDefault, undefined, methodData.methodNode.displayName, index, metadataDefault))
+        listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, configuredDefault, undefined, methodData.methodNode.displayName, index, metadataDefault, {
+          methodData,
+          methodStorageKey,
+          storedPreferences,
+          profile
+        }))
       }
 
       // Create the actual button for the call
@@ -161,7 +208,14 @@ export default class MethodGUICreator {
     const savedType = String(savedArgument?.type?.Identifier ?? '')
     if (expectedType && savedType && expectedType !== savedType) return undefined
     const value = savedArgument.value
-    if (Array.isArray(value) || (value && typeof value === 'object' && expectedType !== '21')) return undefined
+    if (Array.isArray(value)) {
+      return this._expectsArrayArgument(arg) ? value : undefined
+    }
+    if (this._expectsArrayArgument(arg)) {
+      return undefined
+    }
+    if (value && typeof value === 'object' && expectedType !== '21') return undefined
+    if (this._isProductInstanceUriArgument(arg)) return undefined
     return value
   }
 
@@ -225,27 +279,513 @@ export default class MethodGUICreator {
       return new Date().toISOString()
     }
     if (metadataDefault && typeof metadataDefault === 'object' && metadataDefault.source === 'productid') {
-      const value = String(
-        this.settings?.methodProductInstanceUri ||
-        this.settings?.productId ||
-        this.settings?.productid ||
-        ''
-      ).trim()
-      if (value && !value.includes('www.company.com/ProductABC123')) {
-        return value
+      const liveToolValue = String(this.methodState.productInstanceUri || '').trim()
+      if (liveToolValue) {
+        return liveToolValue
       }
-      return metadataDefault.allowEmpty ? '' : value
+      return ''
     }
     return metadataDefault
   }
 
-  formatMethodResult (methodName, payload) {
+  _normalizeArgumentName (argumentName = '') {
+    return String(argumentName).replace(/[^a-z0-9]/gi, '').toLowerCase()
+  }
+
+  _isProductInstanceUriArgument (arg) {
+    return this._normalizeArgumentName(arg?.Name) === 'productinstanceuri'
+  }
+
+  _isJoiningProcessIdentificationArgument (arg) {
+    return String(arg?.DataType?.Identifier ?? '') === '3029' ||
+      this._normalizeArgumentName(arg?.Name).includes('joiningprocessidentification')
+  }
+
+  _isJointIdArgument (arg) {
+    const normalized = this._normalizeArgumentName(arg?.Name)
+    return normalized === 'jointid' || normalized.endsWith('jointid')
+  }
+
+  _isJoiningProcessSelectionArgument (arg) {
+    return this._isJoiningProcessIdentificationArgument(arg)
+  }
+
+  _expectsArrayArgument (arg) {
+    const valueRank = Number(arg?.ValueRank)
+    return valueRank >= 0 || valueRank === -3
+  }
+
+  _isStringLikeArgument (arg) {
+    const dataTypeId = String(arg?.DataType?.Identifier ?? '')
+    return dataTypeId === '12' || dataTypeId === '13' || dataTypeId === '31918'
+  }
+
+  _resolveInputSource (arg, defaultValue, metadataDefault, profile) {
+    if (profile === 'last-used' && typeof defaultValue !== 'undefined' && defaultValue !== '') {
+      return 'saved-values'
+    }
+    if (this._isProductInstanceUriArgument(arg) && typeof defaultValue === 'string' && defaultValue.trim()) {
+      return 'live-tool'
+    }
+    if (metadataDefault && typeof metadataDefault === 'object' && metadataDefault.source === 'currentUtc') {
+      return 'recommended-default'
+    }
+    if (typeof defaultValue !== 'undefined' && defaultValue !== '' && defaultValue !== false) {
+      return 'recommended-default'
+    }
+    return ''
+  }
+
+  _formatInputSource (source) {
+    switch (source) {
+      case 'live-tool':
+        return 'Auto-filled from live Tool.ProductInstanceUri discovery.'
+      case 'saved-values':
+        return 'Loaded from the last values you saved for this method.'
+      case 'recommended-default':
+        return 'Using the recommended default for this argument.'
+      default:
+        return ''
+    }
+  }
+
+  _createInputSourceHint (text, area) {
+    if (!text) return
+    const hint = document.createElement('p')
+    hint.classList.add('methodInputSource')
+    hint.textContent = text
+    area.appendChild(hint)
+  }
+
+  _structureFieldDefinitions (arg) {
+    const declaredFields = Array.isArray(arg?.FieldDefinitions) ? arg.FieldDefinitions : []
+    if (declaredFields.length > 0) {
+      return declaredFields.map(field => ({
+        name: field?.name || field?.Name || '',
+        label: field?.name || field?.Name || '',
+        type: String(field?.dataType ?? field?.DataType?.Identifier ?? '12')
+      })).filter(field => field.name)
+    }
+    if (String(arg?.DataType?.Identifier ?? '') === '3029') {
+      return [
+        { name: 'JoiningProcessId', label: 'Specific Id', type: '31918' },
+        { name: 'JoiningProcessOriginId', label: 'OriginId', type: '31918' },
+        { name: 'SelectionName', label: 'Selection name', type: '31918' }
+      ]
+    }
+    return []
+  }
+
+  _createGenericStructureEditor (arg, area, defaultValue, descText) {
+    const fields = this._structureFieldDefinitions(arg)
+    if (fields.length === 0) return null
+
+    const wrapper = document.createElement('div')
+    wrapper.classList.add('methodInputRight', 'methodCompositeInput', 'methodStructureInput')
+    area.appendChild(wrapper)
+
+    const fieldInputs = []
+    const defaultsByName = Array.isArray(defaultValue)
+      ? Object.fromEntries(defaultValue.map((entry, index) => [fields[index]?.name, entry?.value ?? '']).filter(([name]) => name))
+      : {}
+
+    for (const field of fields) {
+      const label = this.screen.createLabel(field.label)
+      label.classList.add('methodLabel', 'methodSubLabel')
+      wrapper.appendChild(label)
+      const input = this.screen.createInput('', wrapper, null, 55)
+      input.value = String(defaultsByName[field.name] ?? '')
+      input.title = `${field.name}\n${descText}`
+      fieldInputs.push({ field, input })
+    }
+
+    return function () {
+      return {
+        type: { Identifier: String(arg?.DataType?.Identifier ?? ''), NamespaceIndex: String(arg?.DataType?.NamespaceIndex ?? '3') },
+        structure: arg?.DataType?.Name ?? 'Structure',
+        value: fieldInputs.map(({ field, input }) => ({ value: input.value, type: field.type }))
+      }
+    }
+  }
+
+  _extractMethodResponse (payload, methodData = {}) {
+    const declaredOutputArguments = Array.isArray(methodData?.outputArguments) ? methodData.outputArguments : []
+    if (payload && typeof payload === 'object' && !Array.isArray(payload) &&
+      (Object.hasOwn(payload, 'outputArguments') || Object.hasOwn(payload, 'rawOutput') || Object.hasOwn(payload, 'callStatus'))) {
+      const outputArguments = Array.isArray(payload.outputArguments) && payload.outputArguments.length > 0
+        ? payload.outputArguments
+        : (Array.isArray(payload.rawOutput) ? payload.rawOutput : [])
+      return {
+        callStatus: payload.callStatus,
+        statusCode: payload.statusCode,
+        returnValue: payload.returnValue ?? undefined,
+        outputArguments,
+        rawPayload: typeof payload.rawOutput !== 'undefined' ? payload.rawOutput : payload
+      }
+    }
+    const normalizedMessage = payload?.message
+    if (normalizedMessage && typeof normalizedMessage === 'object' && !Array.isArray(normalizedMessage) &&
+      (Object.hasOwn(normalizedMessage, 'outputArguments') ||
+        Object.hasOwn(normalizedMessage, 'rawOutput') ||
+        Object.hasOwn(normalizedMessage, 'callStatus'))) {
+      const outputArguments = Array.isArray(normalizedMessage.outputArguments) && normalizedMessage.outputArguments.length > 0
+        ? normalizedMessage.outputArguments
+        : (Array.isArray(normalizedMessage.rawOutput) ? normalizedMessage.rawOutput : [])
+      return {
+        callStatus: normalizedMessage.callStatus,
+        statusCode: normalizedMessage.statusCode,
+        returnValue: normalizedMessage.returnValue ?? undefined,
+        outputArguments,
+        rawPayload: typeof normalizedMessage.rawOutput !== 'undefined' ? normalizedMessage.rawOutput : payload
+      }
+    }
+    if (Array.isArray(payload)) {
+      if (declaredOutputArguments.length > 0) {
+        return {
+          returnValue: undefined,
+          outputArguments: payload,
+          rawPayload: payload
+        }
+      }
+      return {
+        callStatus: undefined,
+        statusCode: undefined,
+        returnValue: payload.length > 0 ? payload[0] : undefined,
+        outputArguments: payload.slice(1),
+        rawPayload: payload
+      }
+    }
+
+    const message = payload?.message ?? payload
+    if (!message || typeof message !== 'object') {
+      return {
+        callStatus: undefined,
+        statusCode: undefined,
+        returnValue: undefined,
+        outputArguments: [],
+        rawPayload: payload
+      }
+    }
+
+    const output = message.output
+    if (typeof output === 'undefined' && Array.isArray(message)) {
+      if (declaredOutputArguments.length > 0) {
+        return {
+          callStatus: undefined,
+          statusCode: undefined,
+          returnValue: undefined,
+          outputArguments: message,
+          rawPayload: payload
+        }
+      }
+      return {
+        callStatus: undefined,
+        statusCode: undefined,
+        returnValue: message.length > 0 ? message[0] : undefined,
+        outputArguments: message.slice(1),
+        rawPayload: payload
+      }
+    }
+
+    let outputArguments = []
+    if (Array.isArray(output)) {
+      outputArguments = output
+    } else if (typeof output !== 'undefined') {
+      outputArguments = [output]
+    }
+
+    const returnCandidates = [
+      message.returnValue,
+      message.returnvalue,
+      message.statusCode,
+      message.statuscode,
+      message.methodStatus,
+      message.methodstatus
+    ]
+    const returnValue = returnCandidates.find(value => typeof value !== 'undefined')
+
+    return {
+      callStatus: message.callStatus,
+      statusCode: message.statusCode,
+      returnValue,
+      outputArguments,
+      rawPayload: payload
+    }
+  }
+
+  _extractMethodFailure (payload) {
+    const message = payload?.message ?? payload
+    const candidates = [
+      message?.exception,
+      message?.error,
+      message?.reason,
+      message?.statusDescription,
+      payload?.exception,
+      payload?.error,
+      payload?.reason,
+      payload?.statusDescription
+    ]
+    const text = candidates.find(value => typeof value === 'string' && value.trim().length > 0)
+    return text ? text.trim() : ''
+  }
+
+  _describeOutputArgument (argument, value, index) {
+    return {
+      index,
+      name: argument?.Name || `Output ${index + 1}`,
+      dataType: argument?.DataType?.Identifier ?? null,
+      description: argument?.Description?.Text ?? argument?.Description?._text ?? '',
+      value
+    }
+  }
+
+  _describeReturnArgument (argument, value) {
+    if (typeof value === 'undefined' || value === null) return null
+    return {
+      name: argument?.Name || 'Return value',
+      dataType: argument?.DataType?.Identifier ?? null,
+      description: argument?.Description?.Text ?? argument?.Description?._text ?? '',
+      value
+    }
+  }
+
+  buildMethodSchemaSection (methodData) {
+    const inputArguments = Array.isArray(methodData?.arguments) ? methodData.arguments : []
+    const outputArguments = Array.isArray(methodData?.outputArguments) ? methodData.outputArguments : []
+    if (inputArguments.length === 0 && outputArguments.length === 0) return null
+
+    const details = document.createElement('details')
+    details.classList.add('methodSchemaCard')
+
+    const summary = document.createElement('summary')
+    summary.textContent = 'Method schema'
+    details.appendChild(summary)
+
+    const body = document.createElement('div')
+    body.classList.add('methodSchemaBody')
+
+    const appendArgumentSection = (title, argumentsList) => {
+      const section = document.createElement('div')
+      section.classList.add('methodSchemaSection')
+      const heading = document.createElement('h4')
+      heading.classList.add('methodSchemaTitle')
+      heading.textContent = title
+      section.appendChild(heading)
+
+      if (argumentsList.length === 0) {
+        const empty = document.createElement('p')
+        empty.classList.add('methodHelpText')
+        empty.textContent = 'None'
+        section.appendChild(empty)
+      } else {
+        const list = document.createElement('ul')
+        list.classList.add('methodSchemaList')
+        for (const arg of argumentsList) {
+          const item = document.createElement('li')
+          const desc = arg?.Description?.Text ?? arg?.Description?._text ?? ''
+          const arraySuffix = this._expectsArrayArgument(arg) ? '[]' : ''
+          item.textContent = `${arg?.Name || 'Unnamed'}${arraySuffix}${desc ? ` — ${desc}` : ''}`
+          list.appendChild(item)
+        }
+        section.appendChild(list)
+      }
+
+      body.appendChild(section)
+    }
+
+    appendArgumentSection('Inputs', inputArguments)
+    appendArgumentSection('Outputs', outputArguments)
+    details.appendChild(body)
+    return details
+  }
+
+  _getJointPickerOptions () {
+    const detected = this.methodState.detectedJoints
+    return Array.isArray(detected) ? detected : []
+  }
+
+  _getJoiningProcessPickerOptions () {
+    const detected = this.methodState.detectedJoiningProcesses
+    return Array.isArray(detected) ? detected : []
+  }
+
+  _formatValueForDisplay (value, dataType) {
+    if (value === null || typeof value === 'undefined') return '—'
+    if (Array.isArray(value)) {
+      const semantic = this._formatSemanticCollection(value)
+      if (semantic) return semantic
+      return `${value.length} item(s)\n${JSON.stringify(value, null, 2)}`
+    }
+    if (typeof value === 'boolean') return value ? 'True' : 'False'
+    if (typeof value === 'string') return value
+    if (typeof value === 'number') return String(value)
+    if (dataType === 21 && value && typeof value === 'object') {
+      const text = value.Text ?? value.text ?? value._text ?? ''
+      const locale = value.Locale ?? value.locale ?? ''
+      const renderedText = text === null || typeof text === 'undefined' || text === '' ? '—' : String(text)
+      return locale ? `${renderedText} (${locale})` : renderedText
+    }
+    if (value?.pythonclass === 'LocalizedText') {
+      return this._formatValueForDisplay(value, 21)
+    }
+    if (value?.pythonclass && value && typeof value === 'object') {
+      const entries = Object.entries(value)
+        .filter(([key]) => key !== 'pythonclass')
+        .map(([key, entryValue]) => `${key}: ${this._formatValueForDisplay(entryValue, null)}`)
+      if (entries.length > 0) {
+        return `${value.pythonclass}\n${entries.join('\n')}`
+      }
+    }
+    if (value && typeof value === 'object') return JSON.stringify(value, null, 2)
+    return String(value)
+  }
+
+  _formatSemanticCollection (items) {
+    if (!Array.isArray(items) || items.length === 0) return ''
+    const first = items[0]?.Value ?? items[0]
+    if (first?.JointId || first?.Id || first?.JointMetaData) {
+      const labels = items
+        .map(item => item?.Value?.JointId ?? item?.JointId ?? item?.Value?.Id ?? item?.Id ?? '')
+        .filter(Boolean)
+      return `Joint list (${labels.length})\n${labels.join('\n')}`
+    }
+    if (first?.JoiningProcessId || first?.ProgramId || first?.JoiningProcessMetaData) {
+      const labels = items
+        .map(item => item?.Value?.SelectionName ?? item?.SelectionName ?? item?.Value?.JoiningProcessId ?? item?.JoiningProcessId ?? item?.Value?.ProgramId ?? item?.ProgramId ?? '')
+        .filter(Boolean)
+      return `Joining processes (${labels.length})\n${labels.join('\n')}`
+    }
+    if (first?.EntityId || first?.Description) {
+      const labels = items
+        .map(item => item?.EntityId ?? item?.Value?.EntityId ?? item?.Description ?? item?.Value?.Description ?? '')
+        .filter(Boolean)
+      return `Associated entities (${labels.length})\n${labels.join('\n')}`
+    }
+    return ''
+  }
+
+  _createDefinitionRow (label, value, description = '') {
+    const row = document.createElement('div')
+    row.classList.add('methodResultRow')
+
+    const term = document.createElement('dt')
+    term.classList.add('methodResultTerm')
+    term.textContent = label
+    row.appendChild(term)
+
+    const detail = document.createElement('dd')
+    detail.classList.add('methodResultDetail')
+    const valueBlock = document.createElement('pre')
+    valueBlock.classList.add('methodResultValue')
+    valueBlock.textContent = value
+    detail.appendChild(valueBlock)
+
+    if (description) {
+      const descriptionNode = document.createElement('p')
+      descriptionNode.classList.add('methodResultDescription')
+      descriptionNode.textContent = description
+      detail.appendChild(descriptionNode)
+    }
+
+    row.append(term, detail)
+    return row
+  }
+
+  _renderStructuredResultSections (summary, value, labelPrefix = '') {
+    if (value?.pythonclass === 'LocalizedText') return false
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+    const entries = Object.entries(value).filter(([key]) => key !== 'pythonclass')
+    if (entries.length === 0) return false
+    for (const [key, nestedValue] of entries) {
+      summary.appendChild(
+        this._createDefinitionRow(
+          labelPrefix ? `${labelPrefix} — ${key}` : key,
+          this._formatValueForDisplay(nestedValue, null)
+        )
+      )
+    }
+    return true
+  }
+
+  buildMethodResultView (methodName, payload, methodData = {}) {
+    const extracted = this._extractMethodResponse(payload, methodData)
+    const failureText = this._extractMethodFailure(payload)
+    const declaredOutputArguments = Array.isArray(methodData?.outputArguments) ? methodData.outputArguments : []
+    const declaredReturnArgument = methodData?.returnArgument
+    const structuredOutputArguments = extracted.outputArguments.map((value, index) =>
+      this._describeOutputArgument(declaredOutputArguments[index], value, index)
+    )
+    const structuredReturnArgument = this._describeReturnArgument(declaredReturnArgument, extracted.returnValue)
     const result = {
       method: methodName,
       timestamp: new Date().toISOString(),
-      payload
+      returnValue: structuredReturnArgument,
+      outputArguments: structuredOutputArguments,
+      payload: extracted.rawPayload
     }
-    return JSON.stringify(result, null, 2)
+
+    const card = document.createElement('section')
+    card.classList.add('methodResultCard')
+
+    const title = document.createElement('h3')
+    title.classList.add('methodResultTitle')
+    title.textContent = methodName
+    card.appendChild(title)
+
+    const timestamp = document.createElement('p')
+    timestamp.classList.add('methodResultTimestamp')
+    timestamp.textContent = new Date(result.timestamp).toLocaleString()
+    card.appendChild(timestamp)
+
+    const summary = document.createElement('dl')
+    summary.classList.add('methodResultList')
+    if (failureText) {
+      summary.appendChild(this._createDefinitionRow('Call status', extracted.callStatus || 'Failed', failureText))
+    }
+    if (result.returnValue) {
+      summary.appendChild(this._createDefinitionRow(
+        result.returnValue.name,
+        this._formatValueForDisplay(result.returnValue.value, result.returnValue.dataType),
+        result.returnValue.description
+      ))
+    }
+
+    if (structuredOutputArguments.length > 0) {
+      for (const outputArgument of structuredOutputArguments) {
+        summary.appendChild(
+          this._createDefinitionRow(
+            outputArgument.name,
+            this._formatValueForDisplay(outputArgument.value, outputArgument.dataType),
+            outputArgument.description
+          )
+        )
+        this._renderStructuredResultSections(summary, outputArgument.value, outputArgument.name)
+      }
+    } else {
+      const noOutputText = failureText
+        ? 'Unavailable because the method call failed'
+        : 'No output arguments'
+      summary.appendChild(this._createDefinitionRow('Output arguments', noOutputText))
+    }
+
+    card.appendChild(summary)
+
+    const rawDetails = document.createElement('details')
+    rawDetails.classList.add('methodResultDebug')
+    const rawSummary = document.createElement('summary')
+    rawSummary.textContent = 'Raw payload'
+    rawDetails.appendChild(rawSummary)
+    const rawPayload = document.createElement('pre')
+    rawPayload.classList.add('methodResultValue')
+    rawPayload.textContent = JSON.stringify(result.payload, null, 2)
+    rawDetails.appendChild(rawPayload)
+    card.appendChild(rawDetails)
+
+    return card
+  }
+
+  formatMethodResult (methodName, payload, methodData = {}) {
+    return this.buildMethodResultView(methodName, payload, methodData)
   }
 
   /**
@@ -256,12 +796,17 @@ export default class MethodGUICreator {
    * @param {*} callback optional onchange callback
    * @returns a function that returns {value, type} when called
    */
-  createMethodInput (arg, area, defaultValue = '', callback, methodName = '', argumentIndex = 0, metadataDefault) {
+  createMethodInput (arg, area, defaultValue = '', callback, methodName = '', argumentIndex = 0, metadataDefault, context = {}) {
     const dataTypeId = String(arg?.DataType?.Identifier ?? '')
     const normalizedArgumentName = String(arg?.Name ?? '').replace(/[^a-z0-9]/gi, '').toLowerCase()
     const resolvedMetadataDefault = this.resolveMetadataDefault(metadataDefault)
     if ((defaultValue === '' || typeof defaultValue === 'undefined') && typeof resolvedMetadataDefault !== 'undefined') {
       defaultValue = resolvedMetadataDefault
+    }
+    if ((defaultValue === '' || typeof defaultValue === 'undefined') && this._isProductInstanceUriArgument(arg)) {
+      const allowEmpty = ['getjointlist', 'getjoiningprocesslist'].includes(this._normalizeArgumentName(methodName))
+      const liveToolDefault = this.resolveMetadataDefault({ source: 'productid', allowEmpty })
+      defaultValue = liveToolDefault
     }
     defaultValue = this._applyNamedDefaults(arg, defaultValue, methodName, argumentIndex)
 
@@ -273,6 +818,74 @@ export default class MethodGUICreator {
     }
 
     const descText = arg?.Description?.Text ?? arg?.Description?._text ?? ''
+    const inputSource = this._resolveInputSource(arg, defaultValue, metadataDefault, context?.profile)
+    this._createInputSourceHint(this._formatInputSource(inputSource), area)
+
+    const structureEditor = this._createGenericStructureEditor(arg, area, defaultValue, descText)
+    if (structureEditor) {
+      return structureEditor
+    }
+
+    if (this._expectsArrayArgument(arg) && this._isStringLikeArgument(arg)) {
+      const wrapper = document.createElement('div')
+      wrapper.classList.add('methodInputRight', 'methodCompositeInput', 'methodArrayInput')
+      area.appendChild(wrapper)
+
+      const list = document.createElement('div')
+      list.classList.add('methodArrayList')
+      wrapper.appendChild(list)
+
+      const initialValues = Array.isArray(defaultValue)
+        ? defaultValue.map(value => String(value ?? ''))
+        : (String(defaultValue ?? '').trim() ? [String(defaultValue).trim()] : [])
+      const items = [...initialValues]
+
+      const renderItems = () => {
+        list.replaceChildren()
+        if (items.length === 0) {
+          const emptyHint = document.createElement('p')
+          emptyHint.classList.add('methodHelpText')
+          emptyHint.textContent = 'Empty array will be sent.'
+          list.appendChild(emptyHint)
+          return
+        }
+        items.forEach((itemValue, itemIndex) => {
+          const row = document.createElement('div')
+          row.classList.add('methodArrayRow')
+          const input = this.screen.createInput(itemValue, row, (value) => {
+            items[itemIndex] = value
+            if (callback) callback(items)
+          }, 70)
+          input.dataType = arg.DataType
+          input.title = `Datatype: ${arg?.DataType?.Name || 'String'}[]\n${descText}`
+          const removeButton = this.screen.createButton('Remove', row, () => {
+            items.splice(itemIndex, 1)
+            renderItems()
+            if (callback) callback(items)
+          })
+          removeButton.classList.add?.('methodArrayButton')
+          list.appendChild(row)
+        })
+      }
+
+      const controls = document.createElement('div')
+      controls.classList.add('methodArrayControls')
+      this.screen.createButton('Add item', controls, () => {
+        items.push('')
+        renderItems()
+      })
+      wrapper.appendChild(controls)
+      renderItems()
+
+      return function () {
+        return {
+          value: items
+            .map(value => String(value ?? '').trim())
+            .filter(value => value.length > 0),
+          type: arg.DataType
+        }
+      }
+    }
 
     switch (dataTypeId) {
       // ── DropDown (custom virtual type) ─────────────────────────────────────
@@ -292,26 +905,86 @@ export default class MethodGUICreator {
       // ── JoiningProcessIdentification (IJT custom type 3029) ────────────────
       case '3029': {
         const selectionArea = document.createElement('div')
-        selectionArea.classList.add('methodInputRight')
+        selectionArea.classList.add('methodInputRight', 'methodCompositeInput', 'joiningProcessIdInput')
         area.appendChild(selectionArea)
 
-        const drop = this.screen.createDropdown('Type', () => {}, 'dropJoiningProcess')
+        const modeLabel = this.screen.createLabel('Lookup mode')
+        modeLabel.classList.add('methodLabel', 'methodSubLabel')
+        selectionArea.appendChild(modeLabel)
+
+        const drop = this.screen.createDropdown('', () => {
+          saveMethodPreferences(context.methodStorageKey, {
+            ...context.storedPreferences,
+            joiningProcessLookupMode: drop.select.value
+          })
+          applyModePresentation()
+        }, 'dropJoiningProcess')
         drop.classList.add('methodDropdownWrap')
-        drop.addOption('OriginId', 1)
-        drop.addOption('Specific Id', 0)
-        drop.addOption('Selection name', 2)
+        for (const mode of JOINING_PROCESS_IDENTIFICATION_MODES) {
+          drop.addOption(mode.label, mode.index)
+        }
         selectionArea.appendChild(drop)
 
-        selectionArea.appendChild(this.screen.createLabel('Value'))
+        const valueLabel = this.screen.createLabel('Identifier value')
+        valueLabel.classList.add('methodLabel', 'methodSubLabel')
+        selectionArea.appendChild(valueLabel)
+
         const sel = this.screen.createInput('', selectionArea, callback, 55)
         sel.dataType = arg.DataType
         sel.title = `Datatype: JoiningProcessId\n${descText}`
-        sel.value = 0
+        sel.value = ''
+        selectionArea.appendChild(sel)
+
+        const helper = document.createElement('p')
+        helper.classList.add('methodHelpText')
+        selectionArea.appendChild(helper)
+
+        const joiningProcessOptions = this._getJoiningProcessPickerOptions()
+        if (joiningProcessOptions.length > 0) {
+          const pickerLabel = this.screen.createLabel('Discovered processes')
+          pickerLabel.classList.add('methodLabel', 'methodSubLabel')
+          selectionArea.appendChild(pickerLabel)
+
+          const picker = this.screen.createDropdown('', () => {
+            const selected = joiningProcessOptions.find(option =>
+              `${option.joiningProcessId}|${option.joiningProcessOriginId}|${option.selectionName}` === String(picker.select.value)
+            )
+            if (selected) {
+              const selectedMode = Number.parseInt(drop.select.value, 10)
+              sel.value = selectedMode === 1
+                ? selected.joiningProcessOriginId
+                : selectedMode === 2
+                  ? selected.selectionName
+                  : selected.joiningProcessId
+            }
+          })
+          picker.classList.add('methodDropdownWrap')
+          picker.select.setAttribute?.('aria-label', 'Discovered joining processes')
+          picker.addOption('Choose discovered joining process', '')
+          for (const option of joiningProcessOptions) {
+            const label = option.selectionName || option.joiningProcessId || option.joiningProcessOriginId
+            picker.addOption(
+              `${label} — Id: ${option.joiningProcessId || '-'} / Origin: ${option.joiningProcessOriginId || '-'}`,
+              `${option.joiningProcessId}|${option.joiningProcessOriginId}|${option.selectionName}`
+            )
+          }
+          selectionArea.appendChild(picker)
+        }
+
+        const applyModePresentation = () => {
+          const mode = JOINING_PROCESS_IDENTIFICATION_MODES.find(candidate => String(candidate.index) === String(drop.select.value)) ||
+            JOINING_PROCESS_IDENTIFICATION_MODES[0]
+          sel.placeholder = mode.placeholder
+          helper.textContent = mode.help
+        }
+
+        drop.select.value = String(context.storedPreferences?.joiningProcessLookupMode ?? JOINING_PROCESS_IDENTIFICATION_MODES[0].index)
+        applyModePresentation()
 
         return function () {
           const value = []
-          for (let i = 0; i < 3; i++) {
-            value.push(parseInt(drop.select.value) === i
+          for (const mode of JOINING_PROCESS_IDENTIFICATION_MODES) {
+            value.push(parseInt(drop.select.value) === mode.index
               ? { value: sel.value, type: '31918' }
               : { value: '', type: '31918' })
           }
@@ -476,6 +1149,31 @@ export default class MethodGUICreator {
 
       // ── String (12) ────────────────────────────────────────────────────────
       case '12': {
+        if (this._isJointIdArgument(arg)) {
+          const wrapper = document.createElement('div')
+          wrapper.classList.add('methodInputRight', 'methodCompositeInput')
+          const input12 = this.screen.createInput('', wrapper, callback, 45)
+          input12.dataType = arg.DataType
+          input12.title = `Datatype: String\n${descText}`
+          input12.value = defaultValue
+
+          const jointOptions = this._getJointPickerOptions(context.methodData)
+          if (jointOptions.length > 0) {
+            const picker = this.screen.createDropdown('', () => {
+              input12.value = String(picker.select.value || '')
+            })
+            picker.classList.add('methodDropdownWrap')
+            picker.select.setAttribute?.('aria-label', 'Discovered joints')
+            picker.addOption('Choose discovered joint', '')
+            for (const jointId of jointOptions) {
+              picker.addOption(jointId, jointId)
+            }
+            wrapper.appendChild(picker)
+          }
+
+          area.appendChild(wrapper)
+          return function () { return { value: input12.value, type: input12.dataType } }
+        }
         const input12 = this.screen.createInput('', area, callback, 45)
         input12.dataType = arg.DataType
         input12.title = `Datatype: String\n${descText}`

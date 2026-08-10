@@ -111,7 +111,7 @@ _Showing the most relevant capability areas here. Full capability detail is in I
 |---|---|
 | Test Client commit | `15bc900` |
 | Python | 3.14.3 |
-| asyncua | 1.2b2 |
+| asyncua | 2.0.1 |
 | Host OS | Windows-11-10.0.26200-SP0 |
 | Repro command | `python run_all_tests.py` |
 | Run logs | Not Applicable |

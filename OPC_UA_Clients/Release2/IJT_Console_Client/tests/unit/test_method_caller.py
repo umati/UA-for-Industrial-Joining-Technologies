@@ -4,6 +4,8 @@ Comprehensive tests for IJT_Console_Client/method_caller.py
 Covers:
 - _parse_outputs: tuple/list with int status + LocalizedText message,
   single element, empty, non-int status, non-LocalizedText message
+- get_joint_list: no ProductInstanceUri returns None, happy path returns discovered joints,
+  exception returns None
 - select_joint: no ProductInstanceUri returns None, happy path,
   missing joint_origin_id defaults to "", exception returns None
 - enable_asset: no ProductInstanceUri returns None, happy path True/False,
@@ -27,7 +29,7 @@ from method_caller import OPCUAMethodCaller  # noqa: E402
 
 
 def _make_localized_text(text: str):
-    # asyncua 1.2b2: LocalizedText(Text, Locale) — Text is first arg
+    # asyncua LocalizedText(Text, Locale) — Text is first arg
     lt = ua.LocalizedText(text, "en")
     return lt
 
@@ -96,6 +98,60 @@ def test_parse_outputs_zero_is_valid_status():
     caller = OPCUAMethodCaller(MagicMock())
     status, _ = caller._parse_outputs((0,))
     assert status == 0
+
+
+def test_normalize_method_result_wraps_status_message_and_raw():
+    caller = OPCUAMethodCaller(MagicMock())
+    result = caller._normalize_method_result((0, _make_localized_text("OK")))
+    assert result == {"status": 0, "status_message": "OK", "raw": (0, _make_localized_text("OK"))}
+
+
+# ---------------------------------------------------------------------------
+# get_joint_list
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_joint_list_returns_none_when_no_tool_identifier():
+    client, _ = _make_client()
+    caller = OPCUAMethodCaller(client)
+
+    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=None):
+        result = await caller.get_joint_list("obj", "mth")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_joint_list_happy_path_exposes_joint_array():
+    client, tool_id = _make_client("urn:tool:001")
+    joint_list = [{"JointId": "Joint_1"}, {"JointId": "Joint_2"}]
+    node_mock = AsyncMock()
+    node_mock.call_method = AsyncMock(return_value=(joint_list, 0, _make_localized_text("OK")))
+    client.get_node = MagicMock(return_value=node_mock)
+
+    caller = OPCUAMethodCaller(client)
+    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+        result = await caller.get_joint_list("ns=1;s=Obj", "ns=1;s=Mth")
+
+    assert result is not None
+    assert result["status"] == 0
+    assert result["status_message"] == "OK"
+    assert result["joints"] == joint_list
+
+
+@pytest.mark.asyncio
+async def test_get_joint_list_exception_returns_none():
+    client, tool_id = _make_client()
+    node_mock = AsyncMock()
+    node_mock.call_method = AsyncMock(side_effect=RuntimeError("server error"))
+    client.get_node = MagicMock(return_value=node_mock)
+
+    caller = OPCUAMethodCaller(client)
+    with patch("method_caller.read_tool_identifier", new_callable=AsyncMock, return_value=tool_id):
+        result = await caller.get_joint_list("obj", "mth")
+
+    assert result is None
 
 
 # ---------------------------------------------------------------------------

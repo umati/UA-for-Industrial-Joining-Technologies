@@ -67,6 +67,14 @@ test('Methods tab: running all simulations produces events', async ({ connected:
   expect(count).toBeGreaterThan(0)
 })
 
+test('Methods tab: GetIdentifiers and GetIOSignals accept optional empty arrays in browser flow', async ({ connected: app }) => {
+  test.setTimeout(180_000)
+  const methods = await app.openMethods()
+  await methods.waitForMethods({ timeout: 90_000 })
+  await methods.callMethod(['GetIdentifiers'])
+  await methods.callMethod(['GetIOSignals'])
+})
+
 // ── WS protocol layer ─────────────────────────────────────────────────────────
 
 test('WS: methodcall for SimulateSingleResult succeeds', async ({ ws }) => {

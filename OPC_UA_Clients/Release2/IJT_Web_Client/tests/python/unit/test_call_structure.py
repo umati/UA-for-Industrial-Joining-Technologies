@@ -23,6 +23,7 @@ from python.call_structure import (  # noqa: E402
     _ENTITY_DATA_TYPE_ARRAY,
     _JOINING_PROCESS_ID_DATA_TYPE,
     create_call_structure,
+    is_structured_call_type,
 )
 
 # ---------------------------------------------------------------------------
@@ -33,6 +34,15 @@ from python.call_structure import (  # noqa: E402
 def test_named_constants_have_correct_values():
     assert _JOINING_PROCESS_ID_DATA_TYPE == 3029
     assert _ENTITY_DATA_TYPE_ARRAY == 3010
+
+
+@pytest.mark.parametrize("data_type", [3029, 3010])
+def test_structured_call_types_are_centralized(data_type):
+    assert is_structured_call_type(data_type)
+
+
+def test_builtin_call_type_does_not_require_custom_builder():
+    assert not is_structured_call_type(12)
 
 
 # ---------------------------------------------------------------------------

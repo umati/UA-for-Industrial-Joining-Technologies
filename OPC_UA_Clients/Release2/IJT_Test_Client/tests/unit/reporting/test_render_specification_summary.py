@@ -133,6 +133,7 @@ def test_renderer_ignores_live_environment_when_frozen_env_passed(monkeypatch: p
     monkeypatch.setenv("GITHUB_REPOSITORY", "leak/leak")
     monkeypatch.setenv("GITHUB_SHA", "deadbeefcafefeed")
     monkeypatch.setenv("GITHUB_RUN_ID", "999999999")
+    monkeypatch.setenv("OPCUA_CAPABILITIES_FILE", "definitely-missing-capabilities.yaml")
 
     fixt = _FIXTURES_DIR / "system_tests_full_specification_coverage"
     data = _parse(fixt / "pytest.xml")

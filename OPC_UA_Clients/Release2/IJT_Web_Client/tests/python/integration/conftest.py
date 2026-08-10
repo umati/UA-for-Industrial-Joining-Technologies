@@ -24,7 +24,6 @@ from urllib.parse import urlparse
 
 import pytest
 
-from .._asyncua_compat import apply_send_request_timeout_patch
 from .._live_server_readiness import (
     opcua_server_log_hint,
     prestarted_port_closed_message,
@@ -72,9 +71,6 @@ def _parse_ws_url(url: str) -> tuple[str, int]:
 
 _OPCUA_HOST, _OPCUA_PORT = _parse_endpoint(_OPCUA_ENDPOINT)
 _WS_HOST, _WS_PORT = _parse_ws_url(_WS_URL)
-
-# Apply asyncua _send_request timeout workaround for all integration tests.
-apply_send_request_timeout_patch()
 
 
 # ── Port utilities ─────────────────────────────────────────────────────────────

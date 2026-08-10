@@ -104,7 +104,15 @@ export class AddressSpace {
     return new Promise((resolve, reject) => {
       this.socketHandler.methodCall(locationId, methodNode, args).then(
         (result) => {
-          resolve(this.parseMaybeJson(result.message.output))
+          const message = result?.message || {}
+          const normalized = {
+            ...message,
+            rawOutput: this.parseMaybeJson(message.rawOutput),
+            outputArguments: Array.isArray(message.outputArguments)
+              ? message.outputArguments.map(item => this.parseMaybeJson(item))
+              : [],
+          }
+          resolve(normalized)
         },
         (error) => {
           reject(error)

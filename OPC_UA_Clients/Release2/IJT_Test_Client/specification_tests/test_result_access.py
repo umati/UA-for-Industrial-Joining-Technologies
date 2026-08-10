@@ -167,8 +167,8 @@ async def _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS, wall_
         handle = raw[0] if len(raw) > 0 else None
         result_data = raw[1] if len(raw) > 1 else None
     else:
-        handle = raw
-        result_data = None
+        handle = None
+        result_data = raw
     return handle, result_data
 
 

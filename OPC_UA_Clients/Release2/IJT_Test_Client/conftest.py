@@ -16,8 +16,8 @@ Design rules enforced here:
   - Namespace indices are resolved once and cached in ns_indices dict.
   - Two separate client fixtures prevent asyncua concurrency issues with subscriptions.
   - Module-scoped clients depend on session_client (not managed_server) so that
-    load_type_definitions() and load_data_type_definitions() run exactly once
-    per session — not once per module.
+    the modern DataTypeDefinition loader runs exactly once per session, not once
+    per module.
     This cuts per-test connection overhead from ~4 s to ~0.5 s.
 """
 # pylint: disable=redefined-outer-name,unused-argument,broad-exception-caught
@@ -34,8 +34,26 @@ import pytest
 import pytest_asyncio
 from asyncua import Client
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from opcua_session_policy_loader import load_shared_session_policy
+
 from helpers.cu_coverage_report import CuCoverageReportRecorder
 from helpers.profile_loader import get_skip_reason, load_all_cus_from_facets, load_supported_cus
+
+_session_policy = load_shared_session_policy(__file__)
+connect_opcua_client = _session_policy.connect_client
+disconnect_opcua_client = _session_policy.disconnect_client
+load_shared_ijt_type_definitions = _session_policy.load_ijt_type_definitions
+
+# Tests create synthetic modules below tmp/ while validating report generation.
+# Never collect runner-managed artifacts as part of the product test suite.
+collect_ignore = ["tmp"]
 
 # Loaded once at collection time — all tests see the same supported-CU set.
 # None means "no capabilities file / no gating" — all tests run.
@@ -199,6 +217,18 @@ SERVER_URL = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
 _OPCUA_TIMEOUT_S = 120  # SimulateJobResult fires many results; 4 s default is too short
 
 
+async def _connect_test_client(client: Client) -> None:
+    await connect_opcua_client(client)
+
+
+async def _disconnect_test_client(client: Client | None) -> None:
+    await disconnect_opcua_client(client)
+
+
+async def _load_test_client_type_definitions(client: Client) -> None:
+    await load_shared_ijt_type_definitions(client)
+
+
 # ─── Early connection check ───────────────────────────────────────────────────
 def pytest_sessionstart(session) -> None:
     """
@@ -265,24 +295,13 @@ async def session_client(managed_server):
     """
     client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
     try:
-        await client.connect()
+        await _connect_test_client(client)
     except Exception as exc:
         pytest.fail(f"Could not connect to OPC UA server at {SERVER_URL}: {exc}")
-    try:
-        # Compatibility bridge for the IJT simulator's custom Result/Event
-        # payloads: asyncua's modern loader reads OPC UA 1.04
-        # DataTypeDefinition attributes, while the simulator still exposes some
-        # IJT structures only through the legacy OPC Binary dictionary path.
-        await client.load_type_definitions()
-    except Exception as exc:
-        logger.warning("load_type_definitions() failed (non-fatal): %s", exc)
-    try:
-        await client.load_data_type_definitions()
-    except Exception as exc:
-        logger.warning("load_data_type_definitions() failed (non-fatal): %s", exc)
+    await _load_test_client_type_definitions(client)
     yield client
     try:
-        await client.disconnect()
+        await _disconnect_test_client(client)
     except Exception as exc:
         logger.debug("session_client disconnect failed (ignored): %s", exc)
 
@@ -618,18 +637,17 @@ async def opcua_client(session_client):
     ~400 per-test connections added ~20 minutes.  With ~30 modules the overhead
     drops to under a minute.
 
-    Depends on session_client so that load_type_definitions() and
-    load_data_type_definitions() have already run once before any per-module
-    client connects.
+    Depends on session_client so that the modern DataTypeDefinition loader has
+    already run once before any per-module client connects.
 
     Use subscription_client (module-scoped) for event subscription tests —
     subscriptions must remain isolated per test to avoid cross-test event noise.
     """
     client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
-    await client.connect()
+    await _connect_test_client(client)
     yield client
     try:
-        await client.disconnect()
+        await _disconnect_test_client(client)
     except Exception as exc:
         logger.debug("opcua_client disconnect failed (ignored): %s", exc)
 
@@ -648,15 +666,14 @@ async def subscription_client(session_client):
     every call regardless of the underlying connection scope.  Tests remain
     sequential so no cross-test event noise can occur.
 
-    Depends on session_client so that load_type_definitions() and
-    load_data_type_definitions() have already run before any per-module client
-    connects — no redundant type loading.
+    Depends on session_client so that the modern DataTypeDefinition loader has
+    already run before any per-module client connects, with no redundant load.
     """
     client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
-    await client.connect()
+    await _connect_test_client(client)
     yield client
     try:
-        await client.disconnect()
+        await _disconnect_test_client(client)
     except Exception as exc:
         logger.debug("subscription_client disconnect failed (ignored): %s", exc)
 

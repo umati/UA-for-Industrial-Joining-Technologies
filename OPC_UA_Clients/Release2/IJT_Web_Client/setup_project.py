@@ -1109,8 +1109,8 @@ def _install_python_packages():
     except Exception as exc:
         log.debug("Optional crypto stack upgrade skipped: %s", exc)
 
-    # asyncua is pinned in repo-root constraints.txt to upstream SHA 35a77c6b
-    # (post-1.2b2; 2026-05-11). ASYNCUA_VERSION_SPEC is a deliberate operator
+    # asyncua is pinned in repo-root constraints.txt to the shared released version.
+    # ASYNCUA_VERSION_SPEC is a deliberate operator
     # escape hatch for testing a future tagged release; when set, this final
     # asyncua install intentionally bypasses constraints so the override wins.
     asyncua_override = os.getenv("ASYNCUA_VERSION_SPEC")
@@ -1137,9 +1137,9 @@ def _install_python_packages():
         log.info("asyncua installed version: %s", installed)
         from packaging.version import Version
 
-        if Version(installed) < Version("1.2b2"):
+        if Version(installed) < Version("2.0.1"):
             log.error(
-                "asyncua %s is too old for Python 3.14. Minimum required: 1.2b2. "
+                "asyncua %s is too old for this workspace. Minimum required: 2.0.1. "
                 "Run with --force_full to trigger a clean reinstall.",
                 installed,
             )
@@ -1386,7 +1386,7 @@ def _restore_direct_runtime_connectionpoints() -> None:
     """Restore the normal LOCAL profile while preserving additional user profiles."""
     default_payload = json.loads(CONNECTIONPOINTS_DEFAULT_FILE.read_text(encoding="utf-8"))
     default_points = default_payload.get("connectionpoints", [])
-    default_local = next(
+    template_local = next(
         (point for point in default_points if str(point.get("name", "")).strip().upper() == "LOCAL"),
         {
             "name": "LOCAL",
@@ -1404,6 +1404,23 @@ def _restore_direct_runtime_connectionpoints() -> None:
                 existing_points = [point for point in raw_points if isinstance(point, dict)]
         except (OSError, json.JSONDecodeError) as exc:
             log.warning("Replacing unreadable runtime connection profile: %s", exc)
+
+    existing_local = next(
+        (point for point in existing_points if str(point.get("name", "")).strip().upper() == "LOCAL"),
+        None,
+    )
+    default_local = {
+        **template_local,
+        **(
+            {
+                key: existing_local[key]
+                for key in ("autoconnect",)
+                if isinstance(existing_local, dict) and key in existing_local
+            }
+        ),
+        "name": "LOCAL",
+        "address": _direct_runtime_endpoint(),
+    }
 
     non_local_points = [point for point in existing_points if str(point.get("name", "")).strip().upper() != "LOCAL"]
     payload = {
@@ -1523,8 +1540,8 @@ def _is_runtime_ready():
         "pytz, aiofiles; "
         "from packaging.version import Version; "
         "v = asyncua.__version__; "
-        "ok = Version(v) >= Version('1.2b2'); "
-        "raise SystemExit(0) if ok else SystemExit('asyncua ' + v + ' is too old; need >= 1.2b2')"
+        "ok = Version(v) >= Version('2.0.1'); "
+        "raise SystemExit(0) if ok else SystemExit('asyncua ' + v + ' is too old; need >= 2.0.1')"
     )
     try:
         subprocess.run(

@@ -555,8 +555,8 @@ def _install_python_packages() -> None:
     except Exception as exc:
         log.debug("Optional crypto stack upgrade skipped: %s", exc)
 
-    # asyncua is pinned in repo-root constraints.txt to upstream SHA 35a77c6b
-    # (post-1.2b2; 2026-05-11). ASYNCUA_VERSION_SPEC is a deliberate operator
+    # asyncua is pinned in repo-root constraints.txt to the shared released version.
+    # ASYNCUA_VERSION_SPEC is a deliberate operator
     # escape hatch for testing a future tagged release; when set, this final
     # asyncua install intentionally bypasses constraints so the override wins.
     asyncua_override = os.getenv("ASYNCUA_VERSION_SPEC")
@@ -585,9 +585,9 @@ def _install_python_packages() -> None:
         log.info("asyncua installed version: %s", installed)
         from packaging.version import Version
 
-        if Version(installed) < Version("1.2b2"):
+        if Version(installed) < Version("2.0.1"):
             log.error(
-                "asyncua %s is too old for Python 3.14. Minimum required: 1.2b2. "
+                "asyncua %s is too old for this workspace. Minimum required: 2.0.1. "
                 "Run setup_client.py --force_full for a clean reinstall.",
                 installed,
             )
@@ -605,8 +605,8 @@ def _is_runtime_ready() -> bool:
         "import asyncua, sys; "
         "from packaging.version import Version; "
         "v = asyncua.__version__; "
-        "sys.exit(0) if Version(v) >= Version('1.2b2') "
-        "else sys.exit('asyncua ' + v + ' is too old; need >= 1.2b2')"
+        "sys.exit(0) if Version(v) >= Version('2.0.1') "
+        "else sys.exit('asyncua ' + v + ' is too old; need >= 2.0.1')"
     )
     try:
         _run_command([str(python), "-c", _dep_check_cmd])

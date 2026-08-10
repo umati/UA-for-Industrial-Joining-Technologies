@@ -54,6 +54,28 @@ def _websocket_server_logger() -> logging.Logger:
     return logger
 
 
+async def _handle_message_until_closed(opcua_handler: IJTInterface, websocket, payload: dict) -> bool:
+    """Process one request while remaining responsive to browser disconnects."""
+    request_task = asyncio.create_task(opcua_handler.handle(websocket, payload))
+    closed_task = asyncio.create_task(websocket.wait_closed())
+    done, _ = await asyncio.wait(
+        (request_task, closed_task),
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    if request_task in done:
+        closed_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await closed_task
+        await request_task
+        return True
+
+    request_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await request_task
+    return False
+
+
 async def handler(websocket):
     """Handle one browser websocket session and isolate OPC UA state per client."""
     if shutdown_started:
@@ -88,7 +110,8 @@ async def handler(websocket):
                 )
                 continue
 
-            await opcua_handler.handle(websocket, payload)
+            if not await _handle_message_until_closed(opcua_handler, websocket, payload):
+                break
     except websockets.exceptions.ConnectionClosed:
         ijt_log.info(f"Client disconnected: {client_ip}")
     except Exception:

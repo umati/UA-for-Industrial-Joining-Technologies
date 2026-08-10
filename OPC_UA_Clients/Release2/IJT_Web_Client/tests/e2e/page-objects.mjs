@@ -316,6 +316,24 @@ export class MethodsPage {
     return found.name
   }
 
+  async fillMethodInputByLabel (nameOrAliases, labelText, value) {
+    const found = await this.findMethodArea(nameOrAliases)
+    if (!found) throw new Error(`Method not found: ${JSON.stringify(nameOrAliases)}`)
+    await found.area.evaluate((area) => {
+      let parent = area.parentElement
+      while (parent) {
+        if (parent.tagName === 'DETAILS') parent.open = true
+        parent = parent.parentElement
+      }
+    })
+    if (!(await found.area.evaluate(area => area.open))) {
+      await found.area.locator('.methodCardSummary').click()
+    }
+    const label = found.area.locator('.methodLabel').filter({ hasText: labelText }).first()
+    const input = label.locator('xpath=following-sibling::*[1]')
+    await input.fill(value)
+  }
+
   /** Return every discovered method title, including methods in collapsed groups. */
   async getMethodNames () {
     const areas = this.page.locator(SEL.METHOD_AREA)

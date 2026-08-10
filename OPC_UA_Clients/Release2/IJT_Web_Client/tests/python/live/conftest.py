@@ -36,7 +36,6 @@ from urllib.parse import urlparse
 
 import pytest
 
-from .._asyncua_compat import apply_send_request_timeout_patch
 from .._live_server_readiness import (
     opcua_server_log_hint,
     prestarted_port_closed_message,
@@ -213,10 +212,6 @@ def ensure_live_servers(request):
             with contextlib.suppress(Exception):
                 proc.terminate()
                 proc.wait(timeout=5)
-
-
-# Apply asyncua _send_request timeout workaround for all live tests in this dir.
-apply_send_request_timeout_patch()
 
 
 # ── Auto-mark all live tests ──────────────────────────────────────────────────

@@ -36,13 +36,9 @@ import pytest
 import pytest_asyncio
 from asyncua import ua
 
-from .._asyncua_compat import apply_send_request_timeout_patch
-
 # All async tests in this file share the module-scoped event loop so they can
 # use the module-scoped opcua_client fixture without cross-loop I/O hangs.
 pytestmark = pytest.mark.asyncio(loop_scope="module")
-
-apply_send_request_timeout_patch()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Module-level loop scope so all async fixtures and tests share one event loop.
