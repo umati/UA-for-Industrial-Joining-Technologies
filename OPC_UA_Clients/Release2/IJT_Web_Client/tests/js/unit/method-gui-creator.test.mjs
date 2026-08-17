@@ -15,7 +15,15 @@ function makeArg (name, dataType = 7) {
 }
 
 function makeClassList () {
-  return { add () {} }
+  const values = []
+  return {
+    values,
+    add (...classes) {
+      for (const cls of classes) {
+        if (!values.includes(cls)) values.push(cls)
+      }
+    }
+  }
 }
 
 function makeContainer () {
@@ -24,6 +32,9 @@ function makeContainer () {
     classList: makeClassList(),
     appendChild (child) {
       this.children.push(child)
+    },
+    replaceChildren (...children) {
+      this.children = [...children]
     }
   }
 }
@@ -38,6 +49,9 @@ function makeElement (tagName) {
     },
     append (...children) {
       this.children.push(...children)
+    },
+    replaceChildren (...children) {
+      this.children = [...children]
     },
     set textContent (value) {
       this._textContent = value
@@ -70,6 +84,23 @@ function makeScreenStub () {
       }
       area.appendChild(input)
       return input
+    },
+    createCheckbox: (initialValue, onchange) => {
+      const cb = {
+        checked: initialValue,
+        classList: makeClassList(),
+        click: () => onchange(!cb.checked)
+      }
+      return cb
+    },
+    createButton: (label, area, callback) => {
+      const button = {
+        textContent: label,
+        classList: makeClassList(),
+        click: callback
+      }
+      area.appendChild(button)
+      return button
     }
   }
 }
@@ -311,6 +342,49 @@ describe('MethodGUICreator default arguments', () => {
     expect(value).toMatch(/Z$/)
   })
 
+  it('applies SetTime InputTime fallback default without metadata', () => {
+    const creator = makeCreator()
+
+    const value = creator._applyNamedDefaults(makeArg('InputTime', 13), '', 'SetTime', 0)
+
+    expect(Number.isNaN(Date.parse(value))).toBe(false)
+    expect(value).toMatch(/Z$/)
+  })
+
+  it('applies SetTime InputTime metadata defaults as current UTC values', () => {
+    const { creator, area } = makeInputCreator()
+
+    const grabValue = creator.createMethodInput(
+      makeArg('InputTime', 13),
+      area,
+      '',
+      undefined,
+      'SetTime',
+      0,
+      { source: 'currentUtc' }
+    )
+
+    const value = grabValue().value
+    expect(Number.isNaN(Date.parse(value))).toBe(false)
+    expect(value).toMatch(/Z$/)
+  })
+
+  it('does not reuse empty last-used values for currentUtc defaults', () => {
+    const creator = makeCreator()
+
+    expect(
+      creator._shouldUseSavedValue('last-used', '', { source: 'currentUtc' })
+    ).toBe(false)
+  })
+
+  it('keeps non-empty last-used values for currentUtc defaults', () => {
+    const creator = makeCreator()
+
+    expect(
+      creator._shouldUseSavedValue('last-used', '2026-08-17T11:00:00.000Z', { source: 'currentUtc' })
+    ).toBe(true)
+  })
+
   it('formats method results with method name and indented payload', () => {
     const creator = makeCreator()
 
@@ -460,6 +534,22 @@ describe('MethodGUICreator default arguments', () => {
     expect(creator._formatValueForDisplay([1, 2, 3], 7)).toContain('3 item(s)')
   })
 
+  it('styles LocalizedText sub-labels with method theme classes', () => {
+    const { creator, area } = makeInputCreator()
+
+    creator.createMethodInput(
+      makeArg('Abort Message', 21),
+      area,
+      { Text: 'Abort requested', Locale: 'en' }
+    )
+
+    const wrapper = area.children.find(child => child.classList?.values?.includes('methodInputRight'))
+    const labels = wrapper.children.filter(child => child?.textContent === 'Text  ' || child?.textContent === '  Locale  ')
+    expect(labels).toHaveLength(2)
+    expect(labels[0].classList.values).toContain('methodSubLabel')
+    expect(labels[1].classList.values).toContain('methodSubLabel')
+  })
+
   it('does not expand LocalizedText outputs into Encoding/Locale/Text rows', () => {
     const creator = makeCreator()
     const summary = makeElement('dl')
@@ -488,6 +578,98 @@ describe('MethodGUICreator default arguments', () => {
       { name: 'ExactServerFieldA', label: 'ExactServerFieldA', type: '12' },
       { name: 'ExactServerFieldB', label: 'ExactServerFieldB', type: '7' }
     ])
+  })
+
+  it('offers entity type enum options from shared catalogs', () => {
+    const creator = makeCreator()
+    const options = creator._structureEnumOptions({ name: 'EntityType' })
+    expect(options.length).toBeGreaterThan(10)
+    expect(options[0]).toEqual(expect.objectContaining({ value: '0' }))
+  })
+
+  it('auto-fills time-like structure fields with UTC defaults when empty', () => {
+    const { creator, area } = makeInputCreator()
+    const arg = {
+      Name: 'Joint',
+      DataType: { Identifier: 3028, Name: 'JointDataType', NamespaceIndex: 7 },
+      FieldDefinitions: [
+        { name: 'CreationTime', dataType: 294 }
+      ]
+    }
+    const grabValue = creator.createMethodInput(arg, area, '')
+    const payload = grabValue()
+    const field = payload.value.find(entry => entry.name === 'CreationTime')
+    expect(Number.isNaN(Date.parse(field.value))).toBe(false)
+    expect(field.value).toMatch(/Z$/)
+  })
+
+  it('renders array-of-structure arguments as editable entry rows', () => {
+    const { creator, area } = makeInputCreator()
+    const arg = {
+      Name: 'Signals',
+      DataType: { Identifier: 49001, Name: 'IOSignalDataType', NamespaceIndex: 3 },
+      ValueRank: 1,
+      FieldDefinitions: [
+        { name: 'SignalId', dataType: 12 },
+        { name: 'Active', dataType: 1 }
+      ]
+    }
+    const grabValue = creator.createMethodInput(arg, area, [
+      {
+        structure: 'IOSignalDataType',
+        value: [
+          { name: 'SignalId', value: 'Signal-1', type: '12' },
+          { name: 'Active', value: 'true', type: '1' }
+        ]
+      },
+      { SignalId: 'Signal-2', Active: 'false' }
+    ])
+
+    const payload = grabValue()
+    expect(Array.isArray(payload.value)).toBe(true)
+    expect(payload.value).toHaveLength(2)
+    expect(payload.value[0].structure).toBe('IOSignalDataType')
+    expect(payload.value[0].value[0]).toEqual({ name: 'SignalId', value: 'Signal-1', type: '12' })
+    expect(payload.value[1].value[0]).toEqual({ name: 'SignalId', value: 'Signal-2', type: '12' })
+  })
+
+  it('offers discovered SignalId options while still allowing manual fallback', () => {
+    const screen = makeScreenStub()
+    const area = makeContainer()
+    const creator = new MethodGUICreator(
+      screen,
+      {},
+      {},
+      { methodEnumCatalogs: { signalid: { LegacySignal: 'LegacySignal' } } },
+      { detectedSignals: [{ SignalId: 'Signal-1', Name: 'Main signal' }] }
+    )
+    const arg = {
+      Name: 'Signals',
+      DataType: { Identifier: 49001, Name: 'IOSignalDataType', NamespaceIndex: 3 },
+      ValueRank: 1,
+      FieldDefinitions: [
+        { name: 'SignalId', dataType: 12 },
+        { name: 'SignalType', dataType: 4 }
+      ]
+    }
+
+    const grabValue = creator.createMethodInput(arg, area, [{ SignalId: 'Manual-1', SignalType: '2' }])
+    const dropdowns = []
+    const collectDropdowns = (node) => {
+      if (!node || !Array.isArray(node.children)) return
+      for (const child of node.children) {
+        if (Array.isArray(child?.options)) dropdowns.push(child)
+        collectDropdowns(child)
+      }
+    }
+    collectDropdowns(area)
+
+    const signalPicker = dropdowns.find(drop => drop.options.some(option => option.value === 'Signal-1'))
+    expect(signalPicker).toBeDefined()
+    expect(signalPicker.options.some(option => option.value === 'LegacySignal')).toBe(true)
+
+    const payload = grabValue()
+    expect(payload.value[0].value[0]).toEqual({ name: 'SignalId', value: 'Manual-1', type: '12' })
   })
 
   it('marks failed method calls explicitly and avoids misleading no-output text', () => {
@@ -604,11 +786,64 @@ describe('MethodGUICreator default arguments', () => {
     expect(value).toHaveLength(3)
   })
 
-  it('reports saved-values as the input source when last-used profile supplies the value', () => {
+  it('does not repeat last-used profile source per argument', () => {
     const creator = makeCreator()
     expect(
-      creator._resolveInputSource(makeArg('Description', 12), 'Saved text', undefined, 'last-used')
-    ).toBe('saved-values')
+      creator._resolveInputSource(makeArg('Description', 12), 'Saved text', undefined)
+    ).toBe('')
+  })
+
+  it('reports joint picker discovery as a per-argument source hint', () => {
+    const creator = new MethodGUICreator({}, {}, {}, {}, { detectedJoints: ['JointA'] })
+    expect(
+      creator._resolveInputSource(makeArg('JointId', 12), '', undefined)
+    ).toBe('live-joint-picker')
+  })
+
+  it('reports joining process picker discovery as a per-argument source hint', () => {
+    const creator = new MethodGUICreator({}, {}, {}, {}, {
+      detectedJoiningProcesses: [{ joiningProcessId: 'JP1', joiningProcessOriginId: '', selectionName: '' }]
+    })
+    expect(
+      creator._resolveInputSource(makeArg('JoiningProcessIdentification', 3029), '', undefined)
+    ).toBe('live-joining-process-picker')
+  })
+
+  it('wraps boolean arguments in a standardized aligned row container', () => {
+    const { creator, area } = makeInputCreator()
+    creator.createMethodInput(makeArg('Include Traces', 1), area, true)
+    expect(area.classList.values).toContain('methodRowBoolean')
+    const wrapper = area.children.find(child => child.classList?.values?.includes('methodBooleanInput'))
+    expect(wrapper).toBeDefined()
+  })
+
+  it('adds usability placeholders for numeric and text arguments', () => {
+    const { creator: numericCreator, area: numericArea } = makeInputCreator()
+    numericCreator.createMethodInput(makeArg('Count', 7), numericArea, '')
+    const numericInput = numericArea.children.find(child => Object.hasOwn(child, 'placeholder'))
+    expect(numericInput.placeholder).toBe('Enter number')
+
+    const { creator: textCreator, area: textArea } = makeInputCreator()
+    textCreator.createMethodInput(makeArg('Comment', 12), textArea, '')
+    const textInput = textArea.children.find(child => Object.hasOwn(child, 'placeholder'))
+    expect(textInput.placeholder).toBe('Enter text')
+  })
+
+  it('keeps server label and shows argument description as helper text', () => {
+    const { creator, area } = makeInputCreator()
+    creator.createMethodInput(
+      {
+        Name: 'RequestedMinimumDurationBetweenResults',
+        DataType: { Identifier: 7 },
+        Description: { Text: 'Minimum delay between emitted results in ms.' }
+      },
+      area,
+      100
+    )
+    const labels = area.children.filter(child => child?.textContent).map(child => child.textContent)
+    expect(labels).toContain('RequestedMinimumDurationBetweenResults  ')
+    const helper = area.children.find(child => child.classList?.values?.includes('methodArgumentDescription'))
+    expect(helper.textContent).toContain('Minimum delay between emitted results')
   })
 
   it('renders generic structure values field-by-field for returned extension-like objects', () => {

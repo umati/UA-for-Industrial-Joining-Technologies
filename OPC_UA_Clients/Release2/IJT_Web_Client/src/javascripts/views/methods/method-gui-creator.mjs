@@ -9,6 +9,7 @@ import {
   saveMethodPreferences,
   saveMethodValues
 } from '../../ijt-support/methods/method-preset-store.mjs'
+import { EntityTypes } from '../../ijt-support/models/entities/entity-data-type.mjs'
 
 /** Result-type options for SimulateSingleResult / SimulateBulkResults */
 const RESULT_TYPE_OPTIONS = [
@@ -57,7 +58,8 @@ export default class MethodGUICreator {
       productInstanceUri: '',
       detectedTools: [],
       detectedJoints: [],
-      detectedJoiningProcesses: []
+      detectedJoiningProcesses: [],
+      detectedSignals: []
     }
     this.screen = screen
   }
@@ -148,12 +150,11 @@ export default class MethodGUICreator {
       })
       profileArea.append(profileLabel, profileSelect)
       content.appendChild(profileArea)
-
-      if (this.methodState.detectedTools?.length || this.methodState.detectedJoints?.length || this.methodState.detectedJoiningProcesses?.length) {
-        const discoveryHint = document.createElement('p')
-        discoveryHint.classList.add('methodHelpText')
-        discoveryHint.textContent = 'Live tool, joint, and joining-process discovery is available where the current method signature supports it.'
-        content.appendChild(discoveryHint)
+      if (profile === 'last-used' && storedValues) {
+        const savedValuesHint = document.createElement('p')
+        savedValuesHint.classList.add('methodHelpText')
+        savedValuesHint.textContent = 'Using your last saved values for this method.'
+        content.appendChild(savedValuesHint)
       }
 
       // Setting up argument windows
@@ -165,7 +166,7 @@ export default class MethodGUICreator {
         content.appendChild(lineArea)
         const metadataDefault = this.getMetadataDefault(methodMetadata?.defaults, arg?.Name)
         const savedValue = this.getSavedArgumentValue(savedValues?.[index], arg)
-        const configuredDefault = profile === 'last-used' && typeof savedValue !== 'undefined'
+        const configuredDefault = this._shouldUseSavedValue(profile, savedValue, metadataDefault)
           ? savedValue
           : defaults?.arguments?.[index]
         listOfValuegrabbers.push(this.createMethodInput(arg, lineArea, configuredDefault, undefined, methodData.methodNode.displayName, index, metadataDefault, {
@@ -219,6 +220,21 @@ export default class MethodGUICreator {
     return value
   }
 
+  _isEmptySavedValue (value) {
+    if (value === null || typeof value === 'undefined') return true
+    if (typeof value === 'string') return value.trim().length === 0
+    return false
+  }
+
+  _shouldUseSavedValue (profile, savedValue, metadataDefault) {
+    if (profile !== 'last-used') return false
+    if (typeof savedValue === 'undefined') return false
+    if (metadataDefault?.source === 'currentUtc' && this._isEmptySavedValue(savedValue)) {
+      return false
+    }
+    return true
+  }
+
   /**
    * Apply well-known default values by argument name when no explicit default is provided.
    * All Boolean arguments implicitly default to true (handled in the Boolean case below).
@@ -249,6 +265,10 @@ export default class MethodGUICreator {
     if (normalizedName === 'durationbetweenresults') return 100
     if (normalizedName === 'numberofresults') return 3
     if (normalizedName === 'updateresultvariables') return true
+    // SetTime must always provide a usable UTC default for time arguments.
+    if (normalizedMethod === 'settime' && (normalizedName === 'time' || normalizedName === 'inputtime')) {
+      return new Date().toISOString()
+    }
     // Joining process management defaults
     if (normalizedName === 'countersize' || normalizedName === 'countervalue') return 1
     if (normalizedName === 'incrementcount' || normalizedName === 'decrementcount') return 1
@@ -320,17 +340,20 @@ export default class MethodGUICreator {
     return dataTypeId === '12' || dataTypeId === '13' || dataTypeId === '31918'
   }
 
-  _resolveInputSource (arg, defaultValue, metadataDefault, profile) {
-    if (profile === 'last-used' && typeof defaultValue !== 'undefined' && defaultValue !== '') {
-      return 'saved-values'
+  _resolveInputSource (arg, defaultValue, metadataDefault, context = {}) {
+    if (context?.profile === 'last-used') {
+      return ''
     }
     if (this._isProductInstanceUriArgument(arg) && typeof defaultValue === 'string' && defaultValue.trim()) {
       return 'live-tool'
     }
-    if (metadataDefault && typeof metadataDefault === 'object' && metadataDefault.source === 'currentUtc') {
-      return 'recommended-default'
+    if (this._isJointIdArgument(arg) && this._getJointPickerOptions(context?.methodData).length > 0) {
+      return 'live-joint-picker'
     }
-    if (typeof defaultValue !== 'undefined' && defaultValue !== '' && defaultValue !== false) {
+    if (this._isJoiningProcessSelectionArgument(arg) && this._getJoiningProcessPickerOptions().length > 0) {
+      return 'live-joining-process-picker'
+    }
+    if (metadataDefault && typeof metadataDefault === 'object' && metadataDefault.source === 'currentUtc') {
       return 'recommended-default'
     }
     return ''
@@ -340,8 +363,10 @@ export default class MethodGUICreator {
     switch (source) {
       case 'live-tool':
         return 'Auto-filled from live Tool.ProductInstanceUri discovery.'
-      case 'saved-values':
-        return 'Loaded from the last values you saved for this method.'
+      case 'live-joint-picker':
+        return 'Discovered JointId values are available in the selector for this argument.'
+      case 'live-joining-process-picker':
+        return 'Discovered joining processes are available in the selector for this argument.'
       case 'recommended-default':
         return 'Using the recommended default for this argument.'
       default:
@@ -355,6 +380,14 @@ export default class MethodGUICreator {
     hint.classList.add('methodInputSource')
     hint.textContent = text
     area.appendChild(hint)
+  }
+
+  _createArgumentDescriptionHint (text, area) {
+    if (!text) return
+    const description = document.createElement('p')
+    description.classList.add('methodArgumentDescription')
+    description.textContent = text
+    area.appendChild(description)
   }
 
   _structureFieldDefinitions (arg) {
@@ -376,34 +409,294 @@ export default class MethodGUICreator {
     return []
   }
 
+  _structureEnumOptions (field) {
+    const normalizedFieldName = this._normalizeArgumentName(field?.name)
+    const enumCatalogs = this.settings?.methodEnumCatalogs || this.methodManager?.methodMetadata?.enumCatalogs || {}
+    const configured = enumCatalogs?.[normalizedFieldName]
+    if (configured && typeof configured === 'object') {
+      return Object.entries(configured).map(([value, label]) => ({ value: String(value), label: String(label) }))
+    }
+    if (normalizedFieldName === 'entitytype') {
+      return Object.entries(EntityTypes).map(([value, label]) => ({ value: String(value), label: String(label) }))
+    }
+    return []
+  }
+
+  _resolveSignalIdOptions () {
+    const options = []
+    const seen = new Set()
+    const pushOption = (value, label = value) => {
+      const normalizedValue = String(value ?? '').trim()
+      if (!normalizedValue || seen.has(normalizedValue)) return
+      seen.add(normalizedValue)
+      options.push({ value: normalizedValue, label: String(label ?? normalizedValue) })
+    }
+
+    const addFromList = (list) => {
+      if (!Array.isArray(list)) return
+      for (const entry of list) {
+        if (typeof entry === 'string' || typeof entry === 'number') {
+          pushOption(entry)
+          continue
+        }
+        if (!entry || typeof entry !== 'object') continue
+        const signalId = entry.SignalId ?? entry.signalId ?? entry.id ?? entry.name
+        const signalLabel = entry.Name ?? entry.name ?? signalId
+        if (signalId) pushOption(signalId, signalLabel)
+      }
+    }
+
+    addFromList(this.methodState?.detectedSignals)
+    addFromList(this.settings?.signalIds)
+    addFromList(this.settings?.ioSignalIds)
+    addFromList(this.settings?.detectedSignalIds)
+
+    const signalIdCatalog = this.settings?.methodEnumCatalogs?.signalid
+    if (signalIdCatalog && typeof signalIdCatalog === 'object') {
+      for (const [value, label] of Object.entries(signalIdCatalog)) {
+        pushOption(value, label)
+      }
+    }
+
+    return options
+  }
+
+  _resolveNestedEntityDefaults (seedValue) {
+    if (!Array.isArray(seedValue)) return []
+    return seedValue.map(entry => {
+      if (entry && typeof entry === 'object' && entry.value && typeof entry.value === 'object' && !Array.isArray(entry.value)) {
+        return entry.value
+      }
+      if (entry && typeof entry === 'object' && Array.isArray(entry.value)) {
+        const mapped = {}
+        for (const field of entry.value) {
+          if (field?.name) mapped[field.name] = field.value
+        }
+        return mapped
+      }
+      if (entry && typeof entry === 'object') return entry
+      return null
+    }).filter(Boolean)
+  }
+
   _createGenericStructureEditor (arg, area, defaultValue, descText) {
     const fields = this._structureFieldDefinitions(arg)
     if (fields.length === 0) return null
+    const structureName = String(arg?.DataType?.Name ?? '').trim()
+    const structureType = {
+      Identifier: String(arg?.DataType?.Identifier ?? ''),
+      NamespaceIndex: String(arg?.DataType?.NamespaceIndex ?? '3')
+    }
+
+    const resolveFieldDefault = (entry, field, fieldIndex) => {
+      if (entry === null || typeof entry === 'undefined') return ''
+      if (Array.isArray(entry)) {
+        const byName = entry.find(candidate =>
+          this._normalizeArgumentName(candidate?.name) === this._normalizeArgumentName(field.name))
+        if (byName && typeof byName.value !== 'undefined') return byName.value
+        return entry[fieldIndex]?.value ?? ''
+      }
+      if (entry && typeof entry === 'object') {
+        if (Array.isArray(entry?.value)) {
+          return resolveFieldDefault(entry.value, field, fieldIndex)
+        }
+        if (Object.hasOwn(entry, field.name)) return entry[field.name]
+      }
+      return ''
+    }
+
+    const createStructureFieldEditor = (parent, seedEntry = null) => {
+      const fieldInputs = []
+      for (const [fieldIndex, field] of fields.entries()) {
+        const label = this.screen.createLabel(field.label)
+        label.classList.add('methodLabel', 'methodSubLabel')
+        parent.appendChild(label)
+        if (String(field.type) === '3010' && this._normalizeArgumentName(field.name) === 'associatedentities') {
+          const nestedArea = document.createElement('div')
+          nestedArea.classList.add('methodInputRight', 'methodCompositeInput', 'methodEntityInput')
+          parent.appendChild(nestedArea)
+          const nestedEntities = this._resolveNestedEntityDefaults(resolveFieldDefault(seedEntry, field, fieldIndex))
+          const nestedEntityListDiv = document.createElement('div')
+          nestedArea.appendChild(nestedEntityListDiv)
+          const renderNestedEntities = () => {
+            nestedEntityListDiv.replaceChildren()
+            for (const [entityIndex, entity] of nestedEntities.entries()) {
+              const entityArea = document.createElement('div')
+              entityArea.classList.add('methodEntityIdentifier')
+              const entityName = entity.Name ?? ''
+              const entityId = entity.EntityId ?? ''
+              const entityLabel = this.screen.createLabel(`${entityName} (${entityId})`)
+              entityLabel.classList.add('methodLabel')
+              entityArea.appendChild(entityLabel)
+              this.screen.createButton('Remove', entityArea, () => {
+                nestedEntities.splice(entityIndex, 1)
+                renderNestedEntities()
+              })
+              nestedEntityListDiv.appendChild(entityArea)
+            }
+          }
+          this.screen.createButton('Add identifier', nestedArea, () => {
+            const selectionDiv = this.entityManager?.makeSelectableEntityView((x, entity) => {
+              nestedArea.removeChild(selectionDiv)
+              nestedArea.removeChild(selectionAreaBackground)
+              nestedEntities.push({
+                Name: entity.name ?? entity.Name ?? '',
+                Description: entity.description ?? entity.Description ?? '',
+                EntityId: entity.entityId ?? entity.EntityId ?? '',
+                EntityOriginId: entity.entityOriginId ?? entity.EntityOriginId ?? '',
+                IsExternal: entity.isExternal ?? entity.IsExternal ?? false,
+                EntityType: entity.entityType ?? entity.EntityType ?? 0
+              })
+              renderNestedEntities()
+            }, 'Select an identifier entity')
+            const selectionAreaBackground = document.createElement('div')
+            selectionAreaBackground.classList.add('idSelectDialogGrayBackground')
+            nestedArea.appendChild(selectionAreaBackground)
+            selectionDiv.classList.add('idSelectDialog')
+            nestedArea.appendChild(selectionDiv)
+          })
+          renderNestedEntities()
+          fieldInputs.push({
+            field,
+            getValue: () => nestedEntities.map(entity => ({ value: entity }))
+          })
+          continue
+        }
+        const normalizedFieldName = this._normalizeArgumentName(field.name)
+        if (normalizedFieldName === 'signalid') {
+          const wrapper = document.createElement('div')
+          wrapper.classList.add('methodInputRight', 'methodCompositeInput')
+          parent.appendChild(wrapper)
+          const input = this.screen.createInput('', wrapper, null, 55)
+          const resolvedDefault = resolveFieldDefault(seedEntry, field, fieldIndex)
+          input.value = String(resolvedDefault ?? '')
+          input.placeholder = field.label || field.name
+          input.title = `${field.name}\n${descText}`
+
+          const signalOptions = this._resolveSignalIdOptions()
+          if (signalOptions.length > 0) {
+            const picker = this.screen.createDropdown('', () => {
+              if (picker.select.value) input.value = String(picker.select.value)
+            })
+            picker.classList.add('methodDropdownWrap')
+            picker.addOption('Choose discovered signal (or type manually)', '')
+            for (const option of signalOptions) {
+              picker.addOption(`${option.label} (${option.value})`, option.value)
+            }
+            wrapper.appendChild(picker)
+          }
+          fieldInputs.push({
+            field,
+            getValue: () => input.value
+          })
+          continue
+        }
+        const options = this._structureEnumOptions(field)
+        if (options.length > 0) {
+          const drop = this.screen.createDropdown('', null)
+          drop.classList.add('methodDropdownWrap')
+          for (const option of options) {
+            drop.addOption(`${option.label} (${option.value})`, option.value)
+          }
+          const resolvedDefault = String(resolveFieldDefault(seedEntry, field, fieldIndex) ?? options[0].value ?? '')
+          drop.select.value = resolvedDefault
+          parent.appendChild(drop)
+          fieldInputs.push({
+            field,
+            getValue: () => drop.select.value
+          })
+          continue
+        }
+        const input = this.screen.createInput('', parent, null, 55)
+        const resolvedDefault = resolveFieldDefault(seedEntry, field, fieldIndex)
+        const isTimeLike = String(field.type) === '294' || this._normalizeArgumentName(field.name).includes('time')
+        input.value = String((resolvedDefault === '' && isTimeLike)
+          ? new Date().toISOString()
+          : (resolvedDefault ?? ''))
+        input.placeholder = field.label || field.name
+        input.title = `${field.name}\n${descText}`
+        fieldInputs.push({ field, input })
+      }
+      return fieldInputs
+    }
+
+    if (this._expectsArrayArgument(arg)) {
+      const wrapper = document.createElement('div')
+      wrapper.classList.add('methodInputRight', 'methodCompositeInput', 'methodStructureInput', 'methodStructureArrayInput')
+      area.appendChild(wrapper)
+
+      const rowsContainer = document.createElement('div')
+      rowsContainer.classList.add('methodArrayList')
+      wrapper.appendChild(rowsContainer)
+
+      const initialRows = Array.isArray(defaultValue)
+        ? defaultValue
+        : (defaultValue && typeof defaultValue === 'object' ? [defaultValue] : [])
+      const rows = [...initialRows]
+      const renderRows = () => {
+        rowsContainer.replaceChildren()
+        if (rows.length === 0) {
+          const emptyHint = document.createElement('p')
+          emptyHint.classList.add('methodHelpText')
+          emptyHint.textContent = 'Empty array will be sent.'
+          rowsContainer.appendChild(emptyHint)
+          return
+        }
+        rows.forEach((rowDefaults, rowIndex) => {
+          const rowArea = document.createElement('div')
+          rowArea.classList.add('methodStructureArrayRow')
+          const rowLabel = this.screen.createLabel(`Entry ${rowIndex + 1}`)
+          rowLabel.classList.add('methodLabel', 'methodSubLabel')
+          rowArea.appendChild(rowLabel)
+          const fieldInputs = createStructureFieldEditor(rowArea, rowDefaults)
+          rowArea._structureFieldInputs = fieldInputs
+          this.screen.createButton('Remove', rowArea, () => {
+            rows.splice(rowIndex, 1)
+            renderRows()
+          })
+          rowsContainer.appendChild(rowArea)
+        })
+      }
+
+      const controls = document.createElement('div')
+      controls.classList.add('methodArrayControls')
+      this.screen.createButton('Add entry', controls, () => {
+        rows.push({})
+        renderRows()
+      })
+      wrapper.appendChild(controls)
+      renderRows()
+
+      return function () {
+        const value = [...rowsContainer.children]
+          .filter(node => Array.isArray(node?._structureFieldInputs))
+          .map(node => ({
+            type: structureType,
+            ...(structureName ? { structure: structureName } : {}),
+            value: node._structureFieldInputs.map(({ field, input, getValue }) => ({
+              name: field.name,
+              value: getValue ? getValue() : (typeof input === 'undefined' ? '' : input.value),
+              type: field.type
+            }))
+          }))
+        return { type: arg.DataType, value }
+      }
+    }
 
     const wrapper = document.createElement('div')
     wrapper.classList.add('methodInputRight', 'methodCompositeInput', 'methodStructureInput')
     area.appendChild(wrapper)
-
-    const fieldInputs = []
-    const defaultsByName = Array.isArray(defaultValue)
-      ? Object.fromEntries(defaultValue.map((entry, index) => [fields[index]?.name, entry?.value ?? '']).filter(([name]) => name))
-      : {}
-
-    for (const field of fields) {
-      const label = this.screen.createLabel(field.label)
-      label.classList.add('methodLabel', 'methodSubLabel')
-      wrapper.appendChild(label)
-      const input = this.screen.createInput('', wrapper, null, 55)
-      input.value = String(defaultsByName[field.name] ?? '')
-      input.title = `${field.name}\n${descText}`
-      fieldInputs.push({ field, input })
-    }
+    const fieldInputs = createStructureFieldEditor(wrapper, defaultValue)
 
     return function () {
       return {
-        type: { Identifier: String(arg?.DataType?.Identifier ?? ''), NamespaceIndex: String(arg?.DataType?.NamespaceIndex ?? '3') },
-        structure: arg?.DataType?.Name ?? 'Structure',
-        value: fieldInputs.map(({ field, input }) => ({ value: input.value, type: field.type }))
+        type: structureType,
+        ...(structureName ? { structure: structureName } : {}),
+        value: fieldInputs.map(({ field, input, getValue }) => ({
+          name: field.name,
+          value: getValue ? getValue() : input.value,
+          type: field.type
+        }))
       }
     }
   }
@@ -811,6 +1104,7 @@ export default class MethodGUICreator {
     defaultValue = this._applyNamedDefaults(arg, defaultValue, methodName, argumentIndex)
 
     // Argument label
+    area.classList.add('methodArgumentRow')
     if (arg.Name && arg.Name.length > 0) {
       const titleLabel = this.screen.createLabel(`${arg.Name}  `)
       titleLabel.classList.add('methodLabel')
@@ -818,7 +1112,8 @@ export default class MethodGUICreator {
     }
 
     const descText = arg?.Description?.Text ?? arg?.Description?._text ?? ''
-    const inputSource = this._resolveInputSource(arg, defaultValue, metadataDefault, context?.profile)
+    this._createArgumentDescriptionHint(descText, area)
+    const inputSource = this._resolveInputSource(arg, defaultValue, metadataDefault, context)
     this._createInputSourceHint(this._formatInputSource(inputSource), area)
 
     const structureEditor = this._createGenericStructureEditor(arg, area, defaultValue, descText)
@@ -856,6 +1151,7 @@ export default class MethodGUICreator {
             items[itemIndex] = value
             if (callback) callback(items)
           }, 70)
+          input.placeholder = 'Enter value'
           input.dataType = arg.DataType
           input.title = `Datatype: ${arg?.DataType?.Name || 'String'}[]\n${descText}`
           const removeButton = this.screen.createButton('Remove', row, () => {
@@ -995,6 +1291,7 @@ export default class MethodGUICreator {
       // ── EntityDataType array (IJT custom type 3010) ────────────────────────
       case '3010': {
         const selectionArea = document.createElement('div')
+        selectionArea.classList.add('methodInputRight', 'methodCompositeInput', 'methodEntityInput')
         area.appendChild(selectionArea)
         const entityList = []
         const entityListDiv = document.createElement('div')
@@ -1008,7 +1305,9 @@ export default class MethodGUICreator {
             entityArea.classList.add('methodEntityIdentifier')
             const entityName = ent.name ?? ent.Name ?? ''
             const entityId = ent.entityId ?? ent.EntityId ?? ''
-            entityArea.appendChild(this.screen.createLabel(`${entityName} (${entityId})`))
+            const entityLabel = this.screen.createLabel(`${entityName} (${entityId})`)
+            entityLabel.classList.add('methodLabel')
+            entityArea.appendChild(entityLabel)
             this.screen.createButton('Remove', entityArea, () => {
               entityList.splice(entityIndex, 1)
               renderEntities()
@@ -1048,17 +1347,21 @@ export default class MethodGUICreator {
 
       // ── Boolean — checkbox, always defaults to TRUE ────────────────────────
       case '1': {
+        area.classList.add('methodRowBoolean')
         let returnValue = true
         if (typeof defaultValue !== 'undefined' && defaultValue !== '') {
           returnValue = defaultValue === true || defaultValue === 'true'
         }
+        const wrapper = document.createElement('div')
+        wrapper.classList.add('methodInputRight', 'methodBooleanInput')
         const cb = this.screen.createCheckbox(returnValue, (newValue) => {
           returnValue = newValue
           if (callback) callback(newValue)
         })
         cb.dataType = arg.DataType
         cb.title = `Datatype: Boolean\n${descText}`
-        area.appendChild(cb)
+        wrapper.appendChild(cb)
+        area.appendChild(wrapper)
         return function () {
           return { value: returnValue, type: cb.dataType }
         }
@@ -1067,10 +1370,12 @@ export default class MethodGUICreator {
       // ── LocalizedText (OPC UA type 21) ─────────────────────────────────────
       case '21': {
         const wrapper = document.createElement('div')
-        wrapper.classList.add('methodInputRight')
+        wrapper.classList.add('methodInputRight', 'methodCompositeInput')
         area.appendChild(wrapper)
 
-        wrapper.appendChild(this.screen.createLabel('Text  '))
+        const textLabel = this.screen.createLabel('Text  ')
+        textLabel.classList.add('methodLabel', 'methodSubLabel')
+        wrapper.appendChild(textLabel)
         const textInput = this.screen.createInput('', wrapper, null, 50)
         const defText = typeof defaultValue === 'object'
           ? (defaultValue?.Text ?? '')
@@ -1079,7 +1384,9 @@ export default class MethodGUICreator {
         textInput.title = `LocalizedText.Text\n${descText}`
         textInput.placeholder = 'Text value'
 
-        wrapper.appendChild(this.screen.createLabel('  Locale  '))
+        const localeLabel = this.screen.createLabel('  Locale  ')
+        localeLabel.classList.add('methodLabel', 'methodSubLabel')
+        wrapper.appendChild(localeLabel)
         const localeInput = this.screen.createInput('en', wrapper, null, 10)
         localeInput.value = typeof defaultValue === 'object' ? (defaultValue?.Locale ?? 'en') : 'en'
         localeInput.title = 'LocalizedText.Locale — ISO language code (e.g. "en")'
@@ -1112,6 +1419,7 @@ export default class MethodGUICreator {
         const input67 = this.screen.createInput('', area, callback, 45)
         input67.dataType = arg.DataType
         input67.title = `Datatype: Number\n${descText}`
+        input67.placeholder = 'Enter number'
         input67.value = defaultValue
         return function () { return { value: input67.value, type: input67.dataType } }
       }
@@ -1133,6 +1441,7 @@ export default class MethodGUICreator {
         const input3 = this.screen.createInput('', area, callback, 45)
         input3.dataType = arg.DataType
         input3.title = `Datatype: Number\n${descText}`
+        input3.placeholder = 'Enter number'
         input3.value = defaultValue
         return function () { return { value: input3.value, type: input3.dataType } }
       }
@@ -1143,6 +1452,7 @@ export default class MethodGUICreator {
         const input89 = this.screen.createInput('', area, callback, 45)
         input89.dataType = arg.DataType
         input89.title = `Datatype: Number (64-bit)\n${descText}`
+        input89.placeholder = 'Enter whole number'
         input89.value = defaultValue
         return function () { return { value: input89.value, type: input89.dataType } }
       }
@@ -1155,6 +1465,7 @@ export default class MethodGUICreator {
           const input12 = this.screen.createInput('', wrapper, callback, 45)
           input12.dataType = arg.DataType
           input12.title = `Datatype: String\n${descText}`
+          input12.placeholder = 'Enter text'
           input12.value = defaultValue
 
           const jointOptions = this._getJointPickerOptions(context.methodData)
@@ -1177,6 +1488,7 @@ export default class MethodGUICreator {
         const input12 = this.screen.createInput('', area, callback, 45)
         input12.dataType = arg.DataType
         input12.title = `Datatype: String\n${descText}`
+        input12.placeholder = 'Enter text'
         input12.value = defaultValue
         return function () { return { value: input12.value, type: input12.dataType } }
       }

@@ -160,15 +160,34 @@ def _serialize_datatype_nodeid(nodeid: Any) -> dict[str, Any] | None:
     }
 
 
-def _serialize_argument_definition(argument: Any) -> dict[str, Any]:
+def _serialize_structure_field_definition(field: Any) -> dict[str, Any]:
+    """Normalize an OPC UA StructureField definition for browser editors."""
+    return {
+        "Name": getattr(field, "Name", ""),
+        "DataType": _serialize_datatype_nodeid(getattr(field, "DataType", None)),
+        "ValueRank": getattr(field, "ValueRank", None),
+        "ArrayDimensions": getattr(field, "ArrayDimensions", None),
+        "Description": serialize_full_event(getattr(field, "Description", None)),
+        "IsOptional": getattr(field, "IsOptional", None),
+    }
+
+
+def _serialize_argument_definition(
+    argument: Any, field_definitions: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """Normalize an OPC UA Argument definition for the browser."""
+    raw_field_definitions = getattr(argument, "FieldDefinitions", [])
+    default_serialized_fields = (
+        serialize_full_event(raw_field_definitions) if isinstance(raw_field_definitions, (list, tuple)) else []
+    )
+    serialized_field_definitions = field_definitions if field_definitions is not None else default_serialized_fields
     return {
         "Name": getattr(argument, "Name", ""),
         "DataType": _serialize_datatype_nodeid(getattr(argument, "DataType", None)),
         "ValueRank": getattr(argument, "ValueRank", None),
         "ArrayDimensions": getattr(argument, "ArrayDimensions", None),
         "Description": serialize_full_event(getattr(argument, "Description", None)),
-        "FieldDefinitions": [],
+        "FieldDefinitions": serialized_field_definitions or [],
     }
 
 
@@ -654,6 +673,15 @@ class Connection:
 
             last_read_state = "READ_ATTRIBUTES_READ"
             attribute_values = [reply.Value.Value for reply in attribute_reply]
+            value_index = attr_ids_strings.index("Value")
+            value_payload = attribute_values[value_index]
+            if self._is_argument_definition_list(value_payload):
+                field_definition_cache: dict[tuple[Any, Any], list[dict[str, Any]]] = {}
+                serialized_arguments = []
+                for argument in value_payload:
+                    field_definitions = await self._resolve_argument_field_definitions(argument, field_definition_cache)
+                    serialized_arguments.append(_serialize_argument_definition(argument, field_definitions))
+                attribute_values[value_index] = serialized_arguments
             zipped = list(zip(attr_ids_strings, attribute_values))
             serialized_attributes = serialize_tuple(zipped)
 
@@ -678,6 +706,49 @@ class Connection:
             self.log.error(f"Exception in Read ({last_read_state}): {id_object_to_string(node_id)}")
             self.log.error("Exception: " + str(e))
             return {"exception": f"Read Exception ({last_read_state}): {str(e)}"}
+
+    @staticmethod
+    def _is_argument_definition_list(value: Any) -> bool:
+        if not isinstance(value, list) or len(value) == 0:
+            return False
+        return all(
+            hasattr(entry, "DataType") and hasattr(entry, "Name") and hasattr(entry, "ValueRank") for entry in value
+        )
+
+    async def _resolve_argument_field_definitions(
+        self,
+        argument: Any,
+        cache: dict[tuple[Any, Any], list[dict[str, Any]]],
+    ) -> list[dict[str, Any]]:
+        data_type_nodeid = getattr(argument, "DataType", None)
+        if data_type_nodeid is None:
+            return []
+
+        cache_key = (
+            getattr(data_type_nodeid, "NamespaceIndex", None),
+            getattr(data_type_nodeid, "Identifier", None),
+        )
+        if cache_key in cache:
+            return cache[cache_key]
+
+        try:
+            data_type_node = self.client.get_node(data_type_nodeid)
+            data_type_definition = await data_type_node.read_data_type_definition()
+            fields = getattr(data_type_definition, "Fields", None) or []
+            serialized_fields = [
+                _serialize_structure_field_definition(field) for field in fields if getattr(field, "Name", "")
+            ]
+            cache[cache_key] = serialized_fields
+            return serialized_fields
+        except Exception as exc:
+            self.log.debug(
+                "Could not resolve structure fields for data type ns=%s;i=%s: %s",
+                cache_key[0],
+                cache_key[1],
+                exc,
+            )
+            cache[cache_key] = []
+            return []
 
     async def pathtoid(self, data: dict) -> dict[str, Any]:
         """Coroutine. Resolve a relative browse path to a node-id.
@@ -958,17 +1029,36 @@ class Connection:
                     if isinstance(value, str) and value.strip() == "" and variant_type == ua.VariantType.String:
                         self.log.warning(f"[methodcall] Argument {i + 1} is empty string - server may reject it.")
 
-                    if is_structured_call_type(effective_data_type):
+                    is_generic_structure_payload = (
+                        (isinstance(value, dict) and isinstance(value.get("value"), list))
+                        or (
+                            isinstance(value, list)
+                            and len(value) > 0
+                            and all(isinstance(row, dict) and isinstance(row.get("value"), list) for row in value)
+                        )
+                        or (
+                            isinstance(value, list)
+                            and len(value) > 0
+                            and all(
+                                isinstance(field, dict) and isinstance(field.get("name"), str) and "value" in field
+                                for field in value
+                            )
+                        )
+                    )
+
+                    if is_structured_call_type(effective_data_type) or is_generic_structure_payload:
                         structured_value = create_call_structure(
                             {
                                 **arg,
                                 "dataType": effective_data_type,
+                                "dataTypeNamespaceIndex": getattr(expected_type_node, "NamespaceIndex", None),
+                                "dataTypeName": arg.get("dataTypeName"),
                                 "value": value,
                             }
                         )
                         input_args.append(structured_value)
                         self.log.info(
-                            f"[methodcall] Argument {i + 1} mapped to structured type {effective_data_type} with value {value}"
+                            f"[methodcall] Argument {i + 1} mapped to structured payload for data type {effective_data_type}"
                         )
                     # Handle arrays
                     elif isinstance(value, list):
@@ -1006,6 +1096,52 @@ class Connection:
                     input_args.append(create_call_structure(arg))
 
             self.log.info("[methodcall] Calling method on object...")
+            if method_id.endswith("/SendJoint"):
+                try:
+                    known_joint_fields = (
+                        "JointId",
+                        "JointOriginId",
+                        "JointDesignId",
+                        "CreationTime",
+                        "LastUpdatedTime",
+                        "Name",
+                        "Description",
+                        "Classification",
+                        "ClassificationDetails",
+                        "JointStatus",
+                        "AssociatedEntities",
+                        "JoiningTechnology",
+                    )
+                    for arg_index, mapped_argument in enumerate(input_args):
+                        if not isinstance(mapped_argument, ua.Variant):
+                            continue
+                        if mapped_argument.VariantType != ua.VariantType.ExtensionObject:
+                            continue
+                        extension_value = mapped_argument.Value
+                        runtime_types = {}
+                        for field_name in known_joint_fields:
+                            if hasattr(extension_value, field_name):
+                                runtime_types[field_name] = type(getattr(extension_value, field_name)).__name__
+                        if not runtime_types and hasattr(extension_value, "__dict__"):
+                            runtime_types = {
+                                key: type(val).__name__
+                                for key, val in extension_value.__dict__.items()
+                                if not key.startswith("_")
+                            }
+                        self.log.info(
+                            "[methodcall] SendJoint arg %s extension object type: %s; field runtime types: %s",
+                            arg_index + 1,
+                            type(extension_value).__name__,
+                            runtime_types,
+                        )
+                        associated_entities = getattr(extension_value, "AssociatedEntities", None)
+                        if isinstance(associated_entities, list) and associated_entities:
+                            self.log.info(
+                                "[methodcall] SendJoint AssociatedEntities sample item type: %s",
+                                type(associated_entities[0]).__name__,
+                            )
+                except Exception as diagnostics_error:
+                    self.log.debug("[methodcall] SendJoint diagnostics skipped: %s", diagnostics_error)
             call_result = await _call_method_preserving_result(obj, method, input_args)
             status_code = call_result.StatusCode
             output_values = [

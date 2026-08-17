@@ -1385,3 +1385,123 @@ async def test_handle_plugin_command_exception_returns_error(fake_websocket, dec
     assert "exception" in payload["data"]
     assert "plugin crash" in payload["data"]["exception"]
     assert payload["error"]["code"] == "OPCUA_REQUEST_FAILED"
+
+
+def test_resource_default_path_fallback_when_no_candidate_directory():
+    from unittest.mock import patch
+
+    with patch.object(IJTInterface, "_SOURCE_ROOT", Path("/nonexistent/xyz_root")):
+        with patch.object(IJTInterface, "_RESOURCE_DIR_CANDIDATES", ("no_such_dir",)):
+            result = IJTInterface()._resource_default_path("connectionpoints.json")
+    assert result.name == "connectionpoints.default.json"
+    assert "no_such_dir" in str(result)
+
+
+def test_normalize_connectionpoints_payload_handles_legacy_shape_and_invalid_rows():
+    payload = {
+        "ConnectionPoint1": {"Name": "One", "URL": "opc.tcp://one:4840", "AutoConnect": True},
+        "connectionpoint2": "invalid",
+    }
+    normalized = IJTInterface._normalize_connectionpoints_payload(payload)
+    assert normalized["schema_version"] == 1
+    assert normalized["connectionpoints"] == [{"name": "One", "address": "opc.tcp://one:4840", "autoconnect": True}]
+
+
+@pytest.mark.asyncio
+async def test_read_connectionpoints_payload_with_backup_reraises_when_backup_missing(tmp_path):
+    interface = IJTInterface()
+    broken = tmp_path / "connectionpoints.json"
+    broken.write_text("{not-json", encoding="utf-8")
+    with pytest.raises(json.JSONDecodeError):
+        interface._read_connectionpoints_payload_with_backup(broken)
+
+
+@pytest.mark.asyncio
+async def test_handle_get_default_connection_points_returns_exception_on_read_error(monkeypatch):
+    interface = IJTInterface()
+    monkeypatch.setattr(interface, "_resource_default_path", lambda _filename: Path("/definitely/missing/default.json"))
+    result = await interface.handle_get_default_connection_points()
+    assert "exception" in result
+
+
+@pytest.mark.asyncio
+async def test_handle_set_connection_points_rejects_non_list_payload():
+    interface = IJTInterface()
+    interface._normalize_connectionpoints_payload = lambda _payload: {"connectionpoints": "not-a-list"}  # type: ignore[method-assign]
+    result = await interface.handle_set_connection_points({"connectionpoints": []})
+    assert "connectionpoints' must be a list" in result["exception"]
+
+
+@pytest.mark.asyncio
+async def test_handle_set_connection_points_rejects_empty_name():
+    interface = IJTInterface()
+    result = await interface.handle_set_connection_points(
+        {"connectionpoints": [{"name": " ", "address": "opc.tcp://host:4840", "autoconnect": False}]}
+    )
+    assert "empty name" in result["exception"]
+
+
+@pytest.mark.asyncio
+async def test_handle_reset_connection_points_propagates_get_default_exception():
+    interface = IJTInterface()
+    interface.handle_get_default_connection_points = AsyncMock(return_value={"exception": "default read failed"})  # type: ignore[method-assign]
+    result = await interface.handle_reset_connection_points()
+    assert result == {"exception": "default read failed"}
+
+
+@pytest.mark.asyncio
+async def test_handle_reset_connection_points_propagates_set_exception():
+    interface = IJTInterface()
+    interface.handle_get_default_connection_points = AsyncMock(return_value={"connectionpoints": []})  # type: ignore[method-assign]
+    interface.handle_set_connection_points = AsyncMock(return_value={"exception": "save failed"})  # type: ignore[method-assign]
+    result = await interface.handle_reset_connection_points()
+    assert result == {"exception": "save failed"}
+
+
+@pytest.mark.asyncio
+async def test_handle_connect_to_reconnects_when_existing_state_probe_raises(fake_websocket):
+    from unittest.mock import patch
+
+    interface = IJTInterface()
+    ep = "opc.tcp://host:4840"
+    existing = AsyncMock()
+    existing.is_connection_open.side_effect = RuntimeError("probe failed")
+    interface.connection_list[ep] = existing
+
+    new_conn = AsyncMock()
+    new_conn.connect = AsyncMock(return_value={"command": "connection established", "endpoint": ep})
+    with patch("python.ijt_interface.Connection", return_value=new_conn):
+        result = await interface.handle_connect_to(ep, fake_websocket)
+
+    assert result == {"command": "connection established", "endpoint": ep}
+    existing.terminate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_test_connection_returns_exception_when_connect_raises():
+    from unittest.mock import patch
+
+    interface = IJTInterface()
+    failing = AsyncMock()
+    failing.connect = AsyncMock(side_effect=RuntimeError("dial failed"))
+    failing.terminate = AsyncMock()
+    with patch("python.ijt_interface.Connection", return_value=failing):
+        result = await interface.handle_test_connection("opc.tcp://bad-host:4840")
+    assert result == {"exception": "dial failed"}
+    failing.terminate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_routes_default_and_reset_connectionpoints(fake_websocket, decode_last_message):
+    interface = IJTInterface()
+    interface.handle_get_default_connection_points = AsyncMock(
+        return_value={"schema_version": 1, "connectionpoints": []}
+    )  # type: ignore[method-assign]
+    await interface.handle(fake_websocket, {"command": "get default connectionpoints", "endpoint": ""})
+    payload = decode_last_message(fake_websocket)
+    assert payload["data"]["schema_version"] == 1
+
+    interface.handle_reset_connection_points = AsyncMock(return_value={"saved": True, "count": 0})  # type: ignore[method-assign]
+    await interface.handle(fake_websocket, {"command": "reset connectionpoints", "endpoint": ""})
+    payload = decode_last_message(fake_websocket)
+    assert payload["data"]["saved"] is True

@@ -8,6 +8,7 @@ output from third-party libraries such as *asyncua*.
 import logging
 from datetime import datetime
 from functools import lru_cache
+from typing import Any
 
 
 class MillisecondFormatter(logging.Formatter):
@@ -38,8 +39,11 @@ class MillisecondFormatter(logging.Formatter):
 class EndpointLoggerAdapter(logging.LoggerAdapter):
     """Prefix records with the immutable OPC UA endpoint identity."""
 
-    def process(self, msg, kwargs):
-        return f"[{self.extra['endpoint']}] {msg}", kwargs
+    def process(self, msg: object, kwargs: Any) -> tuple[str, Any]:
+        endpoint = "unknown-endpoint"
+        if isinstance(self.extra, dict):
+            endpoint = str(self.extra.get("endpoint", endpoint))
+        return f"[{endpoint}] {msg}", kwargs
 
 
 _formatter = MillisecondFormatter(

@@ -4,6 +4,7 @@ import { ijtLog } from '../ijt-logger.mjs'
 const INTEGER_DATA_TYPE_IDS = new Set([2, 3, 4, 5, 6, 7, 8, 9])
 const FLOAT_DATA_TYPE_IDS = new Set([10, 11])
 const STRING_DATA_TYPE_IDS = new Set([12, 31918])
+const BUILTIN_OR_ALIAS_DATA_TYPE_IDS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 21, 290, 294, 31918])
 
 function castScalarInputValue (dataTypeId, value) {
   if (INTEGER_DATA_TYPE_IDS.has(dataTypeId)) {
@@ -34,6 +35,18 @@ function castInputValue (dataTypeId, value, valueRank) {
       : [castScalarInputValue(dataTypeId, value)]
   }
   return castScalarInputValue(dataTypeId, value)
+}
+
+function isStructureFieldEntry (entry) {
+  return entry && typeof entry === 'object' && Object.hasOwn(entry, 'name') && Object.hasOwn(entry, 'value')
+}
+
+function isWrappedStructureEntry (entry) {
+  return entry && typeof entry === 'object' && Array.isArray(entry.value)
+}
+
+function isCustomStructureTypeId (typeId) {
+  return Number.isInteger(typeId) && !BUILTIN_OR_ALIAS_DATA_TYPE_IDS.has(typeId)
 }
 
 function normalizeSchemaArgument (argument = {}) {
@@ -340,11 +353,35 @@ export class MethodManager {
       const rowTypeId = Number(row.type.Identifier)
       const dataTypeId = Number.isInteger(schemaTypeId) ? schemaTypeId : rowTypeId
       const castValue = castInputValue(dataTypeId, row.value, valueRank)
+      const dataTypeNamespaceIndex = Number(argumentDefinition?.DataType?.NamespaceIndex ?? row.type?.NamespaceIndex)
+      const dataTypeName = String(argumentDefinition?.DataType?.Name || row?.structure || '').trim()
+      const hasStructureFieldEntries = Array.isArray(row?.value) && row.value.every(isStructureFieldEntry)
+      const hasWrappedStructureEntries = Array.isArray(row?.value) && row.value.every(isWrappedStructureEntry)
+      const shouldPreserveStructureEnvelope = isCustomStructureTypeId(dataTypeId)
+      let value = castValue
+      if (shouldPreserveStructureEnvelope && hasStructureFieldEntries) {
+        value = {
+          ...(row?.structure ? { structure: row.structure } : {}),
+          value: row.value
+        }
+      } else if (shouldPreserveStructureEnvelope && hasWrappedStructureEntries) {
+        value = row.value.map(entry => ({
+          ...(entry?.structure ? { structure: entry.structure } : {}),
+          value: entry.value
+        }))
+      }
 
-      inputArguments.push({
+      const payload = {
         dataType: dataTypeId,
-        value: castValue
-      })
+        value
+      }
+      if (Number.isInteger(dataTypeNamespaceIndex)) {
+        payload.dataTypeNamespaceIndex = dataTypeNamespaceIndex
+      }
+      if (dataTypeName) {
+        payload.dataTypeName = dataTypeName
+      }
+      inputArguments.push(payload)
     }
 
     return this.addressSpace.methodCall(methodData.parentNode.nodeId, methodData.methodNode.nodeId, inputArguments)

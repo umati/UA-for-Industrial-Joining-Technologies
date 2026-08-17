@@ -268,7 +268,7 @@ class IJTInterface:
         add_name("SendSimulatedBulkResults", {}, group_id="simulate-results")
         add_name(
             "SetTime",
-            {"Time": {"source": "currentUtc"}},
+            {"Time": {"source": "currentUtc"}, "InputTime": {"source": "currentUtc"}},
             ["Prefills Time with the current UTC timestamp."],
         )
         add_name(

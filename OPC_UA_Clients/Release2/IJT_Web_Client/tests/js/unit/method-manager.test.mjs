@@ -663,7 +663,7 @@ describe('MethodManager.call — additional type cases', () => {
 
     await manager.call(methodData, [{ type: { Identifier: 12 }, value: '' }])
     const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
-    expect(calledArgs[0]).toEqual({ dataType: 12, value: [] })
+    expect(calledArgs[0]).toMatchObject({ dataType: 12, value: [] })
   })
 
   it('maps empty UI value to empty string array when the server declares a TrimmedString argument with array ValueRank', async () => {
@@ -679,7 +679,7 @@ describe('MethodManager.call — additional type cases', () => {
     await manager.call(methodData, [{ type: { Identifier: 31918 }, value: [] }])
 
     const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
-    expect(calledArgs[0]).toEqual({ dataType: 31918, value: [] })
+    expect(calledArgs[0]).toMatchObject({ dataType: 31918, value: [] })
   })
 
   it('keeps non-empty scalar UI value as a single string item when the server declares a scalar String argument with array ValueRank', async () => {
@@ -694,7 +694,7 @@ describe('MethodManager.call — additional type cases', () => {
     await manager.call(methodData, [{ type: { Identifier: 12 }, value: 'BatchId:001' }])
     const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
 
-    expect(calledArgs[0]).toEqual({ dataType: 12, value: ['BatchId:001'] })
+    expect(calledArgs[0]).toMatchObject({ dataType: 12, value: ['BatchId:001'] })
   })
 
   it('preserves structured arrays instead of coercing their rows to strings', async () => {
@@ -719,7 +719,102 @@ describe('MethodManager.call — additional type cases', () => {
     await manager.call(methodData, [{ type: { Identifier: 3010 }, value: [entity] }])
     const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
 
-    expect(calledArgs[0]).toEqual({ dataType: 3010, value: [entity] })
+    expect(calledArgs[0]).toMatchObject({ dataType: 3010, value: [entity] })
+  })
+
+  it('preserves structured scalar payload envelope for generic custom datatypes', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('SendJoint', 'ns=1;s=TS/SendJoint'),
+      arguments: [
+        {
+          Name: 'Joint',
+          DataType: { Identifier: 49010, NamespaceIndex: 3, Name: 'JointDataType' },
+          ValueRank: -1
+        }
+      ],
+    }
+    const fields = [
+      { name: 'JointId', value: 'Joint-1', type: '12' },
+      { name: 'JointNumber', value: '1', type: '7' }
+    ]
+
+    await manager.call(methodData, [{
+      type: { Identifier: 49010, NamespaceIndex: 3 },
+      structure: 'JointDataType',
+      value: fields
+    }])
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+
+    expect(calledArgs[0]).toMatchObject({
+      dataType: 49010,
+      dataTypeNamespaceIndex: 3,
+      dataTypeName: 'JointDataType',
+      value: {
+        structure: 'JointDataType',
+        value: fields
+      }
+    })
+  })
+
+  it('wraps custom field-list payloads even when no structure name is available', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('SendJoint', 'ns=1;s=TS/SendJoint'),
+      arguments: [
+        {
+          Name: 'Joint',
+          DataType: { Identifier: 3028, NamespaceIndex: 7 },
+          ValueRank: -1
+        }
+      ],
+    }
+    const fields = [
+      { name: 'JointId', value: 'Joint-1', type: '31918' },
+      { name: 'Classification', value: '2', type: '4' }
+    ]
+
+    await manager.call(methodData, [{
+      type: { Identifier: 3028, NamespaceIndex: 7 },
+      value: fields
+    }])
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+
+    expect(calledArgs[0]).toMatchObject({
+      dataType: 3028,
+      dataTypeNamespaceIndex: 7,
+      value: { value: fields }
+    })
+  })
+
+  it('normalizes custom structure-array rows by stripping UI-only row type metadata', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('SetIOSignals', 'ns=1;s=TS/SetIOSignals'),
+      arguments: [{ Name: 'SignalList', DataType: { Identifier: 3019, NamespaceIndex: 7 }, ValueRank: 1 }],
+    }
+    const row = {
+      type: { Identifier: '3019', NamespaceIndex: '7' },
+      value: [
+        { name: 'SignalId', value: 'Test', type: '31918' },
+        { name: 'SignalValue', value: '1', type: '26' }
+      ]
+    }
+
+    await manager.call(methodData, [{ type: { Identifier: 3019 }, value: [row] }])
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+
+    expect(calledArgs[0]).toMatchObject({
+      dataType: 3019,
+      dataTypeNamespaceIndex: 7,
+      value: [{ value: row.value }]
+    })
   })
 
   it('casts numeric array items without changing the server-declared data type', async () => {
@@ -734,7 +829,7 @@ describe('MethodManager.call — additional type cases', () => {
     await manager.call(methodData, [{ type: { Identifier: 12 }, value: ['10', '20'] }])
     const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
 
-    expect(calledArgs[0]).toEqual({ dataType: 7, value: [10, 20] })
+    expect(calledArgs[0]).toMatchObject({ dataType: 7, value: [10, 20] })
   })
 
   it('keeps a scalar value scalar when ValueRank permits either scalar or one-dimensional array', async () => {
@@ -749,6 +844,6 @@ describe('MethodManager.call — additional type cases', () => {
     await manager.call(methodData, [{ type: { Identifier: 12 }, value: 'Id-1' }])
     const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
 
-    expect(calledArgs[0]).toEqual({ dataType: 12, value: 'Id-1' })
+    expect(calledArgs[0]).toMatchObject({ dataType: 12, value: 'Id-1' })
   })
 })

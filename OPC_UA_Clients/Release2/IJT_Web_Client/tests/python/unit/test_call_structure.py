@@ -12,6 +12,8 @@ Covers:
 - Builtin type round-trip: value is preserved inside ua.Variant
 """
 
+import datetime
+
 import pytest
 
 # Import asyncua first to skip the whole module if the library is not installed.
@@ -22,6 +24,13 @@ from python.call_structure import (  # noqa: E402
     _BUILTIN_TYPE_MAP,
     _ENTITY_DATA_TYPE_ARRAY,
     _JOINING_PROCESS_ID_DATA_TYPE,
+    _build_extension_object,
+    _cast_structure_field_value,
+    _coerce_int,
+    _extract_named_or_positional_field,
+    _field_entries_to_object,
+    _resolve_structure_class,
+    _try_coerce_int,
     create_call_structure,
     is_structured_call_type,
 )
@@ -295,6 +304,24 @@ def test_joining_process_type_happy_path(ijt_nodeset_types):  # noqa: ARG001 —
     assert result.SelectionName == "selection-A"
 
 
+def test_joining_process_type_accepts_wrapped_schema_rows(ijt_nodeset_types):  # noqa: ARG001
+    arg = {
+        "dataType": 3029,
+        "value": {
+            "value": [
+                {"name": "JoiningProcessId", "value": "proc-002", "type": "31918"},
+                {"name": "JoiningProcessOriginId", "value": "origin-002", "type": "31918"},
+                {"name": "SelectionName", "value": "selection-B", "type": "31918"},
+            ]
+        },
+    }
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.JoiningProcessIdentificationDataType)  # type: ignore[attr-defined]
+    assert result.JoiningProcessId == "proc-002"
+    assert result.JoiningProcessOriginId == "origin-002"
+    assert result.SelectionName == "selection-B"
+
+
 # ---------------------------------------------------------------------------
 # create_call_structure — type 3010 (EntityDataType array)
 # ---------------------------------------------------------------------------
@@ -369,3 +396,468 @@ def test_entity_data_type_array_empty_list(ijt_entity_type):  # noqa: ARG001
     assert isinstance(result, ua.Variant)
     assert result.VariantType is ua.VariantType.ExtensionObject
     assert result.Value == []
+
+
+def test_entity_data_type_array_accepts_schema_field_rows(ijt_entity_type):  # noqa: ARG001
+    arg = {
+        "dataType": 3010,
+        "value": [
+            {
+                "value": [
+                    {"name": "Name", "value": "Tool", "type": "12"},
+                    {"name": "Description", "value": "Joining tool", "type": "12"},
+                    {"name": "EntityId", "value": "ent-01", "type": "12"},
+                    {"name": "EntityOriginId", "value": "orig-01", "type": "12"},
+                    {"name": "IsExternal", "value": "true", "type": "1"},
+                    {"name": "EntityType", "value": "27", "type": "4"},
+                ]
+            }
+        ],
+    }
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.Variant)
+    assert result.VariantType is ua.VariantType.ExtensionObject
+    assert len(result.Value) == 1
+    assert result.Value[0].Name == "Tool"
+    assert result.Value[0].IsExternal is True
+    assert result.Value[0].EntityType == 27
+
+
+@pytest.fixture()
+def generic_signal_type():
+    """Register a generic structure used by schema-driven structure editors."""
+    from asyncua.common.structures104 import make_structure
+
+    already_registered = hasattr(ua, "IOSignalDataType")
+    registry_key = ua.NodeId(49001, 3)  # type: ignore[arg-type]
+    had_registry_entry = registry_key in ua.extension_objects_by_typeid
+    previous_registry_value = ua.extension_objects_by_typeid.get(registry_key)
+    if not already_registered:
+        sdef = ua.StructureDefinition()
+        sdef.StructureType = ua.StructureType.Structure
+        sdef.Fields = [
+            ua.StructureField(Name="SignalId", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),  # type: ignore[arg-type]
+            ua.StructureField(Name="Active", DataType=ua.NodeId(ua.ObjectIds.Boolean), ValueRank=-1),  # type: ignore[arg-type]
+        ]
+        make_structure(ua.NodeId(49001, 3), "IOSignalDataType", sdef)  # type: ignore[arg-type]
+    ua.extension_objects_by_typeid[registry_key] = ua.IOSignalDataType  # type: ignore[attr-defined]
+
+    yield
+
+    if had_registry_entry:
+        if previous_registry_value is not None:
+            ua.extension_objects_by_typeid[registry_key] = previous_registry_value
+        else:
+            ua.extension_objects_by_typeid.pop(registry_key, None)
+    else:
+        ua.extension_objects_by_typeid.pop(registry_key, None)
+    if not already_registered and hasattr(ua, "IOSignalDataType"):
+        delattr(ua, "IOSignalDataType")
+
+
+def test_generic_structure_payload_happy_path(generic_signal_type):  # noqa: ARG001
+    arg = {
+        "dataType": 49001,
+        "value": {
+            "structure": "IOSignalDataType",
+            "value": [
+                {"name": "SignalId", "value": "I1", "type": "12"},
+                {"name": "Active", "value": "true", "type": "1"},
+            ],
+        },
+    }
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.Variant)
+    assert result.VariantType is ua.VariantType.ExtensionObject
+    assert result.Value.SignalId == "I1"
+    assert result.Value.Active is True
+
+
+def test_generic_structure_array_payload_happy_path(generic_signal_type):  # noqa: ARG001
+    arg = {
+        "dataType": 49001,
+        "value": [
+            {
+                "structure": "IOSignalDataType",
+                "value": [
+                    {"name": "SignalId", "value": "I1", "type": "12"},
+                    {"name": "Active", "value": "true", "type": "1"},
+                ],
+            },
+            {
+                "structure": "IOSignalDataType",
+                "value": [
+                    {"name": "SignalId", "value": "I2", "type": "12"},
+                    {"name": "Active", "value": False, "type": "1"},
+                ],
+            },
+        ],
+    }
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.Variant)
+    assert result.VariantType is ua.VariantType.ExtensionObject
+    assert len(result.Value) == 2
+    assert result.Value[0].SignalId == "I1"
+    assert result.Value[1].Active is False
+
+
+def test_generic_structure_payload_without_name_resolves_by_datatype(generic_signal_type):  # noqa: ARG001
+    arg = {
+        "dataType": 49001,
+        "dataTypeNamespaceIndex": 3,
+        "value": {
+            "value": [
+                {"name": "SignalId", "value": "I3", "type": "12"},
+                {"name": "Active", "value": "true", "type": "1"},
+            ],
+        },
+    }
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.Variant)
+    assert result.VariantType is ua.VariantType.ExtensionObject
+    assert result.Value.SignalId == "I3"
+    assert result.Value.Active is True
+
+
+def test_generic_structure_field_list_payload_is_accepted(generic_signal_type):  # noqa: ARG001
+    arg = {
+        "dataType": 49001,
+        "dataTypeNamespaceIndex": 3,
+        "dataTypeName": "IOSignalDataType",
+        "value": [
+            {"name": "SignalId", "value": "I4", "type": "12"},
+            {"name": "Active", "value": "true", "type": "1"},
+        ],
+    }
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.Variant)
+    assert result.VariantType is ua.VariantType.ExtensionObject
+    assert result.Value.SignalId == "I4"
+    assert result.Value.Active is True
+
+
+@pytest.fixture()
+def signal_data_type_with_variant():
+    from asyncua.common.structures104 import make_structure
+
+    already_registered = hasattr(ua, "SignalDataType")
+    registry_key = ua.NodeId(3019, 7)  # type: ignore[arg-type]
+    had_registry_entry = registry_key in ua.extension_objects_by_typeid
+    previous_registry_value = ua.extension_objects_by_typeid.get(registry_key)
+    if not already_registered:
+        sdef = ua.StructureDefinition()
+        sdef.StructureType = ua.StructureType.Structure
+        sdef.Fields = [
+            ua.StructureField(Name="SignalId", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),  # type: ignore[arg-type]
+            ua.StructureField(Name="SignalValue", DataType=ua.NodeId(26), ValueRank=-1),  # type: ignore[arg-type]
+            ua.StructureField(Name="SignalDescription", DataType=ua.NodeId(ua.ObjectIds.String), ValueRank=-1),  # type: ignore[arg-type]
+            ua.StructureField(Name="SignalType", DataType=ua.NodeId(ua.ObjectIds.Int16), ValueRank=-1),  # type: ignore[arg-type]
+        ]
+        make_structure(ua.NodeId(3019, 7), "SignalDataType", sdef)  # type: ignore[arg-type]
+    ua.extension_objects_by_typeid[registry_key] = ua.SignalDataType  # type: ignore[attr-defined]
+
+    yield
+
+    if had_registry_entry:
+        if previous_registry_value is not None:
+            ua.extension_objects_by_typeid[registry_key] = previous_registry_value
+        else:
+            ua.extension_objects_by_typeid.pop(registry_key, None)
+    else:
+        ua.extension_objects_by_typeid.pop(registry_key, None)
+    if not already_registered and hasattr(ua, "SignalDataType"):
+        delattr(ua, "SignalDataType")
+
+
+@pytest.fixture()
+def joint_data_type_with_associated_entities():
+    class JointDataType:  # local lightweight stand-in for test-only structure registration
+        def __init__(self):
+            self.JointId = ""
+            self.AssociatedEntities = []
+
+    already_registered = hasattr(ua, "JointDataType")
+    previous_class = getattr(ua, "JointDataType", None)
+    registry_key = ua.NodeId(3028, 7)  # type: ignore[arg-type]
+    had_registry_entry = registry_key in ua.extension_objects_by_typeid
+    previous_registry_value = ua.extension_objects_by_typeid.get(registry_key)
+    setattr(ua, "JointDataType", JointDataType)
+    ua.extension_objects_by_typeid[registry_key] = JointDataType
+
+    yield
+
+    if had_registry_entry:
+        if previous_registry_value is not None:
+            ua.extension_objects_by_typeid[registry_key] = previous_registry_value
+        else:
+            ua.extension_objects_by_typeid.pop(registry_key, None)
+    else:
+        ua.extension_objects_by_typeid.pop(registry_key, None)
+    if already_registered and previous_class is not None:
+        setattr(ua, "JointDataType", previous_class)
+    elif hasattr(ua, "JointDataType"):
+        delattr(ua, "JointDataType")
+
+
+def test_signal_data_type_variant_field_casting(signal_data_type_with_variant):  # noqa: ARG001
+    arg = {
+        "dataType": 3019,
+        "dataTypeNamespaceIndex": 7,
+        "value": [
+            {
+                "value": [
+                    {"name": "SignalId", "value": "Signal-A", "type": "31918"},
+                    {"name": "SignalValue", "value": "1", "type": "26"},
+                    {"name": "SignalDescription", "value": "Desc", "type": "12"},
+                    {"name": "SignalType", "value": "2", "type": "4"},
+                ]
+            }
+        ],
+    }
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.Variant)
+    assert result.VariantType is ua.VariantType.ExtensionObject
+    assert result.Value[0].SignalId == "Signal-A"
+    assert isinstance(result.Value[0].SignalValue, ua.Variant)
+    assert result.Value[0].SignalValue.Value == 1
+    assert result.Value[0].SignalType == 2
+
+
+def test_joint_data_type_nested_entities_are_cast_to_entity_datatype(
+    ijt_entity_type, joint_data_type_with_associated_entities
+):  # noqa: ARG001
+    arg = {
+        "dataType": 3028,
+        "dataTypeNamespaceIndex": 7,
+        "value": {
+            "value": [
+                {"name": "JointId", "value": "Joint_9", "type": "31918"},
+                {
+                    "name": "AssociatedEntities",
+                    "type": "3010",
+                    "value": [
+                        {
+                            "value": {
+                                "Name": "VIN",
+                                "Description": "Vehicle identifier",
+                                "EntityId": "ABCDid000011",
+                                "EntityOriginId": "-",
+                                "IsExternal": True,
+                                "EntityType": 20,
+                            }
+                        }
+                    ],
+                },
+            ]
+        },
+    }
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.Variant)
+    assert result.VariantType is ua.VariantType.ExtensionObject
+    assert result.Value.JointId == "Joint_9"
+    assert isinstance(result.Value.AssociatedEntities, list)
+    assert result.Value.AssociatedEntities[0].EntityId == "ABCDid000011"
+    assert result.Value.AssociatedEntities[0].EntityType == 20
+
+
+@pytest.mark.parametrize(
+    ("raw_value", "raw_type", "expected"),
+    [
+        (None, 4, 0),
+        ("", 10, 0.0),
+        ("7", 7, 7),
+        ("2.5", 11, 2.5),
+        ("abc", 4, "abc"),
+        ("abc", 11, "abc"),
+    ],
+)
+def test_cast_structure_field_value_numeric_paths(raw_value, raw_type, expected):
+    assert _cast_structure_field_value(raw_value, raw_type) == expected
+
+
+def test_cast_structure_field_value_datetime_and_localizedtext_paths():
+    dt = datetime.datetime.now(datetime.UTC)
+    assert _cast_structure_field_value(dt, 13) is dt
+
+    parsed = _cast_structure_field_value("2026-08-17T12:30:00Z", 13)
+    assert hasattr(parsed, "year")
+    assert parsed.tzinfo is None
+
+    fallback = _cast_structure_field_value("not-a-date", 13)
+    assert hasattr(fallback, "year")
+
+    localized = ua.LocalizedText(Text="X", Locale="en")
+    assert _cast_structure_field_value(localized, 21) is localized
+
+    from_dict = _cast_structure_field_value({"Text": "ABC", "Locale": "de"}, 21)
+    assert isinstance(from_dict, ua.LocalizedText)
+    assert from_dict.Text == "ABC"
+    assert from_dict.Locale == "de"
+
+    from_scalar = _cast_structure_field_value("DEF", 21)
+    assert isinstance(from_scalar, ua.LocalizedText)
+    assert from_scalar.Text == "DEF"
+
+
+def test_cast_structure_field_value_variant_and_bool_paths():
+    variant_bool = _cast_structure_field_value("true", 26)
+    assert isinstance(variant_bool, ua.Variant)
+    assert variant_bool.Value is True
+
+    variant_int = _cast_structure_field_value("12", 26)
+    assert isinstance(variant_int, ua.Variant)
+    assert variant_int.Value == 12
+
+    variant_float = _cast_structure_field_value("1.5", 26)
+    assert isinstance(variant_float, ua.Variant)
+    assert variant_float.Value == 1.5
+
+    variant_raw = _cast_structure_field_value(["x"], 26)
+    assert isinstance(variant_raw, ua.Variant)
+    assert variant_raw.Value == ["x"]
+
+    assert _cast_structure_field_value("false", 1) is False
+    assert _cast_structure_field_value([], _ENTITY_DATA_TYPE_ARRAY) == []
+    assert _cast_structure_field_value("raw", _ENTITY_DATA_TYPE_ARRAY) == "raw"
+
+
+def test_field_entry_mapping_and_extraction_helpers_cover_invalid_rows():
+    mapped = _field_entries_to_object(
+        [
+            {"name": "SignalId", "value": "I1", "type": "12"},
+            {"name": "", "value": "ignored", "type": "12"},
+            "not-a-dict",
+        ]
+    )
+    assert mapped == {"SignalId": "I1"}
+    assert _coerce_int("NaN", fallback=9) == 9
+
+    value_rows = [{"name": "A", "value": "x"}]
+    assert _extract_named_or_positional_field(value_rows, "A", 0) == "x"
+    assert _extract_named_or_positional_field([], "Missing", 3) == ""
+
+
+def test_resolve_structure_class_handles_lookup_failures_and_registry_fallback(monkeypatch):
+    class DummyStructure:
+        pass
+
+    class FakeNode:
+        def __init__(self, identifier, namespace):
+            self.Identifier = identifier
+            self.NamespaceIndex = namespace
+
+    monkeypatch.setattr(ua, "DummyStructure", DummyStructure, raising=False)
+    assert _resolve_structure_class(49001, 3, "DummyStructure") is DummyStructure
+
+    monkeypatch.delattr(ua, "DummyStructure", raising=False)
+    monkeypatch.setattr(ua, "get_extensionobject_class_type", lambda _node_id: None, raising=False)
+    monkeypatch.setattr(ua, "extension_objects_by_datatype", {FakeNode("49001", "3"): DummyStructure}, raising=False)
+    monkeypatch.setattr(ua, "extension_objects_by_typeid", {}, raising=False)
+    assert _resolve_structure_class(49001, 3, "") is DummyStructure
+
+    monkeypatch.setattr(ua, "extension_objects_by_datatype", {}, raising=False)
+    monkeypatch.setattr(ua, "extension_objects_by_typeid", {FakeNode("49002", "4"): DummyStructure}, raising=False)
+    assert _resolve_structure_class(49002, 4, "") is DummyStructure
+
+    monkeypatch.setattr(
+        ua, "get_extensionobject_class_type", lambda _node_id: (_ for _ in ()).throw(RuntimeError("x")), raising=False
+    )
+    monkeypatch.setattr(ua, "extension_objects_by_datatype", {}, raising=False)
+    monkeypatch.setattr(ua, "extension_objects_by_typeid", {}, raising=False)
+    assert _resolve_structure_class("not-int", 4, "") is None
+    assert _resolve_structure_class(49003, "not-int", "") is None
+    assert _resolve_structure_class(49003, 4, "") is None
+
+
+def test_build_extension_object_failure_paths_are_null_safe():
+    assert _build_extension_object(None, "MissingType", [{"name": "A", "value": "x", "type": "12"}]) is None
+
+    class BrokenInit:
+        def __init__(self):
+            raise RuntimeError("init failed")
+
+    assert _build_extension_object(BrokenInit, "BrokenInit", [{"name": "A", "value": "x", "type": "12"}]) is None
+
+    class SlotOnly:
+        __slots__ = ("Allowed",)
+
+    obj = _build_extension_object(SlotOnly, "SlotOnly", ["not-a-dict", {"value": "missing-name"}])
+    assert isinstance(obj, SlotOnly)
+
+    assert _build_extension_object(SlotOnly, "SlotOnly", [{"name": "Forbidden", "value": "x", "type": "12"}]) is None
+
+
+def test_create_call_structure_returns_null_variant_when_extension_build_fails():
+    result_from_object = create_call_structure(
+        {"dataType": 49901, "dataTypeNamespaceIndex": 3, "value": {"structure": "Nope", "value": [{"name": "A"}]}}
+    )
+    assert isinstance(result_from_object, ua.Variant)
+    assert result_from_object.VariantType is ua.VariantType.Null
+
+    result_from_field_list = create_call_structure(
+        {"dataType": 49902, "dataTypeNamespaceIndex": 3, "dataTypeName": "Nope", "value": [{"name": "A"}]}
+    )
+    assert isinstance(result_from_field_list, ua.Variant)
+    assert result_from_field_list.VariantType is ua.VariantType.Null
+
+    result_from_array = create_call_structure(
+        {
+            "dataType": 49903,
+            "dataTypeNamespaceIndex": 3,
+            "value": [{"structure": "Nope", "value": [{"name": "A"}]}],
+        }
+    )
+    assert isinstance(result_from_array, ua.Variant)
+    assert result_from_array.VariantType is ua.VariantType.Null
+
+
+def test_remaining_scalar_helper_paths_are_covered():
+    sentinel = object()
+    assert _cast_structure_field_value(sentinel, "not-a-number") is sentinel
+    assert _cast_structure_field_value("2026-08-17T12:30:00", 13).tzinfo is None
+    assert _cast_structure_field_value("", 13).tzinfo is None
+
+    variant = ua.Variant("keep")
+    assert _cast_structure_field_value(variant, 26) is variant
+    assert _cast_structure_field_value("x", 9999) == "x"
+    assert _cast_structure_field_value("TRUE", 1) is True
+
+
+def test_try_coerce_int_and_entity_array_invalid_rows_are_safe(ijt_entity_type):  # noqa: ARG001
+    assert _try_coerce_int(None) is None
+    assert _try_coerce_int("bad-int") is None
+    assert _try_coerce_int("12") == 12
+
+    arg = {
+        "dataType": 3010,
+        "value": [
+            {
+                "Name": "A",
+                "Description": "",
+                "EntityId": "1",
+                "EntityOriginId": "o",
+                "IsExternal": False,
+                "EntityType": 1,
+            },
+            123,
+        ],
+    }
+    result = create_call_structure(arg)
+    assert isinstance(result, ua.Variant)
+    assert result.VariantType is ua.VariantType.ExtensionObject
+    assert len(result.Value) == 1
+
+
+def test_resolve_structure_class_namespace_mismatch_and_second_registry_loop(monkeypatch):
+    class DummyStructure:
+        pass
+
+    class FakeNode:
+        def __init__(self, identifier, namespace):
+            self.Identifier = identifier
+            self.NamespaceIndex = namespace
+
+    monkeypatch.setattr(ua, "get_extensionobject_class_type", lambda _node_id: None, raising=False)
+    monkeypatch.setattr(ua, "extension_objects_by_datatype", {FakeNode(49010, 99): DummyStructure}, raising=False)
+    monkeypatch.setattr(ua, "extension_objects_by_typeid", {FakeNode(49010, 3): DummyStructure}, raising=False)
+    assert _resolve_structure_class(49010, 3, "") is DummyStructure

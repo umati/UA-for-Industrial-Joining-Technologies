@@ -25,6 +25,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
       detectedTools: [],
       detectedJoints: [],
       detectedJoiningProcesses: [],
+      detectedSignals: [],
       discoveryLoaded: false
     }
     this.methodGUICreator = new MethodGUICreator(this, methodManager, entityManager, settings, this.methodState)
@@ -115,15 +116,32 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
       this.methodState.productInstanceUri = productInstanceUri
       await this.resolveDetectedJoints()
       await this.resolveDetectedJoiningProcesses()
+      await this.resolveDetectedSignals()
       this.methodState.discoveryLoaded = true
     } catch (error) {
       this.methodState.productInstanceUri = ''
       this.methodState.detectedTools = []
       this.methodState.detectedJoints = []
       this.methodState.detectedJoiningProcesses = []
+      this.methodState.detectedSignals = []
       this.methodState.discoveryLoaded = false
       ijtLog.warn('Could not resolve Tool.ProductInstanceUri for method defaults:', error)
     }
+  }
+
+  _extractPrimaryOutputList (result) {
+    if (Array.isArray(result)) {
+      return Array.isArray(result[0]) ? result[0] : result
+    }
+    if (result && typeof result === 'object') {
+      if (Array.isArray(result.outputArguments) && Array.isArray(result.outputArguments[0])) {
+        return result.outputArguments[0]
+      }
+      if (Array.isArray(result.rawOutput) && Array.isArray(result.rawOutput[0])) {
+        return result.rawOutput[0]
+      }
+    }
+    return []
   }
 
   async resolveDetectedJoints () {
@@ -140,7 +158,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
           type: getJointListMethod.arguments?.[0]?.DataType || { Identifier: '12' }
         }
       ])
-      const list = Array.isArray(output) && Array.isArray(output[0]) ? output[0] : output
+      const list = this._extractPrimaryOutputList(output)
       this.methodState.detectedJoints = (Array.isArray(list) ? list : [])
         .map(entry => String(entry?.Value?.JointId ?? entry?.JointId ?? entry?.Value?.Id ?? entry?.Id ?? entry ?? '').trim())
         .filter(Boolean)
@@ -164,7 +182,7 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
           type: getJoiningProcessListMethod.arguments?.[0]?.DataType || { Identifier: '12' }
         }
       ])
-      const list = Array.isArray(output) && Array.isArray(output[0]) ? output[0] : output
+      const list = this._extractPrimaryOutputList(output)
       this.methodState.detectedJoiningProcesses = (Array.isArray(list) ? list : [])
         .map(entry => ({
           joiningProcessId: joiningProcessIdFromEntry(entry),
@@ -175,6 +193,34 @@ export default class MethodGraphics extends ControlMessageSplitScreen {
     } catch (error) {
       this.methodState.detectedJoiningProcesses = []
       ijtLog.warn('Could not resolve JoiningProcesses for method pickers:', error)
+    }
+  }
+
+  async resolveDetectedSignals () {
+    const getIOSignalsMethod = this.methodManager?.getMethod('GetIOSignals')
+    const productInstanceUri = String(this.methodState.productInstanceUri || '').trim()
+    if (!getIOSignalsMethod || !productInstanceUri) {
+      this.methodState.detectedSignals = []
+      return
+    }
+    try {
+      const output = await this.methodManager.call(getIOSignalsMethod, [
+        {
+          value: productInstanceUri,
+          type: getIOSignalsMethod.arguments?.[0]?.DataType || { Identifier: '12' }
+        },
+        {
+          value: [],
+          type: getIOSignalsMethod.arguments?.[1]?.DataType || { Identifier: '31918' }
+        }
+      ])
+      const list = this._extractPrimaryOutputList(output)
+      this.methodState.detectedSignals = (Array.isArray(list) ? list : [])
+        .map(entry => String(entry?.Value?.SignalId ?? entry?.SignalId ?? entry?.Id ?? entry ?? '').trim())
+        .filter(Boolean)
+    } catch (error) {
+      this.methodState.detectedSignals = []
+      ijtLog.warn('Could not resolve SignalIds for SetIOSignals picker:', error)
     }
   }
 

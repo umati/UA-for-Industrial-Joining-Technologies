@@ -68,8 +68,8 @@ def _call_method_result(
     diagnostic_infos=(),
 ):
     return ua.CallMethodResult(
-        StatusCode=ua.StatusCode(status_code),
-        InputArgumentResults=[ua.StatusCode(value) for value in input_argument_results],
+        StatusCode=ua.StatusCode(status_code),  # pyright: ignore[reportArgumentType]
+        InputArgumentResults=[ua.StatusCode(value) for value in input_argument_results],  # pyright: ignore[reportArgumentType]
         InputArgumentDiagnosticInfos=list(diagnostic_infos),
         OutputArguments=[value if isinstance(value, ua.Variant) else ua.Variant(value) for value in output_values],
     )
@@ -86,8 +86,8 @@ def _configure_raw_method_call(
     captured=None,
     exception=None,
 ):
-    object_node.nodeid = ua.NodeId("Object", 1)
-    method_node.nodeid = ua.NodeId("Method", 1)
+    object_node.nodeid = ua.NodeId(ua.String("Object"), ua.Int16(1))
+    method_node.nodeid = ua.NodeId(ua.String("Method"), ua.Int16(1))
 
     async def _call(requests):
         if captured is not None:
@@ -540,6 +540,37 @@ def test_serialize_argument_definition_keeps_schema_shape():
     assert result["FieldDefinitions"] == []
 
 
+def test_serialize_argument_definition_accepts_resolved_field_definitions():
+    from python.connection import _serialize_argument_definition
+
+    argument = MagicMock()
+    argument.Name = "Joint"
+    argument.DataType = MagicMock()
+    argument.DataType.NamespaceIndex = 3
+    argument.DataType.Identifier = 49010
+    argument.ValueRank = -1
+    argument.ArrayDimensions = None
+    argument.Description = None
+
+    result = _serialize_argument_definition(
+        argument,
+        field_definitions=[
+            {
+                "Name": "JointId",
+                "DataType": {"NamespaceIndex": 0, "Identifier": 12},
+                "ValueRank": -1,
+                "ArrayDimensions": None,
+                "Description": None,
+                "IsOptional": False,
+            }
+        ],
+    )
+
+    assert result["Name"] == "Joint"
+    assert result["DataType"] == {"NamespaceIndex": 3, "Identifier": 49010}
+    assert result["FieldDefinitions"][0]["Name"] == "JointId"
+
+
 # ---------------------------------------------------------------------------
 # methodcall — connected path: valid keys reach client.get_node()
 # ---------------------------------------------------------------------------
@@ -792,6 +823,158 @@ async def test_methodcall_array_argument_creates_list_variant():
     assert result["callStatus"] == "Succeeded"
     assert len(captured) == 1
     assert isinstance(captured[0].Value, list)
+
+
+@pytest.mark.asyncio
+async def test_methodcall_generic_structure_array_uses_create_call_structure():
+    """Array payloads tagged as structures should route through create_call_structure."""
+    conn = _make_connection()
+
+    mock_arg_desc = MagicMock()
+    mock_arg_desc.DataType.Identifier = 49001  # custom structure type id
+    mock_arg_desc.DataType.NamespaceIndex = 3
+
+    mock_input_args_node = MagicMock()
+    mock_input_args_node.get_value = AsyncMock(return_value=[mock_arg_desc])
+
+    mock_method = MagicMock()
+    mock_method.get_child = AsyncMock(return_value=mock_input_args_node)
+
+    mock_obj = MagicMock()
+    captured: list = []
+    _configure_raw_method_call(mock_obj, mock_method, captured=captured)
+
+    mock_client = MagicMock()
+    mock_client.get_node = MagicMock(side_effect=[mock_obj, mock_method])
+    conn.client = mock_client
+
+    structured_value = MagicMock()
+    with patch("python.connection.create_call_structure", return_value=structured_value) as mock_ccs:
+        with patch("python.connection.serialize_full_event", return_value=[]):
+            with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+                result = await conn.methodcall(
+                    {
+                        "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                        "methodnode": {"NamespaceIndex": 1, "Identifier": "SetIOSignals"},
+                        "arguments": [
+                            {
+                                "dataType": 49001,
+                                "value": [
+                                    {
+                                        "value": [
+                                            {"name": "SignalId", "value": "I1", "type": "12"},
+                                            {"name": "Active", "value": "true", "type": "1"},
+                                        ],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                )
+
+    assert result["callStatus"] == "Succeeded"
+    mock_ccs.assert_called_once()
+    assert captured[0].Value is structured_value
+
+
+@pytest.mark.asyncio
+async def test_methodcall_structure_field_list_uses_create_call_structure():
+    """Field-list structure payloads should route through create_call_structure."""
+    conn = _make_connection()
+
+    mock_arg_desc = MagicMock()
+    mock_arg_desc.DataType.Identifier = 3028
+    mock_arg_desc.DataType.NamespaceIndex = 7
+
+    mock_input_args_node = MagicMock()
+    mock_input_args_node.get_value = AsyncMock(return_value=[mock_arg_desc])
+
+    mock_method = MagicMock()
+    mock_method.get_child = AsyncMock(return_value=mock_input_args_node)
+
+    mock_obj = MagicMock()
+    captured: list = []
+    _configure_raw_method_call(mock_obj, mock_method, captured=captured)
+
+    mock_client = MagicMock()
+    mock_client.get_node = MagicMock(side_effect=[mock_obj, mock_method])
+    conn.client = mock_client
+
+    structured_value = MagicMock()
+    with patch("python.connection.create_call_structure", return_value=structured_value) as mock_ccs:
+        with patch("python.connection.serialize_full_event", return_value=[]):
+            with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+                result = await conn.methodcall(
+                    {
+                        "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                        "methodnode": {"NamespaceIndex": 1, "Identifier": "SendJoint"},
+                        "arguments": [
+                            {
+                                "dataType": 3028,
+                                "value": [
+                                    {"name": "JointId", "value": "Joint-1", "type": "31918"},
+                                    {"name": "JointOriginId", "value": "Joint-1", "type": "31918"},
+                                ],
+                            }
+                        ],
+                    }
+                )
+
+    assert result["callStatus"] == "Succeeded"
+    mock_ccs.assert_called_once()
+    assert captured[0].Value is structured_value
+
+
+@pytest.mark.asyncio
+async def test_methodcall_sendjoint_diagnostics_supports_slot_based_extension_objects():
+    """SendJoint diagnostics must not crash when extension objects use __slots__."""
+    conn = _make_connection()
+
+    mock_arg_desc = MagicMock()
+    mock_arg_desc.DataType.Identifier = 3028
+    mock_arg_desc.DataType.NamespaceIndex = 7
+
+    mock_input_args_node = MagicMock()
+    mock_input_args_node.get_value = AsyncMock(return_value=[mock_arg_desc])
+
+    mock_method = MagicMock()
+    mock_method.get_child = AsyncMock(return_value=mock_input_args_node)
+
+    mock_obj = MagicMock()
+    captured: list = []
+    _configure_raw_method_call(mock_obj, mock_method, captured=captured)
+
+    mock_client = MagicMock()
+    mock_client.get_node = MagicMock(side_effect=[mock_obj, mock_method])
+    conn.client = mock_client
+
+    class SlotJoint:
+        __slots__ = ("AssociatedEntities",)
+
+        def __init__(self):
+            self.AssociatedEntities = []
+
+    structured_value = ua.Variant(SlotJoint(), ua.VariantType.ExtensionObject)
+    with patch("python.connection.create_call_structure", return_value=structured_value):
+        with patch("python.connection.serialize_full_event", return_value=[]):
+            with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+                result = await conn.methodcall(
+                    {
+                        "objectnode": {"NamespaceIndex": 1, "Identifier": "TighteningSystem"},
+                        "methodnode": {"NamespaceIndex": 1, "Identifier": "SendJoint"},
+                        "arguments": [
+                            {
+                                "dataType": 3028,
+                                "value": [
+                                    {"name": "JointId", "value": "Joint-1", "type": "31918"},
+                                    {"name": "JointOriginId", "value": "Joint-1", "type": "31918"},
+                                ],
+                            }
+                        ],
+                    }
+                )
+
+    assert result["callStatus"] == "Succeeded"
 
 
 # ---------------------------------------------------------------------------
@@ -1430,6 +1613,66 @@ async def test_read_non_variable_node_does_not_fetch_value():
 
 
 @pytest.mark.asyncio
+async def test_read_method_arguments_include_resolved_field_definitions():
+    conn = _make_connection()
+    mock_node = _make_read_node(ua.NodeClass.Method)
+    method_argument = SimpleNamespace(
+        Name="Joint",
+        DataType=SimpleNamespace(NamespaceIndex=3, Identifier=49010),
+        ValueRank=-1,
+        ArrayDimensions=None,
+        Description=None,
+    )
+    replies = [MagicMock() for _ in range(12)]
+    for reply in replies:
+        reply.Value = SimpleNamespace(Value="v")
+    replies[11].Value = SimpleNamespace(Value=[method_argument])
+    mock_node.read_attributes = AsyncMock(return_value=replies)
+
+    data_type_node = MagicMock()
+    data_type_node.read_data_type_definition = AsyncMock(
+        return_value=SimpleNamespace(
+            Fields=[
+                SimpleNamespace(
+                    Name="JointId",
+                    DataType=SimpleNamespace(NamespaceIndex=0, Identifier=12),
+                    ValueRank=-1,
+                    ArrayDimensions=None,
+                    Description=None,
+                    IsOptional=False,
+                ),
+                SimpleNamespace(
+                    Name="JointNumber",
+                    DataType=SimpleNamespace(NamespaceIndex=0, Identifier=7),
+                    ValueRank=-1,
+                    ArrayDimensions=None,
+                    Description=None,
+                    IsOptional=False,
+                ),
+            ]
+        )
+    )
+
+    conn.client = MagicMock()
+
+    def _get_node(node_id):
+        if getattr(node_id, "Identifier", None) == 49010:
+            return data_type_node
+        return mock_node
+
+    conn.client.get_node = MagicMock(side_effect=_get_node)
+
+    with patch("python.connection.serialize_tuple", side_effect=lambda pairs: {name: value for name, value in pairs}):
+        with patch("python.connection.serialize_value", return_value="{}"):
+            result = await conn.read({"nodeid": "ns=1;s=SendJoint"})
+
+    arguments = result["attributes"]["Value"]
+    assert arguments[0]["Name"] == "Joint"
+    assert arguments[0]["FieldDefinitions"][0]["Name"] == "JointId"
+    assert arguments[0]["FieldDefinitions"][1]["Name"] == "JointNumber"
+
+
+@pytest.mark.asyncio
 async def test_read_exception_returns_exception_dict():
     """read() returns an exception dict when an OPC UA call raises."""
     conn = _make_connection()
@@ -1619,8 +1862,8 @@ def _make_methodcall_conn(
             exception=call_method_exc,
         )
     elif call_method_func is not None:
-        mock_obj.nodeid = ua.NodeId("Object", 1)
-        mock_method.nodeid = ua.NodeId("Method", 1)
+        mock_obj.nodeid = ua.NodeId(ua.String("Object"), ua.Int16(1))
+        mock_method.nodeid = ua.NodeId(ua.String("Method"), ua.Int16(1))
         mock_obj.session.call = call_method_func
     else:
         _configure_raw_method_call(

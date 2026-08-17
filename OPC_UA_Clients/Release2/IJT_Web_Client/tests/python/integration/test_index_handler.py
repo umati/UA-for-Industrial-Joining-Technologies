@@ -49,7 +49,7 @@ class FakeIJTInterface:
 @pytest.mark.asyncio
 async def test_handler_routes_message_and_disconnects(monkeypatch):
     idx = importlib.import_module("index")
-    idx.shutdown_started = False
+    idx.shutdown_started = False  # type: ignore[attr-defined]
     idx.opcuaHandler = None  # type: ignore[attr-defined]
     monkeypatch.setattr(idx, "IJTInterface", FakeIJTInterface)
 
@@ -67,7 +67,7 @@ async def test_handler_routes_message_and_disconnects(monkeypatch):
 @pytest.mark.asyncio
 async def test_handler_disconnects_on_invalid_json(monkeypatch):
     idx = importlib.import_module("index")
-    idx.shutdown_started = False
+    idx.shutdown_started = False  # type: ignore[attr-defined]
     idx.opcuaHandler = None  # type: ignore[attr-defined]
     monkeypatch.setattr(idx, "IJTInterface", FakeIJTInterface)
 

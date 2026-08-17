@@ -96,8 +96,19 @@ Rules to preserve:
   Encoding/Locale/Text rows.
 - Keep optional array arguments represented as arrays all the way to the Python
   backend.
+- Keep schema-driven structured field-list payloads represented as structured
+  payloads all the way to the Python backend (do not coerce them to scalar or
+  string arrays in `MethodManager.call()`).
+- `EntityDataType[]`, `SignalDataType[]`, and other custom structure arrays may
+  arrive in either legacy object-map rows or schema field-list rows; parser
+  handling must accept both shapes.
 - Keep `Uncertain` and Bad method output arguments visible; they commonly carry
   the IJT Status and StatusMessage that explain a rejected request.
+- For enum-backed structured fields (for example `EntityType`) reuse shared
+  enum catalogs where available so users select values from dropdowns instead of
+  guessing numeric codes.
+- For time-like structured fields (for example `CreationTime`,
+  `LastUpdatedTime`) prefer safe UTC defaults when the field is empty.
 
 ## Multi-server logging
 

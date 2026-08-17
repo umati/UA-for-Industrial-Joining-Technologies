@@ -48,6 +48,10 @@
   color: var(--ui-text-main);
 }
 
+.methodsScreen .methodInputRight {
+  display: block;
+}
+
 .methodsScreen .methodDropdownWrap {
   width: 45%;
   min-width: 0;
@@ -109,9 +113,17 @@
 
 .methodsScreen .methodInputSource {
   grid-column: 2;
-  margin: calc(var(--space-4) * -1) 0 0;
+  margin: 0;
   color: #8fb3d9;
   font-size: var(--demo-font-small);
+}
+
+.methodsScreen .methodArgumentDescription {
+  grid-column: 2;
+  margin: 0;
+  color: #b8c4d3;
+  font-size: var(--demo-font-small);
+  line-height: 1.35;
 }
 
 .methodsScreen .myButton {
@@ -330,6 +342,16 @@
   gap: var(--space-8);
 }
 
+.methodsScreen .methodStructureArrayRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 2%);
+}
+
 .methodsScreen .methodArrayRow .methodInput {
   flex: 1 1 auto;
   width: auto;
@@ -348,9 +370,13 @@
 .methodsScreen .methodRowDistance {
   display: grid;
   grid-template-columns: minmax(170px, 0.85fr) minmax(220px, 1.15fr);
-  align-items: center;
+  align-items: start;
   gap: var(--control-gap);
   padding: var(--space-4) 0;
+}
+
+.methodsScreen .methodRowDistance.methodRowBoolean {
+  align-items: center;
 }
 
 .methodsScreen .methodRowDistance > .methodInput,
@@ -358,6 +384,16 @@
 .methodsScreen .methodRowDistance > .methodInputRight {
   width: 100%;
   min-width: 0;
+}
+
+.methodsScreen .methodBooleanInput {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
+}
+
+.methodsScreen .methodBooleanInput .myCheckBox {
+  margin: 0;
 }
 
 .methodsScreen .messages > li {
@@ -500,12 +536,17 @@
 
 @media (width <= 760px) {
   .methodsScreen .methodRowDistance {
-    flex-wrap: wrap;
+    grid-template-columns: 1fr;
     gap: var(--space-6);
   }
 
   .methodsScreen .methodLabel {
     width: 100%;
+  }
+
+   .methodsScreen .methodInputSource,
+   .methodsScreen .methodArgumentDescription {
+    grid-column: 1;
   }
 
   .methodsScreen .myButton,

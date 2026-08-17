@@ -37,8 +37,8 @@ def _mock_client_fails():
 
 
 def _capture_raw_method_call(object_node, method_node, captured):
-    object_node.nodeid = ua.NodeId("Object", 1)
-    method_node.nodeid = ua.NodeId("Method", 1)
+    object_node.nodeid = ua.NodeId(ua.String("Object"), ua.Int16(1))
+    method_node.nodeid = ua.NodeId(ua.String("Method"), ua.Int16(1))
 
     async def _call(requests):
         captured.extend(requests[0].InputArguments)
