@@ -1,0 +1,78 @@
+# .cursorignore — tells Cursor AI which files NOT to index
+# Works like .gitignore: patterns listed here are excluded from the AI's context window.
+# Keep this file committed so all contributors share the same security boundary.
+
+# ---------------------------------------------------------------------------
+# Secrets / credentials — never let the AI read these
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.der
+secret*.json
+secrets/
+*credentials*
+*secret*
+
+# ---------------------------------------------------------------------------
+# OPC UA PKI certificates — auto-generated on first connection
+# ---------------------------------------------------------------------------
+**/PKI/
+**/pki/
+
+# ---------------------------------------------------------------------------
+# Virtual environments — large, irrelevant to AI context
+# ---------------------------------------------------------------------------
+.venv*/
+venv/
+venv_test/
+ENV/
+env/
+
+# ---------------------------------------------------------------------------
+# Node.js dependencies
+# ---------------------------------------------------------------------------
+node_modules/
+
+# ---------------------------------------------------------------------------
+# Auto-generated source files — UA-ModelCompiler output, never edit
+# ---------------------------------------------------------------------------
+**/Types/
+
+# ---------------------------------------------------------------------------
+# Build output — binaries and compiled artefacts
+# ---------------------------------------------------------------------------
+[Bb]in/
+[Oo]bj/
+**/publish/
+**/PublishOutput/
+[Aa][Rr][Tt][Ii][Ff][Aa][Cc][Tt][Ss]/
+
+# ---------------------------------------------------------------------------
+# Test results and temporary artefacts
+# ---------------------------------------------------------------------------
+test-results/
+.pytest_cache/
+.pytest_basetemp*/
+playwright-report/
+coverage/
+htmlcov/
+*.trx
+*.coverage
+*.coveragexml
+
+# ---------------------------------------------------------------------------
+# Logs and debug output
+# ---------------------------------------------------------------------------
+[Ll][Oo][Gg][Ss]/
+*.[Ll][Oo][Gg]
+*.log.*
+
+# ---------------------------------------------------------------------------
+# OS artefacts
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
