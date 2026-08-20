@@ -522,10 +522,24 @@ after deterministic dependency preparation, then runs the timing-sensitive
 Envelope performance budgets only after both lanes have exited. The repository
 root runner uses `--skip-performance` for the parallel Web static suite and
 invokes `--performance-only` as an isolated serial Phase 1b suite after every Phase 1a
-worker has exited. This private Envelope performance suite is omitted entirely
-from ordinary/public root runs unless the private benchmark module is checked
-out. When the module exists but its local ITBP fixture does not, the suite is
-shown explicitly as skipped. GitHub `integration.yml`
+worker has exited. runs the same root-runner Web Client live/e2e suites as local validation, split
+by execution surface. `web-client-live-*` suites stay on `windows-latest` with
+the Windows simulator package. Every `web-client-e2e-*` suite runs inside the
+owned `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci`
+image, resolved from the reviewed
+`.github/docker/ijt-browser-ci/image-pin.json` digest, then started with
+`docker run --network=none`; Chromium, its Linux system dependencies, the
+locked `@playwright/test` version, Python 3.14, and Node 24 are all baked into
+the image. The host runner never executes
+`npx playwright install chromium --with-deps`. No job-level `container:`
+image is used —
+container-job images are pulled by GitHub before any step runs, so a
+`container:`-based browser lane would keep the browser image invisible to the
+PR review diff and would not exercise the reviewed run-time contract.
+
+The private Envelope performance suite is omitted from ordinary/public root
+runs unless the private benchmark module is checked out. When the module exists
+but its local ITBP fixture does not, the suite is shown explicitly as skipped.
 runs the same root-runner Web Client live/e2e suites as local validation, split
 by execution surface. `web-client-live-*` suites stay on `windows-latest` with
 the Windows simulator package. Every `web-client-e2e-*` suite runs inside the

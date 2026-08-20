@@ -284,6 +284,9 @@ delegated runner), so the
 default root run does not overlap Node Client activity with `server-smoke` on
 port 40451.
 
+Phase 1b is the private Envelope performance lane only; it is not a general Web
+Client workload label.
+
 Set `IJT_DOCKER_BUILD_TIMEOUT` to raise the Linux package Docker build timeout
 or Web Client Docker image build timeout when a cold Docker/network environment
 needs more than the default 1200 seconds. Set `IJT_DOCKER_TIMEOUT` to raise the
