@@ -438,8 +438,6 @@ jobs:
           file: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
           tags: ijt_web_client:latest
           load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Start Compose Stack
         # ``--wait --wait-timeout 120`` makes compose itself the synchronization
@@ -448,7 +446,7 @@ jobs:
         # 120s covers container startup plus the compose
         # healthcheck window with margin. Replaces the previous "up -d" +
         # manual curl loop.
-        run: docker compose up -d --no-build --wait --wait-timeout 120
+        run: docker compose -f docker-compose.smoke.yml up -d --no-build --wait --wait-timeout 120
 
       - name: Verify WebSocket Port
         shell: bash
@@ -460,15 +458,15 @@ jobs:
 
       - name: Show Container Status
         if: always()
-        run: docker compose ps ijt_web_client
+        run: docker compose -f docker-compose.smoke.yml ps ijt_web_client
 
       - name: Show Recent Logs
         if: always()
-        run: docker compose logs --tail 120 ijt_web_client
+        run: docker compose -f docker-compose.smoke.yml logs --tail 120 ijt_web_client
 
       - name: Teardown Compose Stack
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.smoke.yml down -v
 
   # ───────────────────────────────────────────────────────────────────────────
   # C# Client

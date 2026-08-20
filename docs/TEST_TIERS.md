@@ -41,8 +41,9 @@ public clones stay deterministic and Envelope-independent. Use
 checks, and use `--private-modules require` in authorized internal validation
 where a missing Envelope checkout must fail. Coverage remains enforced on the
 public JavaScript suite; Envelope performance-budget tests run separately without
-coverage instrumentation because coverage overhead invalidates timing budgets,
-and are skipped when the local-only performance fixture data is not available.
+coverage instrumentation and after parallel static workers have exited because
+coverage overhead and competing CPU workloads invalidate timing budgets. They are
+skipped when the local-only performance fixture data is not available.
 The Envelope submodule is also configured with `update = none`, so normal IJT
 pulls and public CI checkouts do not require private repository access. Authorized
 developers can initialize it explicitly with `git submodule update --checkout
@@ -277,8 +278,9 @@ run their live/integration tests in parallel without port conflicts.
 | Server smoke/native default | 40451  | —            | Built-in default (from `server_configuration.json`); root runner Phase 2 validates this package path |
 | Server Linux package smoke | 40465  | Docker       | Builds the Docker image from the Linux ZIP package and runs `smoke_test.py` |
 
-The root runner runs Phase 1 to completion before starting Phase 2. The Release 1
-Node Client is included only in Phase 1 (`--phase1` delegated runner), so the
+The root runner runs Phase 1a and isolated Phase 1b to completion before starting
+Phase 2. The Release 1 Node Client is included only in Phase 1a (`--phase1`
+delegated runner), so the
 default root run does not overlap Node Client activity with `server-smoke` on
 port 40451.
 

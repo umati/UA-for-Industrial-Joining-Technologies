@@ -4,7 +4,7 @@ run_all_tests.py -- Top-level test runner for the
 UA-for-Industrial-Joining-Technologies repository.
 
 Architecture: Two-phase execution
-  Phase 1 (PARALLEL)   -- static analysis + unit tests, no OPC UA server required.
+  Phase 1a (PARALLEL)  -- static analysis + unit tests, no OPC UA server required.
                           Delegates to each sub-project's own run_all_tests.py --phase1,
                           ensuring local runs cover CI checks or stricter (e.g. testclient
                           runs full phase1 locally, matching ci.yml pytest tests/unit/ run):
@@ -14,6 +14,8 @@ Architecture: Two-phase execution
                             - hadolint, yamllint (Server / Docker)
                           Extra root-level checks: repo-static-gitignore-check,
                           repo-static-markdown-leak-check, GHA workflow validation.
+  Phase 1b (SERIAL)     -- timing-sensitive Web Client performance budgets.
+                          Runs only after all parallel Phase 1a workers exit.
   Phase 2 (PARALLEL)   -- live integration tests, no shared server.
                           Each sub-runner owns its server on a dedicated port
                           and manages its full lifecycle independently:
@@ -27,7 +29,7 @@ Architecture: Two-phase execution
                           Release 2 clients do not share 40451.
 
 Usage:
-  python run_all_tests.py                    # full run (Phase 1 + Phase 2)
+  python run_all_tests.py                    # full run (Phase 1a + Phase 1b + Phase 2)
   python run_all_tests.py --phase1           # static + unit tests only (no server)
   python run_all_tests.py --phase2           # server smoke + live tests
   python run_all_tests.py --private-modules require
@@ -224,6 +226,10 @@ CSHARP_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client"
 CONSOLE_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Console_Client"
 TEST_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Test_Client"
 WEB_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
+_PRIVATE_ENVELOPE_DIR = WEB_CLIENT_DIR / "src" / "javascripts" / "views" / "envelope"
+_PRIVATE_ENVELOPE_PERFORMANCE_TEST = (
+    _PRIVATE_ENVELOPE_DIR / "tests" / "unit" / "automatic-stepwise-performance.test.mjs"
+)
 NODE_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release1" / "IJT_Node_Client"
 SMOKE_TEST = SERVER_DIR / "tests" / "smoke_test.py"
 _RUNNER_SCRIPT_PATHS: tuple[Path, ...] = (
@@ -618,6 +624,21 @@ def _parse_suite_counts(text: str) -> str:
     return ""
 
 
+def _clarify_suite_counts(name: str, counts: str) -> str:
+    """Describe intentional selection and optional checks without implying failures."""
+    if name == "server-static":
+        match = re.fullmatch(r"(\d+) passed, (\d+) skipped", counts)
+        if match:
+            passed, skipped = match.groups()
+            return f"{passed} checks passed; {skipped} optional checks skipped"
+    if name == "console-client-live":
+        match = re.fullmatch(r"(\d+) passed, (\d+) deselected", counts)
+        if match:
+            passed, deselected = match.groups()
+            return f"{passed} passed; {deselected} security cases excluded"
+    return counts
+
+
 def _count_tests_from_detail(counts: str) -> int:
     """Return executable test total from a parsed Detail cell count string."""
     return sum(_test_outcome_counts_from_detail(counts).values())
@@ -708,7 +729,7 @@ def _delegate_to_runner(
         env=env,
         timeout=run_timeout,
     )
-    counts = _parse_suite_counts(out)
+    counts = _clarify_suite_counts(name, _parse_suite_counts(out))
     skipped = rc == 0 and _counts_are_only_skipped(counts)
     return SuiteResult(
         name=name,
@@ -1378,8 +1399,18 @@ def _suite_webclient_unit() -> SuiteResult:
     return _delegate_to_runner(
         name="web-client-static",
         runner_dir=WEB_CLIENT_DIR,
-        phase_args=["--phase1"],
+        phase_args=["--phase1", "--skip-performance"],
         label="webclient runner (phase1)",
+    )
+
+
+def _suite_webclient_performance() -> SuiteResult:
+    """Run Web Client timing budgets after parallel Phase 1 workers have exited."""
+    return _delegate_to_runner(
+        name="web-client-performance",
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--performance-only"],
+        label="webclient runner (isolated performance)",
     )
 
 
@@ -2228,6 +2259,7 @@ class SuiteGroup(StrEnum):
 
     REPO_CHECKS = "repo-checks"
     PHASE1_STATIC = "phase1-static"
+    PHASE1_PERFORMANCE = "phase1-performance"
     PHASE2_LIVE = "phase2-live"
     PHASE2_PACKAGE = "phase2-package"
     PHASE2_OPCUA_SECURITY = "phase2-opcua-security"
@@ -2271,31 +2303,37 @@ SUITE_REGISTRY: dict[str, SuiteSpec] = {
     ),
     "node-client-static": SuiteSpec(
         id="node-client-static",
-        display_name="Node Client - Static checks",
+        display_name="Node Client - Static + unit",
         group=SuiteGroup.PHASE1_STATIC,
         runner=_suite_node_unit,
     ),
     "test-client-static": SuiteSpec(
         id="test-client-static",
-        display_name="Test Client - Static checks",
+        display_name="Test Client - Static + unit",
         group=SuiteGroup.PHASE1_STATIC,
         runner=_suite_testclient_phase1,
     ),
     "console-client-static": SuiteSpec(
         id="console-client-static",
-        display_name="Console Client - Static checks",
+        display_name="Console Client - Static + unit",
         group=SuiteGroup.PHASE1_STATIC,
         runner=_suite_console_unit,
     ),
     "web-client-static": SuiteSpec(
         id="web-client-static",
-        display_name="Web Client - Static checks (Python + JS)",
+        display_name="Web Client - Static + unit (Python + JS)",
         group=SuiteGroup.PHASE1_STATIC,
         runner=_suite_webclient_unit,
     ),
+    "web-client-performance": SuiteSpec(
+        id="web-client-performance",
+        display_name="Web Client - Private Envelope performance (isolated)",
+        group=SuiteGroup.PHASE1_PERFORMANCE,
+        runner=_suite_webclient_performance,
+    ),
     "csharp-client-static": SuiteSpec(
         id="csharp-client-static",
-        display_name="C# Client - Static checks",
+        display_name="C# Client - Static + unit",
         group=SuiteGroup.PHASE1_STATIC,
         runner=_suite_csharp_unit,
     ),
@@ -2414,6 +2452,15 @@ def phase1_specs() -> dict[str, SuiteSpec]:
     return _specs_for_groups({SuiteGroup.REPO_CHECKS, SuiteGroup.PHASE1_STATIC})
 
 
+def phase1_performance_specs() -> dict[str, SuiteSpec]:
+    private_mode = os.getenv("IJT_PRIVATE_MODULES", "auto").strip().lower()
+    if private_mode == "skip":
+        return {}
+    if not _PRIVATE_ENVELOPE_PERFORMANCE_TEST.is_file():
+        return {}
+    return _specs_for_groups({SuiteGroup.PHASE1_PERFORMANCE})
+
+
 def phase2_specs(*, include_opcua_security: bool = False) -> dict[str, SuiteSpec]:
     groups = {
         SuiteGroup.PHASE2_LIVE,
@@ -2436,8 +2483,8 @@ def _suite_display_name(suite_id: str) -> str:
 
 
 def run_phase1(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:
-    """Run all Phase 1 suites in parallel; emit each result atomically as it completes."""
-    _banner("PHASE 1 \u2014 Unit / Static tests  (parallel, no server required)")
+    """Run all Phase 1a suites in parallel; emit each result atomically as it completes."""
+    _banner("PHASE 1a \u2014 Unit / Static tests  (parallel, no server required)")
     log.info(
         "\u25b6 Starting %d suites simultaneously: %s",
         len(suites),
@@ -2456,6 +2503,21 @@ def run_phase1(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:
             results.append(result)
             _emit_suite_output(result)
 
+    return results
+
+
+def run_phase1_performance(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:
+    """Run timing-sensitive suites serially after parallel Phase 1a completes."""
+    _banner("PHASE 1b — Private Envelope performance  (isolated, serial)")
+    results: list[SuiteResult] = []
+    for key, spec in suites.items():
+        log.info("▶ Starting isolated performance suite: %s", key)
+        try:
+            result = spec.runner()
+        except Exception as exc:
+            result = SuiteResult(key, False, output=f"[unexpected error: {exc}]\n")
+        results.append(result)
+        _emit_suite_output(result)
     return results
 
 
@@ -2523,7 +2585,7 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
         │ GHA actionlint       │  PASS  │     0.0s │ 3 workflow(s) valid  │
         │ GHA zizmor           │  SKIP  │     0.0s │ zizmor unavailable   │
         ├──────────────────────┴────────┴──────────┴──────────────────────┤
-        │  Phase 1 — Unit & Static                                         │
+        │  Phase 1a — Unit & Static                                        │
         ├──────────────────────┬────────┬──────────┬──────────────────────┤
         │ node                 │  PASS  │   160.8s │ 705 passed           │
         ├──────────────────────┼────────┼──────────┼──────────────────────┤
@@ -2542,11 +2604,17 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
         for suite_id, spec in SUITE_REGISTRY.items()
         if spec.group is SuiteGroup.PHASE1_STATIC
     }
+    phase1_performance_names = {
+        suite_id
+        for suite_id, spec in SUITE_REGISTRY.items()
+        if spec.group is SuiteGroup.PHASE1_PERFORMANCE
+    }
     phase2_names = set(phase2_specs(include_opcua_security=True))
     registered_names = set(SUITE_REGISTRY)
 
     gha_rows = [r for r in results if r.name not in registered_names or r.name in repo_check_names]
     p1_rows = [r for r in results if r.name in phase1_names]
+    p1_performance_rows = [r for r in results if r.name in phase1_performance_names]
     p2_rows = [r for r in results if r.name in phase2_names]
 
     def _detail_for_row(result: SuiteResult) -> str:
@@ -2640,7 +2708,7 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
     out(_hcols(TL, TT, TR) + "\n")
     out(_row("Suite", f" {'Status':^{sw}} ", "Time", "Detail") + "\n")
 
-    # ── One group of rows (GHA / Phase 1 / Phase 2) ───────────────────────────
+    # ── One group of rows (GHA / Phase 1a / Phase 1b / Phase 2) ───────────────
     def _emit_group(label: str, rows: list[SuiteResult]) -> None:
         nonlocal overall
         if not rows:
@@ -2660,16 +2728,22 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
                 out(_row("", blank_s, "", f"  \u2514 {note}") + "\n")
 
     _emit_group("GHA / Repo Checks", gha_rows)
-    _emit_group("Phase 1 \u2014 Unit & Static", p1_rows)
+    _emit_group("Phase 1a \u2014 Unit & Static (parallel)", p1_rows)
+    _emit_group("Phase 1b \u2014 Private Envelope Performance (isolated)", p1_performance_rows)
     _emit_group("Phase 2 \u2014 Live / Integration", p2_rows)
 
     # ── Totals row ────────────────────────────────────────────────────────────
     out(_hcols(LM, CR, RM) + "\n")
-    out(_row("TOTAL", blank_s, f"{total_time:.1f}s", suite_totals) + "\n")
+    out(_row("WALL TIME (parallel)", blank_s, f"{total_time:.1f}s", suite_totals) + "\n")
     out(_row("", blank_s, "", f"  \u2514 {total_test_detail}") + "\n")
     out(_hcols(BL, BT, BR) + "\n\n")
 
     # ── Verdict ───────────────────────────────────────────────────────────────
+    slowest = sorted(results, key=lambda result: result.duration, reverse=True)[:3]
+    if slowest:
+        out("  Slowest suites:\n")
+        for index, result in enumerate(slowest, start=1):
+            out(f"    {index}. {_suite_display_name(result.name)} ({result.duration:.1f}s)\n")
     if overall == 0:
         out(_c("\033[92m\033[1m", "  \u2714  ALL TESTS PASSED\n"))
     else:
@@ -2718,7 +2792,7 @@ def _build_parser() -> argparse.ArgumentParser:
     group.add_argument(
         "--phase1",
         action="store_true",
-        help="Phase 1 only: unit tests, no server required",
+        help="Phase 1a + 1b only: parallel unit/static checks plus isolated private performance",
     )
     group.add_argument(
         "--phase2",
@@ -2780,11 +2854,15 @@ def _print_suite_list() -> None:
     groups = [
         (
             SuiteGroup.REPO_CHECKS,
-            "Repo checks suites (Phase 1 static, no live infrastructure):",
+            "Repo check suites (pre-flight, no live infrastructure):",
         ),
         (
             SuiteGroup.PHASE1_STATIC,
-            "Phase 1 static suites (parallel, no server):",
+            "Phase 1a static/unit suites (parallel, no server):",
+        ),
+        (
+            SuiteGroup.PHASE1_PERFORMANCE,
+            "Phase 1b private performance suites (isolated, serial):",
         ),
         (
             SuiteGroup.PHASE2_LIVE,
@@ -2907,13 +2985,15 @@ def main() -> int:
             _write_timing_artifacts([result], total_time, _timing_mode(args))
             return 0 if (result.ok or result.skipped) else 1
 
-        # -- Phase 1 ---------------------------------------------------------
+        # -- Pre-flight + Phase 1a + Phase 1b -------------------------------
         if not args.phase2:
-            _banner("PHASE 1 \u2014 GHA Workflow Validation  (root-level checks)")
+            _banner("PRE-FLIGHT \u2014 GHA Workflow Validation  (root-level checks)")
             gha_results = _run_gha_checks()
             all_results.extend(gha_results)
             p1 = run_phase1(phase1_specs())
             all_results.extend(p1)
+            p1_performance = run_phase1_performance(phase1_performance_specs())
+            all_results.extend(p1_performance)
 
         # -- Phase 2 (parallel — each sub-runner owns its server) ------------
         if not args.phase1:

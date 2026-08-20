@@ -67,6 +67,7 @@ import tempfile
 import threading
 import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -326,9 +327,9 @@ def _compose_project_name() -> str:
 
 
 def _npm_install_args(npm: str, *, project_root: Path | None = None) -> list[str]:
-    """Return deterministic install args for CI and developer-friendly args locally."""
+    """Return deterministic install args without rewriting a committed lockfile."""
     root = project_root or ROOT
-    command = "ci" if IS_CI and (root / "package-lock.json").exists() else "install"
+    command = "ci" if (root / "package-lock.json").exists() else "install"
     return [npm, command, *_NPM_INSTALL_FLAGS]
 
 
@@ -1535,7 +1536,7 @@ def _stage_js_lint() -> StageResult:
     return StageResult("js-lint", overall_rc, duration=time.monotonic() - t0, notes=notes)
 
 
-def _stage_js_unit(private_modules: str = "auto") -> StageResult:
+def _stage_js_unit() -> StageResult:
     _banner("STAGE 3  JavaScript unit tests (vitest)")
     t0 = time.monotonic()
     notes: list[str] = []
@@ -1574,27 +1575,54 @@ def _stage_js_unit(private_modules: str = "auto") -> StageResult:
             ],
             label="vitest --coverage",
         )
-        if rc == 0:
-            normalized_private_mode = private_modules.strip().lower()
-            if normalized_private_mode == "skip":
-                _skip("optional private Envelope performance tests disabled (--private-modules=skip)")
-                notes.append("optional private Envelope performance tests disabled via --private-modules=skip")
-            elif (
-                _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST.is_file()
-                and _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_DATA.is_file()
-            ):
-                rc = _run(
-                    [npm, "run", "test:unit:js:performance"],
-                    label="vitest performance budgets",
-                )
-            else:
-                _skip("optional private Envelope performance fixtures not available")
-                notes.append("optional private Envelope performance fixtures not available")
     else:
         if npx and not has_coverage:
             _skip("@vitest/coverage-v8 not installed — coverage skipped (npm install --save-dev @vitest/coverage-v8)")
         rc = _run([npm, "run", "test:unit:js"], label="vitest")
     return StageResult("js-unit", rc, duration=time.monotonic() - t0, notes=notes)
+
+
+def _stage_js_performance(private_modules: str = "auto") -> StageResult:
+    """Run timing-sensitive Envelope budgets without concurrent test workloads."""
+    _banner("STAGE 3b  Private Envelope performance budgets (isolated)")
+    t0 = time.monotonic()
+    normalized_private_mode = private_modules.strip().lower()
+    if normalized_private_mode == "skip":
+        note = "optional private Envelope performance tests disabled via --private-modules=skip"
+        _skip(note)
+        return StageResult(
+            "private-envelope-performance",
+            0,
+            skipped=True,
+            duration=time.monotonic() - t0,
+            notes=[note],
+        )
+    if not (
+        _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_TEST.is_file() and _OPTIONAL_PRIVATE_ENVELOPE_PERFORMANCE_DATA.is_file()
+    ):
+        note = "optional private Envelope performance fixtures not available"
+        _skip(note)
+        return StageResult(
+            "private-envelope-performance",
+            0,
+            skipped=True,
+            duration=time.monotonic() - t0,
+            notes=[note],
+        )
+
+    npm = shutil.which("npm") or shutil.which("npm.cmd")
+    if not npm:
+        return StageResult(
+            "private-envelope-performance",
+            1,
+            duration=time.monotonic() - t0,
+            notes=["npm not found"],
+        )
+    rc = _run(
+        [npm, "run", "test:unit:js:performance"],
+        label="vitest performance budgets",
+    )
+    return StageResult("private-envelope-performance", rc, duration=time.monotonic() - t0)
 
 
 def _optional_private_envelope_missing_reason() -> str | None:
@@ -1711,6 +1739,42 @@ def _stage_optional_private_module_static(mode: str, python: Path) -> StageResul
         duration=time.monotonic() - t0,
         notes=notes,
     )
+
+
+def _run_phase1_lane(stages: list[Callable[[], StageResult]]) -> list[StageResult]:
+    """Run one language lane sequentially while the other lane runs in parallel."""
+    return [stage() for stage in stages]
+
+
+def _run_combined_phase1(
+    python: Path,
+    private_modules: str,
+    *,
+    include_performance: bool = True,
+) -> list[StageResult]:
+    """Run independent Python and JavaScript Phase 1 lanes concurrently.
+
+    GitHub Actions already executes these lanes as separate parallel jobs. The
+    combined local runner uses the same boundary so its elapsed time is the
+    slower lane rather than the sum of both lanes.
+    """
+    python_stages: list[Callable[[], StageResult]] = [
+        lambda: _stage_python_lint(python),
+        lambda: _stage_python_unit(python),
+        _stage_infra_lint,
+    ]
+    js_stages: list[Callable[[], StageResult]] = [
+        _stage_js_lint,
+        _stage_js_unit,
+        lambda: _stage_optional_private_module_static(private_modules, python),
+    ]
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="phase1") as executor:
+        python_future = executor.submit(_run_phase1_lane, python_stages)
+        js_future = executor.submit(_run_phase1_lane, js_stages)
+        lane_results = [*python_future.result(), *js_future.result()]
+    if include_performance:
+        lane_results.append(_stage_js_performance(private_modules))
+    return lane_results
 
 
 def _stage_python_live(python: Path) -> StageResult:
@@ -2145,7 +2209,7 @@ def _capture_compose_failure_logs(
         )
     except ImportError:  # pragma: no cover — defensive only
         return
-    diag_dir = ROOT / "test-results" / "readiness"
+    diag_dir = _RESULTS_DIR / "readiness"
     capture_compose_logs_on_failure(
         diag_dir,
         compose_dir,
@@ -3020,7 +3084,7 @@ def _docker_skip_reason() -> str:
 
 
 def _stage_docker_smoke() -> StageResult:
-    """Build image with BuildKit layer caching, start compose, verify readiness, tear down."""
+    """Build the production image, start its immutable smoke stack, and verify readiness."""
     _banner("STAGE 8  Docker smoke (build + compose up + readiness + down)")
     t0 = time.monotonic()
     # Pytest on Windows can leave transient "pytest-cache-files-*" directories
@@ -3032,29 +3096,28 @@ def _stage_docker_smoke() -> StageResult:
     linux_skip = _docker_linux_engine_skip_note(docker)
     if linux_skip:
         return StageResult("docker-smoke", 0, skipped=True, notes=[linux_skip])
-    compose_cmd = [docker, "compose"]
+    smoke_compose_file = ROOT / "docker-compose.smoke.yml"
+    if not smoke_compose_file.is_file():
+        return StageResult(
+            "docker-smoke",
+            1,
+            duration=time.monotonic() - t0,
+            notes=[f"missing smoke compose file: {smoke_compose_file.name}"],
+        )
+    compose_cmd = [docker, "compose", "-f", str(smoke_compose_file)]
     compose_project = _compose_project_name()
     compose_env = {"COMPOSE_PROJECT_NAME": compose_project}
 
-    # DOCKER_BUILDKIT=1 enables layer caching — repeated local builds take seconds, not minutes.
-    build_env = {**os.environ, "DOCKER_BUILDKIT": "1", "BUILDKIT_INLINE_CACHE": "1"}
-    # Guard --cache-from: only pass it when the image already exists locally.
-    # Without this guard, BuildKit tries to pull ijt_web_client:latest from
-    # Docker Hub (the default registry), which fails with an auth error on
-    # machines that have never logged in or on a first build.  The error is
-    # non-fatal for the build itself but clutters the output and can confuse
-    # retry logic.  A local image is always sufficient as a cache source.
-    cache_probe = subprocess.run(
-        [docker, "image", "inspect", "ijt_web_client:latest"],
-        capture_output=True,
-        timeout=10,
-    )
+    # Native BuildKit layer reuse is local and automatic. Do not pass a bare
+    # --cache-from image: BuildKit treats it as a registry cache and may contact
+    # Docker Hub even when an image with that name exists locally.
+    build_env = {**os.environ, "DOCKER_BUILDKIT": "1"}
+    _info("Docker cache: local BuildKit layers (no registry cache dependency)")
     build_cmd = [
         docker,
         "build",
-        *(["--cache-from", "ijt_web_client:latest"] if cache_probe.returncode == 0 else []),
         "-t",
-        "ijt_web_client",
+        "ijt_web_client:latest",
         "-f",
         str(ROOT.relative_to(_REPO_ROOT) / "Dockerfile"),
         ".",
@@ -3072,8 +3135,8 @@ def _stage_docker_smoke() -> StageResult:
     # Choose host ports for the Compose stack that don't conflict with services
     # already running from parallel test suites (e.g. the WS backend that lives
     # on the default port 8001 throughout the live-test phase).
-    # --no-build: the image was already produced above; asking compose to
-    # rebuild would repeat the cache-from probe and risks a second auth error.
+    # The smoke compose file deliberately has no build section, bind mount, or
+    # setup override. It validates exactly the immutable image built above.
     http_port = (
         _DOCKER_HTTP_PORT
         if not _port_open("127.0.0.1", _DOCKER_HTTP_PORT, timeout=0.3)
@@ -3218,6 +3281,7 @@ STAGES = [
     "python-unit",
     "js-lint",
     "js-unit",
+    "private-envelope-performance",
     "private-module-static",
     "infra-lint",
     "python-live",
@@ -3244,6 +3308,8 @@ def _mode_name(args: argparse.Namespace, target_only: bool) -> str:
         return "phase1-js"
     if args.phase1:
         return "phase1"
+    if args.performance_only:
+        return "performance-only"
     if args.phase2:
         return "phase2"
     if args.docker_only:
@@ -3327,6 +3393,16 @@ def main() -> int:
         help="JavaScript Phase 1 lane only — versions, npm install, JS lint, and JS unit tests",
     )
     parser.add_argument("--phase2", action="store_true", help="Live/E2E stages only — skip static analysis (CI use)")
+    parser.add_argument(
+        "--performance-only",
+        action="store_true",
+        help="Run only isolated JavaScript performance budgets",
+    )
+    parser.add_argument(
+        "--skip-performance",
+        action="store_true",
+        help="Defer JavaScript performance budgets to an external isolated runner",
+    )
     parser.add_argument("--docker-only", action="store_true", help="Docker smoke only — skip static/live/E2E stages")
     parser.add_argument("--skip-docker", action="store_true", help="Skip Docker smoke even when Docker is available")
     parser.add_argument("--python-opcua-only", action="store_true", help="Run only direct OPC UA Python live tests")
@@ -3377,6 +3453,27 @@ def main() -> int:
     ]
     if sum(1 for flag in targeted_flags if flag) > 1:
         parser.error("choose only one targeted live-suite flag")
+
+    if args.performance_only:
+        conflicts = [
+            flag
+            for enabled, flag in (
+                (args.all, "--all"),
+                (args.integration, "--integration"),
+                (args.e2e, "--e2e"),
+                (args.phase1, "--phase1"),
+                (args.phase1_python, "--phase1-python"),
+                (args.phase1_js, "--phase1-js"),
+                (args.phase2, "--phase2"),
+                (args.docker_only, "--docker-only"),
+                (args.skip_performance, "--skip-performance"),
+            )
+            if enabled
+        ]
+        if any(targeted_flags):
+            conflicts.append("targeted live-suite flags")
+        if conflicts:
+            parser.error(f"--performance-only cannot be combined with {', '.join(conflicts)}")
 
     phase1_lane_flags = [args.phase1_python, args.phase1_js]
     if any(phase1_lane_flags):
@@ -3465,6 +3562,18 @@ def main() -> int:
     # Wipe previous run's results so the local copy always reflects the latest run only
     shutil.rmtree(_RESULTS_DIR, ignore_errors=True)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if args.performance_only:
+        results.append(_stage_versions())
+        npm_install = _stage_npm_install(required=True)
+        results.append(npm_install)
+        if npm_install.rc == 0:
+            results.append(_stage_js_performance(args.private_modules))
+        total_time = time.monotonic() - t_start
+        _write_timing_artifacts(results, total_time, mode)
+        rc = _print_summary(results, total_time)
+        _cleanup_caches(ROOT)
+        return rc
 
     if target_only:
         if not _run_target_dependency_stages(args, python, results):
@@ -3561,8 +3670,10 @@ def main() -> int:
         if args.phase1_js:
             results.append(_stage_npm_install())
             results.append(_stage_js_lint())
-            results.append(_stage_js_unit(args.private_modules))
+            results.append(_stage_js_unit())
             results.append(_stage_optional_private_module_static(args.private_modules, python))
+            if not args.skip_performance:
+                results.append(_stage_js_performance(args.private_modules))
         elif args.phase1_python:
             results.append(_stage_pip_install(python))
             results.append(_stage_python_lint(python))
@@ -3571,12 +3682,13 @@ def main() -> int:
         else:
             results.append(_stage_pip_install(python))
             results.append(_stage_npm_install())
-            results.append(_stage_python_lint(python))
-            results.append(_stage_python_unit(python))
-            results.append(_stage_js_lint())
-            results.append(_stage_js_unit(args.private_modules))
-            results.append(_stage_optional_private_module_static(args.private_modules, python))
-            results.append(_stage_infra_lint())
+            results.extend(
+                _run_combined_phase1(
+                    python,
+                    args.private_modules,
+                    include_performance=not args.skip_performance,
+                )
+            )
 
     # ── Live + Integration tests (Phase 2 — skipped when --phase1) ────────────
     # Auto-launch server ONCE and share it between live and integration stages.

@@ -1,0 +1,15 @@
+services:
+  ijt_web_client:
+    image: ijt_web_client:latest
+    ports:
+      - "${WEB_CLIENT_HTTP_PORT:-3000}:3000"
+      - "${WEB_CLIENT_WS_PORT:-8001}:8001"
+    environment:
+      IS_DOCKER: "true"
+      IJT_OPCUA_HOST_REWRITE: "true"
+      IJT_SKIP_OPCUA_STARTUP_CHECK: "true"
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HTTP_PORT: "3000"
+      WS_PORT: "8001"
+    restart: "no"

@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -399,15 +400,22 @@ def test_python_lint_skips_pip_audit_when_network_leaves_partial_report(monkeypa
     assert any("pip-audit skipped (network)" in note for note in result.notes)
 
 
-def test_npm_install_uses_ci_in_ci_when_lockfile_exists(monkeypatch):
+def test_npm_install_uses_ci_when_lockfile_exists():
     runner = _load_runner()
-    monkeypatch.setattr(runner, "IS_CI", True)
 
     args = runner._npm_install_args("npm")
 
     assert args[:2] == ["npm", "ci"]
     assert "--no-audit" in args
     assert "--no-fund" in args
+
+
+def test_npm_install_falls_back_to_install_without_lockfile(tmp_path):
+    runner = _load_runner()
+
+    args = runner._npm_install_args("npm", project_root=tmp_path)
+
+    assert args[:2] == ["npm", "install"]
 
 
 def test_npm_install_repairs_incomplete_node_modules(monkeypatch, tmp_path):
@@ -604,8 +612,10 @@ def test_js_unit_stage_writes_ci_junit_and_cobertura_coverage(monkeypatch, tmp_p
     monkeypatch.setattr(runner, "_run", fake_run)
 
     result = runner._stage_js_unit()
+    performance_result = runner._stage_js_performance()
 
     assert result.rc == 0
+    assert performance_result.rc == 0
     assert len(captured["calls"]) == 2
     assert captured["calls"][0]["label"] == "vitest --coverage"
     assert captured["calls"][1]["label"] == "vitest performance budgets"
@@ -641,11 +651,11 @@ def test_js_unit_stage_skips_private_performance_file_when_submodule_is_absent(m
     monkeypatch.setattr(Path, "exists", fake_exists)
     monkeypatch.setattr(runner, "_run", fake_run)
 
-    result = runner._stage_js_unit()
+    result = runner._stage_js_performance()
 
     assert result.rc == 0
-    assert len(calls) == 1
-    assert calls[0]["label"] == "vitest --coverage"
+    assert result.skipped
+    assert calls == []
     assert result.notes == ["optional private Envelope performance fixtures not available"]
     assert skips == ["optional private Envelope performance fixtures not available"]
 
@@ -679,13 +689,13 @@ def test_js_unit_stage_respects_private_modules_skip_for_performance_file(monkey
     monkeypatch.setattr(Path, "exists", fake_exists)
     monkeypatch.setattr(runner, "_run", fake_run)
 
-    result = runner._stage_js_unit("skip")
+    result = runner._stage_js_performance("skip")
 
     assert result.rc == 0
-    assert len(calls) == 1
-    assert calls[0]["label"] == "vitest --coverage"
+    assert result.skipped
+    assert calls == []
     assert result.notes == ["optional private Envelope performance tests disabled via --private-modules=skip"]
-    assert skips == ["optional private Envelope performance tests disabled (--private-modules=skip)"]
+    assert skips == ["optional private Envelope performance tests disabled via --private-modules=skip"]
 
 
 def test_js_unit_stage_skips_private_performance_fixtures_when_private_modules_required(monkeypatch, tmp_path):
@@ -715,11 +725,11 @@ def test_js_unit_stage_skips_private_performance_fixtures_when_private_modules_r
     monkeypatch.setattr(Path, "exists", fake_exists)
     monkeypatch.setattr(runner, "_run", fake_run)
 
-    result = runner._stage_js_unit("require")
+    result = runner._stage_js_performance("require")
 
     assert result.rc == 0
-    assert len(calls) == 1
-    assert calls[0]["label"] == "vitest --coverage"
+    assert result.skipped
+    assert calls == []
     assert result.notes == ["optional private Envelope performance fixtures not available"]
     assert skips == ["optional private Envelope performance fixtures not available"]
 
@@ -1787,6 +1797,7 @@ def _phase1_lane_runner(monkeypatch, tmp_path, argv):
     monkeypatch.setattr(runner, "_stage_python_unit", stage("python-unit"))
     monkeypatch.setattr(runner, "_stage_js_lint", stage("js-lint"))
     monkeypatch.setattr(runner, "_stage_js_unit", stage("js-unit"))
+    monkeypatch.setattr(runner, "_stage_js_performance", stage("private-envelope-performance"))
     monkeypatch.setattr(
         runner, "_stage_optional_private_module_static", lambda _mode, _python: stage("private-module-static")()
     )
@@ -1805,7 +1816,55 @@ def test_phase1_js_runs_js_lane_without_python(monkeypatch, tmp_path):
     runner, calls = _phase1_lane_runner(monkeypatch, tmp_path, ["--phase1-js"])
 
     assert runner.main() == 0
-    assert calls == ["versions", "npm-install", "js-lint", "js-unit", "private-module-static"]
+    assert calls == [
+        "versions",
+        "npm-install",
+        "js-lint",
+        "js-unit",
+        "private-module-static",
+        "private-envelope-performance",
+    ]
+
+
+def test_combined_phase1_runs_python_and_js_as_parallel_language_lanes(monkeypatch):
+    runner = _load_runner()
+    thread_names: dict[str, str] = {}
+    started_lanes: set[str] = set()
+    lane_barrier = threading.Barrier(2)
+
+    def stage(name):
+        def run(*_args):
+            lane = "python" if name.startswith(("python", "infra")) else "js"
+            thread_names.setdefault(lane, threading.current_thread().name)
+            if lane not in started_lanes:
+                started_lanes.add(lane)
+                lane_barrier.wait(timeout=2)
+            return runner.StageResult(name, 0)
+
+        return run
+
+    monkeypatch.setattr(runner, "_stage_python_lint", stage("python-lint"))
+    monkeypatch.setattr(runner, "_stage_python_unit", stage("python-unit"))
+    monkeypatch.setattr(runner, "_stage_infra_lint", stage("infra-lint"))
+    monkeypatch.setattr(runner, "_stage_js_lint", stage("js-lint"))
+    monkeypatch.setattr(runner, "_stage_js_unit", stage("js-unit"))
+    monkeypatch.setattr(runner, "_stage_js_performance", stage("private-envelope-performance"))
+    monkeypatch.setattr(runner, "_stage_optional_private_module_static", stage("private-module-static"))
+
+    results = runner._run_combined_phase1(Path(sys.executable), "auto")
+
+    assert [result.name for result in results] == [
+        "python-lint",
+        "python-unit",
+        "infra-lint",
+        "js-lint",
+        "js-unit",
+        "private-module-static",
+        "private-envelope-performance",
+    ]
+    assert thread_names["python"].startswith("phase1")
+    assert thread_names["js"].startswith("phase1")
+    assert thread_names["python"] != thread_names["js"]
 
 
 def test_phase1_lane_flags_reject_conflicting_modes(monkeypatch, tmp_path):
@@ -1833,12 +1892,14 @@ def test_phase1_lane_mode_names_are_distinct():
         "phase1": False,
         "phase1_python": False,
         "phase1_js": False,
+        "performance_only": False,
         "phase2": False,
         "docker_only": False,
     }
 
     assert runner._mode_name(SimpleNamespace(**{**base, "phase1_python": True}), False) == "phase1-python"
     assert runner._mode_name(SimpleNamespace(**{**base, "phase1_js": True}), False) == "phase1-js"
+    assert runner._mode_name(SimpleNamespace(**{**base, "performance_only": True}), False) == "performance-only"
 
 
 def test_parse_int_env_treats_empty_and_whitespace_as_unset(monkeypatch, recwarn):
@@ -2303,6 +2364,8 @@ def test_docker_smoke_builds_web_image_from_repo_root():
     assert 'str(ROOT.relative_to(_REPO_ROOT) / "Dockerfile")' in source
     assert 'label="docker build (BuildKit)",' in source
     assert "cwd=_REPO_ROOT," in source
+    assert '"--cache-from"' not in source
+    assert 'ROOT / "docker-compose.smoke.yml"' in source
 
 
 def test_joint_demo_uses_server_discovered_joint_ids():

@@ -498,6 +498,30 @@ class TestEnsureOpcServerRunning:
         assert any("Failed to launch" in r.message for r in caplog.records)
 
 
+class TestOpcuaStartupPrecheck:
+    def test_calls_probe_by_default(self, monkeypatch):
+        calls = []
+        monkeypatch.delenv("IJT_SKIP_OPCUA_STARTUP_CHECK", raising=False)
+        monkeypatch.setattr(
+            sp,
+            "_ensure_opc_server_running",
+            lambda endpoint, *, allow_launch, context: calls.append((endpoint, allow_launch, context)) or True,
+        )
+
+        assert sp._run_opcua_startup_precheck("opc.tcp://localhost:40451", allow_launch=False, context="test")
+        assert calls == [("opc.tcp://localhost:40451", False, "test")]
+
+    def test_smoke_flag_skips_probe(self, monkeypatch):
+        monkeypatch.setenv("IJT_SKIP_OPCUA_STARTUP_CHECK", "true")
+        monkeypatch.setattr(
+            sp,
+            "_ensure_opc_server_running",
+            lambda *args, **kwargs: pytest.fail("OPC UA probe must not run during image smoke validation"),
+        )
+
+        assert sp._run_opcua_startup_precheck("opc.tcp://localhost:40451", allow_launch=False, context="test")
+
+
 # =============================================================================
 # _is_runtime_ready — venv scenarios
 # =============================================================================

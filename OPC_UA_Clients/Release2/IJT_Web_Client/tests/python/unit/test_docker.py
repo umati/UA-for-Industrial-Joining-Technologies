@@ -25,6 +25,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _DOCKERFILE = _PROJECT_ROOT / "Dockerfile"
 _DOCKERIGNORE = _PROJECT_ROOT / ".dockerignore"
 _COMPOSE_FILE = _PROJECT_ROOT / "docker-compose.yml"
+_SMOKE_COMPOSE_FILE = _PROJECT_ROOT / "docker-compose.smoke.yml"
 
 
 # ---------------------------------------------------------------------------
@@ -245,3 +246,21 @@ class TestDockerCompose:
             env = services[service_name].get("environment", {})
             assert env.get("IS_DOCKER") == "true"
             assert env.get("IJT_OPCUA_HOST_REWRITE") == "true"
+
+
+class TestDockerSmokeCompose:
+    @pytest.mark.skipif(
+        not _YAML_AVAILABLE,
+        reason="PyYAML not installed — skipping docker-compose YAML parsing",
+    )
+    def test_smoke_stack_runs_only_the_prebuilt_image(self):
+        """Smoke checks must not replace the image with host files or reinstall dependencies."""
+        import yaml
+
+        content = yaml.safe_load(_SMOKE_COMPOSE_FILE.read_text(encoding="utf-8"))
+        service = content["services"]["ijt_web_client"]
+
+        assert service["image"] == "ijt_web_client:latest"
+        assert "build" not in service
+        assert "volumes" not in service
+        assert "command" not in service

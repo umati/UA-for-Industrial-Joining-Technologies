@@ -496,6 +496,18 @@ def test_count_tests_from_detail_sums_only_test_outcomes() -> None:
     assert _runner._count_tests_from_detail(detail) == 1341
 
 
+def test_clarify_suite_counts_explains_optional_and_excluded_cases() -> None:
+    assert (
+        _runner._clarify_suite_counts("server-static", "9 passed, 4 skipped")
+        == "9 checks passed; 4 optional checks skipped"
+    )
+    assert (
+        _runner._clarify_suite_counts("console-client-live", "18 passed, 39 deselected")
+        == "18 passed; 39 security cases excluded"
+    )
+    assert _runner._clarify_suite_counts("web-client-static", "858 passed") == "858 passed"
+
+
 def test_check_counts_do_not_contribute_to_test_totals() -> None:
     assert _runner._count_tests_from_detail("1 check passed") == 0
     assert not _runner._test_outcome_counts_from_detail("2 checks passed, 1 check failed")
@@ -582,6 +594,7 @@ def test_suite_ids_match_naming_pattern() -> None:
             (
                 "static",
                 "live",
+                "performance",
                 "e2e",
                 "smoke",
                 "docker-smoke",
@@ -645,6 +658,7 @@ def test_suite_ids_match_naming_pattern() -> None:
     expected_tiers = {
         "static",
         "live",
+        "performance",
         "e2e",
         "smoke",
         "docker-smoke",
@@ -668,6 +682,7 @@ def test_suite_groups_are_known_enum_values() -> None:
     assert {group.value for group in _runner.SuiteGroup} == {
         "repo-checks",
         "phase1-static",
+        "phase1-performance",
         "phase2-live",
         "phase2-package",
         "phase2-opcua-security",
@@ -688,6 +703,7 @@ def test_suite_registry_has_no_duplicate_ids() -> None:
         "test-client-static",
         "console-client-static",
         "web-client-static",
+        "web-client-performance",
         "csharp-client-static",
         "server-smoke",
         "server-linux-package-smoke",
@@ -714,6 +730,24 @@ def test_suite_registry_has_no_duplicate_ids() -> None:
     assert all(
         suite_id and suite_id == spec.id for suite_id, spec in _runner.SUITE_REGISTRY.items()
     )
+
+
+def test_private_envelope_performance_suite_requires_private_module(monkeypatch, tmp_path) -> None:
+    performance_test = tmp_path / "automatic-stepwise-performance.test.mjs"
+    monkeypatch.setattr(_runner, "_PRIVATE_ENVELOPE_PERFORMANCE_TEST", performance_test)
+    monkeypatch.setenv("IJT_PRIVATE_MODULES", "auto")
+
+    assert _runner.phase1_performance_specs() == {}
+
+    performance_test.write_text("export {}\n", encoding="utf-8")
+    assert set(_runner.phase1_performance_specs()) == {"web-client-performance"}
+    assert (
+        _runner.SUITE_REGISTRY["web-client-performance"].display_name
+        == "Web Client - Private Envelope performance (isolated)"
+    )
+
+    monkeypatch.setenv("IJT_PRIVATE_MODULES", "skip")
+    assert _runner.phase1_performance_specs() == {}
 
 
 def test_workflow_matrix_uses_only_known_suite_ids() -> None:
@@ -1287,6 +1321,8 @@ def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
     assert "Not reported" in output
     assert "4 total suites; 4 passed, 0 failed, 0 skipped" in output
     assert "872 total tests; 732 passed, 0 failed, 0 errors, 140 skipped" in output
+    assert "WALL TIME (parallel)" in output
+    assert "Slowest suites:" in output
 
 
 def test_server_linux_package_smoke_skips_without_docker(monkeypatch) -> None:
@@ -1757,6 +1793,15 @@ def test_ci_web_client_splits_local_phase1_runner_by_language_lane() -> None:
     assert "npx vitest run --coverage" not in web_jobs
     assert "steps.web_python_runner.outcome" in web_jobs
     assert "steps.web_js_runner.outcome" in web_jobs
+
+
+def test_ci_web_client_docker_smoke_uses_immutable_stack_without_remote_cache() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    docker_job = workflow.split("  docker-smoke:", 1)[1].split("  csharp-unit:", 1)[0]
+
+    assert "docker-compose.smoke.yml" in docker_job
+    assert "cache-from:" not in docker_job
+    assert "cache-to:" not in docker_job
 
 
 def test_integration_web_client_uses_split_live_and_browser_matrices() -> None:
@@ -2780,7 +2825,7 @@ def test_ci_mode_flag_sets_ci_env_for_child_runners(monkeypatch, capsys) -> None
     assert rc == 0
     assert _os.environ.get("CI") == "1"
     # --list still works in ci-mode
-    assert "Phase 1 static suites" in captured.out
+    assert "Phase 1a static/unit suites" in captured.out
 
     monkeypatch.delenv("CI", raising=False)
 

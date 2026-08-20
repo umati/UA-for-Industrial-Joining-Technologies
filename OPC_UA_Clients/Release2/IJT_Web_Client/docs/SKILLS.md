@@ -29,7 +29,8 @@ IJT_Web_Client/
 ├── requirements-dev.txt    # Pinned: pytest~=9.0, pytest-asyncio~=1.3, pyfakefs~=6.1, and tooling
 ├── package.json            # Node deps + scripts (lint, test:unit:js, start)
 ├── Dockerfile              # FROM nikolaik/python-nodejs:python3.14-nodejs24; CMD setup_project.py
-├── docker-compose.yaml     # Service: ijt_web_client; ports 3000+8001; command: setup_project.py
+├── docker-compose.yml      # Bind-mounted development stack
+├── docker-compose.smoke.yml # Immutable production-image smoke stack
 ├── Makefile                # make setup|test|lint|docker|clean
 ├── .env / .env.example     # OPCUA_TEST_ENDPOINT, WS_PORT, etc.
 │
@@ -296,8 +297,14 @@ sim_node = client.get_node("ns=1;s=TighteningSystem/Simulations/SimulateResults"
 - Production images omit developer-only npm packages; setup skips ESLint and neostandard version probes when `NODE_ENV=production`
 
 ### Local smoke runner (`run_all_tests.py --docker-only`)
-- `docker build` runs first; `--cache-from ijt_web_client:latest` is **only added when the image already exists locally** — without this guard BuildKit tries to pull from Docker Hub and fails with an auth error on fresh machines.
-- `docker compose up` uses `--no-build` so the image built above is used directly (matches CI behaviour and prevents a redundant second build + cache-from probe).
+- `docker build` uses BuildKit's automatic local layer cache. Never add a bare
+  `--cache-from ijt_web_client:latest`: BuildKit interprets it as a registry
+  cache and may contact Docker Hub even when the image exists locally.
+- `docker-compose.smoke.yml` has no build section, bind mount, dependency
+  installation, or command override. Local and CI smoke checks therefore
+  validate exactly the immutable production image built by the preceding step.
+- `docker compose up` uses `--no-build` so smoke validation cannot silently
+  rebuild or substitute the image.
 - `_find_free_port()` detects host-port conflicts before compose up; if the configured port is already held by a parallel test suite, an alternative port is selected automatically.
 
 ### Venv Skip Pattern (in `setup_project.py` at project root)
@@ -399,10 +406,11 @@ const DEFAULT_VIEW_LEVEL = 3;  // Detailed (Basic=1, Simple=2, Detailed=3, Speci
 
 ## File Organisation Rules
 
-### Root Level (keep clean — 20 files max)
+### Root Level (standard entrypoints and configuration only)
 Only standard files at root: `index.html`, `index.py`, `config.js`, `run_all_tests.py`,
 `setup_project.py`, `run_docker_setup.py`,
-`pyproject.toml`, `vitest.config.mjs`, `eslint.config.mjs`, `Dockerfile`, `docker-compose.yaml`,
+`pyproject.toml`, `vitest.config.mjs`, `eslint.config.mjs`, `Dockerfile`, `docker-compose.yml`,
+`docker-compose.smoke.yml`,
 `Makefile`, `package.json`, `package-lock.json`, `playwright.config.mjs`,
 `requirements.txt`, `requirements-dev.txt`, `README.md`, `.env`, `.env.example`, `.gitignore`
 
@@ -508,7 +516,16 @@ GitHub `ci.yml` runs this runner in two Phase 1 lanes: `web-client-python`
 delegates to `--phase1-python`, and `web-client-js` delegates to
 `--phase1-js`. The workflow invokes only those two runner entry points instead of
 the individual pytest, Vitest, ESLint, mypy, Bandit, and audit commands, and the
-split gives each language stack its own timing and failure surface. GitHub `integration.yml`
+split gives each language stack its own timing and failure surface. Combined
+local `--phase1` runs the same Python and JavaScript lane boundary concurrently
+after deterministic dependency preparation, then runs the timing-sensitive
+Envelope performance budgets only after both lanes have exited. The repository
+root runner uses `--skip-performance` for the parallel Web static suite and
+invokes `--performance-only` as an isolated serial Phase 1b suite after every Phase 1a
+worker has exited. This private Envelope performance suite is omitted entirely
+from ordinary/public root runs unless the private benchmark module is checked
+out. When the module exists but its local ITBP fixture does not, the suite is
+shown explicitly as skipped. GitHub `integration.yml`
 runs the same root-runner Web Client live/e2e suites as local validation, split
 by execution surface. `web-client-live-*` suites stay on `windows-latest` with
 the Windows simulator package. Every `web-client-e2e-*` suite runs inside the
@@ -720,6 +737,7 @@ When the submodule is present and `run_all_tests.py` runs with `--private-module
 | `IJT_PLAYWRIGHT_WORKERS` | `2` in CI, `1` in direct local Playwright config | Playwright worker count consumed by `playwright.config.mjs`; the runner sets it for project-specific runs |
 | `IS_DOCKER` | (unset) | Set to `true` inside Docker containers; uses container-provided Python |
 | `IJT_OPCUA_HOST_REWRITE` | (unset) | Set to `true` only when a Docker container must rewrite `localhost` / `127.0.0.1` OPC UA endpoints to `host.docker.internal` |
+| `IJT_SKIP_OPCUA_STARTUP_CHECK` | (unset) | Smoke-stack-only switch that skips the external OPC UA readiness probe while validating the immutable Web Client image; normal setup and runtime must leave this unset |
 | `GITHUB_ACTIONS` | (unset) | Set by GitHub Actions; uses runner-provided Python |
 | `CI` | (unset) | Enables CI behavior; local `--ci-mode` still uses `.venv_ci` |
 | `OPCUA_SIMULATOR_EXE` | (unset) | Path to simulator binary for auto-launch |

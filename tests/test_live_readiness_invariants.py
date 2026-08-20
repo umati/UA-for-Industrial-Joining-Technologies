@@ -245,8 +245,9 @@ COMPOSE_UP_EXPECTED_CALLSITES: dict[Path, int] = {
 
 
 _COMPOSE_UP_PATTERNS_YAML: tuple[re.Pattern[str], ...] = (
-    # Workflow YAML: shell ``docker compose up`` in a ``run:`` block.
-    re.compile(r"\bdocker\s+compose\s+up\b"),
+    # Workflow YAML: shell ``docker compose [global options] up`` in a ``run:``
+    # block. Compose accepts options such as ``-f`` before the subcommand.
+    re.compile(r"\bdocker[^\S\r\n]+compose(?:[^\S\r\n]+(?!up\b)\S+)*[^\S\r\n]+up\b"),
 )
 
 _COMPOSE_UP_PATTERNS_PYTHON: tuple[re.Pattern[str], ...] = (

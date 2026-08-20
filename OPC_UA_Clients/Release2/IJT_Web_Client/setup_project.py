@@ -908,6 +908,14 @@ def _ensure_opc_server_running(endpoint: str, *, allow_launch: bool, context: st
     return False
 
 
+def _run_opcua_startup_precheck(endpoint: str, *, allow_launch: bool, context: str) -> bool:
+    """Verify the OPC UA endpoint unless an image-only smoke test disables the probe."""
+    if _env_bool("IJT_SKIP_OPCUA_STARTUP_CHECK", False):
+        log.info("Skipping OPC UA startup pre-check for image smoke validation.")
+        return True
+    return _ensure_opc_server_running(endpoint, allow_launch=allow_launch, context=context)
+
+
 # ---------------------------------------------------------------------------
 # Venv & Python paths
 # ---------------------------------------------------------------------------
@@ -1899,7 +1907,7 @@ def main():
             return
         _restore_direct_runtime_connectionpoints()
         endpoint = _direct_runtime_endpoint()
-        _ensure_opc_server_running(
+        _run_opcua_startup_precheck(
             endpoint,
             allow_launch=True,
             context="Startup pre-check",
@@ -1951,7 +1959,7 @@ def main():
         return
     _restore_direct_runtime_connectionpoints()
     endpoint = _direct_runtime_endpoint()
-    _ensure_opc_server_running(
+    _run_opcua_startup_precheck(
         endpoint,
         allow_launch=True,
         context="Startup pre-check",
