@@ -718,24 +718,15 @@ the only representation of an endpoint.
 
 Envelope is an optional private Git submodule mounted at `src/javascripts/views/envelope`. The public Web Client must continue to work when that submodule is unavailable.
 
-Authorized developers with access to both repositories get the latest Envelope code automatically when running:
+Use the local setup commands only when you have access to the private Envelope repository:
 
 ```powershell
 python .\setup_project.py
-```
-
-Default local setup runs `git submodule update --init --remote --recursive` for the Envelope path. This updates the local submodule checkout to the latest private `main` commit and may make the IJT parent repo show a changed submodule pointer. If the Envelope path already exists as a non-Git folder from an older manual workflow, setup moves that folder to a timestamped sibling backup before initializing the real submodule. Test first, then commit the IJT pointer update only when the new Envelope baseline should become reproducible for other authorized developers.
-
-Use these alternatives when needed:
-
-```powershell
 python .\setup_project.py --private-modules-pinned
 python .\setup_project.py --skip-private-modules
 ```
 
-`--private-modules-pinned` initializes the submodule at the IJT-pinned commit. `--skip-private-modules` leaves private modules untouched.
-
-When the submodule is present and `run_all_tests.py` runs with `--private-modules auto` or `require`, its private-module lane validates the Envelope module with `npm run lint:all`, `npm test`, and the Envelope Python unit tests (`src/javascripts/views/envelope/python/tests`). The Envelope repo also ships its own `run_all_tests.py` at its root, which runs those same lanes standalone for authorized developers working directly in the Envelope checkout.
+When the submodule is present and `run_all_tests.py` runs with `--private-modules auto` or `require`, its private-module lane validates the Envelope module with `npm run lint:all`, `npm test`, and the Envelope Python unit tests (`src/javascripts/views/envelope/python/tests`).
 
 ## Environment Variables
 

@@ -16,47 +16,48 @@ of OPC UA IJT clients and servers, supporting documents, and specification testi
 
 ## Repository Contents
 
-| Component | Purpose |
-|-----------|---------|
-| [IJT Server Simulator](OPC_UA_Servers/Release2) | Provides a local OPC UA IJT server simulator for demonstrations, client development, and interoperability testing |
-| [IJT Web Client](OPC_UA_Clients/Release2/IJT_Web_Client) | Provides a browser-based client for exploring IJT data, events, assets, results, and traces |
-| [IJT Console Client](OPC_UA_Clients/Release2/IJT_Console_Client) | Provides a command-line client for connecting to a server, subscribing to events, and calling IJT methods |
-| [IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client) | Provides a C#/.NET client and reusable generated OPC UA type libraries |
-| [IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client) | Provides a specification test client for validating OPC UA IJT server behavior |
+| Component | Purpose | Example Use |
+|-----------|---------|-------------|
+| [IJT Server Simulator](OPC_UA_Servers/Release2) | Provides a local OPC UA IJT server simulator | Demonstrations, client development, interoperability testing |
+| [IJT Web Client](OPC_UA_Clients/Release2/IJT_Web_Client) | Provides a browser-based client for IJT data | Visual inspection of data, events, assets, results, and traces |
+| [IJT Console Client](OPC_UA_Clients/Release2/IJT_Console_Client) | Provides a command-line IJT client | Scripting, automation, and direct server interaction |
+| [IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client) | Provides a C#/.NET client and reusable type libraries | Building .NET applications against IJT |
+| [IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client) | Provides a specification test client | Validating OPC UA IJT server behavior |
 
 ## Quick Start
 
-### Prerequisites
-- **Python 3.14** (check with `python --version`)
-- **Node.js 24** (check with `node --version`)
-- Docker (optional; server/Docker tests skip gracefully if unavailable)
+### Run the IJT Server Simulator
 
-### Running Tests
+The easiest way to explore IJT is to run the server simulator locally and connect with an OPC UA client:
+
 ```bash
-# Full test suite (static checks + live tests)
-python run_all_tests.py
+# Clone the repository (if you haven't already)
+git clone https://github.com/umati/UA-for-Industrial-Joining-Technologies.git
+cd UA-for-Industrial-Joining-Technologies
 
-# Pre-commit validation (lint + format + CVE checks)
-python run_precommit_all.py
+# Start the server simulator
+cd OPC_UA_Servers/Release2
+python run_server.py
 ```
 
-**Note:** Missing optional tools (Docker, .NET, npm)? Tests skip gracefully. Exit code `0` means all available tests passed.
+**Default endpoint:** `opc.tcp://localhost:40451`
 
-### Explore the Repository
-- Start the **[IJT Server Simulator](OPC_UA_Servers/Release2)** and connect with any OPC UA client such as
-  **UaExpert**, or use one of the reference clients in this repository.
-  - **Default endpoint:** `opc.tcp://localhost:40451`
+**Tip:** Use any OPC UA client against the endpoint if you already have one installed.
 
-## Runtime Baselines
+### Explore the Reference Implementations
 
-- Node.js runtime for CI and local development is centralized in root `.nvmrc` (major `24`).
-- Python runtime for CI and local development is centralized in root `.python-version` (`3.14`).
-- Package runtime floors remain enforced in project manifests (`engines` / `requires-python`) to prevent unsupported environments.
+Use any of the provided clients to connect to the running server:
 
-## Before Committing
+1. **[IJT Web Client](OPC_UA_Clients/Release2/IJT_Web_Client)** — Browser-based interface for data, events, assets, results, and traces
+2. **[IJT Console Client](OPC_UA_Clients/Release2/IJT_Console_Client)** — Command-line tool for scripting and automation
+3. **[IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client)** — .NET client and reusable OPC UA type libraries
+4. **[IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client)** — Specification compliance testing
 
-- Run `python run_precommit_all.py` from the IJT repo root. It runs IJT + Envelope pre-commit hooks and blocks on high-severity dependency CVEs across Node (Node Client, Web Client, Envelope lockfiles) and Python requirements (IJT + Envelope requirement files).
-- Run `python run_all_tests.py` for the full test and quality gate suite.
+## Contributing & Development
+
+For development setup, testing, and contribution guidelines, see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+
+For detailed technical information on runtime configuration, Docker, troubleshooting, and advanced testing, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Specifications and References
 
