@@ -15,15 +15,6 @@ C#/.NET reference client for connecting to an OPC UA IJT server, with an interac
 ```bash
 dotnet run
 ```
-
-## Features
-
-- Event subscriptions
-- Result management
-- Asset management
-- Joining process inspection
-- Joint management
-
 ## Testing
 
 ```bash
