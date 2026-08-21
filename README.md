@@ -22,7 +22,7 @@ of OPC UA IJT clients and servers, supporting documents, and specification testi
 | [IJT Web Client](OPC_UA_Clients/Release2/IJT_Web_Client) | Provides a browser-based client for IJT data | Visual inspection of data, events, assets, results, and traces |
 | [IJT Console Client](OPC_UA_Clients/Release2/IJT_Console_Client) | Provides a command-line IJT client | Scripting, automation, and direct server interaction |
 | [IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client) | Provides a C#/.NET client and reusable type libraries | Building .NET applications against IJT |
-| [IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client) | Provides a specification test client | Validating OPC UA IJT server behavior |
+| [IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client) | Provides a specification test client | Specification testing for OPC UA IJT servers |
 
 ## Quick Start
 
@@ -51,7 +51,7 @@ Use any of the provided clients to connect to the running server:
 1. **[IJT Web Client](OPC_UA_Clients/Release2/IJT_Web_Client)** — Browser-based interface for data, events, assets, results, and traces
 2. **[IJT Console Client](OPC_UA_Clients/Release2/IJT_Console_Client)** — Command-line tool for scripting and automation
 3. **[IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client)** — .NET client and reusable OPC UA type libraries
-4. **[IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client)** — Specification compliance testing
+4. **[IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client)** — Specification testing
 
 ## Contributing & Development
 
