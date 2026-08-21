@@ -26,33 +26,6 @@ of OPC UA IJT clients and servers, supporting documents, and specification testi
 
 ## Quick Start
 
-### Run the IJT Server Simulator
-
-The easiest way to explore IJT is to run the server simulator locally and connect with an OPC UA client:
-
-```bash
-# Clone the repository (if you haven't already)
-git clone https://github.com/umati/UA-for-Industrial-Joining-Technologies.git
-cd UA-for-Industrial-Joining-Technologies
-
-# Start the server simulator
-cd OPC_UA_Servers/Release2
-python run_server.py
-```
-
-**Default endpoint:** `opc.tcp://localhost:40451`
-
-**Tip:** Use any OPC UA client against the endpoint if you already have one installed.
-
-### Explore the Reference Implementations
-
-Use any of the provided clients to connect to the running server:
-
-1. **[IJT Web Client](OPC_UA_Clients/Release2/IJT_Web_Client)** — Browser-based interface for data, events, assets, results, and traces
-2. **[IJT Console Client](OPC_UA_Clients/Release2/IJT_Console_Client)** — Command-line tool for scripting and automation
-3. **[IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client)** — .NET client and reusable OPC UA type libraries
-4. **[IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client)** — Specification testing
-
 ## Contributing & Development
 
 For development setup, testing, and contribution guidelines, see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
