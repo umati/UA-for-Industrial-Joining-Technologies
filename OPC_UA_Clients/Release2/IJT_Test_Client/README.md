@@ -19,5 +19,7 @@ python run_all_tests.py
 ## Learn More
 
 - [Test report formats](docs/test-results.md)
+- [Integration summary](docs/IJT_TEST_CLIENT_OPCUA_SERVER_INTEGRATION_SUMMARY.md)
+- [Target server CU quick start](docs/TARGET_SERVER_CU_QUICK_START.md)
 - [Reference workflow demos](reference_workflows/README.md)
 - [Target server CU profiles](target_server_cu_profiles/README.md)

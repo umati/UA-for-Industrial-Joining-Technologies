@@ -2,6 +2,11 @@
 
 This folder contains YAML profiles for Target Server CU validation.
 
+Related orientation documents:
+
+- `../docs/IJT_TEST_CLIENT_OPCUA_SERVER_INTEGRATION_SUMMARY.md`
+- `../docs/TARGET_SERVER_CU_QUICK_START.md`
+
 A **target server** is the OPC UA IJT server under test (SUT). It can be the
 checked-in simulator, a product/device server, or another IJT server endpoint.
 The simulator may use `SimulateResults` and `SimulateEvents`; a product/device
