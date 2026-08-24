@@ -7,11 +7,11 @@
 - New profile creation: copy from `target_server_cu_profiles/template.yaml`
 
 ## 2) Run commands
-- Safe preflight check:  
+- Safe preflight check:
   `python run_target_server_cu.py --profile <profile>.yaml --preflight-only`
-- Full automated run:  
+- Full automated run:
   `python run_target_server_cu.py --profile <profile>.yaml --mode automated`
-- Guided/manual run with prompts:  
+- Guided/manual run with prompts:
   `python run_target_server_cu.py --profile <profile>.yaml --mode guided --interactive-prompts`
 
 ## 3) Read outputs

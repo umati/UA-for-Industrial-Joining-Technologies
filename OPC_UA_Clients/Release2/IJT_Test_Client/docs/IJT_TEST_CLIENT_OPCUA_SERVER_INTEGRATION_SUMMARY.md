@@ -29,11 +29,11 @@ YAML profiles tell the runner **how to test a specific target server**.
 
 Use from command line:
 
-- Safe check first  
+- Safe check first
   `python run_target_server_cu.py --profile <profile>.yaml --preflight-only`
-- Full run  
+- Full run
   `python run_target_server_cu.py --profile <profile>.yaml --mode automated`
-- Guided/manual flow when needed  
+- Guided/manual flow when needed
   `python run_target_server_cu.py --profile <profile>.yaml --mode guided --interactive-prompts`
 
 Profile examples:
