@@ -2963,6 +2963,7 @@ def main() -> int:
 
     # Pre-flight tool checks -- warn only, suites fail naturally if tools missing
     _check_tool([sys.executable, "--version"], "python")
+    _check_tool(["git", "--version"], "git")
     _check_tool(["dotnet", "--version"], "dotnet")
     _check_tool(["docker", "--version"], "docker")
     npm = _find_cmd(["npm", "npm.cmd"])

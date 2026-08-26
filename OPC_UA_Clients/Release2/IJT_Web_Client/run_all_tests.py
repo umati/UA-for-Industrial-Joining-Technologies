@@ -680,8 +680,10 @@ def _pip_constraint_args() -> list[str]:
 
 
 def _ensure_precommit_hooks() -> None:
-    """Install pre-commit hooks into .git/hooks/ for local runs."""
+    """Install pre-commit hooks into .git/hooks/ for local runs (best-effort)."""
     if IS_CI:
+        return
+    if not shutil.which("git"):
         return
     git_root = ROOT
     # Walk up to find .git directory (project may be nested in a monorepo)
@@ -695,10 +697,16 @@ def _ensure_precommit_hooks() -> None:
     if not _py_module_available("pre_commit"):
         return  # pre-commit not installed — skip silently
     print("[bootstrap] Installing pre-commit hooks …")
-    subprocess.check_call(
-        [sys.executable, "-m", "pre_commit", "install", "--install-hooks"],
-        cwd=str(git_root),
-    )
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pre_commit", "install", "--install-hooks"],
+            cwd=str(git_root),
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"[bootstrap] Note: pre-commit hook setup skipped ({exc})")
 
 
 _STALE_PYTEST_TMP_CUTOFF_SECONDS = 6 * 60 * 60  # 6h: longer than any IJT suite

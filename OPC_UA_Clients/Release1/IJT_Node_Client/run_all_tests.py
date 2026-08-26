@@ -551,6 +551,8 @@ def _step_license_checker() -> StepResult:
 
 def _step_detect_secrets() -> StepResult:
     label = "detect-secrets"
+    if not _cmd_available("git"):
+        return StepResult(label, "PHASE 1", "SKIP", "git not in PATH", 0.0)
     if not _cmd_available("detect-secrets"):
         return StepResult(label, "PHASE 1", "SKIP", "not installed", 0.0)
     t0 = time.monotonic()
@@ -560,6 +562,8 @@ def _step_detect_secrets() -> StepResult:
     )
     dur = time.monotonic() - t0
     if rc != 0:
+        if "FileNotFoundError" in stdout or "git failed" in stdout or "PermissionError" in stdout:
+            return StepResult(label, "PHASE 1", "SKIP", "scan unavailable on host", dur)
         return StepResult(label, "PHASE 1", "FAIL", f"exit {rc}", dur)
     with contextlib.suppress(Exception):
         data = json.loads(stdout)

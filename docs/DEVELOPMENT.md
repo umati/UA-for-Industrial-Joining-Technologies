@@ -81,40 +81,45 @@ python --version  # Should be 3.14.x or newer
 
 Before starting development, ensure you have:
 
-1. **Python 3.14** installed and on your PATH
-2. **Node.js 24** installed and on your PATH
-3. **Git** (for cloning and committing)
-4. A code editor (VS Code, JetBrains IDEs, vim, etc.)
+1. **Python 3.14+** installed and on your PATH (with `pip` and `venv`)
+2. **Node.js 24+** installed and on your PATH (with `npm`)
+3. **Git** installed and on your PATH (required for pre-commit hooks and repo-level checks)
+4. A code editor (VS Code, JetBrains IDEs, etc.)
 
-### Optional Tools
+#### Fresh Machine Setup (One-Command Install)
 
-These tools are optional but recommended for specific workflows:
+- **Windows (PowerShell with winget):**
+  ```powershell
+  winget install --id Python.Python.3.14 -e ; winget install --id OpenJS.NodeJS.LTS -e ; winget install --id Git.Git -e
+  ```
+- **macOS (Homebrew):**
+  ```bash
+  brew install python@3.14 node@24 git
+  ```
+- **Linux (Ubuntu / Debian):**
+  ```bash
+  sudo apt update && sudo apt install -y python3 python3-pip python3-venv nodejs npm git
+  ```
 
-- **.NET SDK 6.0+** – Required only if developing the C# IJT Client
-- **Docker** – Required only if running server/Docker tests
-- **UaExpert** – Optional OPC UA client for manual testing (not needed for automated tests)
+### Optional Tools (Auto-Detected & Skipped if Missing)
 
-### Project Setup
+These tools are optional; test runners automatically detect their availability and skip dependent suites gracefully with exit code `0`:
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/umati/UA-for-Industrial-Joining-Technologies.git
-   cd UA-for-Industrial-Joining-Technologies
-   ```
+- **.NET SDK 10+** – Required only if developing or testing the C# IJT Client
+- **Docker / Docker Compose** – Required only if running Docker-based server tests
+- **UaExpert** – Optional desktop OPC UA client for manual GUI inspection
 
-2. **Set your Node.js version:**
-   ```bash
-   # Using nvm
-   nvm use
-   # Or manually install Node.js 24
-   ```
+### What is Handled Automatically
 
-3. **Set your Python version:**
-   ```bash
-   # Using pyenv
-   pyenv local 3.14.0
-   # Or manually activate Python 3.14
-   ```
+When you run `python run_all_tests.py`, the repository handles the following without manual intervention:
+
+| Component | Automated Behavior |
+|-----------|--------------------|
+| **Python Virtual Environments** | Automatically creates `.venv_test/` in each client directory and installs required packages |
+| **Node.js Packages** | Automatically runs `npm ci` when `node_modules` is missing |
+| **Playwright Browsers** | Automatically installs browser binaries (`playwright install chromium`) during E2E stages |
+| **OPC UA Server Simulators** | Automatically launches native/containerized simulator instances with dedicated port isolation |
+| **Missing Optional Tools** | Dotnet, Docker, Hadolint, Semgrep, Actionlint, and Git-dependent scans skip gracefully |
 
 ## Package Management
 

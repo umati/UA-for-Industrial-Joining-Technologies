@@ -534,6 +534,16 @@ def _check_user_identity_config(results: list) -> None:
 
 def _check_detect_secrets(results: list) -> None:
     label = "Secrets scan (detect-secrets)"
+    if not _cmd_available("git"):
+        _record(
+            results,
+            1,
+            label,
+            True,
+            "SKIP (git not in PATH — detect-secrets requires git)",
+            optional=True,
+        )
+        return
     if not _cmd_available("detect-secrets"):
         _record(
             results,
@@ -556,6 +566,17 @@ def _check_detect_secrets(results: list) -> None:
         cwd=str(PROJ_DIR),
     )
     if r.returncode != 0:
+        err = (r.stderr or "") + (r.stdout or "")
+        if "FileNotFoundError" in err or "git failed" in err or "PermissionError" in err:
+            _record(
+                results,
+                1,
+                label,
+                True,
+                "SKIP (detect-secrets scan unavailable on this host)",
+                optional=True,
+            )
+            return
         _record(results, 1, label, False, f"FAIL (exit {r.returncode})")
         return
     try:

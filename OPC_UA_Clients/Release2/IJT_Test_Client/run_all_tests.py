@@ -461,7 +461,9 @@ def _ensure_cli_tool(
 
 
 def _ensure_precommit_hooks() -> None:
-    """Install pre-commit hooks into .git/hooks/ if not already present."""
+    """Install pre-commit hooks into .git/hooks/ if not already present (best-effort)."""
+    if not shutil.which("git"):
+        return
     git_root = _HERE
     # Walk up to find .git directory (project may be nested in a monorepo)
     for parent in [_HERE] + list(_HERE.parents):
@@ -474,10 +476,16 @@ def _ensure_precommit_hooks() -> None:
     if not _tool_available("pre_commit"):
         return  # pre-commit not installed — skip silently
     logger.info("Installing pre-commit hooks …")
-    subprocess.check_call(
-        [str(_venv_python(VENV)), "-m", "pre_commit", "install", "--install-hooks"],
-        cwd=str(git_root),
-    )
+    try:
+        subprocess.run(
+            [str(_venv_python(VENV)), "-m", "pre_commit", "install", "--install-hooks"],
+            cwd=str(git_root),
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.info("pre-commit hook setup skipped (%s)", exc)
 
 
 # ---------------------------------------------------------------------------

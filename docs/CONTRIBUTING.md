@@ -6,19 +6,19 @@ Thank you for your interest in contributing to the VDMA OPC UA Industrial Joinin
 
 ### Runtime Requirements
 
-- **Python 3.14** or newer
-- **Node.js 24** or newer
-- **Docker** is optional
+- **Python 3.14** or newer (with `pip` and `venv`)
+- **Node.js 24** or newer (with `npm`)
+- **Git** (available on system PATH)
 
 Central version files:
 
 - `.nvmrc` for Node.js
 - `.python-version` for Python
 
-### Optional Tools
+### Optional Tools (Auto-Skipped if Missing)
 
-- **.NET SDK** for the C# client
-- **npm** for the web and console clients
+- **.NET SDK 10+** for the C# client
+- **Docker** for containerized server testing
 
 ## Testing and Validation
 

@@ -24,8 +24,6 @@ of OPC UA IJT clients and servers, supporting documents, and specification testi
 | [IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client) | Provides a C#/.NET client and reusable type libraries | Building .NET applications against IJT |
 | [IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client) | Provides a specification test client | Specification testing for OPC UA IJT servers |
 
-## Quick Start
-
 ## Contributing & Development
 
 For development setup, testing, and contribution guidelines, see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).

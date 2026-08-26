@@ -1,4 +1,4 @@
-﻿# Pre-commit configuration
+# Pre-commit configuration
 #
 # Hooks fall into two categories:
 #
@@ -245,7 +245,7 @@ repos:
         name: Workflow policy guard (root runner)
         language: system
         entry: python
-        args: ['-m', 'pytest', 'tests/test_root_runner.py', 'tests/test_image_pin.py', 'tests/reporting', '-q']
+        args: ['scripts/precommit_pytest_hook.py', 'tests/test_root_runner.py', 'tests/test_image_pin.py', 'tests/reporting', '-q']
         pass_filenames: false
         files: '(^\.pre-commit-config\.yaml$|^\.github/workflows/.*\.ya?ml$|^\.github/docker/ijt-browser-ci/.*$|^\.github/scripts/update_browser_ci_image_pin\.py$|^reporting/.*\.py$|^tests/requirements\.txt$|^tests/reporting/.*$|^tests/test_image_pin\.py$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
 

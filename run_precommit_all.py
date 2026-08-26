@@ -66,6 +66,28 @@ def _precommit_command() -> list[str]:
         raise RuntimeError(
             "pre-commit could not be installed. Manual install: pip install pre-commit"
         )
+    req = REPO_ROOT / "tests" / "requirements.txt"
+    if req.is_file():
+        import importlib.util
+
+        if importlib.util.find_spec("pytest") is None or importlib.util.find_spec("yaml") is None:
+            log.info("Installing root test dependencies (pytest, pyyaml)...")
+            constraints = REPO_ROOT / "constraints.txt"
+            c_args = ["-c", str(constraints)] if constraints.is_file() else []
+            subprocess.run(  # noqa: S603 - fixed internal command list
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "--quiet",
+                    "--disable-pip-version-check",
+                    *c_args,
+                    "-r",
+                    str(req),
+                ],
+                check=False,
+            )
     return [sys.executable, "-m", "pre_commit"]
 
 
@@ -144,6 +166,13 @@ def _run_python_requirements_audit() -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.parse_args(argv)
+
+    if not find_cmd("git.exe", "git"):
+        print(
+            "Error: Git is not found in PATH. Install Git to run pre-commit checks.",
+            file=sys.stderr,
+        )
+        return 1
 
     try:
         root_code = _run_precommit(REPO_ROOT, "IJT root")

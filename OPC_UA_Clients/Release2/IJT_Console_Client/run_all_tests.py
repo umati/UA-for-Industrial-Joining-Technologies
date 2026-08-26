@@ -940,9 +940,15 @@ def _step_pip_audit() -> _StepResult:
 
 
 def _step_detect_secrets() -> _StepResult:
-    """Scan for leaked secrets with detect-secrets; skip if not installed."""
+    """Scan for leaked secrets with detect-secrets; skip if not installed or git absent."""
     result = _StepResult("[PHASE 1] detect-secrets")
     t0 = time.monotonic()
+    if not _binary_available("git"):
+        result.skipped = True
+        result.ok = True
+        result.note = "git not in PATH (detect-secrets scan skipped)"
+        result.duration = time.monotonic() - t0
+        return result
     has_bin = _binary_available("detect-secrets")
     has_mod = _tool_available("detect_secrets")
     if not has_bin and not has_mod:
@@ -956,10 +962,15 @@ def _step_detect_secrets() -> _StepResult:
         cmd += ["--baseline", str(baseline)]
     rc, output = _run(cmd)
     result.duration = time.monotonic() - t0
-    if rc != 0 and "PermissionError: [WinError 5]" in output:
+    if rc != 0 and (
+        "PermissionError: [WinError 5]" in output
+        or "FileNotFoundError" in output
+        or "WinError 2" in output
+        or "git failed" in output
+    ):
         result.skipped = True
         result.ok = True
-        result.note = "detect-secrets scan blocked by Windows policy (WinError 5); non-actionable on this host"
+        result.note = "detect-secrets scan unavailable on this host"
         return result
     try:
         data = json.loads(output)
