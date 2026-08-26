@@ -2,6 +2,10 @@
 
 OPC UA IJT Server Simulator for the Industrial Joining Technologies (IJT) companion specifications.
 
+## Contact
+
+- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+
 ## Quick Start
 
 ### Option 1 — Windows

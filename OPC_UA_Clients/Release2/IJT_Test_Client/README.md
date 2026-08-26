@@ -2,6 +2,10 @@
 
 IJT specification test client for specification testing of OPC UA IJT servers against the Industrial Joining Technologies companion specifications.
 
+## Contact
+
+- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+
 ## Prerequisites
 
 - Python 3.14+

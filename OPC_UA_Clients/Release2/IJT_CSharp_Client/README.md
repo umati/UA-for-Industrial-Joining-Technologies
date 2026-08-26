@@ -2,6 +2,10 @@
 
 C#/.NET reference client for connecting to an OPC UA IJT server, with an interactive client and reusable generated type libraries.
 
+## Contact
+
+- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+
 ## Prerequisites
 
 - .NET SDK matching the project target framework

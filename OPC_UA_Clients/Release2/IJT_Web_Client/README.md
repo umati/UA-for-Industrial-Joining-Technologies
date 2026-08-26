@@ -2,6 +2,11 @@
 
 Browser-based GUI for visualizing OPC UA IJT data, events, results, assets, and traces in real time.
 
+## Contact
+
+- **Author:** Joakim Gustafsson — joakim.h.gustafsson@atlascopco.com
+- **Coordinator:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+
 ## Prerequisites
 
 - Python 3.14+

@@ -2,6 +2,10 @@
 
 Release 2 reference clients for the OPC UA Industrial Joining Technologies (IJT) companion specifications.
 
+## Contact
+
+- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+
 ## Available Clients
 
 | Client | Purpose | Technology |

@@ -2,6 +2,10 @@
 
 Command-line reference client for connecting to an OPC UA IJT server, subscribing to events, calling methods, and reading results.
 
+## Contact
+
+- **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
+
 ## Prerequisites
 
 - Python 3.14+
