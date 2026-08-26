@@ -121,8 +121,30 @@ def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
     return stripped, 40451
 
 
+def _find_dotnet() -> str | None:
+    found = shutil.which("dotnet")
+    if found:
+        return found
+    if sys.platform == "win32":
+        candidates = [
+            Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "dotnet" / "dotnet.exe",
+            Path(r"C:\Program Files\dotnet\dotnet.exe"),
+            Path(r"C:\Program Files (x86)\dotnet\dotnet.exe"),
+        ]
+        local_app = os.environ.get("LOCALAPPDATA")
+        if local_app:
+            candidates.append(Path(local_app) / "Microsoft" / "dotnet" / "dotnet.exe")
+        for candidate in candidates:
+            if candidate.is_file():
+                dotnet_dir = str(candidate.parent)
+                if dotnet_dir not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = f"{dotnet_dir};{os.environ.get('PATH', '')}"
+                return str(candidate)
+    return None
+
+
 def _dotnet_available() -> bool:
-    return shutil.which("dotnet") is not None
+    return _find_dotnet() is not None
 
 
 def _is_github_actions_environment() -> bool:

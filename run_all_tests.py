@@ -1240,15 +1240,41 @@ def _parse_zizmor_output(stdout: str, returncode: int) -> StepResult:
         )
 
 
+def _find_zizmor() -> str | None:
+    found = shutil.which("zizmor")
+    if found:
+        return found
+    if sys.platform == "win32":
+        candidates = [
+            Path(sys.executable).parent / "Scripts" / "zizmor.exe",
+            Path(sys.prefix) / "Scripts" / "zizmor.exe",
+            Path(sys.exec_prefix) / "Scripts" / "zizmor.exe",
+        ]
+        with contextlib.suppress(Exception):
+            import site
+
+            user_base = site.getuserbase()
+            if user_base:
+                candidates.append(Path(user_base) / "Scripts" / "zizmor.exe")
+        for candidate in candidates:
+            if candidate.is_file():
+                scripts_dir = str(candidate.parent)
+                if scripts_dir not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = f"{scripts_dir};{os.environ.get('PATH', '')}"
+                return str(candidate)
+    return None
+
+
 def _check_zizmor(results_dir: Path) -> StepResult:
     """Security audit GitHub Actions workflows with zizmor."""
-    if not shutil.which("zizmor"):
+    zizmor_bin = _find_zizmor()
+    if not zizmor_bin:
         return StepResult(
             "GHA zizmor (security)", "SKIP", "Install: cargo install zizmor  OR  pip install zizmor"
         )
     workflows_dir = ROOT / ".github/workflows"
     result = subprocess.run(
-        ["zizmor", "--format", "json", str(workflows_dir)],
+        [zizmor_bin, "--format", "json", str(workflows_dir)],
         capture_output=True,
         text=True,
         check=False,

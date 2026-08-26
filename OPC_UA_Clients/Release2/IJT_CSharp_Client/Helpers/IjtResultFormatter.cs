@@ -203,8 +203,9 @@ public static class IjtResultFormatter
     {
         var pad = new string(' ', indent);
         var units = NormalizeUnits(rv.EngineeringUnits?.DisplayName?.Text, rv.PhysicalQuantity);
+        var valStr = rv.MeasuredValue.ToString("F3", CultureInfo.InvariantCulture);
         sb.AppendLine(
-            $"{pad}{rv.Name ?? rv.ValueId ?? "?",-24} {rv.MeasuredValue,10:F3}  {units,-10} [{rv.ResultEvaluation}]");
+            $"{pad}{rv.Name ?? rv.ValueId ?? "?",-24} {valStr,10}  {units,-10} [{rv.ResultEvaluation}]");
     }
 
     private static void FormatTrace(StringBuilder sb, JoiningTraceDataType trace)
