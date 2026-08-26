@@ -121,7 +121,7 @@ jobs:
   crypto-path-filter:
     name: "OPC UA Security Path Filter"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -131,7 +131,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 2
 
       - id: filter
         name: Detect crypto-relevant changes
@@ -144,6 +144,12 @@ jobs:
 
           base="${{ github.event.pull_request.base.sha || github.event.before || '' }}"
           head="${{ github.event.pull_request.head.sha || github.sha }}"
+
+          if [[ -n "$base" && "$base" != "0000000000000000000000000000000000000000" ]]; then
+            if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "$base" 2>/dev/null || true
+            fi
+          fi
 
           if [[ -n "$base" ]] && git cat-file -e "$base^{commit}" 2>/dev/null; then
             changed="$(git diff --name-only "$base" "$head")"

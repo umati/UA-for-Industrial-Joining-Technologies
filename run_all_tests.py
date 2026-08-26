@@ -1111,9 +1111,39 @@ _ACTION_MIN_VERSIONS = {
 }
 
 
+def _find_actionlint() -> str | None:
+    found = shutil.which("actionlint")
+    if found:
+        return found
+    if sys.platform == "win32":
+        candidates = [
+            Path(os.environ.get("LOCALAPPDATA", ""))
+            / "Microsoft"
+            / "WinGet"
+            / "Links"
+            / "actionlint.exe",
+            Path(os.environ.get("USERPROFILE", "")) / "go" / "bin" / "actionlint.exe",
+            Path(r"C:\Program Files\actionlint\actionlint.exe"),
+            Path(r"C:\Go\bin\actionlint.exe"),
+        ]
+        winget_pkgs = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages"
+        if winget_pkgs.is_dir():
+            with contextlib.suppress(OSError):
+                for p in winget_pkgs.glob("**/actionlint.exe"):
+                    candidates.append(p)
+        for candidate in candidates:
+            if candidate.is_file():
+                actionlint_dir = str(candidate.parent)
+                if actionlint_dir not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = f"{actionlint_dir};{os.environ.get('PATH', '')}"
+                return str(candidate)
+    return None
+
+
 def _check_actionlint(results_dir: Path) -> StepResult:
     """Validate GitHub Actions workflow syntax with actionlint."""
-    if not shutil.which("actionlint"):
+    actionlint_bin = _find_actionlint()
+    if not actionlint_bin:
         return StepResult(
             "GHA actionlint",
             "SKIP",
@@ -1126,7 +1156,7 @@ def _check_actionlint(results_dir: Path) -> StepResult:
     # Windows hosts they hang indefinitely (no upstream timeout) and freeze Phase 1.
     # Workflow syntax + action-reference validation still runs from actionlint itself.
     cmd = [
-        "actionlint",
+        actionlint_bin,
         "-shellcheck=",
         "-pyflakes=",
         "-format",

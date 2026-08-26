@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -141,8 +140,6 @@ def _run_python_requirements_audit() -> int:
     log.info("[security] Python requirements: pip-audit --requirement ...")
     cache_dir = REPO_ROOT / "tmp" / "pip-audit-cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    temp_dir = REPO_ROOT / "tmp" / "pip-audit-temp"
-    temp_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable,
         "-m",
@@ -154,12 +151,7 @@ def _run_python_requirements_audit() -> int:
     ]
     for req in requirements:
         cmd.extend(["--requirement", str(req)])
-    env = os.environ.copy()
-    long_temp_dir = str(temp_dir.resolve())
-    env["TMP"] = long_temp_dir
-    env["TEMP"] = long_temp_dir
-    env["TMPDIR"] = long_temp_dir
-    completed = subprocess.run(cmd, cwd=REPO_ROOT, env=env)  # noqa: S603 - fixed internal command list
+    completed = subprocess.run(cmd, cwd=REPO_ROOT)  # noqa: S603 - fixed internal command list
     return completed.returncode
 
 
