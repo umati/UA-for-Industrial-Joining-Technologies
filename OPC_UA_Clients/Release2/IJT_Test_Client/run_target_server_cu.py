@@ -59,6 +59,7 @@ import argparse
 import datetime
 import json
 import logging
+import math
 import os
 import subprocess
 import sys
@@ -515,18 +516,20 @@ def run_live_spec_tests(
         spec_dir,
         junit_xml,
         exclude_simulation=exclude_simulation,
-        test_timeout_seconds=min(
-            timeout_seconds,
-            max(
-                120,
-                (
-                    4 * profile.cu_execution.default_timeout_seconds
-                    + profile.workflow_execution.expected_operation_count
-                    * (
-                        profile.cu_execution.default_timeout_seconds
-                        + profile.workflow_execution.expected_results.timeout_seconds
-                    )
-                    + 30
+        test_timeout_seconds=math.ceil(
+            min(
+                timeout_seconds,
+                max(
+                    120,
+                    (
+                        4 * profile.cu_execution.default_timeout_seconds
+                        + profile.workflow_execution.expected_operation_count
+                        * (
+                            profile.cu_execution.default_timeout_seconds
+                            + profile.workflow_execution.expected_results.timeout_seconds
+                        )
+                        + 30
+                    ),
                 ),
             ),
         ),
