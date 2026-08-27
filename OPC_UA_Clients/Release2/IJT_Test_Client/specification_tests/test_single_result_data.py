@@ -1439,10 +1439,10 @@ async def test_extended_meta_data_empty_array_is_valid(subscription_client, resu
 
 
 @pytest.mark.requires_cu(CU.RESULT_EVENT_ACCESS)
-async def test_joining_system_event_notifier_allows_subscriptions(session_client, ns_indices):
+async def test_joining_system_event_notifier_allows_subscriptions(opcua_client, ns_indices):
     """The JoiningSystem instance's EventNotifier attribute must have the SubscribeToEvents
     bit (bit 0) set, making it usable as an event source for result-ready events."""
-    js = await find_joining_system(session_client)
+    js = await find_joining_system(opcua_client)
     if js is None:
         pytest.skip("JoiningSystem not found — cannot check EventNotifier attribute")
 

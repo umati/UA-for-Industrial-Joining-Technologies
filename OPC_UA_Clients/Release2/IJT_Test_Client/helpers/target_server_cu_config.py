@@ -259,7 +259,7 @@ class TargetServerCuProfile:
         schema_version:     Profile format version (must be in SUPPORTED_SCHEMA_VERSIONS).
         profile_name:       Human-readable label for the profile.
         description:        Optional description for documentation.
-        capabilities_file:  Path (relative to profile) to server_capabilities.yaml.
+        capabilities_file:  Path (relative to profile) to its CU capability declaration.
         source_path:        Absolute path of the loaded YAML file.
         target:             Endpoint and server selection.
         cu_execution:       CU test execution policy.

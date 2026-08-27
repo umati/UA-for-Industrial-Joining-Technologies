@@ -125,8 +125,8 @@ async def _collect_events_after_trigger(
     Subscribe to event_type_node_id, trigger event_type via event_trigger,
     collect and return received events.
 
-    Skips the test when the simulator trigger fails.  For real-controller
-    triggers, proceeds to collect and lets the caller decide on empty results.
+    Skips when no deterministic trigger is configured. Target-server events
+    must not be synthesized or pass merely because a passive timeout elapsed.
     """
     server_node = subscription_client.nodes.server
     event_type_node = subscription_client.get_node(event_type_node_id)
@@ -134,8 +134,8 @@ async def _collect_events_after_trigger(
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
         outcome = await event_trigger.trigger_event(event_type, count=count)
-        if not outcome.triggered and event_trigger.is_simulator:
-            pytest.skip(outcome.skip_reason or "Simulator event trigger failed")
+        if not outcome.triggered:
+            pytest.skip(outcome.skip_reason or "No deterministic event trigger is configured")
         events = await collector.collect(count=count, timeout_s=timeout_s)
 
     return events
@@ -157,8 +157,8 @@ async def _collect_condition_events(
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, condition_type_node)
         outcome = await event_trigger.trigger_condition(event_type)
-        if not outcome.triggered and event_trigger.is_simulator:
-            pytest.skip(outcome.skip_reason or "Simulator event trigger failed")
+        if not outcome.triggered:
+            pytest.skip(outcome.skip_reason or "No deterministic condition trigger is configured")
         events = await collector.collect(count=1, timeout_s=timeout_s)
     return events
 
@@ -416,8 +416,8 @@ async def test_events_delivered_within_reasonable_time(subscription_client, opcu
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
         outcome = await event_trigger.trigger_event(SimulateEventType.TOOL_CONNECTED, count=1)
-        if not outcome.triggered and event_trigger.is_simulator:
-            pytest.skip(outcome.skip_reason or "Simulator trigger failed")
+        if not outcome.triggered:
+            pytest.skip(outcome.skip_reason or "No deterministic event trigger is configured")
         events = await collector.collect(count=1, timeout_s=30.0)
     elapsed = time.monotonic() - t_start
     if not events:

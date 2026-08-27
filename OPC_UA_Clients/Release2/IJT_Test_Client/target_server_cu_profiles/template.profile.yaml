@@ -6,8 +6,8 @@
 # repository or sanitize them fully before committing.
 #
 # All fields shown below are optional unless marked REQUIRED.
-# Omitted sections use safe defaults (no state-changing methods allowed,
-# first-available selection, diagnostic scoring, no manual steps).
+# Omitted sections use safe defaults (no state-changing methods allowed, first
+# ready Tool, first compatible JoiningProcess, diagnostic scoring, no manual steps).
 #
 # Run preflight to validate before executing any state-changing tests:
 #   python run_target_server_cu.py --profile <this_file> --preflight-only
@@ -25,9 +25,9 @@ description: >
   Copy this template and fill in your target server values.
   Sanitize or keep outside the repository before committing.
 
-# Path to the server_capabilities.yaml CU support declaration.
+# Path to the paired CU capability declaration.
 # Can be relative to this profile file (recommended) or absolute.
-capabilities_file: "../server_capabilities.yaml"
+capabilities_file: "default.capabilities.yaml"
 
 # ---------------------------------------------------------------------------
 # Target: Target server endpoint and server identity cross-check.
@@ -55,7 +55,7 @@ cu_execution:
   #   automated      — no manual waits; manual-only evidence becomes blocked
   #   guided         — prompts and waits allowed with --interactive-prompts
   #   preflight_only — discover and classify outcomes only; no state changes
-  default_mode: automated
+  default_mode: preflight_only
 
   # Scoring mode:
   #   diagnostic     — all outcomes reported; no pass/fail gate
@@ -93,8 +93,28 @@ cu_execution:
   # Map method BrowseName to expected status policy: "accepted", "warning", "fail"
   method_status_policies: {}
 
-  # Extension fields for forward-compatible experimental use only.
-  extension_fields: {}
+  # Optional workflow controls consumed by the current runner.
+  # EnableAsset(true) is persistent. Disabling a real Tool requires a separate,
+  # explicit argument-level opt-in and is always restored to true by the tests.
+  extension_fields:
+    allow_disable_asset: false
+    # when_disabled: read Tool.Parameters.Enabled and call EnableAsset(true)
+    # only when needed. always: safely reassert true before every workflow.
+    enable_asset_policy: when_disabled
+    # Method used to generate InterventionResult evidence. It must also appear
+    # in state_changing_methods.allowed_methods.
+    # Supported values: IncrementJoiningProcessCounter,
+    # DecrementJoiningProcessCounter, AbortJoiningProcess, ResetJoiningProcess.
+    intervention_method: IncrementJoiningProcessCounter
+    # Method-specific optional values:
+    intervention_count: 1
+    intervention_message: "Target Server CU intervention"
+    # Some controllers require a parent batch/job process to be selected before
+    # counter or abort methods. Omit this mapping when it is not required.
+    counter_parent_process:
+      joining_process_id: ""
+      joining_process_origin_id: ""
+      selection_name: ""
 
 # ---------------------------------------------------------------------------
 # Selection: Tool and joining-process discovery and selection policy.
@@ -113,9 +133,6 @@ selection:
     # SANITIZE: do not commit real serial numbers or asset identifiers.
     product_instance_uri: ""
 
-    # Optional capability tags for filtered selection (not yet implemented).
-    capability_tags: []
-
   joining_process:
     # Selection policy:
     #   first_compatible  — use first process compatible with the tool (recommended)
@@ -125,12 +142,10 @@ selection:
 
     # Exact joining process identifier. Leave empty for runtime discovery.
     # SANITIZE: do not commit real process IDs, names, or vendor payloads.
+    # Typical UUID format: "123e4567-e89b-12d3-a456-426614174000".
     joining_process_id: ""
     joining_process_origin_id: ""
     selection_name: ""
-
-    # Optional capability tags for filtered selection (not yet implemented).
-    capability_tags: []
 
 # ---------------------------------------------------------------------------
 # Triggers: Evidence generation strategy for result, event, condition CUs.
@@ -184,7 +199,8 @@ workflow_execution:
     # Primary/final classification:
     # single, sync, batch, job, stitching, intervention, text, or any
     classification: single
-    # Optional result classifications emitted before the primary/final result.
+    # Optional result classifications emitted before or alongside the final
+    # result. Intervention is companion evidence, not a JobResult child layer.
     # Examples: [batch] for a handheld Job containing Batch results;
     # [sync] for a fixtured-controller Job containing Sync results.
     intermediate_classifications: []

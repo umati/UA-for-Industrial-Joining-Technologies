@@ -7,7 +7,8 @@ Tests the pure-Python utility functions that do not require a live OPC UA server
 """
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from asyncua import ua
@@ -268,6 +269,81 @@ async def test_find_method_set_tries_di_ijt_and_app_namespaces(monkeypatch):
 
     assert result == "method-set"
     assert calls == [5, 7, 8]
+
+
+@pytest.mark.asyncio
+async def test_read_tool_enabled_finds_matching_tool_and_boolean(monkeypatch):
+    nodes: dict[str, Any] = {
+        "joining": object(),
+        "asset_management": object(),
+        "assets": object(),
+        "tools": object(),
+        "tool": object(),
+        "identification": object(),
+        "piu": AsyncMock(),
+        "parameters": object(),
+        "enabled": AsyncMock(),
+    }
+    nodes["piu"].read_value.return_value = "urn:tool:1"
+    nodes["enabled"].read_value.return_value = True
+
+    async def find_child(parent, name, _namespaces):
+        mapping = {
+            (nodes["joining"], "AssetManagement"): nodes["asset_management"],
+            (nodes["asset_management"], "Assets"): nodes["assets"],
+            (nodes["assets"], "Tools"): nodes["tools"],
+            (nodes["tool"], "Identification"): nodes["identification"],
+            (nodes["identification"], "ProductInstanceUri"): nodes["piu"],
+            (nodes["tool"], "Parameters"): nodes["parameters"],
+            (nodes["parameters"], "Enabled"): nodes["enabled"],
+        }
+        return mapping.get((parent, name))
+
+    monkeypatch.setattr(node_discovery, "find_joining_system", AsyncMock(return_value=nodes["joining"]))
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name_any", find_child)
+    monkeypatch.setattr(
+        node_discovery,
+        "browse_folder_instances",
+        AsyncMock(return_value=[("Tool1", nodes["tool"])]),
+    )
+
+    enabled = await node_discovery.read_tool_enabled(object(), 7, 5, "urn:tool:1", 2)
+
+    assert enabled is True
+
+
+@pytest.mark.asyncio
+async def test_read_tool_enabled_returns_none_for_non_boolean_value(monkeypatch):
+    piu = AsyncMock()
+    piu.read_value.return_value = "urn:tool:1"
+    enabled = AsyncMock()
+    enabled.read_value.return_value = "true"
+    children = iter([object(), object(), object(), object(), piu, object(), enabled])
+
+    monkeypatch.setattr(node_discovery, "find_joining_system", AsyncMock(return_value=object()))
+    monkeypatch.setattr(
+        node_discovery,
+        "find_child_by_browse_name_any",
+        AsyncMock(side_effect=lambda *_args: next(children)),
+    )
+    monkeypatch.setattr(
+        node_discovery,
+        "browse_folder_instances",
+        AsyncMock(return_value=[("Tool1", object())]),
+    )
+
+    assert await node_discovery.read_tool_enabled(object(), 7, 5, "urn:tool:1") is None
+
+
+@pytest.mark.asyncio
+async def test_read_tool_enabled_returns_none_on_discovery_error(monkeypatch):
+    monkeypatch.setattr(
+        node_discovery,
+        "find_joining_system",
+        AsyncMock(side_effect=RuntimeError("connection lost")),
+    )
+
+    assert await node_discovery.read_tool_enabled(object(), 7, 5, "urn:tool:1") is None
 
 
 @pytest.mark.asyncio

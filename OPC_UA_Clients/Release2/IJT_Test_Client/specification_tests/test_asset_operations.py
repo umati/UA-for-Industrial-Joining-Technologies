@@ -30,7 +30,9 @@ execute_operation
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from asyncua import ua
@@ -46,6 +48,7 @@ from helpers.node_discovery import (
     find_method_set,
 )
 from helpers.skip_reasons import skip_companion_spec_note
+from helpers.target_server_cu_config import load_target_server_profile
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -54,6 +57,19 @@ _METHOD_TIMEOUT = 15
 
 
 # ─── local helpers ────────────────────────────────────────────────────────────
+
+
+def _require_disable_asset_opt_in() -> None:
+    """Require argument-level consent before disabling a real target Tool."""
+    profile_path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
+    if not profile_path:
+        return
+    profile = load_target_server_profile(Path(profile_path))
+    if profile.cu_execution.extension_fields.get("allow_disable_asset") is not True:
+        pytest.skip(
+            "Target Server profile does not explicitly allow EnableAsset(false); "
+            "the Tool's enabled state persists until another interface changes it"
+        )
 
 
 async def _get_asset_management_method_set(client, ns_ijt: int, ns_di: int, ns_app: int | None = None):
@@ -255,6 +271,7 @@ async def test_disconnect_asset_method_present_in_method_set(asset_management, n
 @pytest.mark.requires_cu(CU.DISCONNECT_ASSET)
 async def test_disable_asset_then_enable_asset_restores_state(opcua_client, tools_instances, ns_indices):
     """EnableAsset(false) then EnableAsset(true) round-trip must not raise an error."""
+    _require_disable_asset_opt_in()
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_di is None or ns_ijt is None:
@@ -272,31 +289,34 @@ async def test_disable_asset_then_enable_asset_restores_state(opcua_client, tool
     if enable_node is None:
         pytest.skip("EnableAsset: Not Supported — skipping round-trip test")
 
-    disable_result = await find_and_call_method(
-        ms,
-        BN.ENABLE_ASSET,
-        ns_ijt,
-        piu_arg,
-        ua.Variant(False, ua.VariantType.Boolean),
-        timeout=_METHOD_TIMEOUT,
-    )
-    if not disable_result.success:
-        err_str = str(disable_result.error) if disable_result.error else "unknown error"
-        if "BadNotSupported" in err_str or "BadMethodInvalid" in err_str:
-            pytest.skip(f"EnableAsset(false) returned '{err_str}' — not supported on this server")
-        pytest.fail(f"EnableAsset(false) failed: {err_str}")
-
-    enable_result = await find_and_call_method(
-        ms,
-        BN.ENABLE_ASSET,
-        ns_ijt,
-        piu_arg,
-        ua.Variant(True, ua.VariantType.Boolean),
-        timeout=_METHOD_TIMEOUT,
-    )
-    if not enable_result.success:
-        err_str = str(enable_result.error) if enable_result.error else "unknown error"
-        pytest.fail(f"EnableAsset(true) failed after EnableAsset(false) round-trip: {err_str}")
+    try:
+        disable_result = await find_and_call_method(
+            ms,
+            BN.ENABLE_ASSET,
+            ns_ijt,
+            piu_arg,
+            ua.Variant(False, ua.VariantType.Boolean),
+            timeout=_METHOD_TIMEOUT,
+            target_server_authorized=True,
+        )
+        if not disable_result.success:
+            err_str = str(disable_result.error) if disable_result.error else "unknown error"
+            if "BadNotSupported" in err_str or "BadMethodInvalid" in err_str:
+                pytest.skip(f"EnableAsset(false) returned '{err_str}' — not supported on this server")
+            pytest.fail(f"EnableAsset(false) failed: {err_str}")
+    finally:
+        enable_result = await find_and_call_method(
+            ms,
+            BN.ENABLE_ASSET,
+            ns_ijt,
+            piu_arg,
+            ua.Variant(True, ua.VariantType.Boolean),
+            timeout=_METHOD_TIMEOUT,
+            target_server_authorized=True,
+        )
+        if not enable_result.success:
+            err_str = str(enable_result.error) if enable_result.error else "unknown error"
+            pytest.fail(f"EnableAsset(true) failed while restoring the persistent Tool state: {err_str}")
 
 
 # ─── enable_tool ──────────────────────────────────────────────────────────────
@@ -423,7 +443,7 @@ async def test_set_calibration_method_present_in_method_set(asset_management, ns
 
 
 @pytest.mark.requires_cu(CU.SET_CALIBRATION)
-async def test_set_calibration_callable(opcua_client, ns_indices):
+async def test_set_calibration_callable(opcua_client, tools_instances, ns_indices):
     """SetCalibration must be callable without raising an unhandled server error."""
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -438,12 +458,16 @@ async def test_set_calibration_callable(opcua_client, ns_indices):
     calibration_data = _make_calibration_data()
     if calibration_data is None:
         pytest.skip("CalibrationDataType is not loaded — cannot build SetCalibration arguments")
+    tool_name, tool_node = tools_instances[0]
+    tool_piu = await _read_product_instance_uri(tool_node, ns_di)
+    if tool_piu is None:
+        pytest.skip(f"Tool '{tool_name}' has no ProductInstanceUri — cannot build SetCalibration arguments")
 
     result = await find_and_call_method(
         ms,
         BN.SET_CALIBRATION,
         ns_ijt,
-        _asset_arg(""),
+        _asset_arg(tool_piu),
         calibration_data,
         timeout=_METHOD_TIMEOUT,
     )
@@ -663,47 +687,37 @@ async def test_method_input_argument_null_piu_policy_for_tool_scoped_method(opcu
 
 
 @pytest.mark.requires_cu(CU.METHOD_INPUT_ARGUMENT)
-async def test_method_input_argument_valid_server_asset_piu_accepted(opcua_client, ns_indices):
-    """A general AssetManagement method called with the server's own PIU must succeed.
+async def test_method_input_argument_valid_applicable_asset_piu_accepted(
+    opcua_client,
+    tools_instances,
+    ns_indices,
+):
+    """GetIdentifiers must accept the PIU of an applicable exposed Tool.
 
-    Verifies that an explicit PIU matching the deployed Controller asset is accepted.
-    The probe uses GetIdentifiers because EnableAsset is Tool-specific; calling
-    EnableAsset with a Controller PIU belongs to the non-applicable-asset negative
-    case, not the server-own-asset positive case.
+    ProductInstanceUri resolution and method applicability are separate concerns.
+    Identifier methods operate in the Tool's joining context, so a Controller PIU
+    must not be used as the positive GetIdentifiers probe.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
-    ns_machinery = ns_indices.get(NS_MACHINERY)
-    ns_app = ns_indices.get(NS_APP)
     if ns_di is None or ns_ijt is None:
         pytest.skip("Required namespaces not registered on server")
 
-    js = await find_joining_system(opcua_client)
-    if js is None:
-        pytest.skip("JoiningSystem not found — cannot read server asset PIU")
-
-    am = await find_child_by_browse_name(js, BN.ASSET_MANAGEMENT, ns_ijt)
-    if am is None:
-        pytest.skip("AssetManagement not found — cannot read server asset PIU")
-
-    controller_piu = await _read_first_asset_category_product_instance_uri(
-        am, BN.CONTROLLERS, ns_ijt, ns_di, ns_machinery, ns_app
-    )
-    if controller_piu is None:
-        pytest.skip(
-            "No Controller with ProductInstanceUri found under AssetManagement/Assets — cannot verify own-asset PIU"
-        )
+    tool_name, tool_node = tools_instances[0]
+    tool_piu = await _read_product_instance_uri(tool_node, ns_di)
+    if tool_piu is None:
+        pytest.skip(f"Tool '{tool_name}' has no ProductInstanceUri — cannot verify applicable PIU")
 
     _am2, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_indices.get(NS_APP))
     method_node = await find_child_by_browse_name(ms, BN.GET_IDENTIFIERS, ns_ijt)
     if method_node is None:
-        pytest.skip("GetIdentifiers: Not Supported — cannot safely verify server own-asset PIU")
+        pytest.skip("GetIdentifiers: Not Supported — cannot verify applicable Tool PIU")
 
     result = await find_and_call_method(
         ms,
         BN.GET_IDENTIFIERS,
         ns_ijt,
-        _asset_arg(controller_piu),
+        _asset_arg(tool_piu),
         ua.Variant([], ua.VariantType.String),
         timeout=_METHOD_TIMEOUT,
     )
@@ -711,7 +725,7 @@ async def test_method_input_argument_valid_server_asset_piu_accepted(opcua_clien
         err_str = str(result.error) if result.error else "unknown error"
         if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
             pytest.skip(f"GetIdentifiers not supported on this server: {err_str}")
-        pytest.fail(f"GetIdentifiers with server own-asset PIU '{controller_piu}' failed: {err_str}")
+        pytest.fail(f"GetIdentifiers with applicable Tool PIU '{tool_piu}' failed: {err_str}")
 
 
 @pytest.mark.requires_cu(CU.METHOD_INPUT_ARGUMENT)
@@ -968,6 +982,7 @@ async def test_enable_asset_with_false_disables_tool(opcua_client, tools_instanc
     Note: The spec method signature varies — some servers accept a Boolean second
     argument; this test probes with two arg patterns and accepts either.
     """
+    _require_disable_asset_opt_in()
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_di is None or ns_ijt is None:
@@ -996,14 +1011,22 @@ async def test_enable_asset_with_false_disables_tool(opcua_client, tools_instanc
             pytest.skip(f"EnableAsset(piu, True) not supported on this server: {err_str}")
         pytest.fail(f"EnableAsset(piu, True) failed unexpectedly: {err_str}")
 
-    disable_result = await find_and_call_method(
-        ms, BN.ENABLE_ASSET, ns_ijt, piu_arg, disable_arg, timeout=_METHOD_TIMEOUT
-    )
-    if not disable_result.success:
-        err_str = str(disable_result.error) if disable_result.error else "unknown error"
-        if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid")):
-            pytest.skip(f"EnableAsset(piu, False) not supported on this server: {err_str}")
-        pytest.fail(f"EnableAsset with IsEnabled=False failed after successful enable: {err_str}")
+    try:
+        disable_result = await find_and_call_method(
+            ms, BN.ENABLE_ASSET, ns_ijt, piu_arg, disable_arg, timeout=_METHOD_TIMEOUT
+        )
+        if not disable_result.success:
+            err_str = str(disable_result.error) if disable_result.error else "unknown error"
+            if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid")):
+                pytest.skip(f"EnableAsset(piu, False) not supported on this server: {err_str}")
+            pytest.fail(f"EnableAsset with IsEnabled=False failed after successful enable: {err_str}")
+    finally:
+        restore_result = await find_and_call_method(
+            ms, BN.ENABLE_ASSET, ns_ijt, piu_arg, enable_arg, timeout=_METHOD_TIMEOUT
+        )
+        if not restore_result.success:
+            err_str = str(restore_result.error) if restore_result.error else "unknown error"
+            pytest.fail(f"EnableAsset(true) failed while restoring the persistent Tool state: {err_str}")
 
 
 @pytest.mark.requires_cu(CU.ENABLE_TOOL)

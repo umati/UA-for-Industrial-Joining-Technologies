@@ -184,7 +184,7 @@ def _excel_metadata():
 def test_ci_summary_skip_reason_bucket_preserves_public_method_label():
     reason = (
         "IJT Send Joining Process - Method: SendJoiningProcess NOT SUPPORTED "
-        "- CU: send_joining_process. To enable: update server_capabilities.yaml"
+        "- CU: send_joining_process. To enable: update the capability declaration"
     )
 
     assert _ci_summary._skip_reason_bucket(reason) == (
@@ -676,6 +676,103 @@ def test_excel_cover_sheet_exists_and_first():
     )
     values = [cell.value for row in wb["Conformance Overview"].iter_rows() for cell in row]
     assert "Conformance Action Items" not in values
+
+
+def test_excel_target_run_metadata_is_prominent_on_overview_and_facet_sheets():
+    profiles, facets, capabilities = _excel_metadata()
+    payload = _sample_payload()
+    context = _excel_report._build_report_context(payload, profiles, facets, capabilities)
+    target_run = {
+        "profile_name": "Complete controller results",
+        "endpoint": "opc.tcp://controller.example:40451",
+        "mode": "automated",
+        "workflow": {"result_trigger_mode": "start_selected_joining"},
+    }
+    wb = _excel_report.openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    _excel_report._build_cover(
+        wb,
+        [],
+        "2026-05-10 15:46:00",
+        "passed",
+        context,
+        facets,
+        target_run,
+    )
+    _excel_report._build_facet_coverage(wb, payload, facets, capabilities, target_run)
+
+    overview_values = {
+        str(cell.value) for row in wb["Conformance Overview"].iter_rows() for cell in row if cell.value is not None
+    }
+    facet_values = {
+        str(cell.value) for row in wb["IJT Facet Breakdown"].iter_rows() for cell in row if cell.value is not None
+    }
+    for values in (overview_values, facet_values):
+        assert "opc.tcp://controller.example:40451" in values
+        assert "start_selected_joining" in values
+    assert "Real Target Server" in overview_values
+    assert "Complete controller results" in facet_values
+    assert wb["IJT Facet Breakdown"].freeze_panes == "A7"
+    assert wb["IJT Facet Breakdown"].auto_filter.ref.startswith("A6:")
+
+
+def test_excel_explicit_unsupported_override_precedes_workflow_block():
+    profiles, facets, capabilities = _excel_metadata()
+    payload = {
+        "by_cu": {
+            "sync_result": {
+                "compliance": "blocked",
+                "outcome": "blocked",
+                "test_count": 3,
+                "blocked": 3,
+                "not_supported": 0,
+            }
+        }
+    }
+    capabilities.overrides["sync_result"] = "unsupported"
+
+    _excel_report._apply_capability_overrides(payload, capabilities)
+
+    sync = payload["by_cu"]["sync_result"]
+    assert sync["compliance"] == "not_supported"
+    assert sync["outcome"] == "not_supported"
+    assert sync["not_supported"] == 3
+    assert sync["blocked"] == 0
+
+    context = _excel_report._build_report_context(payload, profiles, facets, capabilities)
+    workbook = _excel_report.openpyxl.Workbook()
+    workbook.remove(workbook.active)
+    _excel_report._build_cu_coverage(workbook, payload, facets, capabilities, context)
+    worksheet = workbook["Conformance Unit Details"]
+    rendered = {worksheet.cell(row=2, column=column).value: column for column in range(1, worksheet.max_column + 1)}
+    assert rendered
+    assert worksheet["A2"].value.endswith("Not Supported")
+    assert worksheet["G2"].value == "Server capability profile declares this CU not supported."
+
+
+@pytest.mark.parametrize("outcome_key", ["passed", "failed", "error"])
+def test_excel_unsupported_override_preserves_observed_outcomes(outcome_key):
+    _profiles, _facets, capabilities = _excel_metadata()
+    payload = {
+        "by_cu": {
+            "sync_result": {
+                "compliance": outcome_key,
+                "outcome": outcome_key,
+                "test_count": 1,
+                outcome_key: 1,
+                "not_supported": 0,
+            }
+        }
+    }
+    capabilities.overrides["sync_result"] = "unsupported"
+
+    _excel_report._apply_capability_overrides(payload, capabilities)
+
+    sync = payload["by_cu"]["sync_result"]
+    assert sync["compliance"] == outcome_key
+    assert sync["outcome"] == outcome_key
+    assert sync["not_supported"] == 0
 
 
 def test_triage_workbook_mapping_precision_defaults_to_unknown_title_case():

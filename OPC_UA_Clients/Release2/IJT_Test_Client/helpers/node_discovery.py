@@ -366,3 +366,51 @@ async def read_tool_product_instance_uri(client, ns_ijt: int, ns_di: int, ns_app
         return str(value) if value is not None else ""
     except Exception:  # noqa: BLE001
         return ""
+
+
+async def read_tool_enabled(
+    client,
+    ns_ijt: int,
+    ns_di: int,
+    product_instance_uri: str,
+    ns_app: int | None = None,
+) -> bool | None:
+    """Read Parameters.Enabled from the Tool identified by ProductInstanceUri."""
+    try:
+        joining_system = await find_joining_system(client)
+        if joining_system is None:
+            return None
+        asset_management = await find_child_by_browse_name_any(joining_system, "AssetManagement", (ns_ijt, ns_app))
+        if asset_management is None:
+            return None
+        assets = await find_child_by_browse_name_any(asset_management, "Assets", (ns_ijt, ns_app))
+        if assets is None:
+            return None
+        tools = await find_child_by_browse_name_any(assets, "Tools", (ns_ijt, ns_app))
+        if tools is None:
+            return None
+
+        for _name, tool in await browse_folder_instances(tools):
+            identification = await find_child_by_browse_name_any(tool, "Identification", (ns_di, ns_ijt, ns_app))
+            if identification is None:
+                continue
+            piu_node = await find_child_by_browse_name_any(
+                identification, "ProductInstanceUri", (ns_di, ns_ijt, ns_app)
+            )
+            if piu_node is None:
+                continue
+            piu = await asyncio.wait_for(piu_node.read_value(), timeout=_BROWSE_TIMEOUT)
+            if str(piu) != product_instance_uri:
+                continue
+
+            parameters = await find_child_by_browse_name_any(tool, "Parameters", (ns_ijt, ns_app))
+            if parameters is None:
+                return None
+            enabled_node = await find_child_by_browse_name_any(parameters, "Enabled", (ns_ijt, ns_app))
+            if enabled_node is None:
+                return None
+            enabled = await asyncio.wait_for(enabled_node.read_value(), timeout=_BROWSE_TIMEOUT)
+            return enabled if isinstance(enabled, bool) else None
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Could not read Tool Parameters.Enabled: %s", exc)
+    return None

@@ -158,10 +158,22 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 entity_ids.add(str(entity_id))
         return piu in entity_ids and (not joining_process_id or joining_process_id in entity_ids)
 
-    def _method_succeeded(self, method_name: str, result: Any) -> bool:
+    def _method_succeeded(
+        self,
+        method_name: str,
+        result: Any,
+        *,
+        observe_uncertain: bool = False,
+    ) -> bool:
         """Return whether both the OPC UA call and IJT method status succeeded."""
         if not result.success:
             self._last_method_failure = str(result.error or "OPC UA service call failed")
+            if observe_uncertain and result.status_code is not None and 0x40000000 <= result.status_code < 0x80000000:
+                logger.warning(
+                    "%s returned Uncertain; observing for correlated result evidence",
+                    method_name,
+                )
+                return True
             return False
 
         output = result.output_list
@@ -236,8 +248,34 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             ua.Variant(piu, ua.VariantType.String),
             ua.Variant(True, ua.VariantType.Boolean),
             timeout=self._profile.cu_execution.default_timeout_seconds,
+            target_server_authorized=True,
         )
         return self._method_succeeded(BN.ENABLE_ASSET, result)
+
+    async def _read_tool_enabled(self, piu: str) -> bool | None:
+        """Read the current persistent Tool enabled state."""
+        from helpers.node_discovery import read_tool_enabled
+
+        ns_ijt = await self._resolve_ijt_namespace_index()
+        ns_di = self._ns_di
+        if ns_di is None:
+            from helpers.namespaces import NS_DI
+
+            ns_di = await self._client.get_namespace_index(NS_DI)
+            self._ns_di = ns_di
+        return await read_tool_enabled(self._client, ns_ijt, ns_di, piu, self._ns_app)
+
+    async def _ensure_tool_enabled(self, piu: str) -> bool:
+        """Ensure the Tool is enabled according to the target profile policy."""
+        policy = self._profile.cu_execution.extension_fields.get(
+            "enable_asset_policy",
+            "when_disabled",
+        )
+        if policy == "always":
+            return await self._enable_tool(piu)
+        if await self._read_tool_enabled(piu) is True:
+            return True
+        return await self._enable_tool(piu)
 
     async def _resolve_tool_piu(self) -> str:
         """Return the configured or discovered tool ProductInstanceUri."""
@@ -340,18 +378,15 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             return process
         return None
 
-    async def _select_joining_process(self, jpm_node: Any, process: Any, piu: str) -> bool:
-        """Call SelectJoiningProcess and return True on success."""
+    def _make_process_identification(self, process: Any) -> Any:
+        """Build the IJT process identifier required by controller methods."""
         from asyncua import ua
-
-        from helpers.method_caller import find_and_call_method
-        from helpers.namespaces import BN
 
         try:
             identification = ua.JoiningProcessIdentificationDataType()
         except AttributeError:
             logger.warning("JoiningProcessIdentificationDataType is not registered")
-            return False
+            return None
 
         identification.JoiningProcessId = self._process_field(
             process,
@@ -364,9 +399,25 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             "JoiningProcessOriginId",
             "JoiningProcessIdentificationOrigin",
         )
-        configured_name = self._profile.selection.joining_process.selection_name
+        selection = self._profile.selection.joining_process
+        configured_name = selection.selection_name
         advertised_names = self._selection_names(process)
-        identification.SelectionName = configured_name or (sorted(advertised_names)[0] if advertised_names else "")
+        ids_configured = bool(selection.joining_process_id or selection.joining_process_origin_id)
+        identification.SelectionName = (
+            "" if ids_configured else configured_name or (sorted(advertised_names)[0] if advertised_names else "")
+        )
+        return identification
+
+    async def _select_joining_process(self, jpm_node: Any, process: Any, piu: str) -> bool:
+        """Call SelectJoiningProcess and return True on success."""
+        from asyncua import ua
+
+        from helpers.method_caller import find_and_call_method
+        from helpers.namespaces import BN
+
+        identification = self._make_process_identification(process)
+        if identification is None:
+            return False
 
         result = await find_and_call_method(
             jpm_node,
@@ -375,8 +426,134 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             ua.Variant(piu, ua.VariantType.String),
             ua.Variant(identification, ua.VariantType.ExtensionObject),
             timeout=self._profile.cu_execution.default_timeout_seconds,
+            target_server_authorized=True,
         )
         return self._method_succeeded(BN.SELECT_JOINING_PROCESS, result)
+
+    async def _trigger_intervention(self) -> TargetServerTriggerOutcome:
+        """Generate an InterventionResult using a configured process action."""
+        from asyncua import ua
+
+        from helpers.method_caller import find_and_call_method
+
+        method_name = str(
+            self._profile.cu_execution.extension_fields.get(
+                "intervention_method",
+                "IncrementJoiningProcessCounter",
+            )
+        )
+        supported_methods = {
+            "AbortJoiningProcess",
+            "DecrementJoiningProcessCounter",
+            "IncrementJoiningProcessCounter",
+            "ResetJoiningProcess",
+        }
+        if method_name not in supported_methods:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"Unsupported intervention_method '{method_name}' in target profile",
+                method=method_name,
+                trigger_mode="joining_process_intervention",
+            )
+
+        state_changes = self._profile.cu_execution.state_changing_methods
+        if not state_changes.allow_state_changing_method(method_name):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"{method_name} is not allowed by the target profile",
+                method=method_name,
+                trigger_mode="joining_process_intervention",
+            )
+
+        jpm_node = await self._get_joining_process_management()
+        piu = await self._resolve_tool_piu()
+        if jpm_node is None or not piu:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="JoiningProcessManagement or Tool ProductInstanceUri is unavailable",
+                method=method_name,
+                trigger_mode="joining_process_intervention",
+            )
+
+        processes = await self._get_joining_process_list(jpm_node, piu)
+        process = self._choose_joining_process(processes)
+        if process is None:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="No joining process matched the intervention workflow selection",
+                method=method_name,
+                trigger_mode="joining_process_intervention",
+                product_instance_uri=piu,
+            )
+        identification = self._make_process_identification(process)
+        if identification is None:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="JoiningProcessIdentificationDataType is unavailable",
+                method=method_name,
+                trigger_mode="joining_process_intervention",
+                product_instance_uri=piu,
+            )
+
+        method_args = [
+            ua.Variant(piu, ua.VariantType.String),
+            ua.Variant(identification, ua.VariantType.ExtensionObject),
+        ]
+        if method_name in {
+            "DecrementJoiningProcessCounter",
+            "IncrementJoiningProcessCounter",
+        }:
+            count = int(
+                self._profile.cu_execution.extension_fields.get(
+                    "intervention_count",
+                    1,
+                )
+            )
+            method_args.append(ua.Variant(count, ua.VariantType.UInt32))
+        elif method_name == "AbortJoiningProcess":
+            message = str(
+                self._profile.cu_execution.extension_fields.get(
+                    "intervention_message",
+                    "IJT target-server intervention workflow",
+                )
+            )
+            method_args.append(
+                ua.Variant(
+                    ua.LocalizedText(Text=message, Locale="en"),
+                    ua.VariantType.LocalizedText,
+                )
+            )
+
+        result = await find_and_call_method(
+            jpm_node,
+            method_name,
+            await self._resolve_ijt_namespace_index(),
+            *method_args,
+            timeout=self._profile.cu_execution.default_timeout_seconds,
+            target_server_authorized=True,
+        )
+        process_id = str(identification.JoiningProcessId)
+        if not self._method_succeeded(
+            method_name,
+            result,
+            observe_uncertain=True,
+        ):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"{method_name} failed for process '{process_id}': {self._last_method_failure}",
+                method=method_name,
+                trigger_mode="joining_process_intervention",
+                product_instance_uri=piu,
+                joining_process_id=process_id,
+            )
+        return TargetServerTriggerOutcome(
+            triggered=True,
+            method=method_name,
+            trigger_mode="joining_process_intervention",
+            product_instance_uri=piu,
+            joining_process_id=process_id,
+            joining_process_origin_id=str(identification.JoiningProcessOriginId),
+        )
 
     async def _start_selected_joining(self, jpm_node: Any, piu: str, deselect_after: bool) -> bool:
         """Call StartSelectedJoining(piu, deselect_after) and return True on success."""
@@ -392,6 +569,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             ua.Variant(piu, ua.VariantType.String),
             ua.Variant(deselect_after, ua.VariantType.Boolean),
             timeout=self._profile.cu_execution.default_timeout_seconds,
+            target_server_authorized=True,
         )
         return self._method_succeeded(BN.START_SELECTED_JOINING, result)
 
@@ -422,7 +600,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
 
         piu = await self._resolve_tool_piu()
-        if sc.allow_state_changing_method("EnableAsset") and not await self._enable_tool(piu):
+        if sc.allow_state_changing_method("EnableAsset") and not await self._ensure_tool_enabled(piu):
             return TargetServerTriggerOutcome(
                 triggered=False,
                 skip_reason=f"EnableAsset failed for tool PIU='{piu}': {self._last_method_failure}",
@@ -606,6 +784,10 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         single_start_produces_final_result.  Calls it num_children times
         when policy is one_start_per_operation.
         """
+        from helpers.namespaces import ResultClassification
+
+        if classification == ResultClassification.INTERVENTION_RESULT:
+            return await self._trigger_intervention()
         policy = self._profile.workflow_execution.start_invocation_policy
         if policy == "one_start_per_operation":
             count = self._profile.workflow_execution.expected_operation_count or num_children

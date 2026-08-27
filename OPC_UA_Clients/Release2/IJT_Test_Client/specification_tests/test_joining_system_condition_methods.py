@@ -106,8 +106,8 @@ async def _raise_condition_and_collect(subscription_client, event_trigger, ns_ij
     async with EventCollector(subscription_client) as collector:
         await _subscribe_to_conditions(collector, subscription_client, ns_ijt)
         outcome = await event_trigger.trigger_condition(event_type)
-        if not outcome.triggered and event_trigger.is_simulator:
-            pytest.skip(outcome.skip_reason or "Simulator condition trigger failed")
+        if not outcome.triggered:
+            pytest.skip(outcome.skip_reason or "No deterministic condition trigger is configured")
         event, seen = await _collect_until(
             collector,
             lambda item: _event_payload_field(item, "EventCode") == event_type,

@@ -38,10 +38,11 @@ Use from command line:
 
 Profile examples:
 
-- `example_remote_start.yaml` (OPC UA can start joining)
-- `example_manual_trigger.yaml` (operator/manual trigger)
-- `example_simulation_methods.yaml` (simulation helper methods)
-- `template.yaml` (base template)
+- `example_multi_operation_job.profile.yaml` (complete automated controller workflow)
+- `example_multi_operation_job.capabilities.yaml` (paired CU declaration)
+- `example_manual_trigger.profile.yaml` (operator/manual trigger)
+- `example_simulation_methods.profile.yaml` (simulation helper methods)
+- `template.profile.yaml` (base template)
 
 ## 5) What is default behavior today
 - Default test flow remains the normal simulator-based path.

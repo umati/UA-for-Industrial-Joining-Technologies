@@ -1,0 +1,101 @@
+# Capability baseline paired with
+# example_multi_operation_job.profile.yaml in this directory.
+#
+# This preserves the tested CU selection without vendor, endpoint, asset, or
+# process identifiers. Capabilities still vary by implementation and version;
+# verify and adjust this file before making conformance claims for another server.
+
+server:
+  name: "Multi-operation Job Result Server Example"
+  vendor: "<target-server-vendor>"
+  version: ""
+  description: >
+    Example IJT server supporting Tool-based remote start, layered
+    SingleResult/BatchResult/JobResult output, and intervention results.
+
+connection:
+  default_url: "opc.tcp://<target-server-host>:40451"
+  connect_timeout_seconds: 30
+  session_timeout_seconds: 300
+
+active_profile: general_joining_system
+
+supported_facets:
+  - batch_result_server_facet
+  - event_management_server_facet
+  - identifiers_methods_server_facet
+  - enable_tool_server_facet
+  - asset_connection_server_facet
+  - general_process_operations_server_facet
+  - sequential_process_operations_server_facet
+  - asset_management_assets_server_facet
+
+cu_overrides:
+  get_latest_result: unsupported
+  get_result_by_id: unsupported
+  get_result_with_filter_criteria: unsupported
+  request_results: unsupported
+  requested_result_variable_access: unsupported
+  requested_result_event_access: unsupported
+  acknowledge_results: unsupported
+  request_unacknowledged_results: unsupported
+
+  result_extended_meta_data: unsupported
+  result_value_trace_point_index: unsupported
+  result_value_trace_point_time_offset: unsupported
+
+  deselect_joining_process: unsupported
+  set_joining_process_counter: unsupported
+  start_joining_process: unsupported
+  get_joining_process_revision_list: unsupported
+  set_joining_process_mapping: unsupported
+
+  joint_management: unsupported
+  send_joint: unsupported
+  get_joint_list: unsupported
+  select_joint: unsupported
+  get_joint: unsupported
+  joint_data: unsupported
+  delete_joint: unsupported
+  get_joint_revision_list: unsupported
+  send_joint_design: unsupported
+  get_joint_design_list: unsupported
+  get_joint_design: unsupported
+  joint_design_data: unsupported
+  delete_joint_design: unsupported
+  send_joint_component: unsupported
+  get_joint_component_list: unsupported
+  get_joint_component: unsupported
+  joint_component_data: unsupported
+  delete_joint_component: unsupported
+
+  set_calibration: unsupported
+  reboot_asset: unsupported
+  disconnect_asset: unsupported
+  feedback_methods: unsupported
+  asset_management_servo: unsupported
+  asset_management_memory_device: unsupported
+  asset_management_cable: unsupported
+  asset_management_power_supply: unsupported
+  asset_management_feeder: unsupported
+  asset_management_battery: unsupported
+  asset_management_sensor: unsupported
+  asset_management_accessory: unsupported
+  asset_management_software: unsupported
+  asset_management_sub_component: unsupported
+  asset_management_battery_operation_cycle_counter: unsupported
+  asset_management_health: unsupported
+  asset_management_monitoring_health: unsupported
+
+  set_offline_timer: unsupported
+  set_time: unsupported
+  io_signals_methods: unsupported
+  execute_operation: unsupported
+  get_error_information: unsupported
+  sync_result: unsupported
+  sync_result_counters: unsupported
+
+  job_result: supported
+  result_value_final_tag: supported
+  partial_consolidated_result: supported
+  intervention_result: supported

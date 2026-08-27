@@ -91,7 +91,7 @@ FULL_VALID = """
 schema_version: 1
 profile_name: "Full Test Profile"
 description: "Complete valid profile for unit tests"
-capabilities_file: "../server_capabilities.yaml"
+capabilities_file: "default.capabilities.yaml"
 
 target:
   endpoint: "opc.tcp://localhost:40451"
@@ -484,35 +484,43 @@ class TestExampleProfilesLoad:
         return Path(__file__).resolve().parents[2] / "target_server_cu_profiles"
 
     def test_template_loads(self, profiles_dir):
-        template = profiles_dir / "template.yaml"
-        assert template.exists(), "template.yaml must exist"
+        template = profiles_dir / "template.profile.yaml"
+        assert template.exists(), "template.profile.yaml must exist"
         profile = load_target_server_profile(template)
         assert profile.schema_version == 1
 
-    def test_example_remote_start_loads(self, profiles_dir):
-        example = profiles_dir / "example_remote_start.yaml"
-        assert example.exists(), "example_remote_start.yaml must exist"
+    def test_complete_automated_controller_example_loads(self, profiles_dir):
+        example = profiles_dir / "example_multi_operation_job.profile.yaml"
+        assert example.exists(), "example_multi_operation_job.profile.yaml must exist"
         profile = load_target_server_profile(example)
         assert profile.triggers.result.mode == "start_selected_joining"
+        assert profile.selection.joining_process.policy == "exact_match"
+        assert profile.workflow_execution.expected_operation_count == 6
 
     def test_example_manual_trigger_loads(self, profiles_dir):
-        example = profiles_dir / "example_manual_trigger.yaml"
-        assert example.exists(), "example_manual_trigger.yaml must exist"
+        example = profiles_dir / "example_manual_trigger.profile.yaml"
+        assert example.exists(), "example_manual_trigger.profile.yaml must exist"
         profile = load_target_server_profile(example)
         assert profile.triggers.result.mode == "manual_trigger"
 
     def test_example_simulation_methods_loads(self, profiles_dir):
-        example = profiles_dir / "example_simulation_methods.yaml"
-        assert example.exists(), "example_simulation_methods.yaml must exist"
+        example = profiles_dir / "example_simulation_methods.profile.yaml"
+        assert example.exists(), "example_simulation_methods.profile.yaml must exist"
         profile = load_target_server_profile(example)
         assert profile.triggers.result.mode == "simulate_methods"
         assert profile.triggers.event.mode == "simulate_methods"
         assert profile.triggers.condition.mode == "simulate_methods"
 
     def test_example_profiles_have_no_real_endpoints(self, profiles_dir):
-        yaml_files = [profiles_dir / "template.yaml", *sorted(profiles_dir.glob("example_*.yaml"))]
+        yaml_files = [
+            profiles_dir / "template.profile.yaml",
+            *sorted(profiles_dir.glob("example_*.profile.yaml")),
+        ]
         for yaml_file in yaml_files:
             profile = load_target_server_profile(yaml_file)
+            capabilities_path = profile.capabilities_file_path()
+            assert capabilities_path is not None
+            assert capabilities_path.exists(), f"{yaml_file.name} references missing capability file"
             endpoint = profile.target.endpoint
             # Endpoints in committed examples must be placeholders or empty
             assert (

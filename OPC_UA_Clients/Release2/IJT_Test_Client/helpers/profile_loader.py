@@ -1,7 +1,7 @@
 """
 Profile loader for the IJT OPC UA test framework.
 
-Reads server_capabilities.yaml (or the path given by OPCUA_CAPABILITIES_FILE
+Reads target_server_cu_profiles/default.capabilities.yaml (or the path given by OPCUA_CAPABILITIES_FILE
 env var), resolves the active profile and facets, applies cu_overrides, and
 returns the final set of supported conformance unit keys.
 
@@ -36,7 +36,7 @@ from helpers.skip_reasons import not_supported_reason
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_CAPABILITIES_FILENAME = "server_capabilities.yaml"
+_DEFAULT_CAPABILITIES_FILENAME = "target_server_cu_profiles/default.capabilities.yaml"
 _PROFILES_DIR = Path(__file__).parent.parent / "profiles"
 _PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -83,7 +83,7 @@ def load_supported_cus(
     capabilities_path: Path | None = None,
 ) -> FrozenSet[str]:
     """
-    Read server_capabilities.yaml and return the frozenset of supported
+    Read a capability declaration and return the frozenset of supported
     conformance unit keys for the current server under test.
 
     Resolution order:
@@ -97,7 +97,7 @@ def load_supported_cus(
     capabilities_path:
         Explicit path to a capabilities YAML file. When None the loader
         checks the OPCUA_CAPABILITIES_FILE env var, then falls back to
-        server_capabilities.yaml in the project root.
+        target_server_cu_profiles/default.capabilities.yaml.
     """
     if capabilities_path is None:
         env_path = os.environ.get("OPCUA_CAPABILITIES_FILE")
@@ -108,7 +108,7 @@ def load_supported_cus(
 
     if not capabilities_path.exists():
         logger.warning(
-            "server_capabilities.yaml not found at %s — "
+            "Default capability declaration not found at %s — "
             "treating all Conformance Units as supported (full specification coverage mode)",
             capabilities_path,
         )

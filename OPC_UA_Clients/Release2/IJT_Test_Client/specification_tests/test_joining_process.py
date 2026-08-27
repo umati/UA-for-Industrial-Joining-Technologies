@@ -481,11 +481,12 @@ async def test_select_joining_process_with_invalid_id_returns_error(opcua_client
     jp_arg = _jp_identification_arg(process_id=_INVALID_PROGRAM_ID)
     if jp_arg is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot run negative selection test")
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
 
     call_result = await call_method(
         jpm,
         method_node,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         jp_arg,
         timeout=15.0,
         method_name=BN.SELECT_JOINING_PROCESS,
@@ -623,13 +624,14 @@ async def test_joining_process_core_methods_are_callable(opcua_client, ns_indice
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await _find_method_node(jpm, method_name, ns_ijt)
     assert method_node is not None, f"Required method '{method_name}' not found in JoiningProcessManagement"
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     if method_name == BN.SELECT_JOINING_PROCESS:
         jp_arg = _jp_identification_arg(process_id=_INVALID_PROGRAM_ID)
         if jp_arg is None:
             pytest.skip("JoiningProcessIdentificationDataType not available — cannot call SelectJoiningProcess")
-        args = (_piu_arg(), jp_arg)
+        args = (_piu_arg(pi_uri), jp_arg)
     else:
-        args = (_piu_arg(), ua.Variant(False, ua.VariantType.Boolean))
+        args = (_piu_arg(pi_uri), ua.Variant(False, ua.VariantType.Boolean))
     call_result = await call_method(jpm, method_node, *args, timeout=15.0, method_name=method_name)
     if not call_result.success:
         err_str = str(call_result.error) if call_result.error else "unknown"
@@ -756,11 +758,12 @@ async def test_get_joining_process_list_returns_list(opcua_client, ns_indices):
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     result = await find_and_call_method(
         jpm,
         BN.GET_JOINING_PROCESS_LIST,
         ns_ijt,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         timeout=15.0,
     )
     if not result.success:
@@ -782,11 +785,12 @@ async def test_get_joining_process_list_elements_have_valid_structure(opcua_clie
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     result = await find_and_call_method(
         jpm,
         BN.GET_JOINING_PROCESS_LIST,
         ns_ijt,
-        ua.Variant("", ua.VariantType.String),
+        _piu_arg(pi_uri),
         timeout=15.0,
     )
     if not result.success:
@@ -1506,11 +1510,12 @@ async def test_get_joining_process_list_entries_have_non_empty_id(opcua_client, 
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     result = await find_and_call_method(
         jpm,
         BN.GET_JOINING_PROCESS_LIST,
         ns_ijt,
-        ua.Variant("", ua.VariantType.String),
+        _piu_arg(pi_uri),
         timeout=15.0,
     )
     if not result.success:
@@ -1542,11 +1547,12 @@ async def test_get_joining_process_list_returns_non_null_list(opcua_client, ns_i
     """
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     result = await find_and_call_method(
         jpm,
         BN.GET_JOINING_PROCESS_LIST,
         ns_ijt,
-        ua.Variant("", ua.VariantType.String),
+        _piu_arg(pi_uri),
         timeout=15.0,
     )
     if not result.success:
@@ -1857,7 +1863,7 @@ async def test_reset_joining_process_server_remains_functional(opcua_client, ns_
         jpm,
         BN.GET_JOINING_PROCESS_LIST,
         ns_ijt,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         timeout=15.0,
     )
     if not list_result.success:
@@ -2008,10 +2014,11 @@ async def test_set_joining_process_size_zero_is_server_policy(opcua_client, ns_i
     jp_arg = _jp_identification_arg()
     if jp_arg is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot build SetJoiningProcessSize arguments")
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     call_result = await call_method(
         jpm,
         method_node,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         jp_arg,
         ua.Variant(0, ua.VariantType.UInt32),
         timeout=15.0,
@@ -2114,10 +2121,11 @@ async def test_delete_joining_process_rejects_nonexistent_id(opcua_client, ns_in
     jp_arg = _jp_identification_arg(process_id=_INVALID_PROGRAM_ID)
     if jp_arg is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot build DeleteJoiningProcess arguments")
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     call_result = await call_method(
         jpm,
         method_node,
-        _piu_arg(),
+        _piu_arg(pi_uri),
         jp_arg,
         timeout=15.0,
         method_name="DeleteJoiningProcess",
@@ -2269,7 +2277,7 @@ async def test_get_selected_joining_program_none_after_deselect(opcua_client, ns
 # ---------------------------------------------------------------------------
 
 
-async def _send_test_joining_process(jpm, ns_ijt, process_id, name="ConformanceTestProcess"):
+async def _send_test_joining_process(jpm, ns_ijt, pi_uri, process_id, name="ConformanceTestProcess"):
     """Send a JoiningProcessDataType via SendJoiningProcess; skip if unavailable."""
     send_node = await find_child_by_browse_name(jpm, "SendJoiningProcess", ns_ijt)
     if send_node is None:
@@ -2295,7 +2303,7 @@ async def _send_test_joining_process(jpm, ns_ijt, process_id, name="ConformanceT
     try:
         await jpm.call_method(
             send_node.nodeid,
-            _piu_arg(),
+            _piu_arg(pi_uri),
             ua.Variant(proc_data, ua.VariantType.ExtensionObject),
             _trimmed_string_arg(""),
         )
@@ -2306,7 +2314,7 @@ async def _send_test_joining_process(jpm, ns_ijt, process_id, name="ConformanceT
         raise
 
 
-async def _delete_test_joining_process(jpm, ns_ijt, process_id):
+async def _delete_test_joining_process(jpm, ns_ijt, pi_uri, process_id):
     """Delete a joining process; silently ignore errors (cleanup helper)."""
     del_node = await find_child_by_browse_name(jpm, "DeleteJoiningProcess", ns_ijt)
     if del_node is None:
@@ -2315,7 +2323,7 @@ async def _delete_test_joining_process(jpm, ns_ijt, process_id):
     if jp_arg is None:
         return
     try:
-        await jpm.call_method(del_node.nodeid, _piu_arg(), jp_arg)
+        await jpm.call_method(del_node.nodeid, _piu_arg(pi_uri), jp_arg)
     except ua.UaError:
         pass
 
@@ -2330,12 +2338,13 @@ async def test_send_joining_process_with_valid_data_succeeds(opcua_client, ns_in
     """Send a fully constructed JoiningProcessDataType and assert a Good response."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     process_id = "conformance-test-jprocess-send"
     try:
-        await _send_test_joining_process(jpm, ns_ijt, process_id)
+        await _send_test_joining_process(jpm, ns_ijt, pi_uri, process_id)
         logger.info("SendJoiningProcess succeeded for ID '%s'", process_id)
     finally:
-        await _delete_test_joining_process(jpm, ns_ijt, process_id)
+        await _delete_test_joining_process(jpm, ns_ijt, pi_uri, process_id)
 
 
 @pytest.mark.requires_cu(CU.SEND_JOINING_PROCESS)
@@ -2343,14 +2352,15 @@ async def test_send_joining_process_update_replaces_existing_process(opcua_clien
     """Sending the same JoiningProcessId twice with a different Name must update the stored process."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     process_id = "conformance-test-jprocess-update"
     try:
-        await _send_test_joining_process(jpm, ns_ijt, process_id, name="OriginalName")
-        await _send_test_joining_process(jpm, ns_ijt, process_id, name="UpdatedName")
+        await _send_test_joining_process(jpm, ns_ijt, pi_uri, process_id, name="OriginalName")
+        await _send_test_joining_process(jpm, ns_ijt, pi_uri, process_id, name="UpdatedName")
         get_node = await find_child_by_browse_name(jpm, "GetJoiningProcess", ns_ijt)
         if get_node is not None:
             try:
-                result = await jpm.call_method(get_node.nodeid, _piu_arg(), _trimmed_string_arg(process_id))
+                result = await jpm.call_method(get_node.nodeid, _piu_arg(pi_uri), _trimmed_string_arg(process_id))
                 returned_process = _first_method_output(result)
                 returned_meta = getattr(returned_process, "JoiningProcessMetaData", None)
                 name_val = getattr(returned_meta, "Name", None) or getattr(returned_process, "Name", None)
@@ -2360,7 +2370,7 @@ async def test_send_joining_process_update_replaces_existing_process(opcua_clien
             except ua.UaError as exc:
                 logger.warning("GetJoiningProcess after update raised: %s", exc)
     finally:
-        await _delete_test_joining_process(jpm, ns_ijt, process_id)
+        await _delete_test_joining_process(jpm, ns_ijt, pi_uri, process_id)
 
 
 @pytest.mark.requires_cu(CU.SEND_JOINING_PROCESS)
@@ -2369,13 +2379,14 @@ async def test_send_joining_process_with_null_data_returns_error(opcua_client, n
     """Calling SendJoiningProcess with null data must raise ua.UaError."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     send_node = await find_child_by_browse_name(jpm, "SendJoiningProcess", ns_ijt)
     if send_node is None:
         pytest.skip("SendJoiningProcess: Not Supported — skipping negative test")
     try:
         result = await jpm.call_method(
             send_node.nodeid,
-            _piu_arg(),
+            _piu_arg(pi_uri),
             ua.Variant(None, ua.VariantType.Null),
             _trimmed_string_arg(""),
         )
@@ -2392,6 +2403,7 @@ async def test_send_joining_process_with_empty_process_id_returns_error(opcua_cl
     """Calling SendJoiningProcess with an empty JoiningProcessId must raise ua.UaError."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     send_node = await find_child_by_browse_name(jpm, "SendJoiningProcess", ns_ijt)
     if send_node is None:
         pytest.skip("SendJoiningProcess: Not Supported — skipping negative test")
@@ -2411,7 +2423,7 @@ async def test_send_joining_process_with_empty_process_id_returns_error(opcua_cl
     try:
         result = await jpm.call_method(
             send_node.nodeid,
-            _piu_arg(),
+            _piu_arg(pi_uri),
             ua.Variant(proc_data, ua.VariantType.ExtensionObject),
             _trimmed_string_arg(""),
         )
@@ -2432,14 +2444,15 @@ async def test_get_joining_process_returns_correct_data_for_known_id(opcua_clien
     """GetJoiningProcess must return a process whose JoiningProcessId matches the requested ID."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     process_id = "conformance-test-jprocess-get"
     try:
-        await _send_test_joining_process(jpm, ns_ijt, process_id)
+        await _send_test_joining_process(jpm, ns_ijt, pi_uri, process_id)
         get_node = await find_child_by_browse_name(jpm, "GetJoiningProcess", ns_ijt)
         if get_node is None:
             pytest.skip("GetJoiningProcess: Not Supported — skipping")
         try:
-            result = await jpm.call_method(get_node.nodeid, _piu_arg(), _trimmed_string_arg(process_id))
+            result = await jpm.call_method(get_node.nodeid, _piu_arg(pi_uri), _trimmed_string_arg(process_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJoiningProcess not callable: {exc}")
@@ -2456,7 +2469,7 @@ async def test_get_joining_process_returns_correct_data_for_known_id(opcua_clien
             )
         logger.info("GetJoiningProcess round-trip succeeded for ID '%s'", process_id)
     finally:
-        await _delete_test_joining_process(jpm, ns_ijt, process_id)
+        await _delete_test_joining_process(jpm, ns_ijt, pi_uri, process_id)
 
 
 @pytest.mark.requires_cu(CU.GET_JOINING_PROCESS)
@@ -2464,14 +2477,15 @@ async def test_get_joining_process_meta_data_has_mandatory_fields(opcua_client, 
     """GetJoiningProcess must return a result with a non-empty JoiningProcessId field."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     process_id = "conformance-test-jprocess-meta"
     try:
-        await _send_test_joining_process(jpm, ns_ijt, process_id)
+        await _send_test_joining_process(jpm, ns_ijt, pi_uri, process_id)
         get_node = await find_child_by_browse_name(jpm, "GetJoiningProcess", ns_ijt)
         if get_node is None:
             pytest.skip("GetJoiningProcess: Not Supported — skipping")
         try:
-            result = await jpm.call_method(get_node.nodeid, _piu_arg(), _trimmed_string_arg(process_id))
+            result = await jpm.call_method(get_node.nodeid, _piu_arg(pi_uri), _trimmed_string_arg(process_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJoiningProcess not callable: {exc}")
@@ -2486,7 +2500,7 @@ async def test_get_joining_process_meta_data_has_mandatory_fields(opcua_client, 
         assert str(proc_id_val).strip() != "", "JoiningProcessId must not be empty"
         logger.info("Mandatory JoiningProcessId field present: '%s'", proc_id_val)
     finally:
-        await _delete_test_joining_process(jpm, ns_ijt, process_id)
+        await _delete_test_joining_process(jpm, ns_ijt, pi_uri, process_id)
 
 
 @pytest.mark.requires_cu(CU.GET_JOINING_PROCESS)
@@ -2498,10 +2512,11 @@ async def test_get_joining_process_with_nonexistent_id_returns_error(opcua_clien
     get_node = await find_child_by_browse_name(jpm, "GetJoiningProcess", ns_ijt)
     if get_node is None:
         pytest.skip("GetJoiningProcess: Not Supported — skipping negative test")
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     try:
         result = await jpm.call_method(
             get_node.nodeid,
-            _piu_arg(),
+            _piu_arg(pi_uri),
             _trimmed_string_arg("conformance-test-nonexistent-process-xyz"),
         )
         logger.warning("Expected ua.UaError for nonexistent process but returned %r", result)
@@ -2518,8 +2533,9 @@ async def test_get_joining_process_with_empty_id_returns_error(opcua_client, ns_
     get_node = await find_child_by_browse_name(jpm, "GetJoiningProcess", ns_ijt)
     if get_node is None:
         pytest.skip("GetJoiningProcess: Not Supported — skipping negative test")
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     try:
-        result = await jpm.call_method(get_node.nodeid, _piu_arg(), _trimmed_string_arg(""))
+        result = await jpm.call_method(get_node.nodeid, _piu_arg(pi_uri), _trimmed_string_arg(""))
         logger.warning("Expected ua.UaError for empty ID but returned %r", result)
     except ua.UaError as exc:
         logger.info("Correctly raised ua.UaError for empty ID: %s", exc)
@@ -2570,10 +2586,11 @@ async def test_set_joining_process_counter_exceeding_batch_size_returns_error(op
     jp_arg = _jp_identification_arg()
     if jp_arg is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot build counter arguments")
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     try:
         result = await jpm.call_method(
             counter_node.nodeid,
-            _piu_arg(),
+            _piu_arg(pi_uri),
             jp_arg,
             ua.Variant(999999, ua.VariantType.UInt32),
         )
@@ -2599,10 +2616,11 @@ async def test_set_joining_process_mapping_with_unknown_id_returns_error(opcua_c
     jp_arg = _jp_identification_arg(process_id="conformance-test-nonexistent-mapping-xyz")
     if jp_arg is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot build mapping arguments")
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     try:
         result = await jpm.call_method(
             mapping_node.nodeid,
-            _piu_arg(),
+            _piu_arg(pi_uri),
             jp_arg,
         )
         logger.warning(
@@ -2622,8 +2640,9 @@ async def test_set_joining_process_mapping_with_empty_data_returns_error(opcua_c
     mapping_node = await find_child_by_browse_name(jpm, "SetJoiningProcessMapping", ns_ijt)
     if mapping_node is None:
         pytest.skip("SetJoiningProcessMapping: Not Supported — skipping negative test")
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     try:
-        result = await jpm.call_method(mapping_node.nodeid, _piu_arg(), ua.Variant(None, ua.VariantType.Null))
+        result = await jpm.call_method(mapping_node.nodeid, _piu_arg(pi_uri), ua.Variant(None, ua.VariantType.Null))
         logger.warning("Expected ua.UaError for empty SetJoiningProcessMapping but returned %r", result)
     except ua.UaError as exc:
         logger.info("Correctly raised ua.UaError for empty mapping data: %s", exc)
@@ -2641,15 +2660,16 @@ async def test_get_joining_process_revision_list_returns_revisions_for_existing_
     """GetJoiningProcessRevisionList for a process sent twice must return a list."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     process_id = "conformance-test-jprocess-rl-multi"
     try:
-        await _send_test_joining_process(jpm, ns_ijt, process_id, name="RevisionOne")
-        await _send_test_joining_process(jpm, ns_ijt, process_id, name="RevisionTwo")
+        await _send_test_joining_process(jpm, ns_ijt, pi_uri, process_id, name="RevisionOne")
+        await _send_test_joining_process(jpm, ns_ijt, pi_uri, process_id, name="RevisionTwo")
         rl_node = await find_child_by_browse_name(jpm, "GetJoiningProcessRevisionList", ns_ijt)
         if rl_node is None:
             pytest.skip("GetJoiningProcessRevisionList: Not Supported — skipping")
         try:
-            result = await jpm.call_method(rl_node.nodeid, _piu_arg(), _trimmed_string_arg(process_id))
+            result = await jpm.call_method(rl_node.nodeid, _piu_arg(pi_uri), _trimmed_string_arg(process_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJoiningProcessRevisionList not callable: {exc}")
@@ -2664,7 +2684,7 @@ async def test_get_joining_process_revision_list_returns_revisions_for_existing_
             process_id,
         )
     finally:
-        await _delete_test_joining_process(jpm, ns_ijt, process_id)
+        await _delete_test_joining_process(jpm, ns_ijt, pi_uri, process_id)
 
 
 @pytest.mark.requires_cu(CU.GET_JOINING_PROCESS_REVISION_LIST)
@@ -2672,14 +2692,15 @@ async def test_get_joining_process_revision_list_for_single_revision_process(opc
     """GetJoiningProcessRevisionList for a process sent once must return a list."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     process_id = "conformance-test-jprocess-rl-single"
     try:
-        await _send_test_joining_process(jpm, ns_ijt, process_id)
+        await _send_test_joining_process(jpm, ns_ijt, pi_uri, process_id)
         rl_node = await find_child_by_browse_name(jpm, "GetJoiningProcessRevisionList", ns_ijt)
         if rl_node is None:
             pytest.skip("GetJoiningProcessRevisionList: Not Supported — skipping")
         try:
-            result = await jpm.call_method(rl_node.nodeid, _piu_arg(), _trimmed_string_arg(process_id))
+            result = await jpm.call_method(rl_node.nodeid, _piu_arg(pi_uri), _trimmed_string_arg(process_id))
         except ua.UaError as exc:
             if "BadNotSupported" in str(exc):
                 pytest.skip(f"GetJoiningProcessRevisionList not callable: {exc}")
@@ -2689,7 +2710,7 @@ async def test_get_joining_process_revision_list_for_single_revision_process(opc
         )
         logger.info("GetJoiningProcessRevisionList returned list for single-revision process")
     finally:
-        await _delete_test_joining_process(jpm, ns_ijt, process_id)
+        await _delete_test_joining_process(jpm, ns_ijt, pi_uri, process_id)
 
 
 @pytest.mark.requires_cu(CU.GET_JOINING_PROCESS_REVISION_LIST)
@@ -2701,10 +2722,11 @@ async def test_get_joining_process_revision_list_with_nonexistent_id_returns_emp
     rl_node = await find_child_by_browse_name(jpm, "GetJoiningProcessRevisionList", ns_ijt)
     if rl_node is None:
         pytest.skip("GetJoiningProcessRevisionList: Not Supported — skipping negative test")
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     try:
         result = await jpm.call_method(
             rl_node.nodeid,
-            _piu_arg(),
+            _piu_arg(pi_uri),
             _trimmed_string_arg("conformance-test-nonexistent-rl-xyz"),
         )
         items = list(result) if isinstance(result, (list, tuple)) else ([] if result is None else [result])

@@ -27,9 +27,16 @@ artifacts are written to `test-results/target-server-cu/` (or the path configure
 |---|---|---|
 | `test-results/target-server-cu/target-server-cu-report.json` | JSON | Machine-readable target server CU evidence report with preflight checks, CU classification, outcome details, and discovery inventory |
 | `test-results/target-server-cu/target-server-cu-summary.txt` | Text | Human-readable operator summary with preflight results and evidence overview |
+| `test-results/target-server-cu/spec-tests.xml` | JUnit XML | Run-scoped specification-test outcomes |
+| `test-results/target-server-cu/cu-coverage-report.json` | JSON | Run-scoped 123-CU support, blocked, and Not Supported classifications |
+| `test-results/target-server-cu/report-controller.xlsx` | Excel | Controller workbook generated from the same run-scoped XML and CU report |
 
 Target Server CU evidence is written only when `run_target_server_cu.py` is invoked directly or
 via `run_all_tests.py --target-server-profile`.  It is never written during simulator runs.
+Use a unique `--output-dir` for each controller run so all five artifacts remain
+an internally consistent evidence set. A successful pytest exit means no executed
+assertion failed; skipped result or event tests still require their stated trigger
+or physical evidence before those CUs can be considered validated.
 
 > `report.html` is **not** produced by `run_all_tests.py`. Use the manual `pytest --html=...` command below if you need an HTML report.
 
@@ -151,7 +158,8 @@ explicit path, but they are not part of the default specification test run becau
 do not all carry CU gating metadata.
 
 When `run_all_tests.py` auto-launches the checked-in Release 2 simulator and no
-`OPCUA_CAPABILITIES_FILE` is set, it uses `server_capabilities.simulator.yaml`.
+`OPCUA_CAPABILITIES_FILE` is set, it uses
+`target_server_cu_profiles/simulator.capabilities.yaml`.
 That file describes simulator-supported CUs only; target servers and vendor
 simulators should provide their own capability file instead of reusing it.
 

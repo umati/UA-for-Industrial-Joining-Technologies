@@ -329,6 +329,22 @@ class TestCheckJoiningProcessConfigured:
         o = check_joining_process_configured(profile)
         assert o.passed
 
+    def test_selection_name_exact_match_passes(self):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "selection_name": "SequenceIndex_1",
+                    }
+                },
+            }
+        )
+        o = check_joining_process_configured(profile)
+        assert o.passed
+        assert o.evidence == {"selection_name": "SequenceIndex_1"}
+
     def test_empty_id_exact_match_is_config_error(self):
         profile = load_target_server_profile_from_dict(
             {

@@ -32,7 +32,7 @@ Usage:
   python run_target_server_cu.py --profile target_server_cu_profiles/my_profile.yaml --mode automated
 
   # Automated run with a real endpoint override:
-  python run_target_server_cu.py --profile template.yaml --endpoint opc.tcp://10.0.0.1:40451 --mode automated
+  python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --endpoint opc.tcp://10.0.0.1:40451 --mode automated
 
   # Classification only (no live spec tests, even if endpoint is set):
   python run_target_server_cu.py --profile my_profile.yaml --mode automated --skip-spec-tests
@@ -44,7 +44,7 @@ Usage:
   python run_target_server_cu.py --profile my_profile.yaml --output-dir test-results/target-server-cu/run-001
 
   # Use example profiles from the committed examples:
-  python run_target_server_cu.py --profile target_server_cu_profiles/example_remote_start.yaml --preflight-only
+  python run_target_server_cu.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml --preflight-only
 
 Environment variables:
 
@@ -228,6 +228,16 @@ def _write_evidence_report(
         "profile_source": profile.source_path,
         "endpoint": profile.target.endpoint,
         "scoring_mode": profile.cu_execution.scoring_mode,
+        "workflow": {
+            "result_trigger_mode": profile.triggers.result.mode,
+            "event_trigger_mode": profile.triggers.event.mode,
+            "condition_trigger_mode": profile.triggers.condition.mode,
+            "primary_result_classification": profile.workflow_execution.expected_results.classification,
+            "intermediate_result_classifications": list(
+                profile.workflow_execution.expected_results.intermediate_classifications
+            ),
+            "joining_process_selection_policy": profile.selection.joining_process.policy,
+        },
         "preflight": preflight_report.to_dict(),
         **(extra or {}),
     }
@@ -260,6 +270,50 @@ def _write_human_summary(
     summary_path = output_dir / "target-server-cu-summary.txt"
     summary_path.write_text("\n".join(lines), encoding="utf-8")
     return summary_path
+
+
+def _generate_excel_report(
+    profile: TargetServerCuProfile,
+    output_dir: Path,
+    target_report_path: Path,
+    *,
+    run_result: str,
+) -> dict:
+    """Generate a workbook from artifacts belonging to this exact target run."""
+    junit_xml = output_dir / "spec-tests.xml"
+    cu_report = output_dir / "cu-coverage-report.json"
+    workbook = output_dir / "report-controller.xlsx"
+    if not junit_xml.exists() or not cu_report.exists():
+        return {
+            "status": "skipped",
+            "reason": "JUnit XML or run-scoped CU coverage JSON is unavailable",
+            "path": None,
+        }
+
+    script = Path(__file__).resolve().parent / "scripts" / "make_excel_report.py"
+    cmd = [
+        sys.executable,
+        str(script),
+        "--xml",
+        str(junit_xml),
+        "--out",
+        str(workbook),
+        "--cu-json",
+        str(cu_report),
+        "--target-report",
+        str(target_report_path),
+        "--run-result",
+        run_result,
+    ]
+    capabilities = profile.capabilities_file_path()
+    if capabilities and capabilities.exists():
+        cmd.extend(["--capabilities", str(capabilities)])
+
+    completed = subprocess.run(cmd, cwd=str(Path(__file__).resolve().parent), text=True, capture_output=True)
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "unknown report generator error").strip()
+        return {"status": "failed", "reason": detail, "path": None}
+    return {"status": "generated", "reason": "", "path": str(workbook)}
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +356,7 @@ def _build_spec_test_env(profile: TargetServerCuProfile) -> dict[str, str]:
 
     Sets OPCUA_SERVER_URL from the profile endpoint.
     Sets OPCUA_CAPABILITIES_FILE from the profile capabilities_file if resolvable,
-    otherwise falls back to the default server_capabilities.yaml next to the runner.
+    otherwise falls back to target_server_cu_profiles/default.capabilities.yaml.
     """
     env = os.environ.copy()
     env["OPCUA_SERVER_URL"] = profile.target.endpoint
@@ -324,7 +378,7 @@ def _build_spec_test_env(profile: TargetServerCuProfile) -> dict[str, str]:
     if caps and caps.exists():
         env["OPCUA_CAPABILITIES_FILE"] = str(caps)
     elif "OPCUA_CAPABILITIES_FILE" not in env:
-        default_caps = _HERE / "server_capabilities.yaml"
+        default_caps = _HERE / "target_server_cu_profiles" / "default.capabilities.yaml"
         if default_caps.exists():
             env["OPCUA_CAPABILITIES_FILE"] = str(default_caps)
     return env
@@ -425,6 +479,8 @@ def run_live_spec_tests(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     junit_xml = output_dir / "spec-tests.xml"
+    cu_report = output_dir / "cu-coverage-report.json"
+    env["IJT_CU_COVERAGE_REPORT_FILE"] = str(cu_report)
 
     cmd = _build_spec_test_command(
         python_exe,
@@ -476,6 +532,7 @@ def run_live_spec_tests(
         "elapsed_seconds": round(elapsed, 1),
         "endpoint": endpoint,
         "junit_xml": str(junit_xml) if junit_xml.exists() else None,
+        "cu_coverage_json": str(cu_report) if cu_report.exists() else None,
         "excluded_simulation": exclude_simulation,
         "mode": mode,
     }
@@ -678,6 +735,20 @@ def run_automated(
 
     report_path = _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
     summary_path = _write_human_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary)
+    if spec_meta and spec_meta.get("status") == "completed":
+        excel_meta = _generate_excel_report(
+            profile,
+            output_dir,
+            report_path,
+            run_result="passed" if spec_rc == 0 else "failed",
+        )
+        extra["excel_report"] = excel_meta
+        report_path = _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
+        if excel_meta["status"] == "generated":
+            _log(f"  Excel report:    {excel_meta['path']}")
+        else:
+            _log(_c(_ANSI_RED, f"  Excel report:    {excel_meta['status']} — {excel_meta['reason']}"))
+            spec_rc = spec_rc or 1
 
     _log(f"\n  Evidence report: {report_path}")
     _log(f"  Human summary:   {summary_path}")
@@ -750,6 +821,30 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Override the endpoint from the profile (e.g. opc.tcp://10.0.0.1:40451)",
     )
     p.add_argument(
+        "--capabilities-file",
+        metavar="FILE",
+        default=None,
+        help="Override capabilities_file; environment: OPCUA_CAPABILITIES_FILE",
+    )
+    p.add_argument(
+        "--tool-product-instance-uri",
+        metavar="PIU",
+        default=None,
+        help="Override the Tool PIU; environment: OPCUA_TOOL_PRODUCT_INSTANCE_URI",
+    )
+    p.add_argument(
+        "--joining-process-id",
+        metavar="ID",
+        default=None,
+        help="Select one discovered JoiningProcess by stable ID; environment: OPCUA_JOINING_PROCESS_ID",
+    )
+    p.add_argument(
+        "--joining-process-origin-id",
+        metavar="ID",
+        default=None,
+        help="Optional stable origin ID; environment: OPCUA_JOINING_PROCESS_ORIGIN_ID",
+    )
+    p.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -773,6 +868,45 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Timeout in seconds for the live specification_tests/ run (default: 600)",
     )
     return p
+
+
+def apply_runtime_overrides(
+    profile: TargetServerCuProfile,
+    *,
+    endpoint: str | None = None,
+    scoring_mode: str | None = None,
+    capabilities_file: str | None = None,
+    tool_product_instance_uri: str | None = None,
+    joining_process_id: str | None = None,
+    joining_process_origin_id: str | None = None,
+) -> TargetServerCuProfile:
+    """Apply installation-specific values without requiring a private YAML copy."""
+    from dataclasses import replace
+
+    if endpoint:
+        profile = replace(profile, target=replace(profile.target, endpoint=endpoint))
+    if scoring_mode:
+        profile = replace(profile, cu_execution=replace(profile.cu_execution, scoring_mode=scoring_mode))
+    if capabilities_file:
+        profile = replace(profile, capabilities_file=str(Path(capabilities_file).resolve()))
+    if tool_product_instance_uri:
+        tool = replace(
+            profile.selection.tool,
+            policy="exact_match",
+            product_instance_uri=tool_product_instance_uri,
+        )
+        profile = replace(profile, selection=replace(profile.selection, tool=tool))
+    if joining_process_id or joining_process_origin_id:
+        process = replace(
+            profile.selection.joining_process,
+            policy="exact_match" if joining_process_id else profile.selection.joining_process.policy,
+            joining_process_id=joining_process_id or profile.selection.joining_process.joining_process_id,
+            joining_process_origin_id=(
+                joining_process_origin_id or profile.selection.joining_process.joining_process_origin_id
+            ),
+        )
+        profile = replace(profile, selection=replace(profile.selection, joining_process=process))
+    return profile
 
 
 def main() -> int:
@@ -811,17 +945,16 @@ def main() -> int:
         profile = build_default_profile(endpoint=endpoint)
         _log("  Profile: (default — no --profile specified)")
 
-    # -- Apply CLI overrides ------------------------------------------------
-    if args.endpoint:
-        # Re-parse with endpoint override (frozen dataclass replacement)
-        from dataclasses import replace as _replace
-
-        profile = _replace(profile, target=_replace(profile.target, endpoint=args.endpoint))
-
-    if args.scoring_mode:
-        from dataclasses import replace as _replace
-
-        profile = _replace(profile, cu_execution=_replace(profile.cu_execution, scoring_mode=args.scoring_mode))
+    # -- Apply CLI/environment overrides ------------------------------------
+    profile = apply_runtime_overrides(
+        profile,
+        endpoint=args.endpoint,
+        scoring_mode=args.scoring_mode,
+        capabilities_file=args.capabilities_file or os.environ.get("OPCUA_CAPABILITIES_FILE"),
+        tool_product_instance_uri=(args.tool_product_instance_uri or os.environ.get("OPCUA_TOOL_PRODUCT_INSTANCE_URI")),
+        joining_process_id=args.joining_process_id or os.environ.get("OPCUA_JOINING_PROCESS_ID"),
+        joining_process_origin_id=(args.joining_process_origin_id or os.environ.get("OPCUA_JOINING_PROCESS_ORIGIN_ID")),
+    )
 
     # -- Determine output dir -----------------------------------------------
     if args.output_dir:
@@ -834,9 +967,7 @@ def main() -> int:
     # -- Apply OPCUA_SERVER_URL override from environment -------------------
     env_url = os.environ.get("OPCUA_SERVER_URL")
     if env_url and not args.endpoint:
-        from dataclasses import replace as _replace
-
-        profile = _replace(profile, target=_replace(profile.target, endpoint=env_url))
+        profile = apply_runtime_overrides(profile, endpoint=env_url)
         _log(f"  Endpoint (env override): {env_url}")
 
     # -- Run -----------------------------------------------------------------

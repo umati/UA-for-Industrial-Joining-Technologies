@@ -78,6 +78,37 @@ class TestHelpFlag:
         rc, output = _run_runner("--help")
         assert "--mode" in output
 
+    def test_help_mentions_installation_overrides(self):
+        rc, output = _run_runner("--help")
+        assert rc == 0
+        assert "--joining-process-id" in output
+        assert "--joining-process-origin-id" in output
+        assert "--tool-product-instance-uri" in output
+        assert "--capabilities-file" in output
+
+
+class TestRuntimeOverrides:
+    def test_generic_profile_accepts_installation_values(self, profiles_dir, tmp_path):
+        profile = _runner_mod.load_target_server_profile(profiles_dir / "example_multi_operation_job.profile.yaml")
+        capabilities = tmp_path / "controller.capabilities.yaml"
+
+        updated = _runner_mod.apply_runtime_overrides(
+            profile,
+            endpoint="opc.tcp://controller.example:40451",
+            capabilities_file=str(capabilities),
+            tool_product_instance_uri="urn:tool:1",
+            joining_process_id="process-1",
+            joining_process_origin_id="origin-1",
+        )
+
+        assert updated.target.endpoint == "opc.tcp://controller.example:40451"
+        assert updated.capabilities_file_path() == capabilities.resolve()
+        assert updated.selection.tool.policy == "exact_match"
+        assert updated.selection.tool.product_instance_uri == "urn:tool:1"
+        assert updated.selection.joining_process.policy == "exact_match"
+        assert updated.selection.joining_process.joining_process_id == "process-1"
+        assert updated.selection.joining_process.joining_process_origin_id == "origin-1"
+
 
 # ---------------------------------------------------------------------------
 # Missing profile file
@@ -104,7 +135,7 @@ class TestMissingProfile:
 
 class TestPreflightOnly:
     def test_template_preflight_produces_report(self, profiles_dir, output_dir):
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         rc, output = _run_runner(
             "--profile",
             str(template),
@@ -118,7 +149,7 @@ class TestPreflightOnly:
         assert report_file.exists(), "Evidence report file must be written during preflight"
 
     def test_template_report_is_valid_json(self, profiles_dir, output_dir):
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         _run_runner(
             "--profile",
             str(template),
@@ -133,7 +164,7 @@ class TestPreflightOnly:
             assert "preflight" in data
 
     def test_template_preflight_summary_file_written(self, profiles_dir, output_dir):
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         _run_runner(
             "--profile",
             str(template),
@@ -144,8 +175,8 @@ class TestPreflightOnly:
         summary_file = output_dir / "target-server-cu-summary.txt"
         assert summary_file.exists(), "Human summary file must be written during preflight"
 
-    def test_remote_start_example_preflight(self, profiles_dir, output_dir):
-        example = profiles_dir / "example_remote_start.yaml"
+    def test_automated_controller_example_preflight(self, profiles_dir, output_dir):
+        example = profiles_dir / "example_multi_operation_job.profile.yaml"
         _run_runner(
             "--profile",
             str(example),
@@ -157,7 +188,7 @@ class TestPreflightOnly:
         assert report_file.exists(), "Evidence report must be written"
 
     def test_manual_trigger_example_preflight(self, profiles_dir, output_dir):
-        example = profiles_dir / "example_manual_trigger.yaml"
+        example = profiles_dir / "example_manual_trigger.profile.yaml"
         _run_runner(
             "--profile",
             str(example),
@@ -223,7 +254,7 @@ class TestInvalidProfile:
 
 class TestModeFlag:
     def test_automated_mode_runs(self, profiles_dir, output_dir):
-        example = profiles_dir / "example_remote_start.yaml"
+        example = profiles_dir / "example_multi_operation_job.profile.yaml"
         rc, output = _run_runner(
             "--profile",
             str(example),
@@ -238,7 +269,7 @@ class TestModeFlag:
         assert report_file.exists(), "Report must be written in automated mode"
 
     def test_report_contains_mode_field(self, profiles_dir, output_dir):
-        example = profiles_dir / "example_remote_start.yaml"
+        example = profiles_dir / "example_multi_operation_job.profile.yaml"
         _run_runner(
             "--profile",
             str(example),
@@ -253,7 +284,7 @@ class TestModeFlag:
             assert "mode" in data
 
     def test_preflight_mode_via_flag(self, profiles_dir, output_dir):
-        example = profiles_dir / "template.yaml"
+        example = profiles_dir / "template.profile.yaml"
         rc, output = _run_runner(
             "--profile",
             str(example),
@@ -274,7 +305,7 @@ class TestModeFlag:
 
 class TestScoringModeOverride:
     def test_scoring_mode_override_applies(self, profiles_dir, output_dir):
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         rc, output = _run_runner(
             "--profile",
             str(template),
@@ -415,7 +446,7 @@ target:
 
 class TestReportSchema:
     def test_report_has_required_top_level_keys(self, profiles_dir, output_dir):
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         _run_runner(
             "--profile",
             str(template),
@@ -430,7 +461,7 @@ class TestReportSchema:
                 assert key in data, f"Expected key '{key}' in report"
 
     def test_preflight_contains_checks_list(self, profiles_dir, output_dir):
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         _run_runner(
             "--profile",
             str(template),
@@ -446,7 +477,7 @@ class TestReportSchema:
             assert isinstance(preflight["checks"], list)
 
     def test_check_entries_have_outcome_field(self, profiles_dir, output_dir):
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         _run_runner(
             "--profile",
             str(template),
@@ -819,7 +850,7 @@ class TestRunLiveSpecTests:
 class TestSkipSpecTestsFlag:
     def test_skip_spec_tests_flag_accepted(self, profiles_dir, output_dir):
         """--skip-spec-tests should be accepted without error."""
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         rc, output = _run_runner(
             "--profile",
             str(template),
@@ -838,7 +869,7 @@ class TestSkipSpecTestsFlag:
         assert "--skip-spec-tests" in output
 
     def test_spec_tests_timeout_flag_accepted(self, profiles_dir, output_dir):
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         rc, output = _run_runner(
             "--profile",
             str(template),
@@ -865,7 +896,7 @@ class TestSimulatorDefaultRegression:
     """
 
     def test_preflight_with_example_profiles_always_writes_report(self, profiles_dir, output_dir):
-        for example in profiles_dir.glob("example_*.yaml"):
+        for example in profiles_dir.glob("example_*.profile.yaml"):
             test_out = output_dir / example.stem
             _run_runner("--profile", str(example), "--preflight-only", "--output-dir", str(test_out))
             report = test_out / "target-server-cu-report.json"
@@ -873,7 +904,7 @@ class TestSimulatorDefaultRegression:
 
     def test_preflight_report_never_has_spec_tests_key(self, profiles_dir, output_dir):
         """--preflight-only must never include spec_tests in the report."""
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         _run_runner("--profile", str(template), "--preflight-only", "--output-dir", str(output_dir))
         report_file = output_dir / "target-server-cu-report.json"
         if report_file.exists():
@@ -882,7 +913,7 @@ class TestSimulatorDefaultRegression:
 
     def test_automated_mode_with_placeholder_endpoint_exits_nonzero(self, profiles_dir, output_dir):
         """Placeholder endpoint in automated mode causes blocking preflight → rc=1."""
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         rc, output = _run_runner(
             "--profile",
             str(template),
@@ -898,7 +929,7 @@ class TestSimulatorDefaultRegression:
 
         This confirms that --skip-spec-tests doesn't change preflight blocking behavior.
         """
-        template = profiles_dir / "template.yaml"
+        template = profiles_dir / "template.profile.yaml"
         rc, output = _run_runner(
             "--profile",
             str(template),

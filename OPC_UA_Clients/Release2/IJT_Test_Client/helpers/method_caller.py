@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from asyncua import ua
@@ -20,6 +22,77 @@ from asyncua import ua
 from helpers.node_discovery import find_child_by_browse_name
 
 logger = logging.getLogger(__name__)
+
+_TARGET_STATE_CHANGING_METHODS = frozenset(
+    {
+        "AbortJoiningProcess",
+        "Acknowledge",
+        "AcknowledgeResults",
+        "Confirm",
+        "DecrementJoiningProcessCounter",
+        "DeleteJoint",
+        "DeleteJointComponent",
+        "DeleteJointDesign",
+        "DeleteJoiningProcess",
+        "DeselectJoiningProcess",
+        "DisconnectAsset",
+        "EnableAsset",
+        "ExecuteOperation",
+        "IncrementJoiningProcessCounter",
+        "RebootAsset",
+        "Reset",
+        "ResetErrors",
+        "ResetIdentifiers",
+        "ResetJoiningProcess",
+        "SelectJoiningProcess",
+        "SelectJoint",
+        "SendFeedback",
+        "SendIdentifiers",
+        "SendJoint",
+        "SendJointComponent",
+        "SendJointDesign",
+        "SendJoiningProcess",
+        "SendTextIdentifiers",
+        "SetCalibration",
+        "SetIOSignals",
+        "SetJoiningProcessCounter",
+        "SetJoiningProcessMapping",
+        "SetJoiningProcessSize",
+        "SetOfflineTimer",
+        "SetTime",
+        "StartJoiningProcess",
+        "StartSelectedJoining",
+    }
+)
+_TARGET_METHOD_CALL_AUTHORIZED: ContextVar[bool] = ContextVar(
+    "target_method_call_authorized",
+    default=False,
+)
+
+
+def is_target_method_call_authorized() -> bool:
+    """Return whether the current async context owns an authorized workflow call."""
+    return _TARGET_METHOD_CALL_AUTHORIZED.get()
+
+
+def is_target_state_changing_method(method_name: str) -> bool:
+    """Return whether a method can mutate target-server state."""
+    return method_name in _TARGET_STATE_CHANGING_METHODS
+
+
+def _enforce_target_method_authorization(method_name: str, authorized: bool) -> None:
+    """Prevent generic specification tests from mutating a configured real target."""
+    if authorized or method_name not in _TARGET_STATE_CHANGING_METHODS:
+        return
+    if not os.environ.get("OPCUA_TARGET_SERVER_PROFILE"):
+        return
+
+    import pytest
+
+    pytest.skip(
+        f"{method_name} is state-changing on a real Target Server and must be "
+        "invoked through an explicitly configured target workflow"
+    )
 
 
 class OpcUaStatusHelper:
@@ -97,6 +170,7 @@ async def call_method(
     *args,
     timeout: float = 15.0,
     method_name: str = "",
+    target_server_authorized: bool = False,
 ) -> MethodCallResult:
     """
     Call an OPC UA method on parent_node with a timeout guard.
@@ -113,29 +187,42 @@ async def call_method(
         or success=False with error set on ua.UaError / asyncio.TimeoutError.
     """
     label = method_name or str(method_node_id)
+    _enforce_target_method_authorization(label, target_server_authorized)
     logger.debug("call_method: invoking '%s' with %d arg(s)", label, len(args))
     start = time.monotonic()
+    authorization_token = _TARGET_METHOD_CALL_AUTHORIZED.set(True) if target_server_authorized else None
     try:
-        result = await asyncio.wait_for(
-            parent_node.call_method(method_node_id, *args),
-            timeout=timeout,
-        )
-        elapsed = time.monotonic() - start
-        logger.debug("call_method: '%s' succeeded in %.3fs, output=%r", label, elapsed, result)
-        return MethodCallResult(success=True, output=result, method_name=label)
-    except ua.UaError as exc:
-        elapsed = time.monotonic() - start
-        logger.debug(
-            "call_method: '%s' raised UaError after %.3fs: %s",
-            label,
-            elapsed,
-            OpcUaStatusHelper.format_status(exc),
-        )
-        return MethodCallResult(success=False, error=exc, method_name=label)
-    except asyncio.TimeoutError as exc:
-        elapsed = time.monotonic() - start
-        logger.debug("call_method: '%s' timed out after %.3fs", label, elapsed)
-        return MethodCallResult(success=False, error=exc, method_name=label)
+        try:
+            result = await asyncio.wait_for(
+                parent_node.call_method(method_node_id, *args),
+                timeout=timeout,
+            )
+            elapsed = time.monotonic() - start
+            logger.debug("call_method: '%s' succeeded in %.3fs, output=%r", label, elapsed, result)
+            return MethodCallResult(success=True, output=result, method_name=label)
+        except ua.UaError as exc:
+            elapsed = time.monotonic() - start
+            raw_code = getattr(exc, "code", None)
+            status_int = int(raw_code) if raw_code is not None else None
+            logger.debug(
+                "call_method: '%s' raised UaError after %.3fs: %s",
+                label,
+                elapsed,
+                OpcUaStatusHelper.format_status(exc),
+            )
+            return MethodCallResult(
+                success=False,
+                error=exc,
+                status_code=status_int,
+                method_name=label,
+            )
+        except asyncio.TimeoutError as exc:
+            elapsed = time.monotonic() - start
+            logger.debug("call_method: '%s' timed out after %.3fs", label, elapsed)
+            return MethodCallResult(success=False, error=exc, method_name=label)
+    finally:
+        if authorization_token is not None:
+            _TARGET_METHOD_CALL_AUTHORIZED.reset(authorization_token)
 
 
 async def call_method_expect_bad_status(
@@ -145,6 +232,7 @@ async def call_method_expect_bad_status(
     expected_status_codes: list[int] | None = None,
     timeout: float = 15.0,
     method_name: str = "",
+    target_server_authorized: bool = False,
 ) -> MethodCallResult:
     """
     Call an OPC UA method expecting it to raise a ua.UaError (Bad status).
@@ -167,54 +255,69 @@ async def call_method_expect_bad_status(
         unexpected status code.
     """
     label = method_name or str(method_node_id)
+    _enforce_target_method_authorization(label, target_server_authorized)
     logger.debug("call_method_expect_bad_status: invoking '%s'", label)
     start = time.monotonic()
+    authorization_token = _TARGET_METHOD_CALL_AUTHORIZED.set(True) if target_server_authorized else None
     try:
-        result = await asyncio.wait_for(
-            parent_node.call_method(method_node_id, *args),
-            timeout=timeout,
-        )
-        elapsed = time.monotonic() - start
-        logger.debug(
-            "call_method_expect_bad_status: '%s' unexpectedly succeeded in %.3fs, output=%r",
-            label,
-            elapsed,
-            result,
-        )
-        return MethodCallResult(
-            success=False,
-            output=result,
-            error=AssertionError(f"Expected BadStatus from '{label}' but call succeeded with output={result!r}"),
-            method_name=label,
-        )
-    except ua.UaError as exc:
-        elapsed = time.monotonic() - start
-        raw_code = getattr(exc, "code", None)
-        status_int: int | None = int(raw_code) if raw_code is not None else None
-        logger.debug(
-            "call_method_expect_bad_status: '%s' raised UaError after %.3fs: %s",
-            label,
-            elapsed,
-            OpcUaStatusHelper.format_status(exc),
-        )
-        if expected_status_codes is not None and status_int is not None:
-            if status_int not in expected_status_codes:
-                return MethodCallResult(
-                    success=False,
-                    error=exc,
-                    status_code=status_int,
-                    method_name=label,
-                )
-            logger.debug(
-                "call_method_expect_bad_status: '%s' got expected status 0x%08X",
-                label,
-                status_int,
+        try:
+            result = await asyncio.wait_for(
+                parent_node.call_method(method_node_id, *args),
+                timeout=timeout,
             )
-        return MethodCallResult(success=True, error=exc, status_code=status_int, method_name=label)
-    except asyncio.TimeoutError as exc:
-        elapsed = time.monotonic() - start
-        logger.debug("call_method_expect_bad_status: '%s' timed out after %.3fs", label, elapsed)
-        return MethodCallResult(success=False, error=exc, method_name=label)
+            elapsed = time.monotonic() - start
+            logger.debug(
+                "call_method_expect_bad_status: '%s' unexpectedly succeeded in %.3fs, output=%r",
+                label,
+                elapsed,
+                result,
+            )
+            return MethodCallResult(
+                success=False,
+                output=result,
+                error=AssertionError(f"Expected BadStatus from '{label}' but call succeeded with output={result!r}"),
+                method_name=label,
+            )
+        except ua.UaError as exc:
+            elapsed = time.monotonic() - start
+            raw_code = getattr(exc, "code", None)
+            status_int: int | None = int(raw_code) if raw_code is not None else None
+            logger.debug(
+                "call_method_expect_bad_status: '%s' raised UaError after %.3fs: %s",
+                label,
+                elapsed,
+                OpcUaStatusHelper.format_status(exc),
+            )
+            if expected_status_codes is not None and status_int is not None:
+                if status_int not in expected_status_codes:
+                    return MethodCallResult(
+                        success=False,
+                        error=exc,
+                        status_code=status_int,
+                        method_name=label,
+                    )
+                logger.debug(
+                    "call_method_expect_bad_status: '%s' got expected status 0x%08X",
+                    label,
+                    status_int,
+                )
+            return MethodCallResult(
+                success=True,
+                error=exc,
+                status_code=status_int,
+                method_name=label,
+            )
+        except asyncio.TimeoutError as exc:
+            elapsed = time.monotonic() - start
+            logger.debug(
+                "call_method_expect_bad_status: '%s' timed out after %.3fs",
+                label,
+                elapsed,
+            )
+            return MethodCallResult(success=False, error=exc, method_name=label)
+    finally:
+        if authorization_token is not None:
+            _TARGET_METHOD_CALL_AUTHORIZED.reset(authorization_token)
 
 
 async def call_method_and_assert_success(
@@ -257,6 +360,7 @@ async def find_and_call_method(
     method_ns_index: int,
     *args,
     timeout: float = 15.0,
+    target_server_authorized: bool = False,
 ) -> MethodCallResult:
     """
     Locate a method child by browse name, then invoke it.
@@ -288,4 +392,5 @@ async def find_and_call_method(
         *args,
         timeout=timeout,
         method_name=method_browse_name,
+        target_server_authorized=target_server_authorized,
     )

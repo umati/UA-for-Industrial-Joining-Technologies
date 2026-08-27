@@ -5,11 +5,9 @@ perform read-only address-space discovery.
 opcua_client is module-scoped — one OPC UA connection per test file.  This cuts
 CI time from ~27 min to ~7 min by avoiding ~400 individual connection handshakes
 (each takes ~3 s on GitHub Actions Windows runners).
-subscription_client is module-scoped — one OPC UA connection per test file that
-uses event subscriptions.  Event subscription isolation is maintained per-test by
-EventCollector (which subscribes and unsubscribes on every call), so no cross-test
-event noise occurs.  Promoting from function scope to module scope saves ~420 s
-(~7 min) by eliminating 152 redundant TCP handshakes at ~3 s each.
+Simulator subscription clients are module-scoped for speed. Real-target
+subscription clients are function-scoped because controller implementations can
+become unstable when many subscriptions are recycled on one connection.
 All async fixtures require pytest-asyncio with asyncio_mode = "auto" (pyproject.toml).
 Design rules enforced here:
   - JoiningSystem is discovered by HasTypeDefinition, never by browse name.
@@ -33,6 +31,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from asyncua import Client
+from asyncua.common.node import Node as UANode
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
@@ -71,7 +70,7 @@ def _deletes_disabled() -> bool:
 def pytest_configure(config):
     """Register markers, load server capability profile, and set up fixture paths.
 
-    Reads server_capabilities.yaml (or OPCUA_CAPABILITIES_FILE env var) once.
+    Reads the default capability declaration (or OPCUA_CAPABILITIES_FILE) once.
     Tests decorated with @pytest.mark.requires_cu(CU.SOME_KEY) are automatically
     skipped when that key is absent from the loaded supported-CU set — they are
     never failed just because a feature is not implemented on the server under test.
@@ -81,7 +80,7 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers",
         "requires_cu(cu_key, ...): skip this test if the given conformance unit "
-        "key(s) are not supported per server_capabilities.yaml",
+        "key(s) are not supported per the active capability declaration",
     )
     config.addinivalue_line(
         "markers",
@@ -153,7 +152,7 @@ def pytest_configure(config):
             )
     except Exception as exc:  # noqa: BLE001
         logging.getLogger(__name__).warning(
-            "Could not load server_capabilities.yaml (%s) — all conformance units treated as supported",
+            "Could not load the capability declaration (%s) — all conformance units treated as supported",
             exc,
         )
         _SUPPORTED_CUS = None  # None = no gating; run everything
@@ -230,8 +229,39 @@ SERVER_URL = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
 _OPCUA_TIMEOUT_S = 120  # SimulateJobResult fires many results; 4 s default is too short
 
 
-async def _connect_test_client(client: Client) -> None:
+@pytest.fixture(autouse=True)
+def _guard_direct_target_method_calls(monkeypatch):
+    """Block target state changes that bypass an authorized workflow adapter."""
+    if not _target_server_profile_path():
+        yield
+        return
+
+    from helpers.method_caller import (
+        is_target_method_call_authorized,
+        is_target_state_changing_method,
+    )
+
+    original_call_method = UANode.call_method
+
+    async def guarded_call_method(node, method_id, *args):
+        if not is_target_method_call_authorized():
+            method_node = method_id if isinstance(method_id, UANode) else UANode(node.session, method_id)
+            browse_name = await method_node.read_browse_name()
+            if is_target_state_changing_method(browse_name.Name):
+                pytest.skip(
+                    f"{browse_name.Name} is state-changing on a real Target Server "
+                    "and must be invoked through an explicitly configured workflow"
+                )
+        return await original_call_method(node, method_id, *args)
+
+    monkeypatch.setattr(UANode, "call_method", guarded_call_method)
+    yield
+
+
+async def _connect_test_client(client: Client, *, load_type_definitions: bool = False) -> None:
     await connect_opcua_client(client)
+    if load_type_definitions:
+        await _load_test_client_type_definitions(client)
 
 
 async def _disconnect_test_client(client: Client | None) -> None:
@@ -308,10 +338,9 @@ async def session_client(managed_server):
     """
     client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
     try:
-        await _connect_test_client(client)
+        await _connect_test_client(client, load_type_definitions=True)
     except Exception as exc:
         pytest.fail(f"Could not connect to OPC UA server at {SERVER_URL}: {exc}")
-    await _load_test_client_type_definitions(client)
     yield client
     try:
         await _disconnect_test_client(client)
@@ -657,7 +686,10 @@ async def opcua_client(session_client):
     subscriptions must remain isolated per test to avoid cross-test event noise.
     """
     client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
-    await _connect_test_client(client)
+    await _connect_test_client(
+        client,
+        load_type_definitions=bool(_target_server_profile_path()),
+    )
     yield client
     try:
         await _disconnect_test_client(client)
@@ -666,7 +698,7 @@ async def opcua_client(session_client):
 
 
 @pytest_asyncio.fixture(scope="module")
-async def subscription_client(session_client):
+async def _module_subscription_client(session_client):
     """
     Module-scoped asyncua Client dedicated to event subscriptions.
     Kept separate from opcua_client because asyncua cannot safely handle
@@ -682,6 +714,10 @@ async def subscription_client(session_client):
     Depends on session_client so that the modern DataTypeDefinition loader has
     already run before any per-module client connects, with no redundant load.
     """
+    if _target_server_profile_path():
+        yield None
+        return
+
     client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
     await _connect_test_client(client)
     yield client
@@ -689,6 +725,28 @@ async def subscription_client(session_client):
         await _disconnect_test_client(client)
     except Exception as exc:
         logger.debug("subscription_client disconnect failed (ignored): %s", exc)
+
+
+@pytest_asyncio.fixture(scope="function")
+async def subscription_client(session_client, _module_subscription_client):
+    """Use isolated subscription connections for real targets.
+
+    Some controllers become unstable when many short-lived subscriptions are
+    repeatedly created and deleted on one long-lived connection. The simulator
+    retains the faster module-scoped connection.
+    """
+    if not _target_server_profile_path():
+        assert _module_subscription_client is not None
+        yield _module_subscription_client
+        return
+
+    client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
+    await _connect_test_client(client, load_type_definitions=True)
+    yield client
+    try:
+        await _disconnect_test_client(client)
+    except Exception as exc:
+        logger.debug("isolated subscription_client disconnect failed (ignored): %s", exc)
 
 
 # ─── Trigger fixtures (function-scoped, use module-scoped opcua_client) ──────

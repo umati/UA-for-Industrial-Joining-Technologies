@@ -614,6 +614,7 @@ class ConsolidatedResultValidator:
 
     def __init__(self) -> None:
         self._meta_validator = ResultMetaDataValidator()
+        self._result_validator = ResultDataValidator()
         self._joining_validator = JoiningResultDataValidator()
 
     def validate(
@@ -627,7 +628,9 @@ class ConsolidatedResultValidator:
         Rules:
         - ``ResultMetaData`` must be present and valid.
         - ``Classification`` must be in {2,3,4,5,6,7} (never SINGLE_RESULT=1).
-        - If ``ResultContent`` is non-empty, validate each entry via ``JoiningResultDataValidator``.
+        - If ``ResultContent`` is non-empty, validate child ``ResultDataType`` envelopes.
+          A child with empty content is a reference stub and requires only ResultId
+          and Classification; a legacy bare JoiningResultDataType remains supported.
         - If ``References`` is non-empty, each reference must have a non-empty ``ResultId``.
         - At least one of ``ResultContent`` or ``References`` must be populated,
           unless ``IsPartial=True`` (partial results may arrive before content is complete).
@@ -662,9 +665,43 @@ class ConsolidatedResultValidator:
         content_list: list = list(content) if isinstance(content, (list, tuple)) else []
         if content_list:
             rc_ctx = ctx.child("ResultContent")
-            for i, joining_result in enumerate(content_list):
-                joining_result = getattr(joining_result, "Value", joining_result)
-                self._joining_validator.validate(joining_result, rc_ctx.index(i), vr)
+            for i, child in enumerate(content_list):
+                child = getattr(child, "Value", child)
+                child_ctx = rc_ctx.index(i)
+                child_meta = getattr(child, "ResultMetaData", _MISSING)
+                if child_meta is _MISSING:
+                    self._joining_validator.validate(child, child_ctx, vr)
+                    continue
+
+                child_content = getattr(child, "ResultContent", None)
+                if isinstance(child_content, (list, tuple)) and child_content:
+                    vr.merge(self._result_validator.validate(child, child_ctx))
+                    continue
+
+                # Reference mode carries a ResultDataType envelope with empty
+                # ResultContent and only enough metadata to resolve the child.
+                ref_id = getattr(child_meta, "ResultId", _MISSING)
+                if ref_id is _MISSING:
+                    vr.add(child_ctx.child("ResultMetaData.ResultId"), "required field is absent")
+                elif not isinstance(ref_id, str) or not ref_id.strip():
+                    vr.add(
+                        child_ctx.child("ResultMetaData.ResultId"),
+                        f"expected non-empty string, got {ref_id!r}",
+                    )
+
+                classification = getattr(child_meta, "Classification", _MISSING)
+                if classification is _MISSING:
+                    vr.add(child_ctx.child("ResultMetaData.Classification"), "required field is absent")
+                else:
+                    try:
+                        cls_int = int(classification)
+                    except (TypeError, ValueError):
+                        cls_int = None
+                    if cls_int is None or cls_int not in ResultClassification.VALID_VALUES:
+                        vr.add(
+                            child_ctx.child("ResultMetaData.Classification"),
+                            f"expected int in {sorted(ResultClassification.VALID_VALUES)}, got {classification!r}",
+                        )
 
         # References — optional reference-only sub-results
         references = getattr(result, "References", None)
@@ -684,7 +721,11 @@ class ConsolidatedResultValidator:
 
         # At least one of ResultContent or References must be populated,
         # unless IsPartial=True allows an empty-so-far consolidated result.
-        is_partial = getattr(result, "IsPartial", False)
+        is_partial = (
+            getattr(meta, "IsPartial", getattr(result, "IsPartial", False))
+            if meta is not _MISSING and meta is not None
+            else getattr(result, "IsPartial", False)
+        )
         if not content_list and not ref_list and not is_partial:
             vr.add(
                 ctx,

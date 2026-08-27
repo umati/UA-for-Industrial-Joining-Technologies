@@ -266,6 +266,88 @@ class TestStartSelectedJoiningResultTrigger:
         assert call_args.args[3].Value == "urn:tool:1"
         assert call_args.args[4].Value is True
 
+    async def test_ensure_tool_enabled_skips_call_when_live_state_is_true(
+        self, profile, mock_client, mock_joining_system
+    ):
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        trigger._read_tool_enabled = AsyncMock(return_value=True)
+        trigger._enable_tool = AsyncMock(return_value=True)
+
+        assert await trigger._ensure_tool_enabled("urn:tool:1") is True
+
+        trigger._read_tool_enabled.assert_awaited_once_with("urn:tool:1")
+        trigger._enable_tool.assert_not_awaited()
+
+    @pytest.mark.parametrize("enabled_state", [False, None])
+    async def test_ensure_tool_enabled_calls_enable_when_needed(
+        self, profile, mock_client, mock_joining_system, enabled_state
+    ):
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        trigger._read_tool_enabled = AsyncMock(return_value=enabled_state)
+        trigger._enable_tool = AsyncMock(return_value=True)
+
+        assert await trigger._ensure_tool_enabled("urn:tool:1") is True
+
+        trigger._enable_tool.assert_awaited_once_with("urn:tool:1")
+
+    async def test_ensure_tool_enabled_can_reassert_enablement(self, profile, mock_client, mock_joining_system):
+        profile.cu_execution.extension_fields["enable_asset_policy"] = "always"
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        trigger._read_tool_enabled = AsyncMock(return_value=True)
+        trigger._enable_tool = AsyncMock(return_value=True)
+
+        assert await trigger._ensure_tool_enabled("urn:tool:1") is True
+
+        trigger._read_tool_enabled.assert_not_awaited()
+        trigger._enable_tool.assert_awaited_once_with("urn:tool:1")
+
+    async def test_trigger_intervention_uses_tool_and_process_identification(self, mock_client, mock_joining_system):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "default_policy": "require_explicit_opt_in",
+                        "allowed_methods": ["IncrementJoiningProcessCounter"],
+                    },
+                    "extension_fields": {"intervention_method": "IncrementJoiningProcessCounter"},
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            client=mock_client,
+            joining_system_node=mock_joining_system,
+            ns_app=2,
+            profile=profile,
+            ns_ijt=7,
+        )
+        process = MagicMock(
+            JoiningProcessId="process-1",
+            JoiningProcessOriginId="origin-1",
+            AssociatedEntities=[],
+        )
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="urn:tool:1")
+        trigger._get_joining_process_list = AsyncMock(return_value=[process])
+        identification = MagicMock(
+            JoiningProcessId="process-1",
+            JoiningProcessOriginId="origin-1",
+        )
+        trigger._make_process_identification = MagicMock(return_value=identification)
+        call_method = AsyncMock(return_value=MagicMock(success=True, output_list=[]))
+
+        with patch("helpers.method_caller.find_and_call_method", new=call_method):
+            outcome = await trigger._trigger_intervention()
+
+        assert outcome.triggered is True
+        assert outcome.method == "IncrementJoiningProcessCounter"
+        args = call_method.await_args
+        assert args is not None
+        assert args.args[3].Value == "urn:tool:1"
+        assert args.args[4].Value is identification
+        assert args.args[5].Value == 1
+        assert args.kwargs["target_server_authorized"] is True
+
     async def test_joining_process_methods_use_ijt_namespace(self, profile, mock_client, mock_joining_system):
         trigger = StartSelectedJoiningResultTrigger(
             client=mock_client,
@@ -397,6 +479,39 @@ class TestStartSelectedJoiningResultTrigger:
 
         assert trigger._choose_joining_process([process]) is None
 
+    def test_process_identification_omits_selection_name_when_ids_are_configured(
+        self, mock_client, mock_joining_system
+    ):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "PROCESS-1",
+                        "joining_process_origin_id": "ORIGIN-1",
+                    }
+                },
+            }
+        )
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        process = MagicMock(
+            JoiningProcessId="PROCESS-1",
+            JoiningProcessOriginId="ORIGIN-1",
+            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="SequenceIndex_1")],
+        )
+
+        with patch(
+            "asyncua.ua.JoiningProcessIdentificationDataType",
+            create=True,
+            return_value=MagicMock(),
+        ):
+            identification = trigger._make_process_identification(process)
+
+        assert identification.JoiningProcessId == "PROCESS-1"
+        assert identification.JoiningProcessOriginId == "ORIGIN-1"
+        assert identification.SelectionName == ""
+
     def test_uncertain_domain_status_is_rejected_with_message(self, profile, mock_client, mock_joining_system):
         from asyncua import ua
 
@@ -408,6 +523,25 @@ class TestStartSelectedJoiningResultTrigger:
 
         assert trigger._method_succeeded("StartSelectedJoining", result) is False
         assert "tool is not ready" in trigger._last_method_failure
+
+    def test_uncertain_service_status_can_be_observed_for_intervention_evidence(
+        self, profile, mock_client, mock_joining_system
+    ):
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        result = MethodCallResult(
+            success=False,
+            error=RuntimeError("Uncertain"),
+            status_code=0x40000000,
+        )
+
+        assert (
+            trigger._method_succeeded(
+                "IncrementJoiningProcessCounter",
+                result,
+                observe_uncertain=True,
+            )
+            is True
+        )
 
     @pytest.mark.parametrize(
         ("result", "expected"),

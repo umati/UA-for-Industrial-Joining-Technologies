@@ -227,7 +227,9 @@ def _load_profiles() -> dict[str, dict[str, Any]]:
 
 def _load_capabilities() -> dict[str, Any]:
     caps_env = os.environ.get("OPCUA_CAPABILITIES_FILE")
-    caps_path = Path(caps_env) if caps_env else _PROJECT_ROOT / "server_capabilities.yaml"
+    caps_path = (
+        Path(caps_env) if caps_env else _PROJECT_ROOT / "target_server_cu_profiles" / "default.capabilities.yaml"
+    )
     return _load_yaml(caps_path)
 
 

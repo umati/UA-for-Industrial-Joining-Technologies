@@ -653,13 +653,15 @@ class TestResultDataValidator:
 
 
 class TestConsolidatedResultValidator:
-    def _good_meta(self, classification=2):
-        return types.SimpleNamespace(
+    def _good_meta(self, classification=2, **overrides):
+        values = dict(
             ResultId="cr-001",
             Classification=classification,
             ResultEvaluation=1,
             CreationTime=object(),
         )
+        values.update(overrides)
+        return types.SimpleNamespace(**values)
 
     def _make_ref(self, result_id="ref-001"):
         return types.SimpleNamespace(ResultId=result_id)
@@ -681,10 +683,64 @@ class TestConsolidatedResultValidator:
         vr = ConsolidatedResultValidator().validate(result)
         assert vr.ok
 
-    def test_valid_is_partial_allows_empty_content(self):
+    def test_valid_with_full_child_result_envelope(self):
+        child = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(classification=1),
+            ResultContent=[types.SimpleNamespace()],
+        )
         result = types.SimpleNamespace(
             ResultMetaData=self._good_meta(),
-            IsPartial=True,
+            ResultContent=[child],
+        )
+        assert ConsolidatedResultValidator().validate(result).ok
+
+    def test_full_child_result_envelope_validates_child_metadata(self):
+        child = types.SimpleNamespace(
+            ResultMetaData=types.SimpleNamespace(
+                ResultId="single-001",
+                Classification=1,
+                CreationTime=object(),
+            ),
+            ResultContent=[types.SimpleNamespace()],
+        )
+        result = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(),
+            ResultContent=[child],
+        )
+        vr = ConsolidatedResultValidator().validate(result)
+        assert not vr.ok
+        assert any("ResultContent[0].ResultMetaData.ResultEvaluation" in failure.path for failure in vr.failures)
+
+    def test_valid_with_reference_stub_in_result_content(self):
+        child = types.SimpleNamespace(
+            ResultMetaData=types.SimpleNamespace(
+                ResultId="single-001",
+                Classification=1,
+            ),
+            ResultContent=[],
+        )
+        result = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(),
+            ResultContent=[child],
+        )
+        assert ConsolidatedResultValidator().validate(result).ok
+
+    def test_reference_stub_in_result_content_requires_classification(self):
+        child = types.SimpleNamespace(
+            ResultMetaData=types.SimpleNamespace(ResultId="single-001"),
+            ResultContent=[],
+        )
+        result = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(),
+            ResultContent=[child],
+        )
+        vr = ConsolidatedResultValidator().validate(result)
+        assert not vr.ok
+        assert any("ResultContent[0].ResultMetaData.Classification" in failure.path for failure in vr.failures)
+
+    def test_valid_is_partial_allows_empty_content(self):
+        result = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(IsPartial=True),
         )
         vr = ConsolidatedResultValidator().validate(result)
         assert vr.ok

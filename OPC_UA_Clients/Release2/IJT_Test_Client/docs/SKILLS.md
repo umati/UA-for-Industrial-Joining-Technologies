@@ -56,7 +56,7 @@ unit stage and is currently 95%.
 |---|---|---|
 | `OPCUA_SERVER_URL` | raw pytest: `opc.tcp://localhost:40451`; runner auto-launch: `opc.tcp://localhost:40462` | OPC UA server endpoint URL |
 | `OPCUA_SIMULATOR_EXE` | (none) | Path to simulator binary for auto-launch |
-| `OPCUA_CAPABILITIES_FILE` | `server_capabilities.yaml` | Capability file for the server under test; auto-launched checked-in simulator uses `server_capabilities.simulator.yaml` when this is unset |
+| `OPCUA_CAPABILITIES_FILE` | `target_server_cu_profiles/default.capabilities.yaml` | Capability file for the server under test; auto-launched checked-in simulator uses `target_server_cu_profiles/simulator.capabilities.yaml` when this is unset |
 | `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
 | `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install |
 
@@ -218,9 +218,11 @@ IJT_Test_Client/
 ├── specification_tests/          ← Specification Unit tests (asset, result, event, joining process, joint)
 ├── target_server_cu_profiles/       ← Target Server CU execution profiles (sanitized examples)
 │   ├── README.md                 ← Profile usage, commands, sanitization rules
-│   ├── template.yaml             ← Commented schema template with safe defaults
-│   ├── example_remote_start.yaml ← Generic profile for StartSelectedJoining target servers
-│   └── example_manual_trigger.yaml ← Generic profile for manual/physical tool trigger
+│   ├── template.profile.yaml             ← Commented schema template with safe defaults
+│   ├── example_multi_operation_job.profile.yaml ← Complete automated controller example
+│   ├── example_multi_operation_job.capabilities.yaml ← Paired CU declaration
+│   ├── example_manual_trigger.profile.yaml ← Manual/physical tool trigger example
+│   └── example_simulation_methods.profile.yaml ← Simulator helper-method example
 ├── run_target_server_cu.py          ← Standalone target server CU runner (preflight/automated/guided)
 ├── scripts/run_reference_workflow.py ← Markdown + interactive reference workflow runner
 ├── tests/
@@ -288,7 +290,7 @@ semantics, and CU coverage outputs are unchanged.
 
 ```bash
 # Preflight — no state changes, safe for any server:
-python run_target_server_cu.py --profile target_server_cu_profiles/template.yaml --preflight-only
+python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --preflight-only
 
 # Automated run:
 python run_target_server_cu.py --profile my_profile.yaml --mode automated
@@ -297,10 +299,10 @@ python run_target_server_cu.py --profile my_profile.yaml --mode automated
 python run_target_server_cu.py --profile my_profile.yaml --mode guided --interactive-prompts
 
 # Override endpoint:
-python run_target_server_cu.py --profile template.yaml --endpoint opc.tcp://10.0.0.1:40451 --preflight-only
+python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --endpoint opc.tcp://10.0.0.1:40451 --preflight-only
 
 # Integrate with run_all_tests.py (non-fatal by default):
-python run_all_tests.py --target-server-profile target_server_cu_profiles/example_remote_start.yaml
+python run_all_tests.py --target-server-profile target_server_cu_profiles/example_multi_operation_job.profile.yaml
 
 # Make target server preflight gate the overall run:
 python run_all_tests.py --target-server-profile my_profile.yaml --target-server-preflight-strict
@@ -608,12 +610,11 @@ I/O methods, JoiningProcess methods, and JointManagement methods. Result access
 methods under Machinery/Result do not take PIU.
 
 For Method Input Argument tests, keep the asset category applicable to the
-method. Use a general AssetManagement method such as `GetIdentifiers` when
-checking that the server's own Controller `ProductInstanceUri` is accepted.
-Use Tool-specific methods such as `EnableAsset` only with a Tool PIU for
-positive tests; calling `EnableAsset` with a valid Controller PIU belongs to
-the non-applicable-asset negative case and must not be treated as a positive
-server-own-asset check.
+method. Identifier methods operate in the Tool's joining context, so use a Tool
+PIU for positive `GetIdentifiers` probes. Use Tool-specific methods such as
+`EnableAsset` only with a Tool PIU for positive tests; calling one with a valid
+Controller PIU belongs to a non-applicable-asset negative case and must not be
+treated as a positive PIU check.
 
 ### EntityType Enum — v100 Values (CRITICAL)
 

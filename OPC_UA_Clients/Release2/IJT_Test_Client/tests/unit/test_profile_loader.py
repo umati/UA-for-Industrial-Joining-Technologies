@@ -150,8 +150,17 @@ class TestLoadSupportedCusFullSpecificationCoverage:
 
 
 class TestCheckedInCapabilitiesFiles:
+    @staticmethod
+    def _capabilities_files():
+        target_examples = _pl_module._PROJECT_ROOT / "target_server_cu_profiles"
+        return [
+            target_examples / "default.capabilities.yaml",
+            target_examples / "simulator.capabilities.yaml",
+            *sorted(target_examples.glob("example_*.capabilities.yaml")),
+        ]
+
     def test_active_profiles_exist_for_all_checked_in_capabilities_files(self):
-        caps_files = sorted(_pl_module._PROJECT_ROOT.glob("server_capabilities*.yaml"))
+        caps_files = self._capabilities_files()
         assert caps_files
 
         for caps_file in caps_files:
@@ -162,7 +171,7 @@ class TestCheckedInCapabilitiesFiles:
             assert profile_path.exists(), f"{caps_file.name} references missing profile {profile_path.name}"
 
     def test_checked_in_capabilities_resolve_non_empty_cu_scope(self):
-        caps_files = sorted(_pl_module._PROJECT_ROOT.glob("server_capabilities*.yaml"))
+        caps_files = self._capabilities_files()
         assert caps_files
 
         for caps_file in caps_files:
@@ -170,7 +179,7 @@ class TestCheckedInCapabilitiesFiles:
             assert supported, f"{caps_file.name} resolved to 0 supported CUs"
 
     def test_simulator_capabilities_keep_expected_supported_cu_count(self):
-        simulator_caps = _pl_module._PROJECT_ROOT / "server_capabilities.simulator.yaml"
+        simulator_caps = _pl_module._PROJECT_ROOT / "target_server_cu_profiles" / "simulator.capabilities.yaml"
         supported = load_supported_cus(capabilities_path=simulator_caps)
         assert len(supported) == 98
 

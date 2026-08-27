@@ -360,20 +360,27 @@ def check_joining_process_configured(profile: TargetServerCuProfile) -> Readines
     """Check whether a joining process is configured for workflow execution."""
     check_name = "joining_process_configured"
     jp = profile.selection.joining_process
-    if jp.joining_process_id:
+    configured_identifiers = {
+        "joining_process_id": jp.joining_process_id,
+        "joining_process_origin_id": jp.joining_process_origin_id,
+        "selection_name": jp.selection_name,
+    }
+    configured_identifiers = {key: value for key, value in configured_identifiers.items() if value}
+    if configured_identifiers:
         return ReadinessOutcome(
             outcome=OUTCOME_PASSED,
-            detail=f"Joining process ID configured: {jp.joining_process_id}",
+            detail="Joining process exact-match selector configured: "
+            + ", ".join(f"{key}={value}" for key, value in configured_identifiers.items()),
             check_name=check_name,
-            evidence={"joining_process_id": jp.joining_process_id},
+            evidence=configured_identifiers,
         )
     if jp.policy == "exact_match":
         return ReadinessOutcome(
             outcome=OUTCOME_CONFIGURATION_ERROR,
             reason_code="configuration_invalid",
             detail=(
-                "selection.joining_process.policy is 'exact_match' but no joining_process_id is configured. "
-                "Either provide an ID or change the policy."
+                "selection.joining_process.policy is 'exact_match' but no process ID, origin ID, "
+                "or SelectionName is configured. Provide at least one selector or change the policy."
             ),
             check_name=check_name,
         )

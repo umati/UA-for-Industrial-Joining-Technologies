@@ -77,8 +77,11 @@ async def _get_fresh_method_set(opcua_client, ns_ijt: int, ns_di: int, ns_app: i
 
 
 async def _product_instance_uri(client, ns_ijt: int, ns_di: int, ns_app: int | None) -> str:
-    """Return a concrete tool ProductInstanceUri, or empty string for default-asset calls."""
-    return await read_tool_product_instance_uri(client, ns_ijt, ns_di, ns_app) or ""
+    """Return a concrete Tool ProductInstanceUri for Tool-context operations."""
+    product_instance_uri = await read_tool_product_instance_uri(client, ns_ijt, ns_di, ns_app)
+    if not product_instance_uri:
+        pytest.skip("No Tool ProductInstanceUri found — cannot call Tool-context method")
+    return product_instance_uri
 
 
 def _piu_arg(product_instance_uri: str) -> ua.Variant:

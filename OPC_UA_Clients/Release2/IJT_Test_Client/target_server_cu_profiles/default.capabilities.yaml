@@ -25,7 +25,7 @@
 #   full_specification_coverage — all 123 CUs (use only for a server that claims all CUs)
 #
 # The checked-in Release 2 simulator has its own capability file:
-#   server_capabilities.simulator.yaml
+#   simulator.capabilities.yaml
 # run_all_tests.py selects that file automatically when it auto-launches the
 # simulator and OPCUA_CAPABILITIES_FILE is not already set.
 #
@@ -62,10 +62,10 @@ supported_facets: []
 # "supported"   → test runs even if the active profile excludes it
 #
 # ─── OPC UA IJT Server Simulator known limitations ────────────────────────────
-# The checked-in Release 2 simulator uses server_capabilities.simulator.yaml.
+# The checked-in Release 2 simulator uses simulator.capabilities.yaml.
 # Keep this default file for the server under test. If you intentionally want
 # simulator behaviour while setting OPCUA_CAPABILITIES_FILE manually, point that
-# variable at server_capabilities.simulator.yaml instead of copying partial
+# variable at simulator.capabilities.yaml instead of copying partial
 # overrides here.
 #
 # Simulator behaviours that differ from OPC 40450-1:

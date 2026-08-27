@@ -183,8 +183,8 @@ async def test_all_simulated_event_use_cases_raise_joining_system_events(
         )
         for event_type, label in event_types:
             outcome = await event_trigger.trigger_event(event_type, count=1)
-            if not outcome.triggered and event_trigger.is_simulator:
-                pytest.skip(outcome.skip_reason or "Simulator event trigger failed")
+            if not outcome.triggered:
+                pytest.skip(outcome.skip_reason or "No deterministic event trigger is configured")
             events = await collector.collect(count=1, timeout_s=_EVENT_TIMEOUT)
             if not events:
                 pytest.skip(f"No JoiningSystemEventType received for {use_case}:{label}")
@@ -214,8 +214,8 @@ async def test_all_simulated_event_use_cases_raise_joining_system_conditions(
         )
         for event_type, label in event_types:
             outcome = await event_trigger.trigger_condition(event_type)
-            if not outcome.triggered and event_trigger.is_simulator:
-                pytest.skip(outcome.skip_reason or "Simulator condition trigger failed")
+            if not outcome.triggered:
+                pytest.skip(outcome.skip_reason or "No deterministic condition trigger is configured")
             event, seen = await _collect_until(
                 collector,
                 _event_code_matches(event_type),

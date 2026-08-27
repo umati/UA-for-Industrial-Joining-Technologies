@@ -337,6 +337,31 @@ def _load_capabilities(path: Path | None) -> CapabilitiesInfo | None:
     )
 
 
+def _apply_capability_overrides(
+    cu_payload: dict[str, Any],
+    capabilities: CapabilitiesInfo | None,
+) -> None:
+    """Make explicit server non-support authoritative over workflow skip reasons."""
+    if capabilities is None:
+        return
+    by_cu = cu_payload.get("by_cu")
+    if not isinstance(by_cu, dict):
+        return
+    for cu_key, override in capabilities.overrides.items():
+        if override != "unsupported":
+            continue
+        data = by_cu.get(cu_key)
+        if not isinstance(data, dict):
+            continue
+        if any(int(data.get(key, 0) or 0) > 0 for key in ("passed", "failed", "error")):
+            continue
+        test_count = int(data.get("test_count", 0) or 0)
+        data["compliance"] = "not_supported"
+        data["outcome"] = "not_supported"
+        data["not_supported"] = max(int(data.get("not_supported", 0) or 0), test_count)
+        data["blocked"] = 0
+
+
 def _title_from_key(key: str) -> str:
     acronyms = {"cu": "CU", "id": "ID", "io": "IO", "ijt": "IJT"}
     return " ".join(acronyms.get(token, token.capitalize()) for token in key.split("_"))
@@ -876,6 +901,7 @@ def _build_cover(
     run_result: str,
     context: dict[str, Any] | None,
     facets: dict[str, FacetInfo],
+    target_run: dict[str, Any] | None = None,
 ) -> None:
     ws = wb.create_sheet("Conformance Overview")
     ws.sheet_view.showGridLines = False
@@ -916,18 +942,42 @@ def _build_cover(
         total_active = len(context["active_cus"])
         validated = _supported_cus_validated_count(context["active_cus"], context["by_cu"], context["supported"])
         findings_count = context["findings_count"]
-        metrics = [
-            (
-                "Server Support Coverage",
-                _fmt_pct(context["spec_coverage_value"]),
-                f"{supported} / {total_active} CUs server-supported",
-            ),
-            (
-                "Validation Health",
-                _fmt_pct(context["validation_health_value"]),
-                f"{validated} / {supported} server-supported CUs validated",
-            ),
-        ]
+        metrics = []
+        if target_run:
+            workflow = target_run.get("workflow", {})
+            metrics.extend(
+                [
+                    (
+                        "Evidence Source",
+                        "Real Target Server",
+                        str(target_run.get("profile_name") or "Target workflow"),
+                    ),
+                    (
+                        "Endpoint",
+                        str(target_run.get("endpoint") or "Not recorded"),
+                        f"Mode: {target_run.get('mode', 'unknown')}",
+                    ),
+                    (
+                        "Result Trigger",
+                        str(workflow.get("result_trigger_mode") or "Not recorded"),
+                        "Events are validated only from controller-generated evidence",
+                    ),
+                ]
+            )
+        metrics.extend(
+            [
+                (
+                    "Server Support Coverage",
+                    _fmt_pct(context["spec_coverage_value"]),
+                    f"{supported} / {total_active} CUs server-supported",
+                ),
+                (
+                    "Validation Health",
+                    _fmt_pct(context["validation_health_value"]),
+                    f"{validated} / {supported} server-supported CUs validated",
+                ),
+            ]
+        )
         if not bool(context.get("is_healthy")):
             metrics.append(
                 (
@@ -1283,10 +1333,33 @@ def _build_facet_coverage(
     cu_payload: dict[str, Any],
     facets: dict[str, FacetInfo],
     capabilities: CapabilitiesInfo | None,
+    target_run: dict[str, Any] | None = None,
 ) -> None:
     ws = wb.create_sheet("IJT Facet Breakdown")
     ws.sheet_view.showGridLines = False
-    ws.freeze_panes = "A2"
+    header_row = 6 if target_run else 1
+    ws.freeze_panes = f"A{header_row + 1}"
+
+    if target_run:
+        workflow = target_run.get("workflow", {})
+        ws.merge_cells("A1:O1")
+        ws["A1"] = "Real Target Server Evidence"
+        ws["A1"].font = Font(bold=True, size=16)
+        ws["A1"].fill = _fill(_LIGHT_BLUE)
+        ws["A2"] = "Server"
+        ws["B2"] = capabilities.server_name if capabilities else "Server under test"
+        ws["D2"] = "Workflow profile"
+        ws["E2"] = str(target_run.get("profile_name") or "")
+        ws["A3"] = "Endpoint"
+        ws["B3"] = str(target_run.get("endpoint") or "")
+        ws["D3"] = "Result trigger"
+        ws["E3"] = str(workflow.get("result_trigger_mode") or "")
+        ws["A4"] = "Evidence rule"
+        ws["B4"] = "Controller-generated observations only; skipped or missing events are not validated."
+        ws.merge_cells("B4:O4")
+        for row in range(2, 5):
+            ws.cell(row=row, column=1).font = Font(bold=True)
+            ws.cell(row=row, column=4).font = Font(bold=True)
 
     by_cu = cu_payload.get("by_cu", {}) if isinstance(cu_payload.get("by_cu"), dict) else {}
     supported = _supported_set(cu_payload)
@@ -1310,9 +1383,9 @@ def _build_facet_coverage(
         "Description",
     ]
     widths = [34, 34, 12, 10, 14, 12, 12, 14, 9, 13, 9, 12, 14, 16, 70]
-    _apply_header(ws, 1, headers, widths)
+    _apply_header(ws, header_row, headers, widths)
 
-    for row, facet in enumerate(facets.values(), start=2):
+    for row, facet in enumerate(facets.values(), start=header_row + 1):
         cu_keys = facet.conformance_units
         counts = _count_cu_outcomes(cu_keys, by_cu)
         server_profile_cus = _server_profile_cu_count(cu_keys, supported)
@@ -1348,8 +1421,8 @@ def _build_facet_coverage(
                 cell.fill = _status_fill(str(value))
                 cell.font = Font(bold=True)
 
-    _apply_print_setup(ws)
-    _apply_autofilter(ws)
+    _apply_print_setup(ws, repeat_header_row=header_row)
+    _apply_autofilter(ws, start_row=header_row)
 
 
 def _build_cu_coverage(
@@ -1401,7 +1474,16 @@ def _build_cu_coverage(
         failed = int(data.get("failed", 0) or 0) + int(data.get("error", 0) or 0)
         tests = data.get("tests") if isinstance(data.get("tests"), list) else []
         support = _in_server_profile(cu_key, supported)
-        status, status_icon = _status_for(cu_key, compliance, active_cus)
+        explicit_unsupported = overrides.get(cu_key) == "unsupported"
+        if explicit_unsupported:
+            status, status_icon = _status_for(cu_key, "not_supported", {cu_key})
+        else:
+            status, status_icon = _status_for(cu_key, compliance, active_cus)
+        primary_reason = (
+            "Server capability profile declares this CU not supported."
+            if explicit_unsupported
+            else _cu_note_summary(cu_key, tests_by_cu)
+        )
         values: list[Any] = [
             f"{status_icon} {status}",
             cu_display_name(cu_key),
@@ -1409,7 +1491,7 @@ def _build_cu_coverage(
             ", ".join(facet_map.get(cu_key, [])),
             support,
             _cu_compliance_label(compliance),
-            _cu_note_summary(cu_key, tests_by_cu),
+            primary_reason,
             int(data.get("test_count", 0) or 0),
             int(data.get("passed", 0) or 0),
             int(data.get("not_supported", 0) or 0),
@@ -1462,6 +1544,11 @@ def _parse_args() -> argparse.Namespace:
         default=os.environ.get("IJT_RUN_RESULT", "unknown"),
         help="Overall runner result; failed adds a diagnostic warning banner to the workbook",
     )
+    p.add_argument(
+        "--target-report",
+        default=None,
+        help="Optional target-server-cu-report.json used to label real-controller evidence",
+    )
     p.add_argument("--baseline", default=str(_DEFAULT_BASELINE_JSON), help="Report baseline JSON path")
     p.add_argument(
         "--write-baseline",
@@ -1486,10 +1573,25 @@ def main() -> int:
     print(f"Reading: {xml_path}")
     cases = parse_junit_xml(xml_path)
     print(f"  {len(cases)} test cases found")
-    cu_payload = _load_json(Path(args.cu_json))
+    cu_payload = _load_json(Path(args.cu_json)) or {}
     capabilities_arg = args.capabilities or os.environ.get("OPCUA_CAPABILITIES_FILE")
-    capabilities_path = Path(capabilities_arg) if capabilities_arg else _PROJECT_ROOT / "server_capabilities.yaml"
+    capabilities_path = (
+        Path(capabilities_arg)
+        if capabilities_arg
+        else _PROJECT_ROOT / "target_server_cu_profiles" / "default.capabilities.yaml"
+    )
     capabilities = _load_capabilities(capabilities_path)
+    _apply_capability_overrides(cu_payload, capabilities)
+    target_report_arg = args.target_report
+    inferred_target_report = xml_path.parent / "target-server-cu-report.json"
+    target_report_path = (
+        Path(target_report_arg)
+        if target_report_arg
+        else inferred_target_report
+        if inferred_target_report.exists()
+        else None
+    )
+    target_run = _load_json(target_report_path) if target_report_path else {}
     facets = _load_facets()
     profiles = _load_profiles()
     baseline_path = Path(args.baseline)
@@ -1501,10 +1603,10 @@ def main() -> int:
     wb = openpyxl.Workbook()
     wb.remove(wb.active)  # remove default empty sheet
 
-    _build_cover(wb, cases, run_ts, args.run_result, context, facets)
+    _build_cover(wb, cases, run_ts, args.run_result, context, facets, target_run)
     _build_summary(wb, cases, run_ts, args.run_result)
     if cu_payload and facets:
-        _build_facet_coverage(wb, cu_payload, facets, capabilities)
+        _build_facet_coverage(wb, cu_payload, facets, capabilities, target_run)
         _build_cu_coverage(wb, cu_payload, facets, capabilities, context)
         _build_profile_coverage(wb, cu_payload, profiles, facets, capabilities, args.run_result)
     _build_all_tests(wb, cases)

@@ -27,16 +27,27 @@ A target server CU profile configures:
 - **Workflow execution** — start invocation policy, expected results, cleanup
 - **Reporting** — output directory, sanitization settings
 
-Profiles do not replace `server_capabilities.yaml`. The capability file says
-which CUs the server supports. The Target Server CU profile says how to run or
-classify those CUs for one server under test.
+The capability file says which CUs the server supports. The execution profile
+says how to run or classify those CUs for one server under test. Keep the pair
+together and reference the capability filename from `capabilities_file`.
 
-The runner also limits result CUs to the profile's
-`workflow_execution.expected_results.classification` plus any
-`intermediate_classifications`. A single-result run does not execute
-batch/job workflows, while a Job workflow can explicitly retain intermediate
-BatchResult CUs with `intermediate_classifications: [batch]` or intermediate
-SyncResult CUs with `intermediate_classifications: [sync]`.
+## Why YAML files have different locations
+
+| Location | Responsibility | Tester normally edits it? |
+|---|---|---|
+| `target_server_cu_profiles/` | Controller execution profiles, capability declarations, template, and examples | Yes, when configuring a controller |
+| `profiles/` | Internal OPC UA IJT profile/facet-to-CU catalog used by the loader | No |
+| `reference_workflows/` | Non-executable documentation/demo workflows | No |
+
+Execution and capability files that belong to one controller are kept together
+here. The suffix states the role: `*.profile.yaml` controls execution and
+`*.capabilities.yaml` controls which CUs are claimed. Internal catalogs and
+runtime defaults remain separate because they are application data, not
+controller configuration.
+
+The runner limits result CUs to the profile's configured primary and intermediate
+classifications. See `../docs/CONTROLLER_PROFILE_GUIDE.md` for layered result,
+selection, intervention, event, and state-change semantics.
 
 ---
 
@@ -45,12 +56,13 @@ SyncResult CUs with `intermediate_classifications: [sync]`.
 | File | Purpose |
 |---|---|
 | `README.md` | This documentation file |
-| `template.yaml` | Fully commented schema template with safe defaults and placeholders |
-| `example_remote_start.yaml` | Generic sanitized example for target servers supporting StartSelectedJoining |
-| `example_manual_trigger.yaml` | Generic sanitized example for target servers requiring physical tool trigger |
-| `example_simulation_methods.yaml` | Generic sanitized example for servers that expose simulation helper methods |
-| `example_joining_process_remote_start.yaml` | Generic ID-based single-result remote-start example |
-| `example_multi_operation_job.yaml` | Generic multi-operation JoiningProcess/job example |
+| `default.capabilities.yaml` | Default Test Client CU declaration when no explicit capability file is selected |
+| `simulator.capabilities.yaml` | Checked-in simulator CU declaration selected automatically by the runner |
+| `template.profile.yaml` | Fully commented execution-profile schema with safe defaults and placeholders |
+| `example_multi_operation_job.profile.yaml` | Complete automated-controller example: ID-first Tool/process selection, layered results, intervention evidence, and safe enablement |
+| `example_multi_operation_job.capabilities.yaml` | Capability declaration paired with the complete automated example |
+| `example_manual_trigger.profile.yaml` | Distinct example for controllers requiring a physical tool trigger |
+| `example_simulation_methods.profile.yaml` | Distinct example for servers exposing simulator helper methods |
 
 ---
 
@@ -65,14 +77,32 @@ SyncResult CUs with `intermediate_classifications: [sync]`.
 
 **Recommended approach:**
 
-1. Copy `template.yaml` to a location **outside** this repository (e.g. `~/my-target-server.yaml`).
-2. Fill in your real endpoint, PIU, and process details.
-3. Run with: `python run_target_server_cu.py --profile ~/my-target-server.yaml --preflight-only`
+1. Start from `example_multi_operation_job.profile.yaml` for a complete
+   automated controller workflow, `example_manual_trigger.profile.yaml` for
+   physical operation, `example_simulation_methods.profile.yaml` for a
+   simulator, or `template.profile.yaml` for the complete field reference.
+2. When its workflow and CU declaration match the target, use it directly and
+   pass `--endpoint`, `--joining-process-id`, and
+   `--joining-process-origin-id`. No private YAML is required.
+3. Only when behavior differs, copy the execution profile to
+   `<controller>.profile.yaml` and its declaration to
+   `<controller>.capabilities.yaml`. Local non-example YAML files here are
+   intentionally Git-ignored.
+4. Set `capabilities_file` in the copied profile to the paired capability
+   filename, then adjust workflow and CU support values.
+5. Keep Tool PIU empty when runtime discovery is preferred.
+
+`GetJoiningProcessList` can return many programs/jobs. One execution profile
+selects one JoiningProcess because operation count, allowed state changes, and
+expected result layers must be deterministic. Use a separate named profile for
+each process workflow that needs different expectations.
 
 If you need to commit a profile for CI/CD, sanitize it first:
 - Replace real IP/hostname with `<target-server-host>` or `localhost`
 - Replace real PIU with empty string (discovery will find it at runtime)
-- Replace real process IDs with empty string (first-available selection)
+- For a reusable discovery example, replace real process IDs with empty strings
+  **and** change `selection.joining_process.policy` from `exact_match` to
+  `first_compatible`
 
 ---
 
@@ -80,16 +110,16 @@ If you need to commit a profile for CI/CD, sanitize it first:
 
 ```bash
 # 1. Preflight only — safe for any target server, no state changes:
-python run_target_server_cu.py --profile target_server_cu_profiles/template.yaml --preflight-only
+python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --preflight-only
 
 # 2. Full automated run (target server supports StartSelectedJoining):
-python run_target_server_cu.py --profile target_server_cu_profiles/example_remote_start.yaml --mode automated
+python run_target_server_cu.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml --mode automated
 
 # 3. Guided/manual run with terminal prompts:
-python run_target_server_cu.py --profile target_server_cu_profiles/example_manual_trigger.yaml --mode guided --interactive-prompts
+python run_target_server_cu.py --profile target_server_cu_profiles/example_manual_trigger.profile.yaml --mode guided --interactive-prompts
 
 # 4. Override endpoint from command line:
-python run_target_server_cu.py --profile template.yaml --endpoint opc.tcp://target-server-host:40451 --preflight-only
+python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --endpoint opc.tcp://target-server-host:40451 --preflight-only
 
 # 5. Custom output directory:
 python run_target_server_cu.py --profile my_profile.yaml --output-dir test-results/target-server-cu/run-2026-06-30
@@ -102,7 +132,7 @@ python run_target_server_cu.py --profile my_profile.yaml --output-dir test-resul
 ### Preflight only (always safe)
 
 ```bash
-python run_target_server_cu.py --profile target_server_cu_profiles/template.yaml --preflight-only
+python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --preflight-only
 ```
 
 Checks the configuration, TCP reachability, and trigger mode. Does **not** call any OPC UA
@@ -111,7 +141,7 @@ methods or open a test session. Safe to run against any target server at any tim
 ### Automated mode (live spec tests)
 
 ```bash
-python run_target_server_cu.py --profile target_server_cu_profiles/example_remote_start.yaml --mode automated
+python run_target_server_cu.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml --mode automated
 ```
 
 When the profile has a configured, reachable endpoint:
@@ -121,6 +151,10 @@ When the profile has a configured, reachable endpoint:
 3. Runs the `specification_tests/` pytest suite with `OPCUA_SERVER_URL` set to the
    target server and `OPCUA_CAPABILITIES_FILE` from the profile.
 4. Writes a `spec-tests.xml` JUnit report and `target-server-cu-report.json` evidence.
+
+Generic specification tests cannot invoke state-changing methods on a real target.
+Those calls are permitted only through the configured workflow adapter. Disabling
+an asset requires the separate `allow_disable_asset: true` opt-in.
 
 When the endpoint is a placeholder or not reachable, step 3 is skipped and only
 classification is shown (same as before).
@@ -141,17 +175,18 @@ Runs classification without invoking the spec test suite, even if the endpoint i
 
 ```bash
 # Add target server preflight to the standard run:
-python run_all_tests.py --target-server-profile target_server_cu_profiles/example_remote_start.yaml
+python run_all_tests.py --target-server-profile target_server_cu_profiles/example_multi_operation_job.profile.yaml
 ```
 
 This step is non-blocking by default. Target server preflight failures are shown
 as warnings and the simulator-based test run still continues. Use
 `--target-server-preflight-strict` when target server preflight must fail the run.
 
-**Note:** Full live target server specification_tests/ runs are a Test Client-level
-operation. Use `run_target_server_cu.py --mode automated` for those. The root-level
-`run_all_tests.py` only performs the non-blocking preflight step via
-`--target-server-profile`.
+**Note:** Run these commands from `IJT_Test_Client`. Full live target-server
+`specification_tests/` runs use `run_target_server_cu.py --mode automated`.
+The `run_all_tests.py` in this same Test Client directory performs only the
+optional preflight step via `--target-server-profile`; the repository-root
+runner does not expose that argument.
 
 ---
 

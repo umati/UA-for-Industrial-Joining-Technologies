@@ -18,10 +18,13 @@ from helpers.address_space import (
 )
 from helpers.method_caller import (
     MethodCallResult,
+    _enforce_target_method_authorization,
     call_method,
     call_method_and_assert_success,
     call_method_expect_bad_status,
     find_and_call_method,
+    is_target_method_call_authorized,
+    is_target_state_changing_method,
 )
 
 
@@ -93,6 +96,49 @@ class TestReadNodeClass:
 
 
 class TestCallMethod:
+    @pytest.mark.parametrize(
+        "method_name",
+        [
+            "AcknowledgeResults",
+            "DisconnectAsset",
+            "ExecuteOperation",
+            "RebootAsset",
+            "SetCalibration",
+            "SetIOSignals",
+            "SetOfflineTimer",
+            "SetTime",
+            "SendFeedback",
+            "SendJoint",
+            "SelectJoint",
+            "DeleteJoint",
+            "SendJointDesign",
+            "DeleteJointDesign",
+            "SendJointComponent",
+            "DeleteJointComponent",
+        ],
+    )
+    def test_classifies_all_additional_mutating_methods(self, method_name):
+        assert is_target_state_changing_method(method_name)
+
+    def test_does_not_classify_read_only_method(self):
+        assert not is_target_state_changing_method("GetIdentifiers")
+
+    def test_real_target_mutation_requires_authorization(self, monkeypatch):
+        monkeypatch.setenv("OPCUA_TARGET_SERVER_PROFILE", "target.yaml")
+
+        with pytest.raises(pytest.skip.Exception, match="state-changing"):
+            _enforce_target_method_authorization("DisconnectAsset", authorized=False)
+
+    def test_real_target_mutation_accepts_explicit_authorization(self, monkeypatch):
+        monkeypatch.setenv("OPCUA_TARGET_SERVER_PROFILE", "target.yaml")
+
+        _enforce_target_method_authorization("DisconnectAsset", authorized=True)
+
+    def test_non_target_run_does_not_require_authorization(self, monkeypatch):
+        monkeypatch.delenv("OPCUA_TARGET_SERVER_PROFILE", raising=False)
+
+        _enforce_target_method_authorization("DisconnectAsset", authorized=False)
+
     @pytest.mark.asyncio
     async def test_returns_success_on_completion(self):
         node = AsyncMock()
@@ -100,6 +146,29 @@ class TestCallMethod:
         result = await call_method(node, "method-id", method_name="TestMethod")
         assert result.success is True
         assert result.output == [42, "OK"]
+
+    @pytest.mark.asyncio
+    async def test_authorization_context_is_active_only_during_call(self):
+        observed = []
+        node = AsyncMock()
+
+        async def call(*_args):
+            observed.append(is_target_method_call_authorized())
+            return []
+
+        node.call_method.side_effect = call
+        assert not is_target_method_call_authorized()
+
+        result = await call_method(
+            node,
+            "method-id",
+            method_name="DisconnectAsset",
+            target_server_authorized=True,
+        )
+
+        assert result.success
+        assert observed == [True]
+        assert not is_target_method_call_authorized()
 
     @pytest.mark.asyncio
     async def test_returns_failure_on_ua_error(self):

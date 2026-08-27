@@ -13,8 +13,8 @@
 # Copy this file and replace placeholder values for your target server.
 #
 # Usage:
-#   python run_target_server_cu.py --profile example_manual_trigger.yaml --preflight-only
-#   python run_target_server_cu.py --profile example_manual_trigger.yaml --mode guided --interactive-prompts
+#   python run_target_server_cu.py --profile example_manual_trigger.profile.yaml --preflight-only
+#   python run_target_server_cu.py --profile example_manual_trigger.profile.yaml --mode guided --interactive-prompts
 
 schema_version: 1
 profile_name: "Generic Manual Trigger Target Server"
@@ -24,7 +24,7 @@ description: >
   Replace <target-server-host> with the target server hostname or IP address.
   Keep this profile outside the repository if it contains real identifiers.
 
-capabilities_file: "../server_capabilities.yaml"
+capabilities_file: "default.capabilities.yaml"
 
 target:
   # Replace <target-server-host> with your target server hostname or IP address.
@@ -54,15 +54,11 @@ cu_execution:
     # allowed_methods:
     #   - SelectJoiningProcess
 
-  method_status_policies: {}
-  extension_fields: {}
-
 selection:
   tool:
     # first_ready: select first tool in ready state for address-space discovery
     policy: first_ready
     product_instance_uri: ""
-    capability_tags: []
 
   joining_process:
     # first_compatible: select first process for address-space/method probing
@@ -70,7 +66,6 @@ selection:
     joining_process_id: ""
     joining_process_origin_id: ""
     selection_name: ""
-    capability_tags: []
 
 triggers:
   result:

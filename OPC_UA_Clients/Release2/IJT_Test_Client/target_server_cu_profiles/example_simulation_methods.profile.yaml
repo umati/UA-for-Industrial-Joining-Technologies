@@ -7,7 +7,7 @@
 # SANITIZED: No real endpoints, PIUs, process IDs, or vendor values are present.
 #
 # Usage:
-#   python run_target_server_cu.py --profile example_simulation_methods.yaml --preflight-only
+#   python run_target_server_cu.py --profile example_simulation_methods.profile.yaml --preflight-only
 
 schema_version: 1
 profile_name: "Generic Simulation Methods Target Server"
@@ -15,14 +15,11 @@ description: >
   Sanitized example profile for target servers that expose simulation helper
   methods for result and event evidence.
 
-capabilities_file: "../server_capabilities.yaml"
+capabilities_file: "simulator.capabilities.yaml"
 
 target:
-  endpoint: "opc.tcp://localhost:40451"
-  expected_server:
-    application_name: ""
-    application_version: ""
-    warn_only_on_version_drift: true
+  # run_all_tests.py launches the checked-in simulator on this isolated port.
+  endpoint: "opc.tcp://localhost:40462"
 
 cu_execution:
   default_mode: automated
@@ -33,21 +30,6 @@ cu_execution:
   state_changing_methods:
     default_policy: require_explicit_opt_in
     allowed_methods: []
-  method_status_policies: {}
-  extension_fields: {}
-
-selection:
-  tool:
-    policy: first_ready
-    product_instance_uri: ""
-    capability_tags: []
-  joining_process:
-    policy: first_compatible
-    joining_process_id: ""
-    joining_process_origin_id: ""
-    selection_name: ""
-    capability_tags: []
-
 triggers:
   result:
     mode: simulate_methods
