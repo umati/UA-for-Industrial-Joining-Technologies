@@ -121,12 +121,30 @@ def _parse_opcua_endpoint(url: str) -> tuple[str, int]:
     return stripped, 40451
 
 
+def _prepend_to_path(directory: str) -> None:
+    """Prepend *directory* to PATH if not already present (case-insensitive, entry-level check).
+
+    Uses os.pathsep for splitting so this works correctly on all platforms
+    (';' on Windows, ':' on POSIX).  The comparison is case-folded on Windows
+    to avoid growing PATH indefinitely when the same directory appears with
+    different capitalisation (e.g. 8.3 short name vs. long name).
+    """
+    sep = os.pathsep
+    current_entries = os.environ.get("PATH", "").split(sep)
+    if sys.platform == "win32":
+        already_present = any(e.casefold() == directory.casefold() for e in current_entries)
+    else:
+        already_present = directory in current_entries
+    if not already_present:
+        os.environ["PATH"] = f"{directory}{sep}{os.environ.get('PATH', '')}"
+
+
 def _find_dotnet() -> str | None:
     found = shutil.which("dotnet")
     if found:
         return found
     if sys.platform == "win32":
-        candidates = [
+        candidates: list[Path] = [
             Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "dotnet" / "dotnet.exe",
             Path(r"C:\Program Files\dotnet\dotnet.exe"),
             Path(r"C:\Program Files (x86)\dotnet\dotnet.exe"),
@@ -136,9 +154,7 @@ def _find_dotnet() -> str | None:
             candidates.append(Path(local_app) / "Microsoft" / "dotnet" / "dotnet.exe")
         for candidate in candidates:
             if candidate.is_file():
-                dotnet_dir = str(candidate.parent)
-                if dotnet_dir not in os.environ.get("PATH", ""):
-                    os.environ["PATH"] = f"{dotnet_dir};{os.environ.get('PATH', '')}"
+                _prepend_to_path(str(candidate.parent))
                 return str(candidate)
     return None
 

@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 # Add scripts/ to path for dependency_helpers
@@ -73,7 +75,7 @@ def _precommit_command() -> list[str]:
             log.info("Installing root test dependencies (pytest, pyyaml)...")
             constraints = REPO_ROOT / "constraints.txt"
             c_args = ["-c", str(constraints)] if constraints.is_file() else []
-            subprocess.run(  # noqa: S603 - fixed internal command list
+            result = subprocess.run(  # noqa: S603 - fixed internal command list
                 [
                     sys.executable,
                     "-m",
@@ -87,6 +89,12 @@ def _precommit_command() -> list[str]:
                 ],
                 check=False,
             )
+            if result.returncode != 0:
+                log.warning(
+                    "pip install for root test dependencies failed (rc=%d); "
+                    "pytest hook may fail with ModuleNotFoundError",
+                    result.returncode,
+                )
     return [sys.executable, "-m", "pre_commit"]
 
 
@@ -151,7 +159,16 @@ def _run_python_requirements_audit() -> int:
     ]
     for req in requirements:
         cmd.extend(["--requirement", str(req)])
-    completed = subprocess.run(cmd, cwd=REPO_ROOT)  # noqa: S603 - fixed internal command list
+    # Resolve a canonical temp dir to avoid 8.3 short-name vs long-name path
+    # mismatches on Windows (and any similar symlink/junction issues on other
+    # platforms). tempfile.gettempdir() returns the real resolved path on all
+    # platforms without any Windows-specific branching.
+    canonical_tmp = str(Path(tempfile.gettempdir()).resolve())
+    env = os.environ.copy()
+    env["TMP"] = canonical_tmp
+    env["TEMP"] = canonical_tmp
+    env["TMPDIR"] = canonical_tmp
+    completed = subprocess.run(cmd, cwd=REPO_ROOT, env=env)  # noqa: S603 - fixed internal command list
     return completed.returncode
 
 
