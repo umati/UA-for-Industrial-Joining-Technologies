@@ -109,6 +109,20 @@ class TestRuntimeOverrides:
         assert updated.selection.joining_process.joining_process_id == "process-1"
         assert updated.selection.joining_process.joining_process_origin_id == "origin-1"
 
+    def test_pytest_reload_reapplies_forwarded_installation_values(self, profiles_dir, monkeypatch):
+        import conftest as test_client_conftest
+
+        profile_path = profiles_dir / "example_multi_operation_job.profile.yaml"
+        monkeypatch.setenv("OPCUA_TOOL_PRODUCT_INSTANCE_URI", "urn:tool:runtime")
+        monkeypatch.setenv("OPCUA_JOINING_PROCESS_ID", "process-runtime")
+        monkeypatch.setenv("OPCUA_JOINING_PROCESS_ORIGIN_ID", "origin-runtime")
+
+        profile = test_client_conftest._load_target_server_profile_with_runtime_overrides(str(profile_path))
+
+        assert profile.selection.tool.product_instance_uri == "urn:tool:runtime"
+        assert profile.selection.joining_process.joining_process_id == "process-runtime"
+        assert profile.selection.joining_process.joining_process_origin_id == "origin-runtime"
+
 
 # ---------------------------------------------------------------------------
 # Missing profile file
@@ -543,6 +557,32 @@ class TestBuildSpecTestEnv:
 
         assert env["OPCUA_TARGET_SERVER_MODE"] == "guided"
 
+    def test_forwards_resolved_tool_and_process_selection(self):
+        from dataclasses import replace as _replace
+
+        profile = self._make_profile()
+        tool = _replace(
+            profile.selection.tool,
+            policy="exact_match",
+            product_instance_uri="urn:tool:runtime",
+        )
+        process = _replace(
+            profile.selection.joining_process,
+            policy="exact_match",
+            joining_process_id="process-runtime",
+            joining_process_origin_id="origin-runtime",
+        )
+        profile = _replace(
+            profile,
+            selection=_replace(profile.selection, tool=tool, joining_process=process),
+        )
+
+        env = _runner_mod._build_spec_test_env(profile)
+
+        assert env["OPCUA_TOOL_PRODUCT_INSTANCE_URI"] == "urn:tool:runtime"
+        assert env["OPCUA_JOINING_PROCESS_ID"] == "process-runtime"
+        assert env["OPCUA_JOINING_PROCESS_ORIGIN_ID"] == "origin-runtime"
+
     def test_single_result_scope_excludes_consolidated_cus(self):
         profile = self._make_profile()
 
@@ -679,6 +719,17 @@ class TestBuildSpecTestEnv:
         assert env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] == "321.0"
         assert env["OPCUA_TARGET_FINAL_RESULT_REQUIRED"] == "false"
 
+    def test_primary_result_classification_is_forwarded_to_spec_tests(self):
+        from dataclasses import replace as _replace
+
+        profile = self._make_profile()
+        expected = _replace(profile.workflow_execution.expected_results, classification="job")
+        profile = _replace(profile, workflow_execution=_replace(profile.workflow_execution, expected_results=expected))
+
+        env = _runner_mod._build_spec_test_env(profile)
+
+        assert env["OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION"] == "4"
+
     def test_any_result_scope_clears_inherited_exclusions(self, monkeypatch):
         from dataclasses import replace as _replace
 
@@ -758,6 +809,20 @@ class TestBuildSpecTestCommand:
         cmd_q = _runner_mod._build_spec_test_command(sys.executable, spec_dir, junit, verbose=False)
         assert "-v" in cmd_v
         assert "-q" in cmd_q
+
+    def test_includes_configured_per_test_timeout(self, tmp_path):
+        spec_dir = tmp_path / "spec"
+        spec_dir.mkdir()
+        junit = tmp_path / "out.xml"
+
+        cmd = _runner_mod._build_spec_test_command(
+            sys.executable,
+            spec_dir,
+            junit,
+            test_timeout_seconds=900,
+        )
+
+        assert "--timeout=900" in cmd
 
 
 class TestRunLiveSpecTests:

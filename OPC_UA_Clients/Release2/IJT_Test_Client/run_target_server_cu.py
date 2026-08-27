@@ -363,9 +363,33 @@ def _build_spec_test_env(profile: TargetServerCuProfile) -> dict[str, str]:
     if profile.source_path:
         env["OPCUA_TARGET_SERVER_PROFILE"] = profile.source_path
     env["OPCUA_TARGET_SERVER_MODE"] = profile.cu_execution.default_mode
+    runtime_selection = {
+        "OPCUA_TOOL_PRODUCT_INSTANCE_URI": profile.selection.tool.product_instance_uri,
+        "OPCUA_JOINING_PROCESS_ID": profile.selection.joining_process.joining_process_id,
+        "OPCUA_JOINING_PROCESS_ORIGIN_ID": profile.selection.joining_process.joining_process_origin_id,
+    }
+    for name, value in runtime_selection.items():
+        if value:
+            env[name] = value
+        else:
+            env.pop(name, None)
     expected_results = profile.workflow_execution.expected_results
     env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] = str(expected_results.timeout_seconds)
     env["OPCUA_TARGET_FINAL_RESULT_REQUIRED"] = str(expected_results.final_result_required).lower()
+    required_classifications = {
+        "single": 1,
+        "sync": 2,
+        "batch": 3,
+        "job": 4,
+        "stitching": 5,
+        "intervention": 6,
+        "text": 7,
+    }
+    required_classification = required_classifications.get(expected_results.classification)
+    if required_classification is not None:
+        env["OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION"] = str(required_classification)
+    else:
+        env.pop("OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION", None)
     excluded_cus = _excluded_cus_for_result_scope(
         expected_results.classification,
         expected_results.intermediate_classifications,
@@ -390,6 +414,7 @@ def _build_spec_test_command(
     junit_xml: Path,
     *,
     exclude_simulation: bool = True,
+    test_timeout_seconds: int = 120,
     verbose: bool = False,
 ) -> list[str]:
     """Build the pytest command for a target server specification_tests/ run.
@@ -406,6 +431,8 @@ def _build_spec_test_command(
         When True, adds ``-m "not simulation"`` to skip simulator-only tests.
         Simulator tests skip naturally via conftest fixture anyway, but explicit
         exclusion is faster and produces clearer output.
+    test_timeout_seconds:
+        Per-test pytest timeout, sized for the configured target workflow.
     verbose:
         When True, passes ``-v`` instead of ``-q`` to pytest.
     """
@@ -417,6 +444,7 @@ def _build_spec_test_command(
         "--tb=short",
         "-v" if verbose else "-q",
         f"--junit-xml={junit_xml}",
+        f"--timeout={test_timeout_seconds}",
     ]
     if exclude_simulation:
         cmd += ["-m", "not simulation"]
@@ -487,6 +515,21 @@ def run_live_spec_tests(
         spec_dir,
         junit_xml,
         exclude_simulation=exclude_simulation,
+        test_timeout_seconds=min(
+            timeout_seconds,
+            max(
+                120,
+                (
+                    4 * profile.cu_execution.default_timeout_seconds
+                    + profile.workflow_execution.expected_operation_count
+                    * (
+                        profile.cu_execution.default_timeout_seconds
+                        + profile.workflow_execution.expected_results.timeout_seconds
+                    )
+                    + 30
+                ),
+            ),
+        ),
         verbose=verbose,
     )
 

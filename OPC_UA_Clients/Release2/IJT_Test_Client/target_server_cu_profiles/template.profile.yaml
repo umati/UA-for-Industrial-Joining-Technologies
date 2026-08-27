@@ -140,14 +140,16 @@ selection:
     # Selection policy:
     #   first_compatible  — use first process compatible with the tool (recommended)
     #   first_available   — use first discoverable process
-    #   exact_match       — requires joining_process_id to be set
+    #   exact_match       — tries process ID, then origin ID, then SelectionName
     policy: first_compatible
 
-    # Exact joining process identifier. Leave empty for runtime discovery.
+    # Exact selectors use the fallback order below. Leave all empty for discovery.
     # SANITIZE: do not commit real process IDs, names, or vendor payloads.
     # Typical UUID format: "123e4567-e89b-12d3-a456-426614174000".
     joining_process_id: ""
+    # Stable fallback when a controller regenerates its primary process ID.
     joining_process_origin_id: ""
+    # Final controller-specific fallback when stable IDs are unavailable.
     selection_name: ""
 
 # ---------------------------------------------------------------------------

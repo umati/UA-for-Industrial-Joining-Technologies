@@ -145,6 +145,7 @@ class ResultCollector:
         self._final_result_required = not is_simulator and os.environ.get(
             "OPCUA_TARGET_FINAL_RESULT_REQUIRED", ""
         ).strip().lower() in {"1", "true", "yes", "on"}
+        self._required_result_classification = self._read_required_result_classification()
 
     def _read_target_timeout(self) -> Optional[float]:
         if self._is_simulator:
@@ -158,6 +159,19 @@ class ResultCollector:
             logger.warning("Ignoring invalid OPCUA_TARGET_RESULT_TIMEOUT_SECONDS=%r", raw)
             return None
         return value if value > 0 else None
+
+    def _read_required_result_classification(self) -> Optional[int]:
+        if self._is_simulator:
+            return None
+        raw = os.environ.get("OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION", "").strip()
+        if not raw:
+            return None
+        try:
+            value = int(raw)
+        except ValueError:
+            logger.warning("Ignoring invalid OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION=%r", raw)
+            return None
+        return value if value in ResultClassification.VALID_VALUES else None
 
     # ── context manager ───────────────────────────────────────────────────
 
@@ -263,7 +277,7 @@ class ResultCollector:
             else (_SIM_SINGLE_TIMEOUT if self._is_simulator else self._target_timeout or _CTRL_SINGLE_TIMEOUT)
         )
         result = await self._collect_until(ResultClassification.SINGLE_RESULT, False, timeout)
-        return self._require_final(result, "SingleResult", timeout)
+        return self._require_final(result, "SingleResult", timeout, ResultClassification.SINGLE_RESULT)
 
     async def collect_single_matching(self, predicate: Any, timeout_s: Optional[float] = None) -> Optional[Any]:
         """Collect a SingleResult that satisfies a caller-provided correlation predicate."""
@@ -289,7 +303,7 @@ class ResultCollector:
             else (_SIM_COMBINED_TIMEOUT if self._is_simulator else self._target_timeout or _CTRL_COMBINED_TIMEOUT)
         )
         result = await self._collect_until(classification, False, timeout)
-        return self._require_final(result, f"classification {classification}", timeout)
+        return self._require_final(result, f"classification {classification}", timeout, classification)
 
     async def collect_partial(self, classification: int, timeout_s: Optional[float] = None) -> Optional[Any]:
         """Collect the first partial combined result event (IsPartial=True).
@@ -327,7 +341,7 @@ class ResultCollector:
             else (_SIM_JOB_TIMEOUT if self._is_simulator else self._target_timeout or _CTRL_JOB_TIMEOUT)
         )
         result = await self._collect_until(ResultClassification.JOB_RESULT, False, timeout)
-        return self._require_final(result, "JobResult", timeout)
+        return self._require_final(result, "JobResult", timeout, ResultClassification.JOB_RESULT)
 
     def discard_pending(self) -> int:
         """Discard queued notifications before a correlated operation starts."""
@@ -335,7 +349,16 @@ class ResultCollector:
             raise RuntimeError("ResultCollector is not active — use as async context manager")
         return self._collector.discard_pending()
 
-    def _require_final(self, result: Optional[Any], label: str, timeout: float) -> Optional[Any]:
-        if result is None and self._final_result_required:
+    def _require_final(
+        self,
+        result: Optional[Any],
+        label: str,
+        timeout: float,
+        classification: Optional[int] = None,
+    ) -> Optional[Any]:
+        classification_is_required = (
+            self._required_result_classification is None or classification == self._required_result_classification
+        )
+        if result is None and self._final_result_required and classification_is_required:
             raise TimeoutError(f"Required final {label} was not received within {timeout:.1f}s")
         return result

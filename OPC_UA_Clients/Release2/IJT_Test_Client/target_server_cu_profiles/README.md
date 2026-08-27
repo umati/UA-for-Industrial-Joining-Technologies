@@ -118,7 +118,7 @@ If you need to commit a profile for CI/CD, sanitize it first:
 python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --preflight-only
 
 # 2. Full automated run (target server supports StartSelectedJoining):
-python run_target_server_cu.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml --mode automated
+python run_target_server_cu.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml --mode automated --spec-tests-timeout 3600
 
 # 3. Guided/manual run with terminal prompts:
 python run_target_server_cu.py --profile target_server_cu_profiles/example_manual_trigger.profile.yaml --mode guided --interactive-prompts
@@ -154,12 +154,27 @@ When the profile has a configured, reachable endpoint:
 1. Runs configuration and TCP preflight checks.
 2. Shows CU execution classification.
 3. Runs the `specification_tests/` pytest suite with `OPCUA_SERVER_URL` set to the
-   target server and `OPCUA_CAPABILITIES_FILE` from the profile.
+   target server, `OPCUA_CAPABILITIES_FILE` from the profile, and the resolved
+   Tool/JoiningProcess runtime overrides forwarded to the target workflow fixtures.
 4. Writes a `spec-tests.xml` JUnit report and `target-server-cu-report.json` evidence.
+
+The default subprocess limit is 600 seconds. Use `--spec-tests-timeout SECONDS`
+when real result generation makes the complete suite take longer. The runner
+automatically sizes pytest's per-test ceiling for the configured method, result,
+and operation timeouts, capped by the full-suite limit.
 
 Generic specification tests cannot invoke state-changing methods on a real target.
 Those calls are permitted only through the configured workflow adapter. Disabling
 an asset requires the separate `allow_disable_asset: true` opt-in.
+
+The complete multi-operation example authorizes selection, remote start, abort,
+reset, increment, and decrement for its Job/Sequence workflow. Abort/reset/counter
+controls are not applicable to a single-program profile. Authorization remains a
+safety gate; it does not cause every listed method to run.
+
+With `selection.joining_process.policy: exact_match`, selection tries the
+configured JoiningProcess ID first, then origin ID, then SelectionName. This
+allows a stable origin ID to survive controller-generated primary ID changes.
 
 When the endpoint is a placeholder or not reachable, step 3 is skipped and only
 classification is shown (same as before).

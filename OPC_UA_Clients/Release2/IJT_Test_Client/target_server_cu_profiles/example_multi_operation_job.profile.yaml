@@ -53,8 +53,15 @@ cu_execution:
       - SelectJoiningProcess
       # Remotely request each joining operation.
       - StartSelectedJoining
+      # Job/Sequence controls below are not applicable to a single program.
       # Generate configured InterventionResult evidence.
       - IncrementJoiningProcessCounter
+      # Exercise the inverse counter intervention when selected by the workflow.
+      - DecrementJoiningProcessCounter
+      # Stop the selected/active Job or Sequence when explicitly tested.
+      - AbortJoiningProcess
+      # Reset Job/Sequence state, including restarting an exhausted counter at 1.
+      - ResetJoiningProcess
   extension_fields:
     # Never call EnableAsset(false) from this profile.
     allow_disable_asset: false
@@ -79,11 +86,11 @@ selection:
     # Copy the IDs returned for the program/job this profile should exercise.
     # Typical format: "123e4567-e89b-12d3-a456-426614174000".
     policy: exact_match
-    # Primary stable identifier returned by GetJoiningProcessList.
+    # Primary selector returned by GetJoiningProcessList.
     joining_process_id: "<joining-process-id>"
-    # Origin-system identifier used to disambiguate the same process ID.
+    # Stable origin-system fallback when the controller regenerates process IDs.
     joining_process_origin_id: "<joining-process-origin-id>"
-    # Use SelectionName only when the server does not provide stable IDs.
+    # Final fallback when neither configured ID is currently advertised.
     selection_name: ""
 
 triggers:

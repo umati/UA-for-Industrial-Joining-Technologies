@@ -755,6 +755,32 @@ def _target_server_profile_path() -> str:
     return os.environ.get("OPCUA_TARGET_SERVER_PROFILE", "")
 
 
+def _load_target_server_profile_with_runtime_overrides(profile_path: str):
+    """Load a profile and reproduce installation overrides in the pytest process."""
+    from dataclasses import replace
+
+    from helpers.target_server_cu_config import load_target_server_profile
+
+    profile = load_target_server_profile(Path(profile_path))
+    tool_piu = os.environ.get("OPCUA_TOOL_PRODUCT_INSTANCE_URI", "")
+    process_id = os.environ.get("OPCUA_JOINING_PROCESS_ID", "")
+    process_origin_id = os.environ.get("OPCUA_JOINING_PROCESS_ORIGIN_ID", "")
+    if tool_piu:
+        tool = replace(profile.selection.tool, policy="exact_match", product_instance_uri=tool_piu)
+        profile = replace(profile, selection=replace(profile.selection, tool=tool))
+    if process_id or process_origin_id:
+        process = replace(
+            profile.selection.joining_process,
+            policy="exact_match" if process_id else profile.selection.joining_process.policy,
+            joining_process_id=process_id or profile.selection.joining_process.joining_process_id,
+            joining_process_origin_id=(
+                process_origin_id or profile.selection.joining_process.joining_process_origin_id
+            ),
+        )
+        profile = replace(profile, selection=replace(profile.selection, joining_process=process))
+    return profile
+
+
 def _target_server_mode_allows_waiting() -> bool:
     """Return True when the Target Server runner is in guided/manual mode."""
     return os.environ.get("OPCUA_TARGET_SERVER_MODE", "").lower() == "guided"
@@ -783,10 +809,9 @@ async def result_trigger(opcua_client, subscription_client, joining_system, ns_i
     ns_app = ns_indices.get(NS_APP)
     target_profile_path = _target_server_profile_path()
     if target_profile_path:
-        from helpers.target_server_cu_config import load_target_server_profile
         from helpers.target_server_triggers import make_target_server_result_trigger
 
-        profile = load_target_server_profile(Path(target_profile_path))
+        profile = _load_target_server_profile_with_runtime_overrides(target_profile_path)
         return make_target_server_result_trigger(
             opcua_client,
             joining_system,
@@ -830,10 +855,9 @@ async def event_trigger(opcua_client, joining_system, ns_indices):
     """
     target_profile_path = _target_server_profile_path()
     if target_profile_path:
-        from helpers.target_server_cu_config import load_target_server_profile
         from helpers.target_server_triggers import make_target_server_event_trigger
 
-        profile = load_target_server_profile(Path(target_profile_path))
+        profile = _load_target_server_profile_with_runtime_overrides(target_profile_path)
         return make_target_server_event_trigger(
             profile,
             allow_waiting=_target_server_mode_allows_waiting(),

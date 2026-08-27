@@ -459,6 +459,50 @@ class TestStartSelectedJoiningResultTrigger:
 
         assert trigger._choose_joining_process([process]) is process
 
+    def test_exact_match_process_id_takes_precedence_over_origin_id(self, mock_client, mock_joining_system):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "PROCESS-1",
+                        "joining_process_origin_id": "STALE-ORIGIN",
+                    }
+                },
+            }
+        )
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        process = MagicMock(
+            JoiningProcessId="PROCESS-1",
+            JoiningProcessOriginId="CURRENT-ORIGIN",
+            AssociatedEntities=[],
+        )
+
+        assert trigger._choose_joining_process([process]) is process
+
+    def test_exact_match_falls_back_to_origin_when_process_id_is_stale(self, mock_client, mock_joining_system):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "STALE-PROCESS",
+                        "joining_process_origin_id": "ORIGIN-2",
+                    }
+                },
+            }
+        )
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        process = MagicMock(
+            JoiningProcessId="PROCESS-2",
+            JoiningProcessOriginId="ORIGIN-2",
+            AssociatedEntities=[],
+        )
+
+        assert trigger._choose_joining_process([process]) is process
+
     def test_name_only_exact_match_still_uses_advertised_selection_name(self, mock_client, mock_joining_system):
         profile = load_target_server_profile_from_dict(
             {
@@ -478,6 +522,18 @@ class TestStartSelectedJoiningResultTrigger:
         )
 
         assert trigger._choose_joining_process([process]) is None
+
+    def test_process_selection_diagnostics_list_available_identifiers(self, profile, mock_client, mock_joining_system):
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        process = MagicMock(
+            JoiningProcessId="PROCESS-1",
+            JoiningProcessOriginId="ORIGIN-1",
+            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="ProgramIndex_1")],
+        )
+
+        description = trigger._describe_joining_processes([process])
+
+        assert description == "id='PROCESS-1', origin='ORIGIN-1', selection_name='ProgramIndex_1'"
 
     def test_process_identification_omits_selection_name_when_ids_are_configured(
         self, mock_client, mock_joining_system

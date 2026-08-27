@@ -352,6 +352,41 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         if selection.policy != "exact_match":
             return processes[0] if processes else None
 
+        selectors = (
+            (
+                selection.joining_process_id,
+                lambda process: self._process_field(
+                    process,
+                    "JoiningProcessId",
+                    "JoiningProcessIdentification",
+                    "Id",
+                ),
+            ),
+            (
+                selection.joining_process_origin_id,
+                lambda process: self._process_field(
+                    process,
+                    "JoiningProcessOriginId",
+                    "JoiningProcessIdentificationOrigin",
+                ),
+            ),
+        )
+        for configured_value, read_value in selectors:
+            if not configured_value:
+                continue
+            for process in processes:
+                if read_value(process) == configured_value:
+                    return process
+        if selection.selection_name:
+            for process in processes:
+                if selection.selection_name in self._selection_names(process):
+                    return process
+            return None
+        return processes[0] if processes and not any(value for value, _ in selectors) else None
+
+    def _describe_joining_processes(self, processes: list[Any]) -> str:
+        """Return compact identifiers for selection diagnostics."""
+        descriptions = []
         for process in processes:
             process_id = self._process_field(
                 process,
@@ -364,19 +399,11 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 "JoiningProcessOriginId",
                 "JoiningProcessIdentificationOrigin",
             )
-            if selection.joining_process_id and process_id != selection.joining_process_id:
-                continue
-            if selection.joining_process_origin_id and origin_id != selection.joining_process_origin_id:
-                continue
-            ids_configured = bool(selection.joining_process_id or selection.joining_process_origin_id)
-            if (
-                not ids_configured
-                and selection.selection_name
-                and selection.selection_name not in self._selection_names(process)
-            ):
-                continue
-            return process
-        return None
+            names = ",".join(sorted(self._selection_names(process)))
+            descriptions.append(
+                f"id='{process_id or '<unreadable>'}', origin='{origin_id or '<unreadable>'}', selection_name='{names}'"
+            )
+        return "; ".join(descriptions)
 
     def _make_process_identification(self, process: Any) -> Any:
         """Build the IJT process identifier required by controller methods."""
@@ -628,7 +655,8 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                     "No joining process matched the configured exact selection "
                     f"(id='{selection.joining_process_id}', "
                     f"origin='{selection.joining_process_origin_id}', "
-                    f"selection_name='{selection.selection_name}')"
+                    f"selection_name='{selection.selection_name}'); "
+                    f"available: [{self._describe_joining_processes(processes)}]"
                 ),
                 method="StartSelectedJoining",
                 trigger_mode="start_selected_joining",

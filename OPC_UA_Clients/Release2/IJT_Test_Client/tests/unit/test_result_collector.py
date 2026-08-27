@@ -406,11 +406,26 @@ class TestPublicCollectMethods:
 
         assert rc._target_timeout is None
 
+    def test_invalid_required_result_classification_is_ignored(self, monkeypatch):
+        monkeypatch.setenv("OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION", "not-a-number")
+
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7}, is_simulator=False)
+
+        assert rc._required_result_classification is None
+
     def test_discard_pending_requires_active_context(self):
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
 
         with pytest.raises(RuntimeError, match="ResultCollector is not active"):
             rc.discard_pending()
+
+    def test_discard_pending_delegates_to_active_collector(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        rc._collector = MagicMock()
+        rc._collector.discard_pending.return_value = 3
+
+        assert rc.discard_pending() == 3
+        rc._collector.discard_pending.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_collect_combined_delegates_correctly(self):
@@ -420,6 +435,33 @@ class TestPublicCollectMethods:
         cls_arg, partial_arg, _ = rc._collect_until.call_args[0]
         assert cls_arg == ResultClassification.BATCH_RESULT
         assert partial_arg is False
+
+    @pytest.mark.asyncio
+    async def test_required_primary_classification_does_not_fail_optional_intermediate_timeout(self, monkeypatch):
+        monkeypatch.setenv("OPCUA_TARGET_FINAL_RESULT_REQUIRED", "true")
+        monkeypatch.setenv(
+            "OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION",
+            str(ResultClassification.JOB_RESULT),
+        )
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7}, is_simulator=False)
+        rc._collect_until = AsyncMock(return_value=None)
+
+        result = await rc.collect_combined(ResultClassification.INTERVENTION_RESULT)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_required_primary_classification_still_fails_on_timeout(self, monkeypatch):
+        monkeypatch.setenv("OPCUA_TARGET_FINAL_RESULT_REQUIRED", "true")
+        monkeypatch.setenv(
+            "OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION",
+            str(ResultClassification.JOB_RESULT),
+        )
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7}, is_simulator=False)
+        rc._collect_until = AsyncMock(return_value=None)
+
+        with pytest.raises(TimeoutError, match="Required final JobResult"):
+            await rc.collect_job()
 
     @pytest.mark.asyncio
     async def test_collect_partial_requests_partial_true(self):

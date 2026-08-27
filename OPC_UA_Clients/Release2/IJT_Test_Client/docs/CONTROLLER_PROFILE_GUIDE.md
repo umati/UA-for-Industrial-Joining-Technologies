@@ -72,6 +72,17 @@ An InterventionResult workflow uses the selected Tool PIU and
 actions include increment/decrement counters, reset, and abort. The action must
 also appear in `state_changing_methods.allowed_methods`.
 
+Select the intended process before using these controls. Abort, reset, increment,
+and decrement apply to a multi-operation Job/Sequence process; they are not
+single-program operations. A profile may authorize all relevant Job controls,
+but `extension_fields.intervention_method` still chooses the one action used to
+generate intervention evidence in that run.
+
+If an increment reaches the configured counter limit, an operator can use
+`ResetJoiningProcess` to restart from counter 1. Do not make this an implicit
+fallback: authorize it explicitly, verify that resetting the selected process is
+safe, and preserve the pre-reset result evidence first.
+
 Adding a method to `allowed_methods` does not schedule or enable a test. It only
 permits an existing state-changing test or workflow adapter to make that call.
 The paired capability declaration must enable the related CU, an automated test
