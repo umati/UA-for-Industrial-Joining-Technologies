@@ -99,14 +99,18 @@ def load_supported_cus(
         checks the OPCUA_CAPABILITIES_FILE env var, then falls back to
         target_server_cu_profiles/default.capabilities.yaml.
     """
+    explicit_path = capabilities_path is not None
     if capabilities_path is None:
         env_path = os.environ.get("OPCUA_CAPABILITIES_FILE")
         if env_path:
             capabilities_path = Path(env_path)
+            explicit_path = True
         else:
             capabilities_path = _PROJECT_ROOT / _DEFAULT_CAPABILITIES_FILENAME
 
     if not capabilities_path.exists():
+        if explicit_path:
+            raise FileNotFoundError(f"Capability declaration not found: {capabilities_path}")
         logger.warning(
             "Default capability declaration not found at %s — "
             "treating all Conformance Units as supported (full specification coverage mode)",

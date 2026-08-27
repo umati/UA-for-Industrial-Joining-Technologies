@@ -99,21 +99,16 @@ class TestGetSkipReason:
 
 
 class TestLoadSupportedCusMissingFile:
-    def test_missing_file_returns_all_facets_cus(self, profile_tmp_path, monkeypatch):
-        """When capabilities file is absent, all CUs from facets should be returned."""
+    def test_missing_environment_file_fails_fast(self, profile_tmp_path, monkeypatch):
         caps_file = profile_tmp_path / "nonexistent_caps.yaml"
         monkeypatch.setenv("OPCUA_CAPABILITIES_FILE", str(caps_file))
-        # The real profiles/facets.yaml is used — result should be a non-empty frozenset
-        supported = load_supported_cus()
-        assert isinstance(supported, frozenset)
-        assert len(supported) > 0
+        with pytest.raises(FileNotFoundError, match="Capability declaration not found"):
+            load_supported_cus()
 
-    def test_missing_file_explicit_path(self, profile_tmp_path):
+    def test_missing_explicit_file_fails_fast(self, profile_tmp_path):
         caps_file = profile_tmp_path / "nonexistent.yaml"
-        supported = load_supported_cus(capabilities_path=caps_file)
-        assert isinstance(supported, frozenset)
-        # Uses real facets.yaml → all CUs
-        assert len(supported) > 0
+        with pytest.raises(FileNotFoundError, match="Capability declaration not found"):
+            load_supported_cus(capabilities_path=caps_file)
 
 
 # ---------------------------------------------------------------------------

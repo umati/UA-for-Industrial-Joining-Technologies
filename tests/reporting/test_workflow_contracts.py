@@ -240,6 +240,29 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
     }
 
 
+def test_integration_test_client_uses_existing_simulator_capabilities() -> None:
+    workflow = _workflow("integration.yml")
+    steps = workflow["jobs"]["int-testclient"]["steps"]
+    relevant_steps = [
+        step
+        for step in steps
+        if step.get("name")
+        in {
+            "Run IJT Test Client tests (all tests)",
+            "Generate Excel report and CI Step Summary",
+        }
+    ]
+
+    assert len(relevant_steps) == 2
+    for step in relevant_steps:
+        working_directory = REPO_ROOT / step["working-directory"]
+        capabilities = working_directory / step["env"]["OPCUA_CAPABILITIES_FILE"]
+        assert capabilities.is_file(), (
+            f"{step['name']} references missing capabilities file: "
+            f"{capabilities.relative_to(REPO_ROOT)}"
+        )
+
+
 def test_browser_image_resolver_does_not_write_step_summary_directly() -> None:
     workflow = _workflow("integration.yml")
     resolve_steps = workflow["jobs"]["resolve-browser-image"]["steps"]

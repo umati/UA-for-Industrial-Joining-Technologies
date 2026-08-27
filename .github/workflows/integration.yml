@@ -480,7 +480,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
         env:
           OPCUA_SERVER_URL: opc.tcp://localhost:40462
-          OPCUA_CAPABILITIES_FILE: server_capabilities.simulator.yaml
+          OPCUA_CAPABILITIES_FILE: target_server_cu_profiles/simulator.capabilities.yaml
         run: |
           python -m pytest `
             specification_tests/ assets/ joining_process/ results/ joint/ events/ common/ `
@@ -494,7 +494,7 @@ jobs:
         working-directory: OPC_UA_Clients/Release2/IJT_Test_Client
         env:
           OPCUA_SERVER_URL: opc.tcp://localhost:40462
-          OPCUA_CAPABILITIES_FILE: server_capabilities.simulator.yaml
+          OPCUA_CAPABILITIES_FILE: target_server_cu_profiles/simulator.capabilities.yaml
         run: |
           python scripts/make_excel_report.py
           # Visible GitHub run-page summary is owned by the 📋 System Tests Report job below.
