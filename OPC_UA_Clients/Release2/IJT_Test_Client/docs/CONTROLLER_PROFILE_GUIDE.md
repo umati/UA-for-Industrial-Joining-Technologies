@@ -27,7 +27,7 @@ declares one controlled execution workflow.
 | Primary/final result | `single`, `sync`, `batch`, `job`, `stitching`, `intervention`, `text`, or `any` classification |
 | Earlier result layers | Optional `intermediate_classifications`, such as `[batch]` before a final `job` result |
 | Starts | `single_start_produces_final_result` or `one_start_per_operation` |
-| State changes | Explicit `allowed_methods` only |
+| State changes | Explicit `allowed_methods` safety permission only; CU declarations and existing tests determine coverage |
 | Tool enablement | `extension_fields.enable_asset_policy`: `when_disabled` or `always` |
 | Tool disablement | Denied unless `extension_fields.allow_disable_asset: true` |
 | Intervention evidence | `extension_fields.intervention_method` plus explicit method permission |
@@ -71,6 +71,13 @@ An InterventionResult workflow uses the selected Tool PIU and
 `JoiningProcessIdentification` plus method-specific arguments. Supported profile
 actions include increment/decrement counters, reset, and abort. The action must
 also appear in `state_changing_methods.allowed_methods`.
+
+Adding a method to `allowed_methods` does not schedule or enable a test. It only
+permits an existing state-changing test or workflow adapter to make that call.
+The paired capability declaration must enable the related CU, an automated test
+path must exist, and all required target objects, inputs, and prerequisites must
+be available. Every checked-in tester-facing YAML contains field-level comments
+so these responsibilities remain visible when a profile is copied.
 
 Unattended target runs must not synthesize events. If no deterministic event or
 condition action is configured, those tests are skipped as not observed. Result

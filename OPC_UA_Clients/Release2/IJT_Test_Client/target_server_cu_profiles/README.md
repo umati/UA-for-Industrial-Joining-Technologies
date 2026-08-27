@@ -56,13 +56,13 @@ selection, intervention, event, and state-change semantics.
 | File | Purpose |
 |---|---|
 | `README.md` | This documentation file |
-| `default.capabilities.yaml` | Default Test Client CU declaration when no explicit capability file is selected |
-| `simulator.capabilities.yaml` | Checked-in simulator CU declaration selected automatically by the runner |
+| `default.capabilities.yaml` | Fully commented default CU declaration when no explicit capability file is selected |
+| `simulator.capabilities.yaml` | Fully commented simulator CU declaration selected automatically by the runner |
 | `template.profile.yaml` | Fully commented execution-profile schema with safe defaults and placeholders |
-| `example_multi_operation_job.profile.yaml` | Complete automated-controller example: ID-first Tool/process selection, layered results, intervention evidence, and safe enablement |
-| `example_multi_operation_job.capabilities.yaml` | Capability declaration paired with the complete automated example |
-| `example_manual_trigger.profile.yaml` | Distinct example for controllers requiring a physical tool trigger |
-| `example_simulation_methods.profile.yaml` | Distinct example for servers exposing simulator helper methods |
+| `example_multi_operation_job.profile.yaml` | Fully commented automated-controller example: ID-first Tool/process selection, layered results, intervention evidence, and safe enablement |
+| `example_multi_operation_job.capabilities.yaml` | Fully commented capability declaration paired with the complete automated example |
+| `example_manual_trigger.profile.yaml` | Fully commented example for controllers requiring a physical tool trigger |
+| `example_simulation_methods.profile.yaml` | Fully commented example for servers exposing simulator helper methods |
 
 ---
 
@@ -91,6 +91,11 @@ selection, intervention, event, and state-change semantics.
 4. Set `capabilities_file` in the copied profile to the paired capability
    filename, then adjust workflow and CU support values.
 5. Keep Tool PIU empty when runtime discovery is preferred.
+
+`state_changing_methods.allowed_methods` is a safety permission list only. It
+does not enable CUs, create tests, or guarantee execution. The paired capability
+declaration, existing automated tests, configured inputs, and live prerequisites
+determine what is actually tested.
 
 `GetJoiningProcessList` can return many programs/jobs. One execution profile
 selects one JoiningProcess because operation count, allowed state changes, and

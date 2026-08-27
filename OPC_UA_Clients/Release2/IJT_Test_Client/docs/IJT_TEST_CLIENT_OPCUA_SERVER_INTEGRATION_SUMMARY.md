@@ -44,6 +44,11 @@ Profile examples:
 - `example_simulation_methods.profile.yaml` (simulation helper methods)
 - `template.profile.yaml` (base template)
 
+All tester-facing profile and capability YAML files contain field-level comments
+covering purpose, safe values, selection, trigger behavior, expected evidence,
+cleanup, reporting, and CU overrides. `allowed_methods` is authorization only;
+it does not enable CUs or create tests.
+
 ## 5) What is default behavior today
 - Default test flow remains the normal simulator-based path.
 - Target-server CU profile flow is **opt-in** via `--profile`.

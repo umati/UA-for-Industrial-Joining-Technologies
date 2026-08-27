@@ -1,8 +1,11 @@
 # Complete real-controller example using only generic OPC UA IJT terms.
 # Copy this file locally, then replace the endpoint and JoiningProcess IDs.
 
+# File-format version understood by the runner.
 schema_version: 1
+# Human-readable name written into reports.
 profile_name: "Full Multi-operation Job Result Workflow Example"
+# Human-readable description of the workflow and expected evidence.
 description: >
   GetJoiningProcessList may return several programs, batches, or jobs.
   This profile chooses one Job-producing JoiningProcess for a deterministic run.
@@ -11,34 +14,56 @@ description: >
   with three operations each, producing SingleResult, BatchResult, and final
   JobResult evidence. IncrementJoiningProcessCounter generates
   InterventionResult evidence with the same Tool and process IDs.
+# Declares which CUs the server supports. This controls which tests run or skip.
+# The path is relative to this profile file.
 capabilities_file: "example_multi_operation_job.capabilities.yaml"
 
 target:
+  # OPC UA endpoint. Replace the placeholder or supply --endpoint at runtime.
   endpoint: "opc.tcp://<target-server-host>:40451"
+  # Optional identity expectations used to detect an unexpected server/version.
   expected_server:
+    # Leave blank to skip the corresponding identity comparison.
     application_name: ""
     application_version: ""
+    # Report identity drift instead of blocking the run.
     warn_only_on_version_drift: true
 
 cu_execution:
+  # Default runner mode when --mode is omitted.
   default_mode: automated
+  # Diagnostic reports all outcomes without claiming a conformance pass.
   scoring_mode: diagnostic
+  # Missing runtime prerequisites are reported as Blocked, not Failed.
   precondition_failure_policy: blocked
+  # This workflow is unattended; no operator prompt is permitted.
   allow_manual_steps: false
+  # Default upper bound for method calls and waits unless overridden below.
   default_timeout_seconds: 120
   state_changing_methods:
+    # Every state-changing call must be explicitly authorized below.
     default_policy: require_explicit_opt_in
+    # SAFETY PERMISSIONS ONLY: adding a method here does not enable its tests.
+    # A method is tested only when its CU is supported in the capabilities file,
+    # the Test Client has an automated test, and all required inputs exist.
     allowed_methods:
+      # Reassert Tool enablement when required by enable_asset_policy.
       - EnableAsset
+      # Select the exact JoiningProcess configured under selection.
       - SelectJoiningProcess
+      # Remotely request each joining operation.
       - StartSelectedJoining
+      # Generate configured InterventionResult evidence.
       - IncrementJoiningProcessCounter
   extension_fields:
+    # Never call EnableAsset(false) from this profile.
     allow_disable_asset: false
+    # Reassert EnableAsset(true) before the workflow even when already enabled.
     enable_asset_policy: always
     # Some servers require a parent batch/job process for counter interventions.
     # If needed, copy counter_parent_process from template.profile.yaml and set
     # that parent process's stable IDs.
+    # State-changing method used for companion InterventionResult evidence.
     intervention_method: IncrementJoiningProcessCounter
 
 selection:
@@ -46,6 +71,7 @@ selection:
     # Discover the first ready Tool and use its ProductInstanceUri for all
     # Tool-context methods. Set an exact PIU only when discovery is unsuitable.
     policy: first_ready
+    # Empty means discover the PIU at runtime; set it for exact Tool selection.
     product_instance_uri: ""
   joining_process:
     # GetJoiningProcessList discovers all available processes. One profile
@@ -53,21 +79,31 @@ selection:
     # Copy the IDs returned for the program/job this profile should exercise.
     # Typical format: "123e4567-e89b-12d3-a456-426614174000".
     policy: exact_match
+    # Primary stable identifier returned by GetJoiningProcessList.
     joining_process_id: "<joining-process-id>"
+    # Origin-system identifier used to disambiguate the same process ID.
     joining_process_origin_id: "<joining-process-origin-id>"
     # Use SelectionName only when the server does not provide stable IDs.
     selection_name: ""
 
 triggers:
   result:
+    # Select the configured process and call StartSelectedJoining automatically.
     mode: start_selected_joining
+    # Maximum wait for each expected result after its trigger.
     timeout_seconds: 120
+    # Preserve the selection for all six operations and intervention evidence.
     deselect_after_joining: false
   event:
+    # No generic event-producing action is configured; event tests requiring
+    # fresh evidence are reported as Blocked or skipped.
     mode: none
+    # Maximum event wait if a test observes passive evidence.
     timeout_seconds: 60
   condition:
+    # No condition-producing action is configured in this workflow.
     mode: none
+    # Maximum condition wait if a test observes retained evidence.
     timeout_seconds: 60
 
 workflow_execution:
@@ -76,21 +112,31 @@ workflow_execution:
   start_invocation_policy: one_start_per_operation
   expected_operation_count: 6
   expected_results:
+    # JobResult is the required final result after all operations.
     classification: job
+    # These result types may be emitted before or alongside the final JobResult.
     intermediate_classifications:
       - single
       - batch
       # Companion evidence generated by intervention_method; it is not a child
       # layer of JobResult.
       - intervention
+    # Absence of the final JobResult leaves its evidence incomplete.
     final_result_required: true
+    # Maximum workflow-level wait for expected final evidence.
     timeout_seconds: 120
   cleanup:
+    # Attempt cleanup and record problems without hiding collected evidence.
     policy: best_effort_with_evidence
+    # Keep the process selected after the run for operator inspection.
     deselect_process: false
+    # Preserve identifiers because this example does not own their lifecycle.
     reset_identifiers: false
 
 reporting:
+  # Default output folder; --output-dir can create a unique run folder.
   output_dir: "test-results/target-server-cu"
+  # Redact installation-specific values from shareable report surfaces.
   sanitize_shared_artifacts: true
+  # Do not retain a second unsanitized debug artifact set.
   keep_local_exact_debug_artifacts: false

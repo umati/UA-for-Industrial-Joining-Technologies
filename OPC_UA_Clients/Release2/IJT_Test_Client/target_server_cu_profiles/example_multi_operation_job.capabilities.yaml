@@ -6,96 +6,122 @@
 # verify and adjust this file before making conformance claims for another server.
 
 server:
+  # Human-readable implementation name written into reports.
   name: "Multi-operation Job Result Server Example"
+  # Replace only in a private/local copy; keep committed examples sanitized.
   vendor: "<target-server-vendor>"
+  # Optional expected server version; blank means no fixed version claim.
   version: ""
+  # Summary of the supported workflow represented by this declaration.
   description: >
     Example IJT server supporting Tool-based remote start, layered
     SingleResult/BatchResult/JobResult output, and intervention results.
 
 connection:
+  # Fallback endpoint when the execution profile/CLI does not override it.
   default_url: "opc.tcp://<target-server-host>:40451"
+  # Maximum connection-establishment wait.
   connect_timeout_seconds: 30
+  # Requested OPC UA session lifetime.
   session_timeout_seconds: 300
 
+# Base profile providing common JoiningSystem, result, and identifier CUs.
 active_profile: general_joining_system
 
+# Additional facets observed for this multi-operation Tool/job pattern.
 supported_facets:
+  # BatchResult structure and evidence.
   - batch_result_server_facet
+  # Event management structure and subscriptions.
   - event_management_server_facet
+  # Identifier read/write methods.
   - identifiers_methods_server_facet
+  # Tool enablement method/state.
   - enable_tool_server_facet
+  # Asset connection state.
   - asset_connection_server_facet
+  # Program-like JoiningProcess operations.
   - general_process_operations_server_facet
+  # Batch/job-like sequential process operations.
   - sequential_process_operations_server_facet
+  # Controller and Tool asset model.
   - asset_management_assets_server_facet
 
+# Fine-grained corrections to the base profile and added facets.
+# "unsupported" skips tests truthfully; "supported" explicitly enables a CU.
 cu_overrides:
-  get_latest_result: unsupported
-  get_result_by_id: unsupported
-  get_result_with_filter_criteria: unsupported
-  request_results: unsupported
-  requested_result_variable_access: unsupported
-  requested_result_event_access: unsupported
-  acknowledge_results: unsupported
-  request_unacknowledged_results: unsupported
+  # Result history/access methods not exposed by this target pattern.
+  get_latest_result: unsupported # No latest-result history method.
+  get_result_by_id: unsupported # No direct result lookup by ID.
+  get_result_with_filter_criteria: unsupported # No filtered result query.
+  request_results: unsupported # No asynchronous result-history request.
+  requested_result_variable_access: unsupported # No RequestedResult variable path.
+  requested_result_event_access: unsupported # No RequestedResult event path.
+  acknowledge_results: unsupported # No result acknowledgement method.
+  request_unacknowledged_results: unsupported # No unacknowledged-result query.
 
-  result_extended_meta_data: unsupported
-  result_value_trace_point_index: unsupported
-  result_value_trace_point_time_offset: unsupported
+  # Optional result metadata/trace-point details not provided.
+  result_extended_meta_data: unsupported # No extended ResultMetaData fields.
+  result_value_trace_point_index: unsupported # No trace-point index values.
+  result_value_trace_point_time_offset: unsupported # No trace-point time offsets.
 
-  deselect_joining_process: unsupported
-  set_joining_process_counter: unsupported
-  start_joining_process: unsupported
-  get_joining_process_revision_list: unsupported
-  set_joining_process_mapping: unsupported
+  # Optional JoiningProcess operations not exposed or not safe in this pattern.
+  deselect_joining_process: unsupported # Workflow intentionally keeps selection.
+  set_joining_process_counter: unsupported # Absolute counter write is unavailable.
+  start_joining_process: unsupported # Uses StartSelectedJoining instead.
+  get_joining_process_revision_list: unsupported # No process revision history.
+  set_joining_process_mapping: unsupported # No process mapping write.
 
-  joint_management: unsupported
-  send_joint: unsupported
-  get_joint_list: unsupported
-  select_joint: unsupported
-  get_joint: unsupported
-  joint_data: unsupported
-  delete_joint: unsupported
-  get_joint_revision_list: unsupported
-  send_joint_design: unsupported
-  get_joint_design_list: unsupported
-  get_joint_design: unsupported
-  joint_design_data: unsupported
-  delete_joint_design: unsupported
-  send_joint_component: unsupported
-  get_joint_component_list: unsupported
-  get_joint_component: unsupported
-  joint_component_data: unsupported
-  delete_joint_component: unsupported
+  # Joint, design, and component management is outside this workflow.
+  joint_management: unsupported # JointManagement AddIn is outside this profile.
+  send_joint: unsupported # Cannot download Joint definitions.
+  get_joint_list: unsupported # Cannot enumerate Joint definitions.
+  select_joint: unsupported # No separate Joint selection method.
+  get_joint: unsupported # Cannot read full Joint definitions.
+  joint_data: unsupported # No JointData payload support.
+  delete_joint: unsupported # Cannot delete Joint definitions.
+  get_joint_revision_list: unsupported # No Joint revision history.
+  send_joint_design: unsupported # Cannot download JointDesign definitions.
+  get_joint_design_list: unsupported # Cannot enumerate JointDesign definitions.
+  get_joint_design: unsupported # Cannot read full JointDesign definitions.
+  joint_design_data: unsupported # No JointDesignData payload support.
+  delete_joint_design: unsupported # Cannot delete JointDesign definitions.
+  send_joint_component: unsupported # Cannot download JointComponent definitions.
+  get_joint_component_list: unsupported # Cannot enumerate JointComponents.
+  get_joint_component: unsupported # Cannot read full JointComponent definitions.
+  joint_component_data: unsupported # No JointComponentData payload support.
+  delete_joint_component: unsupported # Cannot delete JointComponents.
 
-  set_calibration: unsupported
-  reboot_asset: unsupported
-  disconnect_asset: unsupported
-  feedback_methods: unsupported
-  asset_management_servo: unsupported
-  asset_management_memory_device: unsupported
-  asset_management_cable: unsupported
-  asset_management_power_supply: unsupported
-  asset_management_feeder: unsupported
-  asset_management_battery: unsupported
-  asset_management_sensor: unsupported
-  asset_management_accessory: unsupported
-  asset_management_software: unsupported
-  asset_management_sub_component: unsupported
-  asset_management_battery_operation_cycle_counter: unsupported
-  asset_management_health: unsupported
-  asset_management_monitoring_health: unsupported
+  # Optional/destructive asset methods and absent asset categories.
+  set_calibration: unsupported # Calibration mutation is unavailable.
+  reboot_asset: unsupported # Remote asset reboot is unavailable.
+  disconnect_asset: unsupported # Remote asset disconnect is unavailable.
+  feedback_methods: unsupported # Feedback file exchange is unavailable.
+  asset_management_servo: unsupported # No Servo asset instance.
+  asset_management_memory_device: unsupported # No MemoryDevice asset instance.
+  asset_management_cable: unsupported # No Cable asset instance.
+  asset_management_power_supply: unsupported # No PowerSupply asset instance.
+  asset_management_feeder: unsupported # No Feeder asset instance.
+  asset_management_battery: unsupported # No Battery asset instance.
+  asset_management_sensor: unsupported # No Sensor asset instance.
+  asset_management_accessory: unsupported # No Accessory asset instance.
+  asset_management_software: unsupported # No SoftwareComponent asset instance.
+  asset_management_sub_component: unsupported # No SubComponent asset instance.
+  asset_management_battery_operation_cycle_counter: unsupported # No Battery counter.
+  asset_management_health: unsupported # No optional asset health CU.
+  asset_management_monitoring_health: unsupported # No monitoring-health CU.
 
-  set_offline_timer: unsupported
-  set_time: unsupported
-  io_signals_methods: unsupported
-  execute_operation: unsupported
-  get_error_information: unsupported
-  sync_result: unsupported
-  sync_result_counters: unsupported
+  # Optional Tool operations and SyncResult evidence are unavailable.
+  set_offline_timer: unsupported # No Tool offline-timer write.
+  set_time: unsupported # No Tool clock write.
+  io_signals_methods: unsupported # No Tool I/O signal methods.
+  execute_operation: unsupported # No generic ExecuteOperation method.
+  get_error_information: unsupported # No detailed error-information method.
+  sync_result: unsupported # This handheld workflow produces Batch, not Sync.
+  sync_result_counters: unsupported # SyncResult counters therefore do not apply.
 
-  job_result: supported
-  result_value_final_tag: supported
-  partial_consolidated_result: supported
-  intervention_result: supported
+  # Explicit additions required by this Job-producing workflow.
+  job_result: supported # Six operations are expected to close one JobResult.
+  result_value_final_tag: supported # Final-value markers are expected in results.
+  partial_consolidated_result: supported # Intermediate consolidated evidence is valid.
+  intervention_result: supported # Counter intervention should emit InterventionResult.

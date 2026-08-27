@@ -45,7 +45,7 @@ Then update `my_controller.profile.yaml`:
 | `selection.joining_process.joining_process_id` | Stable ID returned by `GetJoiningProcessList` |
 | `selection.joining_process.joining_process_origin_id` | Origin ID when supplied by the server |
 | `selection.joining_process.selection_name` | Leave empty when stable IDs exist |
-| `state_changing_methods.allowed_methods` | Only methods explicitly approved for this run |
+| `state_changing_methods.allowed_methods` | Safety authorization only: methods approved for this run; it does not enable CUs or create tests |
 | `extension_fields.enable_asset_policy` | `when_disabled`, or `always` when safe enablement must be reasserted |
 | `workflow_execution.expected_operation_count` | Starts needed to complete the selected JoiningProcess |
 | `expected_results.classification` | Final result layer, such as `single`, `batch`, or `job` |

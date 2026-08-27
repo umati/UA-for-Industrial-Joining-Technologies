@@ -82,6 +82,9 @@ cu_execution:
   #   deny_all                 — no state-changing calls are allowed
   state_changing_methods:
     default_policy: require_explicit_opt_in
+    # SAFETY PERMISSIONS ONLY: this list does not enable or create tests.
+    # The paired capabilities file enables CUs; existing tests, configured
+    # inputs, and runtime prerequisites determine what can actually execute.
     allowed_methods: []
     # Example for a target server that supports StartSelectedJoining workflow:
     # allowed_methods:

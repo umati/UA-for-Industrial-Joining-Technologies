@@ -218,11 +218,11 @@ IJT_Test_Client/
 ├── specification_tests/          ← Specification Unit tests (asset, result, event, joining process, joint)
 ├── target_server_cu_profiles/       ← Target Server CU execution profiles (sanitized examples)
 │   ├── README.md                 ← Profile usage, commands, sanitization rules
-│   ├── template.profile.yaml             ← Commented schema template with safe defaults
-│   ├── example_multi_operation_job.profile.yaml ← Complete automated controller example
-│   ├── example_multi_operation_job.capabilities.yaml ← Paired CU declaration
-│   ├── example_manual_trigger.profile.yaml ← Manual/physical tool trigger example
-│   └── example_simulation_methods.profile.yaml ← Simulator helper-method example
+│   ├── template.profile.yaml             ← Fully commented schema with safe defaults
+│   ├── example_multi_operation_job.profile.yaml ← Fully commented automated controller example
+│   ├── example_multi_operation_job.capabilities.yaml ← Fully commented paired CU declaration
+│   ├── example_manual_trigger.profile.yaml ← Fully commented manual trigger example
+│   └── example_simulation_methods.profile.yaml ← Fully commented simulator example
 ├── run_target_server_cu.py          ← Standalone target server CU runner (preflight/automated/guided)
 ├── scripts/run_reference_workflow.py ← Markdown + interactive reference workflow runner
 ├── tests/
