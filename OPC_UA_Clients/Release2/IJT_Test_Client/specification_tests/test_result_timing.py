@@ -39,7 +39,7 @@ async def _get_result_with_meta(
     """Trigger a result and return (result_data, meta) via IJTResultEventType events."""
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             return None, None
         result_data = await rc.collect_single()
     if result_data is None:

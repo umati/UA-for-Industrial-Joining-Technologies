@@ -74,7 +74,7 @@ async def _get_single_result_with_traces(subscription_client, result_trigger, ns
     """
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=True)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             return None, None
         result_data = await rc.collect_single()
     if result_data is None:
@@ -739,7 +739,7 @@ async def test_result_without_trace_has_no_trace_point_time_offset(opcua_client,
         pytest.skip("Machinery/Result namespace not registered on server")
 
     outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-    if not outcome.triggered and result_trigger.is_simulator:
+    if not outcome.triggered:
         pytest.skip("Simulator trigger failed")
 
     js = await find_joining_system(opcua_client)
@@ -1093,7 +1093,7 @@ async def test_result_without_trace_has_no_trace_point_index(opcua_client, resul
         pytest.skip("Machinery/Result namespace not registered on server")
 
     outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-    if not outcome.triggered and result_trigger.is_simulator:
+    if not outcome.triggered:
         pytest.skip("Simulator trigger failed")
 
     js = await find_joining_system(opcua_client)

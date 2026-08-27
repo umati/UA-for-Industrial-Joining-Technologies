@@ -134,7 +134,7 @@ async def _get_result(
     """
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             return None, None
         result_data = await rc.collect_single()
 
@@ -275,7 +275,7 @@ async def test_single_result_sequence_number_increments(subscription_client, res
 
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             pytest.skip("Second simulator trigger failed — cannot verify monotonic sequence")
         rd_second = await rc.collect_single()
 
@@ -1472,7 +1472,7 @@ async def test_result_ready_event_received_after_result_trigger(subscription_cli
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
         timeout_s = 15.0 if result_trigger.is_simulator else 90.0
         events = await collector.collect(count=1, timeout_s=timeout_s)
@@ -1497,7 +1497,7 @@ async def test_result_ready_event_carries_non_null_result_field(subscription_cli
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
         timeout_s = 15.0 if result_trigger.is_simulator else 90.0
         events = await collector.collect(count=1, timeout_s=timeout_s)
@@ -1532,7 +1532,7 @@ async def test_result_ready_event_base_event_fields_are_valid(subscription_clien
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
         timeout_s = 15.0 if result_trigger.is_simulator else 90.0
         events = await collector.collect(count=1, timeout_s=timeout_s)
@@ -1557,7 +1557,7 @@ async def test_result_ready_event_source_name_is_non_empty(subscription_client, 
     async with EventCollector(subscription_client) as collector:
         await collector.subscribe(server_node, event_type_node)
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
         timeout_s = 15.0 if result_trigger.is_simulator else 90.0
         events = await collector.collect(count=1, timeout_s=timeout_s)

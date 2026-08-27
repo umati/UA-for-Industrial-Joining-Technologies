@@ -69,7 +69,7 @@ async def _rediscover_result_management(client, ns_mr):
 async def _trigger_and_get_latest(result_trigger, rm, ns_mr, result_type=ResultType.MULTI_STEP_OK_RESULT):
     """Trigger a result and call GetLatestResult.  Returns (result_data, result_meta)."""
     outcome = await result_trigger.trigger_single(result_type, include_traces=False)
-    if not outcome.triggered and result_trigger.is_simulator:
+    if not outcome.triggered:
         return None, None
 
     wait_ms = _SIMULATOR_WAIT_MS if result_trigger.is_simulator else _EXTERNAL_WAIT_MS

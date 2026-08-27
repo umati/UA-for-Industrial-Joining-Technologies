@@ -44,6 +44,8 @@ GetJoiningProcessRevisionList method."
 """
 
 import logging
+import os
+from pathlib import Path
 
 import pytest
 from asyncua import ua
@@ -62,6 +64,7 @@ from helpers.node_discovery import (
     read_tool_product_instance_uri,
 )
 from helpers.skip_reasons import skip_accepted_policy, skip_companion_spec_note
+from helpers.target_server_cu_config import load_target_server_profile
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -232,6 +235,19 @@ async def _first_joining_process_identification_arg(client, ns_indices, jpm_node
     ns_ijt = _require_ns_ijt(ns_indices)
     if not pi_uri:
         pytest.skip("Tool ProductInstanceUri not available - cannot build JoiningProcessIdentification")
+    target_profile_path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
+    if target_profile_path:
+        profile = load_target_server_profile(Path(target_profile_path))
+        selection = profile.selection.joining_process
+        if selection.policy == "exact_match":
+            jp_arg = _jp_identification_arg(
+                process_id=selection.joining_process_id,
+                origin_id=selection.joining_process_origin_id,
+                selection_name=selection.selection_name,
+            )
+            if jp_arg is None:
+                pytest.skip("JoiningProcessIdentificationDataType not available — cannot build method arguments")
+            return jp_arg
     jpm_node = jpm_node or await _get_jpm(client, ns_ijt)
     list_result = await find_and_call_method(
         jpm_node,
@@ -281,6 +297,43 @@ async def _select_first_joining_process(client, ns_indices, jpm_node, pi_uri: st
             status=str(status_code),
         )
     return jp_arg
+
+
+async def _select_counter_parent_if_configured(jpm_node, ns_ijt: int, pi_uri: str) -> None:
+    """Select a parent sequence required by vendor-scoped batch counter methods."""
+    target_profile_path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
+    if not target_profile_path:
+        return
+    profile = load_target_server_profile(Path(target_profile_path))
+    parent = profile.cu_execution.extension_fields.get("counter_parent_process")
+    if not isinstance(parent, dict):
+        return
+
+    parent_arg = _jp_identification_arg(
+        process_id=str(parent.get("joining_process_id", "")),
+        origin_id=str(parent.get("joining_process_origin_id", "")),
+        selection_name=str(parent.get("selection_name", "")),
+    )
+    if parent_arg is None:
+        pytest.skip("JoiningProcessIdentificationDataType not available — cannot select counter parent")
+    result = await find_and_call_method(
+        jpm_node,
+        BN.SELECT_JOINING_PROCESS,
+        ns_ijt,
+        _piu_arg(pi_uri),
+        parent_arg,
+        timeout=15.0,
+    )
+    if not result.success:
+        pytest.fail(f"Could not select the configured counter parent process: {result.error}")
+    status_code = _method_status_code(result.output_list)
+    if status_code not in (None, 0):
+        status_message = str(result.output_list[1]) if len(result.output_list) > 1 else ""
+        skip_accepted_policy(
+            "configured counter parent selection was rejected for current controller/tool state",
+            method=BN.SELECT_JOINING_PROCESS,
+            status=f"{status_code}: {status_message}".rstrip(": "),
+        )
 
 
 async def _find_method_node(jpm_node, method_name, ns_ijt):
@@ -1113,6 +1166,7 @@ async def test_increment_then_decrement_counter_is_balanced(opcua_client, ns_ind
     if inc_node is None or dec_node is None:
         pytest.skip("Both IncrementJoiningProcessCounter and DecrementJoiningProcessCounter are required for this test")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
+    await _select_counter_parent_if_configured(jpm, ns_ijt, pi_uri)
     jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
 
     inc_result = await call_method(

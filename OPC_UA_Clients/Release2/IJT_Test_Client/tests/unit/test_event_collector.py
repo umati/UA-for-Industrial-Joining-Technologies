@@ -166,6 +166,14 @@ class TestSubscribe:
 
 
 class TestCollect:
+    def test_discard_pending_drains_queue(self):
+        collector = EventCollector(MagicMock())
+        collector._queue.put_nowait("event-1")
+        collector._queue.put_nowait("event-2")
+
+        assert collector.discard_pending() == 2
+        assert collector._queue.empty()
+
     @pytest.mark.asyncio
     async def test_collect_returns_events_from_queue(self):
         collector = EventCollector(MagicMock())

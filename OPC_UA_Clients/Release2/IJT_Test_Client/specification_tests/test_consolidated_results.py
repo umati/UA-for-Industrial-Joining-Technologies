@@ -149,7 +149,7 @@ async def _get_combined(
             include_traces=False,
             send_as_refs=send_as_refs,
         )
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             return None
         return await rc.collect_combined(classification)
 
@@ -169,7 +169,7 @@ async def _get_partial(
             include_traces=False,
             send_as_refs=True,
         )
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             return None
         return await rc.collect_partial(classification)
 
@@ -182,7 +182,7 @@ async def _get_job(
     """Events-primary job result retrieval. Returns final job result or None."""
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_job(send_as_refs=True)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             return None
         return await rc.collect_job()
 

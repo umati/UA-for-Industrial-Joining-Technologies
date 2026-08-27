@@ -60,6 +60,7 @@ collect_ignore = ["tmp"]
 # frozenset() means "file present but no CUs supported" — all CU-gated tests skip.
 # Override the config file path via OPCUA_CAPABILITIES_FILE env var.
 _SUPPORTED_CUS: frozenset[str] | None = None
+_WORKFLOW_EXCLUDED_CUS: frozenset[str] = frozenset()
 
 
 def _deletes_disabled() -> bool:
@@ -75,7 +76,7 @@ def pytest_configure(config):
     skipped when that key is absent from the loaded supported-CU set — they are
     never failed just because a feature is not implemented on the server under test.
     """
-    global _SUPPORTED_CUS  # noqa: PLW0603  # pylint: disable=global-statement
+    global _SUPPORTED_CUS, _WORKFLOW_EXCLUDED_CUS  # noqa: PLW0603  # pylint: disable=global-statement
 
     config.addinivalue_line(
         "markers",
@@ -102,14 +103,14 @@ def pytest_configure(config):
     )
 
     _project_root = Path(__file__).resolve().parent
-    # Default to repo-local basetemp (stable in this environment). Set
-    # IJT_USE_SYSTEM_BASETEMP=1 to opt out and let pytest use system temp.
+    # Use a process-specific repo-local basetemp so nested pytest runs cannot
+    # delete or replace their parent's temporary directory.
     _use_system = os.environ.get("IJT_USE_SYSTEM_BASETEMP", "").lower() in {"1", "true", "yes"}
     if config.option.basetemp is None and not _use_system:
         _basetemp_chosen = None
         _pid = os.getpid()
         _tmp_root = _project_root / "tmp"
-        for _candidate in ("pytest", "pytest_tmp", f"pytest_session_{_pid}"):
+        for _candidate in (f"pytest_session_{_pid}",):
             _candidate_path = _tmp_root / _candidate
             try:
                 if _candidate_path.exists():
@@ -142,6 +143,14 @@ def pytest_configure(config):
 
     try:
         _SUPPORTED_CUS = load_supported_cus()
+        _WORKFLOW_EXCLUDED_CUS = frozenset(
+            key.strip() for key in os.environ.get("OPCUA_TARGET_EXCLUDED_CUS", "").split(",") if key.strip()
+        )
+        if _WORKFLOW_EXCLUDED_CUS:
+            logging.getLogger(__name__).info(
+                "Target Server result scope excludes %d non-applicable CUs",
+                len(_WORKFLOW_EXCLUDED_CUS),
+            )
     except Exception as exc:  # noqa: BLE001
         logging.getLogger(__name__).warning(
             "Could not load server_capabilities.yaml (%s) — all conformance units treated as supported",
@@ -172,10 +181,14 @@ def pytest_runtest_setup(item):
 
     for marker in item.iter_markers("requires_cu"):
         for cu_key in marker.args:
+            if cu_key in _WORKFLOW_EXCLUDED_CUS:
+                pytest.skip(f"CU '{cu_key}' is outside this target workflow's expected result classification")
             if cu_key not in _SUPPORTED_CUS:
                 pytest.skip(get_skip_reason(cu_key))
     for marker in item.iter_markers("requires_dependency_cu"):
         for cu_key in marker.args:
+            if cu_key in _WORKFLOW_EXCLUDED_CUS:
+                pytest.skip(f"CU '{cu_key}' is outside this target workflow's expected result classification")
             if cu_key not in _SUPPORTED_CUS:
                 pytest.skip(get_skip_reason(cu_key))
 
@@ -700,7 +713,7 @@ async def _find_simulation_child(joining_system, ns_app: int | None, child_name:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def result_trigger(opcua_client, joining_system, ns_indices):
+async def result_trigger(opcua_client, subscription_client, joining_system, ns_indices):
     """
     Function-scoped ResultTrigger.
     Returns SimulatorResultTrigger when the simulator's SimulateResults folder is available.
@@ -723,6 +736,7 @@ async def result_trigger(opcua_client, joining_system, ns_indices):
             profile,
             ns_ijt=ns_indices.get(NS_IJT_BASE),
             ns_di=ns_indices.get(NS_DI),
+            subscription_client=subscription_client,
             allow_waiting=_target_server_mode_allows_waiting(),
         )
 
@@ -808,7 +822,8 @@ def _sessionfinish_cleanup(session: object) -> None:
         if _bt:
             _active_basetemp = Path(_bt).resolve()
 
-    # Remove tool caches and stale pytest basetemp from tmp/
+    # Remove legacy shared basetemp directories and tool caches. Process-specific
+    # pytest directories can belong to nested or concurrent sessions.
     _tmp_root = _project_root / "tmp"
     if _tmp_root.exists():
         _managed = {"pytest", "pytest_tmp", "ruff-cache", "mypy-cache", "pip-audit-cache"}
@@ -820,7 +835,7 @@ def _sessionfinish_cleanup(session: object) -> None:
                 # Cannot resolve path — skip pytest-named children conservatively
                 if child.name.startswith("pytest"):
                     continue
-            if child.name in _managed or child.name.startswith("pytest"):
+            if child.name in _managed:
                 shutil.rmtree(child, ignore_errors=True)
         # Remove tmp/ itself if now empty (gitignored — safe to delete)
         with contextlib.suppress(OSError):
@@ -844,3 +859,19 @@ def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
         _sessionfinish_cleanup(session)
     except Exception:  # noqa: BLE001
         return  # Best-effort cleanup — errors must never affect the test session exit code
+
+
+def pytest_unconfigure(config: object) -> None:
+    """Remove only this process's basetemp after pytest plugins release it."""
+    if _deletes_disabled():
+        return
+    try:
+        option = getattr(config, "option")
+        basetemp = Path(getattr(option, "basetemp")).resolve()
+        tmp_root = (Path(__file__).resolve().parent / "tmp").resolve()
+        if basetemp.parent == tmp_root and basetemp.name == f"pytest_session_{os.getpid()}":
+            shutil.rmtree(basetemp, ignore_errors=True)
+            with contextlib.suppress(OSError):
+                tmp_root.rmdir()
+    except (AttributeError, OSError, TypeError):
+        return

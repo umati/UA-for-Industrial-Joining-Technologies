@@ -114,7 +114,7 @@ async def _get_result_and_associated_entities(subscription_client, result_trigge
     """
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             return None, None
         result_data = await rc.collect_single()
 
@@ -310,7 +310,7 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
 
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             pytest.skip(f"Simulator trigger failed: {getattr(outcome, 'skip_reason', 'unknown')}")
         result_data = await rc.collect_single()
     if result_data is None:

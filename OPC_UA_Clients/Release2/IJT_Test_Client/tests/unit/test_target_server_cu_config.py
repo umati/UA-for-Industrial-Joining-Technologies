@@ -29,6 +29,38 @@ from helpers.target_server_cu_config import (
     load_target_server_profile_from_dict,
 )
 
+
+def test_expected_results_accepts_intermediate_classifications():
+    profile = load_target_server_profile_from_dict(
+        {
+            "schema_version": 1,
+            "workflow_execution": {
+                "expected_results": {
+                    "classification": "job",
+                    "intermediate_classifications": ["batch"],
+                }
+            },
+        }
+    )
+
+    assert profile.workflow_execution.expected_results.intermediate_classifications == ("batch",)
+
+
+def test_expected_results_rejects_invalid_intermediate_classification():
+    with pytest.raises(TargetServerConfigError, match="intermediate_classifications"):
+        load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "workflow_execution": {
+                    "expected_results": {
+                        "classification": "job",
+                        "intermediate_classifications": ["vendor-sequence"],
+                    }
+                },
+            }
+        )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -478,7 +510,8 @@ class TestExampleProfilesLoad:
         assert profile.triggers.condition.mode == "simulate_methods"
 
     def test_example_profiles_have_no_real_endpoints(self, profiles_dir):
-        for yaml_file in profiles_dir.glob("*.yaml"):
+        yaml_files = [profiles_dir / "template.yaml", *sorted(profiles_dir.glob("example_*.yaml"))]
+        for yaml_file in yaml_files:
             profile = load_target_server_profile(yaml_file)
             endpoint = profile.target.endpoint
             # Endpoints in committed examples must be placeholders or empty

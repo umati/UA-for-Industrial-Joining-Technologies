@@ -31,6 +31,13 @@ Profiles do not replace `server_capabilities.yaml`. The capability file says
 which CUs the server supports. The Target Server CU profile says how to run or
 classify those CUs for one server under test.
 
+The runner also limits result CUs to the profile's
+`workflow_execution.expected_results.classification` plus any
+`intermediate_classifications`. A single-result run does not execute
+batch/job workflows, while a Job workflow can explicitly retain intermediate
+BatchResult CUs with `intermediate_classifications: [batch]` or intermediate
+SyncResult CUs with `intermediate_classifications: [sync]`.
+
 ---
 
 ## Files in This Directory
@@ -42,6 +49,8 @@ classify those CUs for one server under test.
 | `example_remote_start.yaml` | Generic sanitized example for target servers supporting StartSelectedJoining |
 | `example_manual_trigger.yaml` | Generic sanitized example for target servers requiring physical tool trigger |
 | `example_simulation_methods.yaml` | Generic sanitized example for servers that expose simulation helper methods |
+| `example_joining_process_remote_start.yaml` | Generic ID-based single-result remote-start example |
+| `example_multi_operation_job.yaml` | Generic multi-operation JoiningProcess/job example |
 
 ---
 

@@ -512,6 +512,155 @@ class TestBuildSpecTestEnv:
 
         assert env["OPCUA_TARGET_SERVER_MODE"] == "guided"
 
+    def test_single_result_scope_excludes_consolidated_cus(self):
+        profile = self._make_profile()
+
+        env = _runner_mod._build_spec_test_env(profile)
+
+        excluded = set(env["OPCUA_TARGET_EXCLUDED_CUS"].split(","))
+        assert "batch_result" in excluded
+        assert "job_result" in excluded
+        assert "sync_result" in excluded
+        assert "result_value_final_tag" not in excluded
+        assert "increment_joining_process_counter" not in excluded
+
+    def test_batch_result_scope_keeps_batch_and_excludes_job(self):
+        from dataclasses import replace as _replace
+
+        profile = self._make_profile()
+        expected = _replace(profile.workflow_execution.expected_results, classification="batch")
+        workflow = _replace(profile.workflow_execution, expected_results=expected)
+        profile = _replace(profile, workflow_execution=workflow)
+
+        env = _runner_mod._build_spec_test_env(profile)
+
+        excluded = set(env["OPCUA_TARGET_EXCLUDED_CUS"].split(","))
+        assert "batch_result" not in excluded
+        assert "batch_result_counters" not in excluded
+        assert "job_result" in excluded
+        assert "sync_result_counters" in excluded
+        assert "self_contained_consolidated_result" not in excluded
+
+    def test_sync_result_scope_keeps_sync_and_excludes_other_classifications(self):
+        from dataclasses import replace as _replace
+
+        profile = self._make_profile()
+        expected = _replace(profile.workflow_execution.expected_results, classification="sync")
+        profile = _replace(profile, workflow_execution=_replace(profile.workflow_execution, expected_results=expected))
+
+        excluded = set(_runner_mod._build_spec_test_env(profile)["OPCUA_TARGET_EXCLUDED_CUS"].split(","))
+
+        assert "sync_result" not in excluded
+        assert "sync_result_counters" not in excluded
+        assert "batch_result" in excluded
+        assert "job_result" in excluded
+        assert "self_contained_consolidated_result" not in excluded
+
+    def test_job_result_scope_keeps_job_and_common_consolidated_cus(self):
+        from dataclasses import replace as _replace
+
+        profile = self._make_profile()
+        expected = _replace(profile.workflow_execution.expected_results, classification="job")
+        profile = _replace(profile, workflow_execution=_replace(profile.workflow_execution, expected_results=expected))
+
+        excluded = set(_runner_mod._build_spec_test_env(profile)["OPCUA_TARGET_EXCLUDED_CUS"].split(","))
+
+        assert "job_result" not in excluded
+        assert "batch_result" in excluded
+        assert "sync_result" in excluded
+        assert "partial_consolidated_result" not in excluded
+
+    def test_job_scope_can_include_intermediate_batch_results(self):
+        from dataclasses import replace as _replace
+
+        profile = self._make_profile()
+        expected = _replace(
+            profile.workflow_execution.expected_results,
+            classification="job",
+            intermediate_classifications=("batch",),
+        )
+        profile = _replace(profile, workflow_execution=_replace(profile.workflow_execution, expected_results=expected))
+
+        excluded = set(_runner_mod._build_spec_test_env(profile)["OPCUA_TARGET_EXCLUDED_CUS"].split(","))
+
+        assert "job_result" not in excluded
+        assert "batch_result" not in excluded
+        assert "batch_result_counters" not in excluded
+        assert "sync_result" in excluded
+
+    def test_job_scope_can_include_intermediate_sync_results(self):
+        from dataclasses import replace as _replace
+
+        profile = self._make_profile()
+        expected = _replace(
+            profile.workflow_execution.expected_results,
+            classification="job",
+            intermediate_classifications=("sync",),
+        )
+        profile = _replace(profile, workflow_execution=_replace(profile.workflow_execution, expected_results=expected))
+
+        excluded = set(_runner_mod._build_spec_test_env(profile)["OPCUA_TARGET_EXCLUDED_CUS"].split(","))
+
+        assert "job_result" not in excluded
+        assert "sync_result" not in excluded
+        assert "sync_result_counters" not in excluded
+        assert "batch_result" in excluded
+
+    @pytest.mark.parametrize(
+        ("classification", "included", "common_consolidated_included"),
+        [
+            ("intervention", "intervention_result", False),
+            ("stitching", None, True),
+            ("text", None, False),
+        ],
+    )
+    def test_other_standard_result_classifications_are_scoped(
+        self, classification, included, common_consolidated_included
+    ):
+        from dataclasses import replace as _replace
+
+        profile = self._make_profile()
+        expected = _replace(profile.workflow_execution.expected_results, classification=classification)
+        profile = _replace(profile, workflow_execution=_replace(profile.workflow_execution, expected_results=expected))
+
+        excluded = _runner_mod._excluded_cus_for_result_scope(
+            classification,
+            expected.intermediate_classifications,
+        )
+
+        if included:
+            assert included not in excluded
+        assert ("self_contained_consolidated_result" not in excluded) is common_consolidated_included
+
+    def test_expected_result_settings_are_forwarded_to_spec_tests(self):
+        from dataclasses import replace as _replace
+
+        profile = self._make_profile()
+        expected = _replace(
+            profile.workflow_execution.expected_results,
+            timeout_seconds=321.0,
+            final_result_required=False,
+        )
+        profile = _replace(profile, workflow_execution=_replace(profile.workflow_execution, expected_results=expected))
+
+        env = _runner_mod._build_spec_test_env(profile)
+
+        assert env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] == "321.0"
+        assert env["OPCUA_TARGET_FINAL_RESULT_REQUIRED"] == "false"
+
+    def test_any_result_scope_clears_inherited_exclusions(self, monkeypatch):
+        from dataclasses import replace as _replace
+
+        monkeypatch.setenv("OPCUA_TARGET_EXCLUDED_CUS", "batch_result")
+        profile = self._make_profile()
+        expected = _replace(profile.workflow_execution.expected_results, classification="any")
+        workflow = _replace(profile.workflow_execution, expected_results=expected)
+        profile = _replace(profile, workflow_execution=workflow)
+
+        env = _runner_mod._build_spec_test_env(profile)
+
+        assert "OPCUA_TARGET_EXCLUDED_CUS" not in env
+
     def test_returns_dict(self):
         profile = self._make_profile()
         env = _runner_mod._build_spec_test_env(profile)

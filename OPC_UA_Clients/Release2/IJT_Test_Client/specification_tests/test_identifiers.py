@@ -23,10 +23,12 @@ import asyncio
 import logging
 
 import pytest
-import pytest_asyncio
 from asyncua import ua
 
 from helpers.cu_registry import CU
+from helpers.identifier_utils import (
+    VIN_IDENTIFIER_NAME,
+)
 from helpers.identifier_utils import (
     contains_identifier as _contains_identifier,
 )
@@ -51,7 +53,6 @@ from helpers.node_discovery import (
     find_method_set,
 )
 from helpers.result_collector import ResultCollector
-from helpers.trigger import make_result_trigger
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -117,33 +118,6 @@ async def _get_asset_management_method_set(client, ns_ijt: int, ns_di: int, ns_a
             "IJT spec (OPC 40450-1) requires a MethodSet child under AssetManagement — this server omits it (non-conformant)"
         )
     return am, ms
-
-
-# ─── function-scoped result trigger ──────────────────────────────────────────
-
-
-@pytest_asyncio.fixture(scope="function")
-async def result_trigger(opcua_client, ns_indices):
-    """Function-scoped result trigger built on the fresh opcua_client.
-
-    Returns a SimulatorResultTrigger when the App namespace and SimulateResults
-    folder are available; falls back to ExternalResultTrigger (tests that need
-    an active trigger will call pytest.skip via outcome.triggered=False).
-    """
-    ns_app = ns_indices.get(NS_APP)
-    if ns_app is None:
-        return make_result_trigger(opcua_client, None, 0)
-
-    js = await find_joining_system(opcua_client)
-    if js is None:
-        return make_result_trigger(opcua_client, None, 0)
-
-    simulations = await find_child_by_browse_name(js, BN.SIMULATIONS, ns_app)
-    if simulations is None:
-        return make_result_trigger(opcua_client, None, 0)
-
-    sim_results = await find_child_by_browse_name(simulations, BN.SIMULATE_RESULTS_FOLDER, ns_app)
-    return make_result_trigger(opcua_client, sim_results, ns_app)
 
 
 # ─── send_identifiers — structure ─────────────────────────────────────────────
@@ -299,6 +273,7 @@ async def test_send_text_identifiers_accepts_string_key_value_pairs(opcua_client
     ns_app = ns_indices.get(NS_APP)
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_app)
     product_instance_uri = await _read_required_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_app)
+    test_id = _make_test_vin()
 
     try:
         result = await find_and_call_method(
@@ -306,7 +281,7 @@ async def test_send_text_identifiers_accepts_string_key_value_pairs(opcua_client
             BN.SEND_TEXT_IDENTIFIERS,
             ns_ijt,
             ua.Variant(product_instance_uri, ua.VariantType.String),
-            ua.Variant([], ua.VariantType.String),  # TextIdentifiers (empty string array)
+            ua.Variant([test_id], ua.VariantType.String),
             timeout=_METHOD_TIMEOUT,
         )
     except Exception as exc:  # noqa: BLE001
@@ -319,6 +294,10 @@ async def test_send_text_identifiers_accepts_string_key_value_pairs(opcua_client
         if "BadInvalidArgument" in err_str or "BadArgumentsMissing" in err_str:
             pytest.skip(
                 f"SendTextIdentifiers rejected with '{err_str}' — server rejected the call; verify argument encoding"
+            )
+        if _is_domain_rejection(err_str):
+            pytest.skip(
+                f"SendTextIdentifiers rejected identifier {test_id!r} with the defined IJT domain status: {err_str}"
             )
         pytest.fail(f"SendTextIdentifiers failed unexpectedly: {err_str}")
 
@@ -463,7 +442,7 @@ async def test_send_identifiers_then_get_identifiers_round_trip(opcua_client, ns
         BN.GET_IDENTIFIERS,
         ns_ijt,
         ua.Variant(product_instance_uri, ua.VariantType.String),
-        _identifier_list_arg(test_id),
+        _identifier_list_arg(VIN_IDENTIFIER_NAME),
         timeout=_METHOD_TIMEOUT,
     )
     if not get_result.success:

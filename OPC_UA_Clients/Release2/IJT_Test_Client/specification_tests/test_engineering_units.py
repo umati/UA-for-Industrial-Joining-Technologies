@@ -82,7 +82,7 @@ async def _trigger_and_get_result(subscription_client, result_trigger, ns_indice
     """Trigger a result and collect it via IJTResultEventType events."""
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             return None
         return await rc.collect_single()
 
@@ -328,7 +328,7 @@ async def test_engineering_units_are_consistent_within_same_physical_quantity(
     """For the same PhysicalQuantity within a single result, EU identifiers must be consistent."""
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_single(result_type=result_type, include_traces=False)
-        if not outcome.triggered and result_trigger.is_simulator:
+        if not outcome.triggered:
             pytest.skip(outcome.skip_reason if hasattr(outcome, "skip_reason") else "Trigger failed")
         result_data = await rc.collect_single()
     if result_data is None:

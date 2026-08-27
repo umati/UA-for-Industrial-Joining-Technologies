@@ -372,6 +372,47 @@ class TestPublicCollectMethods:
         assert timeout == pytest.approx(99.0)
 
     @pytest.mark.asyncio
+    async def test_collect_single_matching_passes_correlation_predicate(self):
+        rc = self._make_rc_returning("matched")
+        predicate = lambda result: result == "matched"
+
+        result = await rc.collect_single_matching(predicate, timeout_s=42.0)
+
+        assert result == "matched"
+        rc._collect_until.assert_awaited_once_with(
+            ResultClassification.SINGLE_RESULT,
+            False,
+            pytest.approx(42.0),
+            predicate,
+        )
+
+    @pytest.mark.asyncio
+    async def test_target_profile_timeout_and_required_final_are_enforced(self, monkeypatch):
+        monkeypatch.setenv("OPCUA_TARGET_RESULT_TIMEOUT_SECONDS", "123")
+        monkeypatch.setenv("OPCUA_TARGET_FINAL_RESULT_REQUIRED", "true")
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7}, is_simulator=False)
+        rc._collect_until = AsyncMock(return_value=None)
+
+        with pytest.raises(TimeoutError, match="Required final SingleResult"):
+            await rc.collect_single()
+
+        _, _, timeout = rc._collect_until.call_args[0]
+        assert timeout == pytest.approx(123.0)
+
+    def test_invalid_target_timeout_is_ignored(self, monkeypatch):
+        monkeypatch.setenv("OPCUA_TARGET_RESULT_TIMEOUT_SECONDS", "not-a-number")
+
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7}, is_simulator=False)
+
+        assert rc._target_timeout is None
+
+    def test_discard_pending_requires_active_context(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+
+        with pytest.raises(RuntimeError, match="ResultCollector is not active"):
+            rc.discard_pending()
+
+    @pytest.mark.asyncio
     async def test_collect_combined_delegates_correctly(self):
         rc = self._make_rc_returning("batch")
         result = await rc.collect_combined(ResultClassification.BATCH_RESULT)

@@ -156,6 +156,14 @@ class EventCollector:
                 break
         return results
 
+    def discard_pending(self) -> int:
+        """Discard queued events and return the number removed."""
+        removed = 0
+        while not self._queue.empty():
+            self._queue.get_nowait()
+            removed += 1
+        return removed
+
     async def unsubscribe(self) -> None:
         """Delete the subscription if one is active."""
         if self._subscription is not None:

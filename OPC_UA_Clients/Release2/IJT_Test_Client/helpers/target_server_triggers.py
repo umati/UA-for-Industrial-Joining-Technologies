@@ -132,6 +132,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         profile: TargetServerCuProfile,
         ns_ijt: int | None = None,
         ns_di: int | None = None,
+        subscription_client: Any = None,
     ) -> None:
         self._client = client
         self._joining_system = joining_system_node
@@ -139,6 +140,58 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         self._ns_ijt = ns_ijt
         self._ns_di = ns_di
         self._profile = profile
+        self._subscription_client = subscription_client
+        self._last_method_failure = ""
+
+    @staticmethod
+    def _result_matches_context(result_data: Any, piu: str, joining_process_id: str) -> bool:
+        """Require result identifiers for the selected Tool and JoiningProcess."""
+        from asyncua import ua
+
+        meta = getattr(result_data, "ResultMetaData", None)
+        entities = getattr(meta, "AssociatedEntities", None) or ()
+        entity_ids: set[str] = set()
+        for entity in entities:
+            value = entity.Value if isinstance(entity, ua.Variant) else entity
+            entity_id = getattr(value, "EntityId", None)
+            if entity_id is not None and str(entity_id):
+                entity_ids.add(str(entity_id))
+        return piu in entity_ids and (not joining_process_id or joining_process_id in entity_ids)
+
+    def _method_succeeded(self, method_name: str, result: Any) -> bool:
+        """Return whether both the OPC UA call and IJT method status succeeded."""
+        if not result.success:
+            self._last_method_failure = str(result.error or "OPC UA service call failed")
+            return False
+
+        output = result.output_list
+        if not output:
+            self._last_method_failure = ""
+            return True
+
+        raw_status = output[0]
+        try:
+            from asyncua import ua
+
+            if isinstance(raw_status, ua.StatusCode):
+                succeeded = raw_status.is_good()
+            elif isinstance(raw_status, (int, bool)):
+                succeeded = int(raw_status) == 0
+            else:
+                return True
+        except (TypeError, ValueError):
+            return True
+
+        if succeeded:
+            self._last_method_failure = ""
+            return True
+
+        status_message = str(output[1]) if len(output) > 1 else ""
+        self._last_method_failure = f"domain status={raw_status!s}"
+        if status_message:
+            self._last_method_failure += f", message={status_message}"
+        logger.warning("%s rejected by controller: %s", method_name, self._last_method_failure)
+        return False
 
     async def _resolve_ijt_namespace_index(self) -> int:
         from helpers.namespaces import NS_IJT_BASE
@@ -154,6 +207,37 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
 
         ns_ijt = await self._resolve_ijt_namespace_index()
         return await find_child_by_browse_name(self._joining_system, BN.JOINING_PROCESS_MANAGEMENT, ns_ijt)
+
+    async def _enable_tool(self, piu: str) -> bool:
+        """Enable the selected tool before starting when the profile allows it."""
+        from asyncua import ua
+
+        from helpers.method_caller import find_and_call_method
+        from helpers.namespaces import BN, NS_DI
+        from helpers.node_discovery import find_child_by_browse_name, find_method_set
+
+        ns_ijt = await self._resolve_ijt_namespace_index()
+        asset_management = await find_child_by_browse_name(self._joining_system, BN.ASSET_MANAGEMENT, ns_ijt)
+        if asset_management is None:
+            return False
+
+        ns_di = self._ns_di
+        if ns_di is None:
+            ns_di = await self._client.get_namespace_index(NS_DI)
+            self._ns_di = ns_di
+        method_set = await find_method_set(asset_management, ns_di, ns_ijt, self._ns_app)
+        if method_set is None:
+            return False
+
+        result = await find_and_call_method(
+            method_set,
+            BN.ENABLE_ASSET,
+            ns_ijt,
+            ua.Variant(piu, ua.VariantType.String),
+            ua.Variant(True, ua.VariantType.Boolean),
+            timeout=self._profile.cu_execution.default_timeout_seconds,
+        )
+        return self._method_succeeded(BN.ENABLE_ASSET, result)
 
     async def _resolve_tool_piu(self) -> str:
         """Return the configured or discovered tool ProductInstanceUri."""
@@ -192,6 +276,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             timeout=self._profile.cu_execution.default_timeout_seconds,
         )
         if not result.success:
+            self._last_method_failure = str(result.error or "OPC UA service call failed")
             return []
         output = result.output_list
         if not output:
@@ -202,19 +287,96 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             return list(inner)
         return [inner] if inner is not None else []
 
-    async def _select_joining_process(self, jpm_node: Any, process_id: Any) -> bool:
+    @staticmethod
+    def _process_field(process: Any, *names: str) -> str:
+        """Return the first non-empty process field across supported model revisions."""
+        for name in names:
+            value = getattr(process, name, None)
+            if value is not None and str(value):
+                return str(value)
+        return ""
+
+    @staticmethod
+    def _selection_names(process: Any) -> set[str]:
+        """Return SelectionName entity IDs advertised by a process."""
+        names: set[str] = set()
+        entities = getattr(process, "AssociatedEntities", None) or ()
+        for entity in entities:
+            if getattr(entity, "Name", None) == "SelectionName":
+                entity_id = getattr(entity, "EntityId", None)
+                if entity_id is not None and str(entity_id):
+                    names.add(str(entity_id))
+        return names
+
+    def _choose_joining_process(self, processes: list[Any]) -> Any | None:
+        """Choose a process according to the profile's deterministic selection policy."""
+        selection = self._profile.selection.joining_process
+        if selection.policy != "exact_match":
+            return processes[0] if processes else None
+
+        for process in processes:
+            process_id = self._process_field(
+                process,
+                "JoiningProcessId",
+                "JoiningProcessIdentification",
+                "Id",
+            )
+            origin_id = self._process_field(
+                process,
+                "JoiningProcessOriginId",
+                "JoiningProcessIdentificationOrigin",
+            )
+            if selection.joining_process_id and process_id != selection.joining_process_id:
+                continue
+            if selection.joining_process_origin_id and origin_id != selection.joining_process_origin_id:
+                continue
+            ids_configured = bool(selection.joining_process_id or selection.joining_process_origin_id)
+            if (
+                not ids_configured
+                and selection.selection_name
+                and selection.selection_name not in self._selection_names(process)
+            ):
+                continue
+            return process
+        return None
+
+    async def _select_joining_process(self, jpm_node: Any, process: Any, piu: str) -> bool:
         """Call SelectJoiningProcess and return True on success."""
+        from asyncua import ua
+
         from helpers.method_caller import find_and_call_method
         from helpers.namespaces import BN
+
+        try:
+            identification = ua.JoiningProcessIdentificationDataType()
+        except AttributeError:
+            logger.warning("JoiningProcessIdentificationDataType is not registered")
+            return False
+
+        identification.JoiningProcessId = self._process_field(
+            process,
+            "JoiningProcessId",
+            "JoiningProcessIdentification",
+            "Id",
+        )
+        identification.JoiningProcessOriginId = self._process_field(
+            process,
+            "JoiningProcessOriginId",
+            "JoiningProcessIdentificationOrigin",
+        )
+        configured_name = self._profile.selection.joining_process.selection_name
+        advertised_names = self._selection_names(process)
+        identification.SelectionName = configured_name or (sorted(advertised_names)[0] if advertised_names else "")
 
         result = await find_and_call_method(
             jpm_node,
             BN.SELECT_JOINING_PROCESS,
             await self._resolve_ijt_namespace_index(),
-            process_id,
+            ua.Variant(piu, ua.VariantType.String),
+            ua.Variant(identification, ua.VariantType.ExtensionObject),
             timeout=self._profile.cu_execution.default_timeout_seconds,
         )
-        return result.success
+        return self._method_succeeded(BN.SELECT_JOINING_PROCESS, result)
 
     async def _start_selected_joining(self, jpm_node: Any, piu: str, deselect_after: bool) -> bool:
         """Call StartSelectedJoining(piu, deselect_after) and return True on success."""
@@ -231,9 +393,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             ua.Variant(deselect_after, ua.VariantType.Boolean),
             timeout=self._profile.cu_execution.default_timeout_seconds,
         )
-        return result.success
+        return self._method_succeeded(BN.START_SELECTED_JOINING, result)
 
-    async def _run_workflow(self) -> TargetServerTriggerOutcome:
+    async def _run_workflow(self, operation_count: int = 1) -> TargetServerTriggerOutcome:
         """Execute the full StartSelectedJoining workflow."""
         sc = self._profile.cu_execution.state_changing_methods
 
@@ -260,6 +422,15 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
 
         piu = await self._resolve_tool_piu()
+        if sc.allow_state_changing_method("EnableAsset") and not await self._enable_tool(piu):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"EnableAsset failed for tool PIU='{piu}': {self._last_method_failure}",
+                method="EnableAsset",
+                trigger_mode="start_selected_joining",
+                product_instance_uri=piu,
+            )
+
         processes = await self._get_joining_process_list(jpm_node, piu)
 
         if not processes:
@@ -270,16 +441,39 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 trigger_mode="start_selected_joining",
             )
 
-        # Select first available process (or configured one)
-        target_process = processes[0]
-        jp_id = str(getattr(target_process, "JoiningProcessIdentification", ""))
-        jp_origin = str(getattr(target_process, "JoiningProcessIdentificationOrigin", ""))
+        target_process = self._choose_joining_process(processes)
+        if target_process is None:
+            selection = self._profile.selection.joining_process
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=(
+                    "No joining process matched the configured exact selection "
+                    f"(id='{selection.joining_process_id}', "
+                    f"origin='{selection.joining_process_origin_id}', "
+                    f"selection_name='{selection.selection_name}')"
+                ),
+                method="StartSelectedJoining",
+                trigger_mode="start_selected_joining",
+                product_instance_uri=piu,
+            )
 
-        selected = await self._select_joining_process(jpm_node, target_process)
+        jp_id = self._process_field(
+            target_process,
+            "JoiningProcessId",
+            "JoiningProcessIdentification",
+            "Id",
+        )
+        jp_origin = self._process_field(
+            target_process,
+            "JoiningProcessOriginId",
+            "JoiningProcessIdentificationOrigin",
+        )
+
+        selected = await self._select_joining_process(jpm_node, target_process, piu)
         if not selected:
             return TargetServerTriggerOutcome(
                 triggered=False,
-                skip_reason=f"SelectJoiningProcess failed for process '{jp_id}'",
+                skip_reason=f"SelectJoiningProcess failed for process '{jp_id}': {self._last_method_failure}",
                 method="StartSelectedJoining",
                 trigger_mode="start_selected_joining",
                 product_instance_uri=piu,
@@ -287,18 +481,79 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
 
         deselect = self._profile.triggers.result.deselect_after_joining
-        started = await self._start_selected_joining(jpm_node, piu, deselect)
-        if not started:
-            return TargetServerTriggerOutcome(
-                triggered=False,
-                skip_reason=f"StartSelectedJoining failed for process '{jp_id}', PIU='{piu}'",
-                method="StartSelectedJoining",
-                trigger_mode="start_selected_joining",
-                product_instance_uri=piu,
-                joining_process_id=jp_id,
-            )
+        from contextlib import AsyncExitStack
 
-        logger.debug("StartSelectedJoining succeeded: PIU=%s, process=%s", piu, jp_id)
+        from helpers.namespaces import NS_IJT_BASE
+        from helpers.result_collector import ResultCollector
+
+        async with AsyncExitStack() as stack:
+            completion_collector = None
+            if operation_count > 1:
+                if self._subscription_client is None:
+                    return TargetServerTriggerOutcome(
+                        triggered=False,
+                        skip_reason=(
+                            "Multi-operation remote start requires a separate subscription client "
+                            "for correlated operation-completion events"
+                        ),
+                        method="StartSelectedJoining",
+                        trigger_mode="start_selected_joining",
+                        product_instance_uri=piu,
+                        joining_process_id=jp_id,
+                        joining_process_origin_id=jp_origin,
+                    )
+                completion_collector = await stack.enter_async_context(
+                    ResultCollector(
+                        self._subscription_client,
+                        {NS_IJT_BASE: await self._resolve_ijt_namespace_index()},
+                        is_simulator=False,
+                    )
+                )
+
+            for operation_number in range(1, operation_count + 1):
+                if completion_collector is not None:
+                    completion_collector.discard_pending()
+                started = await self._start_selected_joining(jpm_node, piu, deselect)
+                if not started:
+                    return TargetServerTriggerOutcome(
+                        triggered=False,
+                        skip_reason=(
+                            f"StartSelectedJoining failed on operation {operation_number}/{operation_count} "
+                            f"for process '{jp_id}', PIU='{piu}': {self._last_method_failure}"
+                        ),
+                        method="StartSelectedJoining",
+                        trigger_mode="start_selected_joining",
+                        product_instance_uri=piu,
+                        joining_process_id=jp_id,
+                        joining_process_origin_id=jp_origin,
+                        operation_count=operation_number - 1,
+                    )
+                if completion_collector is not None:
+                    completed = await completion_collector.collect_single_matching(
+                        lambda result: self._result_matches_context(result, piu, jp_id),
+                        timeout_s=self._profile.workflow_execution.expected_results.timeout_seconds,
+                    )
+                    if completed is None:
+                        return TargetServerTriggerOutcome(
+                            triggered=False,
+                            skip_reason=(
+                                "No SingleResult correlated to the selected Tool and JoiningProcess "
+                                f"confirmed operation {operation_number}/{operation_count}"
+                            ),
+                            method="StartSelectedJoining",
+                            trigger_mode="start_selected_joining",
+                            product_instance_uri=piu,
+                            joining_process_id=jp_id,
+                            joining_process_origin_id=jp_origin,
+                            operation_count=operation_number,
+                        )
+
+        logger.debug(
+            "StartSelectedJoining succeeded: PIU=%s, process=%s, operations=%d",
+            piu,
+            jp_id,
+            operation_count,
+        )
         return TargetServerTriggerOutcome(
             triggered=True,
             method="StartSelectedJoining",
@@ -306,20 +561,23 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             product_instance_uri=piu,
             joining_process_id=jp_id,
             joining_process_origin_id=jp_origin,
-            operation_count=1,
+            operation_count=operation_count,
         )
 
-    async def trigger_single(self, result_type: int, include_traces: bool = False) -> TriggerOutcome:
-        """Trigger one joining operation and wait for a result."""
+    async def _trigger_operations(self, operation_count: int) -> TriggerOutcome:
+        """Trigger one selected process for the requested operation count."""
+        method_timeout = self._profile.cu_execution.default_timeout_seconds
+        result_timeout = self._profile.workflow_execution.expected_results.timeout_seconds
+        workflow_timeout = (4 * method_timeout) + operation_count * (method_timeout + result_timeout)
         try:
             return await asyncio.wait_for(
-                self._run_workflow(),
-                timeout=self._profile.triggers.result.timeout_seconds,
+                self._run_workflow(operation_count),
+                timeout=workflow_timeout,
             )
         except asyncio.TimeoutError:
             return TargetServerTriggerOutcome(
                 triggered=False,
-                skip_reason=f"StartSelectedJoining workflow timed out after {self._profile.triggers.result.timeout_seconds}s",
+                skip_reason=(f"StartSelectedJoining workflow timed out after {workflow_timeout}s"),
                 method="StartSelectedJoining",
                 trigger_mode="start_selected_joining",
             )
@@ -330,6 +588,10 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 method="StartSelectedJoining",
                 trigger_mode="start_selected_joining",
             )
+
+    async def trigger_single(self, result_type: int, include_traces: bool = False) -> TriggerOutcome:
+        """Trigger one joining operation and wait for a result."""
+        return await self._trigger_operations(1)
 
     async def trigger_batch_or_sync(
         self,
@@ -346,19 +608,15 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         """
         policy = self._profile.workflow_execution.start_invocation_policy
         if policy == "one_start_per_operation":
-            last: TriggerOutcome = TargetServerTriggerOutcome(
-                triggered=False, skip_reason="No operations run", trigger_mode="start_selected_joining"
-            )
-            for _ in range(num_children):
-                last = await self.trigger_single(classification, include_traces)
-                if not last.triggered:
-                    return last
-            return last
+            count = self._profile.workflow_execution.expected_operation_count or num_children
+            return await self._trigger_operations(count)
         # single_start_produces_final_result
         return await self.trigger_single(classification, include_traces)
 
     async def trigger_job(self, send_as_refs: bool = False) -> TriggerOutcome:
         """Trigger joining workflow for job-level evidence."""
+        if self._profile.workflow_execution.start_invocation_policy == "one_start_per_operation":
+            return await self._trigger_operations(self._profile.workflow_execution.expected_operation_count)
         return await self.trigger_single(0, False)
 
     async def trigger_bulk_results(
@@ -516,6 +774,7 @@ def make_target_server_result_trigger(
     *,
     ns_ijt: int | None = None,
     ns_di: int | None = None,
+    subscription_client: Any = None,
     allow_waiting: bool = False,
 ) -> ResultTrigger:
     """Return the appropriate result trigger based on the profile trigger config.
@@ -551,7 +810,13 @@ def make_target_server_result_trigger(
     if mode == "start_selected_joining":
         logger.debug("TargetServer result trigger: StartSelectedJoiningResultTrigger")
         return StartSelectedJoiningResultTrigger(
-            client, joining_system_node, ns_app, profile, ns_ijt=ns_ijt, ns_di=ns_di
+            client,
+            joining_system_node,
+            ns_app,
+            profile,
+            ns_ijt=ns_ijt,
+            ns_di=ns_di,
+            subscription_client=subscription_client,
         )
 
     if mode == "manual_trigger":

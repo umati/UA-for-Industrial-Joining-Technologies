@@ -63,7 +63,9 @@ VALID_START_INVOCATION_POLICIES: frozenset[str] = frozenset(
     {"single_start_produces_final_result", "one_start_per_operation", "manual_operation_trigger"}
 )
 VALID_CLEANUP_POLICIES: frozenset[str] = frozenset({"best_effort_with_evidence", "strict_cleanup", "no_cleanup"})
-VALID_RESULT_CLASSIFICATIONS: frozenset[str] = frozenset({"single", "batch", "sync", "job", "any"})
+VALID_RESULT_CLASSIFICATIONS: frozenset[str] = frozenset(
+    {"single", "batch", "sync", "job", "stitching", "intervention", "text", "any"}
+)
 
 # Stable outcome vocabulary used by readiness checks and runner reporting.
 OUTCOME_PASSED = "passed"
@@ -199,6 +201,7 @@ class ExpectedResultsConfig:
     """Expected result evidence configuration."""
 
     classification: str = "single"
+    intermediate_classifications: tuple[str, ...] = field(default_factory=tuple)
     final_result_required: bool = True
     timeout_seconds: float = 60.0
 
@@ -466,10 +469,17 @@ def _parse_selection(raw: dict, context: str = "selection") -> SelectionConfig:
 
 def _parse_expected_results(raw: dict, context: str) -> ExpectedResultsConfig:
     classification = _require_enum(raw, "classification", "single", VALID_RESULT_CLASSIFICATIONS, context)
+    intermediate = tuple(_require_str_list(raw, "intermediate_classifications", context))
+    invalid_intermediate = sorted(set(intermediate) - (VALID_RESULT_CLASSIFICATIONS - {"any"}))
+    if invalid_intermediate:
+        raise TargetServerConfigError(
+            f"{context}.intermediate_classifications contains invalid values: {invalid_intermediate}"
+        )
     final_req = _require_bool(raw, "final_result_required", True, context)
     timeout = _require_number(raw, "timeout_seconds", 60.0, context, min_val=1.0)
     return ExpectedResultsConfig(
         classification=classification,
+        intermediate_classifications=intermediate,
         final_result_required=final_req,
         timeout_seconds=timeout,
     )

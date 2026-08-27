@@ -85,6 +85,26 @@ logging.basicConfig(
 logger = logging.getLogger("run_target_server_cu")
 logging.getLogger("asyncua").setLevel(logging.ERROR)
 
+_COMMON_CONSOLIDATED_RESULT_CUS = frozenset(
+    {
+        "self_contained_consolidated_result",
+        "consolidated_result_with_references",
+        "partial_consolidated_result",
+    }
+)
+
+_RESULT_CUS_BY_CLASSIFICATION = {
+    "single": frozenset(),
+    "sync": frozenset({"sync_result", "sync_result_counters"}),
+    "batch": frozenset({"batch_result", "batch_result_counters"}),
+    "job": frozenset({"job_result"}),
+    "stitching": frozenset(),
+    "intervention": frozenset({"intervention_result"}),
+    "text": frozenset(),
+}
+_CLASSIFICATION_RESULT_CUS = frozenset().union(*_RESULT_CUS_BY_CLASSIFICATION.values())
+_CONSOLIDATED_CLASSIFICATIONS = frozenset({"sync", "batch", "job", "stitching"})
+
 # ---------------------------------------------------------------------------
 # Outcome vocabulary (imported from config module)
 # ---------------------------------------------------------------------------
@@ -247,6 +267,22 @@ def _write_human_summary(
 # ---------------------------------------------------------------------------
 
 
+def _excluded_cus_for_result_scope(
+    classification: str,
+    intermediate_classifications: tuple[str, ...] = (),
+) -> frozenset[str]:
+    """Return CUs that cannot be exercised by the configured result workflow."""
+    if classification == "any":
+        return frozenset()
+
+    active = {classification, *intermediate_classifications}
+    included_specific = frozenset().union(*(_RESULT_CUS_BY_CLASSIFICATION.get(item, frozenset()) for item in active))
+    excluded = _CLASSIFICATION_RESULT_CUS - included_specific
+    if active.isdisjoint(_CONSOLIDATED_CLASSIFICATIONS):
+        excluded |= _COMMON_CONSOLIDATED_RESULT_CUS
+    return excluded
+
+
 def _find_venv_python() -> str:
     """Return the venv Python used for running specification_tests/.
 
@@ -273,6 +309,17 @@ def _build_spec_test_env(profile: TargetServerCuProfile) -> dict[str, str]:
     if profile.source_path:
         env["OPCUA_TARGET_SERVER_PROFILE"] = profile.source_path
     env["OPCUA_TARGET_SERVER_MODE"] = profile.cu_execution.default_mode
+    expected_results = profile.workflow_execution.expected_results
+    env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] = str(expected_results.timeout_seconds)
+    env["OPCUA_TARGET_FINAL_RESULT_REQUIRED"] = str(expected_results.final_result_required).lower()
+    excluded_cus = _excluded_cus_for_result_scope(
+        expected_results.classification,
+        expected_results.intermediate_classifications,
+    )
+    if excluded_cus:
+        env["OPCUA_TARGET_EXCLUDED_CUS"] = ",".join(sorted(excluded_cus))
+    else:
+        env.pop("OPCUA_TARGET_EXCLUDED_CUS", None)
     caps = profile.capabilities_file_path()
     if caps and caps.exists():
         env["OPCUA_CAPABILITIES_FILE"] = str(caps)

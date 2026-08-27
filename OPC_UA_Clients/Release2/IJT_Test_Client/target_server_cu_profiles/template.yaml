@@ -181,8 +181,13 @@ workflow_execution:
   expected_operation_count: 1
 
   expected_results:
-    # Expected result classification: single, batch, sync, job, any
+    # Primary/final classification:
+    # single, sync, batch, job, stitching, intervention, text, or any
     classification: single
+    # Optional result classifications emitted before the primary/final result.
+    # Examples: [batch] for a handheld Job containing Batch results;
+    # [sync] for a fixtured-controller Job containing Sync results.
+    intermediate_classifications: []
     final_result_required: true
     timeout_seconds: 60
 
