@@ -336,13 +336,102 @@ async def test_read_tool_enabled_returns_none_for_non_boolean_value(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_read_tool_enabled_returns_none_on_discovery_error(monkeypatch):
+async def test_read_tool_enabled_none_branches(monkeypatch):
+    # 1. find_joining_system is None
+    monkeypatch.setattr(node_discovery, "find_joining_system", AsyncMock(return_value=None))
+    assert await node_discovery.read_tool_enabled(object(), 7, 5, "urn:tool:1") is None
+
+    # 2. asset_management is None
+    monkeypatch.setattr(node_discovery, "find_joining_system", AsyncMock(return_value=object()))
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name_any", AsyncMock(return_value=None))
+    assert await node_discovery.read_tool_enabled(object(), 7, 5, "urn:tool:1") is None
+
+    # 3. assets is None
+    call_count = 0
+
+    async def _mock_find_assets(*_a):
+        nonlocal call_count
+        call_count += 1
+        return object() if call_count == 1 else None
+
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name_any", AsyncMock(side_effect=_mock_find_assets))
+    assert await node_discovery.read_tool_enabled(object(), 7, 5, "urn:tool:1") is None
+
+    # 4. tools is None
+    call_count = 0
+
+    async def _mock_find_tools(*_a):
+        nonlocal call_count
+        call_count += 1
+        return object() if call_count <= 2 else None
+
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name_any", AsyncMock(side_effect=_mock_find_tools))
+    assert await node_discovery.read_tool_enabled(object(), 7, 5, "urn:tool:1") is None
+
+    # 5. tool loops with missing identification, missing piu_node, unmatched piu, missing parameters, missing enabled_node
+    # Tool 1: missing identification
+    # Tool 2: missing piu_node
+    # Tool 3: unmatched piu ("urn:other")
+    # Tool 4: missing parameters
+    # Tool 5: missing enabled_node
+    t1, t2, t3, t4, t5 = object(), object(), object(), object(), object()
     monkeypatch.setattr(
         node_discovery,
-        "find_joining_system",
-        AsyncMock(side_effect=RuntimeError("connection lost")),
+        "browse_folder_instances",
+        AsyncMock(return_value=[("T1", t1), ("T2", t2), ("T3", t3), ("T4", t4), ("T5", t5)]),
     )
 
+    piu3 = AsyncMock()
+    piu3.read_value.return_value = "urn:other"
+    piu4 = AsyncMock()
+    piu4.read_value.return_value = "urn:tool:1"
+
+    step = 0
+
+    async def _mock_complex_tree(_parent, name, *_a):
+        nonlocal step
+        if name in ("AssetManagement", "Assets", "Tools"):
+            return object()
+        if _parent is t1 and name == "Identification":
+            return None
+        if _parent is t2 and name == "Identification":
+            return object()
+        if _parent is not t1 and _parent is not t2 and name == "Identification":
+            return object()
+        if name == "ProductInstanceUri":
+            step += 1
+            if step == 1:  # t2
+                return None
+            if step == 2:  # t3
+                return piu3
+            return piu4  # t4
+        if name == "Parameters":
+            return None  # t4 missing parameters
+        return None
+
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name_any", AsyncMock(side_effect=_mock_complex_tree))
+    assert await node_discovery.read_tool_enabled(object(), 7, 5, "urn:tool:1") is None
+
+    # 6. parameters found but enabled node missing
+    async def _mock_missing_enabled(_parent, name, *_a):
+        if name in ("AssetManagement", "Assets", "Tools", "Identification"):
+            return object()
+        if name == "ProductInstanceUri":
+            p = AsyncMock()
+            p.read_value.return_value = "urn:tool:1"
+            return p
+        if name == "Parameters":
+            return object()
+        if name == "Enabled":
+            return None
+        return None
+
+    monkeypatch.setattr(node_discovery, "browse_folder_instances", AsyncMock(return_value=[("Tool", object())]))
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name_any", AsyncMock(side_effect=_mock_missing_enabled))
+    assert await node_discovery.read_tool_enabled(object(), 7, 5, "urn:tool:1") is None
+
+    # 7. Exception in browse_folder_instances or reading
+    monkeypatch.setattr(node_discovery, "browse_folder_instances", AsyncMock(side_effect=RuntimeError("Browse failed")))
     assert await node_discovery.read_tool_enabled(object(), 7, 5, "urn:tool:1") is None
 
 

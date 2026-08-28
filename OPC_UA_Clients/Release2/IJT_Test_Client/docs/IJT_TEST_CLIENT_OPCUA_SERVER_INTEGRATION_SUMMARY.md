@@ -25,16 +25,23 @@ This is normal and intentional.
 It is not duplicate testing; it is organized by feature domain.
 
 ## 4) How YAML profiles are used
-YAML profiles tell the runner **how to test a specific target server**.
+YAML profiles tell the runner **how to test a specific target server**. The
+simulator and a Target Server are both "OPC UA Servers Under Test" — they run
+the identical specification test suite; a profile only controls applicability,
+safety/triggers, scoring, and evidence output, never a separate test suite.
 
-Use from command line:
+Use from command line (`run_all_tests.py` is the canonical entry point;
+`run_target_server_cu.py` is a deprecated compatibility shim for the same
+options):
 
 - Safe check first
-  `python run_target_server_cu.py --profile <profile>.yaml --preflight-only`
-- Full run
-  `python run_target_server_cu.py --profile <profile>.yaml --mode automated`
+  `python run_all_tests.py --preflight-only --profile <profile>.yaml`
+- Full validation (Phase 1 + strict preflight + specs + evidence)
+  `python run_all_tests.py --profile <profile>.yaml`
+- Preflight + specs + evidence only, skipping Phase 1
+  `python run_all_tests.py --phase2 --profile <profile>.yaml`
 - Guided/manual flow when needed
-  `python run_target_server_cu.py --profile <profile>.yaml --mode guided --interactive-prompts`
+  `python run_all_tests.py --phase2 --profile <profile>.yaml --mode guided --interactive-prompts`
 
 Profile examples:
 

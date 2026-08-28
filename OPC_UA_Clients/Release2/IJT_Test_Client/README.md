@@ -20,6 +20,26 @@ IJT specification test client for specification testing of OPC UA IJT servers ag
 python run_all_tests.py
 ```
 
+`run_all_tests.py` is the single documented entry point for this test client — it
+runs static analysis, then the full specification_tests/ suite against either the
+checked-in simulator (auto-launched) or a real Target Server, if configured. Both
+are "OPC UA Servers Under Test": they run the identical specification suite. A
+Target Server CU profile only controls applicability, safety, scoring, and
+evidence — never a separate test suite.
+
+```bash
+python run_all_tests.py                                   # Phase 1 + Phase 2 (simulator auto-launch)
+python run_all_tests.py --phase1                           # static analysis only
+python run_all_tests.py --phase2                           # specification_tests only
+python run_all_tests.py --profile target_server_cu_profiles/my_profile.yaml   # full validation against a Target Server
+python run_all_tests.py --preflight-only --profile target_server_cu_profiles/my_profile.yaml # classification only, no live tests
+```
+
+See [Target server CU quick start](docs/TARGET_SERVER_CU_QUICK_START.md) for the
+full Target Server option reference. `run_target_server_cu.py` is a **deprecated**
+compatibility shim that forwards to the same implementation — prefer
+`run_all_tests.py`.
+
 ## Learn More
 
 - [Test report formats](docs/test-results.md)

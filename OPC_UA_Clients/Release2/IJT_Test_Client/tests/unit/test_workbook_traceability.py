@@ -77,3 +77,20 @@ def test_is_step_zero_handles_invalid_types():
     assert _is_step_zero("not a number") is False
     assert _is_step_zero(None) is False
     assert _is_step_zero([]) is False
+
+
+def test_load_workbook_cases_sheet_count_mismatch(monkeypatch):
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from helpers import workbook_traceability as wt
+
+    mock_wb = MagicMock()
+    mock_wb.worksheets = [MagicMock()] * (wt.INFRA_SHEET_COUNT + 5)
+    mock_wb.close = MagicMock()
+    monkeypatch.setattr(wt, "load_workbook", lambda *a, **k: mock_wb)
+
+    with pytest.raises(ValueError, match="CU sheets but registry has"):
+        wt.load_workbook_cases()
+    mock_wb.close.assert_called_once()

@@ -17,7 +17,11 @@ python run_all_tests.py --excel=never
 python scripts/run_reference_workflow.py --output test-results/reference-workflows/reference_joining_process_workflow.md
 ```
 
-Use `run_all_tests.py` as the only test runner entry point.
+Use `run_all_tests.py` as the only test runner entry point. Pass `--profile FILE`
+to validate against a real Target Server instead of the simulator (see
+[Target Server CU Runner Commands](#target-server-cu-runner-commands) below);
+`run_target_server_cu.py` is a deprecated compatibility shim for the same
+functionality.
 
 See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail explanations, and Excel output details.
 
@@ -206,7 +210,9 @@ IJT_Test_Client/
 │   ├── cu_evidence_map.py        ← CU evidence kind metadata (structure/method/result/event/workflow/…)
 │   ├── target_server_cu_config.py   ← target server CU profile loader and validator
 │   ├── target_server_readiness.py   ← readiness/preflight model with typed outcome vocabulary
-│   └── target_server_triggers.py   ← StartSelectedJoiningResultTrigger, ManualResultTrigger, ManualEventTrigger
+│   ├── target_server_triggers.py   ← StartSelectedJoiningResultTrigger, ManualResultTrigger, ManualEventTrigger
+│   ├── target_server_execution.py  ← canonical preflight/automated run + evidence logic (shared by run_all_tests.py and the deprecated run_target_server_cu.py)
+│   └── runner_plan.py              ← typed immutable RunPlan: resolves phases + endpoint/capabilities precedence once per run_all_tests.py invocation
 ├── common/                       ← connection + namespace registration tests
 ├── assets/                       ← asset structure, interfaces, health, counters
 ├── results/                      ← result management structure + retrieval + simulation
@@ -223,7 +229,7 @@ IJT_Test_Client/
 │   ├── example_multi_operation_job.capabilities.yaml ← Fully commented paired CU declaration
 │   ├── example_manual_trigger.profile.yaml ← Fully commented manual trigger example
 │   └── example_simulation_methods.profile.yaml ← Fully commented simulator example
-├── run_target_server_cu.py          ← Standalone target server CU runner (preflight/automated/guided)
+├── run_target_server_cu.py          ← DEPRECATED compatibility shim (forwards to run_all_tests.py / helpers/target_server_execution.py)
 ├── scripts/run_reference_workflow.py ← Markdown + interactive reference workflow runner
 ├── tests/
     └── unit/                     ← Pure-logic helper tests (no OPC UA server needed)
@@ -246,7 +252,9 @@ IJT_Test_Client/
         ├── test_target_server_cu_config.py ← target server profile loader/validator tests
         ├── test_target_server_readiness.py ← readiness/preflight model tests
         ├── test_target_server_triggers.py  ← StartSelectedJoiningResultTrigger, ManualResultTrigger tests
-        └── test_run_target_server_cu.py    ← target server CU runner CLI/report tests (no server needed)
+        ├── test_target_server_execution.py ← canonical preflight/automated + evidence logic tests (in-process, no server)
+        ├── test_runner_plan.py             ← RunPlan resolution: phases, endpoint/capabilities precedence, invalid combos
+        └── test_run_target_server_cu.py    ← deprecated shim CLI/report tests (no server needed)
 ```
 
 ---
@@ -288,25 +296,32 @@ semantics, and CU coverage outputs are unchanged.
 
 ### Target Server CU Runner Commands
 
+`run_all_tests.py` is the canonical entry point for all Target Server CU runs
+(`run_target_server_cu.py` is a deprecated compatibility shim that forwards to
+the exact same implementation in `helpers/target_server_execution.py`).
+
 ```bash
 # Preflight — no state changes, safe for any server:
-python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --preflight-only
+python run_all_tests.py --preflight-only --profile target_server_cu_profiles/template.profile.yaml
 
-# Automated run:
-python run_target_server_cu.py --profile my_profile.yaml --mode automated
+# Full validation (Phase 1 + strict preflight + specs + evidence):
+python run_all_tests.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml
+
+# Preflight + specs + evidence only, skipping Phase 1:
+python run_all_tests.py --phase2 --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml
 
 # Guided run with interactive prompts:
-python run_target_server_cu.py --profile my_profile.yaml --mode guided --interactive-prompts
+python run_all_tests.py --phase2 --profile my_profile.yaml --mode guided --interactive-prompts
 
-# Override endpoint:
-python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --endpoint opc.tcp://10.0.0.1:40451 --preflight-only
-
-# Integrate with run_all_tests.py (non-fatal by default):
-python run_all_tests.py --target-server-profile target_server_cu_profiles/example_multi_operation_job.profile.yaml
-
-# Make target server preflight gate the overall run:
-python run_all_tests.py --target-server-profile my_profile.yaml --target-server-preflight-strict
+# Override endpoint (suppresses simulator auto-launch):
+python run_all_tests.py --preflight-only --profile target_server_cu_profiles/template.profile.yaml --endpoint opc.tcp://10.0.0.1:40451
 ```
+
+Preflight is always strict: a profile with a blocking configuration issue
+(including an unresolved/placeholder endpoint) fails the run — it is never
+silently downgraded to the simulator. `--target-server-profile` remains a
+deprecated alias for `--profile`; `--target-server-preflight-strict` is
+accepted but no longer needed (preflight is always strict now).
 
 ### Outcome Vocabulary
 

@@ -45,6 +45,16 @@ def test_event_payload_field_returns_none_when_absent():
 
 def test_event_payload_field_reads_from_nested_dict_eventcontent():
     """Test that event_payload_field reads from nested __dict__['EventContent']."""
-    event = SimpleNamespace()
-    event.__dict__["EventContent"] = _Variant(SimpleNamespace(ReportedValues=["value"]))
+
+    class DictOnlyEvent:
+        def __init__(self, key, value):
+            self.__dict__[key] = value
+
+        def __getattr__(self, name):
+            return None
+
+    event = DictOnlyEvent("EventContent", _Variant(SimpleNamespace(ReportedValues=["value"])))
     assert event_payload_field(event, "ReportedValues") == ["value"]
+
+    event2 = DictOnlyEvent("JoiningSystemEventContent", _Variant(SimpleNamespace(ReportedValues=["val2"])))
+    assert event_payload_field(event2, "ReportedValues") == ["val2"]

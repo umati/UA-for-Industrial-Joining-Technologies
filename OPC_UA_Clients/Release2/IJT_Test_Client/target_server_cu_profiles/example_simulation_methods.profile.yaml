@@ -1,14 +1,15 @@
-# Target Server CU Profile — Simulation Methods Example
+# Target Server CU Profile — Simulation Methods Example (OPC 40450-1 Release 2.0)
 #
-# Use this profile for an IJT server under test that exposes simulation helper
-# methods such as SimulateResults or SimulateEvents. This can be the checked-in
-# simulator or another server that intentionally provides simulation helpers.
+# Use this profile for an OPC UA IJT Server under test that exposes simulation helper
+# methods (such as SimulateResults or SimulateEvents). This can be the checked-in
+# Release 2 Simulator or any custom server providing simulation test hooks.
 #
-# SANITIZED: No real endpoints, PIUs, process IDs, or vendor values are present.
+# Run Commands (from OPC_UA_Clients/Release2/IJT_Test_Client):
+#   - Preflight Check:
+#     python run_all_tests.py --preflight-only --profile target_server_cu_profiles/example_simulation_methods.profile.yaml
+#   - Run Against Simulator Port:
+#     python run_all_tests.py --phase2 --profile target_server_cu_profiles/example_simulation_methods.profile.yaml
 #
-# Usage:
-#   python run_target_server_cu.py --profile example_simulation_methods.profile.yaml --preflight-only
-
 # File-format version understood by the runner.
 schema_version: 1
 # Human-readable report name.

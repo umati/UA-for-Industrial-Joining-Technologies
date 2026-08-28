@@ -34,6 +34,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Ensure stdout/stderr use UTF-8 on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Bandit B405/B314 suppressions are limited to trusted JUnit XML from pytest.
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]

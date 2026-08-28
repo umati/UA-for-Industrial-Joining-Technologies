@@ -1,18 +1,37 @@
-# Target Server CU Profile — Schema Template
+# Target Server CU Profile — Universal Schema Template
 #
-# Copy this file and fill in your target server-specific values.
-# DO NOT commit files with real endpoints, PIUs, process IDs, or
-# serial numbers. Keep target server-specific profiles outside this
-# repository or sanitize them fully before committing.
+# This profile defines the connectivity, safety authorization, and workflow
+# expectations for validating ANY OPC UA Industrial Joining Technologies (IJT)
+# Server Under Test compliant with OPC 40450-1 (Release 2.0).
+#
+# Supported Servers:
+#   - Built-in OPC UA IJT Demo Simulator (default auto-launched when no profile/endpoint is set)
+#   - Physical / hardware tightening and joining controllers from any vendor
+#   - Software / virtual OPC UA servers and custom IJT server implementations
+#
+# Usage Guide (from OPC_UA_Clients/Release2/IJT_Test_Client):
+#
+#   1. Safe Preflight Check (no state changes; validates TCP and config):
+#      python run_all_tests.py --preflight-only --profile target_server_cu_profiles/my_profile.yaml
+#
+#   2. Specification Tests Only (skips internal client static analysis/unit tests):
+#      python run_all_tests.py --phase2 --profile target_server_cu_profiles/my_profile.yaml
+#
+#   3. Full Validation (Phase 1 static analysis + preflight + spec tests + evidence report):
+#      python run_all_tests.py --profile target_server_cu_profiles/my_profile.yaml
+#
+#   4. Ad-Hoc Runtime Endpoint Override:
+#      python run_all_tests.py --phase2 --profile target_server_cu_profiles/my_profile.yaml --endpoint opc.tcp://10.0.0.1:40451
+#
+# Security & Privacy:
+#   DO NOT commit real customer endpoints, PIUs, process IDs, or serial numbers.
+#   Keep controller-specific profile copies outside the repo or sanitize them.
 #
 # All fields shown below are optional unless marked REQUIRED.
 # Omitted sections use safe defaults (no state-changing methods allowed, first
 # ready Tool, first compatible JoiningProcess, diagnostic scoring, no manual steps).
 #
-# Run preflight to validate before executing any state-changing tests:
-#   python run_target_server_cu.py --profile <this_file> --preflight-only
-#
-# See target_server_cu_profiles/README.md for full usage documentation.
+# See target_server_cu_profiles/README.md and docs/TARGET_SERVER_CU_QUICK_START.md.
 
 # REQUIRED: Schema version. Must be 1 for this release.
 schema_version: 1

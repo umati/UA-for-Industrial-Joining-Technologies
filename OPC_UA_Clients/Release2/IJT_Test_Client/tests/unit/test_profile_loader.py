@@ -437,3 +437,13 @@ class TestLoadSupportedCusUnknownFacetInProfile:
 
         assert isinstance(result, frozenset)
         assert "nonexistent_facet_xyz" in caplog.text
+
+
+class TestLoadSupportedCusDefaultCapabilitiesMissing:
+    def test_default_capabilities_missing_warns_and_returns_all_cus(self, monkeypatch, caplog):
+        monkeypatch.setattr(_pl_module, "_DEFAULT_CAPABILITIES_FILENAME", "nonexistent_default.yaml")
+        monkeypatch.delenv("OPCUA_CAPABILITIES_FILE", raising=False)
+        with caplog.at_level(logging.WARNING, logger="helpers.profile_loader"):
+            supported = load_supported_cus(capabilities_path=None)
+        assert len(supported) == 123
+        assert "Default capability declaration not found" in caplog.text

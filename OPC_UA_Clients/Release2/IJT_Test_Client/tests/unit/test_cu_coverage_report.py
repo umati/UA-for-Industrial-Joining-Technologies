@@ -2,6 +2,7 @@ import json
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -619,3 +620,53 @@ def test_recorder_handles_workbook_exception(report_tmp_path, monkeypatch):
     # Should gracefully handle exception with error field
     assert payload["workbook"]["schema"] == "ijt-workbook-traceability/v1"
     assert "error" in payload["workbook"]
+
+
+def test_classify_report_returns_skipped_for_empty_reason():
+    rep = _Report(skipped=False, passed=False, failed=False)
+    assert _classify_report(rep) == "skipped"
+
+
+def test_rollup_outcome_returns_error():
+    assert _rollup_outcome(["passed", "error"]) == "error"
+    assert _rollup_outcome(["error", "not_supported"]) == "error"
+
+
+def test_recorder_setup_passed_guard_and_workbook_exact_refs(report_tmp_path, monkeypatch):
+    output = report_tmp_path / "reports" / "cu-coverage-report.json"
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(output))
+    test_file = report_tmp_path / "conformance" / "test_file.py"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text("# test placeholder\n", encoding="utf-8")
+
+    class _WbMarker(_Marker):
+        name = "workbook_ref"
+        args = ("CU_001", 5)  # type: ignore[assignment]
+        kwargs: dict[str, Any] = {}
+
+    recorder = CuCoverageReportRecorder(root=report_tmp_path, all_cus=["single_result"], supported_cus=None)
+    items = [
+        _Item(
+            nodeid="specification_tests/test_file.py::test_case",
+            fspath=test_file,
+            name="test_case",
+            markers=[_Marker("single_result"), _WbMarker()],
+        )
+    ]
+
+    recorder.pytest_collection_modifyitems(None, None, items)
+    # Mock _classify_report to return "passed" when report.passed=False to hit line 221
+    monkeypatch.setattr("helpers.cu_coverage_report._classify_report", lambda _r: "passed")
+    recorder.pytest_runtest_logreport(
+        _Report(nodeid="specification_tests/test_file.py::test_case", when="setup", passed=False)
+    )
+
+    # Restore normal _classify_report
+    monkeypatch.undo()
+    recorder.pytest_runtest_logreport(
+        _Report(nodeid="specification_tests/test_file.py::test_case", when="call", passed=True)
+    )
+    recorder.pytest_sessionfinish(None, 0)
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["by_cu"]["single_result"]["passed"] == 1

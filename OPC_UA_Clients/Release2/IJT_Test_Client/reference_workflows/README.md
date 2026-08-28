@@ -11,8 +11,9 @@ Static means:
 - the YAML is rendered into a Markdown or terminal walkthrough only.
 
 Use this folder when you need a readable checklist or demo of the expected
-joining-process flow. Use `run_target_server_cu.py` when you need preflight,
-classification, or CU evidence for a server under test.
+joining-process flow. Use `python run_all_tests.py --profile FILE` (canonical;
+`run_target_server_cu.py` is a deprecated compatibility shim) when you need
+preflight, classification, or CU evidence for a server under test.
 
 The reference workflow is intentionally kept separate from Target Server CU
 execution. It explains the workflow to people; it does not validate a server.

@@ -6,6 +6,9 @@ Tests the pure-Python components that do not require a live OPC UA server:
   - MethodCallResult dataclass and output_list property
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from asyncua import ua
 
 from helpers.method_caller import MethodCallResult, OpcUaStatusHelper
@@ -156,3 +159,21 @@ class TestMethodCallResult:
     def test_status_code_field(self):
         r = MethodCallResult(success=False, status_code=0x80340000)
         assert r.status_code == 0x80340000
+
+
+class TestCallMethodExpectBadStatus:
+    @pytest.mark.asyncio
+    async def test_call_method_expect_bad_status_with_authorization_reset(self):
+        from helpers.method_caller import call_method_expect_bad_status
+
+        mock_parent = MagicMock()
+        mock_parent.call_method = AsyncMock(side_effect=ua.UaError("BadInvalidArgument"))
+
+        res = await call_method_expect_bad_status(
+            mock_parent,
+            "ns=1;i=1001",
+            target_server_authorized=True,
+            method_name="TestBadMethod",
+        )
+        assert res.success is True
+        assert res.method_name == "TestBadMethod"

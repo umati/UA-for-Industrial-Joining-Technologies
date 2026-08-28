@@ -1,27 +1,61 @@
 #!/usr/bin/env python3
 """
-run_all_tests.py — Complete test orchestrator for IJT Test Client.
+run_all_tests.py — Canonical test orchestrator for IJT Test Client.
 
-Manages a virtual environment, runs static analysis (Phase 1), and executes
-the full live test suite via pytest (Phase 2).
+This is the ONE documented entry point for the IJT Test Client test suite.
+It manages a virtual environment, runs static analysis (Phase 1), and executes
+the full live specification_tests/ suite via pytest (Phase 2) — against either
+the checked-in simulator (auto-launched) or a real Target Server CU profile.
+
+Both the simulator and a Target Server are "OPC UA Servers Under Test": they
+run the exact same specification_tests/ suite. A Target Server CU profile
+(--profile) only controls applicability (which conformance units apply),
+safety (which state-changing methods/triggers are allowed), scoring, and
+evidence reporting — it does not fork the test suite.
 
 Usage:
-  python run_all_tests.py                    # full run (Phase 1 + Phase 2)
+  python run_all_tests.py                    # full run: Phase 1 + Phase 2 (simulator auto-launch)
   python run_all_tests.py --phase1           # static analysis only (no server)
-  python run_all_tests.py --phase2           # live tests only (server must be up)
+  python run_all_tests.py --phase2           # specification_tests only (simulator auto-launch if no target)
+  python run_all_tests.py --profile FILE     # Phase 1 + strict profile preflight + specs + target evidence
+  python run_all_tests.py --phase2 --profile FILE       # strict preflight + specs + target evidence only
+  python run_all_tests.py --preflight-only --profile FILE  # configuration/readiness classification only
+  python run_all_tests.py --endpoint opc.tcp://host:port    # ad hoc Target Server (no profile file needed)
   python run_all_tests.py --junit-xml=FILE   # write JUnit XML report
   python run_all_tests.py --excel=never      # disable Excel report generation
   python run_all_tests.py --no-auto-install-tools  # do not auto-install missing quality tools
   python run_all_tests.py --verbose          # verbose pytest output
   python run_all_tests.py --no-server-check  # skip pre-test server check
+  python run_all_tests.py -- -k some_test    # forward extra pytest selectors after `--`
   python run_all_tests.py --help
+
+Target Server options (used with --profile and/or --endpoint):
+  --endpoint URL                    Endpoint override; suppresses simulator auto-launch
+  --capabilities-file FILE          Capability declaration override
+  --tool-product-instance-uri PIU   Tool selection override
+  --joining-process-id ID           JoiningProcess selection override
+  --joining-process-origin-id ID    JoiningProcess origin override
+  --mode {automated,guided}         Execution mode (default: automated)
+  --scoring-mode {diagnostic,strict_profile,acceptance}
+  --output-dir DIR                  Target evidence output directory override
+  --interactive-prompts             Allow terminal prompts in --mode guided
+  --skip-spec-tests                 Classification-only (no live specification_tests run)
+  --spec-tests-timeout SECONDS      Live specification_tests subprocess timeout (default: 600)
 
 Environment variables:
   OPCUA_SERVER_URL           Override server endpoint (default: opc.tcp://localhost:40462)
   OPCUA_SIMULATOR_EXE        Path to opcua_ijt_demo_application(.exe)
   OPCUA_STARTUP_TIMEOUT_SEC  Seconds to wait for simulator start (default: 30)
+  OPCUA_CAPABILITIES_FILE    Capabilities file override (see --capabilities-file precedence)
   SKIP_VENV_INSTALL          Set to "1" to skip pip install step (faster re-runs)
   IJT_RUNNER_NO_DELETE       Set to "1" to preserve runner outputs/tmp/caches
+
+Precedence (resolved once per run; see helpers/runner_plan.py):
+  Endpoint:      --endpoint > non-placeholder profile endpoint > OPCUA_SERVER_URL > simulator auto-launch
+  Capabilities:  --capabilities-file > profile capabilities_file > OPCUA_CAPABILITIES_FILE > simulator default
+
+run_target_server_cu.py is a DEPRECATED compatibility shim for the Target Server
+options above; prefer this script.
 """
 
 from __future__ import annotations
@@ -38,6 +72,10 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from helpers.runner_plan import RunPlan
 
 # Ensure stdout/stderr use UTF-8 on Windows (cp1252 can't encode box-drawing chars)
 if hasattr(sys.stdout, "reconfigure"):
@@ -171,6 +209,12 @@ def _prepare_tmp_dir() -> None:
                 _safe_rmtree(child)
             else:
                 _safe_unlink(child)
+    sc_root = _sourcecontrol_root()
+    if sc_root.exists() and sc_root != _TMP_DIR:
+        for child in sc_root.iterdir():
+            if child.name.startswith("_ijt_sim_") and child.is_dir():
+                with contextlib.suppress(OSError):
+                    _safe_rmtree(child)
     pytest_tmp = _TMP_DIR / "pytest"
     pytest_tmp.mkdir(parents=True, exist_ok=True)
 
@@ -301,8 +345,15 @@ def _kill_proc_tree(pid: int) -> None:
     else:
         import signal
 
-        with contextlib.suppress(ProcessLookupError):
-            os.killpg(os.getpgid(pid), signal.SIGKILL)
+        with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+            try:
+                pgid = os.getpgid(pid)
+                if hasattr(os, "getpgrp") and pgid != os.getpgrp():
+                    os.killpg(pgid, signal.SIGKILL)
+                else:
+                    os.kill(pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                os.kill(pid, signal.SIGKILL)
 
 
 def _run(
@@ -1599,67 +1650,76 @@ def _maybe_generate_excel(
 
 
 # ---------------------------------------------------------------------------
-# CLI
+# Target Server (--profile / --endpoint) step — single execution path shared
+# with the deprecated run_target_server_cu.py shim via helpers.target_server_execution
 # ---------------------------------------------------------------------------
 
 
-def _step_target_server_cu_preflight(target_server_profile: str, strict: bool = False) -> _StepResult:
-    """Run Target Server CU preflight via run_target_server_cu.py (non-fatal by default).
+def _step_target_run(plan: RunPlan) -> _StepResult:
+    """Run the Target Server CU profile/endpoint execution path directly (no subprocess).
 
-    When *strict* is False (default), blocking preflight outcomes are reported
-    as WARN rather than FAIL so the simulator-based run always continues.
-    When *strict* is True, blocking outcomes fail the overall run.
-
-    Args:
-        target_server_profile: Path to a Target Server CU profile YAML file.
-        strict:             Whether preflight failures gate the overall run.
+    Single execution path for --profile / --endpoint runs, whether used with
+    the default full-validation flow, --phase2 (preflight+specs+evidence),
+    or --preflight-only (classification only). Delegates entirely to
+    helpers.target_server_execution.run_preflight / run_automated so there is
+    exactly one implementation of Target Server CU preflight, scoring, and
+    evidence reporting shared with the deprecated run_target_server_cu.py shim.
     """
-    result = _StepResult("[TARGET SERVER] CU preflight")
+    from helpers.target_server_execution import run_automated, run_preflight
+
+    label = "[TARGET SERVER] preflight" if plan.preflight_only else "[TARGET SERVER] CU run"
+    result = _StepResult(label)
     t0 = time.monotonic()
-    profile_path = Path(target_server_profile)
-    if not profile_path.exists():
-        result.skipped = True
-        result.note = f"profile not found: {target_server_profile}"
-        result.duration = time.monotonic() - t0
-        return result
 
-    target_server_output_dir = _RESULTS_DIR / "target-server-cu"
-    runner_script = _HERE / "run_target_server_cu.py"
-    if not runner_script.exists():
-        result.skipped = True
-        result.note = "run_target_server_cu.py not found — Target Server CU runner not installed"
-        result.duration = time.monotonic() - t0
-        return result
+    if plan.profile is None:
+        # Guarded by main(): _step_target_run is only called when
+        # plan.target_evidence_mode is True, which always implies a profile.
+        raise RuntimeError("_step_target_run called without a resolved Target Server profile")
+    output_dir = plan.output_dir or plan.profile.output_dir_path(base_dir=_HERE)
 
-    rc, output = _run(
-        [
-            str(_venv_python(VENV)),
-            str(runner_script),
-            "--profile",
-            str(profile_path),
-            "--preflight-only",
-            "--output-dir",
-            str(target_server_output_dir),
-        ],
-        timeout=60,
-        timeout_label="target-server-cu-preflight",
-    )
-    result.duration = time.monotonic() - t0
-    # rc=0: passed; rc=1: blocking issues or config errors
-    if rc == 0:
-        result.ok = True
-        result.note = "preflight passed"
-    elif strict:
-        result.ok = False
-        result.note = "preflight blocking issues (use run_target_server_cu.py for details)"
-        if output.strip():
-            _log(output.strip())
+    _log(f"  Endpoint:      {plan.endpoint or '<not set>'}  (source: {plan.endpoint_source})")
+    _log(f"  Capabilities:  {plan.capabilities_file or '<default>'}  (source: {plan.capabilities_source})")
+    _log(f"  Output dir:    {output_dir}")
+
+    if plan.preflight_only:
+        rc = run_preflight(plan.profile, output_dir)
     else:
-        # Non-strict: report as advisory warning, not a failure
-        result.ok = True
-        result.warn = True
-        result.note = f"preflight advisory issues (non-fatal; see {target_server_output_dir})"
+        rc = run_automated(
+            plan.profile,
+            output_dir,
+            mode=plan.mode,
+            interactive_prompts=plan.interactive_prompts,
+            skip_spec_tests=plan.skip_spec_tests,
+            spec_tests_timeout=plan.spec_tests_timeout,
+            verbose=plan.verbose,
+        )
+
+    result.duration = time.monotonic() - t0
+    result.ok = rc == 0
+    result.note = f"evidence: {output_dir}"
     return result
+
+
+def _apply_plan_runtime_env_overrides(plan: RunPlan) -> None:
+    """Forward resolved capability/tool/process overrides to child pytest processes.
+
+    Used for the legacy simulator/plain-pytest Phase 2 path (target_evidence_mode
+    is False), where specification_tests/ conftest reads these values straight
+    from the ambient environment rather than from a loaded profile.
+    """
+    if plan.capabilities_file:
+        os.environ["OPCUA_CAPABILITIES_FILE"] = plan.capabilities_file
+    if plan.tool_product_instance_uri:
+        os.environ["OPCUA_TOOL_PRODUCT_INSTANCE_URI"] = plan.tool_product_instance_uri
+    if plan.joining_process_id:
+        os.environ["OPCUA_JOINING_PROCESS_ID"] = plan.joining_process_id
+    if plan.joining_process_origin_id:
+        os.environ["OPCUA_JOINING_PROCESS_ORIGIN_ID"] = plan.joining_process_origin_id
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -1671,6 +1731,15 @@ def _build_parser() -> argparse.ArgumentParser:
     group = p.add_mutually_exclusive_group()
     group.add_argument("--phase1", action="store_true", help="Static analysis only (no server)")
     group.add_argument("--phase2", action="store_true", help="Live tests only (server must be up)")
+    group.add_argument(
+        "--preflight-only",
+        action="store_true",
+        dest="preflight_only",
+        help=(
+            "Configuration/readiness/profile classification only — no Phase 1, no specification_tests, "
+            "no state-changing execution. Requires --profile, --endpoint, or OPCUA_SERVER_URL."
+        ),
+    )
     p.add_argument("--junit-xml", metavar="FILE", help="Write JUnit XML report to FILE")
     p.add_argument(
         "--excel",
@@ -1702,22 +1771,106 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip pre-test OPC UA server reachability check",
     )
     p.add_argument(
+        "--profile",
+        metavar="FILE",
+        default=None,
+        help=(
+            "Path to a Target Server CU profile YAML. No --phase1/--phase2/--preflight-only: "
+            "runs Phase 1 + strict profile preflight + applicable specification_tests + target evidence. "
+            "With --phase2: preflight + specs + evidence only. With --preflight-only: classification only."
+        ),
+    )
+    p.add_argument(
         "--target-server-profile",
         metavar="FILE",
         dest="target_server_profile",
         default=None,
-        help=("Path to a Target Server CU profile YAML for optional Target Server preflight."),
+        help="DEPRECATED alias for --profile.",
     )
     p.add_argument(
         "--target-server-preflight-strict",
         action="store_true",
         dest="target_server_preflight_strict",
-        help=("Make Target Server CU preflight failures gate the overall run. Requires --target-server-profile."),
+        help=("DEPRECATED and no longer needed: --profile preflight is always strict (blocking issues fail the run)."),
+    )
+    p.add_argument(
+        "--endpoint",
+        metavar="URL",
+        default=None,
+        help="Target Server endpoint override (e.g. opc.tcp://10.0.0.1:40451). Suppresses simulator auto-launch.",
+    )
+    p.add_argument(
+        "--capabilities-file",
+        metavar="FILE",
+        dest="capabilities_file",
+        default=None,
+        help="Override capabilities_file; environment: OPCUA_CAPABILITIES_FILE",
+    )
+    p.add_argument(
+        "--tool-product-instance-uri",
+        metavar="PIU",
+        dest="tool_product_instance_uri",
+        default=None,
+        help="Override the Tool PIU; environment: OPCUA_TOOL_PRODUCT_INSTANCE_URI",
+    )
+    p.add_argument(
+        "--joining-process-id",
+        metavar="ID",
+        dest="joining_process_id",
+        default=None,
+        help="Select one discovered JoiningProcess by stable ID; environment: OPCUA_JOINING_PROCESS_ID",
+    )
+    p.add_argument(
+        "--joining-process-origin-id",
+        metavar="ID",
+        dest="joining_process_origin_id",
+        default=None,
+        help="Optional stable origin ID; environment: OPCUA_JOINING_PROCESS_ORIGIN_ID",
+    )
+    p.add_argument(
+        "--mode",
+        choices=["automated", "guided"],
+        default="automated",
+        help="Target Server execution mode for --profile/--endpoint runs (default: automated)",
+    )
+    p.add_argument(
+        "--scoring-mode",
+        choices=["diagnostic", "strict_profile", "acceptance"],
+        default=None,
+        help="Override the scoring mode from the profile",
+    )
+    p.add_argument(
+        "--output-dir",
+        metavar="DIR",
+        dest="output_dir",
+        default=None,
+        help="Override the output directory for Target Server evidence reports",
+    )
+    p.add_argument(
+        "--interactive-prompts",
+        action="store_true",
+        help="Enable interactive terminal prompts in --mode guided (Target Server runs)",
+    )
+    p.add_argument(
+        "--skip-spec-tests",
+        action="store_true",
+        help=(
+            "With --profile/--endpoint: skip the live specification_tests/ run, producing a "
+            "classification-only evidence report. Has no effect in --preflight-only mode."
+        ),
+    )
+    p.add_argument(
+        "--spec-tests-timeout",
+        metavar="SECONDS",
+        dest="spec_tests_timeout",
+        type=int,
+        default=600,
+        help="Timeout in seconds for a --profile/--endpoint live specification_tests/ run (default: 600)",
     )
     p.add_argument(
         "pytest_args",
         nargs=argparse.REMAINDER,
-        help="Extra args forwarded to pytest (phase 2 only)",
+        help="Extra args forwarded to pytest (phase 2 only; prefix with -- if they look like flags)",
     )
     return p
 
@@ -1728,7 +1881,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    """Entry point; returns 0 on success, 1 on any failure."""
+    """Entry point; returns 0 on success, 1 on any failure, 2 on invalid CLI usage."""
     global _RUNNER_SET_CAPABILITIES_FILE, _RUN_START
     _RUN_START = time.time()
     _RUNNER_SET_CAPABILITIES_FILE = False
@@ -1742,8 +1895,6 @@ def main() -> int:
 
     _VERBOSE = bool(args.verbose)
     _AUTO_INSTALL_TOOLS = bool(args.auto_install_tools)
-    run_phase1 = not args.phase2
-    run_phase2 = not args.phase1
 
     # Step 1: Ensure venv exists and all dependencies are installed
     ensure_venv()
@@ -1752,6 +1903,38 @@ def main() -> int:
 
     # Step 2: Re-exec under the venv Python so all tools use the same interpreter
     _relaunch_if_needed()
+
+    # Step 3: Resolve the run plan (profile loading needs the venv's PyYAML, so this
+    # must happen after the relaunch above). One resolution, used for every decision
+    # below — see helpers/runner_plan.py for the precedence rules.
+    from helpers.runner_plan import RunnerConfigError, resolve_run_plan
+    from helpers.target_server_cu_config import TargetServerConfigError
+
+    try:
+        plan = resolve_run_plan(args)
+    except RunnerConfigError as exc:
+        _log(_c(_ANSI_RED, f"[ERROR] Invalid CLI usage: {exc}"))
+        return 2
+    except FileNotFoundError as exc:
+        _log(_c(_ANSI_RED, f"[ERROR] Target Server profile not found: {exc}"))
+        return 2
+    except TargetServerConfigError as exc:
+        _log(_c(_ANSI_RED, f"[ERROR] Target Server profile configuration error: {exc}"))
+        return 2
+
+    if plan.used_deprecated_profile_flag:
+        _log(_c(_ANSI_YELLOW, "  [DEPRECATED] --target-server-profile is deprecated; use --profile instead."))
+    if getattr(args, "target_server_preflight_strict", False):
+        _log(
+            _c(
+                _ANSI_YELLOW,
+                "  [DEPRECATED] --target-server-preflight-strict is no longer needed: "
+                "--profile preflight is always strict.",
+            )
+        )
+
+    run_phase1 = plan.run_phase1
+    run_target = plan.run_target
 
     _safe_rmtree(_RESULTS_DIR)
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1787,20 +1970,16 @@ def main() -> int:
             results.append(_step_semgrep())
             results.append(_step_pyright())
 
-        if run_phase2:
-            _section("Phase 2: Live Tests")
-            _check_server(skip=args.no_server_check)
-            server_proc = _ensure_server()
-            results.append(_step_live_tests(extra_pytest_args, skip_server_check=args.no_server_check))
-
-        if getattr(args, "target_server_profile", None):
-            _section("Target Server CU (optional)")
-            results.append(
-                _step_target_server_cu_preflight(
-                    args.target_server_profile,
-                    strict=getattr(args, "target_server_preflight_strict", False),
-                )
-            )
+        if run_target:
+            if plan.target_evidence_mode:
+                _section("Target Server (--profile/--endpoint)")
+                results.append(_step_target_run(plan))
+            else:
+                _section("Phase 2: Live Tests")
+                _apply_plan_runtime_env_overrides(plan)
+                _check_server(skip=args.no_server_check)
+                server_proc = _ensure_server()
+                results.append(_step_live_tests(extra_pytest_args, skip_server_check=args.no_server_check))
 
     finally:
         if server_proc is not None:
@@ -1844,8 +2023,9 @@ def main() -> int:
     _log(
         f"  Result: {overall}  passed={passed}  warned={warned}  failed={failed}  skipped={skipped}  (elapsed: {elapsed:.1f}s)"
     )
-    # Print skip-reason breakdown when phase 2 ran (live tests produce significant skip volume)
-    if run_phase2:
+    # Print skip-reason breakdown for the legacy simulator/plain-pytest Phase 2 path
+    # (--profile/--endpoint runs report their own evidence summary instead).
+    if run_target and not plan.target_evidence_mode:
         live_xml = Path(args.junit_xml) if args.junit_xml else _DEFAULT_JUNIT
         _print_skip_reason_summary(live_xml)
     _log(_c(_ANSI_CYAN, "═" * 52))

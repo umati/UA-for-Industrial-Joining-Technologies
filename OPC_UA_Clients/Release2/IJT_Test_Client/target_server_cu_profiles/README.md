@@ -8,9 +8,9 @@ Related orientation documents:
 - `../docs/TARGET_SERVER_CU_QUICK_START.md`
 
 A **target server** is the OPC UA IJT server under test (SUT). It can be the
-checked-in simulator, a product/device server, or another IJT server endpoint.
-The simulator may use `SimulateResults` and `SimulateEvents`; a product/device
-server normally uses `StartSelectedJoining`, manual tool action, or observe-only
+checked-in simulator, a physical/device controller from any vendor, or any custom OPC UA IJT server endpoint.
+The simulator may use `SimulateResults` and `SimulateEvents`; a production controller
+normally uses `StartSelectedJoining`, manual tool action, or observe-only
 evidence.
 
 ---
@@ -113,21 +113,28 @@ If you need to commit a profile for CI/CD, sanitize it first:
 
 ## Run a Target Server Check
 
+`run_all_tests.py` is the canonical entry point for all of the commands below
+(`run_target_server_cu.py` is a deprecated compatibility shim that forwards to
+the exact same implementation in `helpers/target_server_execution.py`).
+
 ```bash
 # 1. Preflight only — safe for any target server, no state changes:
-python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --preflight-only
+python run_all_tests.py --preflight-only --profile target_server_cu_profiles/template.profile.yaml
 
-# 2. Full automated run (target server supports StartSelectedJoining):
-python run_target_server_cu.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml --mode automated --spec-tests-timeout 3600
+# 2. Full validation (Phase 1 + strict preflight + specs + evidence; target server supports StartSelectedJoining):
+python run_all_tests.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml --spec-tests-timeout 3600
+
+# 2b. Preflight + specs + evidence only, skipping Phase 1:
+python run_all_tests.py --phase2 --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml --spec-tests-timeout 3600
 
 # 3. Guided/manual run with terminal prompts:
-python run_target_server_cu.py --profile target_server_cu_profiles/example_manual_trigger.profile.yaml --mode guided --interactive-prompts
+python run_all_tests.py --phase2 --profile target_server_cu_profiles/example_manual_trigger.profile.yaml --mode guided --interactive-prompts
 
-# 4. Override endpoint from command line:
-python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --endpoint opc.tcp://target-server-host:40451 --preflight-only
+# 4. Override endpoint from command line (suppresses simulator auto-launch; --profile is optional):
+python run_all_tests.py --preflight-only --profile target_server_cu_profiles/template.profile.yaml --endpoint opc.tcp://target-server-host:40451
 
 # 5. Custom output directory:
-python run_target_server_cu.py --profile my_profile.yaml --output-dir test-results/target-server-cu/run-2026-06-30
+python run_all_tests.py --profile my_profile.yaml --output-dir test-results/target-server-cu/run-2026-06-30
 ```
 
 ---
@@ -137,26 +144,32 @@ python run_target_server_cu.py --profile my_profile.yaml --output-dir test-resul
 ### Preflight only (always safe)
 
 ```bash
-python run_target_server_cu.py --profile target_server_cu_profiles/template.profile.yaml --preflight-only
+python run_all_tests.py --preflight-only --profile target_server_cu_profiles/template.profile.yaml
 ```
 
 Checks the configuration, TCP reachability, and trigger mode. Does **not** call any OPC UA
 methods or open a test session. Safe to run against any target server at any time.
+Requires `--profile`, `--endpoint`, or `OPCUA_SERVER_URL` so the runner knows which
+server to check — it never falls back to the simulator.
 
 ### Automated mode (live spec tests)
 
 ```bash
-python run_target_server_cu.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml --mode automated
+python run_all_tests.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml
 ```
 
 When the profile has a configured, reachable endpoint:
 
-1. Runs configuration and TCP preflight checks.
+1. Runs configuration and TCP preflight checks (always strict: blocking issues fail the run).
 2. Shows CU execution classification.
 3. Runs the `specification_tests/` pytest suite with `OPCUA_SERVER_URL` set to the
    target server, `OPCUA_CAPABILITIES_FILE` from the profile, and the resolved
    Tool/JoiningProcess runtime overrides forwarded to the target workflow fixtures.
 4. Writes a `spec-tests.xml` JUnit report and `target-server-cu-report.json` evidence.
+
+This is the same `specification_tests/` suite the simulator runs by default —
+the profile only changes applicability, safety, triggers, scoring, and evidence,
+never the test suite itself.
 
 The default subprocess limit is 600 seconds. Use `--spec-tests-timeout SECONDS`
 when real result generation makes the complete suite take longer. The runner
@@ -176,37 +189,51 @@ With `selection.joining_process.policy: exact_match`, selection tries the
 configured JoiningProcess ID first, then origin ID, then SelectionName. This
 allows a stable origin ID to survive controller-generated primary ID changes.
 
-When the endpoint is a placeholder or not reachable, step 3 is skipped and only
-classification is shown (same as before).
+When the endpoint is a placeholder or not reachable, this is reported as a
+blocking preflight issue and the run fails — it is never silently downgraded to
+a classification-only or simulator run.
 
 ### Classification only (no spec test invocation)
 
 ```bash
-python run_target_server_cu.py --profile my_profile.yaml --mode automated --skip-spec-tests
+python run_all_tests.py --profile my_profile.yaml --skip-spec-tests
 ```
 
 Runs classification without invoking the spec test suite, even if the endpoint is configured.
 
 ---
 
-## Integration with run_all_tests.py
+## Canonical CLI Reference
 
-`run_all_tests.py` supports an optional target server preflight step:
+All Target Server options are available directly on `run_all_tests.py`:
 
 ```bash
-# Add target server preflight to the standard run:
-python run_all_tests.py --target-server-profile target_server_cu_profiles/example_multi_operation_job.profile.yaml
+python run_all_tests.py                                    # full run: Phase 1 + Phase 2 (simulator auto-launch)
+python run_all_tests.py --phase1                            # static/security/unit/type checks only
+python run_all_tests.py --phase2                            # specification_tests only (simulator auto-launch if no target)
+python run_all_tests.py --profile FILE                      # Phase 1 + strict preflight + specs + target evidence
+python run_all_tests.py --phase2 --profile FILE              # strict preflight + specs + target evidence only
+python run_all_tests.py --preflight-only --profile FILE      # configuration/readiness classification only
 ```
 
-This step is non-blocking by default. Target server preflight failures are shown
-as warnings and the simulator-based test run still continues. Use
-`--target-server-preflight-strict` when target server preflight must fail the run.
+Relevant Target Server options: `--endpoint`, `--capabilities-file`,
+`--tool-product-instance-uri`, `--joining-process-id`, `--joining-process-origin-id`,
+`--mode {automated,guided}`, `--scoring-mode`, `--output-dir`,
+`--interactive-prompts`, `--skip-spec-tests`, `--spec-tests-timeout`.
 
-**Note:** Run these commands from `IJT_Test_Client`. Full live target-server
-`specification_tests/` runs use `run_target_server_cu.py --mode automated`.
-The `run_all_tests.py` in this same Test Client directory performs only the
-optional preflight step via `--target-server-profile`; the repository-root
-runner does not expose that argument.
+Precedence is resolved once per run: `--endpoint` > non-placeholder profile
+endpoint > `OPCUA_SERVER_URL` > simulator auto-launch (only when there is no
+profile and no external endpoint at all). A profile with an empty or
+placeholder endpoint always fails preflight/live execution — it is never
+silently downgraded to the simulator.
+
+`--target-server-profile` remains a deprecated alias for `--profile`.
+`--target-server-preflight-strict` is accepted but no longer needed: `--profile`
+preflight is always strict now.
+
+**Note:** Run these commands from `IJT_Test_Client`. The repository-root runner
+does not expose Target Server options; run `run_all_tests.py` directly from
+this directory for target server validation.
 
 ---
 
@@ -224,8 +251,10 @@ Target Server CU runs write artifacts to `test-results/target-server-cu/` by def
 
 ## Non-Regression Guarantee
 
-Adding a target server CU profile and running `run_target_server_cu.py` does **not** affect
-the standard simulator-based test run.  The simulator path, `run_all_tests.py` default
-behavior, report schemas, skip/fail semantics, and CU coverage outputs remain unchanged.
+Adding a target server CU profile and running `python run_all_tests.py --profile FILE`
+does **not** affect the standard simulator-based test run (`python run_all_tests.py`
+with no `--profile`/`--endpoint`). The simulator path, default behavior, report
+schemas, skip/fail semantics, and CU coverage outputs remain unchanged.
+
 
 See `docs/test-results.md` for simulator output documentation.

@@ -20,8 +20,9 @@ After a `run_all_tests.py` run the following files are produced:
 
 ### Target Server CU Evidence Outputs
 
-When `run_target_server_cu.py` is used (or `run_all_tests.py --target-server-profile`), additional
-artifacts are written to `test-results/target-server-cu/` (or the path configured in the profile):
+When `run_all_tests.py --profile FILE` (or `--endpoint URL`) is used, additional
+artifacts are written to `test-results/target-server-cu/` (or the path configured
+in the profile or `--output-dir`):
 
 | File | Format | Contents |
 |---|---|---|
@@ -31,8 +32,9 @@ artifacts are written to `test-results/target-server-cu/` (or the path configure
 | `test-results/target-server-cu/cu-coverage-report.json` | JSON | Run-scoped 123-CU support, blocked, and Not Supported classifications |
 | `test-results/target-server-cu/report-controller.xlsx` | Excel | Controller workbook generated from the same run-scoped XML and CU report |
 
-Target Server CU evidence is written only when `run_target_server_cu.py` is invoked directly or
-via `run_all_tests.py --target-server-profile`.  It is never written during simulator runs.
+Target Server CU evidence is written only when `--profile`/`--endpoint` is used
+(or via the deprecated `run_target_server_cu.py` shim, which forwards to the
+same implementation). It is never written during plain simulator runs.
 Use a unique `--output-dir` for each controller run so all five artifacts remain
 an internally consistent evidence set. A successful pytest exit means no executed
 assertion failed; skipped result or event tests still require their stated trigger

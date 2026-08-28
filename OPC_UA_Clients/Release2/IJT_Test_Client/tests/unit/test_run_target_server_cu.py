@@ -848,11 +848,10 @@ class TestRunLiveSpecTests:
         assert meta["reason"] == "endpoint_not_configured"
 
     def test_returns_skipped_when_spec_dir_missing(self, output_dir, tmp_path, monkeypatch):
-        """When specification_tests/ doesn't exist at _HERE, returns skipped."""
+        """When specification_tests/ doesn't exist at base_dir, returns skipped."""
         profile = self._make_profile(endpoint="opc.tcp://real-host:40451")
-        # Point _HERE at tmp_path (no specification_tests/ there)
-        monkeypatch.setattr(_runner_mod, "_HERE", tmp_path)
-        rc, meta = _runner_mod.run_live_spec_tests(profile, output_dir)
+        # Point base_dir at tmp_path (no specification_tests/ there)
+        rc, meta = _runner_mod.run_live_spec_tests(profile, output_dir, base_dir=tmp_path)
         assert rc == 0
         assert meta["status"] == "skipped"
         assert meta["reason"] == "spec_dir_not_found"
@@ -866,7 +865,6 @@ class TestRunLiveSpecTests:
         # Create a fake spec_dir so the function doesn't return skipped
         fake_spec_dir = output_dir / "specification_tests"
         fake_spec_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(_runner_mod, "_HERE", output_dir)
 
         calls = []
 
@@ -878,8 +876,8 @@ class TestRunLiveSpecTests:
 
             return FakeResult()
 
-        monkeypatch.setattr(_runner_mod.subprocess, "run", fake_subprocess_run)
-        rc, meta = _runner_mod.run_live_spec_tests(profile, output_dir)
+        monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
+        rc, meta = _runner_mod.run_live_spec_tests(profile, output_dir, base_dir=output_dir)
         assert len(calls) == 1
         assert rc == 0
         assert meta["status"] == "completed"
@@ -892,7 +890,6 @@ class TestRunLiveSpecTests:
         profile = build_default_profile(endpoint="opc.tcp://real-host:40451")
         fake_spec_dir = output_dir / "specification_tests"
         fake_spec_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(_runner_mod, "_HERE", output_dir)
 
         def fake_run(cmd, **kwargs):
             class R:
@@ -900,8 +897,8 @@ class TestRunLiveSpecTests:
 
             return R()
 
-        monkeypatch.setattr(_runner_mod.subprocess, "run", fake_run)
-        rc, meta = _runner_mod.run_live_spec_tests(profile, output_dir)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        rc, meta = _runner_mod.run_live_spec_tests(profile, output_dir, base_dir=output_dir)
         assert rc == 2
         assert meta["outcome"] == "failed"
         assert meta["exit_code"] == 2

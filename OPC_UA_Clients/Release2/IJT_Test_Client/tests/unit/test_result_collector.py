@@ -52,7 +52,8 @@ class TestUnwrapResult:
 
     def test_double_wrapped_variant_fully_unwrapped(self):
         inner = ua.Variant("prog-2", ua.VariantType.String)
-        outer = ua.Variant(inner)
+        outer = ua.Variant()
+        outer.Value = inner
         result = unwrap_result(outer)
         assert result == "prog-2"
 

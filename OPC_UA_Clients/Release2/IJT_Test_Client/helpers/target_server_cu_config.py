@@ -682,12 +682,35 @@ def load_target_server_profile_from_dict(raw: dict, source_path: str = "<in-memo
     description = _require_str(raw, "description", "root")
     capabilities_file = _require_str(raw, "capabilities_file", "root")
 
-    target_cfg = _parse_target(raw.get("target") or {})
-    cu_exec_cfg = _parse_cu_execution(raw.get("cu_execution") or {})
-    sel_cfg = _parse_selection(raw.get("selection") or {})
-    triggers_cfg = _parse_triggers(raw.get("triggers") or {})
-    wf_cfg = _parse_workflow_execution(raw.get("workflow_execution") or {})
-    rep_cfg = _parse_reporting(raw.get("reporting") or {})
+    target_raw = raw.get("target", {})
+    if not isinstance(target_raw, dict):
+        raise TargetServerConfigError("'target' must be a mapping")
+    target_cfg = _parse_target(target_raw)
+
+    cu_exec_raw = raw.get("cu_execution", {})
+    if not isinstance(cu_exec_raw, dict):
+        raise TargetServerConfigError("'cu_execution' must be a mapping")
+    cu_exec_cfg = _parse_cu_execution(cu_exec_raw)
+
+    sel_raw = raw.get("selection", {})
+    if not isinstance(sel_raw, dict):
+        raise TargetServerConfigError("'selection' must be a mapping")
+    sel_cfg = _parse_selection(sel_raw)
+
+    triggers_raw = raw.get("triggers", {})
+    if not isinstance(triggers_raw, dict):
+        raise TargetServerConfigError("'triggers' must be a mapping")
+    triggers_cfg = _parse_triggers(triggers_raw)
+
+    wf_raw = raw.get("workflow_execution", {})
+    if not isinstance(wf_raw, dict):
+        raise TargetServerConfigError("'workflow_execution' must be a mapping")
+    wf_cfg = _parse_workflow_execution(wf_raw)
+
+    rep_raw = raw.get("reporting", {})
+    if not isinstance(rep_raw, dict):
+        raise TargetServerConfigError("'reporting' must be a mapping")
+    rep_cfg = _parse_reporting(rep_raw)
 
     return TargetServerCuProfile(
         schema_version=sv,

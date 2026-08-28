@@ -154,15 +154,24 @@ class TestSubscribe:
         old_sub = AsyncMock()
         old_sub.delete = AsyncMock()
         new_sub = AsyncMock()
-        new_sub.subscribe_events = AsyncMock()
         mock_client.create_subscription = AsyncMock(return_value=new_sub)
-
         collector = EventCollector(mock_client)
         collector._subscription = old_sub
         await collector.subscribe(MagicMock(), MagicMock())
 
         old_sub.delete.assert_called_once()
         assert collector._subscription is new_sub
+
+    @pytest.mark.asyncio
+    async def test_subscribe_raises_runtime_error_when_no_exception_captured(self, monkeypatch):
+        import helpers.event_collector as ec
+
+        collector = EventCollector(MagicMock())
+        # Intercept 'range' only in helpers.event_collector module scope with raising=False
+        monkeypatch.setattr(ec, "range", lambda *a, **kw: [], raising=False)
+
+        with pytest.raises(RuntimeError, match="Subscription setup failed without a captured exception"):
+            await collector.subscribe(MagicMock(), MagicMock())
 
 
 class TestCollect:

@@ -227,3 +227,37 @@ def test_delta_symbol_returns_empty_for_unknown_outcomes():
 
     baseline = {"cu_outcomes": {"cu_001": "passed"}}
     assert delta_symbol("cu_001", "unknown_outcome", baseline) == ""
+
+
+def test_clean_display_skip_reason_optional_method_variations():
+    from helpers.report_scoring import format_primary_reason_note
+
+    assert (
+        format_primary_reason_note(
+            "not_supported",
+            "Not Supported",
+            "Optional method 'SelectJoiningProcess': Not Supported - controller offline",
+        )
+        == "Method 'SelectJoiningProcess' is not supported - controller offline"
+    )
+    assert (
+        format_primary_reason_note(
+            "not_supported", "Not Supported", "Optional method 'SelectJoiningProcess': Not Supported"
+        )
+        == "Method 'SelectJoiningProcess' is not supported"
+    )
+
+
+def test_format_delta_summary_and_change_marker():
+    from helpers.report_scoring import change_marker, format_delta_summary
+
+    delta = {"new": 2, "resolved": 1, "regressed": 0}
+    summary = format_delta_summary(delta)
+    assert "2 new" in summary
+    assert "1 resolved" in summary
+
+    baseline = {"cu_outcomes": {"cu_001": "supported", "cu_002": "blocked"}}
+    # Unchanged gives empty string in change_marker
+    assert change_marker("cu_001", "supported", baseline) == ""
+    # Improved gives arrow
+    assert change_marker("cu_002", "supported", baseline) == "↑"

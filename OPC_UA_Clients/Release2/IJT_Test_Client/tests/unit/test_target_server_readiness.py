@@ -461,3 +461,206 @@ class TestClassifyPreflightOutcome:
         )
         outcome = classify_preflight_outcome(profile)
         assert outcome.passed or outcome.needs_manual_action  # simulate_methods should pass
+
+
+# ---------------------------------------------------------------------------
+# Async readiness checks
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncReadinessChecks:
+    def test_check_endpoint_reachable_success(self, monkeypatch):
+        import socket
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _mock_conn(*_a, **_kw):
+            yield
+
+        monkeypatch.setattr(socket, "create_connection", _mock_conn)
+        o = check_endpoint_reachable("opc.tcp://localhost:40451")
+        assert o.passed
+        assert "TCP port open" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_check_joining_system_present_success(self):
+        from types import SimpleNamespace
+
+        from helpers.target_server_readiness import check_joining_system_present
+
+        node = SimpleNamespace(nodeid="ns=1;i=1000")
+        o = await check_joining_system_present(None, node)
+        assert o.passed
+        assert o.evidence["joining_system_node_id"] == "ns=1;i=1000"
+
+    @pytest.mark.asyncio
+    async def test_check_joining_system_present_none(self):
+        from helpers.target_server_readiness import check_joining_system_present
+
+        o = await check_joining_system_present(None, None)
+        assert o.outcome == OUTCOME_BLOCKED
+
+    @pytest.mark.asyncio
+    async def test_check_joining_system_present_exception(self):
+        from helpers.target_server_readiness import check_joining_system_present
+
+        class ErrorNode:
+            @property
+            def nodeid(self):
+                raise RuntimeError("Node error")
+
+        o = await check_joining_system_present(None, ErrorNode())
+        assert o.outcome == OUTCOME_BLOCKED
+
+    @pytest.mark.asyncio
+    async def test_check_namespaces_available_success(self):
+        from helpers.target_server_readiness import check_namespaces_available
+
+        class MockClient:
+            async def get_namespace_array(self):
+                return ["http://opcfoundation.org/UA/", "http://opcfoundation.org/UA/IJT/Base/"]
+
+        o = await check_namespaces_available(MockClient(), ["http://opcfoundation.org/UA/IJT/Base/"])
+        assert o.passed
+
+    @pytest.mark.asyncio
+    async def test_check_namespaces_available_missing(self):
+        from helpers.target_server_readiness import check_namespaces_available
+
+        class MockClient:
+            async def get_namespace_array(self):
+                return ["http://opcfoundation.org/UA/"]
+
+        o = await check_namespaces_available(MockClient(), ["http://opcfoundation.org/UA/IJT/Base/"])
+        assert o.outcome == OUTCOME_BLOCKED
+        assert "missing" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_check_namespaces_available_exception(self):
+        from helpers.target_server_cu_config import OUTCOME_FAILED
+        from helpers.target_server_readiness import check_namespaces_available
+
+        class MockClient:
+            async def get_namespace_array(self):
+                raise ConnectionError("Network down")
+
+        o = await check_namespaces_available(MockClient(), ["http://opcfoundation.org/UA/IJT/Base/"])
+        assert o.outcome == OUTCOME_FAILED
+
+    @pytest.mark.asyncio
+    async def test_check_joining_process_list_jpm_node_none(self, monkeypatch):
+        from helpers import node_discovery
+        from helpers import target_server_readiness as tsr
+
+        async def _mock_find(*_a, **_kw):
+            return None
+
+        monkeypatch.setattr(node_discovery, "find_child_by_browse_name", _mock_find)
+        o = await tsr.check_joining_process_list(object(), "urn:tool:1", 1)
+        assert o.outcome == OUTCOME_BLOCKED
+        assert "JoiningProcessManagement node not found" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_check_joining_process_list_call_failed(self, monkeypatch):
+        from helpers import method_caller, node_discovery
+        from helpers import target_server_readiness as tsr
+        from helpers.method_caller import MethodCallResult
+
+        async def _mock_find(*_a, **_kw):
+            return object()
+
+        async def _mock_call(*_a, **_kw):
+            return MethodCallResult(success=False, error="Bad_InternalError")
+
+        monkeypatch.setattr(node_discovery, "find_child_by_browse_name", _mock_find)
+        monkeypatch.setattr(method_caller, "find_and_call_method", _mock_call)
+        o = await tsr.check_joining_process_list(object(), "urn:tool:1", 1)
+        assert o.outcome == OUTCOME_BLOCKED
+        assert "GetJoiningProcessList failed" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_check_joining_process_list_empty(self, monkeypatch):
+        from helpers import method_caller, node_discovery
+        from helpers import target_server_readiness as tsr
+        from helpers.method_caller import MethodCallResult
+
+        async def _mock_find(*_a, **_kw):
+            return object()
+
+        async def _mock_call(*_a, **_kw):
+            return MethodCallResult(success=True, output=[[]])
+
+        monkeypatch.setattr(node_discovery, "find_child_by_browse_name", _mock_find)
+        monkeypatch.setattr(method_caller, "find_and_call_method", _mock_call)
+        o = await tsr.check_joining_process_list(object(), "urn:tool:1", 1)
+        assert o.outcome == OUTCOME_BLOCKED
+        assert "empty list" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_check_joining_process_list_success(self, monkeypatch):
+        from helpers import method_caller, node_discovery
+        from helpers import target_server_readiness as tsr
+        from helpers.method_caller import MethodCallResult
+
+        async def _mock_find(*_a, **_kw):
+            return object()
+
+        async def _mock_call(*_a, **_kw):
+            return MethodCallResult(success=True, output=[["process1", "process2"]])
+
+        monkeypatch.setattr(node_discovery, "find_child_by_browse_name", _mock_find)
+        monkeypatch.setattr(method_caller, "find_and_call_method", _mock_call)
+        o = await tsr.check_joining_process_list(object(), "urn:tool:1", 1)
+        assert o.passed
+        assert o.evidence["process_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_check_joining_process_list_unexpected_exception(self, monkeypatch):
+        from helpers import node_discovery
+        from helpers import target_server_readiness as tsr
+
+        async def _mock_find(*_a, **_kw):
+            raise RuntimeError("Unexpected boom")
+
+        monkeypatch.setattr(node_discovery, "find_child_by_browse_name", _mock_find)
+        o = await tsr.check_joining_process_list(object(), "urn:tool:1", 1)
+        assert o.outcome == OUTCOME_BLOCKED
+        assert "Unexpected error" in o.detail
+
+    def test_preflight_report_summary_lines_with_issues(self):
+        r = PreflightReport(profile_name="Profile", endpoint="opc.tcp://x:1")
+        r.add(ReadinessOutcome(outcome=OUTCOME_BLOCKED, check_name="b1", detail="blocked"))
+        r.add(ReadinessOutcome(outcome=OUTCOME_MANUAL_REQUIRED, check_name="m1", detail="manual"))
+        lines = r.summary_lines()
+        assert any("Blocking issues" in line for line in lines)
+        assert any("Manual action required" in line for line in lines)
+
+    def test_check_joining_process_configured_first_ready_policy(self):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "selection": {"joining_process": {"policy": "first_ready"}},
+            }
+        )
+        o = check_joining_process_configured(profile)
+        assert o.passed
+        assert "first_ready" in o.detail
+
+    def test_classify_preflight_outcome_manual_required(self):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://localhost:40451"},
+                "triggers": {"result": {"mode": "manual_trigger"}},
+            }
+        )
+        outcome = classify_preflight_outcome(profile)
+        assert outcome.needs_manual_action
+
+    def test_parse_endpoint_exception_fallback(self, monkeypatch):
+        from helpers import target_server_readiness as tsr
+
+        monkeypatch.setattr("urllib.parse.urlparse", lambda *_: (_ for _ in ()).throw(ValueError("malformed")))
+        host, port = tsr._parse_endpoint("broken")
+        assert host == ""
+        assert port == 4840

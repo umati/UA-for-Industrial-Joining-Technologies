@@ -874,6 +874,146 @@ class TestModuleFunctions:
             assert_result_value_valid(val, context="MyValue")
 
 
+class TestConsolidatedResultValidatorExtended:
+    def _good_meta(self, **kwargs):
+        base = {
+            "ResultId": "res_001",
+            "Classification": 2,  # BATCH_RESULT
+            "ResultEvaluation": 1,
+            "CreationTime": object(),
+        }
+        base.update(kwargs)
+        return types.SimpleNamespace(**base)
+
+    def test_consolidated_result_with_reference_mode_child(self):
+        from helpers.result_validator import ConsolidatedResultValidator
+
+        v = ConsolidatedResultValidator()
+
+        # Valid reference mode child (empty ResultContent, valid metadata)
+        child_meta = types.SimpleNamespace(ResultId="child_01", Classification=1)
+        child = types.SimpleNamespace(ResultMetaData=child_meta, ResultContent=[])
+        res = types.SimpleNamespace(ResultMetaData=self._good_meta(), ResultContent=[child])
+        vr = v.validate(res)
+        assert vr.ok
+
+        # Missing child ResultId
+        bad_meta1 = types.SimpleNamespace(Classification=1)
+        res1 = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(),
+            ResultContent=[types.SimpleNamespace(ResultMetaData=bad_meta1, ResultContent=[])],
+        )
+        assert not v.validate(res1).ok
+
+        # Empty string child ResultId
+        bad_meta2 = types.SimpleNamespace(ResultId="  ", Classification=1)
+        res2 = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(),
+            ResultContent=[types.SimpleNamespace(ResultMetaData=bad_meta2, ResultContent=[])],
+        )
+        assert not v.validate(res2).ok
+
+        # Missing child Classification
+        bad_meta3 = types.SimpleNamespace(ResultId="child_01")
+        res3 = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(),
+            ResultContent=[types.SimpleNamespace(ResultMetaData=bad_meta3, ResultContent=[])],
+        )
+        assert not v.validate(res3).ok
+
+        # Invalid string child Classification
+        bad_meta4 = types.SimpleNamespace(ResultId="child_01", Classification="invalid_int")
+        res4 = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(),
+            ResultContent=[types.SimpleNamespace(ResultMetaData=bad_meta4, ResultContent=[])],
+        )
+        assert not v.validate(res4).ok
+
+        # Out-of-range child Classification
+        bad_meta5 = types.SimpleNamespace(ResultId="child_01", Classification=999)
+        res5 = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(),
+            ResultContent=[types.SimpleNamespace(ResultMetaData=bad_meta5, ResultContent=[])],
+        )
+        assert not v.validate(res5).ok
+
+    def test_consolidated_result_missing_meta_or_invalid_classification(self):
+        from helpers.result_validator import ConsolidatedResultValidator
+
+        v = ConsolidatedResultValidator()
+        assert not v.validate(types.SimpleNamespace()).ok
+
+        # Classification not combined (e.g. Classification=1 SingleResult or non-int)
+        res_single = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(Classification=1),
+            ResultContent=[
+                types.SimpleNamespace(
+                    ResultMetaData=types.SimpleNamespace(ResultId="r1", Classification=1), ResultContent=[]
+                )
+            ],
+        )
+        assert not v.validate(res_single).ok
+
+        res_bad_cls = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(Classification="bad"),
+            ResultContent=[
+                types.SimpleNamespace(
+                    ResultMetaData=types.SimpleNamespace(ResultId="r1", Classification=1), ResultContent=[]
+                )
+            ],
+        )
+        assert not v.validate(res_bad_cls).ok
+
+    def test_consolidated_result_child_with_nested_content_or_missing_meta(self):
+        from helpers.result_validator import ConsolidatedResultValidator
+
+        v = ConsolidatedResultValidator()
+
+        # Child with nested ResultContent
+        nested_child = types.SimpleNamespace(
+            ResultMetaData=types.SimpleNamespace(
+                ResultId="c1", Classification=1, ResultEvaluation=1, CreationTime=object()
+            ),
+            ResultContent=[types.SimpleNamespace(OverallResultValues=[])],
+        )
+        res_nested = types.SimpleNamespace(ResultMetaData=self._good_meta(), ResultContent=[nested_child])
+        assert v.validate(res_nested).ok
+
+        # Direct JoiningResult child (no ResultMetaData)
+        direct_child = types.SimpleNamespace(OverallResultValues=[])
+        res_direct = types.SimpleNamespace(ResultMetaData=self._good_meta(), ResultContent=[direct_child])
+        assert v.validate(res_direct).ok
+
+    def test_consolidated_result_references_and_empty_guard(self):
+        from helpers.result_validator import ConsolidatedResultValidator
+
+        v = ConsolidatedResultValidator()
+
+        # Valid references
+        res_refs = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(),
+            References=[types.SimpleNamespace(ResultId="ref_1")],
+        )
+        assert v.validate(res_refs).ok
+
+        # References missing ResultId or empty string
+        res_bad_ref1 = types.SimpleNamespace(ResultMetaData=self._good_meta(), References=[types.SimpleNamespace()])
+        assert not v.validate(res_bad_ref1).ok
+
+        res_bad_ref2 = types.SimpleNamespace(
+            ResultMetaData=self._good_meta(), References=[types.SimpleNamespace(ResultId="   ")]
+        )
+        assert not v.validate(res_bad_ref2).ok
+
+        # Neither ResultContent nor References without IsPartial
+        res_empty = types.SimpleNamespace(ResultMetaData=self._good_meta())
+        assert not v.validate(res_empty).ok
+
+        # Empty with IsPartial=True
+        res_partial = types.SimpleNamespace(ResultMetaData=self._good_meta(IsPartial=True))
+        assert v.validate(res_partial).ok
+
+
 # ---------------------------------------------------------------------------
 # _MISSING sentinel
 # ---------------------------------------------------------------------------

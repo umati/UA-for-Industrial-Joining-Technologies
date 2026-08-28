@@ -1,5 +1,14 @@
 # Target Server CU Quick Start
 
+> **Canonical entry point:** `python run_all_tests.py` (see options below).
+> `run_target_server_cu.py` is a **deprecated** compatibility shim that forwards
+> to the exact same implementation — prefer `run_all_tests.py` for new usage.
+> The simulator and a Target Server are both "OPC UA Servers Under Test" running
+> the identical specification_tests/ suite; a profile only controls
+> applicability, safety, triggers, scoring, and evidence — never a separate
+> test suite. Default (no flags) runs everything; `--phase2` runs
+> specification_tests only; `--profile` controls Target Server execution.
+
 ## 1) Choose profile
 - Complete automated controller workflow: `target_server_cu_profiles/example_multi_operation_job.profile.yaml`
 - Manual trigger workflow: `target_server_cu_profiles/example_manual_trigger.profile.yaml`
@@ -11,12 +20,23 @@
 If the controller matches the supplied capability baseline, use the committed
 generic pair directly and pass installation values at runtime:
 
+**Windows (PowerShell):**
 ```powershell
-python run_target_server_cu.py `
-  --profile target_server_cu_profiles\example_multi_operation_job.profile.yaml `
+python run_all_tests.py `
+  --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml `
   --endpoint opc.tcp://<controller-host>:40451 `
   --joining-process-id <joining-process-id> `
   --joining-process-origin-id <joining-process-origin-id> `
+  --preflight-only
+```
+
+**Linux / macOS (Bash / Zsh):**
+```bash
+python run_all_tests.py \
+  --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml \
+  --endpoint opc.tcp://<controller-host>:40451 \
+  --joining-process-id <joining-process-id> \
+  --joining-process-origin-id <joining-process-origin-id> \
   --preflight-only
 ```
 
@@ -28,11 +48,20 @@ Optional runtime overrides are also available through
 Create local paired files only when the controller's workflow or supported CUs
 differ from the complete example:
 
+**Windows (PowerShell):**
 ```powershell
-Copy-Item target_server_cu_profiles\example_multi_operation_job.profile.yaml `
-  target_server_cu_profiles\my_controller.profile.yaml
-Copy-Item target_server_cu_profiles\example_multi_operation_job.capabilities.yaml `
-  target_server_cu_profiles\my_controller.capabilities.yaml
+Copy-Item target_server_cu_profiles/example_multi_operation_job.profile.yaml `
+  target_server_cu_profiles/my_controller.profile.yaml
+Copy-Item target_server_cu_profiles/example_multi_operation_job.capabilities.yaml `
+  target_server_cu_profiles/my_controller.capabilities.yaml
+```
+
+**Linux / macOS (Bash / Zsh):**
+```bash
+cp target_server_cu_profiles/example_multi_operation_job.profile.yaml \
+   target_server_cu_profiles/my_controller.profile.yaml
+cp target_server_cu_profiles/example_multi_operation_job.capabilities.yaml \
+   target_server_cu_profiles/my_controller.capabilities.yaml
 ```
 
 Then update `my_controller.profile.yaml`:
@@ -59,13 +88,15 @@ claim that every controller supports the same CUs.
 
 ## 2) Run commands
 - Safe preflight check:
-  `python run_target_server_cu.py --profile target_server_cu_profiles\my_controller.profile.yaml --preflight-only`
+  `python run_all_tests.py --preflight-only --profile target_server_cu_profiles/my_controller.profile.yaml`
 - Classification without invoking specification tests:
-  `python run_target_server_cu.py --profile target_server_cu_profiles\my_controller.profile.yaml --mode automated --skip-spec-tests`
-- Full automated run:
-  `python run_target_server_cu.py --profile target_server_cu_profiles\my_controller.profile.yaml --mode automated --spec-tests-timeout 3600 --output-dir test-results\target-server-cu\my-controller`
+  `python run_all_tests.py --profile target_server_cu_profiles/my_controller.profile.yaml --skip-spec-tests`
+- Full validation (Phase 1 + preflight + specs + evidence):
+  `python run_all_tests.py --profile target_server_cu_profiles/my_controller.profile.yaml --spec-tests-timeout 3600 --output-dir test-results/target-server-cu/my-controller`
+- Preflight + specs + evidence only, skipping Phase 1:
+  `python run_all_tests.py --phase2 --profile target_server_cu_profiles/my_controller.profile.yaml --spec-tests-timeout 3600 --output-dir test-results/target-server-cu/my-controller`
 - Guided/manual run with prompts:
-  `python run_target_server_cu.py --profile target_server_cu_profiles\my_controller.profile.yaml --mode guided --interactive-prompts --output-dir test-results\target-server-cu\my-controller-guided`
+  `python run_all_tests.py --phase2 --profile target_server_cu_profiles/my_controller.profile.yaml --mode guided --interactive-prompts --output-dir test-results/target-server-cu/my-controller-guided`
 
 Run preflight first. Do not authorize disable, reboot, disconnect, write, or
 execution methods unless the controller state change is understood and intended.

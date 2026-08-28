@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
 """
-run_target_server_cu.py — Target Server CU execution runner for IJT Test Client.
+run_target_server_cu.py — DEPRECATED compatibility shim for IJT Test Client.
+
+.. deprecated::
+   This script is a thin, logic-free compatibility forwarder kept only for
+   existing scripts and muscle memory.  All behaviour is implemented once in
+   ``helpers/target_server_execution.py`` and is also exposed through the
+   canonical entry point:
+
+       python run_all_tests.py --profile <FILE> [--preflight-only|--phase2]
+
+   Prefer the canonical entry point for new usage.  This script will keep
+   working (it calls the exact same functions) but may be removed in a
+   future release.
 
 Runs conformance unit validation against a real OPC UA IJT server under test using a
 Target Server CU profile (YAML).  Produces a structured evidence report in
@@ -56,14 +68,9 @@ Environment variables:
 from __future__ import annotations
 
 import argparse
-import datetime
-import json
 import logging
-import math
 import os
-import subprocess
 import sys
-import time
 from pathlib import Path
 
 # Ensure stdout/stderr use UTF-8 on Windows
@@ -86,61 +93,33 @@ logging.basicConfig(
 logger = logging.getLogger("run_target_server_cu")
 logging.getLogger("asyncua").setLevel(logging.ERROR)
 
-_COMMON_CONSOLIDATED_RESULT_CUS = frozenset(
-    {
-        "self_contained_consolidated_result",
-        "consolidated_result_with_references",
-        "partial_consolidated_result",
-    }
-)
-
-_RESULT_CUS_BY_CLASSIFICATION = {
-    "single": frozenset(),
-    "sync": frozenset({"sync_result", "sync_result_counters"}),
-    "batch": frozenset({"batch_result", "batch_result_counters"}),
-    "job": frozenset({"job_result"}),
-    "stitching": frozenset(),
-    "intervention": frozenset({"intervention_result"}),
-    "text": frozenset(),
-}
-_CLASSIFICATION_RESULT_CUS = frozenset().union(*_RESULT_CUS_BY_CLASSIFICATION.values())
-_CONSOLIDATED_CLASSIFICATIONS = frozenset({"sync", "batch", "job", "stitching"})
-
 # ---------------------------------------------------------------------------
-# Outcome vocabulary (imported from config module)
+# Canonical implementation — imported, never re-implemented here.
 # ---------------------------------------------------------------------------
 
 from helpers.target_server_cu_config import (
-    OUTCOME_BLOCKED,
-    OUTCOME_CLAIM_MISMATCH,
-    OUTCOME_CONFIGURATION_ERROR,
-    OUTCOME_FAILED,
-    OUTCOME_MANUAL_REQUIRED,
-    OUTCOME_PASSED,
-    OUTCOME_UNSUPPORTED,
     TargetServerConfigError,
     TargetServerCuProfile,
     build_default_profile,
     load_target_server_profile,
 )
-from helpers.target_server_readiness import (
-    PreflightReport,
-    ReadinessOutcome,
-    check_endpoint_reachable,
-    run_config_preflight,
+from helpers.target_server_execution import (
+    _build_spec_test_command,  # noqa: F401  (re-exported for existing tests)
+    _build_spec_test_env,  # noqa: F401  (re-exported for existing tests)
+    _c,
+    _excluded_cus_for_result_scope,  # noqa: F401  (re-exported for existing tests)
+    _log,
+    apply_runtime_overrides,
+    configure_colour,
+    format_error,
+    run_automated,
+    run_live_spec_tests,  # noqa: F401  (re-exported for existing tests)
+    run_preflight,
 )
 
 # ---------------------------------------------------------------------------
-# Colour helpers
+# Banner (the only CLI-only presentation left in this shim)
 # ---------------------------------------------------------------------------
-
-_USE_COLOUR = False
-
-_ANSI_GREEN = "\033[92m"
-_ANSI_RED = "\033[91m"
-_ANSI_YELLOW = "\033[93m"
-_ANSI_CYAN = "\033[96m\033[1m"
-_ANSI_RESET = "\033[0m"
 
 
 def _enable_ansi_windows() -> bool:
@@ -158,659 +137,14 @@ def _enable_ansi_windows() -> bool:
         return False
 
 
-def _c(ansi: str, text: str) -> str:
-    return f"{ansi}{text}{_ANSI_RESET}" if _USE_COLOUR else text
-
-
-def _log(msg: str) -> None:
-    sys.stdout.write(msg + "\n")
-    sys.stdout.flush()
-
-
 def _banner(title: str) -> None:
     width = 54
     bar = "═" * width
     pad = title.ljust(width - 2)
     _log("")
-    _log(_c(_ANSI_CYAN, f"╔{bar}╗"))
-    _log(_c(_ANSI_CYAN, f"║  {pad}║"))
-    _log(_c(_ANSI_CYAN, f"╚{bar}╝"))
-
-
-def _section(title: str) -> None:
-    _log(_c(_ANSI_CYAN, f"\n  ── {title} ──"))
-
-
-def _divider() -> None:
-    _log(_c(_ANSI_CYAN, "─" * 56))
-
-
-def _outcome_colour(outcome: str) -> str:
-    return {
-        OUTCOME_PASSED: _ANSI_GREEN,
-        OUTCOME_FAILED: _ANSI_RED,
-        OUTCOME_BLOCKED: _ANSI_YELLOW,
-        OUTCOME_CONFIGURATION_ERROR: _ANSI_RED,
-        OUTCOME_CLAIM_MISMATCH: _ANSI_RED,
-        OUTCOME_MANUAL_REQUIRED: _ANSI_YELLOW,
-        OUTCOME_UNSUPPORTED: _ANSI_YELLOW,
-    }.get(outcome, "")
-
-
-def _print_check(check: ReadinessOutcome) -> None:
-    width = 44
-    label = check.check_name or "check"
-    dots = "." * max(0, width - len(label))
-    outcome_str = _c(_outcome_colour(check.outcome), check.outcome.upper())
-    detail = f"  ({check.detail})" if check.detail else ""
-    _log(f"  {label} {dots} {outcome_str}{detail}")
-
-
-# ---------------------------------------------------------------------------
-# Evidence report
-# ---------------------------------------------------------------------------
-
-
-def _write_evidence_report(
-    output_dir: Path,
-    profile: TargetServerCuProfile,
-    preflight_report: PreflightReport,
-    mode: str,
-    run_start: str,
-    extra: dict | None = None,
-) -> Path:
-    """Write a JSON evidence report to *output_dir*."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    report_data = {
-        "schema_version": 1,
-        "run_start": run_start,
-        "mode": mode,
-        "profile_name": profile.profile_name,
-        "profile_source": profile.source_path,
-        "endpoint": profile.target.endpoint,
-        "scoring_mode": profile.cu_execution.scoring_mode,
-        "workflow": {
-            "result_trigger_mode": profile.triggers.result.mode,
-            "event_trigger_mode": profile.triggers.event.mode,
-            "condition_trigger_mode": profile.triggers.condition.mode,
-            "primary_result_classification": profile.workflow_execution.expected_results.classification,
-            "intermediate_result_classifications": list(
-                profile.workflow_execution.expected_results.intermediate_classifications
-            ),
-            "joining_process_selection_policy": profile.selection.joining_process.policy,
-        },
-        "preflight": preflight_report.to_dict(),
-        **(extra or {}),
-    }
-    report_path = output_dir / "target-server-cu-report.json"
-    report_path.write_text(json.dumps(report_data, indent=2, default=str), encoding="utf-8")
-    return report_path
-
-
-def _write_human_summary(
-    output_dir: Path,
-    profile: TargetServerCuProfile,
-    preflight_report: PreflightReport,
-    mode: str,
-    run_start: str,
-    outcome_summary: str,
-) -> Path:
-    """Write a plain-text human summary."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    lines = [
-        "IJT Target Server CU Run Summary",
-        f"  Profile:  {profile.profile_name}",
-        f"  Endpoint: {profile.target.endpoint}",
-        f"  Mode:     {mode}",
-        f"  Start:    {run_start}",
-        f"  Outcome:  {outcome_summary}",
-        "",
-        *preflight_report.summary_lines(),
-        "",
-    ]
-    summary_path = output_dir / "target-server-cu-summary.txt"
-    summary_path.write_text("\n".join(lines), encoding="utf-8")
-    return summary_path
-
-
-def _generate_excel_report(
-    profile: TargetServerCuProfile,
-    output_dir: Path,
-    target_report_path: Path,
-    *,
-    run_result: str,
-) -> dict:
-    """Generate a workbook from artifacts belonging to this exact target run."""
-    junit_xml = output_dir / "spec-tests.xml"
-    cu_report = output_dir / "cu-coverage-report.json"
-    workbook = output_dir / "report-controller.xlsx"
-    if not junit_xml.exists() or not cu_report.exists():
-        return {
-            "status": "skipped",
-            "reason": "JUnit XML or run-scoped CU coverage JSON is unavailable",
-            "path": None,
-        }
-
-    script = Path(__file__).resolve().parent / "scripts" / "make_excel_report.py"
-    cmd = [
-        sys.executable,
-        str(script),
-        "--xml",
-        str(junit_xml),
-        "--out",
-        str(workbook),
-        "--cu-json",
-        str(cu_report),
-        "--target-report",
-        str(target_report_path),
-        "--run-result",
-        run_result,
-    ]
-    capabilities = profile.capabilities_file_path()
-    if capabilities and capabilities.exists():
-        cmd.extend(["--capabilities", str(capabilities)])
-
-    completed = subprocess.run(cmd, cwd=str(Path(__file__).resolve().parent), text=True, capture_output=True)
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "unknown report generator error").strip()
-        return {"status": "failed", "reason": detail, "path": None}
-    return {"status": "generated", "reason": "", "path": str(workbook)}
-
-
-# ---------------------------------------------------------------------------
-# Live spec-test orchestration helpers
-# ---------------------------------------------------------------------------
-
-
-def _excluded_cus_for_result_scope(
-    classification: str,
-    intermediate_classifications: tuple[str, ...] = (),
-) -> frozenset[str]:
-    """Return CUs that cannot be exercised by the configured result workflow."""
-    if classification == "any":
-        return frozenset()
-
-    active = {classification, *intermediate_classifications}
-    included_specific = frozenset().union(*(_RESULT_CUS_BY_CLASSIFICATION.get(item, frozenset()) for item in active))
-    excluded = _CLASSIFICATION_RESULT_CUS - included_specific
-    if active.isdisjoint(_CONSOLIDATED_CLASSIFICATIONS):
-        excluded |= _COMMON_CONSOLIDATED_RESULT_CUS
-    return excluded
-
-
-def _find_venv_python() -> str:
-    """Return the venv Python used for running specification_tests/.
-
-    Prefers the test-runner virtual environment created by run_all_tests.py.
-    Falls back to the current interpreter when no venv is found.
-    """
-    for venv_name in (".venv_test", ".venv"):
-        venv_dir = _HERE / venv_name
-        py = venv_dir / ("Scripts" if os.name == "nt" else "bin") / ("python.exe" if os.name == "nt" else "python")
-        if py.exists():
-            return str(py)
-    return sys.executable
-
-
-def _build_spec_test_env(profile: TargetServerCuProfile) -> dict[str, str]:
-    """Return env vars for the specification_tests/ subprocess.
-
-    Sets OPCUA_SERVER_URL from the profile endpoint.
-    Sets OPCUA_CAPABILITIES_FILE from the profile capabilities_file if resolvable,
-    otherwise falls back to target_server_cu_profiles/default.capabilities.yaml.
-    """
-    env = os.environ.copy()
-    env["OPCUA_SERVER_URL"] = profile.target.endpoint
-    if profile.source_path:
-        env["OPCUA_TARGET_SERVER_PROFILE"] = profile.source_path
-    env["OPCUA_TARGET_SERVER_MODE"] = profile.cu_execution.default_mode
-    runtime_selection = {
-        "OPCUA_TOOL_PRODUCT_INSTANCE_URI": profile.selection.tool.product_instance_uri,
-        "OPCUA_JOINING_PROCESS_ID": profile.selection.joining_process.joining_process_id,
-        "OPCUA_JOINING_PROCESS_ORIGIN_ID": profile.selection.joining_process.joining_process_origin_id,
-    }
-    for name, value in runtime_selection.items():
-        if value:
-            env[name] = value
-        else:
-            env.pop(name, None)
-    expected_results = profile.workflow_execution.expected_results
-    env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] = str(expected_results.timeout_seconds)
-    env["OPCUA_TARGET_FINAL_RESULT_REQUIRED"] = str(expected_results.final_result_required).lower()
-    required_classifications = {
-        "single": 1,
-        "sync": 2,
-        "batch": 3,
-        "job": 4,
-        "stitching": 5,
-        "intervention": 6,
-        "text": 7,
-    }
-    required_classification = required_classifications.get(expected_results.classification)
-    if required_classification is not None:
-        env["OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION"] = str(required_classification)
-    else:
-        env.pop("OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION", None)
-    excluded_cus = _excluded_cus_for_result_scope(
-        expected_results.classification,
-        expected_results.intermediate_classifications,
-    )
-    if excluded_cus:
-        env["OPCUA_TARGET_EXCLUDED_CUS"] = ",".join(sorted(excluded_cus))
-    else:
-        env.pop("OPCUA_TARGET_EXCLUDED_CUS", None)
-    caps = profile.capabilities_file_path()
-    if caps and caps.exists():
-        env["OPCUA_CAPABILITIES_FILE"] = str(caps)
-    elif "OPCUA_CAPABILITIES_FILE" not in env:
-        default_caps = _HERE / "target_server_cu_profiles" / "default.capabilities.yaml"
-        if default_caps.exists():
-            env["OPCUA_CAPABILITIES_FILE"] = str(default_caps)
-    return env
-
-
-def _build_spec_test_command(
-    python_exe: str,
-    spec_dir: Path,
-    junit_xml: Path,
-    *,
-    exclude_simulation: bool = True,
-    test_timeout_seconds: int = 120,
-    verbose: bool = False,
-) -> list[str]:
-    """Build the pytest command for a target server specification_tests/ run.
-
-    Parameters
-    ----------
-    python_exe:
-        Path to the Python interpreter to use.
-    spec_dir:
-        Path to the specification_tests/ directory.
-    junit_xml:
-        Output path for the JUnit XML evidence file.
-    exclude_simulation:
-        When True, adds ``-m "not simulation"`` to skip simulator-only tests.
-        Simulator tests skip naturally via conftest fixture anyway, but explicit
-        exclusion is faster and produces clearer output.
-    test_timeout_seconds:
-        Per-test pytest timeout, sized for the configured target workflow.
-    verbose:
-        When True, passes ``-v`` instead of ``-q`` to pytest.
-    """
-    cmd: list[str] = [
-        python_exe,
-        "-m",
-        "pytest",
-        str(spec_dir),
-        "--tb=short",
-        "-v" if verbose else "-q",
-        f"--junit-xml={junit_xml}",
-        f"--timeout={test_timeout_seconds}",
-    ]
-    if exclude_simulation:
-        cmd += ["-m", "not simulation"]
-    return cmd
-
-
-def run_live_spec_tests(
-    profile: TargetServerCuProfile,
-    output_dir: Path,
-    *,
-    mode: str = "automated",
-    timeout_seconds: int = 600,
-    verbose: bool = False,
-) -> tuple[int, dict]:
-    """Invoke specification_tests/ against the configured target server.
-
-    This is the live execution path for automated and guided modes when a real
-    target server endpoint is available.  It runs the full specification_tests/
-    pytest suite with OPCUA_SERVER_URL and OPCUA_CAPABILITIES_FILE set from the
-    profile, and records evidence in the output directory.
-
-    Returns ``(exit_code, metadata)`` where ``metadata`` is a JSON-serialisable
-    dict included in the evidence report.  Returns ``(0, {"status": "skipped",
-    ...})`` when the endpoint is a placeholder or specification_tests/ is missing.
-
-    Parameters
-    ----------
-    profile:
-        Loaded Target Server profile; must have ``target.endpoint`` configured.
-    output_dir:
-        Directory where the JUnit XML and other evidence will be written.
-    mode:
-        Execution mode label for logging only.
-    timeout_seconds:
-        Hard limit for the pytest subprocess.  Real joining operations can be
-        slow; 600 s is a reasonable default for automated Target Server runs.
-    verbose:
-        Pass ``-v`` to pytest (instead of ``-q``) for detailed per-test output.
-    """
-    endpoint = profile.target.endpoint
-
-    # Placeholder or unconfigured endpoint — classification-only run is still useful.
-    if not endpoint or "<" in endpoint:
-        _log("  Endpoint not configured — live specification_tests run skipped.")
-        _log("  Set target.endpoint in the profile or pass --endpoint <url> to run live tests.")
-        return 0, {"status": "skipped", "reason": "endpoint_not_configured"}
-
-    spec_dir = _HERE / "specification_tests"
-    if not spec_dir.exists():
-        _log("  specification_tests/ directory not found — live run skipped.")
-        return 0, {"status": "skipped", "reason": "spec_dir_not_found"}
-
-    python_exe = _find_venv_python()
-    env = _build_spec_test_env(profile)
-
-    # Exclude simulator-only tests when the profile does not use simulate_methods.
-    # The conftest fixture would skip them anyway (SimulateResults folder absent),
-    # but explicit exclusion avoids the fixture error and speeds up collection.
-    exclude_simulation = profile.triggers.result.mode not in {"simulate_methods"}
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    junit_xml = output_dir / "spec-tests.xml"
-    cu_report = output_dir / "cu-coverage-report.json"
-    env["IJT_CU_COVERAGE_REPORT_FILE"] = str(cu_report)
-
-    cmd = _build_spec_test_command(
-        python_exe,
-        spec_dir,
-        junit_xml,
-        exclude_simulation=exclude_simulation,
-        test_timeout_seconds=math.ceil(
-            min(
-                timeout_seconds,
-                max(
-                    120,
-                    (
-                        4 * profile.cu_execution.default_timeout_seconds
-                        + profile.workflow_execution.expected_operation_count
-                        * (
-                            profile.cu_execution.default_timeout_seconds
-                            + profile.workflow_execution.expected_results.timeout_seconds
-                        )
-                        + 30
-                    ),
-                ),
-            ),
-        ),
-        verbose=verbose,
-    )
-
-    _log(f"\n  Python:           {python_exe}")
-    _log(f"  Test suite:       {spec_dir.name}/")
-    _log(f"  OPCUA_SERVER_URL: {endpoint}")
-    _log(f"  Capabilities:     {env.get('OPCUA_CAPABILITIES_FILE', '(none)')}")
-    _log(f"  JUnit XML:        {junit_xml}")
-    _log(f"  Timeout:          {timeout_seconds}s")
-    if exclude_simulation:
-        _log("  Marker filter:    not simulation")
-    _log("")
-
-    t0 = time.monotonic()
-    rc = 1
-    timed_out = False
-    error_msg: str | None = None
-
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(_HERE),
-            env=env,
-            check=False,
-            timeout=timeout_seconds,
-        )
-        rc = result.returncode
-    except subprocess.TimeoutExpired:
-        _log(_c(_ANSI_RED, f"\n  [TIMEOUT] Spec tests exceeded {timeout_seconds}s — terminated."))
-        timed_out = True
-        rc = 1
-    except Exception as exc:  # noqa: BLE001
-        error_msg = str(exc)
-        _log(_c(_ANSI_RED, f"\n  [ERROR] Failed to run spec tests: {exc}"))
-        rc = 1
-
-    elapsed = time.monotonic() - t0
-
-    metadata: dict = {
-        "status": "timeout" if timed_out else ("error" if error_msg else "completed"),
-        "outcome": "passed" if rc == 0 else "failed",
-        "exit_code": rc,
-        "elapsed_seconds": round(elapsed, 1),
-        "endpoint": endpoint,
-        "junit_xml": str(junit_xml) if junit_xml.exists() else None,
-        "cu_coverage_json": str(cu_report) if cu_report.exists() else None,
-        "excluded_simulation": exclude_simulation,
-        "mode": mode,
-    }
-    if error_msg:
-        metadata["error"] = error_msg
-    return rc, metadata
-
-
-# ---------------------------------------------------------------------------
-# Preflight runner
-# ---------------------------------------------------------------------------
-
-
-def run_preflight(profile: TargetServerCuProfile, output_dir: Path) -> int:
-    """Run config + TCP preflight checks and produce an evidence report.
-
-    Returns 0 when all checks pass or produce non-blocking outcomes,
-    1 when blocking or configuration-error outcomes are found.
-    """
-    _section("Configuration preflight")
-    cfg_report = run_config_preflight(profile)
-
-    # Add TCP reachability probe for configured endpoint
-    tcp_check = check_endpoint_reachable(profile.target.endpoint)
-    cfg_report.add(tcp_check)
-
-    for check in cfg_report.checks:
-        _print_check(check)
-
-    _divider()
-    blocking = cfg_report.blocking_checks
-    manual_required = cfg_report.manual_required_checks
-
-    if blocking:
-        _log(_c(_ANSI_RED, f"  {len(blocking)} blocking issue(s) found — fix before running."))
-    elif manual_required:
-        _log(_c(_ANSI_YELLOW, f"  {len(manual_required)} check(s) require manual operator action."))
-    else:
-        _log(_c(_ANSI_GREEN, "  All preflight checks passed."))
-
-    outcome_summary = (
-        f"BLOCKING ({len(blocking)} issues)"
-        if blocking
-        else f"MANUAL_REQUIRED ({len(manual_required)} checks)"
-        if manual_required
-        else "PASSED"
-    )
-
-    run_start = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    report_path = _write_evidence_report(output_dir, profile, cfg_report, "preflight_only", run_start)
-    summary_path = _write_human_summary(output_dir, profile, cfg_report, "preflight_only", run_start, outcome_summary)
-
-    _log(f"\n  Evidence report: {report_path}")
-    _log(f"  Human summary:   {summary_path}")
-
-    return 1 if blocking else 0
-
-
-# ---------------------------------------------------------------------------
-# Automated / guided runner
-# ---------------------------------------------------------------------------
-
-
-def run_automated(
-    profile: TargetServerCuProfile,
-    output_dir: Path,
-    *,
-    mode: str = "automated",
-    interactive_prompts: bool = False,
-    skip_spec_tests: bool = False,
-    spec_tests_timeout: int = 600,
-    verbose: bool = False,
-) -> int:
-    """Run Target Server CU validation in automated or guided mode.
-
-    Workflow:
-
-    1. Configuration and TCP preflight.
-    2. CU classification — which CUs can/cannot run for this profile.
-    3. Live specification_tests/ run (when endpoint is configured and reachable).
-       Pass ``skip_spec_tests=True`` (CLI: ``--skip-spec-tests``) to produce a
-       classification-only report without running live tests.
-
-    Returns 0 on success, 1 on configuration errors, blocking preflight issues,
-    or spec test failures.
-    """
-    _section(f"Target Server CU run ({mode})")
-
-    cfg_report = run_config_preflight(profile)
-    tcp_check = check_endpoint_reachable(profile.target.endpoint)
-    cfg_report.add(tcp_check)
-
-    for check in cfg_report.checks:
-        _print_check(check)
-
-    blocking = cfg_report.blocking_checks
-    if blocking:
-        _log(_c(_ANSI_RED, f"\n  {len(blocking)} blocking issue(s) — cannot proceed:"))
-        for c in blocking:
-            _log(f"    [{c.outcome}] {c.check_name}: {c.detail}")
-        run_start = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        _write_evidence_report(output_dir, profile, cfg_report, mode, run_start)
-        return 1
-
-    manual_checks = cfg_report.manual_required_checks
-    if manual_checks and mode == "automated":
-        _log(
-            _c(
-                _ANSI_YELLOW,
-                f"\n  {len(manual_checks)} check(s) require manual action — will be skipped in automated mode.",
-            )
-        )
-    elif manual_checks and mode == "guided":
-        _log(_c(_ANSI_YELLOW, f"\n  {len(manual_checks)} check(s) require manual action."))
-        if interactive_prompts:
-            for c in manual_checks:
-                _log(f"\n  [MANUAL REQUIRED] {c.check_name}")
-                _log(f"  Action: {c.detail}")
-                try:
-                    input("  Press Enter when ready to continue... ")
-                except (EOFError, KeyboardInterrupt):
-                    _log("  Guided run interrupted.")
-                    return 1
-
-    # Classify what would run
-    from helpers.cu_evidence_map import cus_by_evidence_kind
-
-    _section("Expected CU execution classification")
-    trigger_mode = profile.triggers.result.mode
-
-    structural_cus = cus_by_evidence_kind("structure")
-    method_cus = cus_by_evidence_kind("method")
-    result_cus = cus_by_evidence_kind("result")
-    consolidated_cus = cus_by_evidence_kind("consolidated_result")
-    event_cus = cus_by_evidence_kind("event")
-    manual_cus = cus_by_evidence_kind("manual")
-
-    _log(f"  Structure CUs      : {len(structural_cus)} — runnable directly via address-space browse")
-    _log(f"  Method CUs         : {len(method_cus)} — runnable via OPC UA method calls")
-    _log(f"  Result CUs         : {len(result_cus)} — require trigger mode: {trigger_mode}")
-    _log(f"  Consolidated CUs   : {len(consolidated_cus)} — require batch/sync/job trigger")
-    _log(f"  Event CUs          : {len(event_cus)} — require event trigger (mode: {profile.triggers.event.mode})")
-    _log(f"  Manual-only CUs    : {len(manual_cus)} — require physical operator action")
-
-    workflow_cus = cus_by_evidence_kind("workflow")
-    optional_cus = cus_by_evidence_kind("optional_operation")
-    negative_cus = cus_by_evidence_kind("negative_path")
-    _log(f"  Workflow CUs       : {len(workflow_cus)} — require joining workflow execution")
-    _log(f"  Optional CUs       : {len(optional_cus)} — gated by profile support")
-    _log(f"  Negative-path CUs  : {len(negative_cus)} — require explicit state-changing opt-in")
-
-    run_start = datetime.datetime.now(datetime.timezone.utc).isoformat()
-
-    extra: dict = {
-        "cu_classification": {
-            "structure": len(structural_cus),
-            "method": len(method_cus),
-            "result": len(result_cus),
-            "consolidated_result": len(consolidated_cus),
-            "event": len(event_cus),
-            "workflow": len(workflow_cus),
-            "optional_operation": len(optional_cus),
-            "negative_path": len(negative_cus),
-            "manual": len(manual_cus),
-        }
-    }
-
-    # ── Live specification_tests/ run ──────────────────────────────────────
-    spec_rc = 0
-    spec_meta: dict | None = None
-    endpoint = profile.target.endpoint
-    if skip_spec_tests:
-        _log("\n  Live specification_tests run skipped (--skip-spec-tests).")
-        _log(f"  To run live tests: omit --skip-spec-tests (endpoint: {endpoint or '<not set>'})")
-        outcome_summary = "CLASSIFICATION_ONLY"
-    elif endpoint and "<" not in endpoint:
-        _section("Live specification_tests run (Target Server)")
-        spec_rc, spec_meta = run_live_spec_tests(
-            profile,
-            output_dir,
-            mode=mode,
-            timeout_seconds=spec_tests_timeout,
-            verbose=verbose,
-        )
-        extra["spec_tests"] = spec_meta
-        if spec_meta.get("status") == "completed":
-            if spec_rc == 0:
-                outcome_summary = "SPEC_TESTS_PASSED"
-                _log(_c(_ANSI_GREEN, "\n  Live specification_tests: PASSED"))
-            else:
-                outcome_summary = "SPEC_TESTS_FAILED"
-                _log(_c(_ANSI_RED, "\n  Live specification_tests: FAILED"))
-        else:
-            outcome_summary = f"SPEC_TESTS_{spec_meta.get('status', 'UNKNOWN').upper()}"
-            _log(f"\n  Live specification_tests: {spec_meta.get('status', 'unknown')}")
-    else:
-        outcome_summary = "CLASSIFICATION_ONLY"
-        _log("\n  Endpoint not configured — live specification_tests run skipped.")
-        _log("  Configure target.endpoint in the profile or pass --endpoint <url>.")
-
-    report_path = _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
-    summary_path = _write_human_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary)
-    if spec_meta and spec_meta.get("status") == "completed":
-        excel_meta = _generate_excel_report(
-            profile,
-            output_dir,
-            report_path,
-            run_result="passed" if spec_rc == 0 else "failed",
-        )
-        extra["excel_report"] = excel_meta
-        report_path = _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
-        if excel_meta["status"] == "generated":
-            _log(f"  Excel report:    {excel_meta['path']}")
-        else:
-            _log(_c(_ANSI_RED, f"  Excel report:    {excel_meta['status']} — {excel_meta['reason']}"))
-            spec_rc = spec_rc or 1
-
-    _log(f"\n  Evidence report: {report_path}")
-    _log(f"  Human summary:   {summary_path}")
-    _log("")
-
-    if spec_rc != 0:
-        _log(_c(_ANSI_RED, "  Target Server CU run FAILED — spec tests had failures or errors."))
-        return 1
-
-    if spec_meta and spec_meta.get("status") == "skipped":
-        _log(_c(_ANSI_YELLOW, "  Target Server CU classification complete (spec tests skipped)."))
-    elif spec_meta is None and not skip_spec_tests:
-        _log(_c(_ANSI_YELLOW, "  Target Server CU classification complete (no endpoint configured)."))
-    else:
-        _log(_c(_ANSI_GREEN, "  Target Server CU run complete."))
-    return 0
+    _log(_c("\033[96m\033[1m", f"╔{bar}╗"))
+    _log(_c("\033[96m\033[1m", f"║  {pad}║"))
+    _log(_c("\033[96m\033[1m", f"╚{bar}╝"))
 
 
 # ---------------------------------------------------------------------------
@@ -822,6 +156,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description=(
             "IJT Target Server CU runner — preflight and classification for Target Server CU execution.\n"
+            "DEPRECATED: prefer `python run_all_tests.py --profile FILE`.\n"
             "Use --preflight-only for safe discovery without state changes."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -916,50 +251,9 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def apply_runtime_overrides(
-    profile: TargetServerCuProfile,
-    *,
-    endpoint: str | None = None,
-    scoring_mode: str | None = None,
-    capabilities_file: str | None = None,
-    tool_product_instance_uri: str | None = None,
-    joining_process_id: str | None = None,
-    joining_process_origin_id: str | None = None,
-) -> TargetServerCuProfile:
-    """Apply installation-specific values without requiring a private YAML copy."""
-    from dataclasses import replace
-
-    if endpoint:
-        profile = replace(profile, target=replace(profile.target, endpoint=endpoint))
-    if scoring_mode:
-        profile = replace(profile, cu_execution=replace(profile.cu_execution, scoring_mode=scoring_mode))
-    if capabilities_file:
-        profile = replace(profile, capabilities_file=str(Path(capabilities_file).resolve()))
-    if tool_product_instance_uri:
-        tool = replace(
-            profile.selection.tool,
-            policy="exact_match",
-            product_instance_uri=tool_product_instance_uri,
-        )
-        profile = replace(profile, selection=replace(profile.selection, tool=tool))
-    if joining_process_id or joining_process_origin_id:
-        process = replace(
-            profile.selection.joining_process,
-            policy="exact_match" if joining_process_id else profile.selection.joining_process.policy,
-            joining_process_id=joining_process_id or profile.selection.joining_process.joining_process_id,
-            joining_process_origin_id=(
-                joining_process_origin_id or profile.selection.joining_process.joining_process_origin_id
-            ),
-        )
-        profile = replace(profile, selection=replace(profile.selection, joining_process=process))
-    return profile
-
-
 def main() -> int:
     """Entry point; returns 0 on success, 1 on errors or blocking preflight issues."""
-    global _USE_COLOUR
-
-    _USE_COLOUR = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
+    configure_colour(sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows()))
 
     args = _build_parser().parse_args()
 
@@ -967,6 +261,13 @@ def main() -> int:
         logging.getLogger().setLevel(logging.DEBUG)
 
     _banner("IJT Target Server CU Runner")
+    _log(
+        format_error(
+            "  [DEPRECATED] run_target_server_cu.py is a compatibility shim. "
+            "Prefer: python run_all_tests.py --profile <FILE> "
+            "(use --phase2 --profile <FILE> for specification tests only, or --preflight-only for configuration check)."
+        )
+    )
 
     # -- Load profile --------------------------------------------------------
     profile: TargetServerCuProfile
@@ -980,10 +281,10 @@ def main() -> int:
             _log(f"  Profile: {profile.profile_name}")
             _log(f"  Source:  {profile.source_path}")
         except FileNotFoundError as exc:
-            _log(_c(_ANSI_RED, f"  [ERROR] Profile file not found: {exc}"))
+            _log(format_error(f"  [ERROR] Profile file not found: {exc}"))
             return 1
         except TargetServerConfigError as exc:
-            _log(_c(_ANSI_RED, f"  [ERROR] Configuration error: {exc}"))
+            _log(format_error(f"  [ERROR] Configuration error: {exc}"))
             return 1
     else:
         # Build a minimal default profile for discovery/smoke runs

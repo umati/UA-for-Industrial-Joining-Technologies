@@ -10,6 +10,7 @@ from __future__ import annotations
 import textwrap
 import uuid
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -289,6 +290,27 @@ class TestLoadTargetServerProfileFile:
             profile.output_dir_path(base_dir=runner_base) == (runner_base / "test-results/target-server-cu").resolve()
         )
 
+    def test_file_missing_schema_version_raises(self, tmp_profile_dir):
+        path = _write_profile(tmp_profile_dir, "profile_name: test\n")
+        with pytest.raises(TargetServerConfigError, match="missing required field 'schema_version'"):
+            load_target_server_profile(path)
+
+    def test_file_schema_version_not_int_or_bool_raises(self, tmp_profile_dir):
+        path = _write_profile(tmp_profile_dir, "schema_version: true\n")
+        with pytest.raises(TargetServerConfigError, match="'schema_version' must be an integer"):
+            load_target_server_profile(path)
+
+    def test_file_unsupported_schema_version_raises(self, tmp_profile_dir):
+        path = _write_profile(tmp_profile_dir, "schema_version: 999\n")
+        with pytest.raises(TargetServerConfigError, match="unsupported schema_version"):
+            load_target_server_profile(path)
+
+    def test_file_non_mapping_sections_raise(self, tmp_profile_dir):
+        for section in ("target", "cu_execution", "selection", "triggers", "workflow_execution", "reporting"):
+            path = _write_profile(tmp_profile_dir, f"schema_version: 1\n{section}: 'string_not_mapping'\n")
+            with pytest.raises(TargetServerConfigError, match=f"'{section}' must be a mapping"):
+                load_target_server_profile(path)
+
 
 # ---------------------------------------------------------------------------
 # Schema version validation
@@ -532,4 +554,121 @@ class TestExampleProfilesLoad:
             ), (
                 f"{yaml_file.name}: endpoint '{endpoint}' looks like a real address. "
                 "Use a placeholder like 'opc.tcp://<target-server-host>:40451'."
+            )
+
+
+# ---------------------------------------------------------------------------
+# Parser helpers & strict validation
+# ---------------------------------------------------------------------------
+
+
+class TestParserHelpersAndValidation:
+    def test_output_dir_absolute(self, tmp_path):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "reporting": {"output_dir": str(tmp_path / "abs_out")},
+            }
+        )
+        assert profile.output_dir_path() == (tmp_path / "abs_out").resolve()
+
+    def test_capabilities_file_paths(self, tmp_path):
+        p1 = load_target_server_profile_from_dict({"schema_version": 1, "capabilities_file": ""})
+        assert p1.capabilities_file_path() is None
+
+        abs_caps = (tmp_path / "caps.yaml").resolve()
+        p2 = load_target_server_profile_from_dict({"schema_version": 1, "capabilities_file": str(abs_caps)})
+        assert p2.capabilities_file_path() == abs_caps
+
+        p3 = load_target_server_profile_from_dict(
+            {"schema_version": 1, "capabilities_file": "rel.yaml"}, source_path=""
+        )
+        assert p3.capabilities_file_path() == Path("rel.yaml")
+
+    def test_require_str_rejects_non_string(self):
+        from helpers.target_server_cu_config import _require_str
+
+        with pytest.raises(TargetServerConfigError, match="must be a string"):
+            _require_str({"key": 123}, "key", "ctx")
+
+    def test_require_bool_rejects_non_bool(self):
+        from helpers.target_server_cu_config import _require_bool
+
+        with pytest.raises(TargetServerConfigError, match="must be a boolean"):
+            _require_bool({"key": "true"}, "key", False, "ctx")
+
+    def test_require_number_validations(self):
+        from helpers.target_server_cu_config import _require_number
+
+        with pytest.raises(TargetServerConfigError, match="must be a number"):
+            _require_number({"key": "abc"}, "key", 1.0, "ctx")
+        with pytest.raises(TargetServerConfigError, match="must be >="):
+            _require_number({"key": -5}, "key", 1.0, "ctx", min_val=0.0)
+
+    def test_require_int_validations(self):
+        from helpers.target_server_cu_config import _require_int
+
+        with pytest.raises(TargetServerConfigError, match="must be an integer"):
+            _require_int({"key": "123"}, "key", 1, "ctx")
+        with pytest.raises(TargetServerConfigError, match="must be >="):
+            _require_int({"key": -1}, "key", 1, "ctx", min_val=0)
+
+    def test_require_enum_rejects_non_str(self):
+        from helpers.target_server_cu_config import _require_enum
+
+        with pytest.raises(TargetServerConfigError, match="must be a string"):
+            _require_enum({"key": 123}, "key", "val", frozenset({"val"}), "ctx")
+
+    def test_require_str_list_validations(self):
+        from helpers.target_server_cu_config import _require_str_list
+
+        with pytest.raises(TargetServerConfigError, match="must be a list"):
+            _require_str_list({"key": "not-a-list"}, "key", "ctx")
+        with pytest.raises(TargetServerConfigError, match="must be a string"):
+            _require_str_list({"key": [123]}, "key", "ctx")
+
+    def test_non_mapping_sections_rejected(self):
+        sections: list[tuple[str, dict[str, Any]]] = [
+            ("target", {"target": "invalid"}),
+            ("expected_server", {"target": {"expected_server": "invalid"}}),
+            ("cu_execution", {"cu_execution": "invalid"}),
+            ("state_changing_methods", {"cu_execution": {"state_changing_methods": "invalid"}}),
+            ("method_status_policies", {"cu_execution": {"method_status_policies": "invalid"}}),
+            ("extension_fields", {"cu_execution": {"extension_fields": "invalid"}}),
+            ("selection", {"selection": "invalid"}),
+            ("tool", {"selection": {"tool": "invalid"}}),
+            ("joining_process", {"selection": {"joining_process": "invalid"}}),
+            ("triggers", {"triggers": "invalid"}),
+            ("result", {"triggers": {"result": "invalid"}}),
+            ("event", {"triggers": {"event": "invalid"}}),
+            ("condition", {"triggers": {"condition": "invalid"}}),
+            ("workflow_execution", {"workflow_execution": "invalid"}),
+            ("expected_results", {"workflow_execution": {"expected_results": "invalid"}}),
+            ("cleanup", {"workflow_execution": {"cleanup": "invalid"}}),
+            ("reporting", {"reporting": "invalid"}),
+        ]
+        for name, payload in sections:
+            with pytest.raises(TargetServerConfigError, match="must be a mapping"):
+                load_target_server_profile_from_dict({"schema_version": 1, **payload})
+
+    def test_method_status_policies_non_string_keys_or_values(self):
+        with pytest.raises(TargetServerConfigError, match="method_status_policies"):
+            load_target_server_profile_from_dict(
+                {"schema_version": 1, "cu_execution": {"method_status_policies": {123: "val"}}}
+            )
+
+    def test_load_from_dict_non_dict_rejected(self):
+        with pytest.raises(TargetServerConfigError, match="must be a YAML mapping"):
+            load_target_server_profile_from_dict("not-a-dict")  # type: ignore[arg-type]
+
+    def test_cu_execution_timeouts_validation(self):
+        with pytest.raises(TargetServerConfigError, match="default_timeout_seconds"):
+            load_target_server_profile_from_dict({"schema_version": 1, "cu_execution": {"default_timeout_seconds": -1}})
+        with pytest.raises(TargetServerConfigError, match="timeout_seconds"):
+            load_target_server_profile_from_dict(
+                {"schema_version": 1, "triggers": {"result": {"timeout_seconds": 0.5}}}
+            )
+        with pytest.raises(TargetServerConfigError, match="timeout_seconds"):
+            load_target_server_profile_from_dict(
+                {"schema_version": 1, "workflow_execution": {"expected_results": {"timeout_seconds": 0.5}}}
             )

@@ -18,8 +18,10 @@ def _value(name):
 
 def test_unwrap_variant_handles_nested_asyncua_variants():
     inner = SimpleNamespace(ResultId="r1")
+    v = ua.Variant()
+    v.Value = ua.Variant(inner)
 
-    assert unwrap_variant(ua.Variant(ua.Variant(inner))) is inner
+    assert unwrap_variant(v) is inner
 
 
 def test_unwrap_sequence_filters_none_and_unwraps_entries():
@@ -73,8 +75,10 @@ def test_collect_trace_entries_returns_paths_and_content_indexes():
 def test_unwrap_variant_handles_exception():
     """Test that unwrap_variant returns item unchanged on exception."""
 
-    # Create an object that will raise an exception when accessing Value
-    class BadVariant:
+    class BadVariant(ua.Variant):
+        def __init__(self):
+            pass
+
         @property
         def Value(self):
             raise RuntimeError("Cannot read Value")

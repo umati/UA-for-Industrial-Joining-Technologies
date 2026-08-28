@@ -1,6 +1,18 @@
-# Complete real-controller example using only generic OPC UA IJT terms.
-# Copy this file locally, then replace the endpoint and JoiningProcess IDs.
-
+# Complete Real-Controller Multi-Operation Job Example (OPC 40450-1 Release 2.0)
+#
+# This profile illustrates an automated multi-operation tightening workflow
+# on ANY physical tightening or joining controller from any vendor
+# exposing the standard OPC UA IJT Companion Specification.
+#
+# Copy this file locally (e.g. to my_controller.profile.yaml), then replace
+# the endpoint and JoiningProcess IDs for your controller.
+#
+# Run Commands:
+#   - Safe Preflight Discovery:
+#     python run_all_tests.py --preflight-only --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml
+#   - Automated Spec Test Run:
+#     python run_all_tests.py --phase2 --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml --endpoint opc.tcp://<controller-ip>:40451
+#
 # File-format version understood by the runner.
 schema_version: 1
 # Human-readable name written into reports.

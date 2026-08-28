@@ -233,6 +233,10 @@ class TestCuReportLabels:
             format_method_not_supported("SendJoiningProcess")
             == "Method 'SendJoiningProcess' is not supported NOT SUPPORTED"
         )
+        assert (
+            format_method_not_supported("UnknownCustomMethod")
+            == "Method 'UnknownCustomMethod' is not supported NOT SUPPORTED"
+        )
 
     def test_cu_key_for_method(self):
         assert cu_key_for_method("SendJoiningProcess") == CU.SEND_JOINING_PROCESS
