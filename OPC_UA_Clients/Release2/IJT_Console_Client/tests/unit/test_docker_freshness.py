@@ -18,9 +18,11 @@ def test_parse_docker_created_timestamp_handles_nanosecond_utc_value() -> None:
 def test_parse_docker_created_timestamp_handles_offset_and_naive_values() -> None:
     with_offset = docker_freshness.parse_docker_created_timestamp("2026-05-21T15:41:19.2+02:00")
     naive = docker_freshness.parse_docker_created_timestamp("2026-05-21T13:41:19")
+    fractional_naive = docker_freshness.parse_docker_created_timestamp("2026-05-21T13:41:19.2")
 
     assert with_offset == pytest.approx(1779370879.2)
     assert naive == pytest.approx(1779370879.0)
+    assert fractional_naive == pytest.approx(1779370879.2)
 
 
 @pytest.mark.parametrize("value", ["", "not-a-timestamp"])

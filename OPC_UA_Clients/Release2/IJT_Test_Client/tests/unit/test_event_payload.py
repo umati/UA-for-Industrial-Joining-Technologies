@@ -58,3 +58,18 @@ def test_event_payload_field_reads_from_nested_dict_eventcontent():
 
     event2 = DictOnlyEvent("JoiningSystemEventContent", _Variant(SimpleNamespace(ReportedValues=["val2"])))
     assert event_payload_field(event2, "ReportedValues") == ["val2"]
+
+
+def test_event_payload_field_reads_attribute_hidden_nested_dict_content():
+    """Decoded event fields can be present only in the backing attribute dictionary."""
+
+    class AttributeHiddenEvent:
+        def __init__(self):
+            self.__dict__["EventContent"] = _Variant(SimpleNamespace(EventCode=_Variant(42)))
+
+        def __getattribute__(self, name):
+            if name in {"EventCode", "EventContent", "JoiningSystemEventContent"}:
+                return None
+            return super().__getattribute__(name)
+
+    assert event_payload_field(AttributeHiddenEvent(), "EventCode") == 42

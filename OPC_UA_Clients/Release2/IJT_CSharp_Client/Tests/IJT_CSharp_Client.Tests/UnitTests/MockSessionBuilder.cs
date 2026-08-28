@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Reflection;
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Configuration;
 using Moq;
@@ -81,4 +82,90 @@ internal static class MockSessionBuilder
     /// </summary>
     public static Mock<IJoiningSystem> CreateWithNullNodes()
         => Create(browseChildResult: NodeId.Null, methodResult: NodeId.Null);
+
+    public static ISession CreateThrowingSession(Exception exception)
+    {
+        var session = DispatchProxy.Create<ISession, ThrowingSessionProxy>();
+        ((ThrowingSessionProxy)(object)session).Exception = exception;
+        return session;
+    }
+
+    public static Mock<ISession> CreateSubscriptionCapableSession()
+    {
+        var session = new Mock<ISession>();
+        var defaultSubscription = new Subscription();
+        // ISession assigns this internally; the SDK does not expose its setter publicly.
+        var sessionSetter = typeof(Subscription).GetProperty(nameof(Subscription.Session))!
+            .GetSetMethod(nonPublic: true)!;
+        sessionSetter
+            .Invoke(defaultSubscription, [session.Object]);
+#pragma warning disable CS0618
+        session.Setup(s => s.DefaultSubscription).Returns(defaultSubscription);
+        session.Setup(s => s.AddSubscription(It.IsAny<Subscription>()))
+            .Callback<Subscription>(subscription => sessionSetter.Invoke(subscription, [session.Object]))
+            .Returns(true);
+        session.Setup(s => s.CreateSubscriptionAsync(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<double>(),
+                It.IsAny<uint>(),
+                It.IsAny<uint>(),
+                It.IsAny<uint>(),
+                It.IsAny<bool>(),
+                It.IsAny<byte>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CreateSubscriptionResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                SubscriptionId = 1,
+                RevisedPublishingInterval = 500,
+                RevisedLifetimeCount = 100,
+                RevisedMaxKeepAliveCount = 10,
+            });
+        session.Setup(s => s.CreateMonitoredItemsAsync(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<uint>(),
+                It.IsAny<TimestampsToReturn>(),
+                It.IsAny<MonitoredItemCreateRequestCollection>(),
+                It.IsAny<CancellationToken>()))
+            .Returns((
+                RequestHeader _,
+                uint _,
+                TimestampsToReturn _,
+                MonitoredItemCreateRequestCollection requests,
+                CancellationToken _) =>
+                Task.FromResult(CreateMonitoredItemsResponse(requests.Count)));
+#pragma warning restore CS0618
+
+        return session;
+    }
+
+    private static CreateMonitoredItemsResponse CreateMonitoredItemsResponse(int count)
+    {
+        var results = new MonitoredItemCreateResultCollection();
+        for (uint i = 0; i < count; i++)
+        {
+            results.Add(new MonitoredItemCreateResult
+            {
+                StatusCode = StatusCodes.Good,
+                MonitoredItemId = i + 1,
+                RevisedSamplingInterval = 500,
+                RevisedQueueSize = 1,
+            });
+        }
+
+        return new CreateMonitoredItemsResponse
+        {
+            ResponseHeader = new ResponseHeader(),
+            Results = results,
+            DiagnosticInfos = [],
+        };
+    }
+
+    private class ThrowingSessionProxy : DispatchProxy
+    {
+        public Exception Exception { get; set; } = null!;
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+            => throw Exception;
+    }
 }

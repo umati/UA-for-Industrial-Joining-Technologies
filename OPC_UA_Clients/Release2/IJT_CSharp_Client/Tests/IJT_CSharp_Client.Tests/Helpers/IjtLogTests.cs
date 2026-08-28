@@ -250,6 +250,39 @@ public sealed class IjtLogTests
     }
 
     [Fact]
+    public void Factory_Dispose_ReleasesCachedLoggers()
+    {
+        var createFactory = typeof(IjtLog).GetMethod(
+            "CreateFactory",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var factory = (ILoggerFactory)createFactory!.Invoke(null, null)!;
+        _ = factory.CreateLogger("Disposable.Category");
+
+        var ex = Record.Exception(factory.Dispose);
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void LoggerProvider_Dispose_ClearsCachedLoggers()
+    {
+        var providerType = typeof(IjtLog).GetNestedType(
+            "SynchronousConsoleLoggerProvider",
+            System.Reflection.BindingFlags.NonPublic)!;
+        var provider = (ILoggerProvider)Activator.CreateInstance(
+            providerType,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic,
+            binder: null,
+            args: new object[] { LogLevel.Information },
+            culture: null)!;
+        _ = provider.CreateLogger("Disposable.Category");
+
+        var ex = Record.Exception(provider.Dispose);
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
     public void Logger_LogBelowMinLevel_DoesNotLog()
     {
         var logger = NewConsoleLogger(LogLevel.Information);

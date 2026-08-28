@@ -74,6 +74,17 @@ describe('EntityCache — subscribe', () => {
     expect(cache.callbacks[0]).toBe(cb)
   })
 
+  describe('EntityCache — selectable view styling', () => {
+    it('adds the configured item class to selectable entities', () => {
+      cache.cache[4] = [{ Name: 'Tool A' }]
+
+      cache.makeSelectableEntityView(() => {}, 'Tools', { itemClass: 'compact-entity' })
+
+      const entityElement = createdElements.find((element) => element.textContent === 'Tool A')
+      expect(entityElement.classList.add).toHaveBeenCalledWith('compact-entity')
+    })
+  })
+
   it('supports registering multiple subscribers', () => {
     cache.subscribe(vi.fn())
     cache.subscribe(vi.fn())

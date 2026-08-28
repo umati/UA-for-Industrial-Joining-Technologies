@@ -23,6 +23,15 @@ from asyncua import ua  # noqa: E402
 
 from method_caller import OPCUAMethodCaller  # noqa: E402
 
+
+def test_extract_joint_list_returns_empty_for_unexpected_method_output():
+    assert OPCUAMethodCaller._extract_joint_list(("not-a-joint-list",)) == []
+
+
+def test_parse_status_after_items_falls_back_to_standard_method_output():
+    assert OPCUAMethodCaller._parse_status_after_items((0,)) == (0, None)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

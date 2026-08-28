@@ -199,6 +199,15 @@ public class IjtJsonSerializerTests
     }
 
     [Fact]
+    public void PrintNamedOutputs_WithNonResultOutput_UsesGenericPrint()
+    {
+        var ex = Record.Exception(() =>
+            IjtJsonSerializer.PrintNamedOutputs("TestMethod", new List<object> { "raw-output" }));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
     public void PrintMethodOutputs_WithExtensionObjectWrappingResult_DoesNotThrow()
     {
         var rd = new ResultDataType

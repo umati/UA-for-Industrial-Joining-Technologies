@@ -26,6 +26,7 @@ from python.call_structure import (  # noqa: E402
     _JOINING_PROCESS_ID_DATA_TYPE,
     _build_extension_object,
     _cast_structure_field_value,
+    _coerce_bool,
     _coerce_int,
     _extract_named_or_positional_field,
     _field_entries_to_object,
@@ -861,3 +862,50 @@ def test_resolve_structure_class_namespace_mismatch_and_second_registry_loop(mon
     monkeypatch.setattr(ua, "extension_objects_by_datatype", {FakeNode(49010, 99): DummyStructure}, raising=False)
     monkeypatch.setattr(ua, "extension_objects_by_typeid", {FakeNode(49010, 3): DummyStructure}, raising=False)
     assert _resolve_structure_class(49010, 3, "") is DummyStructure
+
+
+def test_coerce_bool_and_second_typeid_registry_pass_handle_nonstandard_inputs(monkeypatch):
+    class DummyStructure:
+        pass
+
+    class FakeNode:
+        Identifier = 49011
+        NamespaceIndex = 3
+
+    class DelayedTypeIdRegistry:
+        def __init__(self):
+            self.calls = 0
+
+        def items(self):
+            self.calls += 1
+            return () if self.calls == 1 else ((FakeNode(), DummyStructure),)
+
+    registry = DelayedTypeIdRegistry()
+    monkeypatch.setattr(ua, "get_extensionobject_class_type", lambda _node_id: None, raising=False)
+    monkeypatch.setattr(ua, "extension_objects_by_datatype", {}, raising=False)
+    monkeypatch.setattr(ua, "extension_objects_by_typeid", registry, raising=False)
+
+    assert _coerce_bool(" TRUE ") is True
+    assert _coerce_bool("false") is False
+    assert _resolve_structure_class(49011, 3, "") is DummyStructure
+    assert registry.calls == 2
+
+
+def test_second_typeid_registry_pass_ignores_a_matching_type_in_another_namespace(monkeypatch):
+    class FakeNode:
+        Identifier = 49012
+        NamespaceIndex = 99
+
+    class DelayedTypeIdRegistry:
+        def __init__(self):
+            self.calls = 0
+
+        def items(self):
+            self.calls += 1
+            return () if self.calls == 1 else ((FakeNode(), object),)
+
+    monkeypatch.setattr(ua, "get_extensionobject_class_type", lambda _node_id: None, raising=False)
+    monkeypatch.setattr(ua, "extension_objects_by_datatype", {}, raising=False)
+    monkeypatch.setattr(ua, "extension_objects_by_typeid", DelayedTypeIdRegistry(), raising=False)
+
+    assert _resolve_structure_class(49012, 3, "") is None

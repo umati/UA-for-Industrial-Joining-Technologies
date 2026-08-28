@@ -246,3 +246,10 @@ which keeps the copied simulator under a short `RUNNER_TEMP/ijt-sim` root.
 
 For the full port assignment table, auto-launch mechanics, and venv rationale, see
 [`docs/TEST_TIERS.md`](../../../../docs/TEST_TIERS.md).
+
+## Coverage maintenance policy
+
+The existing 95% coverage threshold remains a regression buffer. Obtain the
+current percentage from the runner artifact rather than maintaining it here.
+Defensive paths remain measured even when earlier validation prevents them
+under normal execution.

@@ -322,6 +322,40 @@ async def test_connect_logs_retry_message():
         assert any("Retrying" in s for s in info_calls)
 
 
+@pytest.mark.asyncio
+async def test_connect_logs_cleanup_failure_after_a_failed_attempt(monkeypatch):
+    """A failed disconnect must not hide the original connection failure."""
+    with patch("opcua_client.Client"):
+        c = OPCUAClient("opc.tcp://localhost:4840")
+
+    c.client = MagicMock()
+    monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "1")
+    with (
+        patch.object(c, "clear_old_logs", new_callable=AsyncMock),
+        patch.object(c, "configure_security", new_callable=AsyncMock),
+        patch("opcua_client.is_opcua_client_connected", return_value=False),
+        patch("opcua_client.connect_opcua_client", new_callable=AsyncMock, side_effect=OSError("connect failed")),
+        patch("opcua_client.disconnect_opcua_client", new_callable=AsyncMock, side_effect=OSError("disconnect failed")),
+        patch("opcua_client.ijt_log") as mock_log,
+        pytest.raises(OSError, match="connect failed"),
+    ):
+        await c.connect()
+
+    assert any("clean up client" in str(call) for call in mock_log.warning.call_args_list)
+
+
+@pytest.mark.asyncio
+async def test_validate_configured_x509_user_token_policy_delegates_to_general_validator():
+    config = OPCUASecurityConfig()
+    with patch("opcua_client.Client"):
+        c = OPCUAClient("opc.tcp://localhost:4840")
+
+    with patch.object(c, "validate_configured_user_token_policy", new_callable=AsyncMock) as validate_policy:
+        await c.validate_configured_x509_user_token_policy(config)
+
+    validate_policy.assert_awaited_once_with(config, ua.UserTokenType.Certificate, "X509 Certificate")
+
+
 def test_validate_x509_user_token_policy_accepts_endpoint_default_uri():
     endpoint = _endpoint_with_certificate_token("")
 
@@ -653,6 +687,19 @@ async def test_clear_old_logs_creates_directory_if_missing(monkeypatch):
         monkeypatch.chdir(orig_cwd)
         if not _preserve_test_artifacts():
             shutil.rmtree(work_dir, ignore_errors=True)
+
+
+@pytest.mark.asyncio
+async def test_clear_old_logs_preserves_artifacts_when_requested(tmp_path: Path, monkeypatch):
+    """The preservation switch prevents log-directory creation and deletion."""
+    monkeypatch.setenv("IJT_PRESERVE_TEST_ARTIFACTS", "true")
+    monkeypatch.chdir(tmp_path)
+    with patch("opcua_client.Client"):
+        c = OPCUAClient("opc.tcp://localhost:4840")
+
+    await c.clear_old_logs()
+
+    assert not (tmp_path / "logs" / "results").exists()
 
 
 # ── cleanup() — outer except catches unexpected error (L175-177) ──

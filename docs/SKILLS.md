@@ -194,6 +194,15 @@ The C# runner treats 95% as the advisory line-coverage floor for the non-generat
 
 **Web Client JS (Vitest)**: Threshold enforced at 95% via `vitest.config.mjs` `thresholds.lines`. Reporters: `text`, `lcov`, `cobertura`.
 
+#### Coverage maintenance policy
+
+The documented thresholds above are stable regression buffers and must not be
+raised merely because a point-in-time run exceeds them. CI artifacts and local
+runner output are the source of truth for current percentages; do not maintain
+volatile measured values in contributor documentation. Improve execution through
+behavior-valid tests and retain any platform-dependent paths in measurement
+rather than adding exclusions to improve reported coverage.
+
 ---
 
 ### Runner Step Result Model — PASS / WARN / FAIL / SKIP

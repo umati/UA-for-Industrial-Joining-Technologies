@@ -3,7 +3,7 @@
  * Covers: subscribe/notify, resolve(), getUnfinished(), handlePartial false-branch
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { ResultManager } from '../../../src/javascripts/ijt-support/results/result-manager.mjs'
 import { createResultBundle } from '../../../src/javascripts/ijt-support/results/result-serialization.mjs'
 
@@ -49,6 +49,10 @@ function makeRefResult (id) {
     ClientData: { rebuildState: { claimed: false, partial: false, resolved: false } },
     replaceReference: vi.fn()
   }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -582,5 +586,111 @@ describe('ResultManager - runtime model and notification edge cases', () => {
       reason: 'manual',
       resultId: 'removed-1'
     }))
+  })
+})
+
+describe('ResultManager - persistence and settings edge cases', () => {
+  it('normalizes false settings and delegates loosening detection to result models', () => {
+    const disabled = new ResultManager(makeEventManager(), {
+      getIgnoreLoosenings: () => ' FALSE '
+    })
+    const enabled = new ResultManager(makeEventManager(), {
+      getIgnoreLoosenings: () => true
+    })
+    const loosening = { isLoosening: vi.fn(() => true) }
+
+    expect(disabled.shouldIgnoreLooseningResults()).toBe(false)
+    expect(enabled.shouldDropResult(loosening)).toBe(true)
+    expect(loosening.isLoosening).toHaveBeenCalledOnce()
+  })
+
+  it('exports all stored results when no root selection is supplied', () => {
+    const rm = new ResultManager(makeEventManager())
+    rm.addResult(makeResult('export-all-1', '1'))
+    rm.addResult(makeResult('export-all-2', '2'))
+
+    const exported = rm.exportBundle()
+
+    expect(exported.selectedRootCount).toBe(2)
+    expect(exported.bundle.results.map(result => result.ResultMetaData.ResultId).sort())
+      .toEqual(['export-all-1', 'export-all-2'])
+  })
+
+  it('reports imported loosening results as ignored without storing them', () => {
+    const rm = new ResultManager(makeEventManager(), {
+      getIgnoreLoosenings: () => true
+    })
+    vi.spyOn(rm, 'createRuntimeResultFromPayload').mockReturnValue({
+      ...makeResult('ignored-import', '1'),
+      isLoosening: () => true
+    })
+    const bundle = createResultBundle([
+      { ResultMetaData: { ResultId: 'ignored-import', Classification: '1' }, ResultContent: [] }
+    ])
+
+    const summary = rm.importBundleFromText(JSON.stringify(bundle))
+
+    expect(summary).toMatchObject({
+      total: 1,
+      imported: 0,
+      skipped: 1,
+      skipReasons: { ignored_loosening: 1 }
+    })
+    expect(rm.resultFromId('ignored-import')).toBeUndefined()
+  })
+
+  it('clears result state, reports evictions, and removes persisted results', () => {
+    const removeItem = vi.fn()
+    vi.stubGlobal('window', { localStorage: { removeItem } })
+    const rm = new ResultManager(makeEventManager())
+    const evicted = vi.fn()
+    rm.subscribeEvicted(evicted)
+    rm.addResult(makeResult('clear-1', '1'))
+    rm.addResult(makeResult('clear-2', '2'))
+
+    rm.clear()
+
+    expect(rm.getAllResultsChronological()).toEqual([])
+    expect(rm.unresolved).toEqual([])
+    expect(rm.lastResult).toBeNull()
+    expect(removeItem).toHaveBeenCalledOnce()
+    expect(evicted).toHaveBeenCalledTimes(2)
+    expect(evicted.mock.calls.map(([payload]) => payload.reason)).toEqual(['user-clear', 'user-clear'])
+  })
+
+  it('returns zero when eviction input is invalid or nothing is stored', () => {
+    const rm = new ResultManager(makeEventManager())
+
+    expect(rm.evictOldestResults('not-a-number')).toBe(0)
+    expect(rm.evictOldestResults(1)).toBe(0)
+  })
+
+  it('uses default classification and reports fallback eviction metadata', () => {
+    const rm = new ResultManager(makeEventManager())
+    const result = makeResult('default-classification', null)
+    rm.addResult(result)
+
+    expect(rm.getLatest(0)).toBe(result)
+    expect(rm.getLatest(99)).toBeNull()
+
+    const evicted = vi.fn()
+    rm.subscribeEvicted(evicted)
+    rm.notifyEvictedResult({ id: 'fallback-id', classification: '4' }, 'manual')
+    expect(evicted).toHaveBeenCalledWith(expect.objectContaining({
+      reason: 'manual',
+      resultId: 'fallback-id',
+      classification: '4',
+      uniqueCounter: null
+    }))
+  })
+
+  it('resolves contentless results and obtains ids from fallback fields', () => {
+    const rm = new ResultManager(makeEventManager())
+    const contentless = makeResult('contentless')
+    contentless.ResultContent = undefined
+
+    expect(rm.resolve(contentless)).toBe(contentless)
+    expect(rm.getResultId({ id: 'fallback-id' })).toBe('fallback-id')
+    expect(rm.getResultId({})).toBeNull()
   })
 })

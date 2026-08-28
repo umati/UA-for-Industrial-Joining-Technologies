@@ -346,4 +346,41 @@ public class IjtFileLoggerTests : IDisposable
         var ex = Record.Exception(() => IjtFileLogger.ClearSessionLogs());
         Assert.Null(ex);
     }
+
+    [Fact]
+    public void ClearSessionLogs_WhenTimestampedFileIsLocked_LeavesDirectoryIntact()
+    {
+        IjtFileLogger.WriteResultTimestamped("locked-result");
+        var lockedPath = Path.Combine(IjtFileLogger.ResultsLogDir, "locked.json");
+        using var lockedFile = new FileStream(lockedPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+
+        var ex = Record.Exception(IjtFileLogger.ClearSessionLogs);
+
+        Assert.Null(ex);
+        Assert.True(Directory.Exists(IjtFileLogger.ResultsLogDir));
+    }
+
+    [Fact]
+    public void WriteResult_WhenDestinationIsDirectory_SwallowsAccessFailure()
+    {
+        Directory.CreateDirectory(IjtFileLogger.ResultLogPath);
+
+        var ex = Record.Exception(() => IjtFileLogger.WriteResult("unwritable"));
+
+        Assert.Null(ex);
+        Assert.True(Directory.Exists(IjtFileLogger.ResultLogPath));
+    }
+
+    [Fact]
+    public void WriteResult_WhenLogRootIsAFile_SwallowsIoFailure()
+    {
+        var blockedRoot = Path.Combine(_tempRoot, "blocked-root");
+        File.WriteAllText(blockedRoot, "not a directory");
+        using var blockedLogRoot = IjtFileLogger.PushBaseLogDirOverride(blockedRoot);
+
+        var ex = Record.Exception(() => IjtFileLogger.WriteResult("unwritable"));
+
+        Assert.Null(ex);
+        Assert.True(File.Exists(blockedRoot));
+    }
 }

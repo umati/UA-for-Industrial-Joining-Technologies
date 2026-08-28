@@ -128,6 +128,25 @@ describe('WebSocketManager', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
+  it('returns a safe no-op unsubscriber for an invalid connection-state callback', () => {
+    const manager = new WebSocketManager(() => {}, 'ws://test')
+
+    expect(manager.subscribeConnectionState(null)).toEqual(expect.any(Function))
+    expect(() => manager.subscribeConnectionState(null)()).not.toThrow()
+  })
+
+  it('isolates failures in websocket message subscribers', () => {
+    const manager = new WebSocketManager(() => {}, 'ws://test')
+    const ws = MockWebSocket.instances[0]
+    const healthySubscriber = vi.fn()
+    manager.subscribe('ep', 'state', () => { throw new Error('subscriber failed') })
+    manager.subscribe('ep', 'state', healthySubscriber)
+
+    ws.emitMessage({ command: 'state', endpoint: 'ep', data: { valid: true }, uniqueid: 'event-1' })
+
+    expect(healthySubscriber).toHaveBeenCalledWith({ valid: true }, 'event-1')
+  })
+
   it('unsubscribe is a no-op for unknown endpoint or type', () => {
     const manager = new WebSocketManager(() => {}, 'ws://test')
     expect(() => manager.unsubscribe('unknown-ep', 'unknown-cmd', vi.fn())).not.toThrow()

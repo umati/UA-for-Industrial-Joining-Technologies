@@ -9,6 +9,7 @@ Targets:
 """
 
 import asyncio
+import importlib
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -64,6 +65,18 @@ def test_serialize_data_json_dumps_fallback():
         serialize_data.orjson = original_orjson
 
 
+def test_serialize_data_import_falls_back_when_orjson_is_unavailable():
+    """The optional dependency import itself falls back to the standard library."""
+    import serialize_data
+
+    with patch.dict(sys.modules, {"orjson": None}):
+        fallback_module = importlib.reload(serialize_data)
+        assert fallback_module.orjson is None
+        assert fallback_module._json_dumps({"key": "value"}) == '{"key": "value"}'
+
+    importlib.reload(fallback_module)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # utils.py:16-17 — orjson import fallback in utils
 # ══════════════════════════════════════════════════════════════════════════════
@@ -82,6 +95,16 @@ def test_utils_import_without_orjson():
         assert isinstance(result, str)
     finally:
         utils.orjson = original
+
+
+def test_utils_import_falls_back_when_orjson_is_unavailable():
+    """The optional dependency import is safe on platforms without orjson."""
+    with patch.dict(sys.modules, {"orjson": None}):
+        fallback_module = importlib.reload(utils)
+        assert fallback_module.orjson is None
+        assert fallback_module._to_json_str({"key": "value"}) == '{"key":"value"}'
+
+    importlib.reload(fallback_module)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -403,6 +426,20 @@ async def test_event_handler_cancelled_error_during_queue_processing():
 
     assert handler._queue_task.done()
     assert handler._queue_task.cancelled()
+    await handler.close()
+
+
+@pytest.mark.asyncio
+async def test_event_handler_running_queue_task_handles_cancellation_cleanly():
+    """A queue task already waiting for work exits quietly when cancelled."""
+    handler = EventHandler(websocket=AsyncMock(), server_url="opc.tcp://test", client=MagicMock())
+
+    await asyncio.sleep(0)
+    handler._queue_task.cancel()
+    await handler._queue_task
+
+    assert handler._queue_task.done()
+    assert not handler._queue_task.cancelled()
     await handler.close()
 
 

@@ -825,3 +825,10 @@ temp.
 
 For the full port assignment table, auto-launch mechanics, and venv rationale, see
 [`docs/TEST_TIERS.md`](../../../../docs/TEST_TIERS.md).
+
+## Coverage maintenance policy
+
+The existing 95% coverage thresholds remain regression buffers. Obtain current
+coverage from the CI artifact or local runner rather than maintaining volatile
+percentages here. Improve it through behavior-valid tests only; do not exclude
+production paths to increase the reported result.

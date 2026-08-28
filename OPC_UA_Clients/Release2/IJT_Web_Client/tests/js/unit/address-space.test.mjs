@@ -82,6 +82,18 @@ describe('AddressSpace — constructor', () => {
     expect(addressSpace.nodeMapping).toEqual({})
   })
 
+  describe('AddressSpace — namespace initialization', () => {
+    it('handles namespace lookup failures without breaking the connection callback', async () => {
+      socketHandler.namespacePromise.mockRejectedValue(new Error('namespace lookup failed'))
+
+      connectionManager._fire('connection', false)
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(connectionManager.trigger).not.toHaveBeenCalledWith('connection', true)
+    })
+  })
+
   it('initialises status as an empty array', () => {
     expect(addressSpace.status).toEqual([])
   })

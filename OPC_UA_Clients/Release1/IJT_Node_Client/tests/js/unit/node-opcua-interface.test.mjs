@@ -103,6 +103,13 @@ describe('NodeOPCUAInterface — setupSocketIO() socket handlers', () => {
     expect(io.on).toHaveBeenCalledWith('connection', expect.any(Function))
   })
 
+  it('forwards status messages through the socket transport', () => {
+    iface.setupSocketIO({})
+    iface.displayFunction('connected')
+
+    expect(io.emit).toHaveBeenCalledWith('status message', 'connected')
+  })
+
   it('read handler — missing endpoint silently returns', () => {
     iface.setupSocketIO({})
     connectionCallback(socket)
@@ -169,6 +176,19 @@ describe('NodeOPCUAInterface — setupSocketIO() socket handlers', () => {
     iface.setupSocketIO({})
     connectionCallback(socket)
     expect(() => socket._handlers['set connectionpoints']('[]')).not.toThrow()
+  })
+
+  it('reports connection-point file read and write failures without throwing', async () => {
+    const fs = await import('fs/promises')
+    fs.default.readFile.mockRejectedValueOnce(new Error('read denied'))
+    fs.default.writeFile.mockRejectedValueOnce(new Error('write denied'))
+
+    iface.setupSocketIO({})
+    connectionCallback(socket)
+    socket._handlers['get connectionpoints']()
+    socket._handlers['set connectionpoints']('[]')
+
+    await new Promise(resolve => setTimeout(resolve, 10))
   })
 
   it('connect to — invalid URL is rejected', () => {
@@ -248,6 +268,18 @@ describe('Connection — constructor, isActive, setupClient', () => {
     expect(mockOPCUA.OPCUAClient.create).toHaveBeenCalledTimes(1)
   })
 
+  it('setupClient itself ignores a duplicate active connection request', () => {
+    const { mockOPCUA } = makeMockOpcua()
+    iface.setupSocketIO(mockOPCUA)
+    connectionCallback(socket)
+    socket._handlers['connect to']('opc.tcp://localhost:4840')
+
+    const conn = iface.connectionList['opc.tcp://localhost:4840']
+    conn.setupClient()
+
+    expect(mockOPCUA.OPCUAClient.create).toHaveBeenCalledTimes(1)
+  })
+
   it('setupClient async error path emits error message and sets state to error', async () => {
     const { mockOPCUA } = makeMockOpcua(() => Promise.reject(new Error('connection refused')))
     iface.setupSocketIO(mockOPCUA)
@@ -299,6 +331,19 @@ describe('Connection — constructor, isActive, setupClient', () => {
       endpointurl: 'opc.tcp://localhost:4840',
       namespaces: ['http://opcfoundation.org/UA/', 'http://opcfoundation.org/UA/IJT/Base/']
     })
+  })
+
+  it('logs OPC UA connection backoff notifications', () => {
+    const { mockOPCUA, mockClient } = makeMockOpcua()
+    const handlers = {}
+    mockClient.on.mockImplementation((event, handler) => { handlers[event] = handler })
+    iface.setupSocketIO(mockOPCUA)
+    connectionCallback(socket)
+    socket._handlers['connect to']('opc.tcp://localhost:4840')
+
+    handlers.backoff(2, 500)
+
+    expect(mockClient.on).toHaveBeenCalledWith('backoff', expect.any(Function))
   })
 
   it('closeConnection with only client (no session/subscription) completes cleanly', async () => {
@@ -645,6 +690,20 @@ describe('Connection — OPC UA method wrappers', () => {
 
     expect(io.emit).toHaveBeenCalledWith('error message', expect.objectContaining({ context: 'closedown' }))
     expect(io.emit).toHaveBeenCalledWith('client disconnected', { endpointurl: 'opc.tcp://server:4840' })
+    expect(conn.connectionState).toBe('closed')
+  })
+
+  it('closeConnection reports an event-monitor enumeration failure and still closes', async () => {
+    conn.eventMonitoringItems = {
+      [Symbol.iterator] () {
+        throw new Error('monitor enumeration failed')
+      }
+    }
+    conn.client = { disconnect: vi.fn(() => Promise.resolve()) }
+
+    await conn.closeConnection()
+
+    expect(io.emit).toHaveBeenCalledWith('error message', expect.objectContaining({ context: 'closedown' }))
     expect(conn.connectionState).toBe('closed')
   })
 

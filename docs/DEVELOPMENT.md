@@ -121,6 +121,12 @@ When you run `python run_all_tests.py`, the repository handles the following wit
 | **OPC UA Server Simulators** | Automatically launches native/containerized simulator instances with dedicated port isolation |
 | **Missing Optional Tools** | Dotnet, Docker, Hadolint, Semgrep, Actionlint, and Git-dependent scans skip gracefully |
 
+Project runners install required Python quality tools into their project test
+virtual environments. A user-level installation of a CLI such as
+`detect-secrets` is also suitable for ad-hoc scans; add its Python `Scripts`
+directory to `PATH` if the command is not found. It does not replace the
+version used by the project runner.
+
 ## Package Management
 
 ### Node.js Packages

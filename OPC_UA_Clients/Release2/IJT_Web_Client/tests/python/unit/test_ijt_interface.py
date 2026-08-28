@@ -1,8 +1,10 @@
 import asyncio
 import inspect
 import json
+import os
 from pathlib import Path
-from unittest.mock import AsyncMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -1505,3 +1507,114 @@ async def test_handle_routes_default_and_reset_connectionpoints(fake_websocket, 
     await interface.handle(fake_websocket, {"command": "reset connectionpoints", "endpoint": ""})
     payload = decode_last_message(fake_websocket)
     assert payload["data"]["saved"] is True
+
+
+@pytest.mark.parametrize(
+    ("address", "expected"),
+    [(None, False), ("  ", False), (" opc.tcp://host:4840 ", True)],
+)
+def test_endpoint_address_validation_rejects_non_strings_and_blanks(address, expected):
+    assert IJTInterface._is_valid_endpoint_address(address) is expected
+
+
+def test_normalize_connectionpoints_payload_accepts_invalid_top_level_and_skips_invalid_rows():
+    assert IJTInterface._normalize_connectionpoints_payload(["not", "a", "mapping"]) == {
+        "schema_version": 1,
+        "connectionpoints": [],
+    }
+    assert IJTInterface._normalize_connectionpoints_payload(
+        {"connectionpoints": [{"Name": "Valid", "Address": "opc.tcp://host:4840"}, "not-a-mapping"]}
+    )["connectionpoints"] == [{"name": "Valid", "address": "opc.tcp://host:4840", "autoconnect": False}]
+
+
+@pytest.mark.asyncio
+async def test_handle_set_connectionpoints_replaces_existing_file_with_backup(tmp_path, monkeypatch):
+    interface = IJTInterface()
+    destination = tmp_path / "connectionpoints.json"
+    destination.write_text('{"previous": true}\n', encoding="utf-8")
+    monkeypatch.setattr(interface, "_resource_path", lambda _filename: destination)
+
+    result = await interface.handle_set_connection_points(
+        {"connectionpoints": [{"name": "New", "address": "opc.tcp://new:4840", "autoconnect": True}]}
+    )
+
+    assert result == {"saved": True, "count": 1}
+    assert json.loads(destination.with_suffix(".json.bak").read_text(encoding="utf-8")) == {"previous": True}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_type", [FileNotFoundError, PermissionError])
+async def test_handle_set_connectionpoints_retries_transient_replace_errors(tmp_path, monkeypatch, error_type):
+    interface = IJTInterface()
+    destination = tmp_path / "connectionpoints.json"
+    monkeypatch.setattr(interface, "_resource_path", lambda _filename: destination)
+    original_replace = os.replace
+    attempts = 0
+
+    def fail_once(source, target):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise error_type("temporarily unavailable")
+        return original_replace(source, target)
+
+    monkeypatch.setattr("python.ijt_interface.os.replace", fail_once)
+    sleep = Mock()
+    monkeypatch.setattr("python.ijt_interface.time", SimpleNamespace(sleep=sleep))
+    result = await interface.handle_set_connection_points(
+        {"connectionpoints": [{"name": "Retry", "address": "opc.tcp://retry:4840", "autoconnect": False}]}
+    )
+
+    assert result == {"saved": True, "count": 1}
+    assert attempts == 2
+    sleep.assert_called_once_with(0.05)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_type", [FileNotFoundError, PermissionError])
+async def test_handle_set_connectionpoints_reports_persistent_replace_errors(tmp_path, monkeypatch, error_type):
+    interface = IJTInterface()
+    destination = tmp_path / "connectionpoints.json"
+    monkeypatch.setattr(interface, "_resource_path", lambda _filename: destination)
+
+    def always_fail(_source, _target):
+        raise error_type("replace unavailable")
+
+    monkeypatch.setattr("python.ijt_interface.os.replace", always_fail)
+    sleep = Mock()
+    monkeypatch.setattr("python.ijt_interface.time", SimpleNamespace(sleep=sleep))
+    result = await interface.handle_set_connection_points(
+        {"connectionpoints": [{"name": "Retry", "address": "opc.tcp://retry:4840", "autoconnect": False}]}
+    )
+
+    assert result == {"exception": "replace unavailable"}
+    assert sleep.call_count == 4
+
+
+@pytest.mark.asyncio
+async def test_disconnected_interface_rejects_connection_without_prior_cleanup(fake_websocket):
+    interface = IJTInterface()
+    interface.disconnected = True
+
+    assert await interface._handle_connect_to("opc.tcp://host:4840", fake_websocket) == {
+        "exception": "WebSocket session is disconnected."
+    }
+
+
+@pytest.mark.asyncio
+async def test_handle_test_connection_continues_after_existing_connection_probe_error():
+    from unittest.mock import patch
+
+    interface = IJTInterface()
+    endpoint = "opc.tcp://host:4840"
+    existing = AsyncMock()
+    existing.is_connection_open.side_effect = RuntimeError("probe failed")
+    interface.connection_list[endpoint] = existing
+    temporary = AsyncMock()
+    temporary.connect.return_value = {"command": "connection established", "endpoint": endpoint}
+
+    with patch("python.ijt_interface.Connection", return_value=temporary):
+        result = await interface.handle_test_connection(endpoint)
+
+    assert result == {"command": "connection established", "endpoint": endpoint}
+    temporary.terminate.assert_awaited_once()

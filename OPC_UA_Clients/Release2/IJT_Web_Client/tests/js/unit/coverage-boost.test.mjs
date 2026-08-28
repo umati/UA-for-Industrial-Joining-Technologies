@@ -19,6 +19,7 @@ import TighteningDataType from '../../../src/javascripts/ijt-support/models/resu
 import BatchDataModel from '../../../src/javascripts/ijt-support/models/results/batch-data-type.mjs'
 import JobDataModel from '../../../src/javascripts/ijt-support/models/results/job-data-model.mjs'
 import ResultDataType from '../../../src/javascripts/ijt-support/models/results/result-data-type.mjs'
+import { AssetManager } from '../../../src/javascripts/ijt-support/assets/asset-manager.mjs'
 
 // ---------------------------------------------------------------------------
 // Empty class coverage — TagDataType and ResultValueDataType
@@ -280,5 +281,27 @@ describe('AssetManager — loadAllAssetsSupport', () => {
   it('AssetManager can be imported', async () => {
     const { AssetManager } = await import('../../../src/javascripts/ijt-support/assets/asset-manager.mjs')
     expect(AssetManager).toBeDefined()
+  })
+
+  it('preserves nested non-machine asset folders', async () => {
+    const rootRelations = [{ BrowseName: { Name: 'Nested' } }]
+    const nestedRelations = [{ BrowseName: { Name: 'Child' } }]
+    const leaf = {
+      displayName: 'Leaf',
+      getChildRelations: vi.fn(() => [])
+    }
+    const nestedFolder = {
+      displayName: 'Nested',
+      getChildRelations: vi.fn(() => nestedRelations)
+    }
+    const root = {
+      getChildRelations: vi.fn(() => rootRelations)
+    }
+    const addressSpace = {
+      relationsToNodes: vi.fn(async (relations) => relations === rootRelations ? [nestedFolder] : [leaf])
+    }
+    const manager = new AssetManager(addressSpace, { socketHandler: {} })
+
+    await expect(manager.loadAllAssetsSupport(root)).resolves.toEqual([['Nested', [['Leaf', []]]]])
   })
 })

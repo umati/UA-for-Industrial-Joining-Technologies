@@ -160,6 +160,9 @@ dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 **Coverage:**
 - Target: 95% (WARN if below, not FAIL)
 - `coverlet.runsettings` excludes `UAModel.*` (auto-generated) and `Program` (entry point)
+- Keep the threshold as regression margin. Permission-denied file access,
+  interactive-console output, live endpoint discovery, and PKI initialization
+  failures remain measured rather than requiring brittle machine-specific tests.
 
 ---
 

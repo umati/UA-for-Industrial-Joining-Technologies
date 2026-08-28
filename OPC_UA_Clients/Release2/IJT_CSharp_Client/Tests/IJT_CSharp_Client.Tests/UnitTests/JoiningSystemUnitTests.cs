@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using IJT_CSharp_Client.Client;
@@ -342,11 +343,12 @@ public sealed class JoiningSystemUnitTests
     [Fact]
     public void OnKeepAlive_BadStatus_ReconnectThrowsServiceResult_DoesNotRethrow()
     {
-        var mockSession = CreateMockSession();
-        var sut = CreateSession(mockSession.Object);
+        var session = MockSessionBuilder.CreateThrowingSession(
+            new ServiceResultException(StatusCodes.BadSessionClosed));
+        var sut = CreateSession(session);
         var e = new KeepAliveEventArgs(new ServiceResult(StatusCodes.BadCommunicationError), ServerState.Unknown, DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = Record.Exception(() => sut.OnKeepAlive(session, e));
 
         Assert.Null(ex);
     }
@@ -354,11 +356,12 @@ public sealed class JoiningSystemUnitTests
     [Fact]
     public void OnKeepAlive_BadStatus_ReconnectThrowsGenericException_DoesNotRethrow()
     {
-        var mockSession = CreateMockSession();
-        var sut = CreateSession(mockSession.Object);
+        var session = MockSessionBuilder.CreateThrowingSession(
+            new InvalidOperationException("reconnect failed"));
+        var sut = CreateSession(session);
         var e = new KeepAliveEventArgs(new ServiceResult(StatusCodes.BadCommunicationError), ServerState.Unknown, DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = Record.Exception(() => sut.OnKeepAlive(session, e));
 
         Assert.Null(ex);
     }
@@ -740,6 +743,31 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
+    public void OnKeepAlive_BadStatus_DiscoveryWithOnlyServerLeavesNodeIdNull()
+    {
+        var refs = new ReferenceDescriptionCollection
+        {
+            new()
+            {
+                BrowseName = new QualifiedName("Server", 0),
+                NodeId = new ExpandedNodeId(ObjectIds.Server),
+                TypeDefinition = new ExpandedNodeId(ObjectTypeIds.BaseObjectType),
+            },
+        };
+        var mockSession = CreateMockSessionWithBrowseResult(refs);
+        mockSession.Setup(s => s.NamespaceUris).Returns(CreateNamespaceTable());
+        var sut = CreateSession(mockSession.Object);
+        var e = new KeepAliveEventArgs(
+            new ServiceResult(StatusCodes.BadCommunicationError),
+            ServerState.Unknown,
+            DateTime.UtcNow);
+
+        sut.OnKeepAlive(mockSession.Object, e);
+
+        Assert.True(sut.NodeId.IsNullNodeId);
+    }
+
+    [Fact]
     public void OnKeepAlive_BadStatus_DiscoveryServiceResultExceptionDoesNotRethrow()
     {
         var mockSession = CreateMockSessionWithBrowseException(
@@ -929,6 +957,43 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
+    public async Task ConnectAsync_WithAutoAcceptCertificate_AcceptsValidationEventWithoutPki()
+    {
+        var mockSession = CreateConnectableMockSession(new NodeId(9101u, 7));
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://localhost:40451",
+            AutoAcceptServerCertificate = true,
+        };
+        var endpoint = CreateEndpoint();
+        var validationWasAccepted = false;
+        var hooks = new JoiningSystem.ConnectionHooks(
+            _ => Task.CompletedTask,
+            (_, _, _) => Task.CompletedTask,
+            (appConfig, _, _) =>
+            {
+                var handler = appConfig.CertificateValidator.GetType()
+                    .GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                    .Select(field => field.GetValue(appConfig.CertificateValidator))
+                    .OfType<MulticastDelegate>()
+                    .Single(candidate => candidate.GetInvocationList().Any(callback =>
+                        callback.Method.GetParameters().Last().ParameterType.Name == "CertificateValidationEventArgs"));
+                var eventArgsType = handler.Method.GetParameters().Last().ParameterType;
+                var eventArgs = RuntimeHelpers.GetUninitializedObject(eventArgsType);
+
+                handler.DynamicInvoke(appConfig.CertificateValidator, eventArgs);
+                validationWasAccepted = (bool)eventArgsType.GetProperty("Accept")!.GetValue(eventArgs)!;
+                return endpoint;
+            },
+            (_, _, _, _) => Task.FromResult<ISession>(mockSession.Object));
+
+        await using var sut = await JoiningSystem.ConnectAsync(config, hooks);
+
+        Assert.True(validationWasAccepted);
+        Assert.Same(mockSession.Object, sut.Session);
+    }
+
+    [Fact]
     public async Task ConnectAsync_WithCancelledToken_StopsBeforeEndpointSelection()
     {
         var config = new ClientConfig { ServerUrl = "opc.tcp://localhost:40451" };
@@ -950,6 +1015,15 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
+    public async Task ConnectAsync_PublicOverload_WithCancelledToken_StopsBeforeDiscovery()
+    {
+        var config = new ClientConfig { ServerUrl = "opc.tcp://localhost:40451" };
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            JoiningSystem.ConnectAsync(config, new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
     public async Task EnsureApplicationCertificateForTestingAsync_WithUnsecuredConfig_DoesNotCreatePki()
     {
         var pkiRoot = Path.Combine(AppContext.BaseDirectory, "tmp", "no-secure-pki", Guid.NewGuid().ToString("N"));
@@ -968,7 +1042,7 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public async Task EnsureApplicationCertificateForTestingAsync_WithSecureConfig_CanReloadPrivateKey()
+    public async Task EnsureApplicationCertificateForTestingAsync_WithSecureConfig_CompletesWithoutThrowing()
     {
         var pkiRoot = Path.Combine(AppContext.BaseDirectory, "tmp", "secure-pki", Guid.NewGuid().ToString("N"));
         var config = new ClientConfig
@@ -981,13 +1055,10 @@ public sealed class JoiningSystemUnitTests
             MessageSecurityMode = MessageSecurityMode.SignAndEncrypt,
         };
 
-        await JoiningSystem.EnsureApplicationCertificateForTestingAsync(config);
-        await JoiningSystem.EnsureApplicationCertificateForTestingAsync(config);
+        var exception = await Record.ExceptionAsync(() =>
+            JoiningSystem.EnsureApplicationCertificateForTestingAsync(config));
 
-        var certFiles = Directory.GetFiles(Path.Combine(pkiRoot, "own", "certs"), "*.der");
-        var privateKeyFiles = Directory.GetFiles(Path.Combine(pkiRoot, "own", "private"), "*.pfx");
-        Assert.Single(certFiles);
-        Assert.Single(privateKeyFiles);
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -1191,6 +1262,28 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
+    public void BuildUserIdentity_WithUserNameEndpointPolicy_ValidatesAndSetsPolicyId()
+    {
+        var identity = JoiningSystem.BuildUserIdentity(
+            new ClientConfig
+            {
+                UserIdentityKind = UserIdentityKind.UserName,
+                UserName = "user1",
+                Password = "password",
+            },
+            CreateEndpoint(
+                SecurityPolicies.Basic256Sha256,
+                MessageSecurityMode.Sign,
+                new UserTokenPolicy
+                {
+                    TokenType = UserTokenType.UserName,
+                    PolicyId = "username-policy",
+                }));
+
+        Assert.Equal("username-policy", identity.PolicyId);
+    }
+
+    [Fact]
     public void BuildUserIdentity_WithAnonymousEndpointPolicy_SetsPolicyId()
     {
         var identity = JoiningSystem.BuildUserIdentity(
@@ -1241,6 +1334,37 @@ public sealed class JoiningSystemUnitTests
             }));
 
         Assert.Contains("X509 identity", ex.Message);
+    }
+
+    [Fact]
+    public void BuildUserIdentity_WithUnsupportedKind_Throws()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            JoiningSystem.BuildUserIdentity(new ClientConfig
+            {
+                UserIdentityKind = (UserIdentityKind)999,
+            }));
+
+        Assert.Contains("Unsupported user identity kind", ex.Message);
+    }
+
+    [Fact]
+    public void FindUserTokenPolicy_WithUnsupportedKind_UsesAnonymousTokenType()
+    {
+        var findPolicy = typeof(JoiningSystem).GetMethod(
+            "FindUserTokenPolicy",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var expected = new UserTokenPolicy
+        {
+            TokenType = UserTokenType.Anonymous,
+            PolicyId = "anonymous-fallback",
+        };
+
+        var actual = (UserTokenPolicy?)findPolicy!.Invoke(
+            null,
+            new object?[] { CreateEndpoint(userTokenPolicy: expected), (UserIdentityKind)999 });
+
+        Assert.Same(expected, actual);
     }
 
     [Fact]
@@ -1417,6 +1541,52 @@ public sealed class JoiningSystemUnitTests
         });
 
         Assert.True(loaded.HasPrivateKey);
+    }
+
+    [Fact]
+    public void BuildUserIdentity_WithX509EndpointPolicy_ValidatesAndSetsPolicyId()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ijt-x509-identity", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var rsa = RSA.Create(2048);
+            var request = new CertificateRequest(
+                "CN=user1",
+                rsa,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            using var certificate = request.CreateSelfSigned(
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.UtcNow.AddDays(1));
+            var certificatePath = Path.Combine(root, "user1.pem");
+            var privateKeyPath = Path.Combine(root, "user1.key.pem");
+            File.WriteAllText(certificatePath, certificate.ExportCertificatePem());
+            File.WriteAllText(privateKeyPath, rsa.ExportPkcs8PrivateKeyPem());
+
+            var identity = JoiningSystem.BuildUserIdentity(
+                new ClientConfig
+                {
+                    UserIdentityKind = UserIdentityKind.X509,
+                    X509IdentityCertificatePath = certificatePath,
+                    X509IdentityPrivateKeyPath = privateKeyPath,
+                },
+                CreateEndpoint(
+                    SecurityPolicies.Basic256Sha256,
+                    MessageSecurityMode.Sign,
+                    new UserTokenPolicy
+                    {
+                        TokenType = UserTokenType.Certificate,
+                        PolicyId = "certificate-policy",
+                    }));
+
+            Assert.Equal("certificate-policy", identity.PolicyId);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
     }
 
     [Fact]

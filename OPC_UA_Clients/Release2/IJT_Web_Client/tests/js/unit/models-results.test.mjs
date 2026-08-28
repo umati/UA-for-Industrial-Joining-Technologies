@@ -254,6 +254,13 @@ describe('ResultDataType', () => {
     expect(new ResultDataType({ ResultMetaData: {} }, mm).getAssociatedEntity('tool')).toBeUndefined()
   })
 
+  it('returns undefined when associated entities are unavailable at runtime', () => {
+    const result = new ResultDataType({ ResultMetaData: { ResultId: 'r1' } }, makeMM())
+    result.ResultMetaData = {}
+
+    expect(result.getAssociatedEntity('tool')).toBeUndefined()
+  })
+
   it('replaceReference swaps the child at the correct index', () => {
     const mm = makeMM()
     const r = new ResultDataType({ ResultMetaData: { ResultId: 'r1' } }, mm)
@@ -493,6 +500,17 @@ describe('TighteningDataType — constructor', () => {
       ResultMetaData: { ResultId: 'r3' },
       ResultContent: []
     }, mm)).not.toThrow()
+  })
+
+  it('connects a supplied trace to the constructed result', () => {
+    const trace = { createConnections: vi.fn() }
+    const mm = { factory: vi.fn((key, value) => value) }
+    const result = new TighteningDataType({
+      ResultMetaData: { ResultId: 'with-trace' },
+      ResultContent: [{ Trace: trace }]
+    }, mm)
+
+    expect(trace.createConnections).toHaveBeenCalledWith(result)
   })
 })
 

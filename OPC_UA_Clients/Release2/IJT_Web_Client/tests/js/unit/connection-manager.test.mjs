@@ -84,6 +84,17 @@ describe('ConnectionManager — constructor', () => {
     expect(manager[CONNECTION_STATES.ATTEMPT_CONNECTION]).toBe(true)
   })
 
+  describe('ConnectionManager — state subscriptions', () => {
+    it('immediately publishes an already reached state to a new subscriber', () => {
+      const callback = vi.fn()
+      manager[CONNECTION_STATES.CONNECTION] = true
+
+      manager.subscribe(CONNECTION_STATES.CONNECTION, callback)
+
+      expect(callback).toHaveBeenCalledWith(true)
+    })
+  })
+
   it('calls socketHandler.connect() once during construction', () => {
     expect(mockSocket.connect).toHaveBeenCalledOnce()
   })

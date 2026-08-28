@@ -109,6 +109,13 @@ describe('PartialNode — constructor initialisation', () => {
 // ---------------------------------------------------------------------------
 
 describe('PartialNode — nodeIdString getter', () => {
+  it('uses the null node id string when NodeId is unavailable', () => {
+    const node = NodeFactory({ attributes: {} })
+    delete node.data.attributes.NodeId
+
+    expect(node.nodeIdString).toBe('ns=0;i=0')
+  })
+
   it('returns ;i= format for numeric identifier', () => {
     const node = NodeFactory(makeData())
     expect(node.nodeIdString).toBe('ns=2;i=100')

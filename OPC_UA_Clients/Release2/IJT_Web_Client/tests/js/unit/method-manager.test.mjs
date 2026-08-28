@@ -150,6 +150,21 @@ describe('MethodManager.call — node ID forwarding', () => {
     expect(calledArgs[0].value).toBe(42)
   })
 
+  it('maps floating-point input values through parseFloat', async () => {
+    const fakeAddressSpace = makeFakeAddressSpace()
+    const manager = new MethodManager(fakeAddressSpace)
+    const methodData = {
+      parentNode: makeNode('TS', 'ns=1;s=TS'),
+      methodNode: makeMethodNode('Method', 'ns=1;s=TS/Method'),
+      arguments: []
+    }
+
+    await manager.call(methodData, [{ type: { Identifier: 10 }, value: '42.5' }])
+
+    const [, , calledArgs] = fakeAddressSpace.methodCall.mock.calls[0]
+    expect(calledArgs[0].value).toBe(42.5)
+  })
+
   it('maps Boolean true correctly', async () => {
     const fakeAddressSpace = makeFakeAddressSpace()
     const manager = new MethodManager(fakeAddressSpace)
@@ -201,6 +216,52 @@ describe('MethodManager.call — node ID forwarding', () => {
 })
 
 describe('MethodManager — method registry', () => {
+  it('sorts methods alphabetically within a generated group', () => {
+    const manager = new MethodManager(makeFakeAddressSpace())
+    manager.methodObject = {
+      Zeta: { nodeIdString: 'ns=1;s=Zeta', methodNode: {} },
+      Alpha: { nodeIdString: 'ns=1;s=Alpha', methodNode: {} }
+    }
+
+    manager.setMethodMetadata({ groups: [], defaults: { byName: {}, byPath: {} } })
+
+    expect(manager.getGroupedMethods()[0].methods.map(method => method.name)).toEqual(['Alpha', 'Zeta'])
+  })
+
+  it('returns no method names when the registry is unavailable', () => {
+    const manager = new MethodManager(makeFakeAddressSpace())
+    manager.methodObject = null
+
+    expect(manager.getMethodNames()).toEqual([])
+  })
+
+  it('skips missing output definitions and captures a return definition', async () => {
+    const outputRelation = { NodeId: 'output', BrowseName: { Name: 'OutputArguments' } }
+    const returnRelation = { NodeId: 'return', BrowseName: { Name: 'ReturnValue' } }
+    const fakeAddressSpace = makeFakeAddressSpace()
+    fakeAddressSpace.relationsToNodes.mockImplementation(async ([relation]) => {
+      if (relation.NodeId === 'output') {
+        return [{ data: { attributes: { Value: [null] } } }]
+      }
+      return [{
+        data: {
+          attributes: {
+            Value: [{ Name: 'ReturnStatus', DataType: { Identifier: 6 } }]
+          }
+        }
+      }]
+    })
+    const manager = new MethodManager(fakeAddressSpace)
+    const methodNode = makeMethodNode('WithReturnValue', 'ns=1;s=WithReturnValue')
+    methodNode.getChildRelations.mockImplementation((relationType) =>
+      relationType === 'hasProperty' ? [outputRelation, returnRelation] : [])
+
+    const method = await manager.setupMethod(methodNode)
+
+    expect(method.outputArguments).toEqual([])
+    expect(method.returnArgument).toMatchObject({ Name: 'ReturnStatus', DataType: { Identifier: 6 } })
+  })
+
   it('getMethodNames returns empty array before setup', () => {
     const manager = new MethodManager(makeFakeAddressSpace())
     // methodObject not initialised yet

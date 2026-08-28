@@ -1,6 +1,7 @@
 #nullable enable
 
 using IJT_CSharp_Client.Client;
+using IJT_CSharp_Client.Helpers;
 using Moq;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -551,6 +552,77 @@ public sealed class ResultManagementUnitTests
         Assert.NotNull(ex);
     }
 
+    [Fact]
+    public void SubscribeResultVariable_WithSubscriptionCapableSession_CreatesSubscription()
+    {
+        var session = MockSessionBuilder.Create();
+        var uaSession = MockSessionBuilder.CreateSubscriptionCapableSession();
+        session.Setup(s => s.Session).Returns(uaSession.Object);
+        session.Setup(s => s.BrowseChildren(It.IsAny<NodeId>(), It.IsAny<uint>()))
+            .Returns(new ReferenceDescriptionCollection
+            {
+                new()
+                {
+                    NodeId = new ExpandedNodeId(new NodeId(5556u, 1)),
+                    NodeClass = NodeClass.Variable,
+                    BrowseName = new QualifiedName("Result", 1),
+                },
+            });
+        using var rm = new ResultManagement(session.Object);
+
+        rm.SubscribeResultVariable();
+
+        Assert.True(rm.IsResultVarSubscribed);
+        uaSession.Verify(s => s.CreateSubscriptionAsync(
+            It.IsAny<RequestHeader>(),
+            It.IsAny<double>(),
+            It.IsAny<uint>(),
+            It.IsAny<uint>(),
+            It.IsAny<uint>(),
+            It.IsAny<bool>(),
+            It.IsAny<byte>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public void ResultVariableNotificationHandler_ProcessesQueuedValue()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ijt-result-notification", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var logRoot = IjtFileLogger.PushBaseLogDirOverride(root);
+            var session = MockSessionBuilder.Create();
+            using var rm = new ResultManagement(session.Object);
+            var item = new MonitoredItem { NodeClass = NodeClass.Variable };
+            item.SaveValueInCache(new MonitoredItemNotification
+            {
+                Value = new DataValue
+                {
+                    Value = new UAModel.MachineryResult.ResultDataType
+                    {
+                        ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType
+                        {
+                            ResultId = "NOTIFICATION-RESULT",
+                        },
+                    },
+                },
+            });
+            var handler = typeof(ResultManagement).GetMethod(
+                "OnResultVariableChanged",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            handler!.Invoke(rm, [item, null]);
+
+            Assert.True(File.Exists(IjtFileLogger.ResultLogPath));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
     // ── StopResultVariableSubscription — normal path ─────────────────────────
 
     private static void SetResultVarSubscription(ResultManagement rm, Subscription? value)
@@ -575,5 +647,32 @@ public sealed class ResultManagementUnitTests
 
         Assert.Null(ex);
         Assert.False(rm.IsResultVarSubscribed);  // finally block cleared it
+    }
+
+    [Fact]
+    public void StopResultVariableSubscription_WhenSessionRemovalThrowsServiceResult_CleansUp()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.Session).Returns(
+            MockSessionBuilder.CreateThrowingSession(new ServiceResultException(StatusCodes.BadSessionClosed)));
+        using var rm = new ResultManagement(session.Object);
+        SetResultVarSubscription(rm, new Subscription());
+
+        rm.StopResultVariableSubscription();
+
+        Assert.False(rm.IsResultVarSubscribed);
+    }
+
+    [Fact]
+    public void StopResultVariableSubscription_WhenSessionRemovalThrowsUnexpectedException_CleansUp()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.Session).Returns(
+            MockSessionBuilder.CreateThrowingSession(new InvalidOperationException("remove failed")));
+        using var rm = new ResultManagement(session.Object);
+        SetResultVarSubscription(rm, new Subscription());
+
+        Assert.Null(Record.Exception(rm.StopResultVariableSubscription));
+        Assert.False(rm.IsResultVarSubscribed);
     }
 }

@@ -43,6 +43,10 @@ def test_console_opcua_security_common_name_hashes_unknown_long_targets() -> Non
     assert len(common_name) <= 64
 
 
+def test_console_opcua_security_common_name_defaults_empty_target_to_local() -> None:
+    assert console_opcua_security_common_name("") == "IJT Console OPC UA Security Local"
+
+
 def test_write_self_signed_certificate_creates_cert_key_and_der(tmp_path: Path) -> None:
     generated = write_self_signed_certificate(
         tmp_path / "certs",
@@ -106,6 +110,32 @@ unknown_user:
     assert users.wrong_password.password == "wrong"
     assert users.unknown_user.username == "no_such_user"
     assert users.unknown_user.password == "anything"
+
+
+def test_load_opcua_security_users_ignores_comments_blank_and_out_of_section_lines(tmp_path: Path) -> None:
+    users_file = tmp_path / "users.yaml"
+    users_file.write_text(
+        """
+# This comment and the blank line below are ignored.
+
+orphan: ignored
+positive:
+  username: user1
+  password: password
+wrong_password:
+  username: user1
+  password: wrong
+unknown_user:
+  username: no_such_user
+  password: anything
+""".strip(),
+        encoding="utf-8",
+    )
+
+    users = load_opcua_security_users(users_file)
+
+    assert users.positive.username == "user1"
+    assert users.unknown_user.username == "no_such_user"
 
 
 def test_write_simulator_user_identity_configuration_adds_x509_thumbprint(tmp_path: Path) -> None:

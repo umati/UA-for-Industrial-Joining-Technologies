@@ -242,6 +242,21 @@ describe('TighteningResultDataType', () => {
     expect(result.resultId).toBe('R-001')
   })
 
+  it('connects trace steps to their corresponding result steps during construction', () => {
+    const result = new TighteningResultDataType(
+      {
+        stepResults: [{ stepResultId: 'result-step-1' }],
+        trace: {
+          stepTraces: [{ stepTraceId: 'trace-step-1', stepResultId: 'result-step-1' }]
+        }
+      },
+      mm
+    )
+
+    expect(result.trace.stepTraces[0].stepResultId.link).toBe(result.stepResults[0])
+    expect(result.stepResults[0].stepTraceId.link).toBe(result.trace.stepTraces[0])
+  })
+
   it('getStep() returns the matching step by stepResultId', () => {
     const result = new TighteningResultDataType(
       {

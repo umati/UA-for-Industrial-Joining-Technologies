@@ -2,7 +2,6 @@ import json
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 
@@ -639,10 +638,18 @@ def test_recorder_setup_passed_guard_and_workbook_exact_refs(report_tmp_path, mo
     test_file.parent.mkdir(parents=True)
     test_file.write_text("# test placeholder\n", encoding="utf-8")
 
-    class _WbMarker(_Marker):
-        name = "workbook_ref"
-        args = ("CU_001", 5)  # type: ignore[assignment]
-        kwargs: dict[str, Any] = {}
+    captured_workbook_inputs = {}
+
+    def workbook_report(**kwargs):
+        captured_workbook_inputs.update(kwargs)
+        return {"by_cu": {}}
+
+    monkeypatch.setattr("helpers.cu_coverage_report.workbook_traceability_report", workbook_report)
+
+    class _WorkbookMarker(_Marker):
+        def __init__(self):
+            super().__init__("CU_001", 5, name="workbook_ref")
+            self.kwargs = {}
 
     recorder = CuCoverageReportRecorder(root=report_tmp_path, all_cus=["single_result"], supported_cus=None)
     items = [
@@ -650,19 +657,18 @@ def test_recorder_setup_passed_guard_and_workbook_exact_refs(report_tmp_path, mo
             nodeid="specification_tests/test_file.py::test_case",
             fspath=test_file,
             name="test_case",
-            markers=[_Marker("single_result"), _WbMarker()],
+            markers=[_Marker("single_result"), _WorkbookMarker()],
         )
     ]
 
     recorder.pytest_collection_modifyitems(None, None, items)
-    # Mock _classify_report to return "passed" when report.passed=False to hit line 221
-    monkeypatch.setattr("helpers.cu_coverage_report._classify_report", lambda _r: "passed")
-    recorder.pytest_runtest_logreport(
-        _Report(nodeid="specification_tests/test_file.py::test_case", when="setup", passed=False)
-    )
+    # A passed setup report is ignored even when classification is unexpectedly passed.
+    with monkeypatch.context() as patch:
+        patch.setattr("helpers.cu_coverage_report._classify_report", lambda _r: "passed")
+        recorder.pytest_runtest_logreport(
+            _Report(nodeid="specification_tests/test_file.py::test_case", when="setup", passed=False)
+        )
 
-    # Restore normal _classify_report
-    monkeypatch.undo()
     recorder.pytest_runtest_logreport(
         _Report(nodeid="specification_tests/test_file.py::test_case", when="call", passed=True)
     )
@@ -670,3 +676,4 @@ def test_recorder_setup_passed_guard_and_workbook_exact_refs(report_tmp_path, mo
 
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["by_cu"]["single_result"]["passed"] == 1
+    assert captured_workbook_inputs["exact_refs_by_row"] == {"CU_001!R5": {items[0].nodeid}}

@@ -104,6 +104,10 @@ E2E tests live in `tests/e2e/` and use Playwright (requires running server).
 Vitest enforces a 95% line-coverage threshold for the unit suite; the runner also
 reports an advisory 95% ratchet floor and a 100% aspirational goal.
 
+Keep the existing threshold as regression margin. Private UI paths that are not
+reachable through public behavior remain measured rather than excluded; rely on
+the current runner report for the observed percentage.
+
 ### E2E Test Architecture
 
 All E2E specs use `e2e-fixtures.mjs` which **skips all tests gracefully** when

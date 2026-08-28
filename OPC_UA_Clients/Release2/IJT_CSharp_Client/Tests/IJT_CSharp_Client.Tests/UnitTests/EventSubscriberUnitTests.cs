@@ -171,23 +171,19 @@ public sealed class EventSubscriberUnitTests
     // ── Subscribe — subscription creation code paths ─────────────────────────
 
     /// <summary>
-    /// Calling Subscribe() exercises lines 106-145 (Subscription + MonitoredItem
-    /// object creation, AddSubscription call). The call to Subscription.Create()
-    /// throws because the mock ISession has no real server channel; all lines
-    /// before Create() are instrumented and counted as covered.
+    /// Calling Subscribe() with a protocol-complete mock exercises the subscription
+    /// creation path without requiring a server connection.
     /// </summary>
     [Fact]
     public void Subscribe_WithMockSession_CoversSubscriptionCreationBeforeCreate()
     {
         var session = MockSessionBuilder.Create();
+        var uaSession = MockSessionBuilder.CreateSubscriptionCapableSession();
+        session.Setup(s => s.Session).Returns(uaSession.Object);
         using var sub = new EventSubscriber(session.Object);
 
-        // Record.Exception lets the NullReferenceException from Create() through
-        // without failing the test; lines 106-145 are covered.
-        var ex = Record.Exception(() => sub.Subscribe());
+        sub.Subscribe();
 
-        // _eventSubscription was set before Create() threw, so IsSubscribed is true
-        Assert.NotNull(ex);
         Assert.True(sub.IsSubscribed);
     }
 
@@ -214,6 +210,27 @@ public sealed class EventSubscriberUnitTests
 
         Assert.Null(ex);
         Assert.False(sub.IsSubscribed);
+    }
+
+    [Fact]
+    public void NotificationHandlers_ProcessQueuedEvents()
+    {
+        var session = MockSessionBuilder.Create();
+        using var sub = new EventSubscriber(session.Object);
+        var resultItem = new MonitoredItem { NodeClass = NodeClass.Object };
+        var systemItem = new MonitoredItem { NodeClass = NodeClass.Object };
+        resultItem.SaveValueInCache(new EventFieldList { EventFields = [] });
+        systemItem.SaveValueInCache(new EventFieldList { EventFields = [] });
+
+        var resultHandler = typeof(EventSubscriber).GetMethod(
+            "OnResultEventNotification",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var systemHandler = typeof(EventSubscriber).GetMethod(
+            "OnJoiningSystemEventNotification",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        resultHandler!.Invoke(sub, [resultItem, null]);
+        systemHandler!.Invoke(sub, [systemItem, null]);
     }
 
     // ── IsSubscribed property ─────────────────────────────────────────────────

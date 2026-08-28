@@ -2210,3 +2210,186 @@ async def test_methodcall_generic_exception_unhandled_connection_dead_returns_ex
 
     assert "exception" in result
     assert "reconnect" in result["exception"].lower()
+
+
+def test_connection_helper_failure_contracts_are_explicit():
+    from python.connection import _call_method_preserving_result, _find_repo_root, _serialize_datatype_nodeid
+
+    parent = SimpleNamespace(
+        nodeid=ua.NodeId(ua.String("Object"), ua.Int16(1)),
+        session=SimpleNamespace(call=AsyncMock(return_value=[])),
+    )
+    method = SimpleNamespace(nodeid=ua.NodeId(ua.String("Method"), ua.Int16(1)))
+
+    with pytest.raises(ua.UaError, match="0 results"):
+        asyncio.run(_call_method_preserving_result(parent, method, []))
+    with patch("python.connection.Path.is_file", return_value=False):
+        with pytest.raises(ModuleNotFoundError, match="full UA-for-Industrial-Joining-Technologies"):
+            _find_repo_root()
+    assert _serialize_datatype_nodeid(None) is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_argument_field_definitions_handles_absent_cached_and_unreadable_datatypes():
+    conn = _make_connection()
+    cache = {(3, 49001): [{"Name": "Cached"}]}
+
+    assert await conn._resolve_argument_field_definitions(SimpleNamespace(DataType=None), cache) == []
+    assert await conn._resolve_argument_field_definitions(
+        SimpleNamespace(DataType=SimpleNamespace(NamespaceIndex=3, Identifier=49001)),
+        cache,
+    ) == [{"Name": "Cached"}]
+
+    conn.client = MagicMock()
+    conn.client.get_node.side_effect = RuntimeError("unreadable data type")
+    assert (
+        await conn._resolve_argument_field_definitions(
+            SimpleNamespace(DataType=SimpleNamespace(NamespaceIndex=3, Identifier=49002)),
+            cache,
+        )
+        == []
+    )
+    assert cache[(3, 49002)] == []
+
+
+@pytest.mark.asyncio
+async def test_cleanup_failed_connect_attempt_tolerates_timed_out_disconnects(monkeypatch):
+    conn = _make_connection()
+    conn.client = MagicMock()
+    conn.subscription_client = MagicMock()
+
+    async def timed_out_disconnect(_client):
+        raise asyncio.TimeoutError()
+
+    monkeypatch.setattr("python.connection.disconnect_opcua_client", timed_out_disconnect)
+    await conn._cleanup_failed_connect_attempt()
+
+    assert conn.client is None
+    assert conn.subscription_client is None
+
+
+@pytest.mark.asyncio
+async def test_connect_keeps_main_session_when_subscription_cleanup_fails(monkeypatch):
+    main_client = MagicMock()
+    main_client.get_root_node.return_value = MagicMock()
+    subscription_client = MagicMock()
+
+    async def connect_client(client):
+        if client is subscription_client:
+            raise RuntimeError("subscription unavailable")
+
+    disconnect_client = AsyncMock(side_effect=RuntimeError("disconnect unavailable"))
+    monkeypatch.setenv("OPCUA_CONNECT_RETRIES", "1")
+    with patch("python.connection.Client", side_effect=[main_client, subscription_client]):
+        with patch("python.connection.apply_session_policy", side_effect=lambda client: client):
+            with patch("python.connection.connect_opcua_client", side_effect=connect_client):
+                with patch("python.connection.load_ijt_type_definitions", new=AsyncMock()):
+                    with patch("python.connection.disconnect_opcua_client", disconnect_client):
+                        result = await _make_connection().connect()
+
+    assert result["command"] == "connection established"
+    disconnect_client.assert_awaited_once_with(subscription_client)
+
+
+async def _call_send_joint_diagnostics(create_result):
+    expected_argument = MagicMock()
+    expected_argument.DataType.Identifier = 3028
+    conn, _ = _make_methodcall_conn(expected_args=[expected_argument])
+    payload = {
+        **_MC_PAYLOAD,
+        "methodnode": {"NamespaceIndex": 1, "Identifier": "/SendJoint"},
+        "arguments": [{"dataType": 3028, "value": [{"name": "JointId", "value": "joint"}]}],
+    }
+    with patch("python.connection.create_call_structure", return_value=create_result):
+        with patch("python.connection.serialize_full_event", return_value=[]):
+            with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+                result = await conn.methodcall(payload)
+    return result
+
+
+@pytest.mark.asyncio
+async def test_methodcall_sendjoint_diagnostics_records_extension_object_fields():
+    joint = SimpleNamespace(
+        JointId="joint-1",
+        JointOriginId="origin-1",
+        JointDesignId="design-1",
+        CreationTime="now",
+        LastUpdatedTime="later",
+        Name="Joint",
+        Description="description",
+        Classification=1,
+        ClassificationDetails="details",
+        JointStatus=2,
+        AssociatedEntities=[SimpleNamespace(Name="tool")],
+        JoiningTechnology="tightening",
+    )
+
+    result = await _call_send_joint_diagnostics(ua.Variant(joint, ua.VariantType.ExtensionObject))
+
+    assert result["callStatus"] == "Succeeded"
+
+
+@pytest.mark.asyncio
+async def test_methodcall_sendjoint_diagnostics_uses_public_attributes_when_known_fields_absent():
+    result = await _call_send_joint_diagnostics(
+        ua.Variant(SimpleNamespace(CustomField=42), ua.VariantType.ExtensionObject)
+    )
+
+    assert result["callStatus"] == "Succeeded"
+
+
+@pytest.mark.asyncio
+async def test_methodcall_sendjoint_diagnostics_skips_non_extension_arguments():
+    expected_arguments = [MagicMock(), MagicMock(), MagicMock()]
+    for expected_argument in expected_arguments:
+        expected_argument.DataType.Identifier = 3028
+    conn, _ = _make_methodcall_conn(expected_args=expected_arguments)
+    payload = {
+        **_MC_PAYLOAD,
+        "methodnode": {"NamespaceIndex": 1, "Identifier": "/SendJoint"},
+        "arguments": [
+            {"dataType": 3028, "value": [{"name": "JointId", "value": "first"}]},
+            {"dataType": 3028, "value": [{"name": "JointId", "value": "second"}]},
+            {"dataType": 3028, "value": [{"name": "JointId", "value": "third"}]},
+        ],
+    }
+
+    with patch(
+        "python.connection.create_call_structure",
+        side_effect=[
+            object(),
+            ua.Variant("not-an-extension-object", ua.VariantType.String),
+            ua.Variant(SimpleNamespace(CustomField=42), ua.VariantType.ExtensionObject),
+        ],
+    ):
+        with patch("python.connection.serialize_full_event", return_value=[]):
+            with patch.object(conn, "is_connection_open", new=AsyncMock(return_value=True)):
+                result = await conn.methodcall(payload)
+
+    assert result["callStatus"] == "Succeeded"
+
+
+@pytest.mark.asyncio
+async def test_methodcall_sendjoint_diagnostics_never_prevents_method_execution():
+    class BrokenJoint:
+        @property
+        def AssociatedEntities(self):
+            raise RuntimeError("diagnostics unavailable")
+
+    result = await _call_send_joint_diagnostics(ua.Variant(BrokenJoint(), ua.VariantType.ExtensionObject))
+
+    assert result["callStatus"] == "Succeeded"
+
+
+def test_connection_module_reload_adds_shared_scripts_directory_to_sys_path():
+    import importlib
+
+    original_sys_path = sys.path[:]
+    connection_module = sys.modules["python.connection"]
+    scripts_directory = str(connection_module._SCRIPTS_DIR)
+    try:
+        sys.path[:] = [entry for entry in sys.path if entry != scripts_directory]
+        importlib.reload(connection_module)
+        assert scripts_directory in sys.path
+    finally:
+        sys.path[:] = original_sys_path

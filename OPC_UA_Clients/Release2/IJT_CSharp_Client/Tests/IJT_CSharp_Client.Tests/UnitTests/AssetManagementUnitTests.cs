@@ -1,6 +1,8 @@
 #nullable enable
 
+using System.Collections.Concurrent;
 using IJT_CSharp_Client.Client;
+using IJT_CSharp_Client.Helpers;
 using Moq;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -523,14 +525,42 @@ public sealed class AssetManagementUnitTests
         Assert.False(am.IsAssetVarSubscribed);
     }
 
+    [Fact]
+    public void StopAssetVariableSubscription_WhenSessionRemovalThrowsServiceResult_CleansUp()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.Session).Returns(
+            MockSessionBuilder.CreateThrowingSession(new ServiceResultException(StatusCodes.BadSessionClosed)));
+        using var am = new AssetManagement(session.Object);
+        SetAssetVarSubscription(am, new Subscription());
+
+        am.StopAssetVariableSubscription();
+
+        Assert.False(am.IsAssetVarSubscribed);
+    }
+
+    [Fact]
+    public void StopAssetVariableSubscription_WhenSessionRemovalThrowsUnexpectedException_CleansUp()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.Session).Returns(
+            MockSessionBuilder.CreateThrowingSession(new InvalidOperationException("remove failed")));
+        using var am = new AssetManagement(session.Object);
+        SetAssetVarSubscription(am, new Subscription());
+
+        am.StopAssetVariableSubscription();
+
+        Assert.False(am.IsAssetVarSubscribed);
+    }
+
     // ── SubscribeAssetVariables — full hierarchy (covers loop bodies + SubscribeAllVariables) ──
 
     /// <summary>
     /// Feeds a full category → instance → variable + object-child hierarchy to
     /// SubscribeAssetVariables so the inner foreach bodies, SubscribeAllVariables,
     /// and both the Variable and Object branches are exercised.
-    /// Create() throws on the disconnected mock subscription — that exception is
-    /// caught by Record.Exception so all preceding lines count as covered.
+    /// The protocol-complete mock lets the subscription lifecycle complete without
+    /// connecting to an OPC UA server.
     /// </summary>
     [Fact]
     public void SubscribeAssetVariables_WithCategoryInstanceAndVariableHierarchy_CoversLoopBodiesAndSubscribeAllVariables()
@@ -572,6 +602,8 @@ public sealed class AssetManagementUnitTests
         };
 
         var session = MockSessionBuilder.Create();
+        var uaSession = MockSessionBuilder.CreateSubscriptionCapableSession();
+        session.Setup(s => s.Session).Returns(uaSession.Object);
 
         // Category objects under the Assets node (ValidNodeId == assetsNode)
         session.Setup(s => s.BrowseChildren(
@@ -599,8 +631,9 @@ public sealed class AssetManagementUnitTests
 
         using var am = new AssetManagement(session.Object);
 
-        // Create() on the disconnected mock subscription throws — that is expected
-        _ = Record.Exception(() => am.SubscribeAssetVariables());
+        am.SubscribeAssetVariables();
+
+        Assert.True(am.IsAssetVarSubscribed);
     }
 
     // ── GetMethodSetNode — fallback when MethodSet child is not found ─────────
@@ -666,6 +699,44 @@ public sealed class AssetManagementUnitTests
         var ex = Record.Exception(() => method!.Invoke(am, new object[] { "nonexistent-key" }));
 
         Assert.Null(ex); // should return early if key not found
+    }
+
+    [Fact]
+    public void FlushAssetJson_WithValues_WritesNestedAssetSnapshot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ijt-asset-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var logRoot = IjtFileLogger.PushBaseLogDirOverride(Path.Combine(root, "logs"));
+            var session = MockSessionBuilder.Create();
+            using var am = new AssetManagement(session.Object);
+            var valuesField = typeof(AssetManagement).GetField(
+                "_assetValues",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var values = (ConcurrentDictionary<string, ConcurrentDictionary<string, object?>>)valuesField!.GetValue(am)!;
+            values["Tool-1"] = new ConcurrentDictionary<string, object?>(
+                new[]
+                {
+                    new KeyValuePair<string, object?>("Identification/ProductInstanceUri", "urn:tool:1"),
+                    new KeyValuePair<string, object?>("Status/Enabled", true),
+                });
+            var flush = typeof(AssetManagement).GetMethod(
+                "FlushAssetJson",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            flush!.Invoke(am, new object[] { "Tool-1" });
+
+            var content = File.ReadAllText(Path.Combine(IjtFileLogger.AssetLogDir, "Tool-1.json"));
+            Assert.Contains("Identification", content, StringComparison.Ordinal);
+            Assert.Contains("urn:tool:1", content, StringComparison.Ordinal);
+            Assert.Contains("Enabled", content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
     }
 
 
