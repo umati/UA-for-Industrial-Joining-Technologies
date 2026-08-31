@@ -204,7 +204,8 @@ triggers:
     #   manual_trigger          — subscribe first, wait for physical tool trigger
     #   observe_only            — validate passive evidence without triggering
     mode: none
-    timeout_seconds: 15
+    # Fast 5s wait for tightening results; skips quickly if tool is not operated.
+    timeout_seconds: 5
     deselect_after_joining: false
 
   event:
@@ -214,7 +215,8 @@ triggers:
     #   manual_trigger  — wait for events produced by operator/target server action
     #   none            — no event trigger; event CUs will be blocked
     mode: observe_only
-    timeout_seconds: 10
+    # Maximum passive event wait.
+    timeout_seconds: 5
 
   condition:
     # Trigger mode for condition CUs:
@@ -223,7 +225,8 @@ triggers:
     #   manual_trigger  — wait for conditions produced by operator/target server action
     #   none            — no condition trigger; condition CUs will be blocked
     mode: observe_only
-    timeout_seconds: 10
+    # Maximum retained condition wait.
+    timeout_seconds: 5
 
 # ---------------------------------------------------------------------------
 # Workflow execution: joining workflow setup and cleanup.
@@ -241,12 +244,13 @@ workflow_execution:
 
   expected_results:
     # Primary/final classification:
-    # single, sync, batch, job, stitching, intervention, text, or any
+    # single, sync, batch, job, stitching, intervention, text, or any (for all 123 CUs)
     classification: single
     # Optional result classifications emitted before or alongside the final
     # result. Intervention is companion evidence, not a JobResult child layer.
     # Examples: [batch] for a handheld Job containing Batch results;
-    # [sync] for a fixtured-controller Job containing Sync results.
+    # [sync] for a fixtured-controller Job containing Sync results;
+    # [single, batch, job, sync, intervention] when classification is 'any'.
     intermediate_classifications: []
     final_result_required: true
     timeout_seconds: 60
