@@ -194,6 +194,7 @@ class SelectionConfig:
 
     tool: ToolSelectionConfig = field(default_factory=ToolSelectionConfig)
     joining_process: JoiningProcessSelectionConfig = field(default_factory=JoiningProcessSelectionConfig)
+    joining_processes: dict[str, JoiningProcessSelectionConfig] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -464,7 +465,19 @@ def _parse_selection(raw: dict, context: str = "selection") -> SelectionConfig:
         raise TargetServerConfigError(f"{context}: 'joining_process' must be a mapping")
     jp_cfg = _parse_jp_selection(jp_raw, f"{context}.joining_process")
 
-    return SelectionConfig(tool=tool_cfg, joining_process=jp_cfg)
+    jps_raw = raw.get("joining_processes", {})
+    if not isinstance(jps_raw, dict):
+        raise TargetServerConfigError(f"{context}: 'joining_processes' must be a mapping")
+    jps_dict: dict[str, JoiningProcessSelectionConfig] = {}
+    for key, sub_raw in jps_raw.items():
+        if not isinstance(key, str):
+            raise TargetServerConfigError(f"{context}.joining_processes: keys must be strings")
+        norm_key = key.lower().strip()
+        if not isinstance(sub_raw, dict):
+            raise TargetServerConfigError(f"{context}.joining_processes.{key}: value must be a mapping")
+        jps_dict[norm_key] = _parse_jp_selection(sub_raw, f"{context}.joining_processes.{key}")
+
+    return SelectionConfig(tool=tool_cfg, joining_process=jp_cfg, joining_processes=jps_dict)
 
 
 def _parse_expected_results(raw: dict, context: str) -> ExpectedResultsConfig:

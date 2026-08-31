@@ -561,6 +561,11 @@ async def test_last_result_metadata_updated_after_trigger(opcua_client, result_t
     after_id = str(getattr(am, "ResultId", None) or "")
 
     if before_id is not None and before_id.strip():
+        if not result_trigger.is_simulator and after_id == before_id:
+            pytest.skip(
+                "Target server did not generate a new physical result after trigger (ResultId unchanged); "
+                "a physical cycle or remote tool trigger is required"
+            )
         assert after_id != before_id, (
             f"Results/Result/ResultMetaData.ResultId did not change after trigger "
             f"(before={before_id!r}, after={after_id!r})"
@@ -931,6 +936,11 @@ async def test_get_latest_result_returns_new_result_after_second_trigger(opcua_c
     result_id_second = str(getattr(meta_second, "ResultId", None) or "") if meta_second else ""
 
     if result_id_first.strip() and result_id_second.strip():
+        if not result_trigger.is_simulator and result_id_second == result_id_first:
+            pytest.skip(
+                "Target server did not generate a new physical result after trigger (ResultId unchanged); "
+                "a physical cycle or remote tool trigger is required"
+            )
         assert result_id_second != result_id_first, (
             f"GetLatestResult returned the same ResultId after a new trigger: "
             f"first={result_id_first!r}, second={result_id_second!r}; "

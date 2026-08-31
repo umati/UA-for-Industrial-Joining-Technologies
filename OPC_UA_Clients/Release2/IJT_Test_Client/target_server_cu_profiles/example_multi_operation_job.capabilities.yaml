@@ -1,9 +1,16 @@
-# Capability baseline paired with
-# example_multi_operation_job.profile.yaml in this directory.
+# =============================================================================
+# OPC UA IJT Server Capability Declaration Example (OPC 40450-1 Release 2.0)
+# =============================================================================
 #
-# This preserves the tested CU selection without vendor, endpoint, asset, or
-# process identifiers. Capabilities still vary by implementation and version;
-# verify and adjust this file before making conformance claims for another server.
+# PURPOSE:
+# This file declares WHICH Conformance Units (CUs), Profiles, and Facets the
+# controller firmware implements. The Test Client reads this file to determine
+# which specification tests to execute and which optional features to skip.
+#
+# NOTE:
+# - Connection details (IP, port) belong ONLY in *.profile.yaml.
+# - Unsupported CUs will be safely skipped so they do not fail conformance.
+# =============================================================================
 
 server:
   # Human-readable implementation name written into reports.
@@ -17,15 +24,14 @@ server:
     Example IJT server supporting Tool-based remote start, layered
     SingleResult/BatchResult/JobResult output, and intervention results.
 
-connection:
-  # Fallback endpoint when the execution profile/CLI does not override it.
-  default_url: "opc.tcp://<target-server-host>:40451"
-  # Maximum connection-establishment wait.
-  connect_timeout_seconds: 30
-  # Requested OPC UA session lifetime.
-  session_timeout_seconds: 300
-
-# Base profile providing common JoiningSystem, result, and identifier CUs.
+# ---------------------------------------------------------------------------
+# Base Profile
+# Defines the standard baseline of required CUs.
+# Common values:
+#   - general_joining_system       (standard physical tightening controller)
+#   - basic_tightening_system      (minimal tightening device)
+#   - full_specification_coverage  (enables all 123 CUs for full spec audit)
+# ---------------------------------------------------------------------------
 active_profile: general_joining_system
 
 # Additional facets observed for this multi-operation Tool/job pattern.

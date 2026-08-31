@@ -778,8 +778,31 @@ class TestStartSelectedJoiningResultTrigger:
 
         outcome = await trigger.trigger_batch_or_sync(classification=2, num_children=9)
 
-        trigger._run_workflow.assert_awaited_once_with(3)
+        trigger._run_workflow.assert_awaited_once_with(3, classification="sync")
         assert outcome.operation_count == 3
+
+    async def test_batch_workflow_single_start_policy(self, mock_client, mock_joining_system):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "triggers": {"result": {"mode": "start_selected_joining", "timeout_seconds": 30}},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "default_policy": "require_explicit_opt_in",
+                        "allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining"],
+                    }
+                },
+                "workflow_execution": {
+                    "start_invocation_policy": "single_start_produces_final_result",
+                },
+            }
+        )
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        trigger._run_workflow = AsyncMock(return_value=TargetServerTriggerOutcome(triggered=True, operation_count=1))
+
+        outcome = await trigger.trigger_batch_or_sync(classification=3, num_children=5)
+        trigger._run_workflow.assert_awaited_once_with(1, classification="batch")
+        assert outcome.operation_count == 1
 
     async def test_job_workflow_uses_configured_operation_count(self, mock_client, mock_joining_system):
         profile = load_target_server_profile_from_dict(
@@ -803,7 +826,7 @@ class TestStartSelectedJoiningResultTrigger:
 
         outcome = await trigger.trigger_job()
 
-        trigger._run_workflow.assert_awaited_once_with(6)
+        trigger._run_workflow.assert_awaited_once_with(6, classification="job")
         assert outcome.operation_count == 6
 
     async def test_bulk_results_not_supported(self, profile, mock_client, mock_joining_system):
@@ -1372,8 +1395,205 @@ class TestTargetServerTriggersExtendedBranches:
         assert res.triggered is True
         trigger._trigger_intervention.assert_awaited_once()
 
-        res2 = await trigger.trigger_batch_or_sync(ResultClassification.BATCH_RESULT)
-        assert res2.triggered is True
-
         res3 = await trigger.trigger_job()
         assert res3.triggered is True
+
+    def test_normalize_classification_and_get_selection(self):
+        from helpers.namespaces import ResultClassification
+
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "Default_PSet",
+                    },
+                    "joining_processes": {
+                        "job": {
+                            "policy": "exact_match",
+                            "joining_process_id": "Job_Process_1",
+                        },
+                        "batch": {
+                            "policy": "exact_match",
+                            "joining_process_id": "Batch_Process_1",
+                        },
+                    },
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+
+        assert trigger._normalize_classification(None) == ""
+        assert trigger._normalize_classification(ResultClassification.SINGLE_RESULT) == "single"
+        assert trigger._normalize_classification(ResultClassification.JOB_RESULT) == "job"
+        assert trigger._normalize_classification(ResultClassification.BATCH_RESULT) == "batch"
+        assert trigger._normalize_classification(ResultClassification.SYNC_RESULT) == "sync"
+        assert trigger._normalize_classification(ResultClassification.STITCHING_RESULT) == "stitching"
+        assert trigger._normalize_classification(ResultClassification.INTERVENTION_RESULT) == "intervention"
+        assert trigger._normalize_classification(999) == ""
+        assert trigger._normalize_classification("  JOB ") == "job"
+
+        sel_job, key_job = trigger._get_selection_for_classification("job")
+        assert key_job == "job"
+        assert sel_job.joining_process_id == "Job_Process_1"
+
+        sel_batch, key_batch = trigger._get_selection_for_classification(ResultClassification.BATCH_RESULT)
+        assert key_batch == "batch"
+        assert sel_batch.joining_process_id == "Batch_Process_1"
+
+        sel_default, key_default = trigger._get_selection_for_classification("single")
+        assert key_default == "single"
+        assert sel_default.joining_process_id == "Default_PSet"
+
+    @pytest.mark.asyncio
+    async def test_choose_joining_process_with_classification(self):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "Prog_1",
+                    },
+                    "joining_processes": {
+                        "job": {
+                            "policy": "exact_match",
+                            "joining_process_id": "Job_1",
+                        },
+                    },
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+
+        proc_prog = MagicMock()
+        proc_prog.JoiningProcessId = "Prog_1"
+        proc_job = MagicMock()
+        proc_job.JoiningProcessId = "Job_1"
+        processes = [proc_prog, proc_job]
+
+        chosen_single = trigger._choose_joining_process(processes, classification="single")
+        assert chosen_single == proc_prog
+
+        chosen_job = trigger._choose_joining_process(processes, classification="job")
+        assert chosen_job == proc_job
+
+        chosen_unknown = trigger._choose_joining_process(processes, classification="sync")
+        assert chosen_unknown == proc_prog
+
+    @pytest.mark.asyncio
+    async def test_get_selection_for_intervention_with_counter_parent_process(self):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "extension_fields": {
+                        "counter_parent_process": {
+                            "joining_process_id": "PARENT-1",
+                            "joining_process_origin_id": "PARENT-ORIGIN-1",
+                            "selection_name": "ParentName",
+                        }
+                    }
+                },
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "Prog_1",
+                    }
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        sel, key = trigger._get_selection_for_classification("intervention")
+        assert key == "intervention"
+        assert sel.joining_process_id == "PARENT-1"
+        assert sel.joining_process_origin_id == "PARENT-ORIGIN-1"
+        assert sel.selection_name == "ParentName"
+
+    @pytest.mark.asyncio
+    async def test_get_selection_for_intervention_with_joining_processes_present(self):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "Prog_1",
+                    },
+                    "joining_processes": {
+                        "job": {
+                            "policy": "exact_match",
+                            "joining_process_id": "Job_1",
+                        }
+                    },
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        sel, key = trigger._get_selection_for_classification("intervention")
+        assert key == "intervention"
+        assert sel.policy == "exact_match"
+        assert sel.joining_process_id == ""
+
+    @pytest.mark.asyncio
+    async def test_run_workflow_multi_operation_breaks_early_on_terminal_job_result(self):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://localhost:40451"},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining", "EnableAsset"]
+                    }
+                },
+                "selection": {
+                    "tool": {"policy": "exact_match", "product_instance_uri": "Tool_1"},
+                    "joining_processes": {
+                        "job": {"policy": "exact_match", "joining_process_id": "Job_1"},
+                    },
+                },
+                "workflow_execution": {
+                    "expected_operation_count": 6,
+                    "expected_results": {"timeout_seconds": 5},
+                },
+            }
+        )
+        mock_client = MagicMock()
+        mock_sub_client = MagicMock()
+        mock_js = MagicMock()
+        trigger = StartSelectedJoiningResultTrigger(
+            mock_client, mock_js, 2, profile, ns_ijt=2, subscription_client=mock_sub_client
+        )
+
+        mock_jpm = MagicMock()
+        proc = MagicMock()
+        proc.JoiningProcessId = "Job_1"
+        proc.JoiningProcessOriginId = "Job_Orig_1"
+        proc.AssociatedEntities = []
+
+        trigger._get_joining_process_management = AsyncMock(return_value=mock_jpm)
+        trigger._get_joining_process_list = AsyncMock(return_value=[proc])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._ensure_tool_enabled = AsyncMock(return_value=True)
+        trigger._start_selected_joining = AsyncMock(return_value=True)
+
+        meta = MagicMock()
+        meta.Classification = 4  # JobResult
+        meta.AssociatedEntities = [
+            MagicMock(EntityId="Tool_1"),
+            MagicMock(EntityId="Job_1"),
+        ]
+        job_result = MagicMock(ResultMetaData=meta)
+
+        mock_collector = MagicMock()
+        mock_collector.__aenter__ = AsyncMock(return_value=mock_collector)
+        mock_collector.__aexit__ = AsyncMock(return_value=None)
+        mock_collector.discard_pending = MagicMock(return_value=None)
+        mock_collector.collect_single_matching = AsyncMock(return_value=job_result)
+
+        with patch("helpers.result_collector.ResultCollector", return_value=mock_collector):
+            outcome = await trigger._run_workflow(6, classification="job")
+
+        assert outcome.triggered is True
+        assert outcome.method == "StartSelectedJoining"

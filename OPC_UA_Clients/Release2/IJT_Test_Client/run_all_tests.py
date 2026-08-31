@@ -54,8 +54,6 @@ Precedence (resolved once per run; see helpers/runner_plan.py):
   Endpoint:      --endpoint > non-placeholder profile endpoint > OPCUA_SERVER_URL > simulator auto-launch
   Capabilities:  --capabilities-file > profile capabilities_file > OPCUA_CAPABILITIES_FILE > simulator default
 
-run_target_server_cu.py is a DEPRECATED compatibility shim for the Target Server
-options above; prefer this script.
 """
 
 from __future__ import annotations
@@ -387,6 +385,8 @@ def _run(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             env=env,
         ) as proc:
             try:
@@ -847,6 +847,8 @@ def _print_test_count(pytest_args: list[str] | None = None) -> None:
             cwd=_HERE,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
         for line in reversed(result.stdout.splitlines()):
@@ -1318,7 +1320,15 @@ def _step_pyright() -> _StepResult:
         ]
     )
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    proc = subprocess.run(cmd, check=False, capture_output=True, text=True, cwd=str(_HERE))
+    proc = subprocess.run(
+        cmd,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(_HERE),
+    )
     result.duration = time.monotonic() - t0
     (_RESULTS_DIR / "pyright.json").write_text(proc.stdout or "{}", encoding="utf-8")
     if proc.stderr:
@@ -1650,8 +1660,8 @@ def _maybe_generate_excel(
 
 
 # ---------------------------------------------------------------------------
-# Target Server (--profile / --endpoint) step — single execution path shared
-# with the deprecated run_target_server_cu.py shim via helpers.target_server_execution
+# Target Server (--profile / --endpoint) step — single execution path
+# via helpers.target_server_execution
 # ---------------------------------------------------------------------------
 
 
@@ -1663,7 +1673,7 @@ def _step_target_run(plan: RunPlan) -> _StepResult:
     or --preflight-only (classification only). Delegates entirely to
     helpers.target_server_execution.run_preflight / run_automated so there is
     exactly one implementation of Target Server CU preflight, scoring, and
-    evidence reporting shared with the deprecated run_target_server_cu.py shim.
+    evidence reporting.
     """
     from helpers.target_server_execution import run_automated, run_preflight
 
@@ -1868,6 +1878,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Timeout in seconds for a --profile/--endpoint live specification_tests/ run (default: 600)",
     )
     p.add_argument(
+        "--discover-target",
+        action="store_true",
+        help="Connect to the target server, discover tools and joining processes, and print suggested YAML.",
+    )
+    p.add_argument(
         "pytest_args",
         nargs=argparse.REMAINDER,
         help="Extra args forwarded to pytest (phase 2 only; prefix with -- if they look like flags)",
@@ -1921,6 +1936,15 @@ def main() -> int:
     except TargetServerConfigError as exc:
         _log(_c(_ANSI_RED, f"[ERROR] Target Server profile configuration error: {exc}"))
         return 2
+
+    if getattr(args, "discover_target", False):
+        endpoint = plan.endpoint
+        if not endpoint or "<" in endpoint:
+            _log(_c(_ANSI_RED, "[ERROR] --discover-target requires a valid --endpoint or profile target.endpoint"))
+            return 2
+        from helpers.target_server_execution import run_discover_target
+
+        return run_discover_target(endpoint)
 
     if plan.used_deprecated_profile_flag:
         _log(_c(_ANSI_YELLOW, "  [DEPRECATED] --target-server-profile is deprecated; use --profile instead."))

@@ -31,19 +31,18 @@ evidence — never a separate test suite.
 python run_all_tests.py                                   # Phase 1 + Phase 2 (simulator auto-launch)
 python run_all_tests.py --phase1                           # static analysis only
 python run_all_tests.py --phase2                           # specification_tests only
+python run_all_tests.py --endpoint opc.tcp://<host>:40451 --discover-target      # discover tools/processes & emit YAML
 python run_all_tests.py --profile target_server_cu_profiles/my_profile.yaml   # full validation against a Target Server
 python run_all_tests.py --preflight-only --profile target_server_cu_profiles/my_profile.yaml # classification only, no live tests
 ```
 
-See [Target server CU quick start](docs/TARGET_SERVER_CU_QUICK_START.md) for the
-full Target Server option reference. `run_target_server_cu.py` is a **deprecated**
-compatibility shim that forwards to the same implementation — prefer
-`run_all_tests.py`.
+See [Target Server CU Guide](docs/TARGET_SERVER_CU_GUIDE.md) for the
+full Target Server option reference.
 
 ## Learn More
 
-- [Test report formats](docs/test-results.md)
-- [Integration summary](docs/IJT_TEST_CLIENT_OPCUA_SERVER_INTEGRATION_SUMMARY.md)
-- [Target server CU quick start](docs/TARGET_SERVER_CU_QUICK_START.md)
-- [Reference workflow demos](reference_workflows/README.md)
-- [Target server CU profiles](target_server_cu_profiles/README.md)
+- [Target Server CU Guide](docs/TARGET_SERVER_CU_GUIDE.md) — complete guide: architecture, controller setup, execution recipes, process selection, result layering & safety semantics
+- [Reporting Glossary & KPIs](docs/REPORT_GLOSSARY.md) — metrics definitions, status codes & report contracts
+- [Developer Guide & Coding Rules](docs/SKILLS.md) — architecture, zero-escape gates & async rules
+- [Test Report Formats](docs/test-results.md) — output files, JSON schemas & Excel generation
+- [Target Server CU Profiles](target_server_cu_profiles/README.md) — profile inventory & template catalog

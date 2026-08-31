@@ -9,7 +9,7 @@ simulator is auto-launched, which endpoint/capabilities file is used) is
 made from a single frozen :class:`RunPlan` instead of re-reading
 ``os.environ`` or CLI args at scattered call sites.
 
-Precedence (see run_all_tests.py --help and docs/TARGET_SERVER_CU_QUICK_START.md):
+Precedence (see run_all_tests.py --help and docs/TARGET_SERVER_CU_GUIDE.md):
 
   Endpoint:      --endpoint > non-placeholder profile endpoint > OPCUA_SERVER_URL
                  > simulator auto-launch (only when no profile/external endpoint)
@@ -173,7 +173,7 @@ def resolve_run_plan(args: argparse.Namespace, *, env: Mapping[str, str] | None 
         # an override when CLI wins outright, or when the profile has no capabilities
         # file of its own and env is the only remaining source. This is deliberately
         # different from tool/process selection below, which always let CLI/env win
-        # over the profile (matching the pre-existing run_target_server_cu.py contract).
+        # over the profile (matching the Target Server CLI contract).
         profile_had_own_capabilities = bool(profile.capabilities_file)
         capabilities_override = cli_capabilities
         if not capabilities_override and not profile_had_own_capabilities:

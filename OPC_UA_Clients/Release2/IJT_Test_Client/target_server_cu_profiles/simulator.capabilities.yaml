@@ -16,15 +16,10 @@ server:
   # Scope statement for this observed capability declaration.
   description: "Capabilities observed for the checked-in simulator binary."
 
-connection:
-  # Dedicated simulator endpoint used by Test Client live tests.
-  default_url: "opc.tcp://localhost:40462"
-  # Maximum connection-establishment wait.
-  connect_timeout_seconds: 30
-  # Requested OPC UA session lifetime.
-  session_timeout_seconds: 300
-
+# ---------------------------------------------------------------------------
+# Base Profile
 # Start from all official IJT CUs, then remove known simulator gaps below.
+# ---------------------------------------------------------------------------
 active_profile: full_specification_coverage
 # No extra facets are needed beyond the full profile.
 supported_facets: []

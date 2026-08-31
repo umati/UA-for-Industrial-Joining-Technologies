@@ -672,3 +672,42 @@ class TestParserHelpersAndValidation:
             load_target_server_profile_from_dict(
                 {"schema_version": 1, "workflow_execution": {"expected_results": {"timeout_seconds": 0.5}}}
             )
+
+    def test_joining_processes_valid_mapping(self):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_processes": {
+                        "single": {
+                            "policy": "exact_match",
+                            "joining_process_id": "Prog_1",
+                            "joining_process_origin_id": "Prog_Origin_1",
+                        },
+                        "job": {
+                            "policy": "exact_match",
+                            "joining_process_id": "Job_1",
+                        },
+                    }
+                },
+            }
+        )
+        assert "single" in profile.selection.joining_processes
+        assert profile.selection.joining_processes["single"].joining_process_id == "Prog_1"
+        assert profile.selection.joining_processes["single"].joining_process_origin_id == "Prog_Origin_1"
+        assert "job" in profile.selection.joining_processes
+        assert profile.selection.joining_processes["job"].joining_process_id == "Job_1"
+
+    def test_joining_processes_invalid_not_mapping(self):
+        with pytest.raises(TargetServerConfigError, match="joining_processes"):
+            load_target_server_profile_from_dict({"schema_version": 1, "selection": {"joining_processes": "invalid"}})
+
+    def test_joining_processes_invalid_sub_mapping(self):
+        with pytest.raises(TargetServerConfigError, match="joining_processes.job"):
+            load_target_server_profile_from_dict(
+                {"schema_version": 1, "selection": {"joining_processes": {"job": "invalid"}}}
+            )
+
+    def test_joining_processes_invalid_key_type(self):
+        with pytest.raises(TargetServerConfigError, match="keys must be strings"):
+            load_target_server_profile_from_dict({"schema_version": 1, "selection": {"joining_processes": {123: {}}}})

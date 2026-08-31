@@ -36,7 +36,7 @@ cu_execution:
   # Simulation helpers require no physical operator steps.
   allow_manual_steps: false
   # Default OPC UA call timeout unless a trigger overrides it.
-  default_timeout_seconds: 60
+  default_timeout_seconds: 15
   state_changing_methods:
     # Real state-changing calls require explicit authorization.
     default_policy: require_explicit_opt_in
@@ -49,19 +49,19 @@ triggers:
     # Use non-standard simulator helpers to generate result evidence.
     mode: simulate_methods
     # Maximum wait for the simulated result.
-    timeout_seconds: 30
+    timeout_seconds: 10
     # No JoiningProcess was selected by this profile.
     deselect_after_joining: false
   event:
     # Use non-standard simulator helpers to generate event evidence.
     mode: simulate_methods
     # Maximum wait for the simulated event.
-    timeout_seconds: 30
+    timeout_seconds: 10
   condition:
     # Use non-standard simulator helpers to generate condition evidence.
     mode: simulate_methods
     # Maximum wait for the simulated condition.
-    timeout_seconds: 30
+    timeout_seconds: 10
 
 workflow_execution:
   # One simulation request produces the final result.

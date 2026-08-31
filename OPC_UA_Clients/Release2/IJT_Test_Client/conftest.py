@@ -778,6 +778,22 @@ def _load_target_server_profile_with_runtime_overrides(profile_path: str):
             ),
         )
         profile = replace(profile, selection=replace(profile.selection, joining_process=process))
+
+    updated_jps = dict(profile.selection.joining_processes)
+    for prefix in ("job", "batch", "single", "sync", "stitching", "intervention"):
+        env_id = os.environ.get(f"OPCUA_{prefix.upper()}_JOINING_PROCESS_ID", "")
+        env_origin = os.environ.get(f"OPCUA_{prefix.upper()}_JOINING_PROCESS_ORIGIN_ID", "")
+        if env_id or env_origin:
+            base_jp = updated_jps.get(prefix, profile.selection.joining_process)
+            updated_jps[prefix] = replace(
+                base_jp,
+                policy="exact_match" if env_id else base_jp.policy,
+                joining_process_id=env_id or base_jp.joining_process_id,
+                joining_process_origin_id=env_origin or base_jp.joining_process_origin_id,
+            )
+    if updated_jps != profile.selection.joining_processes:
+        profile = replace(profile, selection=replace(profile.selection, joining_processes=updated_jps))
+
     return profile
 
 

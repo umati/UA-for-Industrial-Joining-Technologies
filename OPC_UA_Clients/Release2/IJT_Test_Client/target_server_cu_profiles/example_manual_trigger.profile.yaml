@@ -52,7 +52,7 @@ cu_execution:
   # Allow manual steps so guided mode can prompt and wait.
   allow_manual_steps: true
   # Default timeout for OPC UA calls not overridden below.
-  default_timeout_seconds: 120
+  default_timeout_seconds: 15
 
   # No state-changing method automation — the operator physically triggers the
   # tool. allowed_methods grants safety permission only; it does not enable tests.
@@ -88,20 +88,20 @@ triggers:
     # In guided + interactive-prompts mode, the runner displays operator
     # instructions before waiting.
     mode: manual_trigger
-    # Allow up to 3 minutes for the operator to trigger the tool.
-    timeout_seconds: 180
+    # Allow up to 60 seconds for the operator to trigger the tool.
+    timeout_seconds: 60
 
   event:
     # observe_only: validate OPC UA events that arrive naturally.
     mode: observe_only
     # Maximum passive event-observation window.
-    timeout_seconds: 60
+    timeout_seconds: 10
 
   condition:
     # observe_only: validate retained conditions passively.
     mode: observe_only
     # Maximum retained-condition observation window.
-    timeout_seconds: 60
+    timeout_seconds: 10
 
 workflow_execution:
   # manual_operation_trigger: do not call StartSelectedJoining;

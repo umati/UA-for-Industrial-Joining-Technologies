@@ -11,16 +11,19 @@
 #
 # Usage Guide (from OPC_UA_Clients/Release2/IJT_Test_Client):
 #
-#   1. Safe Preflight Check (no state changes; validates TCP and config):
+#   1. Auto-Discover Target Server (Discovers Tool PIU, process IDs, and generates YAML):
+#      python run_all_tests.py --endpoint opc.tcp://<host>:40451 --discover-target
+#
+#   2. Safe Preflight Check (no state changes; validates TCP and config):
 #      python run_all_tests.py --preflight-only --profile target_server_cu_profiles/my_profile.yaml
 #
-#   2. Specification Tests Only (skips internal client static analysis/unit tests):
+#   3. Specification Tests Only (skips internal client static analysis/unit tests):
 #      python run_all_tests.py --phase2 --profile target_server_cu_profiles/my_profile.yaml
 #
-#   3. Full Validation (Phase 1 static analysis + preflight + spec tests + evidence report):
+#   4. Full Validation (Phase 1 static analysis + preflight + spec tests + evidence report):
 #      python run_all_tests.py --profile target_server_cu_profiles/my_profile.yaml
 #
-#   4. Ad-Hoc Runtime Endpoint Override:
+#   5. Ad-Hoc Runtime Endpoint Override:
 #      python run_all_tests.py --phase2 --profile target_server_cu_profiles/my_profile.yaml --endpoint opc.tcp://10.0.0.1:40451
 #
 # Security & Privacy:
@@ -31,7 +34,7 @@
 # Omitted sections use safe defaults (no state-changing methods allowed, first
 # ready Tool, first compatible JoiningProcess, diagnostic scoring, no manual steps).
 #
-# See target_server_cu_profiles/README.md and docs/TARGET_SERVER_CU_QUICK_START.md.
+# See target_server_cu_profiles/README.md and docs/TARGET_SERVER_CU_GUIDE.md.
 
 # REQUIRED: Schema version. Must be 1 for this release.
 schema_version: 1
@@ -92,7 +95,7 @@ cu_execution:
   allow_manual_steps: false
 
   # Default timeout in seconds for OPC UA method calls and result waiting.
-  default_timeout_seconds: 60
+  default_timeout_seconds: 15
 
   # State-changing method policy.
   # default_policy values:
@@ -171,6 +174,23 @@ selection:
     # Final controller-specific fallback when stable IDs are unavailable.
     selection_name: ""
 
+  # Optional per-classification process selection for workflows exercising both
+  # single tightening programs (for SingleResult) and multi-operation Jobs/Batches.
+  # If omitted, joining_process above is used as the default for all result types.
+  # joining_processes:
+  #   single:
+  #     policy: exact_match
+  #     joining_process_id: ""
+  #     joining_process_origin_id: ""
+  #   job:
+  #     policy: exact_match
+  #     joining_process_id: ""
+  #     joining_process_origin_id: ""
+  #   batch:
+  #     policy: exact_match
+  #     joining_process_id: ""
+  #     joining_process_origin_id: ""
+
 # ---------------------------------------------------------------------------
 # Triggers: Evidence generation strategy for result, event, condition CUs.
 # ---------------------------------------------------------------------------
@@ -184,7 +204,7 @@ triggers:
     #   manual_trigger          — subscribe first, wait for physical tool trigger
     #   observe_only            — validate passive evidence without triggering
     mode: none
-    timeout_seconds: 60
+    timeout_seconds: 15
     deselect_after_joining: false
 
   event:
@@ -194,7 +214,7 @@ triggers:
     #   manual_trigger  — wait for events produced by operator/target server action
     #   none            — no event trigger; event CUs will be blocked
     mode: observe_only
-    timeout_seconds: 60
+    timeout_seconds: 10
 
   condition:
     # Trigger mode for condition CUs:
@@ -203,7 +223,7 @@ triggers:
     #   manual_trigger  — wait for conditions produced by operator/target server action
     #   none            — no condition trigger; condition CUs will be blocked
     mode: observe_only
-    timeout_seconds: 60
+    timeout_seconds: 10
 
 # ---------------------------------------------------------------------------
 # Workflow execution: joining workflow setup and cleanup.

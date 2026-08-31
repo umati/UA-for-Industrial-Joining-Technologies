@@ -13,22 +13,11 @@ python run_all_tests.py
 # Skip the default Excel report only when explicitly needed
 python run_all_tests.py --excel=never
 
-# Generate a reference workflow walkthrough for review/demo use
-python scripts/run_reference_workflow.py --output test-results/reference-workflows/reference_joining_process_workflow.md
-```
-
 Use `run_all_tests.py` as the only test runner entry point. Pass `--profile FILE`
 to validate against a real Target Server instead of the simulator (see
-[Target Server CU Runner Commands](#target-server-cu-runner-commands) below);
-`run_target_server_cu.py` is a deprecated compatibility shim for the same
-functionality.
+[`docs/TARGET_SERVER_CU_GUIDE.md`](TARGET_SERVER_CU_GUIDE.md)).
 
 See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail explanations, and Excel output details.
-
-Reference workflow walkthroughs are separate from specification test
-validation. They are driven by YAML under `reference_workflows/`, render
-Markdown tables for review or Teams demos, and are not collected by default
-Phase 2 runs.
 
 `python run_all_tests.py` is the full orchestrator. Phase 1 runs static,
 security, unit, type, and formatting checks. Phase 2 runs the live
@@ -211,7 +200,7 @@ IJT_Test_Client/
 │   ├── target_server_cu_config.py   ← target server CU profile loader and validator
 │   ├── target_server_readiness.py   ← readiness/preflight model with typed outcome vocabulary
 │   ├── target_server_triggers.py   ← StartSelectedJoiningResultTrigger, ManualResultTrigger, ManualEventTrigger
-│   ├── target_server_execution.py  ← canonical preflight/automated run + evidence logic (shared by run_all_tests.py and the deprecated run_target_server_cu.py)
+│   ├── target_server_execution.py  ← canonical preflight/automated run + evidence logic (used by run_all_tests.py)
 │   └── runner_plan.py              ← typed immutable RunPlan: resolves phases + endpoint/capabilities precedence once per run_all_tests.py invocation
 ├── common/                       ← connection + namespace registration tests
 ├── assets/                       ← asset structure, interfaces, health, counters
@@ -229,7 +218,6 @@ IJT_Test_Client/
 │   ├── example_multi_operation_job.capabilities.yaml ← Fully commented paired CU declaration
 │   ├── example_manual_trigger.profile.yaml ← Fully commented manual trigger example
 │   └── example_simulation_methods.profile.yaml ← Fully commented simulator example
-├── run_target_server_cu.py          ← DEPRECATED compatibility shim (forwards to run_all_tests.py / helpers/target_server_execution.py)
 ├── scripts/run_reference_workflow.py ← Markdown + interactive reference workflow runner
 ├── tests/
     └── unit/                     ← Pure-logic helper tests (no OPC UA server needed)
@@ -253,8 +241,7 @@ IJT_Test_Client/
         ├── test_target_server_readiness.py ← readiness/preflight model tests
         ├── test_target_server_triggers.py  ← StartSelectedJoiningResultTrigger, ManualResultTrigger tests
         ├── test_target_server_execution.py ← canonical preflight/automated + evidence logic tests (in-process, no server)
-        ├── test_runner_plan.py             ← RunPlan resolution: phases, endpoint/capabilities precedence, invalid combos
-        └── test_run_target_server_cu.py    ← deprecated shim CLI/report tests (no server needed)
+        └── test_runner_plan.py             ← RunPlan resolution: phases, endpoint/capabilities precedence, invalid combos
 ```
 
 ---
@@ -296,9 +283,7 @@ semantics, and CU coverage outputs are unchanged.
 
 ### Target Server CU Runner Commands
 
-`run_all_tests.py` is the canonical entry point for all Target Server CU runs
-(`run_target_server_cu.py` is a deprecated compatibility shim that forwards to
-the exact same implementation in `helpers/target_server_execution.py`).
+`run_all_tests.py` is the canonical entry point for all Target Server CU runs:
 
 ```bash
 # Preflight — no state changes, safe for any server:

@@ -51,7 +51,7 @@ cu_execution:
   # This workflow is unattended; no operator prompt is permitted.
   allow_manual_steps: false
   # Default upper bound for method calls and waits unless overridden below.
-  default_timeout_seconds: 120
+  default_timeout_seconds: 15
   state_changing_methods:
     # Every state-changing call must be explicitly authorized below.
     default_policy: require_explicit_opt_in
@@ -104,26 +104,40 @@ selection:
     joining_process_origin_id: "<joining-process-origin-id>"
     # Final fallback when neither configured ID is currently advertised.
     selection_name: ""
+  # Optional: per-classification process selection for mixed workflows
+  joining_processes:
+    single:
+      policy: exact_match
+      joining_process_id: "<single-tightening-program-id>"
+      joining_process_origin_id: "<single-tightening-program-origin-id>"
+    job:
+      policy: exact_match
+      joining_process_id: "<job-joining-process-id>"
+      joining_process_origin_id: "<job-joining-process-origin-id>"
+    batch:
+      policy: exact_match
+      joining_process_id: "<batch-joining-process-id>"
+      joining_process_origin_id: "<batch-joining-process-origin-id>"
 
 triggers:
   result:
     # Select the configured process and call StartSelectedJoining automatically.
     mode: start_selected_joining
-    # Maximum wait for each expected result after its trigger.
-    timeout_seconds: 120
-    # Preserve the selection for all six operations and intervention evidence.
+    # Fast 10s wait for tightening results.
+    timeout_seconds: 10
+    # Preserve the selection for all operations and intervention evidence.
     deselect_after_joining: false
   event:
     # No generic event-producing action is configured; event tests requiring
     # fresh evidence are reported as Blocked or skipped.
     mode: none
     # Maximum event wait if a test observes passive evidence.
-    timeout_seconds: 60
+    timeout_seconds: 10
   condition:
     # No condition-producing action is configured in this workflow.
     mode: none
     # Maximum condition wait if a test observes retained evidence.
-    timeout_seconds: 60
+    timeout_seconds: 10
 
 workflow_execution:
   # Six starts model two batches of three operations for this example.

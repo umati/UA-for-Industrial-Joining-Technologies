@@ -3,16 +3,8 @@ target_server_execution — canonical Target Server CU execution logic.
 
 This module is the single implementation of Target Server CU preflight,
 classification, live specification_tests/ orchestration, and evidence
-reporting.  It is consumed by both:
-
-  * ``run_all_tests.py``           — the canonical orchestrator entry point
-    (``--profile``, ``--phase2 --profile``, ``--preflight-only --profile``).
-  * ``run_target_server_cu.py``    — a deprecated, thin compatibility CLI
-    that forwards to the functions below.
-
-Keeping this logic in one module (rather than duplicated across the two
-CLI scripts) is what makes "one canonical implementation" possible: neither
-script re-implements preflight, scoring, or evidence-writing behaviour.
+reporting.  It is consumed by ``run_all_tests.py`` (``--profile``,
+``--phase2 --profile``, ``--preflight-only --profile``).
 """
 
 from __future__ import annotations
@@ -45,8 +37,7 @@ from helpers.target_server_readiness import (
 )
 
 # _HERE resolves to the IJT_Test_Client project root (parent of helpers/), which is
-# identical to the ``_HERE`` computed independently by run_all_tests.py and
-# run_target_server_cu.py since all three files share the same project layout.
+# identical to the ``_HERE`` computed independently by run_all_tests.py.
 _HERE = Path(__file__).resolve().parents[1]
 
 # ---------------------------------------------------------------------------
@@ -140,12 +131,13 @@ _CONSOLIDATED_CLASSIFICATIONS = frozenset({"sync", "batch", "job", "stitching"})
 def _excluded_cus_for_result_scope(
     classification: str,
     intermediate_classifications: tuple[str, ...] = (),
+    configured_classifications: tuple[str, ...] = (),
 ) -> frozenset[str]:
     """Return CUs that cannot be exercised by the configured result workflow."""
     if classification == "any":
         return frozenset()
 
-    active = {classification, *intermediate_classifications}
+    active = {classification, *intermediate_classifications, *configured_classifications}
     included_specific = frozenset().union(*(_RESULT_CUS_BY_CLASSIFICATION.get(item, frozenset()) for item in active))
     excluded = _CLASSIFICATION_RESULT_CUS - included_specific
     if active.isdisjoint(_CONSOLIDATED_CLASSIFICATIONS):
@@ -167,6 +159,14 @@ def apply_runtime_overrides(
     tool_product_instance_uri: str | None = None,
     joining_process_id: str | None = None,
     joining_process_origin_id: str | None = None,
+    job_joining_process_id: str | None = None,
+    job_joining_process_origin_id: str | None = None,
+    batch_joining_process_id: str | None = None,
+    batch_joining_process_origin_id: str | None = None,
+    single_joining_process_id: str | None = None,
+    single_joining_process_origin_id: str | None = None,
+    sync_joining_process_id: str | None = None,
+    sync_joining_process_origin_id: str | None = None,
 ) -> TargetServerCuProfile:
     """Apply installation-specific values without requiring a private YAML copy."""
     if endpoint:
@@ -192,6 +192,25 @@ def apply_runtime_overrides(
             ),
         )
         profile = replace(profile, selection=replace(profile.selection, joining_process=process))
+
+    updated_jps = dict(profile.selection.joining_processes)
+    per_class_overrides = (
+        ("job", job_joining_process_id, job_joining_process_origin_id),
+        ("batch", batch_joining_process_id, batch_joining_process_origin_id),
+        ("single", single_joining_process_id, single_joining_process_origin_id),
+        ("sync", sync_joining_process_id, sync_joining_process_origin_id),
+    )
+    for key, ovr_id, ovr_origin in per_class_overrides:
+        if ovr_id or ovr_origin:
+            base_jp = updated_jps.get(key, profile.selection.joining_process)
+            updated_jps[key] = replace(
+                base_jp,
+                policy="exact_match" if ovr_id else base_jp.policy,
+                joining_process_id=ovr_id or base_jp.joining_process_id,
+                joining_process_origin_id=ovr_origin or base_jp.joining_process_origin_id,
+            )
+    if updated_jps != profile.selection.joining_processes:
+        profile = replace(profile, selection=replace(profile.selection, joining_processes=updated_jps))
     return profile
 
 
@@ -260,6 +279,255 @@ def _write_human_summary(
     summary_path = output_dir / "target-server-cu-summary.txt"
     summary_path.write_text("\n".join(lines), encoding="utf-8")
     return summary_path
+
+
+def _write_markdown_summary(
+    output_dir: Path,
+    profile: TargetServerCuProfile,
+    preflight_report: PreflightReport,
+    mode: str,
+    run_start: str,
+    outcome_summary: str,
+    extra: dict | None = None,
+) -> Path:
+    """Write a structured GitHub-flavored Markdown summary report."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    badge = (
+        "🟢 **PASSED**"
+        if "PASSED" in outcome_summary
+        else (
+            "🟡 **SKIPPED / CLASSIFICATION ONLY**"
+            if "SKIPPED" in outcome_summary or "CLASSIFICATION" in outcome_summary
+            else "🔴 **FAILED**"
+        )
+    )
+    lines = [
+        "# Target Server Conformance Unit Run Summary",
+        "",
+        f"- **Profile:** `{profile.profile_name}`",
+        f"- **Endpoint:** `{profile.target.endpoint}`",
+        f"- **Mode:** `{mode}`",
+        f"- **Start Time:** `{run_start}`",
+        f"- **Outcome:** {badge} (`{outcome_summary}`)",
+        "",
+        "## Preflight Checks",
+        "",
+        "| Check Name | Status | Detail |",
+        "|---|:---:|---|",
+    ]
+    for check in preflight_report.checks:
+        status_icon = (
+            "✅" if check.outcome == OUTCOME_PASSED else ("⚠️" if check.outcome == OUTCOME_MANUAL_REQUIRED else "❌")
+        )
+        lines.append(f"| `{check.check_name}` | {status_icon} `{check.outcome}` | {check.detail} |")
+
+    lines.extend(
+        [
+            "",
+            "## Conformance Unit Classification",
+            "",
+            "| Evidence Kind | Count |",
+            "|---|:---:|",
+        ]
+    )
+    cu_counts = (extra or {}).get("cu_classification", {})
+    if cu_counts:
+        for kind, count in sorted(cu_counts.items()):
+            lines.append(f"| `{kind}` | {count} |")
+    else:
+        lines.append("| (Preflight only) | - |")
+
+    spec_tests = (extra or {}).get("spec_tests")
+    if spec_tests:
+        lines.extend(
+            [
+                "",
+                "## Specification Tests Execution",
+                "",
+                f"- **Status:** `{spec_tests.get('status')}`",
+                f"- **Outcome:** `{spec_tests.get('outcome')}`",
+                f"- **Exit Code:** `{spec_tests.get('exit_code')}`",
+                f"- **Duration:** `{spec_tests.get('elapsed_seconds')}s`",
+                f"- **JUnit XML:** `{spec_tests.get('junit_xml')}`",
+            ]
+        )
+
+    excel_report = (extra or {}).get("excel_report")
+    if excel_report:
+        lines.extend(
+            [
+                "",
+                "## Generated Artifacts",
+                "",
+                f"- **Excel Workbook:** `{excel_report.get('path') or 'N/A'}` (`{excel_report.get('status')}`)",
+                "- **JSON Evidence Report:** `target-server-cu-report.json`",
+                "- **Text Summary:** `target-server-cu-summary.txt`",
+                "- **Markdown Summary:** `target-server-cu-summary.md`",
+            ]
+        )
+
+    lines.append("")
+    md_path = output_dir / "target-server-cu-summary.md"
+    md_path.write_text("\n".join(lines), encoding="utf-8")
+    return md_path
+
+
+async def async_discover_target_server(endpoint: str, timeout: float = 15.0) -> dict:
+    """Connect to a target OPC UA server, discover Tools and Joining Processes, and return structured metadata."""
+    import asyncio
+
+    from asyncua import Client, ua
+
+    from helpers.namespaces import BN, NS_DI, NS_IJT_BASE
+    from helpers.node_discovery import find_child_by_browse_name, find_joining_system, read_tool_product_instance_uri
+
+    discovery_data: dict = {
+        "endpoint": endpoint,
+        "tools": [],
+        "processes": [],
+        "suggested_yaml": "",
+    }
+
+    client = Client(endpoint)
+    async with asyncio.timeout(timeout):
+        await client.connect()
+    try:
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            await client.load_data_type_definitions()
+        ns_ijt = await client.get_namespace_index(NS_IJT_BASE)
+        ns_di = await client.get_namespace_index(NS_DI)
+        js = await find_joining_system(client)
+        if not js:
+            discovery_data["error"] = "JoiningSystem node not found on server"
+            return discovery_data
+
+        # 1. Discover Tool PIU
+        piu = await read_tool_product_instance_uri(client, ns_ijt, ns_di)
+        if piu:
+            discovery_data["tools"].append({"name": "PrimaryTool", "product_instance_uri": piu})
+
+        # 2. Discover Joining Processes via GetJoiningProcessList
+        jpm = await find_child_by_browse_name(js, BN.JOINING_PROCESS_MANAGEMENT, ns_ijt)
+        if jpm:
+            gjpl = await find_child_by_browse_name(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt)
+            if gjpl:
+                call_out = await jpm.call_method(gjpl.nodeid, ua.Variant(piu, ua.VariantType.String))
+                procs = (
+                    call_out[0]
+                    if isinstance(call_out, list) and call_out and isinstance(call_out[0], list)
+                    else (call_out if isinstance(call_out, list) else [])
+                )
+                for p in procs:
+                    jid = str(getattr(p, "JoiningProcessId", "") or "")
+                    orig = str(getattr(p, "JoiningProcessOriginId", "") or "")
+                    pname = str(getattr(p, "Name", "") or "")
+                    pcls = int(getattr(p, "Classification", 1) or 1)
+                    sel_name = ""
+                    for entity in getattr(p, "AssociatedEntities", []) or []:
+                        if getattr(entity, "Name", "") == "SelectionName":
+                            sel_name = str(getattr(entity, "EntityId", "") or "")
+                    discovery_data["processes"].append(
+                        {
+                            "id": jid,
+                            "origin_id": orig,
+                            "name": pname,
+                            "selection_name": sel_name,
+                            "classification": pcls,
+                        }
+                    )
+
+        # 3. Format suggested YAML snippet
+        single_p = next(
+            (
+                p
+                for p in discovery_data["processes"]
+                if p["classification"] in (1, 2)
+                or "program" in p["name"].lower()
+                or "program" in p["selection_name"].lower()
+            ),
+            None,
+        )
+        job_p = next(
+            (
+                p
+                for p in discovery_data["processes"]
+                if p["classification"] in (3, 4, 5)
+                or "job" in p["name"].lower()
+                or "sequence" in p["name"].lower()
+                or "sequence" in p["selection_name"].lower()
+            ),
+            None,
+        )
+        batch_p = next(
+            (
+                p
+                for p in discovery_data["processes"]
+                if p["classification"] == 3 or "batch" in p["name"].lower() or "batch" in p["selection_name"].lower()
+            ),
+            None,
+        )
+
+        yaml_lines = [
+            "selection:",
+            "  tool:",
+            "    policy: first_ready",
+            f'    product_instance_uri: "{piu}"',
+            "  joining_processes:",
+            "    single:",
+            "      policy: exact_match",
+            f'      joining_process_id: "{single_p["id"] if single_p else ""}"',
+            f'      joining_process_origin_id: "{single_p["origin_id"] if single_p else ""}"',
+            f'      selection_name: "{single_p["selection_name"] if single_p else ""}"',
+            "    job:",
+            "      policy: exact_match",
+            f'      joining_process_id: "{job_p["id"] if job_p else ""}"',
+            f'      joining_process_origin_id: "{job_p["origin_id"] if job_p else ""}"',
+            f'      selection_name: "{job_p["selection_name"] if job_p else ""}"',
+            "    batch:",
+            "      policy: exact_match",
+            f'      joining_process_id: "{batch_p["id"] if batch_p else ""}"',
+            f'      joining_process_origin_id: "{batch_p["origin_id"] if batch_p else ""}"',
+            f'      selection_name: "{batch_p["selection_name"] if batch_p else ""}"',
+        ]
+        discovery_data["suggested_yaml"] = "\n".join(yaml_lines)
+    finally:
+        await client.disconnect()
+
+    return discovery_data
+
+
+def run_discover_target(endpoint: str, timeout: float = 15.0) -> int:
+    """CLI runner to discover target server tools and processes and print suggested YAML."""
+    import asyncio
+
+    _section(f"Target Server Auto-Discovery: {endpoint}")
+    try:
+        data = asyncio.run(async_discover_target_server(endpoint, timeout=timeout))
+    except Exception as exc:  # noqa: BLE001
+        _log(_c(_ANSI_RED, f"  [ERROR] Discovery failed: {exc}"))
+        return 1
+
+    if "error" in data:
+        _log(_c(_ANSI_RED, f"  [ERROR] {data['error']}"))
+        return 1
+
+    _log(f"  Discovered Tools: {len(data['tools'])}")
+    for t in data["tools"]:
+        _log(f"    - {t['name']}: {t['product_instance_uri']}")
+
+    _log(f"\n  Discovered Joining Processes: {len(data['processes'])}")
+    for p in data["processes"]:
+        cls_name = {1: "Single", 2: "Batch", 3: "Job", 4: "Job", 5: "Stitching", 6: "Intervention"}.get(
+            p["classification"], "Other"
+        )
+        _log(f"    - [{cls_name}] ID: {p['id']} | Origin: {p['origin_id']} | SelectionName: {p['selection_name']}")
+
+    _section("Suggested YAML Configuration Snippet")
+    _log(data["suggested_yaml"])
+    _log("")
+    return 0
 
 
 def _generate_excel_report(
@@ -351,6 +619,13 @@ def _build_spec_test_env(profile: TargetServerCuProfile, *, base_dir: Path | Non
             env[name] = value
         else:
             env.pop(name, None)
+    for prefix in ("job", "batch", "single", "sync", "stitching", "intervention"):
+        jp = profile.selection.joining_processes.get(prefix)
+        if jp:
+            if jp.joining_process_id:
+                env[f"OPCUA_{prefix.upper()}_JOINING_PROCESS_ID"] = jp.joining_process_id
+            if jp.joining_process_origin_id:
+                env[f"OPCUA_{prefix.upper()}_JOINING_PROCESS_ORIGIN_ID"] = jp.joining_process_origin_id
     expected_results = profile.workflow_execution.expected_results
     env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] = str(expected_results.timeout_seconds)
     env["OPCUA_TARGET_FINAL_RESULT_REQUIRED"] = str(expected_results.final_result_required).lower()
@@ -371,6 +646,7 @@ def _build_spec_test_env(profile: TargetServerCuProfile, *, base_dir: Path | Non
     excluded_cus = _excluded_cus_for_result_scope(
         expected_results.classification,
         expected_results.intermediate_classifications,
+        configured_classifications=tuple(profile.selection.joining_processes.keys()),
     )
     if excluded_cus:
         env["OPCUA_TARGET_EXCLUDED_CUS"] = ",".join(sorted(excluded_cus))
@@ -613,9 +889,13 @@ def run_preflight(profile: TargetServerCuProfile, output_dir: Path) -> int:
     run_start = datetime.datetime.now(datetime.timezone.utc).isoformat()
     report_path = _write_evidence_report(output_dir, profile, cfg_report, "preflight_only", run_start)
     summary_path = _write_human_summary(output_dir, profile, cfg_report, "preflight_only", run_start, outcome_summary)
+    md_summary_path = _write_markdown_summary(
+        output_dir, profile, cfg_report, "preflight_only", run_start, outcome_summary
+    )
 
     _log(f"\n  Evidence report: {report_path}")
     _log(f"  Human summary:   {summary_path}")
+    _log(f"  Markdown report: {md_summary_path}")
 
     return 1 if blocking else 0
 
@@ -766,6 +1046,7 @@ def run_automated(
 
     report_path = _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
     summary_path = _write_human_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary)
+    md_summary_path = _write_markdown_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra)
     if spec_meta and spec_meta.get("status") == "completed":
         excel_meta = _generate_excel_report(
             profile,
@@ -776,6 +1057,9 @@ def run_automated(
         )
         extra["excel_report"] = excel_meta
         report_path = _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
+        md_summary_path = _write_markdown_summary(
+            output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra
+        )
         if excel_meta["status"] == "generated":
             _log(f"  Excel report:    {excel_meta['path']}")
         else:
@@ -784,6 +1068,7 @@ def run_automated(
 
     _log(f"\n  Evidence report: {report_path}")
     _log(f"  Human summary:   {summary_path}")
+    _log(f"  Markdown report: {md_summary_path}")
     _log("")
 
     if spec_rc != 0:

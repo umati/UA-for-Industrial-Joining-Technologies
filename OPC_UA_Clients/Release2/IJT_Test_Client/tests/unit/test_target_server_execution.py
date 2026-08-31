@@ -1,12 +1,8 @@
 """
 Unit tests for helpers/target_server_execution.py — the canonical Target Server
-CU execution logic shared by run_all_tests.py (--profile/--endpoint) and the
-deprecated run_target_server_cu.py compatibility shim.
+CU execution logic used by run_all_tests.py (--profile/--endpoint).
 
-These tests call run_preflight()/run_automated() directly (in-process) rather
-than through a subprocess, so coverage.py can attribute the executed lines —
-subprocess-based CLI tests (tests/unit/test_run_target_server_cu.py) exercise
-the same code but coverage cannot see across a process boundary.
+These tests call run_preflight()/run_automated() directly (in-process).
 """
 
 from __future__ import annotations
@@ -15,6 +11,9 @@ import json
 import sys
 from contextlib import redirect_stdout
 from io import StringIO
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from helpers import target_server_execution as tse
 from helpers.target_server_cu_config import (
@@ -590,3 +589,191 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert rc == 0
         assert meta["status"] == "completed"
         assert meta["outcome"] == "passed"
+
+    def test_apply_runtime_overrides_per_classification(self):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {"joining_process_id": "Default_1"},
+                    "joining_processes": {
+                        "job": {"joining_process_id": "Old_Job"},
+                    },
+                },
+            }
+        )
+        updated = tse.apply_runtime_overrides(
+            profile,
+            job_joining_process_id="New_Job_1",
+            batch_joining_process_id="New_Batch_1",
+        )
+        assert updated.selection.joining_processes["job"].joining_process_id == "New_Job_1"
+        assert updated.selection.joining_processes["batch"].joining_process_id == "New_Batch_1"
+
+    def test_excluded_cus_with_configured_classifications(self):
+        excluded = tse._excluded_cus_for_result_scope(
+            "single",
+            configured_classifications=("job",),
+        )
+        assert "job_result" not in excluded
+
+    def test_build_spec_test_env_exports_per_classification_ids(self, tmp_path):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://localhost:40451"},
+                "selection": {
+                    "joining_processes": {
+                        "job": {"joining_process_id": "Job_123", "joining_process_origin_id": "Job_Orig_123"},
+                        "batch": {"joining_process_id": "Batch_456"},
+                    }
+                },
+            }
+        )
+        env = tse._build_spec_test_env(profile, base_dir=tmp_path)
+        assert env.get("OPCUA_JOB_JOINING_PROCESS_ID") == "Job_123"
+        assert env.get("OPCUA_JOB_JOINING_PROCESS_ORIGIN_ID") == "Job_Orig_123"
+        assert env.get("OPCUA_BATCH_JOINING_PROCESS_ID") == "Batch_456"
+
+    def test_write_markdown_summary_generates_file_and_content(self, tmp_path):
+        profile = load_target_server_profile_from_dict(
+            {
+                "schema_version": 1,
+                "profile_name": "Test Profile",
+                "target": {"endpoint": "opc.tcp://localhost:40451"},
+            }
+        )
+        report = PreflightReport(endpoint=profile.target.endpoint)
+        report.add(ReadinessOutcome(outcome=OUTCOME_PASSED, check_name="TCP_PORT", detail="Port reachable"))
+        md_path = tse._write_markdown_summary(
+            tmp_path,
+            profile,
+            report,
+            mode="automated",
+            run_start="2026-08-31T12:00:00Z",
+            outcome_summary="SPEC_TESTS_PASSED",
+            extra={
+                "cu_classification": {"structure": 10, "method": 5},
+                "spec_tests": {
+                    "status": "completed",
+                    "outcome": "passed",
+                    "exit_code": 0,
+                    "elapsed_seconds": 12.5,
+                    "junit_xml": "spec-tests.xml",
+                },
+                "excel_report": {"status": "generated", "path": "report.xlsx"},
+            },
+        )
+        assert md_path.exists()
+        content = md_path.read_text(encoding="utf-8")
+        assert "# Target Server Conformance Unit Run Summary" in content
+        assert "🟢 **PASSED**" in content
+        assert "| `TCP_PORT` | ✅ `passed` | Port reachable |" in content
+        assert "| `structure` | 10 |" in content
+        assert "spec-tests.xml" in content
+        assert "report.xlsx" in content
+
+    @pytest.mark.asyncio
+    async def test_async_discover_target_server_full_flow(self, monkeypatch):
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock()
+        mock_client.disconnect = AsyncMock()
+        mock_client.load_data_type_definitions = AsyncMock()
+        mock_client.get_namespace_index = AsyncMock(side_effect=lambda uri: 2 if "IJT" in uri else 1)
+
+        mock_js = MagicMock()
+        mock_jpm = MagicMock()
+        mock_gjpl = MagicMock()
+        mock_gjpl.nodeid = "node:gjpl"
+
+        mock_proc_single = MagicMock(
+            JoiningProcessId="Prog_1",
+            JoiningProcessOriginId="Prog_Orig_1",
+            Name="Program1",
+            Classification=1,
+            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="ProgIndex_1")],
+        )
+        mock_proc_job = MagicMock(
+            JoiningProcessId="Job_1",
+            JoiningProcessOriginId="Job_Orig_1",
+            Name="Sequence1",
+            Classification=5,
+            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="SeqIndex_1")],
+        )
+        mock_proc_batch = MagicMock(
+            JoiningProcessId="Batch_1",
+            JoiningProcessOriginId="Batch_Orig_1",
+            Name="Batch1",
+            Classification=2,
+            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="BatchIndex_1")],
+        )
+        mock_jpm.call_method = AsyncMock(return_value=[[mock_proc_single, mock_proc_job, mock_proc_batch]])
+
+        with (
+            patch("asyncua.Client", return_value=mock_client),
+            patch("helpers.node_discovery.find_joining_system", new=AsyncMock(return_value=mock_js)),
+            patch("helpers.node_discovery.read_tool_product_instance_uri", new=AsyncMock(return_value="uri:tool1")),
+            patch("helpers.node_discovery.find_child_by_browse_name", new=AsyncMock(side_effect=[mock_jpm, mock_gjpl])),
+        ):
+            data = await tse.async_discover_target_server("opc.tcp://localhost:40451")
+
+        assert data["endpoint"] == "opc.tcp://localhost:40451"
+        assert len(data["tools"]) == 1
+        assert data["tools"][0]["product_instance_uri"] == "uri:tool1"
+        assert len(data["processes"]) == 3
+        assert "Prog_1" in data["suggested_yaml"]
+        assert "Job_1" in data["suggested_yaml"]
+
+    @pytest.mark.asyncio
+    async def test_async_discover_target_server_no_joining_system(self):
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock()
+        mock_client.disconnect = AsyncMock()
+        mock_client.load_data_type_definitions = AsyncMock()
+        mock_client.get_namespace_index = AsyncMock(return_value=2)
+
+        with (
+            patch("asyncua.Client", return_value=mock_client),
+            patch("helpers.node_discovery.find_joining_system", new=AsyncMock(return_value=None)),
+        ):
+            data = await tse.async_discover_target_server("opc.tcp://localhost:40451")
+
+        assert "error" in data
+        assert "JoiningSystem node not found" in data["error"]
+
+    def test_run_discover_target_success(self, monkeypatch):
+        async def fake_discover(endpoint, timeout=15.0):
+            return {
+                "endpoint": endpoint,
+                "tools": [{"name": "Tool1", "product_instance_uri": "uri:test"}],
+                "processes": [
+                    {
+                        "id": "P1",
+                        "origin_id": "O1",
+                        "name": "Program1",
+                        "selection_name": "ProgIndex_1",
+                        "classification": 1,
+                    }
+                ],
+                "suggested_yaml": "selection:\n  tool:\n    policy: first_ready",
+            }
+
+        monkeypatch.setattr(tse, "async_discover_target_server", fake_discover)
+        rc = tse.run_discover_target("opc.tcp://localhost:40451")
+        assert rc == 0
+
+    def test_run_discover_target_error_in_data(self, monkeypatch):
+        async def fake_discover(endpoint, timeout=15.0):
+            return {"endpoint": endpoint, "error": "Connection refused"}
+
+        monkeypatch.setattr(tse, "async_discover_target_server", fake_discover)
+        rc = tse.run_discover_target("opc.tcp://localhost:40451")
+        assert rc == 1
+
+    def test_run_discover_target_exception(self, monkeypatch):
+        async def fake_discover(endpoint, timeout=15.0):
+            raise RuntimeError("Network down")
+
+        monkeypatch.setattr(tse, "async_discover_target_server", fake_discover)
+        rc = tse.run_discover_target("opc.tcp://localhost:40451")
+        assert rc == 1

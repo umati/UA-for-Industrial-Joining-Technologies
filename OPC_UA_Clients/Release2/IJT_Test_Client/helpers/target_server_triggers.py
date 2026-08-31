@@ -346,9 +346,49 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                     names.add(str(entity_id))
         return names
 
-    def _choose_joining_process(self, processes: list[Any]) -> Any | None:
+    def _normalize_classification(self, classification: str | int | None) -> str:
+        """Normalize integer or string classification to a canonical profile key."""
+        if classification is None:
+            return ""
+        if isinstance(classification, int):
+            from helpers.namespaces import ResultClassification
+
+            mapping = {
+                ResultClassification.SINGLE_RESULT: "single",
+                ResultClassification.SYNC_RESULT: "sync",
+                ResultClassification.BATCH_RESULT: "batch",
+                ResultClassification.JOB_RESULT: "job",
+                ResultClassification.STITCHING_RESULT: "stitching",
+                ResultClassification.INTERVENTION_RESULT: "intervention",
+            }
+            return mapping.get(classification, "")
+        return str(classification).lower().strip()
+
+    def _get_selection_for_classification(self, classification: str | int | None = None) -> tuple[Any, str]:
+        """Return the appropriate process selection config and normalized key."""
+        key = self._normalize_classification(classification)
+        if key and key in self._profile.selection.joining_processes:
+            return self._profile.selection.joining_processes[key], key
+        if key == "intervention":
+            cpp = self._profile.cu_execution.extension_fields.get("counter_parent_process")
+            if isinstance(cpp, dict) and (cpp.get("joining_process_id") or cpp.get("joining_process_origin_id")):
+                from helpers.target_server_cu_config import JoiningProcessSelectionConfig
+
+                return JoiningProcessSelectionConfig(
+                    policy="exact_match",
+                    joining_process_id=cpp.get("joining_process_id", ""),
+                    joining_process_origin_id=cpp.get("joining_process_origin_id", ""),
+                    selection_name=cpp.get("selection_name", ""),
+                ), key
+            if self._profile.selection.joining_processes:
+                from helpers.target_server_cu_config import JoiningProcessSelectionConfig
+
+                return JoiningProcessSelectionConfig(policy="exact_match"), key
+        return self._profile.selection.joining_process, key
+
+    def _choose_joining_process(self, processes: list[Any], classification: str | int | None = None) -> Any | None:
         """Choose a process according to the profile's deterministic selection policy."""
-        selection = self._profile.selection.joining_process
+        selection, _ = self._get_selection_for_classification(classification)
         if selection.policy != "exact_match":
             return processes[0] if processes else None
 
@@ -382,7 +422,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 if selection.selection_name in self._selection_names(process):
                     return process
             return None
-        return processes[0] if processes and not any(value for value, _ in selectors) else None
+        return None
 
     def _describe_joining_processes(self, processes: list[Any]) -> str:
         """Return compact identifiers for selection diagnostics."""
@@ -405,7 +445,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
         return "; ".join(descriptions)
 
-    def _make_process_identification(self, process: Any) -> Any:
+    def _make_process_identification(self, process: Any, classification: str | int | None = None) -> Any:
         """Build the IJT process identifier required by controller methods."""
         from asyncua import ua
 
@@ -426,7 +466,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             "JoiningProcessOriginId",
             "JoiningProcessIdentificationOrigin",
         )
-        selection = self._profile.selection.joining_process
+        selection, _ = self._get_selection_for_classification(classification)
         configured_name = selection.selection_name
         advertised_names = self._selection_names(process)
         ids_configured = bool(selection.joining_process_id or selection.joining_process_origin_id)
@@ -435,14 +475,16 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         )
         return identification
 
-    async def _select_joining_process(self, jpm_node: Any, process: Any, piu: str) -> bool:
+    async def _select_joining_process(
+        self, jpm_node: Any, process: Any, piu: str, classification: str | int | None = None
+    ) -> bool:
         """Call SelectJoiningProcess and return True on success."""
         from asyncua import ua
 
         from helpers.method_caller import find_and_call_method
         from helpers.namespaces import BN
 
-        identification = self._make_process_identification(process)
+        identification = self._make_process_identification(process, classification=classification)
         if identification is None:
             return False
 
@@ -503,7 +545,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
 
         processes = await self._get_joining_process_list(jpm_node, piu)
-        process = self._choose_joining_process(processes)
+        process = self._choose_joining_process(processes, classification="intervention")
         if process is None:
             return TargetServerTriggerOutcome(
                 triggered=False,
@@ -512,7 +554,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 trigger_mode="joining_process_intervention",
                 product_instance_uri=piu,
             )
-        identification = self._make_process_identification(process)
+        identification = self._make_process_identification(process, classification="intervention")
         if identification is None:
             return TargetServerTriggerOutcome(
                 triggered=False,
@@ -600,7 +642,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         )
         return self._method_succeeded(BN.START_SELECTED_JOINING, result)
 
-    async def _run_workflow(self, operation_count: int = 1) -> TargetServerTriggerOutcome:
+    async def _run_workflow(
+        self, operation_count: int = 1, classification: str | int | None = None
+    ) -> TargetServerTriggerOutcome:
         """Execute the full StartSelectedJoining workflow."""
         sc = self._profile.cu_execution.state_changing_methods
 
@@ -646,13 +690,14 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 trigger_mode="start_selected_joining",
             )
 
-        target_process = self._choose_joining_process(processes)
+        target_process = self._choose_joining_process(processes, classification=classification)
         if target_process is None:
-            selection = self._profile.selection.joining_process
+            selection, norm_key = self._get_selection_for_classification(classification)
+            label = f"{norm_key} " if norm_key else ""
             return TargetServerTriggerOutcome(
                 triggered=False,
                 skip_reason=(
-                    "No joining process matched the configured exact selection "
+                    f"No joining process matched the configured {label}selection "
                     f"(id='{selection.joining_process_id}', "
                     f"origin='{selection.joining_process_origin_id}', "
                     f"selection_name='{selection.selection_name}'); "
@@ -675,7 +720,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             "JoiningProcessIdentificationOrigin",
         )
 
-        selected = await self._select_joining_process(jpm_node, target_process, piu)
+        selected = await self._select_joining_process(jpm_node, target_process, piu, classification=classification)
         if not selected:
             return TargetServerTriggerOutcome(
                 triggered=False,
@@ -753,6 +798,24 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                             joining_process_origin_id=jp_origin,
                             operation_count=operation_number,
                         )
+                    from helpers.namespaces import ResultClassification
+                    from helpers.result_collector import get_classification
+
+                    res_cls = get_classification(completed)
+                    if (
+                        classification in ("job", ResultClassification.JOB_RESULT)
+                        and res_cls == ResultClassification.JOB_RESULT
+                    ) or (
+                        classification in ("batch", ResultClassification.BATCH_RESULT)
+                        and res_cls == ResultClassification.BATCH_RESULT
+                    ):
+                        logger.info(
+                            "Terminal %s result received on operation %d/%d; workflow completed",
+                            classification,
+                            operation_number,
+                            operation_count,
+                        )
+                        break
 
         logger.debug(
             "StartSelectedJoining succeeded: PIU=%s, process=%s, operations=%d",
@@ -770,14 +833,16 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             operation_count=operation_count,
         )
 
-    async def _trigger_operations(self, operation_count: int) -> TriggerOutcome:
+    async def _trigger_operations(
+        self, operation_count: int, classification: str | int | None = None
+    ) -> TriggerOutcome:
         """Trigger one selected process for the requested operation count."""
         method_timeout = self._profile.cu_execution.default_timeout_seconds
         result_timeout = self._profile.workflow_execution.expected_results.timeout_seconds
         workflow_timeout = (4 * method_timeout) + operation_count * (method_timeout + result_timeout)
         try:
             return await asyncio.wait_for(
-                self._run_workflow(operation_count),
+                self._run_workflow(operation_count, classification=classification),
                 timeout=workflow_timeout,
             )
         except asyncio.TimeoutError:
@@ -797,7 +862,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
 
     async def trigger_single(self, result_type: int, include_traces: bool = False) -> TriggerOutcome:
         """Trigger one joining operation and wait for a result."""
-        return await self._trigger_operations(1)
+        return await self._trigger_operations(1, classification="single")
 
     async def trigger_batch_or_sync(
         self,
@@ -817,17 +882,21 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         if classification == ResultClassification.INTERVENTION_RESULT:
             return await self._trigger_intervention()
         policy = self._profile.workflow_execution.start_invocation_policy
+        cls_name = "batch" if classification == ResultClassification.BATCH_RESULT else "sync"
         if policy == "one_start_per_operation":
             count = self._profile.workflow_execution.expected_operation_count or num_children
-            return await self._trigger_operations(count)
+            return await self._trigger_operations(count, classification=cls_name)
         # single_start_produces_final_result
-        return await self.trigger_single(classification, include_traces)
+        return await self._trigger_operations(1, classification=cls_name)
 
     async def trigger_job(self, send_as_refs: bool = False) -> TriggerOutcome:
         """Trigger joining workflow for job-level evidence."""
         if self._profile.workflow_execution.start_invocation_policy == "one_start_per_operation":
-            return await self._trigger_operations(self._profile.workflow_execution.expected_operation_count)
-        return await self.trigger_single(0, False)
+            return await self._trigger_operations(
+                self._profile.workflow_execution.expected_operation_count,
+                classification="job",
+            )
+        return await self._trigger_operations(1, classification="job")
 
     async def trigger_bulk_results(
         self,

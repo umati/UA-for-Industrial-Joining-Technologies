@@ -713,7 +713,7 @@ async def test_result_management_get_result_by_id_with_invalid_id_returns_error(
 
 
 @pytest.mark.requires_cu(CU.RESULT_MANAGEMENT)
-async def test_joining_system_result_management_type_is_present_in_type_system(session_client, ns_indices):
+async def test_joining_system_result_management_type_is_present_in_type_system(opcua_client, ns_indices):
     """JoiningSystemResultManagementType must exist with NodeClass=ObjectType, IsAbstract=False.
 
     OPC 40450-1 Sec 7.5 and Table 15.
@@ -722,7 +722,7 @@ async def test_joining_system_result_management_type_is_present_in_type_system(s
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
 
-    type_node = session_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_MANAGEMENT_TYPE, ns_ijt))
+    type_node = opcua_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_MANAGEMENT_TYPE, ns_ijt))
     try:
         node_class = await asyncio.wait_for(type_node.read_node_class(), timeout=10.0)
     except Exception as exc:
@@ -738,7 +738,7 @@ async def test_joining_system_result_management_type_is_present_in_type_system(s
 
 
 @pytest.mark.requires_cu(CU.RESULT_MANAGEMENT)
-async def test_joining_system_result_management_type_inherits_from_result_management_type(session_client, ns_indices):
+async def test_joining_system_result_management_type_inherits_from_result_management_type(opcua_client, ns_indices):
     """JoiningSystemResultManagementType must be a subtype of ResultManagementType.
 
     Follows HasSubtype inverse references to confirm ancestry via the
@@ -764,7 +764,7 @@ async def test_joining_system_result_management_type_inherits_from_result_manage
         if current_nid.NamespaceIndex == target_nid.NamespaceIndex and current_nid.Identifier == target_nid.Identifier:
             logger.info("JoiningSystemResultManagementType → ResultManagementType ancestry confirmed")
             return
-        node = session_client.get_node(current_nid)
+        node = opcua_client.get_node(current_nid)
         try:
             refs = await asyncio.wait_for(
                 node.get_references(
@@ -787,7 +787,7 @@ async def test_joining_system_result_management_type_inherits_from_result_manage
 
 
 @pytest.mark.requires_cu(CU.RESULT_MANAGEMENT)
-async def test_joining_system_result_management_type_has_mandatory_results_folder_declared(session_client, ns_indices):
+async def test_joining_system_result_management_type_has_mandatory_results_folder_declared(opcua_client, ns_indices):
     """JoiningSystemResultManagementType must declare a Results folder as mandatory.
 
     Browses the type node for a HasComponent reference to the Results folder.
@@ -800,12 +800,16 @@ async def test_joining_system_result_management_type_has_mandatory_results_folde
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
-    type_node = session_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_MANAGEMENT_TYPE, ns_ijt))
+    type_node = opcua_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_MANAGEMENT_TYPE, ns_ijt))
     # Results folder is declared with the Machinery/Result namespace BrowseName
     results_decl = await find_child_by_browse_name(type_node, BN.RESULTS, ns_mr)
     if results_decl is None:
         # Try IJT Base ns as fallback (some servers may use different ns for this)
         results_decl = await find_child_by_browse_name(type_node, BN.RESULTS, ns_ijt)
+    if results_decl is None:
+        # Check inherited parent type ResultManagementType in Machinery/Result namespace
+        parent_type_node = opcua_client.get_node(ua.NodeId(MachineryResultTypes.RESULT_MANAGEMENT_TYPE, ns_mr))
+        results_decl = await find_child_by_browse_name(parent_type_node, BN.RESULTS, ns_mr)
 
     assert results_decl is not None, (
         "JoiningSystemResultManagementType must declare a Results folder child. "
@@ -893,7 +897,7 @@ async def test_result_management_results_folder_result_variable_instances(result
 
 
 @pytest.mark.requires_cu(CU.RESULT_MANAGEMENT)
-async def test_result_management_result_access_methods_declared_in_type(session_client, ns_indices):
+async def test_result_management_result_access_methods_declared_in_type(opcua_client, ns_indices):
     """JoiningSystemResultManagementType must declare result-access Method nodes.
 
     Checks for GetLatestResult, GetResultById, GetResultIdListFiltered in the type
@@ -907,7 +911,7 @@ async def test_result_management_result_access_methods_declared_in_type(session_
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
-    type_node = session_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_MANAGEMENT_TYPE, ns_ijt))
+    type_node = opcua_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_MANAGEMENT_TYPE, ns_ijt))
     try:
         refs = await asyncio.wait_for(
             type_node.get_references(
@@ -931,7 +935,7 @@ async def test_result_management_result_access_methods_declared_in_type(session_
         if key in visited:
             break
         visited.add(key)
-        node = session_client.get_node(current_nid)
+        node = opcua_client.get_node(current_nid)
         try:
             parent_refs = await asyncio.wait_for(
                 node.get_references(
@@ -947,7 +951,7 @@ async def test_result_management_result_access_methods_declared_in_type(session_
         if not parent_refs:
             break
         current_nid = parent_refs[0].NodeId
-        base_node = session_client.get_node(current_nid)
+        base_node = opcua_client.get_node(current_nid)
         try:
             base_refs = await asyncio.wait_for(
                 base_node.get_references(

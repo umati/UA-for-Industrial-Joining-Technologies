@@ -55,16 +55,12 @@ server:
   # Short explanation of the implementation represented by this declaration.
   description: "Edit this to describe your specific server implementation"
 
-# URL used when OPCUA_SERVER_URL environment variable is not set
-connection:
-  # Fallback endpoint when OPCUA_SERVER_URL is not supplied.
-  default_url: "opc.tcp://localhost:40451"
-  # Maximum time allowed to establish the TCP/OPC UA connection.
-  connect_timeout_seconds: 30
-  # Requested OPC UA session lifetime.
-  session_timeout_seconds: 300
-
-# Active base profile — choose ONE of the profiles listed above
+# ---------------------------------------------------------------------------
+# Base Profile — choose ONE of the standard profiles:
+#   - general_joining_system       (standard physical tightening controller)
+#   - basic_tightening_system      (minimal tightening device)
+#   - full_specification_coverage  (enables all 123 CUs for full spec audit)
+# ---------------------------------------------------------------------------
 active_profile: full_specification_coverage
 
 # Additional facets supported beyond the base profile (list of facet names)
