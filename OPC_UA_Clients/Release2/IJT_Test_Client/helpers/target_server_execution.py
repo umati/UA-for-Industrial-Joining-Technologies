@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import math
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -544,7 +546,6 @@ def _generate_excel_report(
     base_dir: Path | None = None,
 ) -> dict:
     """Generate a workbook from artifacts belonging to this exact target run."""
-    import shutil
 
     base_dir = base_dir or _HERE
     junit_xml = output_dir / "spec-tests.xml"
@@ -588,7 +589,9 @@ def _generate_excel_report(
             if default_workbook.resolve() != workbook.resolve():
                 shutil.copy2(workbook, default_workbook)
         except Exception as exc:
-            logging.getLogger(__name__).warning("Could not mirror workbook to default location %s: %s", default_workbook, exc)
+            logging.getLogger(__name__).warning(
+                "Could not mirror workbook to default location %s: %s", default_workbook, exc
+            )
 
     return {"status": "generated", "reason": "", "path": str(workbook)}
 

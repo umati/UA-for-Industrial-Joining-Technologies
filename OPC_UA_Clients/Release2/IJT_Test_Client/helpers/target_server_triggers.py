@@ -164,9 +164,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         jp_origin_lower = joining_process_origin_id.lower().strip()
 
         piu_match = not piu_lower or piu_lower in entity_ids
-        jp_match = (
-            not jp_id_lower and not jp_origin_lower
-        ) or (
+        jp_match = (not jp_id_lower and not jp_origin_lower) or (
             (bool(jp_id_lower) and jp_id_lower in entity_ids)
             or (bool(jp_origin_lower) and jp_origin_lower in entity_ids)
         )

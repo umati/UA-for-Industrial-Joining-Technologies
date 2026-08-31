@@ -1478,7 +1478,9 @@ async def test_result_ready_event_received_after_result_trigger(subscription_cli
         events = await collector.collect(count=1, timeout_s=timeout_s)
 
     if not result_trigger.is_simulator and not events:
-        pytest.skip("No result-ready event received within timeout on target server (requires physical tightening or external trigger)")
+        pytest.skip(
+            "No result-ready event received within timeout on target server (requires physical tightening or external trigger)"
+        )
 
     assert len(events) >= 1, (
         "No JoiningSystemResultReadyEventType event received within the timeout after "
