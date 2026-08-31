@@ -144,7 +144,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         self._last_method_failure = ""
 
     @staticmethod
-    def _result_matches_context(result_data: Any, piu: str, joining_process_id: str) -> bool:
+    def _result_matches_context(
+        result_data: Any, piu: str, joining_process_id: str, joining_process_origin_id: str = ""
+    ) -> bool:
         """Require result identifiers for the selected Tool and JoiningProcess."""
         from asyncua import ua
 
@@ -155,8 +157,20 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             value = entity.Value if isinstance(entity, ua.Variant) else entity
             entity_id = getattr(value, "EntityId", None)
             if entity_id is not None and str(entity_id):
-                entity_ids.add(str(entity_id))
-        return piu in entity_ids and (not joining_process_id or joining_process_id in entity_ids)
+                entity_ids.add(str(entity_id).lower().strip())
+
+        piu_lower = piu.lower().strip()
+        jp_id_lower = joining_process_id.lower().strip()
+        jp_origin_lower = joining_process_origin_id.lower().strip()
+
+        piu_match = not piu_lower or piu_lower in entity_ids
+        jp_match = (
+            not jp_id_lower and not jp_origin_lower
+        ) or (
+            (bool(jp_id_lower) and jp_id_lower in entity_ids)
+            or (bool(jp_origin_lower) and jp_origin_lower in entity_ids)
+        )
+        return piu_match and jp_match
 
     def _method_succeeded(
         self,
@@ -781,8 +795,11 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                     )
                 if completion_collector is not None:
                     completed = await completion_collector.collect_single_matching(
-                        lambda result: self._result_matches_context(result, piu, jp_id),
-                        timeout_s=self._profile.workflow_execution.expected_results.timeout_seconds,
+                        lambda result: self._result_matches_context(result, piu, jp_id, jp_origin),
+                        timeout_s=min(
+                            self._profile.triggers.result.timeout_seconds,
+                            self._profile.workflow_execution.expected_results.timeout_seconds,
+                        ),
                     )
                     if completed is None:
                         return TargetServerTriggerOutcome(

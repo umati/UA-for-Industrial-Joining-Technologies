@@ -530,6 +530,11 @@ def run_discover_target(endpoint: str, timeout: float = 15.0) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Target server CU evidence reporting helpers
+# ---------------------------------------------------------------------------
+
+
 def _generate_excel_report(
     profile: TargetServerCuProfile,
     output_dir: Path,
@@ -539,10 +544,13 @@ def _generate_excel_report(
     base_dir: Path | None = None,
 ) -> dict:
     """Generate a workbook from artifacts belonging to this exact target run."""
+    import shutil
+
     base_dir = base_dir or _HERE
     junit_xml = output_dir / "spec-tests.xml"
     cu_report = output_dir / "cu-coverage-report.json"
     workbook = output_dir / "report-controller.xlsx"
+    default_workbook = base_dir / "test-results" / "report.xlsx"
     if not junit_xml.exists() or not cu_report.exists():
         return {
             "status": "skipped",
@@ -573,6 +581,15 @@ def _generate_excel_report(
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "unknown report generator error").strip()
         return {"status": "failed", "reason": detail, "path": None}
+
+    if workbook.exists():
+        try:
+            default_workbook.parent.mkdir(parents=True, exist_ok=True)
+            if default_workbook.resolve() != workbook.resolve():
+                shutil.copy2(workbook, default_workbook)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Could not mirror workbook to default location %s: %s", default_workbook, exc)
+
     return {"status": "generated", "reason": "", "path": str(workbook)}
 
 
@@ -596,13 +613,11 @@ def _find_venv_python(base_dir: Path | None = None) -> str:
     return sys.executable
 
 
-def _build_spec_test_env(profile: TargetServerCuProfile, *, base_dir: Path | None = None) -> dict[str, str]:
-    """Return env vars for the specification_tests/ subprocess.
-
-    Sets OPCUA_SERVER_URL from the profile endpoint.
-    Sets OPCUA_CAPABILITIES_FILE from the profile capabilities_file if resolvable,
-    otherwise falls back to target_server_cu_profiles/default.capabilities.yaml.
-    """
+def _build_spec_test_env(
+    profile: TargetServerCuProfile,
+    base_dir: Path | None = None,
+) -> dict[str, str]:
+    """Populate environment variables consumed by specification_tests/ fixtures."""
     base_dir = base_dir or _HERE
     env = os.environ.copy()
     env["OPCUA_SERVER_URL"] = profile.target.endpoint
@@ -611,6 +626,7 @@ def _build_spec_test_env(profile: TargetServerCuProfile, *, base_dir: Path | Non
     env["OPCUA_TARGET_SERVER_MODE"] = profile.cu_execution.default_mode
     runtime_selection = {
         "OPCUA_TOOL_PRODUCT_INSTANCE_URI": profile.selection.tool.product_instance_uri,
+        "OPCUA_TOOL_PIU": profile.selection.tool.product_instance_uri,
         "OPCUA_JOINING_PROCESS_ID": profile.selection.joining_process.joining_process_id,
         "OPCUA_JOINING_PROCESS_ORIGIN_ID": profile.selection.joining_process.joining_process_origin_id,
     }
@@ -627,7 +643,14 @@ def _build_spec_test_env(profile: TargetServerCuProfile, *, base_dir: Path | Non
             if jp.joining_process_origin_id:
                 env[f"OPCUA_{prefix.upper()}_JOINING_PROCESS_ORIGIN_ID"] = jp.joining_process_origin_id
     expected_results = profile.workflow_execution.expected_results
-    env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] = str(expected_results.timeout_seconds)
+    # Use result trigger timeout (or default timeout) for individual spec test assertions,
+    # reserving the longer expected_results.timeout_seconds for full workflow sequences.
+    result_timeout = (
+        profile.triggers.result.timeout_seconds
+        if profile.triggers.result.timeout_seconds > 0
+        else (expected_results.timeout_seconds or 10)
+    )
+    env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] = str(result_timeout)
     env["OPCUA_TARGET_FINAL_RESULT_REQUIRED"] = str(expected_results.final_result_required).lower()
     required_classifications = {
         "single": 1,
@@ -643,6 +666,15 @@ def _build_spec_test_env(profile: TargetServerCuProfile, *, base_dir: Path | Non
         env["OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION"] = str(required_classification)
     else:
         env.pop("OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION", None)
+
+    caps = profile.capabilities_file_path()
+    if caps and caps.exists():
+        env["OPCUA_CAPABILITIES_FILE"] = str(caps)
+    elif "OPCUA_CAPABILITIES_FILE" not in env:
+        default_caps = base_dir / "target_server_cu_profiles" / "default.capabilities.yaml"
+        if default_caps.exists():
+            env["OPCUA_CAPABILITIES_FILE"] = str(default_caps)
+
     excluded_cus = _excluded_cus_for_result_scope(
         expected_results.classification,
         expected_results.intermediate_classifications,
@@ -652,13 +684,6 @@ def _build_spec_test_env(profile: TargetServerCuProfile, *, base_dir: Path | Non
         env["OPCUA_TARGET_EXCLUDED_CUS"] = ",".join(sorted(excluded_cus))
     else:
         env.pop("OPCUA_TARGET_EXCLUDED_CUS", None)
-    caps = profile.capabilities_file_path()
-    if caps and caps.exists():
-        env["OPCUA_CAPABILITIES_FILE"] = str(caps)
-    elif "OPCUA_CAPABILITIES_FILE" not in env:
-        default_caps = base_dir / "target_server_cu_profiles" / "default.capabilities.yaml"
-        if default_caps.exists():
-            env["OPCUA_CAPABILITIES_FILE"] = str(default_caps)
     return env
 
 
@@ -692,11 +717,12 @@ def _build_spec_test_command(
     """
     cmd: list[str] = [
         python_exe,
+        "-u",
         "-m",
         "pytest",
         str(spec_dir),
         "--tb=short",
-        "-v" if verbose else "-q",
+        "-v",
         f"--junit-xml={junit_xml}",
         f"--timeout={test_timeout_seconds}",
     ]

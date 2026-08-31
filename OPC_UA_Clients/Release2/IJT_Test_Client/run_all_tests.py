@@ -1577,13 +1577,23 @@ def _resolve_junit_xml_path(explicit_junit_xml: str | None) -> Path | None:
     """Pick the best available JUnit XML produced by this run.
 
     Explicit paths (via --junit-xml) are trusted unconditionally.
-    Auto-detected candidates are rejected if older than _RUN_START to avoid
-    consuming stale XML from a previous run.
+    Auto-detected candidates are checked in priority order, including target
+    server execution output directories.
     """
     if explicit_junit_xml:
         p = Path(explicit_junit_xml)
         return p if p.exists() else None
-    candidates = [_DEFAULT_JUNIT, _RESULTS_DIR / "pytest-unit.xml", _RESULTS_DIR / "pytest.xml"]
+    candidates = [
+        _DEFAULT_JUNIT,
+        _RESULTS_DIR / "pytest-live.xml",
+        _RESULTS_DIR / "target-server-cu" / "spec-tests.xml",
+        _RESULTS_DIR / "spec-tests.xml",
+        _RESULTS_DIR / "pytest-unit.xml",
+        _RESULTS_DIR / "pytest.xml",
+    ]
+    if _RESULTS_DIR.exists():
+        candidates.extend(sorted(_RESULTS_DIR.glob("**/spec-tests.xml"), reverse=True))
+
     for path in candidates:
         if not path.exists():
             continue
@@ -1601,6 +1611,20 @@ def _step_excel_report(xml_path: Path, out_path: Path, *, tests_passed: bool) ->
     capabilities_path = os.environ.get("OPCUA_CAPABILITIES_FILE")
     if not capabilities_path and _RUNNER_SET_CAPABILITIES_FILE and _SIMULATOR_CAPABILITIES.exists():
         capabilities_path = str(_SIMULATOR_CAPABILITIES)
+
+    cu_json_candidates = [
+        xml_path.parent / "cu-coverage-report.json",
+        _RESULTS_DIR / "cu-coverage-report.json",
+        _RESULTS_DIR / "target-server-cu" / "cu-coverage-report.json",
+    ]
+    cu_json = next((c for c in cu_json_candidates if c.exists()), None)
+
+    target_report_candidates = [
+        xml_path.parent / "target-server-cu-report.json",
+        _RESULTS_DIR / "target-server-cu" / "target-server-cu-report.json",
+    ]
+    target_report = next((t for t in target_report_candidates if t.exists()), None)
+
     cmd = [
         str(_venv_python(VENV)),
         str(_HERE / "scripts" / "make_excel_report.py"),
@@ -1614,6 +1638,11 @@ def _step_excel_report(xml_path: Path, out_path: Path, *, tests_passed: bool) ->
     ]
     if capabilities_path:
         cmd.extend(["--capabilities", capabilities_path])
+    if cu_json:
+        cmd.extend(["--cu-json", str(cu_json)])
+    if target_report:
+        cmd.extend(["--target-report", str(target_report)])
+
     rc, output = _run(cmd, cwd=_HERE)
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
