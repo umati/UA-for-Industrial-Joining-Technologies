@@ -122,6 +122,7 @@ Then update `my_controller.sut.yaml`:
 | `authentication.source` | `anonymous`, `prompt`, `file`, or `environment` - references only, never a secret value |
 | `capability_claims.active_profile` / `supported_facets` / `cu_overrides` | The controller's authoritative CU claims |
 | `workflows.tool_selector.product_instance_uri` | Leave empty for runtime Tool discovery; otherwise enter the Tool PIU |
+| `workflows.process_selector.policy` | `first_ready` (default — picks the first ready program automatically, safe for small program lists); `exact_match` (pin a specific ID, required for deterministic runs on controllers with many programs); `first_available` or `first_compatible` for looser matching |
 | `workflows.process_selector.joining_process_id` | Default/fallback Process ID returned by `GetJoiningProcessList` |
 | `workflows.process_selector.joining_process_origin_id` | Stable origin fallback if the controller regenerates the primary ID |
 | `workflows.process_selector.selection_name` | Final fallback when neither configured ID is advertised |

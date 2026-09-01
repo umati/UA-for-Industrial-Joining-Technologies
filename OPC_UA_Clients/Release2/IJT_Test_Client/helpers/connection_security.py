@@ -484,9 +484,9 @@ async def apply_connection_security(
             ) from exc
 
     resolved = credentials if credentials is not None else resolve_credentials(config, env=env, prompt=prompt)
+    # Log security config before applying credentials — never log credential values.
+    logger.info("Applied SUT connection security (%s)", describe_connection_security(config))
     if resolved is not None:
         client.set_user(resolved.username)
         client.set_password(resolved.password)
-
-    logger.info("Applied SUT connection security (%s)", describe_connection_security(config))
     return resolved

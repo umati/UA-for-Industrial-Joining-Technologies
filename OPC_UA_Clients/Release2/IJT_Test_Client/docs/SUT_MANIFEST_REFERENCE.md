@@ -50,7 +50,7 @@ Outcomes in the final report use the canonical vocabulary (Passed, Failed, Not S
 | `workflows.tool_selector.policy` | str | No | `first_ready` | `exact_match`, `first_available`, `first_compatible`, `first_ready` | Tool selection policy. |
 | `workflows.tool_selector.product_instance_uri` | str | No | `''` | - | Exact Tool ProductInstanceUri. Leave empty for runtime discovery. Do not commit real serial numbers. |
 | `workflows.tool_selector.capability_tags` | list of strings | No | `[]` | - | Optional tags used to narrow tool selection. |
-| `workflows.process_selector.policy` | str | No | `first_compatible` | `exact_match`, `first_available`, `first_compatible`, `first_ready` | Joining process selection policy. |
+| `workflows.process_selector.policy` | str | No | `first_compatible` | `exact_match`, `first_available`, `first_compatible`, `first_ready` | Joining process selection policy. first_ready: picks the first ready program automatically — good for simple controllers. exact_match: pin a specific joining_process_id for deterministic selection on controllers with many programs. |
 | `workflows.process_selector.joining_process_id` | str | No | `''` | - | Exact JoiningProcessId. Do not commit real IDs. |
 | `workflows.process_selector.joining_process_origin_id` | str | No | `''` | - | Stable fallback when a controller regenerates its primary process ID. |
 | `workflows.process_selector.selection_name` | str | No | `''` | - | Final controller-specific selection fallback. |

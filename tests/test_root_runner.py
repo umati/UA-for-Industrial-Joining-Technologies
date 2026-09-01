@@ -546,7 +546,7 @@ def test_total_test_outcomes_show_pass_fail_skip_breakdown() -> None:
 def test_root_runner_writes_timing_artifacts(monkeypatch) -> None:
     scratch = _runner.REPO_ROOT / "test-results" / "root-runner-timing-unit"
     if scratch.exists():
-        shutil.rmtree(scratch)
+        shutil.rmtree(scratch, ignore_errors=True)
     monkeypatch.setattr(_runner, "ROOT", scratch)
     result = _runner.SuiteResult(
         "repo-static-gitignore-check",
@@ -568,7 +568,7 @@ def test_root_runner_writes_timing_artifacts(monkeypatch) -> None:
         assert per_job["jobs"][0]["name"] == "Local Root Runner"
     finally:
         if scratch.exists():
-            shutil.rmtree(scratch)
+            shutil.rmtree(scratch, ignore_errors=True)
 
 
 def test_suite_ids_match_naming_pattern() -> None:

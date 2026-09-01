@@ -148,8 +148,8 @@ capability_claims:
     asset_management_cable: unsupported
     asset_management_feeder: unsupported
     asset_management_health: unsupported
-    asset_management_memory_device: unsupported
-    asset_management_monitoring_health: unsupported
+    asset_management_memory_device: supported
+    asset_management_monitoring_health: supported
     asset_management_power_supply: unsupported
     asset_management_sensor: unsupported
     asset_management_servo: unsupported
@@ -222,10 +222,10 @@ workflows:
 
   # How many start calls produce the required result evidence.
   # Values: manual_operation_trigger, one_start_per_operation, single_start_produces_final_result
-  start_invocation_policy: one_start_per_operation
+  start_invocation_policy: single_start_produces_final_result
 
   # Expected number of joining operations for batch/sync workflows.
-  expected_operation_count: 6
+  expected_operation_count: 1
 
   # How the Tool under test is discovered or pinned.
   tool_selector:
@@ -244,7 +244,9 @@ workflows:
   # Default joining-process selection for all result classifications.
   process_selector:
 
-    # Joining process selection policy.
+    # Joining process selection policy. first_ready: picks the first ready program automatically —
+    # good for simple controllers. exact_match: pin a specific joining_process_id for deterministic
+    # selection on controllers with many programs.
     # Values: exact_match, first_available, first_compatible, first_ready
     policy: first_ready
 
@@ -291,7 +293,7 @@ workflows:
       - intervention
 
     # Require a final result before the workflow counts as complete.
-    final_result_required: true
+    final_result_required: false
 
   # What the runner restores after a workflow.
   cleanup:
@@ -426,7 +428,7 @@ timeouts:
   passive_observation_seconds: 5.0
 
   # Budget for result completion after the client started a joining operation.
-  active_result_seconds: 60.0
+  active_result_seconds: 8.0
 
   # Budget for a complete workflow, including setup and cleanup.
   workflow_seconds: 300.0

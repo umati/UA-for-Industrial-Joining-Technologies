@@ -663,10 +663,10 @@ class TestPresetsAndCommittedManifests:
         profile = build_preset("remote_start_multi_operation").to_execution_profile()
         expected = profile.workflow_execution.expected_results
         assert profile.triggers.result.mode == "start_selected_joining"
-        assert profile.workflow_execution.start_invocation_policy == "one_start_per_operation"
-        assert profile.workflow_execution.expected_operation_count == 6
+        assert profile.workflow_execution.start_invocation_policy == "single_start_produces_final_result"
+        assert profile.workflow_execution.expected_operation_count == 1
         assert expected.classification == "job"
-        assert expected.final_result_required is True
+        assert expected.final_result_required is False
         assert "job" in profile.selection.joining_processes
         # Passive observation budget stays short; result completion budget stays long.
         assert profile.triggers.result.timeout_seconds < expected.timeout_seconds

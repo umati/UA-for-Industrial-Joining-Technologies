@@ -110,7 +110,7 @@ def test_write_timing_bundle_writes_aggregate_latest_and_per_job() -> None:
 
     scratch = REPO_ROOT / "test-results" / "timing-artifacts-unit"
     if scratch.exists():
-        shutil.rmtree(scratch)
+        shutil.rmtree(scratch, ignore_errors=True)
     try:
         paths = write_timing_bundle(payload, scratch)
 
@@ -123,4 +123,4 @@ def test_write_timing_bundle_writes_aggregate_latest_and_per_job() -> None:
         assert job_payload["jobs"][0]["name"] == "Job One"
     finally:
         if scratch.exists():
-            shutil.rmtree(scratch)
+            shutil.rmtree(scratch, ignore_errors=True)

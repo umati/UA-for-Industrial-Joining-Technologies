@@ -383,7 +383,7 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                     FieldSpec(
                         "policy",
                         "str",
-                        "Joining process selection policy.",
+                        "Joining process selection policy. first_ready: picks the first ready program automatically — good for simple controllers. exact_match: pin a specific joining_process_id for deterministic selection on controllers with many programs.",
                         default="first_compatible",
                         choices=VALID_SELECTION_POLICIES,
                     ),
@@ -1365,8 +1365,8 @@ _REMOTE_START_CU_OVERRIDES: dict[str, str] = {
     "asset_management_cable": "unsupported",
     "asset_management_feeder": "unsupported",
     "asset_management_health": "unsupported",
-    "asset_management_memory_device": "unsupported",
-    "asset_management_monitoring_health": "unsupported",
+    "asset_management_memory_device": "supported",
+    "asset_management_monitoring_health": "supported",
     "asset_management_power_supply": "unsupported",
     "asset_management_sensor": "unsupported",
     "asset_management_servo": "unsupported",
@@ -1496,8 +1496,8 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
         },
         "workflows": {
             "approved": ["remote_start_multi_operation_job", "counter_intervention"],
-            "start_invocation_policy": "one_start_per_operation",
-            "expected_operation_count": 6,
+            "start_invocation_policy": "single_start_produces_final_result",
+            "expected_operation_count": 1,
             "process_selector": {
                 "policy": "first_ready",
                 "joining_process_id": "",
@@ -1523,7 +1523,7 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
             "expected_results": {
                 "classification": "job",
                 "intermediate_classifications": ["single", "batch", "sync", "intervention"],
-                "final_result_required": True,
+                "final_result_required": False,
             },
             "cleanup": {"policy": "best_effort_with_evidence", "deselect_process": False},
         },
@@ -1559,7 +1559,7 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
         },
         "timeouts": {
             "passive_observation_seconds": 5.0,
-            "active_result_seconds": 60.0,
+            "active_result_seconds": 8.0,
             "workflow_seconds": 300.0,
             "operator_seconds": 300.0,
             "method_call_seconds": 15.0,

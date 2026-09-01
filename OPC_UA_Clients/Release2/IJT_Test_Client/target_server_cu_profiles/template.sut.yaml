@@ -168,7 +168,9 @@ workflows:
   # Default joining-process selection for all result classifications.
   process_selector:
 
-    # Joining process selection policy.
+    # Joining process selection policy. first_ready: picks the first ready program automatically —
+    # good for simple controllers. exact_match: pin a specific joining_process_id for deterministic
+    # selection on controllers with many programs.
     # Values: exact_match, first_available, first_compatible, first_ready
     policy: first_compatible
 
