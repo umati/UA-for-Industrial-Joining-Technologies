@@ -1474,17 +1474,14 @@ async def test_result_ready_event_received_after_result_trigger(subscription_cli
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
-        timeout_s = 15.0 if result_trigger.is_simulator else getattr(result_trigger, "wait_timeout", 10.0)
+        timeout_s = result_trigger.active_result_timeout_s
         events = await collector.collect(count=1, timeout_s=timeout_s)
 
-    if not result_trigger.is_simulator and not events:
-        pytest.skip(
-            "No result-ready event received within timeout on target server (requires physical tightening or external trigger)"
-        )
-
     assert len(events) >= 1, (
-        "No JoiningSystemResultReadyEventType event received within the timeout after "
-        "triggering a result; the server must fire a result-ready event for each operation"
+        "No JoiningSystemResultReadyEventType event received within "
+        f"{timeout_s:.0f}s after an accepted result trigger "
+        f"(trigger method={outcome.method!r}); the server must fire a result-ready event "
+        "for each completed operation"
     )
 
 
@@ -1504,7 +1501,7 @@ async def test_result_ready_event_carries_non_null_result_field(subscription_cli
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
-        timeout_s = 15.0 if result_trigger.is_simulator else getattr(result_trigger, "wait_timeout", 10.0)
+        timeout_s = result_trigger.active_result_timeout_s
         events = await collector.collect(count=1, timeout_s=timeout_s)
 
     if not events:
@@ -1539,7 +1536,7 @@ async def test_result_ready_event_base_event_fields_are_valid(subscription_clien
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
-        timeout_s = 15.0 if result_trigger.is_simulator else getattr(result_trigger, "wait_timeout", 10.0)
+        timeout_s = result_trigger.active_result_timeout_s
         events = await collector.collect(count=1, timeout_s=timeout_s)
 
     if not events:
@@ -1564,7 +1561,7 @@ async def test_result_ready_event_source_name_is_non_empty(subscription_client, 
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "Simulator result trigger failed")
-        timeout_s = 15.0 if result_trigger.is_simulator else getattr(result_trigger, "wait_timeout", 10.0)
+        timeout_s = result_trigger.active_result_timeout_s
         events = await collector.collect(count=1, timeout_s=timeout_s)
 
     if not events:

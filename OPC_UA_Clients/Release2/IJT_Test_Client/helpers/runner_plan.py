@@ -1,24 +1,28 @@
 """
 runner_plan — typed immutable run-plan resolution for run_all_tests.py.
 
-Resolves CLI flag combinations, Target Server profile loading, and the
-endpoint/capabilities precedence chain exactly once, before any phase
+Resolves CLI flag combinations, SUT manifest loading, and the
+endpoint/claims precedence chain exactly once, before any phase
 executes.  This avoids the classic "shared mutable state read at different
 times" bug class: every downstream decision (which phases run, whether the
-simulator is auto-launched, which endpoint/capabilities file is used) is
+simulator is auto-launched, which endpoint/manifest is used) is
 made from a single frozen :class:`RunPlan` instead of re-reading
 ``os.environ`` or CLI args at scattered call sites.
 
 Precedence (see run_all_tests.py --help and docs/TARGET_SERVER_CU_GUIDE.md):
 
-  Endpoint:      --endpoint > non-placeholder profile endpoint > OPCUA_SERVER_URL
-                 > simulator auto-launch (only when no profile/external endpoint)
-  Capabilities:  --capabilities-file > profile capabilities_file > OPCUA_CAPABILITIES_FILE
-                 > built-in simulator capability (only when the simulator is launched)
+  Endpoint:      --endpoint > non-placeholder manifest endpoint > OPCUA_SERVER_URL
+                 > simulator auto-launch (only when no manifest/external endpoint)
+  CU claims:     --capabilities-file > the manifest itself > OPCUA_CAPABILITIES_FILE
 
-A profile (``--profile`` / deprecated ``--target-server-profile``) that resolves to an
-empty/placeholder endpoint is never silently downgraded to the simulator: the
-existing Target Server config-preflight machinery (helpers.target_server_readiness)
+``--profile`` now takes one ``*.sut.yaml`` manifest: the paired
+``*.profile.yaml`` + ``*.capabilities.yaml`` model was replaced by a single
+versioned manifest (see :mod:`helpers.sut_manifest`).
+
+A manifest with an ``external`` lifecycle that still contains ``<placeholder>``
+values fails fast here, before any I/O against a real server. A manifest that
+resolves to an empty endpoint is never silently downgraded to the simulator:
+the Target Server config-preflight machinery (helpers.target_server_readiness)
 reports this as a blocking configuration error instead.
 """
 
@@ -26,14 +30,14 @@ from __future__ import annotations
 
 import argparse
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping
 
+from helpers.sut_manifest import SutManifest, load_sut_manifest, validate_live_ready
 from helpers.target_server_cu_config import (
     TargetServerCuProfile,
     build_default_profile,
-    load_target_server_profile,
 )
 from helpers.target_server_execution import apply_runtime_overrides
 
@@ -95,6 +99,7 @@ class RunPlan:
     preflight_only: bool
 
     profile: TargetServerCuProfile | None
+    manifest: SutManifest | None
     profile_requested: bool
     used_deprecated_profile_flag: bool
     target_evidence_mode: bool
@@ -122,18 +127,19 @@ class RunPlan:
 def resolve_run_plan(args: argparse.Namespace, *, env: Mapping[str, str] | None = None) -> RunPlan:
     """Resolve a complete :class:`RunPlan` from parsed CLI args + environment.
 
-    Loads and validates the Target Server profile (if any), so this must be
-    called only once PyYAML/profile dependencies are importable (i.e. after
+    Loads and validates the SUT manifest (if any), so this must be
+    called only once PyYAML/manifest dependencies are importable (i.e. after
     run_all_tests.py has re-launched itself under its managed venv).
 
     Raises
     ------
     RunnerConfigError
         For invalid flag combinations (also checked earlier by
-        :func:`validate_flag_combinations` for a fast, dependency-free failure).
-    FileNotFoundError, helpers.target_server_cu_config.TargetServerConfigError
-        Propagated unchanged from profile loading so callers can report the
-        original, specific error message.
+        :func:`validate_flag_combinations` for a fast, dependency-free failure),
+        or when an external SUT manifest still contains placeholders.
+    FileNotFoundError, helpers.sut_manifest.SutManifestError
+        Propagated unchanged from manifest loading so callers can report the
+        original, specific error message (including the legacy paired-file error).
     """
     env = os.environ if env is None else env
     validate_flag_combinations(args)
@@ -151,11 +157,21 @@ def resolve_run_plan(args: argparse.Namespace, *, env: Mapping[str, str] | None 
     scoring_mode_arg: str | None = getattr(args, "scoring_mode", None)
 
     profile: TargetServerCuProfile | None = None
+    manifest: SutManifest | None = None
     if profile_path_arg:
-        profile_file = Path(profile_path_arg)
-        if not profile_file.is_absolute():
-            profile_file = Path.cwd() / profile_file
-        profile = load_target_server_profile(profile_file)
+        manifest_file = Path(profile_path_arg)
+        if not manifest_file.is_absolute():
+            manifest_file = Path.cwd() / manifest_file
+        manifest = load_sut_manifest(manifest_file)
+        if not endpoint_arg:
+            issues = validate_live_ready(manifest, env=env)
+            if issues:
+                raise RunnerConfigError(
+                    f"SUT manifest '{manifest_file.name}' is not ready for a live run:\n  - "
+                    + "\n  - ".join(issues)
+                    + "\nReplace the placeholders (or pass --endpoint) before running against a real server."
+                )
+        profile = manifest.to_execution_profile()
     elif endpoint_arg:
         # No profile file, but an explicit endpoint was given: build a minimal
         # default profile so the same run_preflight/run_automated execution
@@ -169,11 +185,11 @@ def resolve_run_plan(args: argparse.Namespace, *, env: Mapping[str, str] | None 
         profile = build_default_profile(endpoint=str(env.get("OPCUA_SERVER_URL", "")))
 
     if profile is not None:
-        # Capabilities precedence is CLI > profile's own value > env: only forward
-        # an override when CLI wins outright, or when the profile has no capabilities
-        # file of its own and env is the only remaining source. This is deliberately
+        # Claim-source precedence is CLI > the manifest itself > env: only forward
+        # an override when CLI wins outright, or when the profile carries no claim
+        # source of its own and env is the only remaining source. This is deliberately
         # different from tool/process selection below, which always let CLI/env win
-        # over the profile (matching the Target Server CLI contract).
+        # over the manifest (matching the Target Server CLI contract).
         profile_had_own_capabilities = bool(profile.capabilities_file)
         capabilities_override = cli_capabilities
         if not capabilities_override and not profile_had_own_capabilities:
@@ -202,11 +218,14 @@ def resolve_run_plan(args: argparse.Namespace, *, env: Mapping[str, str] | None 
     else:
         endpoint, endpoint_source = "", "unset"
 
-    # Simulator auto-launch only when there is no profile and no externally
-    # supplied endpoint of any kind. A profile with an unresolved endpoint is
-    # NEVER downgraded to the simulator here — helpers.target_server_readiness
-    # reports it as a blocking configuration error via run_preflight/run_automated.
-    launch_simulator = endpoint_source == "unset" and not target_evidence_mode
+    # Simulator auto-launch when there is no externally supplied endpoint of any kind:
+    # either no manifest at all, or a manifest whose lifecycle says this runner owns the
+    # server process. A manifest with an unresolved *external* endpoint is NEVER
+    # downgraded to the simulator here - helpers.target_server_readiness reports it as a
+    # blocking configuration error via run_preflight/run_automated.
+    launch_simulator = endpoint_source == "unset" and (
+        not target_evidence_mode or (manifest is not None and manifest.is_auto_simulator)
+    )
 
     # -- Capabilities precedence: CLI > profile > env > unset (simulator default applied later) --
     # Uses profile_had_own_capabilities (captured before apply_runtime_overrides) so an
@@ -240,6 +259,7 @@ def resolve_run_plan(args: argparse.Namespace, *, env: Mapping[str, str] | None 
         run_target=run_target,
         preflight_only=preflight_only,
         profile=profile,
+        manifest=manifest,
         profile_requested=bool(profile_path_arg),
         used_deprecated_profile_flag=used_deprecated_profile_flag,
         target_evidence_mode=target_evidence_mode,
@@ -260,3 +280,16 @@ def resolve_run_plan(args: argparse.Namespace, *, env: Mapping[str, str] | None 
         verbose=bool(getattr(args, "verbose", False)),
         pytest_args=list(getattr(args, "pytest_args", None) or []),
     )
+
+
+def with_resolved_endpoint(plan: RunPlan, endpoint: str) -> RunPlan:
+    """Return a copy of *plan* using *endpoint*, for an auto-launched simulator.
+
+    An ``auto_simulator`` manifest cannot know the port before the runner picks
+    one, so the plan stays frozen and the runner replaces the endpoint once the
+    simulator is ready. Returns *plan* unchanged when *endpoint* is empty.
+    """
+    if not endpoint or plan.profile is None:
+        return plan
+    profile = replace(plan.profile, target=replace(plan.profile.target, endpoint=endpoint))
+    return replace(plan, profile=profile, endpoint=endpoint, endpoint_source="simulator")

@@ -3,7 +3,7 @@
 # Declares all 123 conformance units as supported. Facet rows follow the
 # official IJT Base 11.2.2 catalogue. Use this profile only for a server that
 # claims complete IJT Base implementation. The checked-in Release 2 simulator
-# uses target_server_cu_profiles/simulator.capabilities.yaml to declare unsupported optional CUs.
+# uses target_server_cu_profiles/simulator.sut.yaml to declare unsupported optional CUs.
 
 profile:
   name: "Full IJT Base Specification Coverage"
@@ -11,8 +11,8 @@ profile:
     All 123 conformance units from OPC 40450-1 IJT Base Companion Specification
     across the IJT Base 11.2.2 server-facet catalogue. Use for full-featured
     servers that claim all CUs. Simulators or controllers with unsupported
-    optional features should provide a capability file with cu_overrides so
-    those tests are reported as Not Supported instead of failed.
+    optional features should provide a SUT manifest with capability_claims.cu_overrides
+    so those tests are reported as Not Supported instead of failed.
 
   facets:
     - result_server_facet

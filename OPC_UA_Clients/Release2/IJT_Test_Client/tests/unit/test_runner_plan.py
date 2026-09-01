@@ -21,7 +21,13 @@ _RUNNER_DIR = Path(__file__).resolve().parents[2]  # = IJT_Test_Client/
 sys.path.insert(0, str(_RUNNER_DIR))
 _run_all_tests = importlib.import_module("run_all_tests")
 
-from helpers.runner_plan import RunnerConfigError, resolve_run_plan, validate_flag_combinations
+from helpers.runner_plan import (
+    RunnerConfigError,
+    resolve_run_plan,
+    validate_flag_combinations,
+    with_resolved_endpoint,
+)
+from helpers.sut_manifest import LegacyPairedFileError
 
 
 def _parse(*argv: str):
@@ -38,13 +44,23 @@ def profile_dir(tmp_path) -> Path:
     return tmp_path
 
 
-def _write_profile(path: Path, endpoint: str = "opc.tcp://<target-server-host>:40451") -> Path:
-    profile_path = path / f"profile_{uuid.uuid4().hex}.yaml"
-    profile_path.write_text(
-        f'schema_version: 1\nprofile_name: "Test"\ntarget:\n  endpoint: "{endpoint}"\n',
+def _write_profile(
+    path: Path,
+    endpoint: str = "opc.tcp://<target-server-host>:40451",
+    *,
+    claims: str = "",
+) -> Path:
+    """Write one minimal SUT manifest and return its path."""
+    manifest_path = path / f"sut_{uuid.uuid4().hex}.sut.yaml"
+    manifest_path.write_text(
+        "schema_version: 1\n"
+        'name: "Test SUT"\n'
+        "lifecycle:\n  mode: external\n"
+        "authentication:\n  source: anonymous\n"
+        f'connection:\n  endpoint: "{endpoint}"\n' + claims,
         encoding="utf-8",
     )
-    return profile_path
+    return manifest_path
 
 
 # ---------------------------------------------------------------------------
@@ -189,13 +205,29 @@ class TestResolveRunPlanPrecedence:
         assert plan.profile is not None
         assert plan.profile.target.endpoint == "opc.tcp://from-cli:40451"
 
-    def test_placeholder_profile_endpoint_never_falls_back_to_simulator(self, tmp_path, monkeypatch):
+    def test_placeholder_manifest_endpoint_fails_fast(self, tmp_path, monkeypatch):
+        """An external SUT manifest with placeholders must not start a run."""
         monkeypatch.delenv("OPCUA_SERVER_URL", raising=False)
         profile = _write_profile(tmp_path, endpoint="opc.tcp://<target-server-host>:40451")
-        plan = resolve_run_plan(_parse("--profile", str(profile)))
+        with pytest.raises(RunnerConfigError, match="not ready for a live run"):
+            resolve_run_plan(_parse("--profile", str(profile)))
+
+    def test_placeholder_manifest_endpoint_never_falls_back_to_simulator(self, tmp_path, monkeypatch):
+        """With --endpoint supplied the run proceeds, but never via the simulator."""
+        monkeypatch.delenv("OPCUA_SERVER_URL", raising=False)
+        profile = _write_profile(tmp_path, endpoint="opc.tcp://<target-server-host>:40451")
+        plan = resolve_run_plan(_parse("--profile", str(profile), "--endpoint", "opc.tcp://real:40451"))
         assert plan.target_evidence_mode is True
-        assert plan.endpoint_source == "unset"
         assert plan.launch_simulator is False  # never silently falls back to the simulator
+
+    def test_legacy_paired_profile_file_is_rejected(self, tmp_path):
+        legacy = tmp_path / "old.profile.yaml"
+        legacy.write_text(
+            'schema_version: 1\nprofile_name: "Old"\ncapabilities_file: "old.capabilities.yaml"\n',
+            encoding="utf-8",
+        )
+        with pytest.raises(LegacyPairedFileError, match="sut.yaml"):
+            resolve_run_plan(_parse("--profile", str(legacy)))
 
     def test_endpoint_without_profile_builds_default_profile(self):
         plan = resolve_run_plan(_parse("--endpoint", "opc.tcp://ad-hoc:40451"))
@@ -204,41 +236,28 @@ class TestResolveRunPlanPrecedence:
         assert plan.profile.target.endpoint == "opc.tcp://ad-hoc:40451"
         assert plan.launch_simulator is False
 
-    def test_capabilities_cli_overrides_profile_and_env(self, tmp_path, monkeypatch):
-        caps_cli = tmp_path / "cli.yaml"
-        caps_cli.write_text("schema_version: 1\n", encoding="utf-8")
-        caps_env = tmp_path / "env.yaml"
-        caps_env.write_text("schema_version: 1\n", encoding="utf-8")
-        profile_path = tmp_path / "profile.yaml"
-        profile_path.write_text(
-            'schema_version: 1\ntarget:\n  endpoint: "opc.tcp://real:1"\ncapabilities_file: "profile.capabilities.yaml"\n',
-            encoding="utf-8",
-        )
+    def test_claims_cli_overrides_manifest_and_env(self, tmp_path, monkeypatch):
+        caps_cli = _write_profile(tmp_path, endpoint="opc.tcp://cli-claims:1")
+        caps_env = _write_profile(tmp_path, endpoint="opc.tcp://env-claims:1")
+        manifest_path = _write_profile(tmp_path, endpoint="opc.tcp://real:1")
         monkeypatch.setenv("OPCUA_CAPABILITIES_FILE", str(caps_env))
-        plan = resolve_run_plan(_parse("--profile", str(profile_path), "--capabilities-file", str(caps_cli)))
+        plan = resolve_run_plan(_parse("--profile", str(manifest_path), "--capabilities-file", str(caps_cli)))
         assert plan.capabilities_source == "cli"
         assert plan.capabilities_file == str(Path(caps_cli).resolve())
 
-    def test_capabilities_profile_wins_over_env_when_no_cli(self, tmp_path, monkeypatch):
-        caps_env = tmp_path / "env.yaml"
-        caps_env.write_text("schema_version: 1\n", encoding="utf-8")
-        profile_path = tmp_path / "profile.yaml"
-        profile_path.write_text(
-            'schema_version: 1\ntarget:\n  endpoint: "opc.tcp://real:1"\ncapabilities_file: "profile.capabilities.yaml"\n',
-            encoding="utf-8",
-        )
+    def test_manifest_is_its_own_claim_source_over_env(self, tmp_path, monkeypatch):
+        """One manifest carries its own claims: env never silently replaces them."""
+        caps_env = _write_profile(tmp_path, endpoint="opc.tcp://env-claims:1")
+        manifest_path = _write_profile(tmp_path, endpoint="opc.tcp://real:1")
         monkeypatch.setenv("OPCUA_CAPABILITIES_FILE", str(caps_env))
-        plan = resolve_run_plan(_parse("--profile", str(profile_path)))
+        plan = resolve_run_plan(_parse("--profile", str(manifest_path)))
         assert plan.capabilities_source == "profile"
-        assert plan.capabilities_file is not None
-        assert plan.capabilities_file.endswith("profile.capabilities.yaml")
+        assert plan.capabilities_file == str(manifest_path.resolve())
 
-    def test_capabilities_env_used_when_profile_has_none(self, tmp_path, monkeypatch):
-        caps_env = tmp_path / "env.yaml"
-        caps_env.write_text("schema_version: 1\n", encoding="utf-8")
-        profile_path = _write_profile(tmp_path, endpoint="opc.tcp://real:1")
+    def test_claims_env_used_when_no_manifest_is_given(self, tmp_path, monkeypatch):
+        caps_env = _write_profile(tmp_path, endpoint="opc.tcp://env-claims:1")
         monkeypatch.setenv("OPCUA_CAPABILITIES_FILE", str(caps_env))
-        plan = resolve_run_plan(_parse("--profile", str(profile_path)))
+        plan = resolve_run_plan(_parse("--endpoint", "opc.tcp://ad-hoc:40451"))
         assert plan.capabilities_source == "env"
         assert plan.capabilities_file == str(caps_env)
 
@@ -326,3 +345,58 @@ class TestResolveRunPlanOverridesAndAlias:
         missing = tmp_path / "does-not-exist.yaml"
         with pytest.raises(FileNotFoundError):
             resolve_run_plan(_parse("--profile", str(missing)))
+
+
+# ---------------------------------------------------------------------------
+# lifecycle: auto_simulator manifests own the server process
+# ---------------------------------------------------------------------------
+
+
+class TestSimulatorLifecycle:
+    def _simulator_manifest(self, path: Path) -> Path:
+        manifest = path / "sim.sut.yaml"
+        manifest.write_text(
+            "schema_version: 1\n"
+            'name: "Sim"\n'
+            "lifecycle:\n  mode: auto_simulator\n"
+            "authentication:\n  source: anonymous\n"
+            'connection:\n  endpoint: ""\n',
+            encoding="utf-8",
+        )
+        return manifest
+
+    def test_auto_simulator_manifest_requests_a_launch(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("OPCUA_SERVER_URL", raising=False)
+        plan = resolve_run_plan(_parse("--profile", str(self._simulator_manifest(tmp_path))), env={})
+        assert plan.target_evidence_mode is True
+        assert plan.launch_simulator is True
+        assert plan.manifest is not None
+        assert plan.manifest.is_auto_simulator is True
+
+    def test_auto_simulator_manifest_does_not_fail_on_placeholders(self, tmp_path):
+        # An auto_simulator manifest has no endpoint to fill in, so it is always live-ready.
+        plan = resolve_run_plan(_parse("--profile", str(self._simulator_manifest(tmp_path))), env={})
+        assert plan.endpoint == ""
+
+    def test_external_manifest_never_launches_the_simulator(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("OPCUA_SERVER_URL", raising=False)
+        manifest = _write_profile(tmp_path, endpoint="opc.tcp://real:40451")
+        plan = resolve_run_plan(_parse("--profile", str(manifest)), env={})
+        assert plan.launch_simulator is False
+
+    def test_with_resolved_endpoint_updates_plan_and_profile(self, tmp_path):
+        plan = resolve_run_plan(_parse("--profile", str(self._simulator_manifest(tmp_path))), env={})
+        resolved = with_resolved_endpoint(plan, "opc.tcp://localhost:41234")
+        assert resolved.endpoint == "opc.tcp://localhost:41234"
+        assert resolved.endpoint_source == "simulator"
+        assert resolved.profile is not None
+        assert resolved.profile.target.endpoint == "opc.tcp://localhost:41234"
+
+    def test_with_resolved_endpoint_is_a_no_op_without_an_endpoint(self, tmp_path):
+        plan = resolve_run_plan(_parse("--profile", str(self._simulator_manifest(tmp_path))), env={})
+        assert with_resolved_endpoint(plan, "") is plan
+
+    def test_with_resolved_endpoint_is_a_no_op_without_a_profile(self):
+        plan = resolve_run_plan(_parse("--phase2"), env={})
+        assert plan.profile is None
+        assert with_resolved_endpoint(plan, "opc.tcp://localhost:1") is plan

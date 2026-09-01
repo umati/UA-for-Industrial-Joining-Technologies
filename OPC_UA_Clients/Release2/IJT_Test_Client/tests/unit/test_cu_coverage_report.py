@@ -234,6 +234,17 @@ def test_recorder_writes_cu_compliance_json(report_tmp_path, monkeypatch):
     assert payload["by_cu"]["acknowledge_results"]["compliance"] == "not_supported"
     assert payload["by_cu"]["vendor_extension_cu"]["outcome"] == "untested"
     assert payload["by_cu"]["vendor_extension_cu"]["compliance"] == "untested"
+    # Final reports read the canonical outcome; the detailed values above stay intact.
+    assert payload["by_cu"]["single_result"]["canonical_outcome"] == "passed"
+    assert payload["by_cu"]["single_result"]["claimed"] is True
+    # acknowledge_results is not claimed by the manifest, so its absence is informational.
+    assert payload["by_cu"]["acknowledge_results"]["claimed"] is False
+    assert payload["by_cu"]["acknowledge_results"]["canonical_outcome"] == "not_supported"
+    assert payload["by_cu"]["vendor_extension_cu"]["canonical_outcome"] == "not_tested"
+    canonical_by_test = {entry["nodeid"]: entry["canonical_outcome"] for entry in payload["tests"]}
+    assert canonical_by_test["specification_tests/test_file.py::test_passes"] == "passed"
+    assert canonical_by_test["specification_tests/test_file.py::test_not_supported"] == "not_supported"
+    assert canonical_by_test["specification_tests/test_file.py::test_extension"] == "not_tested"
     reasons = {entry["nodeid"]: entry["reason"] for entry in payload["tests"]}
     assert reasons["specification_tests/test_file.py::test_not_supported"] == (
         "Skipped: AcknowledgeResults method: Not Supported"
@@ -677,3 +688,43 @@ def test_recorder_setup_passed_guard_and_workbook_exact_refs(report_tmp_path, mo
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["by_cu"]["single_result"]["passed"] == 1
     assert captured_workbook_inputs["exact_refs_by_row"] == {"CU_001!R5": {items[0].nodeid}}
+
+
+def test_recorder_marks_a_claimed_but_unsupported_cu_as_failed(report_tmp_path, monkeypatch):
+    """A claimed CU that reports Not Supported is a canonical Failed, not an informational note."""
+    output = report_tmp_path / "reports" / "claimed-gap.json"
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(output))
+    test_file = report_tmp_path / "conformance" / "test_claimed.py"
+    test_file.parent.mkdir(parents=True, exist_ok=True)
+    test_file.write_text("# test placeholder\n", encoding="utf-8")
+
+    recorder = CuCoverageReportRecorder(
+        root=report_tmp_path,
+        all_cus=["acknowledge_results"],
+        supported_cus=["acknowledge_results"],
+    )
+    items = [
+        _Item(
+            nodeid="specification_tests/test_claimed.py::test_claimed_gap",
+            fspath=test_file,
+            name="test_claimed_gap",
+            markers=[_Marker("acknowledge_results")],
+        )
+    ]
+    recorder.pytest_collection_modifyitems(None, None, items)
+    recorder.pytest_runtest_logreport(
+        _Report(
+            nodeid="specification_tests/test_claimed.py::test_claimed_gap",
+            skipped=True,
+            longrepr=("file.py", 9, "Skipped: AcknowledgeResults method: Not Supported"),
+        )
+    )
+    recorder.pytest_sessionfinish(None, 1)
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    entry = payload["by_cu"]["acknowledge_results"]
+    assert entry["claimed"] is True
+    assert entry["compliance"] == "not_supported"  # detailed vocabulary is preserved
+    assert entry["canonical_outcome"] == "failed"  # claimed behaviour missing -> Failed
+    assert payload["tests"][0]["outcome"] == "not_supported"
+    assert payload["tests"][0]["canonical_outcome"] == "failed"

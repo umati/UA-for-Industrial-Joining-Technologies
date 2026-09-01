@@ -522,3 +522,54 @@ class TestNsIndicesResolveAll:
         assert ns.ijt_tightening == 8
         assert ns.app == 9
         assert client.get_namespace_index.await_count == 9
+
+
+# ---------------------------------------------------------------------------
+# Shared ResultClassification name/value table
+# ---------------------------------------------------------------------------
+
+
+class TestResultClassificationTable:
+    def test_names_match_the_enum_exactly(self):
+        from helpers.namespaces import RESULT_CLASSIFICATION_NAMES, ResultClassification
+
+        assert RESULT_CLASSIFICATION_NAMES == {
+            ResultClassification.SINGLE_RESULT: "single",
+            ResultClassification.SYNC_RESULT: "sync",
+            ResultClassification.BATCH_RESULT: "batch",
+            ResultClassification.JOB_RESULT: "job",
+            ResultClassification.STITCHING_RESULT: "stitching",
+            ResultClassification.INTERVENTION_RESULT: "intervention",
+            ResultClassification.TEXT_RESULT: "text",
+        }
+
+    def test_canonical_numbering(self):
+        from helpers.namespaces import result_classification_name
+
+        assert [result_classification_name(i) for i in range(1, 8)] == [
+            "single",
+            "sync",
+            "batch",
+            "job",
+            "stitching",
+            "intervention",
+            "text",
+        ]
+
+    def test_undefined_and_unknown_values_have_no_name(self):
+        from helpers.namespaces import result_classification_name
+
+        assert result_classification_name(0) == ""
+        assert result_classification_name(99) == ""
+        assert result_classification_name(None) == ""
+        assert result_classification_name(True) == ""
+
+    def test_value_lookup_round_trips_and_is_case_insensitive(self):
+        from helpers.namespaces import result_classification_name, result_classification_value
+
+        for value in range(1, 8):
+            assert result_classification_value(result_classification_name(value)) == value
+        assert result_classification_value("  JOB ") == 4
+        assert result_classification_value("") is None
+        assert result_classification_value(None) is None
+        assert result_classification_value("nonsense") is None

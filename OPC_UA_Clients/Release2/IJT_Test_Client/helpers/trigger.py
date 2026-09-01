@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -43,6 +44,38 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 60.0  # seconds — job results can be slow
 _EXTERNAL_SKIP_REASON = "External trigger required — run test with a real controller and trigger manually"
+
+# Evidence-wait budgets.  These are deliberately split so a test never spends a
+# long completion budget when nothing was actively started, and never uses a
+# short passive-observation budget after a remote start was accepted.
+#
+#   active   — an operation was actively started by the trigger and a correlated
+#              result/event MUST arrive; sized for a real joining cycle.
+#   passive  — nothing was started by the test; the trigger only observes
+#              whatever the server produces on its own.  Kept short so an
+#              unattended run cannot stall for hours.
+DEFAULT_SIMULATOR_ACTIVE_RESULT_TIMEOUT_S = 15.0
+DEFAULT_SIMULATOR_PASSIVE_OBSERVATION_TIMEOUT_S = 15.0
+DEFAULT_EXTERNAL_ACTIVE_RESULT_TIMEOUT_S = 90.0
+DEFAULT_EXTERNAL_PASSIVE_OBSERVATION_TIMEOUT_S = 10.0
+
+# Environment overrides used by target server runs (set by
+# helpers/target_server_execution.py from the loaded profile).
+ENV_ACTIVE_RESULT_TIMEOUT = "OPCUA_TARGET_ACTIVE_RESULT_TIMEOUT_SECONDS"
+ENV_PASSIVE_OBSERVATION_TIMEOUT = "OPCUA_TARGET_PASSIVE_OBSERVATION_TIMEOUT_SECONDS"
+
+
+def _positive_float_env(name: str) -> float | None:
+    """Return a positive float from *name*, or None when unset/invalid."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning("Ignoring invalid %s=%r", name, raw)
+        return None
+    return value if value > 0 else None
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +114,24 @@ class ResultTrigger(ABC):
     @abstractmethod
     def is_simulator(self) -> bool:
         """True when this trigger drives the OPC UA simulator."""
+
+    @property
+    def active_result_timeout_s(self) -> float:
+        """Seconds to wait for a result/event after this trigger started an operation.
+
+        Only valid after a trigger method returned ``triggered=True``.  Sized for
+        a complete joining cycle on the server under test.
+        """
+        return _positive_float_env(ENV_ACTIVE_RESULT_TIMEOUT) or DEFAULT_EXTERNAL_ACTIVE_RESULT_TIMEOUT_S
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        """Seconds to observe server-generated evidence when nothing was started.
+
+        Deliberately short so unattended runs cannot stall waiting for an
+        operator action that will never happen.
+        """
+        return _positive_float_env(ENV_PASSIVE_OBSERVATION_TIMEOUT) or DEFAULT_EXTERNAL_PASSIVE_OBSERVATION_TIMEOUT_S
 
     @abstractmethod
     async def trigger_single(self, result_type: int, include_traces: bool = False) -> TriggerOutcome:
@@ -162,6 +213,16 @@ class EventTrigger(ABC):
     def is_simulator(self) -> bool:
         """True when this trigger drives the OPC UA simulator."""
 
+    @property
+    def active_event_timeout_s(self) -> float:
+        """Seconds to wait for an event after this trigger fired one."""
+        return _positive_float_env(ENV_ACTIVE_RESULT_TIMEOUT) or DEFAULT_EXTERNAL_ACTIVE_RESULT_TIMEOUT_S
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        """Seconds to observe server-generated events when nothing was triggered."""
+        return _positive_float_env(ENV_PASSIVE_OBSERVATION_TIMEOUT) or DEFAULT_EXTERNAL_PASSIVE_OBSERVATION_TIMEOUT_S
+
     @abstractmethod
     async def trigger_event(self, event_type: int, count: int = 1) -> TriggerOutcome:
         """Trigger one or more events of the given type.
@@ -235,6 +296,16 @@ class SimulatorResultTrigger(ResultTrigger):
     def is_simulator(self) -> bool:
         """True — this trigger drives the OPC UA simulator."""
         return True
+
+    @property
+    def active_result_timeout_s(self) -> float:
+        """Simulator results are generated immediately; a short budget is enough."""
+        return DEFAULT_SIMULATOR_ACTIVE_RESULT_TIMEOUT_S
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        """Simulator passive observation uses the same short budget."""
+        return DEFAULT_SIMULATOR_PASSIVE_OBSERVATION_TIMEOUT_S
 
     def __init__(self, client, simulate_results_folder_node, ns_app: int) -> None:
         self._client = client
@@ -339,6 +410,16 @@ class SimulatorEventTrigger(EventTrigger):
         """True — this trigger drives the OPC UA simulator."""
         return True
 
+    @property
+    def active_event_timeout_s(self) -> float:
+        """Simulator events are fired immediately; a short budget is enough."""
+        return DEFAULT_SIMULATOR_ACTIVE_RESULT_TIMEOUT_S
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        """Simulator passive observation uses the same short budget."""
+        return DEFAULT_SIMULATOR_PASSIVE_OBSERVATION_TIMEOUT_S
+
     def __init__(self, client, simulate_events_folder_node, ns_app: int) -> None:
         self._client = client
         self._folder = simulate_events_folder_node
@@ -433,8 +514,9 @@ class ExternalResultTrigger(ResultTrigger):
     when they receive this outcome.
 
     Args:
-        wait_timeout_s: Reserved for future use (e.g. polling with a real controller
-                        adapter).  Not used by this base implementation.
+        wait_timeout_s: Explicit passive-observation budget in seconds.  When
+                        greater than 0 it overrides the environment/default
+                        value returned by ``passive_observation_timeout_s``.
     """
 
     @property
@@ -444,6 +526,18 @@ class ExternalResultTrigger(ResultTrigger):
 
     def __init__(self, wait_timeout_s: float = 0.0) -> None:
         self._wait_timeout_s = wait_timeout_s
+
+    @property
+    def active_result_timeout_s(self) -> float:
+        """This trigger never starts an operation — observation budget only."""
+        return self.passive_observation_timeout_s
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        """Explicit constructor budget, else the environment/passive default."""
+        if self._wait_timeout_s > 0:
+            return self._wait_timeout_s
+        return _positive_float_env(ENV_PASSIVE_OBSERVATION_TIMEOUT) or DEFAULT_EXTERNAL_PASSIVE_OBSERVATION_TIMEOUT_S
 
     def _skip(self, method: str) -> TriggerOutcome:
         return TriggerOutcome(triggered=False, skip_reason=_EXTERNAL_SKIP_REASON, method=method)
@@ -487,8 +581,9 @@ class ExternalEventTrigger(EventTrigger):
     when they receive this outcome.
 
     Args:
-        wait_timeout_s: Reserved for future use (e.g. polling with a real controller
-                        adapter).  Not used by this base implementation.
+        wait_timeout_s: Explicit passive-observation budget in seconds.  When
+                        greater than 0 it overrides the environment/default
+                        value returned by ``passive_observation_timeout_s``.
     """
 
     @property
@@ -498,6 +593,18 @@ class ExternalEventTrigger(EventTrigger):
 
     def __init__(self, wait_timeout_s: float = 0.0) -> None:
         self._wait_timeout_s = wait_timeout_s
+
+    @property
+    def active_event_timeout_s(self) -> float:
+        """This trigger never fires an event — observation budget only."""
+        return self.passive_observation_timeout_s
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        """Explicit constructor budget, else the environment/passive default."""
+        if self._wait_timeout_s > 0:
+            return self._wait_timeout_s
+        return _positive_float_env(ENV_PASSIVE_OBSERVATION_TIMEOUT) or DEFAULT_EXTERNAL_PASSIVE_OBSERVATION_TIMEOUT_S
 
     def _skip(self, method: str) -> TriggerOutcome:
         return TriggerOutcome(triggered=False, skip_reason=_EXTERNAL_SKIP_REASON, method=method)
@@ -520,6 +627,37 @@ class ExternalEventTrigger(EventTrigger):
     async def trigger_condition(self, event_type: int) -> TriggerOutcome:
         """Return skip outcome — external trigger required."""
         return self._skip(BN.SIMULATE_CONDITIONS)
+
+
+# ---------------------------------------------------------------------------
+# Simulator helper-node discovery
+# ---------------------------------------------------------------------------
+
+
+async def find_simulation_child(joining_system_node, ns_app: int | None, child_browse_name: str):
+    """Return a simulator helper folder under ``JoiningSystem/Simulations``.
+
+    This is the one lookup path used for simulator helper nodes: the pytest
+    trigger fixtures and the SUT-manifest ``simulate_methods`` trigger mode both
+    call it, so a manifest-driven run locates exactly the same nodes as the
+    default simulator run.
+
+    Args:
+        joining_system_node:  JoiningSystem OPC UA Node.
+        ns_app:               Application namespace index, or ``None`` when the
+                              application namespace is not registered.
+        child_browse_name:    Browse name of the wanted folder, e.g.
+                              ``BN.SIMULATE_RESULTS_FOLDER``.
+
+    Returns:
+        The folder node, or ``None`` when the server exposes no such helper.
+    """
+    if ns_app is None:
+        return None
+    simulations = await find_child_by_browse_name(joining_system_node, BN.SIMULATIONS, ns_app)
+    if simulations is None:
+        return None
+    return await find_child_by_browse_name(simulations, child_browse_name, ns_app)
 
 
 # ---------------------------------------------------------------------------

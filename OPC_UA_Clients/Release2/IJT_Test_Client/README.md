@@ -28,16 +28,36 @@ Target Server CU profile only controls applicability, safety, scoring, and
 evidence — never a separate test suite.
 
 ```bash
-python run_all_tests.py                                   # Phase 1 + Phase 2 (simulator auto-launch)
-python run_all_tests.py --phase1                           # static analysis only
-python run_all_tests.py --phase2                           # specification_tests only
-python run_all_tests.py --endpoint opc.tcp://<host>:40451 --discover-target      # discover tools/processes & emit YAML
-python run_all_tests.py --profile target_server_cu_profiles/my_profile.yaml   # full validation against a Target Server
-python run_all_tests.py --preflight-only --profile target_server_cu_profiles/my_profile.yaml # classification only, no live tests
+python run_all_tests.py                                        # Phase 1 + Phase 2 (simulator auto-launch)
+python run_all_tests.py --phase1                               # static analysis only
+python run_all_tests.py --phase2                               # specification_tests only
+python run_all_tests.py inspect --endpoint opc.tcp://<host>:40451          # read-only discovery (no state change)
+python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output my_controller.sut.yaml  # guided manifest creation
+python run_all_tests.py run --profile target_server_cu_profiles/controller_remote_start.sut.yaml --endpoint opc.tcp://<host>:40451  # full controller run
+python run_all_tests.py run --profile my_controller.sut.yaml --endpoint opc.tcp://<host>:40451 --preflight-only  # classification only
 ```
 
 See [Target Server CU Guide](docs/TARGET_SERVER_CU_GUIDE.md) for the
 full Target Server option reference.
+
+## Testing a Real Controller
+
+**Every run — one command:**
+```bash
+python run_all_tests.py run --profile target_server_cu_profiles/controller_remote_start.sut.yaml --endpoint opc.tcp://<host>:40451
+```
+
+Use [`controller_manual_trigger.sut.yaml`](target_server_cu_profiles/controller_manual_trigger.sut.yaml) instead if the operator physically triggers the tool.
+
+**Only create a custom manifest** if your controller has different capability claims. Use `init-profile` to auto-generate one from live discovery:
+```bash
+python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output my_controller.sut.yaml
+```
+
+Optional read-only discovery (safe, no state change, no manifest needed):
+```bash
+python run_all_tests.py inspect --endpoint opc.tcp://<host>:40451
+```
 
 ## Learn More
 

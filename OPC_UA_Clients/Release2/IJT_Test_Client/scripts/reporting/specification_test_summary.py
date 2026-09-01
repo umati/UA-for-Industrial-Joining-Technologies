@@ -226,11 +226,25 @@ def _load_profiles() -> dict[str, dict[str, Any]]:
 
 
 def _load_capabilities() -> dict[str, Any]:
+    """Return the claim summary of the selected SUT manifest, or an empty dict.
+
+    ``OPCUA_CAPABILITIES_FILE`` names one ``*.sut.yaml`` manifest. When it is
+    unset there is no server-specific claim, so the report falls back to
+    generic labels instead of another server's manifest.
+    """
     caps_env = os.environ.get("OPCUA_CAPABILITIES_FILE")
-    caps_path = (
-        Path(caps_env) if caps_env else _PROJECT_ROOT / "target_server_cu_profiles" / "default.capabilities.yaml"
-    )
-    return _load_yaml(caps_path)
+    if not caps_env:
+        return {}
+    from helpers.sut_manifest import SutManifestError, load_sut_manifest
+
+    try:
+        manifest = load_sut_manifest(Path(caps_env))
+    except (SutManifestError, OSError, FileNotFoundError):
+        return {}
+    return {
+        "server": {"name": manifest.name},
+        "active_profile": manifest.capability_claims.active_profile,
+    }
 
 
 def _active_profile_key(capabilities: dict[str, Any]) -> str:

@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # Import _StepResult from run_all_tests.py (the runner script, not a package)
 # ---------------------------------------------------------------------------
@@ -375,7 +377,7 @@ def test_live_tests_respect_explicit_coverage_args():
 def test_skip_summary_formats_cu_not_supported_reason():
     reason = (
         "Skipped: Conformance unit 'send_joining_process' is not listed as supported "
-        "for this server. Config file: simulator.capabilities.yaml"
+        "for this server. Config file: simulator.sut.yaml"
     )
     assert _mod._summarize_skip_reason(reason) == "Method 'SendJoiningProcess' is not supported"
 
@@ -564,3 +566,200 @@ def test_semgrep_errors_is_fail():
     assert not result.warn
     c = _counts([result])
     assert c["failed"] == 1
+
+
+# ---------------------------------------------------------------------------
+# _maybe_generate_excel — flag handling and shared-baseline protection
+# ---------------------------------------------------------------------------
+
+
+def test_excel_never_is_skipped():
+    result = _mod._maybe_generate_excel("never", tests_passed=True, explicit_junit_xml=None, excel_out=None)
+    assert result.skipped
+    assert "--excel=never" in result.note
+
+
+def test_excel_on_success_skipped_after_failures():
+    result = _mod._maybe_generate_excel("on-success", tests_passed=False, explicit_junit_xml=None, excel_out=None)
+    assert result.skipped
+    assert "on-success" in result.note
+
+
+def test_target_evidence_run_does_not_touch_shared_simulator_workbook():
+    """A --profile/--endpoint run must not regenerate test-results/report.xlsx nor
+    rewrite the shared report-baseline.json from target-server results."""
+    called = {"ran": False}
+
+    def _fail_if_called(*_a, **_kw):
+        called["ran"] = True
+        raise AssertionError("simulator Excel step must not run for a target evidence run")
+
+    with patch.object(_mod, "_step_excel_report", _fail_if_called):
+        result = _mod._maybe_generate_excel(
+            "always",
+            tests_passed=True,
+            explicit_junit_xml=None,
+            excel_out=None,
+            target_evidence_mode=True,
+        )
+    assert result.skipped
+    assert called["ran"] is False
+    assert "report-controller.xlsx" in result.note
+
+
+def test_simulator_excel_step_still_runs_when_not_target_mode(tmp_path):
+    xml = tmp_path / "pytest-live.xml"
+    xml.write_text("<testsuite/>", encoding="utf-8")
+    captured: dict = {}
+
+    def _fake_step(xml_path, out_path, *, tests_passed):
+        captured["out"] = out_path
+        r = _StepResult("[POST] Excel report")
+        r.ok = True
+        return r
+
+    with patch.object(_mod, "_step_excel_report", _fake_step):
+        result = _mod._maybe_generate_excel(
+            "always",
+            tests_passed=True,
+            explicit_junit_xml=str(xml),
+            excel_out=str(tmp_path / "custom.xlsx"),
+        )
+    assert result.ok
+    assert captured["out"] == Path(tmp_path / "custom.xlsx")
+
+
+def test_simulator_excel_step_writes_shared_baseline():
+    """The simulator lane owns test-results/report-baseline.json."""
+    captured: dict = {}
+
+    def _fake_run(cmd, cwd=None):
+        captured["cmd"] = cmd
+        return 0, ""
+
+    with patch.object(_mod, "_run", _fake_run):
+        _mod._step_excel_report(Path("x.xml"), Path("out.xlsx"), tests_passed=True)
+    assert "--write-baseline" in captured["cmd"]
+
+
+# ---------------------------------------------------------------------------
+# Auto-simulator endpoint resolution
+# ---------------------------------------------------------------------------
+
+
+class TestAutoSimulatorEndpointResolution:
+    """The resolved simulator endpoint must always reach the frozen run plan."""
+
+    @pytest.fixture(autouse=True)
+    def _isolated_server_env(self):
+        """Restore the endpoint/manifest environment this runner mutates directly."""
+        saved = {name: _mod.os.environ.get(name) for name in ("OPCUA_SERVER_URL", "OPCUA_CAPABILITIES_FILE")}
+        yield
+        for name, value in saved.items():
+            if value is None:
+                _mod.os.environ.pop(name, None)
+            else:
+                _mod.os.environ[name] = value
+
+    def _reset_env(self, monkeypatch):
+        monkeypatch.delenv("OPCUA_SERVER_URL", raising=False)
+        monkeypatch.delenv("OPCUA_CAPABILITIES_FILE", raising=False)
+
+    def test_already_running_simulator_publishes_the_default_endpoint(self, monkeypatch):
+        self._reset_env(monkeypatch)
+        monkeypatch.setattr(_mod, "_is_port_reachable", lambda host, port, timeout=2.0: True)
+        monkeypatch.setattr(_mod, "_is_opcua_ready", lambda url, timeout_s=10.0: True)
+
+        assert _mod._ensure_server() is None
+        assert _mod.os.environ["OPCUA_SERVER_URL"] == f"opc.tcp://localhost:{_mod._OPCUA_SERVER_PORT}"
+
+    def test_already_running_simulator_adopts_the_simulator_manifest(self, monkeypatch):
+        self._reset_env(monkeypatch)
+        monkeypatch.setattr(_mod, "_is_port_reachable", lambda host, port, timeout=2.0: True)
+        monkeypatch.setattr(_mod, "_is_opcua_ready", lambda url, timeout_s=10.0: True)
+
+        _mod._ensure_server()
+        assert _mod.os.environ["OPCUA_CAPABILITIES_FILE"].endswith("simulator.sut.yaml")
+
+    def test_open_port_without_handshake_publishes_no_endpoint(self, monkeypatch):
+        self._reset_env(monkeypatch)
+        monkeypatch.setattr(_mod, "_is_port_reachable", lambda host, port, timeout=2.0: True)
+        monkeypatch.setattr(_mod, "_is_opcua_ready", lambda url, timeout_s=10.0: False)
+
+        assert _mod._ensure_server() is None
+        assert "OPCUA_SERVER_URL" not in _mod.os.environ
+
+    def test_caller_managed_endpoint_is_left_alone(self, monkeypatch):
+        self._reset_env(monkeypatch)
+        monkeypatch.setenv("OPCUA_SERVER_URL", "opc.tcp://elsewhere:40451")
+
+        assert _mod._ensure_server() is None
+        assert _mod.os.environ["OPCUA_SERVER_URL"] == "opc.tcp://elsewhere:40451"
+
+    def test_newly_launched_simulator_publishes_its_endpoint(self, monkeypatch, tmp_path):
+        self._reset_env(monkeypatch)
+        exe = tmp_path / "opcua_ijt_demo_application.exe"
+        exe.write_text("binary", encoding="utf-8")
+
+        monkeypatch.setattr(_mod.shutil, "copytree", lambda src, dst: Path(dst).mkdir(parents=True))
+        monkeypatch.setattr(_mod.subprocess, "Popen", lambda *a, **k: object())
+        monkeypatch.setattr(_mod, "_is_opcua_ready", lambda url, timeout_s=10.0: True)
+        monkeypatch.setattr(_mod, "_simulator_tmp_dir", lambda port: tmp_path / f"sim_{port}")
+
+        proc = _mod._launch_simulator_on_port(41111, str(exe))
+        try:
+            assert proc is not None
+            assert _mod.os.environ["OPCUA_SERVER_URL"] == "opc.tcp://localhost:41111"
+            assert _mod.os.environ["OPCUA_CAPABILITIES_FILE"].endswith("simulator.sut.yaml")
+        finally:
+            setattr(_mod, "_server_tmp_dir", None)
+
+    def test_existing_capabilities_selection_is_never_overwritten(self, monkeypatch):
+        self._reset_env(monkeypatch)
+        monkeypatch.setenv("OPCUA_CAPABILITIES_FILE", "my_controller.sut.yaml")
+        monkeypatch.setattr(_mod, "_is_port_reachable", lambda host, port, timeout=2.0: True)
+        monkeypatch.setattr(_mod, "_is_opcua_ready", lambda url, timeout_s=10.0: True)
+
+        _mod._ensure_server()
+        assert _mod.os.environ["OPCUA_CAPABILITIES_FILE"] == "my_controller.sut.yaml"
+
+    def test_resolved_endpoint_reaches_the_frozen_plan(self, monkeypatch):
+        """with_resolved_endpoint must receive a real URL, never an empty string."""
+        from helpers.runner_plan import RunPlan, with_resolved_endpoint
+        from helpers.target_server_cu_config import build_default_profile
+
+        self._reset_env(monkeypatch)
+        monkeypatch.setattr(_mod, "_is_port_reachable", lambda host, port, timeout=2.0: True)
+        monkeypatch.setattr(_mod, "_is_opcua_ready", lambda url, timeout_s=10.0: True)
+        _mod._ensure_server()
+
+        plan = RunPlan(
+            run_phase1=False,
+            run_target=True,
+            preflight_only=False,
+            profile=build_default_profile(),
+            manifest=None,
+            profile_requested=True,
+            used_deprecated_profile_flag=False,
+            target_evidence_mode=True,
+            endpoint="",
+            endpoint_source="unset",
+            launch_simulator=True,
+            capabilities_file=None,
+            capabilities_source="unset",
+            tool_product_instance_uri=None,
+            joining_process_id=None,
+            joining_process_origin_id=None,
+            mode="automated",
+            scoring_mode=None,
+            output_dir=None,
+            interactive_prompts=False,
+            skip_spec_tests=False,
+            spec_tests_timeout=600,
+            verbose=False,
+            pytest_args=[],
+        )
+        resolved = with_resolved_endpoint(plan, _mod.os.environ.get("OPCUA_SERVER_URL", ""))
+        assert resolved.endpoint == f"opc.tcp://localhost:{_mod._OPCUA_SERVER_PORT}"
+        assert resolved.profile is not None
+        assert resolved.profile.target.endpoint == resolved.endpoint

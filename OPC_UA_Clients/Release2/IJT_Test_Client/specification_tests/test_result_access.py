@@ -49,6 +49,7 @@ from asyncua import ua
 from helpers.cu_registry import CU
 from helpers.namespaces import BN, NS_APP, NS_IJT_BASE, NS_MACH_RESULT, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.result_polling import extract_result_id, poll_until_result_id_changes
 from helpers.result_validator import assert_result_data_valid
 
 logger = logging.getLogger(__name__)
@@ -537,10 +538,7 @@ async def test_last_result_metadata_updated_after_trigger(opcua_client, result_t
     except ua.UaError:
         before_value = None
 
-    before_id = None
-    if before_value is not None:
-        bm = getattr(before_value, "ResultMetaData", before_value)
-        before_id = str(getattr(bm, "ResultId", None) or "")
+    before_id = extract_result_id(before_value)
 
     outcome = await result_trigger.trigger_single(
         result_type=ResultType.MULTI_STEP_OK_RESULT,
@@ -549,26 +547,27 @@ async def test_last_result_metadata_updated_after_trigger(opcua_client, result_t
     if not outcome.triggered:
         pytest.skip(outcome.skip_reason)
 
-    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
-
+    # Bounded poll: returns as soon as a new ResultId is published and only
+    # spends the full active budget when the server never publishes one.
     try:
-        after_value = await last_meta_node.read_value()
+        poll = await poll_until_result_id_changes(
+            last_meta_node.read_value,
+            before_id,
+            timeout_s=result_trigger.active_result_timeout_s,
+        )
     except ua.UaError as exc:
         pytest.skip(f"Could not read Results/Result/ResultMetaData after trigger: {exc}")
 
+    after_value = poll.value
     assert after_value is not None, "Results/Result/ResultMetaData must not be None after a result is produced"
-    am = getattr(after_value, "ResultMetaData", after_value)
-    after_id = str(getattr(am, "ResultId", None) or "")
+    after_id = poll.result_id
 
-    if before_id is not None and before_id.strip():
-        if not result_trigger.is_simulator and after_id == before_id:
-            pytest.skip(
-                "Target server did not generate a new physical result after trigger (ResultId unchanged); "
-                "a physical cycle or remote tool trigger is required"
-            )
-        assert after_id != before_id, (
-            f"Results/Result/ResultMetaData.ResultId did not change after trigger "
-            f"(before={before_id!r}, after={after_id!r})"
+    if before_id.strip():
+        assert poll.changed, (
+            f"Results/Result/ResultMetaData.ResultId did not change after an accepted trigger "
+            f"(trigger method={outcome.method!r}, before={before_id!r}, after={after_id!r}, "
+            f"waited {poll.elapsed_s:.1f}s of {poll.timeout_s:.1f}s over {poll.reads} read(s)); "
+            "an accepted joining operation must publish a new result"
         )
 
 
@@ -918,8 +917,7 @@ async def test_get_latest_result_returns_new_result_after_second_trigger(opcua_c
     if result_data_first is None:
         pytest.skip("First GetLatestResult returned no data")
 
-    meta_first = getattr(result_data_first, "ResultMetaData", None)
-    result_id_first = str(getattr(meta_first, "ResultId", None) or "") if meta_first else ""
+    result_id_first = extract_result_id(result_data_first)
 
     outcome = await result_trigger.trigger_single(
         result_type=ResultType.MULTI_STEP_OK_RESULT,
@@ -928,22 +926,30 @@ async def test_get_latest_result_returns_new_result_after_second_trigger(opcua_c
     if not outcome.triggered:
         pytest.skip(outcome.skip_reason)
 
-    _h2, result_data_second = await _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS)
+    async def _read_latest():
+        _handle, data = await _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS)
+        return data
+
+    # Bounded poll: the second result does not have to be published by the time
+    # the trigger call returns, but it must arrive within the active budget.
+    poll = await poll_until_result_id_changes(
+        _read_latest,
+        result_id_first,
+        timeout_s=result_trigger.active_result_timeout_s,
+    )
+
+    result_data_second = poll.value
     if result_data_second is None:
         pytest.skip("Second GetLatestResult returned no data")
 
-    meta_second = getattr(result_data_second, "ResultMetaData", None)
-    result_id_second = str(getattr(meta_second, "ResultId", None) or "") if meta_second else ""
+    result_id_second = poll.result_id
 
     if result_id_first.strip() and result_id_second.strip():
-        if not result_trigger.is_simulator and result_id_second == result_id_first:
-            pytest.skip(
-                "Target server did not generate a new physical result after trigger (ResultId unchanged); "
-                "a physical cycle or remote tool trigger is required"
-            )
-        assert result_id_second != result_id_first, (
-            f"GetLatestResult returned the same ResultId after a new trigger: "
-            f"first={result_id_first!r}, second={result_id_second!r}; "
+        assert poll.changed, (
+            f"GetLatestResult returned the same ResultId after an accepted new trigger "
+            f"(trigger method={outcome.method!r}): "
+            f"first={result_id_first!r}, second={result_id_second!r} "
+            f"after {poll.elapsed_s:.1f}s of {poll.timeout_s:.1f}s over {poll.reads} read(s); "
             "the server must return the most recently completed result"
         )
 

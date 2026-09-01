@@ -1,26 +1,24 @@
 """
-Target Server CU configuration loader and validator.
+Target Server CU execution configuration (internal typed model).
 
-Loads and strictly validates Target Server CU execution profiles (YAML).
-Keeps a clear separation from helpers/profile_loader.py which handles
-official CU support declarations (profiles, facets, cu_overrides).
+Holds the typed, validated execution policy used by the Target Server run
+path: endpoint, CU execution policy, trigger modes, selection, workflow
+execution, and reporting.
 
-This module handles:
-  - target server endpoint and server selection config
-  - cu_execution policy (mode, scoring, preconditions, state-changing methods)
-  - trigger modes (result, event, condition)
-  - workflow_execution setup (selection, start policy, cleanup)
-  - reporting options
+This module is **not** a tester-facing file schema. The single tester-facing
+schema is the SUT manifest (``*.sut.yaml``, see :mod:`helpers.sut_manifest`),
+which normalizes its own sections and calls :func:`build_execution_profile`
+here so validation exists exactly once.
+
+The stable outcome and reason-code vocabulary is defined in
+:mod:`helpers.canonical_outcomes` and re-exported below for existing importers.
 
 Usage::
 
-    from helpers.target_server_cu_config import load_target_server_profile, TargetServerConfigError
+    from helpers.sut_manifest import load_sut_manifest
 
-    try:
-        cfg = load_target_server_profile(Path("target_server_cu_profiles/my_profile.yaml"))
-    except TargetServerConfigError as exc:
-        print(f"Configuration error: {exc}")
-        sys.exit(1)
+    manifest = load_sut_manifest(Path("target_server_cu_profiles/simulator.sut.yaml"))
+    cfg = manifest.to_execution_profile()
 
     if cfg.cu_execution.allow_state_changing_method("SelectJoiningProcess"):
         ...
@@ -33,7 +31,30 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
+from helpers.canonical_outcomes import (
+    ALL_OUTCOMES,
+    OUTCOME_BLOCKED,
+    OUTCOME_CLAIM_MISMATCH,
+    OUTCOME_CONFIGURATION_ERROR,
+    OUTCOME_FAILED,
+    OUTCOME_MANUAL_REQUIRED,
+    OUTCOME_PASSED,
+    OUTCOME_UNSUPPORTED,
+    REASON_CLAIM_METHOD_MISSING,
+    REASON_CLAIM_STATUS_NOT_SUPPORTED,
+    REASON_CONFIGURATION_INVALID,
+    REASON_ENDPOINT_UNREACHABLE,
+    REASON_JOINING_SYSTEM_NOT_FOUND,
+    REASON_MANUAL_TRIGGER_REQUIRED,
+    REASON_MISSING_RUNTIME_PRECONDITION,
+    REASON_NAMESPACE_UNAVAILABLE,
+    REASON_NO_PROCESS_CONFIGURED,
+    REASON_SAFETY_INTERLOCK_ACTIVE,
+    REASON_STATUS_NOT_SUPPORTED,
+    REASON_TARGET_SERVER_NOT_READY,
+    REASON_TOOL_DISCONNECTED,
+    REASON_UNSAFE_METHOD_NOT_ENABLED,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,42 +88,63 @@ VALID_RESULT_CLASSIFICATIONS: frozenset[str] = frozenset(
     {"single", "batch", "sync", "job", "stitching", "intervention", "text", "any"}
 )
 
-# Stable outcome vocabulary used by readiness checks and runner reporting.
-OUTCOME_PASSED = "passed"
-OUTCOME_FAILED = "failed"
-OUTCOME_BLOCKED = "blocked"
-OUTCOME_UNSUPPORTED = "unsupported"
-OUTCOME_MANUAL_REQUIRED = "manual_required"
-OUTCOME_CLAIM_MISMATCH = "claim_mismatch"
-OUTCOME_CONFIGURATION_ERROR = "configuration_error"
-
-ALL_OUTCOMES: frozenset[str] = frozenset(
-    {
-        OUTCOME_PASSED,
-        OUTCOME_FAILED,
-        OUTCOME_BLOCKED,
-        OUTCOME_UNSUPPORTED,
-        OUTCOME_MANUAL_REQUIRED,
-        OUTCOME_CLAIM_MISMATCH,
-        OUTCOME_CONFIGURATION_ERROR,
-    }
-)
-
-# Stable reason code vocabulary for blocked/failed outcomes.
-REASON_TOOL_DISCONNECTED = "tool_disconnected"
-REASON_NO_PROCESS_CONFIGURED = "no_process_configured"
-REASON_MANUAL_TRIGGER_REQUIRED = "manual_trigger_required"
-REASON_UNSAFE_METHOD_NOT_ENABLED = "unsafe_method_not_enabled"
-REASON_CLAIM_METHOD_MISSING = "claim_method_missing"
-REASON_CLAIM_STATUS_NOT_SUPPORTED = "claim_status_not_supported"
-REASON_STATUS_NOT_SUPPORTED = "status_not_supported"
-REASON_CONFIGURATION_INVALID = "configuration_invalid"
-REASON_TARGET_SERVER_NOT_READY = "target_server_not_ready"
-REASON_MISSING_RUNTIME_PRECONDITION = "missing_runtime_precondition"
-REASON_SAFETY_INTERLOCK_ACTIVE = "safety_interlock_active"
-REASON_NAMESPACE_UNAVAILABLE = "namespace_unavailable"
-REASON_JOINING_SYSTEM_NOT_FOUND = "joining_system_not_found"
-REASON_ENDPOINT_UNREACHABLE = "endpoint_unreachable"
+# The outcome and reason-code vocabulary lives in helpers.canonical_outcomes —
+# it is the single vocabulary source. These names are re-exported here so
+# existing importers keep working without a second definition of the values.
+__all__ = [
+    "ALL_OUTCOMES",
+    "OUTCOME_BLOCKED",
+    "OUTCOME_CLAIM_MISMATCH",
+    "OUTCOME_CONFIGURATION_ERROR",
+    "OUTCOME_FAILED",
+    "OUTCOME_MANUAL_REQUIRED",
+    "OUTCOME_PASSED",
+    "OUTCOME_UNSUPPORTED",
+    "REASON_CLAIM_METHOD_MISSING",
+    "REASON_CLAIM_STATUS_NOT_SUPPORTED",
+    "REASON_CONFIGURATION_INVALID",
+    "REASON_ENDPOINT_UNREACHABLE",
+    "REASON_JOINING_SYSTEM_NOT_FOUND",
+    "REASON_MANUAL_TRIGGER_REQUIRED",
+    "REASON_MISSING_RUNTIME_PRECONDITION",
+    "REASON_NAMESPACE_UNAVAILABLE",
+    "REASON_NO_PROCESS_CONFIGURED",
+    "REASON_SAFETY_INTERLOCK_ACTIVE",
+    "REASON_STATUS_NOT_SUPPORTED",
+    "REASON_TARGET_SERVER_NOT_READY",
+    "REASON_TOOL_DISCONNECTED",
+    "REASON_UNSAFE_METHOD_NOT_ENABLED",
+    "SUPPORTED_SCHEMA_VERSIONS",
+    "CleanupConfig",
+    "CuExecutionConfig",
+    "ExpectedResultsConfig",
+    "ExpectedServerConfig",
+    "JoiningProcessSelectionConfig",
+    "ReportingConfig",
+    "SelectionConfig",
+    "StateChangingMethodsConfig",
+    "TargetConfig",
+    "TargetServerConfigError",
+    "TargetServerCuProfile",
+    "ToolSelectionConfig",
+    "TriggerConfig",
+    "TriggersConfig",
+    "WorkflowExecutionConfig",
+    "build_default_profile",
+    "build_execution_profile",
+    "parse_cu_execution",
+    "parse_reporting",
+    "parse_selection",
+    "parse_target",
+    "parse_triggers",
+    "parse_workflow_execution",
+    "require_bool",
+    "require_enum",
+    "require_int",
+    "require_number",
+    "require_str",
+    "require_str_list",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -254,14 +296,15 @@ class ReportingConfig:
 
 @dataclass(frozen=True)
 class TargetServerCuProfile:
-    """Complete target_server CU execution profile loaded from YAML.
+    """Complete target_server CU execution profile (built from a SUT manifest).
 
     Attributes:
-        schema_version:     Profile format version (must be in SUPPORTED_SCHEMA_VERSIONS).
-        profile_name:       Human-readable label for the profile.
+        schema_version:     Execution config format version (in SUPPORTED_SCHEMA_VERSIONS).
+        profile_name:       Human-readable label for the SUT.
         description:        Optional description for documentation.
-        capabilities_file:  Path (relative to profile) to its CU capability declaration.
-        source_path:        Absolute path of the loaded YAML file.
+        capabilities_file:  Path to the file that carries the authoritative CU
+                            claims for this run — normally the SUT manifest itself.
+        source_path:        Absolute path of the source manifest.
         target:             Endpoint and server selection.
         cu_execution:       CU test execution policy.
         selection:          Tool and process selection.
@@ -313,21 +356,21 @@ class TargetServerCuProfile:
 # ---------------------------------------------------------------------------
 
 
-def _require_str(mapping: dict, key: str, context: str) -> str:
+def require_str(mapping: dict, key: str, context: str) -> str:
     val = mapping.get(key, "")
     if not isinstance(val, str):
         raise TargetServerConfigError(f"{context}: '{key}' must be a string, got {type(val).__name__}")
     return val
 
 
-def _require_bool(mapping: dict, key: str, default: bool, context: str) -> bool:
+def require_bool(mapping: dict, key: str, default: bool, context: str) -> bool:
     val = mapping.get(key, default)
     if not isinstance(val, bool):
         raise TargetServerConfigError(f"{context}: '{key}' must be a boolean, got {type(val).__name__}")
     return val
 
 
-def _require_number(mapping: dict, key: str, default: float, context: str, *, min_val: float | None = None) -> float:
+def require_number(mapping: dict, key: str, default: float, context: str, *, min_val: float | None = None) -> float:
     val = mapping.get(key, default)
     if not isinstance(val, (int, float)):
         raise TargetServerConfigError(f"{context}: '{key}' must be a number, got {type(val).__name__}")
@@ -337,7 +380,7 @@ def _require_number(mapping: dict, key: str, default: float, context: str, *, mi
     return f_val
 
 
-def _require_int(mapping: dict, key: str, default: int, context: str, *, min_val: int | None = None) -> int:
+def require_int(mapping: dict, key: str, default: int, context: str, *, min_val: int | None = None) -> int:
     val = mapping.get(key, default)
     if not isinstance(val, int) or isinstance(val, bool):
         raise TargetServerConfigError(f"{context}: '{key}' must be an integer, got {type(val).__name__}")
@@ -346,7 +389,7 @@ def _require_int(mapping: dict, key: str, default: int, context: str, *, min_val
     return val
 
 
-def _require_enum(mapping: dict, key: str, default: str, valid: frozenset[str], context: str) -> str:
+def require_enum(mapping: dict, key: str, default: str, valid: frozenset[str], context: str) -> str:
     val = mapping.get(key, default)
     if not isinstance(val, str):
         raise TargetServerConfigError(f"{context}: '{key}' must be a string, got {type(val).__name__}")
@@ -355,7 +398,7 @@ def _require_enum(mapping: dict, key: str, default: str, valid: frozenset[str], 
     return val
 
 
-def _require_str_list(mapping: dict, key: str, context: str) -> list[str]:
+def require_str_list(mapping: dict, key: str, context: str) -> list[str]:
     val = mapping.get(key, [])
     if not isinstance(val, list):
         raise TargetServerConfigError(f"{context}: '{key}' must be a list, got {type(val).__name__}")
@@ -366,17 +409,17 @@ def _require_str_list(mapping: dict, key: str, context: str) -> list[str]:
 
 
 def _parse_state_changing(raw: dict, context: str) -> StateChangingMethodsConfig:
-    policy = _require_enum(raw, "default_policy", "require_explicit_opt_in", VALID_STATE_CHANGING_POLICIES, context)
-    allowed_methods = tuple(_require_str_list(raw, "allowed_methods", context))
+    policy = require_enum(raw, "default_policy", "require_explicit_opt_in", VALID_STATE_CHANGING_POLICIES, context)
+    allowed_methods = tuple(require_str_list(raw, "allowed_methods", context))
     return StateChangingMethodsConfig(default_policy=policy, allowed_methods=allowed_methods)
 
 
-def _parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionConfig:
-    mode = _require_enum(raw, "default_mode", "automated", VALID_EXECUTION_MODES, context)
-    scoring = _require_enum(raw, "scoring_mode", "diagnostic", VALID_SCORING_MODES, context)
-    precondition = _require_enum(raw, "precondition_failure_policy", "blocked", VALID_PRECONDITION_POLICIES, context)
-    allow_manual = _require_bool(raw, "allow_manual_steps", False, context)
-    timeout = _require_number(raw, "default_timeout_seconds", 60.0, context, min_val=1.0)
+def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionConfig:
+    mode = require_enum(raw, "default_mode", "automated", VALID_EXECUTION_MODES, context)
+    scoring = require_enum(raw, "scoring_mode", "diagnostic", VALID_SCORING_MODES, context)
+    precondition = require_enum(raw, "precondition_failure_policy", "blocked", VALID_PRECONDITION_POLICIES, context)
+    allow_manual = require_bool(raw, "allow_manual_steps", False, context)
+    timeout = require_number(raw, "default_timeout_seconds", 60.0, context, min_val=1.0)
 
     sc_raw = raw.get("state_changing_methods", {})
     if not isinstance(sc_raw, dict):
@@ -407,13 +450,13 @@ def _parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecution
 
 
 def _parse_trigger_config(raw: dict, context: str, valid_modes: frozenset[str], default_mode: str) -> TriggerConfig:
-    mode = _require_enum(raw, "mode", default_mode, valid_modes, context)
-    timeout = _require_number(raw, "timeout_seconds", 60.0, context, min_val=1.0)
-    deselect = _require_bool(raw, "deselect_after_joining", False, context)
+    mode = require_enum(raw, "mode", default_mode, valid_modes, context)
+    timeout = require_number(raw, "timeout_seconds", 60.0, context, min_val=1.0)
+    deselect = require_bool(raw, "deselect_after_joining", False, context)
     return TriggerConfig(mode=mode, timeout_seconds=timeout, deselect_after_joining=deselect)
 
 
-def _parse_triggers(raw: dict, context: str = "triggers") -> TriggersConfig:
+def parse_triggers(raw: dict, context: str = "triggers") -> TriggersConfig:
     result_raw = raw.get("result", {})
     if not isinstance(result_raw, dict):
         raise TargetServerConfigError(f"{context}: 'result' must be a mapping")
@@ -433,18 +476,18 @@ def _parse_triggers(raw: dict, context: str = "triggers") -> TriggersConfig:
 
 
 def _parse_tool_selection(raw: dict, context: str) -> ToolSelectionConfig:
-    policy = _require_enum(raw, "policy", "first_ready", VALID_SELECTION_POLICIES, context)
-    piu = _require_str(raw, "product_instance_uri", context)
-    tags = tuple(_require_str_list(raw, "capability_tags", context))
+    policy = require_enum(raw, "policy", "first_ready", VALID_SELECTION_POLICIES, context)
+    piu = require_str(raw, "product_instance_uri", context)
+    tags = tuple(require_str_list(raw, "capability_tags", context))
     return ToolSelectionConfig(policy=policy, product_instance_uri=piu, capability_tags=tags)
 
 
 def _parse_jp_selection(raw: dict, context: str) -> JoiningProcessSelectionConfig:
-    policy = _require_enum(raw, "policy", "first_compatible", VALID_SELECTION_POLICIES, context)
-    jp_id = _require_str(raw, "joining_process_id", context)
-    jp_origin = _require_str(raw, "joining_process_origin_id", context)
-    sel_name = _require_str(raw, "selection_name", context)
-    tags = tuple(_require_str_list(raw, "capability_tags", context))
+    policy = require_enum(raw, "policy", "first_compatible", VALID_SELECTION_POLICIES, context)
+    jp_id = require_str(raw, "joining_process_id", context)
+    jp_origin = require_str(raw, "joining_process_origin_id", context)
+    sel_name = require_str(raw, "selection_name", context)
+    tags = tuple(require_str_list(raw, "capability_tags", context))
     return JoiningProcessSelectionConfig(
         policy=policy,
         joining_process_id=jp_id,
@@ -454,7 +497,7 @@ def _parse_jp_selection(raw: dict, context: str) -> JoiningProcessSelectionConfi
     )
 
 
-def _parse_selection(raw: dict, context: str = "selection") -> SelectionConfig:
+def parse_selection(raw: dict, context: str = "selection") -> SelectionConfig:
     tool_raw = raw.get("tool", {})
     if not isinstance(tool_raw, dict):
         raise TargetServerConfigError(f"{context}: 'tool' must be a mapping")
@@ -481,15 +524,15 @@ def _parse_selection(raw: dict, context: str = "selection") -> SelectionConfig:
 
 
 def _parse_expected_results(raw: dict, context: str) -> ExpectedResultsConfig:
-    classification = _require_enum(raw, "classification", "single", VALID_RESULT_CLASSIFICATIONS, context)
-    intermediate = tuple(_require_str_list(raw, "intermediate_classifications", context))
+    classification = require_enum(raw, "classification", "single", VALID_RESULT_CLASSIFICATIONS, context)
+    intermediate = tuple(require_str_list(raw, "intermediate_classifications", context))
     invalid_intermediate = sorted(set(intermediate) - (VALID_RESULT_CLASSIFICATIONS - {"any"}))
     if invalid_intermediate:
         raise TargetServerConfigError(
             f"{context}.intermediate_classifications contains invalid values: {invalid_intermediate}"
         )
-    final_req = _require_bool(raw, "final_result_required", True, context)
-    timeout = _require_number(raw, "timeout_seconds", 60.0, context, min_val=1.0)
+    final_req = require_bool(raw, "final_result_required", True, context)
+    timeout = require_number(raw, "timeout_seconds", 60.0, context, min_val=1.0)
     return ExpectedResultsConfig(
         classification=classification,
         intermediate_classifications=intermediate,
@@ -499,21 +542,21 @@ def _parse_expected_results(raw: dict, context: str) -> ExpectedResultsConfig:
 
 
 def _parse_cleanup(raw: dict, context: str) -> CleanupConfig:
-    policy = _require_enum(raw, "policy", "best_effort_with_evidence", VALID_CLEANUP_POLICIES, context)
-    deselect = _require_bool(raw, "deselect_process", True, context)
-    reset = _require_bool(raw, "reset_identifiers", False, context)
+    policy = require_enum(raw, "policy", "best_effort_with_evidence", VALID_CLEANUP_POLICIES, context)
+    deselect = require_bool(raw, "deselect_process", True, context)
+    reset = require_bool(raw, "reset_identifiers", False, context)
     return CleanupConfig(policy=policy, deselect_process=deselect, reset_identifiers=reset)
 
 
-def _parse_workflow_execution(raw: dict, context: str = "workflow_execution") -> WorkflowExecutionConfig:
-    sip = _require_enum(
+def parse_workflow_execution(raw: dict, context: str = "workflow_execution") -> WorkflowExecutionConfig:
+    sip = require_enum(
         raw,
         "start_invocation_policy",
         "single_start_produces_final_result",
         VALID_START_INVOCATION_POLICIES,
         context,
     )
-    op_count = _require_int(raw, "expected_operation_count", 1, context, min_val=1)
+    op_count = require_int(raw, "expected_operation_count", 1, context, min_val=1)
 
     er_raw = raw.get("expected_results", {})
     if not isinstance(er_raw, dict):
@@ -534,9 +577,9 @@ def _parse_workflow_execution(raw: dict, context: str = "workflow_execution") ->
 
 
 def _parse_expected_server(raw: dict, context: str) -> ExpectedServerConfig:
-    app_name = _require_str(raw, "application_name", context)
-    app_version = _require_str(raw, "application_version", context)
-    warn_only = _require_bool(raw, "warn_only_on_version_drift", True, context)
+    app_name = require_str(raw, "application_name", context)
+    app_version = require_str(raw, "application_version", context)
+    warn_only = require_bool(raw, "warn_only_on_version_drift", True, context)
     return ExpectedServerConfig(
         application_name=app_name,
         application_version=app_version,
@@ -544,8 +587,8 @@ def _parse_expected_server(raw: dict, context: str) -> ExpectedServerConfig:
     )
 
 
-def _parse_target(raw: dict, context: str = "target") -> TargetConfig:
-    endpoint = _require_str(raw, "endpoint", context)
+def parse_target(raw: dict, context: str = "target") -> TargetConfig:
+    endpoint = require_str(raw, "endpoint", context)
     es_raw = raw.get("expected_server", {})
     if not isinstance(es_raw, dict):
         raise TargetServerConfigError(f"{context}: 'expected_server' must be a mapping")
@@ -553,10 +596,10 @@ def _parse_target(raw: dict, context: str = "target") -> TargetConfig:
     return TargetConfig(endpoint=endpoint, expected_server=es_cfg)
 
 
-def _parse_reporting(raw: dict, context: str = "reporting") -> ReportingConfig:
-    output_dir = _require_str(raw, "output_dir", context) or "test-results/target-server-cu"
-    sanitize = _require_bool(raw, "sanitize_shared_artifacts", True, context)
-    keep_debug = _require_bool(raw, "keep_local_exact_debug_artifacts", False, context)
+def parse_reporting(raw: dict, context: str = "reporting") -> ReportingConfig:
+    output_dir = require_str(raw, "output_dir", context) or "test-results/target-server-cu"
+    sanitize = require_bool(raw, "sanitize_shared_artifacts", True, context)
+    keep_debug = require_bool(raw, "keep_local_exact_debug_artifacts", False, context)
     return ReportingConfig(
         output_dir=output_dir,
         sanitize_shared_artifacts=sanitize,
@@ -569,117 +612,22 @@ def _parse_reporting(raw: dict, context: str = "reporting") -> ReportingConfig:
 # ---------------------------------------------------------------------------
 
 
-def load_target_server_profile(path: Path) -> TargetServerCuProfile:
-    """Load and strictly validate a target_server CU profile YAML file.
+def build_execution_profile(raw: dict, source_path: str = "<in-memory>") -> TargetServerCuProfile:
+    """Build a validated :class:`TargetServerCuProfile` from normalized sections.
 
-    Parameters
-    ----------
-    path:
-        Path to a YAML profile file.
-
-    Returns
-    -------
-    TargetServerCuProfile
-        Validated, typed configuration object.
+    This is the internal execution-config constructor. It is **not** a
+    tester-facing file schema: the only file schema is the SUT manifest
+    (``*.sut.yaml``, see :mod:`helpers.sut_manifest`), which normalizes its
+    own sections and calls this function to reuse the validation below.
 
     Raises
     ------
     TargetServerConfigError
-        When the YAML is malformed, missing required fields, or contains
-        invalid enum values.  The exception message contains the field path
-        and the list of valid values to assist correction.
-    FileNotFoundError
-        When *path* does not exist.
-    """
-    if not path.exists():
-        raise FileNotFoundError(f"Target Server profile not found: {path}")
-
-    try:
-        with path.open(encoding="utf-8") as fh:
-            raw: dict = yaml.safe_load(fh) or {}
-    except yaml.YAMLError as exc:
-        raise TargetServerConfigError(f"YAML parse error in '{path}': {exc}") from exc
-
-    if not isinstance(raw, dict):
-        raise TargetServerConfigError(f"Profile '{path}' must be a YAML mapping at the top level")
-
-    # schema_version — required, must be supported
-    sv = raw.get("schema_version")
-    if sv is None:
-        raise TargetServerConfigError(f"Profile '{path}' is missing required field 'schema_version'")
-    if not isinstance(sv, int) or isinstance(sv, bool):
-        raise TargetServerConfigError(f"Profile '{path}': 'schema_version' must be an integer, got {type(sv).__name__}")
-    if sv not in SUPPORTED_SCHEMA_VERSIONS:
-        raise TargetServerConfigError(
-            f"Profile '{path}': unsupported schema_version {sv}. "
-            f"Supported versions: {sorted(SUPPORTED_SCHEMA_VERSIONS)}"
-        )
-
-    profile_name = _require_str(raw, "profile_name", "root")
-    description = _require_str(raw, "description", "root")
-    capabilities_file = _require_str(raw, "capabilities_file", "root")
-
-    target_raw = raw.get("target", {})
-    if not isinstance(target_raw, dict):
-        raise TargetServerConfigError("'target' must be a mapping")
-    target_cfg = _parse_target(target_raw)
-
-    cu_exec_raw = raw.get("cu_execution", {})
-    if not isinstance(cu_exec_raw, dict):
-        raise TargetServerConfigError("'cu_execution' must be a mapping")
-    cu_exec_cfg = _parse_cu_execution(cu_exec_raw)
-
-    sel_raw = raw.get("selection", {})
-    if not isinstance(sel_raw, dict):
-        raise TargetServerConfigError("'selection' must be a mapping")
-    sel_cfg = _parse_selection(sel_raw)
-
-    triggers_raw = raw.get("triggers", {})
-    if not isinstance(triggers_raw, dict):
-        raise TargetServerConfigError("'triggers' must be a mapping")
-    triggers_cfg = _parse_triggers(triggers_raw)
-
-    wf_raw = raw.get("workflow_execution", {})
-    if not isinstance(wf_raw, dict):
-        raise TargetServerConfigError("'workflow_execution' must be a mapping")
-    wf_cfg = _parse_workflow_execution(wf_raw)
-
-    rep_raw = raw.get("reporting", {})
-    if not isinstance(rep_raw, dict):
-        raise TargetServerConfigError("'reporting' must be a mapping")
-    rep_cfg = _parse_reporting(rep_raw)
-
-    profile = TargetServerCuProfile(
-        schema_version=sv,
-        profile_name=profile_name or path.stem,
-        description=description,
-        capabilities_file=capabilities_file,
-        source_path=str(path.resolve()),
-        target=target_cfg,
-        cu_execution=cu_exec_cfg,
-        selection=sel_cfg,
-        triggers=triggers_cfg,
-        workflow_execution=wf_cfg,
-        reporting=rep_cfg,
-    )
-    logger.info(
-        "Loaded Target Server profile '%s' (schema_version=%d, mode=%s, trigger.result=%s)",
-        profile.profile_name,
-        profile.schema_version,
-        profile.cu_execution.default_mode,
-        profile.triggers.result.mode,
-    )
-    return profile
-
-
-def load_target_server_profile_from_dict(raw: dict, source_path: str = "<in-memory>") -> TargetServerCuProfile:
-    """Build a TargetServerCuProfile from an already-parsed dict.
-
-    Useful for testing without a filesystem.  Raises TargetServerConfigError
-    for invalid data, same as load_target_server_profile().
+        When a section is malformed, has the wrong type, or contains an
+        invalid enum value. Messages carry the field path and valid values.
     """
     if not isinstance(raw, dict):
-        raise TargetServerConfigError("Profile data must be a YAML mapping (dict)")
+        raise TargetServerConfigError("Execution profile data must be a mapping (dict)")
 
     sv = raw.get("schema_version")
     if sv is None:
@@ -691,39 +639,24 @@ def load_target_server_profile_from_dict(raw: dict, source_path: str = "<in-memo
             f"Unsupported schema_version {sv}. Supported: {sorted(SUPPORTED_SCHEMA_VERSIONS)}"
         )
 
-    profile_name = _require_str(raw, "profile_name", "root")
-    description = _require_str(raw, "description", "root")
-    capabilities_file = _require_str(raw, "capabilities_file", "root")
+    profile_name = require_str(raw, "profile_name", "root")
+    description = require_str(raw, "description", "root")
+    capabilities_file = require_str(raw, "capabilities_file", "root")
 
-    target_raw = raw.get("target", {})
-    if not isinstance(target_raw, dict):
-        raise TargetServerConfigError("'target' must be a mapping")
-    target_cfg = _parse_target(target_raw)
-
-    cu_exec_raw = raw.get("cu_execution", {})
-    if not isinstance(cu_exec_raw, dict):
-        raise TargetServerConfigError("'cu_execution' must be a mapping")
-    cu_exec_cfg = _parse_cu_execution(cu_exec_raw)
-
-    sel_raw = raw.get("selection", {})
-    if not isinstance(sel_raw, dict):
-        raise TargetServerConfigError("'selection' must be a mapping")
-    sel_cfg = _parse_selection(sel_raw)
-
-    triggers_raw = raw.get("triggers", {})
-    if not isinstance(triggers_raw, dict):
-        raise TargetServerConfigError("'triggers' must be a mapping")
-    triggers_cfg = _parse_triggers(triggers_raw)
-
-    wf_raw = raw.get("workflow_execution", {})
-    if not isinstance(wf_raw, dict):
-        raise TargetServerConfigError("'workflow_execution' must be a mapping")
-    wf_cfg = _parse_workflow_execution(wf_raw)
-
-    rep_raw = raw.get("reporting", {})
-    if not isinstance(rep_raw, dict):
-        raise TargetServerConfigError("'reporting' must be a mapping")
-    rep_cfg = _parse_reporting(rep_raw)
+    sections: dict[str, Any] = {}
+    parsers = {
+        "target": parse_target,
+        "cu_execution": parse_cu_execution,
+        "selection": parse_selection,
+        "triggers": parse_triggers,
+        "workflow_execution": parse_workflow_execution,
+        "reporting": parse_reporting,
+    }
+    for name, parser in parsers.items():
+        section_raw = raw.get(name, {})
+        if not isinstance(section_raw, dict):
+            raise TargetServerConfigError(f"'{name}' must be a mapping")
+        sections[name] = parser(section_raw)
 
     return TargetServerCuProfile(
         schema_version=sv,
@@ -731,12 +664,12 @@ def load_target_server_profile_from_dict(raw: dict, source_path: str = "<in-memo
         description=description,
         capabilities_file=capabilities_file,
         source_path=source_path,
-        target=target_cfg,
-        cu_execution=cu_exec_cfg,
-        selection=sel_cfg,
-        triggers=triggers_cfg,
-        workflow_execution=wf_cfg,
-        reporting=rep_cfg,
+        target=sections["target"],
+        cu_execution=sections["cu_execution"],
+        selection=sections["selection"],
+        triggers=sections["triggers"],
+        workflow_execution=sections["workflow_execution"],
+        reporting=sections["reporting"],
     )
 
 

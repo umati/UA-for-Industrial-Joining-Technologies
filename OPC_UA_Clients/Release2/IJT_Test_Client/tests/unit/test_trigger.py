@@ -17,9 +17,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from asyncua import ua
 
+from helpers import trigger as trigger_mod
 from helpers.trigger import (
     ExternalEventTrigger,
     ExternalResultTrigger,
+    ResultTrigger,
     SimulatorEventTrigger,
     SimulatorResultTrigger,
     TriggerOutcome,
@@ -451,3 +453,145 @@ class TestSimulatorEventTrigger:
             outcome = await trigger.trigger_event(event_type=2)
 
         assert outcome.triggered is False
+
+
+# ---------------------------------------------------------------------------
+# Evidence-wait budgets (active vs passive)
+# ---------------------------------------------------------------------------
+
+
+class TestTriggerTimeoutBudgets:
+    def test_simulator_triggers_use_short_simulator_budgets(self):
+        result_trigger = SimulatorResultTrigger(None, MagicMock(), ns_app=2)
+        event_trigger = SimulatorEventTrigger(None, MagicMock(), ns_app=2)
+        assert result_trigger.active_result_timeout_s == trigger_mod.DEFAULT_SIMULATOR_ACTIVE_RESULT_TIMEOUT_S
+        assert (
+            result_trigger.passive_observation_timeout_s == trigger_mod.DEFAULT_SIMULATOR_PASSIVE_OBSERVATION_TIMEOUT_S
+        )
+        assert event_trigger.active_event_timeout_s == trigger_mod.DEFAULT_SIMULATOR_ACTIVE_RESULT_TIMEOUT_S
+
+    def test_external_triggers_never_use_a_long_active_budget(self, monkeypatch):
+        """An external trigger never starts anything, so it must not block a run
+        for the long completion budget."""
+        monkeypatch.delenv(trigger_mod.ENV_ACTIVE_RESULT_TIMEOUT, raising=False)
+        monkeypatch.delenv(trigger_mod.ENV_PASSIVE_OBSERVATION_TIMEOUT, raising=False)
+        result_trigger = ExternalResultTrigger()
+        event_trigger = ExternalEventTrigger()
+        assert (
+            result_trigger.active_result_timeout_s
+            == result_trigger.passive_observation_timeout_s
+            == trigger_mod.DEFAULT_EXTERNAL_PASSIVE_OBSERVATION_TIMEOUT_S
+        )
+        assert event_trigger.active_event_timeout_s == trigger_mod.DEFAULT_EXTERNAL_PASSIVE_OBSERVATION_TIMEOUT_S
+
+    def test_explicit_wait_timeout_overrides_default(self, monkeypatch):
+        monkeypatch.delenv(trigger_mod.ENV_PASSIVE_OBSERVATION_TIMEOUT, raising=False)
+        assert ExternalResultTrigger(wait_timeout_s=3.5).passive_observation_timeout_s == 3.5
+        assert ExternalEventTrigger(wait_timeout_s=3.5).passive_observation_timeout_s == 3.5
+
+    def test_environment_overrides_are_honoured(self, monkeypatch):
+        """A trigger that does not override the budgets picks them up from the
+        environment set by helpers/target_server_execution.py."""
+        monkeypatch.setenv(trigger_mod.ENV_ACTIVE_RESULT_TIMEOUT, "45")
+        monkeypatch.setenv(trigger_mod.ENV_PASSIVE_OBSERVATION_TIMEOUT, "7")
+
+        class _DefaultBudgetTrigger(ResultTrigger):
+            @property
+            def is_simulator(self) -> bool:
+                return False
+
+            async def trigger_single(self, result_type, include_traces=False):
+                raise NotImplementedError
+
+            async def trigger_batch_or_sync(
+                self, classification, num_children=3, include_traces=False, send_as_refs=False
+            ):
+                raise NotImplementedError
+
+            async def trigger_job(self, send_as_refs=False):
+                raise NotImplementedError
+
+            async def trigger_bulk_results(
+                self, result_type, include_traces, from_seq, to_seq, min_duration_ms=100, update_vars=True
+            ):
+                raise NotImplementedError
+
+        probe = _DefaultBudgetTrigger()
+        assert probe.active_result_timeout_s == 45.0
+        assert probe.passive_observation_timeout_s == 7.0
+        assert ExternalResultTrigger().passive_observation_timeout_s == 7.0
+
+    def test_invalid_or_non_positive_environment_values_are_ignored(self, monkeypatch):
+        monkeypatch.setenv(trigger_mod.ENV_PASSIVE_OBSERVATION_TIMEOUT, "not-a-number")
+        assert (
+            ExternalResultTrigger().passive_observation_timeout_s
+            == trigger_mod.DEFAULT_EXTERNAL_PASSIVE_OBSERVATION_TIMEOUT_S
+        )
+        monkeypatch.setenv(trigger_mod.ENV_PASSIVE_OBSERVATION_TIMEOUT, "0")
+        assert (
+            ExternalResultTrigger().passive_observation_timeout_s
+            == trigger_mod.DEFAULT_EXTERNAL_PASSIVE_OBSERVATION_TIMEOUT_S
+        )
+
+
+class TestEventTriggerDefaultBudgets:
+    def test_event_trigger_abc_defaults_come_from_the_environment(self, monkeypatch):
+        monkeypatch.setenv(trigger_mod.ENV_ACTIVE_RESULT_TIMEOUT, "33")
+        monkeypatch.setenv(trigger_mod.ENV_PASSIVE_OBSERVATION_TIMEOUT, "4")
+
+        class _DefaultBudgetEventTrigger(trigger_mod.EventTrigger):
+            @property
+            def is_simulator(self) -> bool:
+                return False
+
+            async def trigger_event(self, event_type, count=1):
+                raise NotImplementedError
+
+            async def trigger_bulk_events(self, event_type, count, from_seq, to_seq, min_duration_ms=100):
+                raise NotImplementedError
+
+            async def trigger_condition(self, event_type):
+                raise NotImplementedError
+
+        probe = _DefaultBudgetEventTrigger()
+        assert probe.active_event_timeout_s == 33.0
+        assert probe.passive_observation_timeout_s == 4.0
+
+    def test_simulator_event_trigger_passive_budget(self):
+        trigger = SimulatorEventTrigger(None, MagicMock(), ns_app=2)
+        assert trigger.passive_observation_timeout_s == trigger_mod.DEFAULT_SIMULATOR_PASSIVE_OBSERVATION_TIMEOUT_S
+
+
+# ---------------------------------------------------------------------------
+# find_simulation_child - the one simulator helper-node lookup
+# ---------------------------------------------------------------------------
+
+
+class TestFindSimulationChild:
+    """Both the default fixtures and a simulate_methods manifest use this path."""
+
+    async def test_returns_none_without_an_application_namespace(self):
+        assert await trigger_mod.find_simulation_child(MagicMock(), None, "SimulateResults") is None
+
+    async def test_returns_none_when_simulations_folder_is_absent(self, monkeypatch):
+        monkeypatch.setattr(trigger_mod, "find_child_by_browse_name", AsyncMock(return_value=None))
+        assert await trigger_mod.find_simulation_child(MagicMock(), 2, "SimulateResults") is None
+
+    async def test_returns_none_when_the_child_folder_is_absent(self, monkeypatch):
+        simulations = MagicMock()
+        lookup = AsyncMock(side_effect=[simulations, None])
+        monkeypatch.setattr(trigger_mod, "find_child_by_browse_name", lookup)
+        assert await trigger_mod.find_simulation_child(MagicMock(), 2, "SimulateResults") is None
+
+    async def test_browses_simulations_then_the_requested_child(self, monkeypatch):
+        joining_system = MagicMock()
+        simulations = MagicMock()
+        folder = MagicMock()
+        lookup = AsyncMock(side_effect=[simulations, folder])
+        monkeypatch.setattr(trigger_mod, "find_child_by_browse_name", lookup)
+
+        found = await trigger_mod.find_simulation_child(joining_system, 2, "SimulateResults")
+
+        assert found is folder
+        assert lookup.await_args_list[0].args == (joining_system, trigger_mod.BN.SIMULATIONS, 2)
+        assert lookup.await_args_list[1].args == (simulations, "SimulateResults", 2)

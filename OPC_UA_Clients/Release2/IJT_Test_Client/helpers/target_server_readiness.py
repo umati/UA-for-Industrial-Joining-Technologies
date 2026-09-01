@@ -6,16 +6,22 @@ execute each class of CU test.  Results are returned as typed ReadinessOutcome
 objects with stable reason codes, avoiding ambiguous pytest skip/fail mixes in
 the runner layer.
 
-Outcome vocabulary (stable, matches target_server_cu_config.py):
+Detailed outcome vocabulary (defined in helpers.canonical_outcomes):
 
   passed              All checked preconditions are met; execution can proceed.
   blocked             Target Server precondition unmet but config is valid.
-                      Runner applies precondition_failure_policy from YAML.
+                      Runner applies precondition_failure_policy from the manifest.
   failed              A hard check error that prevents any meaningful execution.
-  unsupported         The CU/capability is not supported by this Target Server profile.
+  unsupported         The CU/capability is not supported by this SUT manifest.
   manual_required     Evidence requires physical operator/tool action.
-  claim_mismatch      Profile claims support, but address-space probe disagrees.
-  configuration_error YAML is invalid or inconsistent; fix config before running.
+  claim_mismatch      Manifest claims support, but address-space probe disagrees.
+  configuration_error Manifest is invalid or inconsistent; fix it before running.
+
+Every outcome also carries a canonical final-report outcome
+(``ReadinessOutcome.canonical_outcome``) — Passed, Failed, NotSupported,
+Blocked, NotTested, or Inconclusive — which is what final JSON/Markdown/Excel
+reports show. The detailed outcome and reason code above are preserved
+alongside it.
 
 Usage::
 
@@ -35,8 +41,15 @@ from __future__ import annotations
 import logging
 import socket
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Mapping
 
+from helpers.canonical_outcomes import (
+    CANONICAL_OUTCOME_ORDER,
+    CanonicalOutcome,
+    canonical_for_legacy_outcome,
+    reason_category,
+)
 from helpers.target_server_cu_config import (
     OUTCOME_BLOCKED,
     OUTCOME_CLAIM_MISMATCH,
@@ -55,6 +68,9 @@ from helpers.target_server_cu_config import (
     REASON_UNSAFE_METHOD_NOT_ENABLED,
     TargetServerCuProfile,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from helpers.connection_security import ConnectionSecurity
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +97,22 @@ class ReadinessOutcome:
     detail: str = ""
     check_name: str = ""
     evidence: dict[str, Any] = field(default_factory=dict)
+    claimed: bool = False
+
+    @property
+    def canonical_outcome(self) -> CanonicalOutcome:
+        """Return the canonical final-report outcome for this check."""
+        return canonical_for_legacy_outcome(self.outcome, claimed=self.claimed)
+
+    @property
+    def canonical_label(self) -> str:
+        """Return the public canonical label used by final reports."""
+        return self.canonical_outcome.label
+
+    @property
+    def reason_category(self) -> str:
+        """Return the stable category of :attr:`reason_code`."""
+        return reason_category(self.reason_code)
 
     @property
     def passed(self) -> bool:
@@ -169,15 +201,24 @@ class PreflightReport:
         return lines
 
     def to_dict(self) -> dict[str, Any]:
-        """Return a JSON-serialisable dict for evidence reports."""
+        """Return a JSON-serialisable dict for evidence reports.
+
+        Final reports read ``canonical_outcome``; ``outcome``/``reason_code``
+        are preserved for detail and backwards compatibility.
+        """
         return {
             "profile_name": self.profile_name,
             "endpoint": self.endpoint,
             "all_passed": self.all_passed,
+            "canonical_outcome": self.canonical_outcome.value,
+            "canonical_label": self.canonical_outcome.label,
             "checks": [
                 {
                     "outcome": c.outcome,
+                    "canonical_outcome": c.canonical_outcome.value,
+                    "canonical_label": c.canonical_label,
                     "reason_code": c.reason_code,
+                    "reason_category": c.reason_category,
                     "detail": c.detail,
                     "check_name": c.check_name,
                 }
@@ -185,6 +226,16 @@ class PreflightReport:
             ],
             "discovery": self.discovery,
         }
+
+    @property
+    def canonical_outcome(self) -> CanonicalOutcome:
+        """Return the most severe canonical outcome across all checks."""
+        if not self.checks:
+            return CanonicalOutcome.NOT_TESTED
+        return min(
+            (check.canonical_outcome for check in self.checks),
+            key=CANONICAL_OUTCOME_ORDER.index,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +280,73 @@ def check_endpoint_reachable(endpoint: str, *, timeout_s: float = 3.0) -> Readin
             detail=f"Cannot reach {host}:{port}: {exc}",
             check_name=check_name,
         )
+
+
+def resolve_profile_connection_security(profile: TargetServerCuProfile) -> ConnectionSecurity | None:
+    """Return the connection security declared by the profile's SUT manifest.
+
+    Returns ``None`` for ad hoc runs that have no manifest (``--endpoint``), which
+    are anonymous by definition.
+    """
+    from helpers.connection_security import connection_security_from_manifest_path
+    from helpers.sut_manifest import MANIFEST_SUFFIX
+
+    source = profile.source_path or profile.capabilities_file
+    if not source or not source.endswith(MANIFEST_SUFFIX):
+        return None
+    path = Path(source)
+    if not path.exists():
+        return None
+    return connection_security_from_manifest_path(path)
+
+
+def check_connection_security(
+    security: ConnectionSecurity | None,
+    *,
+    env: Mapping[str, str] | None = None,
+    allow_prompt: bool = True,
+) -> ReadinessOutcome:
+    """Check that the declared connection security/authentication can be applied.
+
+    A declared mode that cannot be applied (missing certificate, key, credentials
+    file, or environment secret) is a configuration error: it must stop the run
+    before any test, instead of being silently ignored and producing an
+    anonymous, unsecured session.
+
+    ``allow_prompt`` is False for unattended runs; an interactive credential
+    source is then reported as a configuration error rather than blocking on a
+    console prompt no one will answer.
+    """
+    check_name = "connection_security"
+    if security is None or security.is_default_anonymous:
+        return ReadinessOutcome(
+            outcome=OUTCOME_PASSED,
+            detail="Anonymous session with no message security declared",
+            check_name=check_name,
+        )
+
+    from helpers.connection_security import describe_connection_security, validate_connection_security
+
+    summary = describe_connection_security(security)
+    issues = validate_connection_security(security, env=env)
+    if not allow_prompt and security.auth_source == "prompt":
+        issues.append(
+            "authentication.source is 'prompt' but this run is unattended. Run with --interactive-prompts, "
+            "or use the 'file'/'environment' credential source."
+        )
+    if issues:
+        return ReadinessOutcome(
+            outcome=OUTCOME_CONFIGURATION_ERROR,
+            reason_code="configuration_invalid",
+            detail=f"Declared connection security cannot be applied ({summary}): " + "; ".join(issues),
+            check_name=check_name,
+            evidence={"issues": issues},
+        )
+    return ReadinessOutcome(
+        outcome=OUTCOME_PASSED,
+        detail=f"Connection security is applicable ({summary})",
+        check_name=check_name,
+    )
 
 
 def check_endpoint_configured(endpoint: str) -> ReadinessOutcome:
@@ -559,7 +677,13 @@ async def check_joining_process_list(
 # ---------------------------------------------------------------------------
 
 
-def run_config_preflight(profile: TargetServerCuProfile) -> PreflightReport:
+def run_config_preflight(
+    profile: TargetServerCuProfile,
+    *,
+    security: ConnectionSecurity | None = None,
+    env: Mapping[str, str] | None = None,
+    allow_prompt: bool = True,
+) -> PreflightReport:
     """Run all synchronous (no-network) configuration checks for a profile.
 
     Returns a PreflightReport with the results.  This can be called before
@@ -569,6 +693,15 @@ def run_config_preflight(profile: TargetServerCuProfile) -> PreflightReport:
     ----------
     profile:
         The loaded target_server profile to check.
+    security:
+        Declared connection security. Resolved from the profile's SUT manifest
+        when omitted; pass it explicitly to check a specific declaration.
+    env:
+        Environment mapping used to resolve referenced secrets. Defaults to
+        ``os.environ``.
+    allow_prompt:
+        False for unattended runs, where an interactive credential source is a
+        configuration error rather than a console prompt.
     """
     report = PreflightReport(
         profile_name=profile.profile_name,
@@ -589,6 +722,10 @@ def run_config_preflight(profile: TargetServerCuProfile) -> PreflightReport:
 
     # 5. StartSelectedJoining requires explicit opt-in when mode demands it
     report.add(check_start_selected_joining_methods_allowed(profile))
+
+    # 6. Declared session security/authentication must be appliable
+    resolved_security = security if security is not None else resolve_profile_connection_security(profile)
+    report.add(check_connection_security(resolved_security, env=env, allow_prompt=allow_prompt))
 
     return report
 

@@ -1,4 +1,4 @@
-﻿# IJT Report Glossary and Reading Guide
+# IJT Report Glossary and Reading Guide
 
 **Status:** authoritative in-repo terminology reference for the IJT Test
 Client specification test summary renderer
@@ -61,7 +61,7 @@ The IJT Facet Support summary splits the support icon into its own `🚦` marker
 
 ### 2.2 `Server Support Coverage` 👔 🛠️ 📦
 Source: `scripts/reporting/specification_test_summary.py` — `Server Support Coverage` column header in the `## 📊 Specification Test Overview` KPI table; value is the local `spec_coverage_value` computed in `render_specification_test_summary()`.
-The share of OPC 40100 Joining Test Result CUs (Conformance Units) that the **server under test claims to support** in its capability file.
+The share of OPC 40100 Joining Test Result CUs (Conformance Units) that the **server under test claims to support** in its SUT manifest (`capability_claims`).
 - **Numerator:** CUs the server lists as supported.
 - **Denominator:** CUs in the active profile (facet or full set).
 - Example: 78% means the server says it supports 78% of the CUs in the active profile.
@@ -109,12 +109,38 @@ Current table shapes:
 | Outcome | Icon | Meaning | Internal source term | Source |
 |---|---|---|---|---|
 | Supported | ✅ | Test validated this CU as supported. | `Supported` | `OUTCOME_LABELS["supported"]` in `helpers/report_scoring.py` |
-| Supported with Notes | ⚠ | Validated but with caveats (e.g., partial coverage). Mapped from `partial` key. | `Supported with Notes` (KPI strip uses short form `With Notes` from `KPI_LABELS`) | `OUTCOME_LABELS["partial"]`, `KPI_LABELS` in `helpers/report_scoring.py` |
+| Supported with Notes | ⚠ | Validated but with caveats (e.g., partial coverage). Mapped from `partial` key to `Inconclusive` in canonical outcomes. | `Supported with Notes` (KPI strip uses short form `With Notes` from `KPI_LABELS`) | `OUTCOME_LABELS["partial"]`, `KPI_LABELS` in `helpers/report_scoring.py` |
 | Not Supported | ➖ | Server-supported CU was not validated as supported by this run. | `Not Supported` | `OUTCOME_LABELS["not_supported"]` in `helpers/report_scoring.py` |
 | Blocked | 🚫 | Missing runtime precondition (e.g., dependency CU failed). | `Blocked` | `OUTCOME_LABELS["blocked"]` in `helpers/report_scoring.py` |
 | Failed | ❌ | Test failure or harness/runtime error. | `action_needed` | `OUTCOME_LABELS["action_needed"]`, `ACTION_ITEM_LABEL_ORDER` in `helpers/report_scoring.py` |
 
 The internal JSON key remains `action_needed` so existing machine-readable data stays stable. The public label is `Failed`.
+
+### 3.1.1 Canonical final-report outcomes 👔 🛠️ 🧪 📦
+Source: `helpers/canonical_outcomes.py` — the single vocabulary source.
+
+Every layer keeps its own detailed status strings (raw pytest `passed`/`failed`/`error`/`skipped`, readiness `blocked`/`unsupported`/`manual_required`, CU rollups `supported`/`partial`/`action_needed`). On top of those, each final artifact (JSON, Markdown, Excel) records one **canonical outcome**:
+
+| Canonical outcome | Meaning | Typical detailed sources |
+|---|---|---|
+| `Passed` | Claimed behaviour was exercised and accepted. | pytest `passed`; CU rollup `supported` |
+| `Failed` | Claimed behaviour is missing, rejected, or wrong. | pytest `failed`/`error`; readiness `claim_mismatch`; a claimed CU reported Not Supported |
+| `Not Supported` | Behaviour is absent and was never claimed — informational, not a defect. | unclaimed CU skipped as Not Supported; accepted policy |
+| `Blocked` | A runtime prerequisite was absent, so nothing could be judged. | readiness `blocked`/`manual_required`; environment gaps |
+| `Not Tested` | Applicable and executable, but not executed in this run. | collected-but-unexecuted CU tests; plain skips |
+| `Inconclusive` | Evidence was unreadable, ambiguous, or suppressed. | invalid configuration; `xfail`/`xpass`; CU rollup `partial`; unknown status strings |
+
+Mapping rules are deterministic:
+
+- claimed behaviour missing or failing -> `Failed`
+- unclaimed, absent, optional behaviour -> `Not Supported`
+- runtime prerequisite absent -> `Blocked`
+- applicable but not executed -> `Not Tested`
+- unreadable, ambiguous, or suppressed -> `Inconclusive`
+
+Reason codes and their categories (`connectivity`, `configuration`, `claim`, `capability`, `safety_policy`, `runtime_prerequisite`, `operator_action`, `tooling`, `evidence`) are preserved **separately** from the canonical outcome: the outcome says what the report concludes, the reason says why.
+
+The public labels in section 3.1 are unchanged. Raw pytest and JUnit semantics are unchanged. Canonical outcomes describe what this client observed and are not an OPC Foundation certification claim.
 
 ### 3.2 `Failures` 🛠️ 🧪
 Source: `scripts/reporting/specification_test_summary.py` — `Failures` column header in the `CUs Needing Review` table; Excel parity in the `Failures` column emitted by `make_excel_report.py`.

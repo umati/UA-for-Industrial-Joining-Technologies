@@ -43,7 +43,12 @@ if str(_SCRIPTS_DIR) not in sys.path:
 from opcua_session_policy_loader import load_shared_session_policy
 
 from helpers.cu_coverage_report import CuCoverageReportRecorder
-from helpers.profile_loader import get_skip_reason, load_all_cus_from_facets, load_supported_cus
+from helpers.profile_loader import (
+    ExplicitManifestError,
+    get_skip_reason,
+    load_all_cus_from_facets,
+    resolve_session_supported_cus,
+)
 
 _session_policy = load_shared_session_policy(__file__)
 connect_opcua_client = _session_policy.connect_client
@@ -55,9 +60,10 @@ load_shared_ijt_type_definitions = _session_policy.load_ijt_type_definitions
 collect_ignore = ["tmp"]
 
 # Loaded once at collection time — all tests see the same supported-CU set.
-# None means "no capabilities file / no gating" — all tests run.
-# frozenset() means "file present but no CUs supported" — all CU-gated tests skip.
-# Override the config file path via OPCUA_CAPABILITIES_FILE env var.
+# None means "no manifest selected and no usable facet catalogue" — all tests run.
+# frozenset() means "manifest present but no CUs claimed" — all CU-gated tests skip.
+# Select the manifest via the OPCUA_CAPABILITIES_FILE env var; a selected manifest
+# that cannot be read fails configuration instead of disabling gating.
 _SUPPORTED_CUS: frozenset[str] | None = None
 _WORKFLOW_EXCLUDED_CUS: frozenset[str] = frozenset()
 
@@ -70,10 +76,12 @@ def _deletes_disabled() -> bool:
 def pytest_configure(config):
     """Register markers, load server capability profile, and set up fixture paths.
 
-    Reads the default capability declaration (or OPCUA_CAPABILITIES_FILE) once.
-    Tests decorated with @pytest.mark.requires_cu(CU.SOME_KEY) are automatically
-    skipped when that key is absent from the loaded supported-CU set — they are
-    never failed just because a feature is not implemented on the server under test.
+    Reads the selected SUT manifest (OPCUA_CAPABILITIES_FILE) once. A manifest
+    that is selected but missing, unreadable, or invalid aborts configuration
+    with a UsageError. Tests decorated with @pytest.mark.requires_cu(CU.SOME_KEY)
+    are automatically skipped when that key is absent from the loaded supported-CU
+    set — they are never failed just because a feature is not implemented on the
+    server under test.
     """
     global _SUPPORTED_CUS, _WORKFLOW_EXCLUDED_CUS  # noqa: PLW0603  # pylint: disable=global-statement
 
@@ -141,21 +149,21 @@ def pytest_configure(config):
     _project_root.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
 
     try:
-        _SUPPORTED_CUS = load_supported_cus()
-        _WORKFLOW_EXCLUDED_CUS = frozenset(
-            key.strip() for key in os.environ.get("OPCUA_TARGET_EXCLUDED_CUS", "").split(",") if key.strip()
+        _SUPPORTED_CUS = resolve_session_supported_cus()
+    except ExplicitManifestError as exc:
+        # An explicitly selected manifest is a claim statement. Refusing to start
+        # is the only safe response: continuing would silently score the run
+        # against a claim scope nobody configured.
+        raise pytest.UsageError(str(exc)) from exc
+
+    _WORKFLOW_EXCLUDED_CUS = frozenset(
+        key.strip() for key in os.environ.get("OPCUA_TARGET_EXCLUDED_CUS", "").split(",") if key.strip()
+    )
+    if _WORKFLOW_EXCLUDED_CUS:
+        logging.getLogger(__name__).info(
+            "Target Server result scope excludes %d non-applicable CUs",
+            len(_WORKFLOW_EXCLUDED_CUS),
         )
-        if _WORKFLOW_EXCLUDED_CUS:
-            logging.getLogger(__name__).info(
-                "Target Server result scope excludes %d non-applicable CUs",
-                len(_WORKFLOW_EXCLUDED_CUS),
-            )
-    except Exception as exc:  # noqa: BLE001
-        logging.getLogger(__name__).warning(
-            "Could not load the capability declaration (%s) — all conformance units treated as supported",
-            exc,
-        )
-        _SUPPORTED_CUS = None  # None = no gating; run everything
 
     config.pluginmanager.register(
         CuCoverageReportRecorder(
@@ -171,8 +179,8 @@ def pytest_runtest_setup(item):
     """Skip any test whose required conformance units are not in the supported set.
 
     Reads @pytest.mark.requires_cu(CU.KEY) markers.
-    When _SUPPORTED_CUS is None (no capabilities file loaded) every test runs — safe default.
-    When _SUPPORTED_CUS is an empty frozenset (file present but declares nothing) all
+    When _SUPPORTED_CUS is None (no manifest and no usable facet catalogue) every test runs — safe default.
+    When _SUPPORTED_CUS is an empty frozenset (manifest present but declares nothing) all
     CU-gated tests are skipped — this is the correct behaviour for an explicit empty profile.
     """
     if _SUPPORTED_CUS is None:
@@ -259,9 +267,56 @@ def _guard_direct_target_method_calls(monkeypatch):
 
 
 async def _connect_test_client(client: Client, *, load_type_definitions: bool = False) -> None:
+    await _apply_session_connection_security(client)
     await connect_opcua_client(client)
     if load_type_definitions:
         await _load_test_client_type_definitions(client)
+
+
+def _session_connection_security():
+    """Return the ConnectionSecurity declared by the selected SUT manifest, or None.
+
+    The manifest is the only source: a run without OPCUA_TARGET_SERVER_PROFILE
+    (the default simulator run) stays anonymous with no message security.
+    """
+    profile_path = _target_server_profile_path()
+    if not profile_path:
+        return None
+    from helpers.connection_security import connection_security_from_manifest_path
+
+    security = connection_security_from_manifest_path(profile_path)
+    return None if security.is_default_anonymous else security
+
+
+async def _apply_session_connection_security(client: Client) -> None:
+    """Apply the manifest's security mode/policy, certificates, and identity.
+
+    Applied to every asyncua client this suite opens. A declared setting that
+    cannot be applied fails the session immediately (never silently ignored and
+    never downgraded to an anonymous unsecured session).
+    """
+    security = _session_connection_security()
+    if security is None:
+        return
+    from helpers.connection_security import ConnectionSecurityError, apply_connection_security
+
+    try:
+        await apply_connection_security(client, security, prompt=_credential_prompt())
+    except ConnectionSecurityError as exc:
+        pytest.fail(str(exc))
+
+
+def _credential_prompt():
+    """Return the interactive credential prompt only when prompting is allowed.
+
+    Guided runs (``--interactive-prompts``) may ask the operator; automated runs
+    must fail with a clear configuration error instead of blocking on stdin.
+    """
+    if os.environ.get("OPCUA_TARGET_INTERACTIVE_PROMPTS", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return None
+    from helpers.connection_security import default_credential_prompt
+
+    return default_credential_prompt
 
 
 async def _disconnect_test_client(client: Client | None) -> None:
@@ -756,12 +811,12 @@ def _target_server_profile_path() -> str:
 
 
 def _load_target_server_profile_with_runtime_overrides(profile_path: str):
-    """Load a profile and reproduce installation overrides in the pytest process."""
+    """Load a SUT manifest and reproduce installation overrides in the pytest process."""
     from dataclasses import replace
 
-    from helpers.target_server_cu_config import load_target_server_profile
+    from helpers.sut_manifest import load_sut_manifest
 
-    profile = load_target_server_profile(Path(profile_path))
+    profile = load_sut_manifest(Path(profile_path)).to_execution_profile()
     tool_piu = os.environ.get("OPCUA_TOOL_PRODUCT_INSTANCE_URI", "")
     process_id = os.environ.get("OPCUA_JOINING_PROCESS_ID", "")
     process_origin_id = os.environ.get("OPCUA_JOINING_PROCESS_ORIGIN_ID", "")
@@ -804,12 +859,9 @@ def _target_server_mode_allows_waiting() -> bool:
 
 async def _find_simulation_child(joining_system, ns_app: int | None, child_name: str):
     """Find a simulator child folder without invoking another async fixture."""
-    if ns_app is None:
-        return None
-    simulations = await find_child_by_browse_name(joining_system, BN.SIMULATIONS, ns_app)
-    if simulations is None:
-        return None
-    return await find_child_by_browse_name(simulations, child_name, ns_app)
+    from helpers.trigger import find_simulation_child
+
+    return await find_simulation_child(joining_system, ns_app, child_name)
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -825,13 +877,13 @@ async def result_trigger(opcua_client, subscription_client, joining_system, ns_i
     ns_app = ns_indices.get(NS_APP)
     target_profile_path = _target_server_profile_path()
     if target_profile_path:
-        from helpers.target_server_triggers import make_target_server_result_trigger
+        from helpers.target_server_triggers import build_target_server_result_trigger
 
         profile = _load_target_server_profile_with_runtime_overrides(target_profile_path)
-        return make_target_server_result_trigger(
+        return await build_target_server_result_trigger(
             opcua_client,
             joining_system,
-            ns_app or 0,
+            ns_app,
             profile,
             ns_ijt=ns_indices.get(NS_IJT_BASE),
             ns_di=ns_indices.get(NS_DI),
@@ -871,10 +923,13 @@ async def event_trigger(opcua_client, joining_system, ns_indices):
     """
     target_profile_path = _target_server_profile_path()
     if target_profile_path:
-        from helpers.target_server_triggers import make_target_server_event_trigger
+        from helpers.target_server_triggers import build_target_server_event_trigger
 
         profile = _load_target_server_profile_with_runtime_overrides(target_profile_path)
-        return make_target_server_event_trigger(
+        return await build_target_server_event_trigger(
+            opcua_client,
+            joining_system,
+            ns_indices.get(NS_APP),
             profile,
             allow_waiting=_target_server_mode_allows_waiting(),
         )

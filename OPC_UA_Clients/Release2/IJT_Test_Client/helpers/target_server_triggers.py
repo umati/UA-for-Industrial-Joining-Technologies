@@ -20,6 +20,16 @@ Factory functions:
 
   make_target_server_result_trigger()  — choose adapter based on profile trigger config
   make_target_server_event_trigger()   — choose event adapter based on profile config
+  build_target_server_result_trigger() — async: discover simulator helper nodes first
+  build_target_server_event_trigger()  — async: discover simulator helper nodes first
+
+A manifest may also declare ``simulate_methods``; the factories then return the
+existing :class:`helpers.trigger.SimulatorResultTrigger` /
+:class:`helpers.trigger.SimulatorEventTrigger` on the helper nodes discovered by
+:func:`helpers.trigger.find_simulation_child` — the same lookup the default
+simulator fixtures use. When the helper nodes are absent the factories raise
+:class:`TargetServerTriggerConfigurationError` instead of degrading to an
+External (no-op) trigger.
 
 These factories preserve the OPCUA_TRIGGER_CLASS override mechanism so that
 custom adapter classes can be injected via environment variable, matching the
@@ -48,18 +58,31 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
+from helpers.namespaces import BN
 from helpers.target_server_cu_config import TargetServerCuProfile
 from helpers.trigger import (
     EventTrigger,
     ExternalEventTrigger,
     ExternalResultTrigger,
     ResultTrigger,
+    SimulatorEventTrigger,
+    SimulatorResultTrigger,
     TriggerOutcome,
+    find_simulation_child,
 )
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TARGET_SERVER_TIMEOUT = 120.0  # real joining operations can be slow
+
+
+class TargetServerTriggerConfigurationError(RuntimeError):
+    """Raised when a manifest's trigger configuration cannot be honoured.
+
+    Raised instead of degrading to a no-op trigger, so a manifest that claims a
+    capability the server does not expose fails as a configuration error rather
+    than as a run full of unexplained skips.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +103,15 @@ class TargetServerTriggerOutcome(TriggerOutcome):
         product_instance_uri:   Tool PIU used for the joining operation.
         joining_process_id:     Joining process ID selected.
         joining_process_origin_id: Joining process origin ID selected.
-        operation_count:        Number of StartSelectedJoining calls made.
+        operation_count:        Alias of ``starts_issued``, kept for backward
+                                compatibility with existing callers/reports.
+        starts_issued:          StartSelectedJoining calls the server accepted.
+        results_confirmed:      Correlated results this trigger actually observed.
+                                0 when the trigger did not subscribe for
+                                completion evidence (single-operation runs leave
+                                that verification to the test itself), so
+                                ``starts_issued > results_confirmed`` means
+                                "started but not confirmed".
         pre_trigger_baseline:   Snapshot captured before the trigger.
     """
 
@@ -89,6 +120,8 @@ class TargetServerTriggerOutcome(TriggerOutcome):
     joining_process_id: str = ""
     joining_process_origin_id: str = ""
     operation_count: int = 0
+    starts_issued: int = 0
+    results_confirmed: int = 0
     pre_trigger_baseline: dict[str, Any] = field(default_factory=dict)
 
 
@@ -123,6 +156,21 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
     @property
     def is_simulator(self) -> bool:
         return False
+
+    @property
+    def active_result_timeout_s(self) -> float:
+        """Result-completion budget for an operation this trigger actually started.
+
+        Uses the profile's workflow/result completion timeout, never the short
+        passive ``triggers.result.timeout_seconds`` observation budget: a remote
+        StartSelectedJoining has to be given the time a real joining cycle needs.
+        """
+        return self._profile.workflow_execution.expected_results.timeout_seconds
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        """Observation budget when no operation was started by this trigger."""
+        return self._profile.triggers.result.timeout_seconds
 
     def __init__(
         self,
@@ -362,47 +410,77 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         """Normalize integer or string classification to a canonical profile key."""
         if classification is None:
             return ""
-        if isinstance(classification, int):
-            from helpers.namespaces import ResultClassification
+        if isinstance(classification, int) and not isinstance(classification, bool):
+            from helpers.namespaces import result_classification_name
 
-            mapping = {
-                ResultClassification.SINGLE_RESULT: "single",
-                ResultClassification.SYNC_RESULT: "sync",
-                ResultClassification.BATCH_RESULT: "batch",
-                ResultClassification.JOB_RESULT: "job",
-                ResultClassification.STITCHING_RESULT: "stitching",
-                ResultClassification.INTERVENTION_RESULT: "intervention",
-            }
-            return mapping.get(classification, "")
+            return result_classification_name(classification)
         return str(classification).lower().strip()
 
     def _get_selection_for_classification(self, classification: str | int | None = None) -> tuple[Any, str]:
-        """Return the appropriate process selection config and normalized key."""
+        """Return the appropriate process selection config and normalized key.
+
+        Resolution order:
+
+        1. ``selection.joining_processes[<classification>]`` when configured.
+        2. For ``intervention`` only: the explicit
+           ``cu_execution.extension_fields.counter_parent_process`` entry, when
+           it carries at least one selector accepted by
+           ``_selection_has_selector`` (id, origin id, **or** selection_name).
+        3. The legacy/default ``selection.joining_process`` entry.
+
+        Step 3 is always reachable, so an unconfigured classification degrades
+        to the documented default selection instead of an empty ``exact_match``
+        selector that can never match any advertised process.
+        """
         key = self._normalize_classification(classification)
         if key and key in self._profile.selection.joining_processes:
             return self._profile.selection.joining_processes[key], key
         if key == "intervention":
             cpp = self._profile.cu_execution.extension_fields.get("counter_parent_process")
-            if isinstance(cpp, dict) and (cpp.get("joining_process_id") or cpp.get("joining_process_origin_id")):
+            if isinstance(cpp, dict):
                 from helpers.target_server_cu_config import JoiningProcessSelectionConfig
 
-                return JoiningProcessSelectionConfig(
+                candidate = JoiningProcessSelectionConfig(
                     policy="exact_match",
-                    joining_process_id=cpp.get("joining_process_id", ""),
-                    joining_process_origin_id=cpp.get("joining_process_origin_id", ""),
-                    selection_name=cpp.get("selection_name", ""),
-                ), key
-            if self._profile.selection.joining_processes:
-                from helpers.target_server_cu_config import JoiningProcessSelectionConfig
-
-                return JoiningProcessSelectionConfig(policy="exact_match"), key
+                    joining_process_id=str(cpp.get("joining_process_id", "")),
+                    joining_process_origin_id=str(cpp.get("joining_process_origin_id", "")),
+                    selection_name=str(cpp.get("selection_name", "")),
+                )
+                # selection_name is a usable selector everywhere else
+                # (_selection_has_selector / _choose_joining_process), so it must
+                # be accepted here too instead of falling through to the default.
+                if self._selection_has_selector(candidate):
+                    return candidate, key
+            logger.debug(
+                "No intervention-specific selection configured "
+                "(selection.joining_processes.intervention / counter_parent_process); "
+                "falling back to the default selection.joining_process entry"
+            )
         return self._profile.selection.joining_process, key
+
+    @staticmethod
+    def _selection_has_selector(selection: Any) -> bool:
+        """Return True when an exact_match selection carries at least one selector."""
+        return bool(
+            getattr(selection, "joining_process_id", "")
+            or getattr(selection, "joining_process_origin_id", "")
+            or getattr(selection, "selection_name", "")
+        )
 
     def _choose_joining_process(self, processes: list[Any], classification: str | int | None = None) -> Any | None:
         """Choose a process according to the profile's deterministic selection policy."""
         selection, _ = self._get_selection_for_classification(classification)
         if selection.policy != "exact_match":
             return processes[0] if processes else None
+
+        if not self._selection_has_selector(selection):
+            # An exact_match selection with no identifiers can never match; report
+            # it as a configuration problem rather than silently taking a process.
+            logger.warning(
+                "Joining process selection policy is 'exact_match' but no "
+                "joining_process_id/joining_process_origin_id/selection_name is configured"
+            )
+            return None
 
         selectors = (
             (
@@ -706,15 +784,24 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         if target_process is None:
             selection, norm_key = self._get_selection_for_classification(classification)
             label = f"{norm_key} " if norm_key else ""
-            return TargetServerTriggerOutcome(
-                triggered=False,
-                skip_reason=(
+            if selection.policy == "exact_match" and not self._selection_has_selector(selection):
+                skip_reason = (
+                    f"Target profile configuration error: the {label}joining process selection uses "
+                    "policy 'exact_match' but configures no joining_process_id, "
+                    "joining_process_origin_id or selection_name; "
+                    f"available: [{self._describe_joining_processes(processes)}]"
+                )
+            else:
+                skip_reason = (
                     f"No joining process matched the configured {label}selection "
                     f"(id='{selection.joining_process_id}', "
                     f"origin='{selection.joining_process_origin_id}', "
                     f"selection_name='{selection.selection_name}'); "
                     f"available: [{self._describe_joining_processes(processes)}]"
-                ),
+                )
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=skip_reason,
                 method="StartSelectedJoining",
                 trigger_mode="start_selected_joining",
                 product_instance_uri=piu,
@@ -750,6 +837,8 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         from helpers.result_collector import ResultCollector
 
         async with AsyncExitStack() as stack:
+            completed_operations = 0
+            confirmed_operations = 0
             completion_collector = None
             if operation_count > 1:
                 if self._subscription_client is None:
@@ -774,10 +863,13 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 )
 
             for operation_number in range(1, operation_count + 1):
+                completed_operations = operation_number
                 if completion_collector is not None:
                     completion_collector.discard_pending()
                 started = await self._start_selected_joining(jpm_node, piu, deselect)
                 if not started:
+                    # The failing start was never accepted, so neither it nor a
+                    # result for it counts as evidence.
                     return TargetServerTriggerOutcome(
                         triggered=False,
                         skip_reason=(
@@ -790,16 +882,17 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                         joining_process_id=jp_id,
                         joining_process_origin_id=jp_origin,
                         operation_count=operation_number - 1,
+                        starts_issued=operation_number - 1,
+                        results_confirmed=confirmed_operations,
                     )
                 if completion_collector is not None:
                     completed = await completion_collector.collect_single_matching(
                         lambda result: self._result_matches_context(result, piu, jp_id, jp_origin),
-                        timeout_s=min(
-                            self._profile.triggers.result.timeout_seconds,
-                            self._profile.workflow_execution.expected_results.timeout_seconds,
-                        ),
+                        timeout_s=self.active_result_timeout_s,
                     )
                     if completed is None:
+                        # This start WAS accepted but produced no correlated
+                        # result: starts_issued and results_confirmed differ.
                         return TargetServerTriggerOutcome(
                             triggered=False,
                             skip_reason=(
@@ -812,31 +905,32 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                             joining_process_id=jp_id,
                             joining_process_origin_id=jp_origin,
                             operation_count=operation_number,
+                            starts_issued=operation_number,
+                            results_confirmed=confirmed_operations,
                         )
-                    from helpers.namespaces import ResultClassification
+                    confirmed_operations = operation_number
+                    from helpers.namespaces import result_classification_name, result_classification_value
                     from helpers.result_collector import get_classification
 
-                    res_cls = get_classification(completed)
-                    if (
-                        classification in ("job", ResultClassification.JOB_RESULT)
-                        and res_cls == ResultClassification.JOB_RESULT
-                    ) or (
-                        classification in ("batch", ResultClassification.BATCH_RESULT)
-                        and res_cls == ResultClassification.BATCH_RESULT
-                    ):
+                    requested_key = self._normalize_classification(classification)
+                    received_key = result_classification_name(get_classification(completed))
+                    if requested_key in {"job", "batch"} and received_key == requested_key:
                         logger.info(
-                            "Terminal %s result received on operation %d/%d; workflow completed",
-                            classification,
+                            "Terminal %s result (classification %s) received on operation %d/%d; workflow completed",
+                            requested_key,
+                            result_classification_value(received_key),
                             operation_number,
                             operation_count,
                         )
+                        completed_operations = operation_number
                         break
 
         logger.debug(
-            "StartSelectedJoining succeeded: PIU=%s, process=%s, operations=%d",
+            "StartSelectedJoining succeeded: PIU=%s, process=%s, starts=%d, results confirmed=%d",
             piu,
             jp_id,
-            operation_count,
+            completed_operations,
+            confirmed_operations,
         )
         return TargetServerTriggerOutcome(
             triggered=True,
@@ -845,7 +939,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             product_instance_uri=piu,
             joining_process_id=jp_id,
             joining_process_origin_id=jp_origin,
-            operation_count=operation_count,
+            operation_count=completed_operations,
+            starts_issued=completed_operations,
+            results_confirmed=confirmed_operations,
         )
 
     async def _trigger_operations(
@@ -958,6 +1054,16 @@ class ManualResultTrigger(ResultTrigger):
     def is_simulator(self) -> bool:
         return False
 
+    @property
+    def active_result_timeout_s(self) -> float:
+        """This trigger never starts an operation — observation budget only."""
+        return self._profile.triggers.result.timeout_seconds
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        """Operator-observation budget from the profile result trigger config."""
+        return self._profile.triggers.result.timeout_seconds
+
     def __init__(self, profile: TargetServerCuProfile, allow_waiting: bool = False) -> None:
         self._profile = profile
         self._allow_waiting = allow_waiting
@@ -1022,6 +1128,16 @@ class ManualEventTrigger(EventTrigger):
     def is_simulator(self) -> bool:
         return False
 
+    @property
+    def active_event_timeout_s(self) -> float:
+        """This trigger never fires an event — observation budget only."""
+        return self._profile.triggers.event.timeout_seconds
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        """Operator-observation budget from the profile event trigger config."""
+        return self._profile.triggers.event.timeout_seconds
+
     def __init__(self, profile: TargetServerCuProfile, allow_waiting: bool = False) -> None:
         self._profile = profile
         self._allow_waiting = allow_waiting
@@ -1056,6 +1172,73 @@ class ManualEventTrigger(EventTrigger):
 
 
 # ---------------------------------------------------------------------------
+# Simulator-backed trigger composition (triggers.*.mode = simulate_methods)
+# ---------------------------------------------------------------------------
+
+SIMULATE_METHODS_MODE = "simulate_methods"
+
+
+class SplitEventTrigger(EventTrigger):
+    """Serve events from one adapter and conditions from another.
+
+    Needed when a manifest declares different ``triggers.event.mode`` and
+    ``triggers.condition.mode`` values - for example natural (observed) events
+    but simulator-generated conditions. Each call is forwarded unchanged so the
+    underlying adapters keep their own semantics and timeouts.
+    """
+
+    def __init__(self, event_trigger: EventTrigger, condition_trigger: EventTrigger) -> None:
+        self._events = event_trigger
+        self._conditions = condition_trigger
+
+    @property
+    def is_simulator(self) -> bool:
+        return self._events.is_simulator
+
+    @property
+    def active_event_timeout_s(self) -> float:
+        return self._events.active_event_timeout_s
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        return self._events.passive_observation_timeout_s
+
+    async def trigger_event(self, event_type: int, count: int = 1) -> TriggerOutcome:
+        return await self._events.trigger_event(event_type, count)
+
+    async def trigger_bulk_events(
+        self,
+        event_type: int,
+        count: int,
+        from_seq: int,
+        to_seq: int,
+        min_duration_ms: int = 100,
+    ) -> TriggerOutcome:
+        return await self._events.trigger_bulk_events(event_type, count, from_seq, to_seq, min_duration_ms)
+
+    async def trigger_condition(self, event_type: int) -> TriggerOutcome:
+        return await self._conditions.trigger_condition(event_type)
+
+
+def _require_simulator_folder(node: Any, *, browse_name: str, mode_path: str, profile: TargetServerCuProfile) -> Any:
+    """Return *node*, or raise a configuration error when the helper is absent.
+
+    A manifest claiming ``simulate_methods`` states that the SUT exposes the
+    simulator helper methods. Silently degrading to an External trigger would
+    turn that false claim into a pile of skips instead of a visible
+    configuration error, so the run stops here instead.
+    """
+    if node is not None:
+        return node
+    raise TargetServerTriggerConfigurationError(
+        f"SUT manifest '{profile.profile_name}' sets {mode_path} = '{SIMULATE_METHODS_MODE}', but the "
+        f"'{browse_name}' simulator helper folder was not found under JoiningSystem/Simulations on this "
+        "server. Point the manifest at the simulator, or change the trigger mode to one this server "
+        "supports (start_selected_joining, manual_trigger, observe_only, or none)."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Factory functions
 # ---------------------------------------------------------------------------
 
@@ -1070,11 +1253,14 @@ def make_target_server_result_trigger(
     ns_di: int | None = None,
     subscription_client: Any = None,
     allow_waiting: bool = False,
+    simulate_results_folder: Any = None,
 ) -> ResultTrigger:
     """Return the appropriate result trigger based on the profile trigger config.
 
     Selection logic:
       - If OPCUA_TRIGGER_CLASS is set, instantiate that class (backward compat).
+      - If trigger mode is 'simulate_methods' → SimulatorResultTrigger, using the
+        SimulateResults folder discovered through the shared simulator lookup.
       - If trigger mode is 'start_selected_joining' → StartSelectedJoiningResultTrigger.
       - If trigger mode is 'manual_trigger' → ManualResultTrigger.
       - Otherwise → ExternalResultTrigger (existing no-op fallback).
@@ -1087,6 +1273,14 @@ def make_target_server_result_trigger(
         ns_ijt:               IJT Base namespace index, resolved lazily when omitted.
         ns_di:                DI namespace index, resolved lazily when omitted.
         allow_waiting:        Enable waiting behavior for guided/manual modes.
+        simulate_results_folder: SimulateResults folder node, required for
+                              'simulate_methods'. Use
+                              :func:`build_target_server_result_trigger` to have
+                              it discovered automatically.
+
+    Raises:
+        TargetServerTriggerConfigurationError: when the manifest claims
+            'simulate_methods' but the simulator helper folder is unavailable.
     """
     # Preserve existing OPCUA_TRIGGER_CLASS override mechanism
     override_class = os.environ.get("OPCUA_TRIGGER_CLASS")
@@ -1100,6 +1294,16 @@ def make_target_server_result_trigger(
         return cls(client, joining_system_node, ns_app)
 
     mode = profile.triggers.result.mode
+
+    if mode == SIMULATE_METHODS_MODE:
+        folder = _require_simulator_folder(
+            simulate_results_folder,
+            browse_name=BN.SIMULATE_RESULTS_FOLDER,
+            mode_path="triggers.result.mode",
+            profile=profile,
+        )
+        logger.debug("TargetServer result trigger: SimulatorResultTrigger")
+        return SimulatorResultTrigger(client, folder, ns_app)
 
     if mode == "start_selected_joining":
         logger.debug("TargetServer result trigger: StartSelectedJoiningResultTrigger")
@@ -1125,12 +1329,22 @@ def make_target_server_event_trigger(
     profile: TargetServerCuProfile,
     *,
     allow_waiting: bool = False,
+    client: Any = None,
+    ns_app: int = 0,
+    simulate_events_folder: Any = None,
 ) -> EventTrigger:
     """Return the appropriate event trigger based on the profile trigger config.
 
-    Selection logic:
-      - If trigger mode is 'manual_trigger' → ManualEventTrigger.
+    Selection logic (applied to ``triggers.event.mode`` and
+    ``triggers.condition.mode`` independently):
+      - 'simulate_methods' → SimulatorEventTrigger on the
+        SimulateEventsAndConditions folder.
+      - 'manual_trigger' → ManualEventTrigger.
       - Otherwise → ExternalEventTrigger (existing no-op fallback).
+
+    When exactly one of the two modes is ``simulate_methods`` the two adapters are
+    combined by :class:`SplitEventTrigger`, so conditions can be simulated while
+    events are only observed (or vice versa).
 
     Note: 'observe_only' mode does not need a trigger class because events
     arrive naturally.  The runner subscribes before the workflow step and
@@ -1139,12 +1353,98 @@ def make_target_server_event_trigger(
     Args:
         profile:       Loaded target_server profile.
         allow_waiting: Enable waiting behavior for guided/manual modes.
+        client:        Active asyncua Client, required for 'simulate_methods'.
+        ns_app:        Application namespace index, required for 'simulate_methods'.
+        simulate_events_folder: SimulateEventsAndConditions folder node, required
+                       for 'simulate_methods'. Use
+                       :func:`build_target_server_event_trigger` to have it
+                       discovered automatically.
+
+    Raises:
+        TargetServerTriggerConfigurationError: when the manifest claims
+            'simulate_methods' but the simulator helper folder is unavailable.
     """
-    mode = profile.triggers.event.mode
+    event_mode = profile.triggers.event.mode
+    condition_mode = profile.triggers.condition.mode
 
-    if mode == "manual_trigger":
-        logger.debug("TargetServer event trigger: ManualEventTrigger (allow_waiting=%s)", allow_waiting)
-        return ManualEventTrigger(profile, allow_waiting=allow_waiting)
+    def _adapter(mode: str, mode_path: str) -> EventTrigger:
+        if mode == SIMULATE_METHODS_MODE:
+            folder = _require_simulator_folder(
+                simulate_events_folder,
+                browse_name=BN.SIMULATE_EVENTS_AND_CONDITIONS,
+                mode_path=mode_path,
+                profile=profile,
+            )
+            logger.debug("TargetServer event trigger: SimulatorEventTrigger (%s)", mode_path)
+            return SimulatorEventTrigger(client, folder, ns_app)
+        if mode == "manual_trigger":
+            logger.debug("TargetServer event trigger: ManualEventTrigger (allow_waiting=%s)", allow_waiting)
+            return ManualEventTrigger(profile, allow_waiting=allow_waiting)
+        logger.debug("TargetServer event trigger: ExternalEventTrigger (mode=%s)", mode)
+        return ExternalEventTrigger()
 
-    logger.debug("TargetServer event trigger: ExternalEventTrigger (mode=%s)", mode)
-    return ExternalEventTrigger()
+    events = _adapter(event_mode, "triggers.event.mode")
+    # Only a simulate_methods mismatch needs splitting: the other modes all share
+    # one adapter whose events and conditions behave identically.
+    if (event_mode == SIMULATE_METHODS_MODE) == (condition_mode == SIMULATE_METHODS_MODE):
+        return events
+    return SplitEventTrigger(events, _adapter(condition_mode, "triggers.condition.mode"))
+
+
+async def build_target_server_result_trigger(
+    client: Any,
+    joining_system_node: Any,
+    ns_app: int | None,
+    profile: TargetServerCuProfile,
+    *,
+    ns_ijt: int | None = None,
+    ns_di: int | None = None,
+    subscription_client: Any = None,
+    allow_waiting: bool = False,
+) -> ResultTrigger:
+    """Discover any needed simulator helper node, then build the result trigger.
+
+    This is the entry point used by the pytest fixtures: it resolves the
+    SimulateResults folder through :func:`helpers.trigger.find_simulation_child`,
+    the same lookup the default (non-manifest) simulator fixture path uses.
+    """
+    folder = None
+    if profile.triggers.result.mode == SIMULATE_METHODS_MODE:
+        folder = await find_simulation_child(joining_system_node, ns_app, BN.SIMULATE_RESULTS_FOLDER)
+    return make_target_server_result_trigger(
+        client,
+        joining_system_node,
+        ns_app or 0,
+        profile,
+        ns_ijt=ns_ijt,
+        ns_di=ns_di,
+        subscription_client=subscription_client,
+        allow_waiting=allow_waiting,
+        simulate_results_folder=folder,
+    )
+
+
+async def build_target_server_event_trigger(
+    client: Any,
+    joining_system_node: Any,
+    ns_app: int | None,
+    profile: TargetServerCuProfile,
+    *,
+    allow_waiting: bool = False,
+) -> EventTrigger:
+    """Discover any needed simulator helper node, then build the event trigger.
+
+    Resolves the SimulateEventsAndConditions folder through
+    :func:`helpers.trigger.find_simulation_child` so a manifest-driven run finds
+    exactly the nodes the default simulator fixture path finds.
+    """
+    folder = None
+    if SIMULATE_METHODS_MODE in {profile.triggers.event.mode, profile.triggers.condition.mode}:
+        folder = await find_simulation_child(joining_system_node, ns_app, BN.SIMULATE_EVENTS_AND_CONDITIONS)
+    return make_target_server_event_trigger(
+        profile,
+        allow_waiting=allow_waiting,
+        client=client,
+        ns_app=ns_app or 0,
+        simulate_events_folder=folder,
+    )

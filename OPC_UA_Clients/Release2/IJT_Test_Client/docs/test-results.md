@@ -19,25 +19,30 @@ After a `run_all_tests.py` run the following files are produced:
 
 ### Target Server CU Evidence Outputs
 
-When `run_all_tests.py --profile FILE` (or `--endpoint URL`) is used, additional
-artifacts are written to `test-results/target-server-cu/` (or the path configured
-in the profile or `--output-dir`):
+When `run_all_tests.py --profile FILE` (or `--endpoint URL`) is used, each run
+gets a unique timestamped directory under the configured output path:
+
+```
+test-results/target-server-cu/<profile-name>/<YYYYMMDD-HHMMSS>/
+test-results/target-server-cu/<profile-name>/latest/   ← symlink/junction to newest run
+```
 
 | File | Format | Contents |
 |---|---|---|
-| `test-results/target-server-cu/target-server-cu-report.json` | JSON | Machine-readable target server CU evidence report with preflight checks, CU classification, outcome details, and discovery inventory |
-| `test-results/target-server-cu/target-server-cu-summary.txt` | Text | Human-readable operator summary with preflight results and evidence overview |
-| `test-results/target-server-cu/target-server-cu-summary.md` | Markdown | GitHub-compatible Markdown summary table for PRs, releases, and inspection |
-| `test-results/target-server-cu/spec-tests.xml` | JUnit XML | Run-scoped specification-test outcomes |
-| `test-results/target-server-cu/cu-coverage-report.json` | JSON | Run-scoped 123-CU support, blocked, and Not Supported classifications |
-| `test-results/target-server-cu/report-controller.xlsx` | Excel | Controller workbook generated from the same run-scoped XML and CU report |
+| `target-server-cu-report.json` | JSON | Machine-readable evidence: preflight, CU classification, outcome, model inventory |
+| `target-server-cu-summary.txt` | Text | Human-readable operator summary |
+| `target-server-cu-summary.md` | Markdown | GitHub-compatible Markdown summary table |
+| `spec-tests.xml` | JUnit XML | Run-scoped specification-test outcomes |
+| `cu-coverage-report.json` | JSON | Run-scoped CU support/blocked/Not Supported classifications |
+| `report-controller.xlsx` | Excel | Controller workbook. Copied to `--excel-out FILE` only when explicitly passed |
+| `model-inventory.json` | JSON | Read-only address-space + packaged model contract inventory |
+| `latest-run.json` | JSON | Pointer to this run directory (always machine-discoverable) |
+
+Each run directory is self-contained and immutable after the run completes.
+Prior runs are preserved; only the `latest` symlink advances.
 
 Target Server CU evidence is written only when `--profile`/`--endpoint` is used.
 It is never written during plain simulator runs.
-Use a unique `--output-dir` for each controller run so all five artifacts remain
-an internally consistent evidence set. A successful pytest exit means no executed
-assertion failed; skipped result or event tests still require their stated trigger
-or physical evidence before those CUs can be considered validated.
 
 > `report.html` is **not** produced by `run_all_tests.py`. Use the manual `pytest --html=...` command below if you need an HTML report.
 
@@ -148,11 +153,12 @@ suites such as `assets`, `results`, `joint`, and `events` are still runnable by
 explicit path, but they are not part of the default specification test run because they
 do not all carry CU gating metadata.
 
-When `run_all_tests.py` auto-launches the checked-in Release 2 simulator and no
-`OPCUA_CAPABILITIES_FILE` is set, it uses
-`target_server_cu_profiles/simulator.capabilities.yaml`.
-That file describes simulator-supported CUs only; target servers and vendor
-simulators should provide their own capability file instead of reusing it.
+When `run_all_tests.py` auto-launches the checked-in Release 2 simulator — or adopts one
+already listening on the default port — and no `OPCUA_CAPABILITIES_FILE` is set, it uses
+`target_server_cu_profiles/simulator.sut.yaml` and publishes the resolved endpoint to the
+run plan.
+That manifest claims simulator-supported CUs only; target servers and vendor
+simulators must supply their own `*.sut.yaml` manifest instead of reusing it.
 
 **Generate a strict CU triage summary after a live run:**
 ```bash
@@ -176,7 +182,7 @@ that need manual classification.
 | **Specification Test Overview** | Audience-first summary with overall result banner, Validation Health, Server Support Coverage, KPI strip, IJT Facet Support block, Specification Test Action Items, Server Scope Notes count, and Test Client Environment details |
 | **Test Outcome Counts** | Total counts (passed/failed/skipped/xfailed) by test area |
 | **IJT Facet Breakdown** | IJT facet table with CU counts, server-supported CU count, server-support percentage, supported-CUs-validated percentage, supported/not-supported/blocked/failed status, and facet descriptions |
-| **Conformance Unit Details** | Excel-only full detail: one row per conformance unit with public CU label, facet mapping, whether it is supported by the server capability profile, raw outcome, review status, workbook case counts, and example test |
+| **Conformance Unit Details** | Excel-only full detail: one row per conformance unit with public CU label, facet mapping, whether the SUT manifest claims it, raw outcome, canonical outcome, review status, workbook case counts, and example test |
 | **Profile Coverage Comparison** | User-facing IJT coverage overview: server capability profile, reference IJT facets, optional full CU-set view, server-supported CU count, server-support percentage, supported-CUs-validated percentage, outcome, and coverage counts |
 | **All Test Cases** | Every test: name, file, status, duration, reason |
 | **Test Failures (N)** | Failed tests only — with full failure message |
@@ -202,8 +208,8 @@ The root System Tests summary also adds a top `Full report below:` link row so
 readers know the full report continues below the GitHub Actions workflow graph.
 The 0–100 composite score lives in the baseline JSON as an internal trend field
 and is not shown as a public specification test grade.
-`Server Supported CUs` is read from the server capability file (`Not Applicable` when
-no capability file was loaded); `Outcome` and validated counts are calculated
+`Server Supported CUs` is read from the SUT manifest's `capability_claims` (`Not Applicable` when
+no manifest was loaded); `Outcome` and validated counts are calculated
 from the current test run. `Server Support %` is informational; `Supported CUs
 Validated %` is the health signal for how much of the server's supported
 capability set was validated by the run. Start with the `Server capability

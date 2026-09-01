@@ -161,6 +161,7 @@ from helpers.report_scoring import (
 from helpers.report_scoring import (
     status_for as _status_for,
 )
+from helpers.sut_manifest import SutManifestError, load_sut_manifest  # noqa: E402
 
 # ── Data model ────────────────────────────────────────────────────────────────
 
@@ -330,16 +331,20 @@ def _load_profiles() -> dict[str, ProfileInfo]:
 
 
 def _load_capabilities(path: Path | None) -> CapabilitiesInfo | None:
-    raw = _load_yaml(path) if path else {}
-    if not raw:
+    """Load the CU claims for the report from one SUT manifest."""
+    if path is None or not path.exists():
         return None
-    server_raw = raw.get("server")
-    server: dict[str, Any] = server_raw if isinstance(server_raw, dict) else {}
+    try:
+        manifest = load_sut_manifest(path)
+    except (SutManifestError, OSError) as exc:
+        print(f"  [warn] Could not read SUT manifest '{path}': {exc}")
+        return None
+    claims = manifest.capability_claims
     return CapabilitiesInfo(
-        server_name=str(server.get("name") or "Server under test"),
-        active_profile=str(raw.get("active_profile") or ""),
-        supported_facets=[str(facet) for facet in raw.get("supported_facets", [])],
-        overrides={str(key): str(value) for key, value in (raw.get("cu_overrides") or {}).items()},
+        server_name=manifest.name or "Server under test",
+        active_profile=claims.active_profile,
+        supported_facets=[str(facet) for facet in claims.supported_facets],
+        overrides={str(key): str(value) for key, value in claims.cu_overrides.items()},
     )
 
 
@@ -1542,7 +1547,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--capabilities",
         default=None,
-        help="Optional server capabilities YAML used to label the active profile",
+        help="Optional SUT manifest (*.sut.yaml) used to label the claimed profile",
     )
     p.add_argument(
         "--run-result",
@@ -1581,11 +1586,7 @@ def main() -> int:
     print(f"  {len(cases)} test cases found")
     cu_payload = _load_json(Path(args.cu_json)) or {}
     capabilities_arg = args.capabilities or os.environ.get("OPCUA_CAPABILITIES_FILE")
-    capabilities_path = (
-        Path(capabilities_arg)
-        if capabilities_arg
-        else _PROJECT_ROOT / "target_server_cu_profiles" / "default.capabilities.yaml"
-    )
+    capabilities_path = Path(capabilities_arg) if capabilities_arg else None
     capabilities = _load_capabilities(capabilities_path)
     _apply_capability_overrides(cu_payload, capabilities)
     target_report_arg = args.target_report

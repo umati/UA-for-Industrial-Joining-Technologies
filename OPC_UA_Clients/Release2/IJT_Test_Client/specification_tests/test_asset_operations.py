@@ -48,7 +48,7 @@ from helpers.node_discovery import (
     find_method_set,
 )
 from helpers.skip_reasons import skip_companion_spec_note
-from helpers.target_server_cu_config import load_target_server_profile
+from helpers.sut_manifest import load_sut_manifest
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -64,11 +64,30 @@ def _require_disable_asset_opt_in() -> None:
     profile_path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
     if not profile_path:
         return
-    profile = load_target_server_profile(Path(profile_path))
-    if profile.cu_execution.extension_fields.get("allow_disable_asset") is not True:
+    manifest = load_sut_manifest(Path(profile_path))
+    if not manifest.risk_approvals.allow_disable_asset:
         pytest.skip(
-            "Target Server profile does not explicitly allow EnableAsset(false); "
+            "SUT manifest does not explicitly allow EnableAsset(false); "
             "the Tool's enabled state persists until another interface changes it"
+        )
+
+
+def _require_destructive_opt_in(method_name: str = "RebootAsset") -> None:
+    """Require explicit risk approval before calling high-risk / destructive methods.
+
+    RebootAsset physically reboots the controller and must ONLY be called when
+    ``execution_policy.risk_approvals.allow_destructive_methods: true`` is set in
+    the SUT manifest.  Without a manifest (simulator run) the call is allowed.
+    """
+    profile_path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
+    if not profile_path:
+        return  # simulator — no restriction
+    manifest = load_sut_manifest(Path(profile_path))
+    if not manifest.risk_approvals.allow_destructive_methods:
+        pytest.skip(
+            f"SUT manifest does not explicitly allow {method_name}; "
+            "set execution_policy.risk_approvals.allow_destructive_methods: true "
+            "to confirm this operation may physically reboot or reset the controller"
         )
 
 
@@ -503,6 +522,7 @@ async def test_reboot_asset_method_present_in_method_set(asset_management, ns_in
 @pytest.mark.requires_cu(CU.REBOOT_ASSET)
 async def test_reboot_asset_callable_with_tool_product_instance_uri(opcua_client, tools_instances, ns_indices):
     """RebootAsset must be callable with a tool's ProductInstanceUri."""
+    _require_destructive_opt_in("RebootAsset")
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_di is None or ns_ijt is None:
@@ -1175,6 +1195,7 @@ async def test_reboot_asset_empty_piu_uses_server_default_asset(opcua_client, ns
     Per spec (method_input_argument): empty PIU = server's own deployed asset.
     BadNotSupported is accepted since rebooting the server's asset is destructive.
     """
+    _require_destructive_opt_in("RebootAsset")
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_di is None or ns_ijt is None:

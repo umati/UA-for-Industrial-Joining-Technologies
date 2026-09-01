@@ -16,7 +16,7 @@ from helpers.target_server_cu_config import (
     OUTCOME_PASSED,
     OUTCOME_UNSUPPORTED,
     build_default_profile,
-    load_target_server_profile_from_dict,
+    build_execution_profile,
 )
 from helpers.target_server_readiness import (
     PreflightReport,
@@ -123,6 +123,41 @@ class TestPreflightReport:
         assert "checks" in data
         assert data["checks"][0]["outcome"] == OUTCOME_BLOCKED
 
+    def test_to_dict_reports_canonical_outcomes_for_final_reports(self):
+        from helpers.canonical_outcomes import (
+            OUTCOME_MANUAL_REQUIRED,
+            REASON_MANUAL_TRIGGER_REQUIRED,
+        )
+
+        r = PreflightReport(profile_name="Test", endpoint="opc.tcp://x:1")
+        r.add(ReadinessOutcome(outcome=OUTCOME_PASSED, check_name="tcp"))
+        r.add(
+            ReadinessOutcome(
+                outcome=OUTCOME_MANUAL_REQUIRED,
+                check_name="trigger",
+                reason_code=REASON_MANUAL_TRIGGER_REQUIRED,
+            )
+        )
+        data = r.to_dict()
+        assert data["canonical_outcome"] == "blocked"
+        assert data["canonical_label"] == "Blocked"
+        assert data["checks"][0]["canonical_outcome"] == "passed"
+        assert data["checks"][1]["canonical_outcome"] == "blocked"
+        assert data["checks"][1]["reason_category"] == "operator_action"
+        # The detailed vocabulary is preserved alongside the canonical outcome.
+        assert data["checks"][1]["outcome"] == OUTCOME_MANUAL_REQUIRED
+
+    def test_empty_report_is_not_tested(self):
+        assert PreflightReport().canonical_outcome.value == "not_tested"
+
+    def test_claimed_unsupported_check_is_a_canonical_failure(self):
+        from helpers.canonical_outcomes import OUTCOME_UNSUPPORTED
+
+        unclaimed = ReadinessOutcome(outcome=OUTCOME_UNSUPPORTED, check_name="cap")
+        claimed = ReadinessOutcome(outcome=OUTCOME_UNSUPPORTED, check_name="cap", claimed=True)
+        assert unclaimed.canonical_label == "Not Supported"
+        assert claimed.canonical_label == "Failed"
+
 
 # ---------------------------------------------------------------------------
 # check_endpoint_configured
@@ -182,7 +217,7 @@ class TestCheckEndpointReachable:
 
 class TestCheckResultTriggerMode:
     def _profile_with_result_mode(self, mode: str):
-        return load_target_server_profile_from_dict(
+        return build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": mode}},
@@ -229,7 +264,7 @@ class TestCheckStateChangingMethodsPolicy:
         assert "SelectJoiningProcess" in o.detail
 
     def test_method_allowed_passes(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -244,7 +279,7 @@ class TestCheckStateChangingMethodsPolicy:
         assert o.passed
 
     def test_allow_all_policy_passes_any_method(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {"state_changing_methods": {"default_policy": "allow_all"}},
@@ -272,7 +307,7 @@ class TestCheckStateChangingMethodsPolicy:
 
 class TestCheckToolPiuConfigured:
     def test_explicit_piu_passes(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {"tool": {"product_instance_uri": "urn:tool:serial:123"}},
@@ -283,7 +318,7 @@ class TestCheckToolPiuConfigured:
         assert "urn:tool:serial:123" in o.detail
 
     def test_empty_piu_first_ready_policy_passes(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {"tool": {"policy": "first_ready"}},
@@ -293,7 +328,7 @@ class TestCheckToolPiuConfigured:
         assert o.passed
 
     def test_empty_piu_exact_match_policy_is_config_error(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {"tool": {"policy": "exact_match", "product_instance_uri": ""}},
@@ -310,7 +345,7 @@ class TestCheckToolPiuConfigured:
 
 class TestCheckJoiningProcessConfigured:
     def test_explicit_id_passes(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {"joining_process": {"joining_process_id": "PROG01"}},
@@ -320,7 +355,7 @@ class TestCheckJoiningProcessConfigured:
         assert o.passed
 
     def test_empty_id_first_compatible_passes(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {"joining_process": {"policy": "first_compatible"}},
@@ -330,7 +365,7 @@ class TestCheckJoiningProcessConfigured:
         assert o.passed
 
     def test_selection_name_exact_match_passes(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -346,7 +381,7 @@ class TestCheckJoiningProcessConfigured:
         assert o.evidence == {"selection_name": "SequenceIndex_1"}
 
     def test_empty_id_exact_match_is_config_error(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {"joining_process": {"policy": "exact_match", "joining_process_id": ""}},
@@ -363,7 +398,7 @@ class TestCheckJoiningProcessConfigured:
 
 class TestCheckStartSelectedJoiningAllowed:
     def test_not_start_mode_skips_check(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "none"}},
@@ -373,7 +408,7 @@ class TestCheckStartSelectedJoiningAllowed:
         assert o.passed
 
     def test_start_mode_without_opt_in_is_blocked(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "start_selected_joining"}},
@@ -383,7 +418,7 @@ class TestCheckStartSelectedJoiningAllowed:
         assert o.outcome == OUTCOME_BLOCKED
 
     def test_start_mode_with_methods_allowed_passes(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "start_selected_joining"}},
@@ -406,7 +441,7 @@ class TestCheckStartSelectedJoiningAllowed:
 
 class TestRunConfigPreflight:
     def test_placeholder_endpoint_produces_configuration_error(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://<host>:40451"},
@@ -423,7 +458,7 @@ class TestRunConfigPreflight:
         assert len(report.checks) > 0
 
     def test_manual_trigger_mode_produces_manual_required(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://localhost:40451"},
@@ -442,7 +477,7 @@ class TestRunConfigPreflight:
 
 class TestClassifyPreflightOutcome:
     def test_config_error_returns_blocking_outcome(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://<host>:40451"},
@@ -452,7 +487,7 @@ class TestClassifyPreflightOutcome:
         assert outcome.is_blocking or outcome.outcome == OUTCOME_CONFIGURATION_ERROR
 
     def test_clean_profile_returns_passed(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://localhost:40451"},
@@ -636,7 +671,7 @@ class TestAsyncReadinessChecks:
         assert any("Manual action required" in line for line in lines)
 
     def test_check_joining_process_configured_first_ready_policy(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {"joining_process": {"policy": "first_ready"}},
@@ -647,7 +682,7 @@ class TestAsyncReadinessChecks:
         assert "first_ready" in o.detail
 
     def test_classify_preflight_outcome_manual_required(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://localhost:40451"},
@@ -664,3 +699,112 @@ class TestAsyncReadinessChecks:
         host, port = tsr._parse_endpoint("broken")
         assert host == ""
         assert port == 4840
+
+
+# ---------------------------------------------------------------------------
+# Connection security preflight
+# ---------------------------------------------------------------------------
+
+
+class TestConnectionSecurityCheck:
+    """A declared security/authentication mode must be provably appliable."""
+
+    @staticmethod
+    def _profile(source_path: str = "") -> object:
+        from helpers.target_server_cu_config import build_execution_profile
+
+        return build_execution_profile(
+            {"schema_version": 1, "target": {"endpoint": "opc.tcp://localhost:40451"}},
+            source_path=source_path,
+        )
+
+    def test_no_manifest_is_anonymous_and_passes(self):
+        from helpers.target_server_readiness import check_connection_security
+
+        outcome = check_connection_security(None)
+        assert outcome.outcome == OUTCOME_PASSED
+        assert "Anonymous session" in outcome.detail
+
+    def test_anonymous_manifest_passes(self):
+        from helpers.connection_security import ConnectionSecurity
+        from helpers.target_server_readiness import check_connection_security
+
+        assert check_connection_security(ConnectionSecurity()).outcome == OUTCOME_PASSED
+
+    def test_applicable_environment_credentials_pass(self):
+        from helpers.connection_security import ConnectionSecurity
+        from helpers.target_server_readiness import check_connection_security
+
+        security = ConnectionSecurity(auth_source="environment", username="op", password_env_var="IJT_PW")
+        outcome = check_connection_security(security, env={"IJT_PW": "s3cret"})
+        assert outcome.outcome == OUTCOME_PASSED
+        assert "s3cret" not in outcome.detail
+
+    def test_unset_ci_secret_is_a_configuration_error(self):
+        from helpers.connection_security import ConnectionSecurity
+        from helpers.target_server_readiness import check_connection_security
+
+        security = ConnectionSecurity(auth_source="environment", username="op", password_env_var="IJT_PW")
+        outcome = check_connection_security(security, env={})
+        assert outcome.outcome == OUTCOME_CONFIGURATION_ERROR
+        assert "IJT_PW" in outcome.detail
+        assert outcome.evidence["issues"]
+
+    def test_missing_certificate_is_a_configuration_error(self):
+        from helpers.connection_security import ConnectionSecurity
+        from helpers.target_server_readiness import check_connection_security
+
+        security = ConnectionSecurity(security_mode="SignAndEncrypt", security_policy="Basic256Sha256")
+        outcome = check_connection_security(security)
+        assert outcome.outcome == OUTCOME_CONFIGURATION_ERROR
+        assert outcome.is_blocking
+
+    def test_prompt_source_is_rejected_for_an_unattended_run(self):
+        from helpers.connection_security import ConnectionSecurity
+        from helpers.target_server_readiness import check_connection_security
+
+        outcome = check_connection_security(ConnectionSecurity(auth_source="prompt"), allow_prompt=False)
+        assert outcome.outcome == OUTCOME_CONFIGURATION_ERROR
+        assert "--interactive-prompts" in outcome.detail
+
+    def test_prompt_source_is_allowed_for_a_guided_run(self):
+        from helpers.connection_security import ConnectionSecurity
+        from helpers.target_server_readiness import check_connection_security
+
+        outcome = check_connection_security(ConnectionSecurity(auth_source="prompt"), allow_prompt=True)
+        assert outcome.outcome == OUTCOME_PASSED
+
+    def test_profile_without_manifest_resolves_to_no_security(self):
+        from helpers.target_server_readiness import resolve_profile_connection_security
+
+        assert resolve_profile_connection_security(self._profile()) is None
+
+    def test_profile_with_missing_manifest_resolves_to_no_security(self, tmp_path):
+        from helpers.target_server_readiness import resolve_profile_connection_security
+
+        missing = str(tmp_path / "absent.sut.yaml")
+        assert resolve_profile_connection_security(self._profile(missing)) is None
+
+    def test_profile_with_manifest_resolves_its_declaration(self):
+        from pathlib import Path
+
+        from helpers.target_server_readiness import resolve_profile_connection_security
+
+        manifest = Path(__file__).parents[2] / "target_server_cu_profiles" / "controller_manual_trigger.sut.yaml"
+        security = resolve_profile_connection_security(self._profile(str(manifest)))
+        assert security is not None
+        assert security.auth_source == "prompt"
+
+    def test_config_preflight_includes_the_security_check(self):
+        from helpers.target_server_readiness import run_config_preflight
+
+        report = run_config_preflight(self._profile())
+        assert any(check.check_name == "connection_security" for check in report.checks)
+
+    def test_config_preflight_blocks_on_an_unappliable_declaration(self):
+        from helpers.connection_security import ConnectionSecurity
+        from helpers.target_server_readiness import run_config_preflight
+
+        security = ConnectionSecurity(security_mode="Sign", security_policy="Basic256Sha256")
+        report = run_config_preflight(self._profile(), security=security)
+        assert any(check.check_name == "connection_security" for check in report.blocking_checks)

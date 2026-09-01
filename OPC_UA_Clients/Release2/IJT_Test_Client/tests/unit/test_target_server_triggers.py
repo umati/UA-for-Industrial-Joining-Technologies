@@ -13,16 +13,25 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from helpers.method_caller import MethodCallResult
-from helpers.target_server_cu_config import build_default_profile, load_target_server_profile_from_dict
+from helpers.namespaces import BN
+from helpers.target_server_cu_config import build_default_profile, build_execution_profile
 from helpers.target_server_triggers import (
     ManualEventTrigger,
     ManualResultTrigger,
+    SplitEventTrigger,
     StartSelectedJoiningResultTrigger,
+    TargetServerTriggerConfigurationError,
     TargetServerTriggerOutcome,
     make_target_server_event_trigger,
     make_target_server_result_trigger,
 )
-from helpers.trigger import ExternalEventTrigger, ExternalResultTrigger, TriggerOutcome
+from helpers.trigger import (
+    ExternalEventTrigger,
+    ExternalResultTrigger,
+    SimulatorEventTrigger,
+    SimulatorResultTrigger,
+    TriggerOutcome,
+)
 
 # ---------------------------------------------------------------------------
 # TargetServerTriggerOutcome
@@ -40,7 +49,21 @@ class TestTargetServerTriggerOutcome:
         assert o.product_instance_uri == ""
         assert o.joining_process_id == ""
         assert o.operation_count == 0
+        assert o.starts_issued == 0
+        assert o.results_confirmed == 0
         assert o.pre_trigger_baseline == {}
+
+    def test_starts_and_confirmations_are_reported_separately(self):
+        """Started-but-unconfirmed evidence must be distinguishable."""
+        o = TargetServerTriggerOutcome(
+            triggered=False,
+            operation_count=2,
+            starts_issued=2,
+            results_confirmed=1,
+        )
+        assert o.starts_issued == 2
+        assert o.results_confirmed == 1
+        assert o.operation_count == o.starts_issued
 
     def test_target_server_fields_set(self):
         o = TargetServerTriggerOutcome(
@@ -65,7 +88,7 @@ class TestTargetServerTriggerOutcome:
 class TestManualResultTrigger:
     @pytest.fixture
     def profile(self):
-        return load_target_server_profile_from_dict(
+        return build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "manual_trigger", "timeout_seconds": 90}},
@@ -110,7 +133,7 @@ class TestManualResultTrigger:
 class TestManualEventTrigger:
     @pytest.fixture
     def profile(self):
-        return load_target_server_profile_from_dict(
+        return build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"event": {"mode": "manual_trigger", "timeout_seconds": 60}},
@@ -146,7 +169,7 @@ class TestManualEventTrigger:
 class TestStartSelectedJoiningResultTrigger:
     @pytest.fixture
     def profile(self):
-        return load_target_server_profile_from_dict(
+        return build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "start_selected_joining", "timeout_seconds": 30}},
@@ -303,7 +326,7 @@ class TestStartSelectedJoiningResultTrigger:
         trigger._enable_tool.assert_awaited_once_with("urn:tool:1")
 
     async def test_trigger_intervention_uses_tool_and_process_identification(self, mock_client, mock_joining_system):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -410,7 +433,7 @@ class TestStartSelectedJoiningResultTrigger:
             assert "GetJoiningProcessList" in outcome.skip_reason
 
     def test_exact_match_selects_process_by_current_model_fields(self, mock_client, mock_joining_system):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -439,7 +462,7 @@ class TestStartSelectedJoiningResultTrigger:
         assert trigger._choose_joining_process([first, second]) is second
 
     def test_exact_match_prefers_process_id_over_selection_name(self, mock_client, mock_joining_system):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -461,7 +484,7 @@ class TestStartSelectedJoiningResultTrigger:
         assert trigger._choose_joining_process([process]) is process
 
     def test_exact_match_process_id_takes_precedence_over_origin_id(self, mock_client, mock_joining_system):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -483,7 +506,7 @@ class TestStartSelectedJoiningResultTrigger:
         assert trigger._choose_joining_process([process]) is process
 
     def test_exact_match_falls_back_to_origin_when_process_id_is_stale(self, mock_client, mock_joining_system):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -505,7 +528,7 @@ class TestStartSelectedJoiningResultTrigger:
         assert trigger._choose_joining_process([process]) is process
 
     def test_name_only_exact_match_still_uses_advertised_selection_name(self, mock_client, mock_joining_system):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -539,7 +562,7 @@ class TestStartSelectedJoiningResultTrigger:
     def test_process_identification_omits_selection_name_when_ids_are_configured(
         self, mock_client, mock_joining_system
     ):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -642,6 +665,53 @@ class TestStartSelectedJoiningResultTrigger:
         assert trigger._result_matches_context(result, "urn:tool:2", "PROCESS-1") is False
         assert trigger._result_matches_context(result, "urn:tool:1", "PROCESS-2") is False
 
+    def test_result_matches_context_is_case_and_whitespace_insensitive(self, profile, mock_client, mock_joining_system):
+        """OPC UA servers frequently return GUID identifiers in a different case
+        than the profile/GetJoiningProcessList value; correlation must still hold."""
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        result = MagicMock(
+            ResultMetaData=MagicMock(
+                AssociatedEntities=[
+                    MagicMock(EntityId="123E4567-E89B-12D3-A456-426614174000"),
+                    MagicMock(EntityId="ABCDEF01-2345-6789-ABCD-EF0123456789"),
+                ]
+            )
+        )
+        assert (
+            trigger._result_matches_context(
+                result,
+                " 123e4567-e89b-12d3-a456-426614174000 ",
+                "abcdef01-2345-6789-abcd-ef0123456789",
+            )
+            is True
+        )
+        assert trigger._result_matches_context(result, "123e4567-e89b-12d3-a456-426614174000", "other") is False
+
+    def test_result_matches_context_accepts_origin_id_fallback(self, profile, mock_client, mock_joining_system):
+        """Servers that only tag the result with the origin id must still correlate."""
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        result = MagicMock(
+            ResultMetaData=MagicMock(
+                AssociatedEntities=[
+                    MagicMock(EntityId="urn:tool:1"),
+                    MagicMock(EntityId="ORIGIN-1"),
+                ]
+            )
+        )
+        # Neither id alone: the configured process id is absent from the result.
+        assert trigger._result_matches_context(result, "urn:tool:1", "PROCESS-1") is False
+        # With the origin id supplied, the fallback matches.
+        assert trigger._result_matches_context(result, "urn:tool:1", "PROCESS-1", "origin-1") is True
+        # Tool correlation is still mandatory.
+        assert trigger._result_matches_context(result, "urn:tool:2", "PROCESS-1", "ORIGIN-1") is False
+
+    def test_result_matches_context_without_configured_process_ids(self, profile, mock_client, mock_joining_system):
+        """When no process identifier is configured only the Tool must correlate."""
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        result = MagicMock(ResultMetaData=MagicMock(AssociatedEntities=[MagicMock(EntityId="urn:tool:1")]))
+        assert trigger._result_matches_context(result, "urn:tool:1", "") is True
+        assert trigger._result_matches_context(result, "urn:tool:9", "") is False
+
     async def test_select_failure_returns_skip(self, profile, mock_client, mock_joining_system):
         trigger = self._make_trigger(profile, mock_client, mock_joining_system)
         mock_jpm = MagicMock()
@@ -702,6 +772,10 @@ class TestStartSelectedJoiningResultTrigger:
             assert outcome.trigger_mode == "start_selected_joining"
             assert outcome.product_instance_uri == "urn:tool:serial:1"
             assert outcome.operation_count == 1
+            assert outcome.starts_issued == 1
+            # No completion subscription on a single-operation run — the test
+            # itself verifies the result, so the trigger confirms nothing.
+            assert outcome.results_confirmed == 0
 
     async def test_multi_operation_workflow_waits_for_correlated_completion(
         self, profile, mock_client, mock_joining_system
@@ -752,12 +826,116 @@ class TestStartSelectedJoiningResultTrigger:
 
         assert outcome.triggered is True
         assert outcome.operation_count == 2
+        assert outcome.starts_issued == 2
+        assert outcome.results_confirmed == 2
         assert start.await_count == 2
         assert completion_collector.discard_pending.call_count == 2
         assert completion_collector.collect_single_matching.await_count == 2
 
+    async def test_unconfirmed_operation_reports_starts_and_confirmations_separately(
+        self, profile, mock_client, mock_joining_system
+    ):
+        """The second start is accepted but never confirmed by a correlated result:
+        the outcome must say 2 starts issued, 1 result confirmed."""
+        subscription_client = MagicMock()
+        trigger = StartSelectedJoiningResultTrigger(
+            client=mock_client,
+            joining_system_node=mock_joining_system,
+            ns_app=2,
+            profile=profile,
+            ns_ijt=7,
+            subscription_client=subscription_client,
+        )
+        mock_process = MagicMock()
+        mock_process.JoiningProcessId = "PROG01"
+        mock_process.JoiningProcessOriginId = "ORIGIN01"
+        completion_collector = MagicMock()
+        completion_collector.__aenter__ = AsyncMock(return_value=completion_collector)
+        completion_collector.__aexit__ = AsyncMock(return_value=None)
+        completion_collector.discard_pending = MagicMock(return_value=0)
+        completion_collector.collect_single_matching = AsyncMock(side_effect=[MagicMock(), None])
+
+        with (
+            patch(
+                "helpers.target_server_triggers.StartSelectedJoiningResultTrigger._get_joining_process_management",
+                new=AsyncMock(return_value=MagicMock()),
+            ),
+            patch(
+                "helpers.target_server_triggers.StartSelectedJoiningResultTrigger._resolve_tool_piu",
+                new=AsyncMock(return_value="urn:tool:serial:1"),
+            ),
+            patch(
+                "helpers.target_server_triggers.StartSelectedJoiningResultTrigger._get_joining_process_list",
+                new=AsyncMock(return_value=[mock_process]),
+            ),
+            patch(
+                "helpers.target_server_triggers.StartSelectedJoiningResultTrigger._select_joining_process",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "helpers.target_server_triggers.StartSelectedJoiningResultTrigger._start_selected_joining",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("helpers.result_collector.ResultCollector", return_value=completion_collector),
+        ):
+            outcome = await trigger._run_workflow(operation_count=2)
+
+        assert outcome.triggered is False
+        assert outcome.starts_issued == 2
+        assert outcome.results_confirmed == 1
+        assert outcome.operation_count == outcome.starts_issued
+
+    async def test_failed_start_counts_neither_the_start_nor_a_result(self, profile, mock_client, mock_joining_system):
+        subscription_client = MagicMock()
+        trigger = StartSelectedJoiningResultTrigger(
+            client=mock_client,
+            joining_system_node=mock_joining_system,
+            ns_app=2,
+            profile=profile,
+            ns_ijt=7,
+            subscription_client=subscription_client,
+        )
+        mock_process = MagicMock()
+        mock_process.JoiningProcessId = "PROG01"
+        mock_process.JoiningProcessOriginId = "ORIGIN01"
+        completion_collector = MagicMock()
+        completion_collector.__aenter__ = AsyncMock(return_value=completion_collector)
+        completion_collector.__aexit__ = AsyncMock(return_value=None)
+        completion_collector.discard_pending = MagicMock(return_value=0)
+        completion_collector.collect_single_matching = AsyncMock(return_value=MagicMock())
+
+        with (
+            patch(
+                "helpers.target_server_triggers.StartSelectedJoiningResultTrigger._get_joining_process_management",
+                new=AsyncMock(return_value=MagicMock()),
+            ),
+            patch(
+                "helpers.target_server_triggers.StartSelectedJoiningResultTrigger._resolve_tool_piu",
+                new=AsyncMock(return_value="urn:tool:serial:1"),
+            ),
+            patch(
+                "helpers.target_server_triggers.StartSelectedJoiningResultTrigger._get_joining_process_list",
+                new=AsyncMock(return_value=[mock_process]),
+            ),
+            patch(
+                "helpers.target_server_triggers.StartSelectedJoiningResultTrigger._select_joining_process",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "helpers.target_server_triggers.StartSelectedJoiningResultTrigger._start_selected_joining",
+                new=AsyncMock(side_effect=[True, False]),
+            ),
+            patch("helpers.result_collector.ResultCollector", return_value=completion_collector),
+        ):
+            outcome = await trigger._run_workflow(operation_count=2)
+
+        assert outcome.triggered is False
+        assert outcome.starts_issued == 1
+        assert outcome.results_confirmed == 1
+        assert outcome.operation_count == 1
+
     async def test_batch_workflow_selects_once_and_starts_configured_count(self, mock_client, mock_joining_system):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "start_selected_joining", "timeout_seconds": 30}},
@@ -782,7 +960,7 @@ class TestStartSelectedJoiningResultTrigger:
         assert outcome.operation_count == 3
 
     async def test_batch_workflow_single_start_policy(self, mock_client, mock_joining_system):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "start_selected_joining", "timeout_seconds": 30}},
@@ -805,7 +983,7 @@ class TestStartSelectedJoiningResultTrigger:
         assert outcome.operation_count == 1
 
     async def test_job_workflow_uses_configured_operation_count(self, mock_client, mock_joining_system):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "start_selected_joining", "timeout_seconds": 30}},
@@ -851,7 +1029,7 @@ class TestMakeTargetServerResultTrigger:
         return MagicMock()
 
     def test_start_selected_joining_mode_returns_correct_trigger(self, mock_client, mock_js):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "start_selected_joining"}},
@@ -861,7 +1039,7 @@ class TestMakeTargetServerResultTrigger:
         assert isinstance(trigger, StartSelectedJoiningResultTrigger)
 
     def test_start_selected_joining_receives_separate_subscription_client(self, mock_client, mock_js):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "start_selected_joining"}},
@@ -881,7 +1059,7 @@ class TestMakeTargetServerResultTrigger:
         assert trigger._subscription_client is subscription_client
 
     def test_manual_trigger_mode_returns_manual_trigger(self, mock_client, mock_js):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "manual_trigger"}},
@@ -896,7 +1074,7 @@ class TestMakeTargetServerResultTrigger:
         assert isinstance(trigger, ExternalResultTrigger)
 
     def test_observe_only_mode_returns_external_trigger(self, mock_client, mock_js):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"result": {"mode": "observe_only"}},
@@ -928,7 +1106,7 @@ class TestMakeTargetServerResultTrigger:
 
 class TestMakeTargetServerEventTrigger:
     def test_manual_trigger_mode_returns_manual(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"event": {"mode": "manual_trigger"}},
@@ -938,7 +1116,7 @@ class TestMakeTargetServerEventTrigger:
         assert isinstance(trigger, ManualEventTrigger)
 
     def test_observe_only_mode_returns_external(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"event": {"mode": "observe_only"}},
@@ -948,7 +1126,7 @@ class TestMakeTargetServerEventTrigger:
         assert isinstance(trigger, ExternalEventTrigger)
 
     def test_none_mode_returns_external(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "triggers": {"event": {"mode": "none"}},
@@ -959,6 +1137,210 @@ class TestMakeTargetServerEventTrigger:
 
 
 # ---------------------------------------------------------------------------
+# simulate_methods trigger mode (SUT manifest declaring simulator helpers)
+# ---------------------------------------------------------------------------
+
+
+def _simulate_profile(**modes):
+    triggers = {kind: {"mode": mode} for kind, mode in modes.items()}
+    return build_execution_profile({"schema_version": 1, "profile_name": "Sim SUT", "triggers": triggers})
+
+
+class TestSimulateMethodsResultTrigger:
+    @pytest.fixture
+    def mock_client(self):
+        return MagicMock()
+
+    @pytest.fixture
+    def mock_js(self):
+        return MagicMock()
+
+    def test_simulate_methods_returns_the_existing_simulator_trigger(self, mock_client, mock_js):
+        folder = MagicMock()
+        trigger = make_target_server_result_trigger(
+            mock_client,
+            mock_js,
+            2,
+            _simulate_profile(result="simulate_methods"),
+            simulate_results_folder=folder,
+        )
+        assert isinstance(trigger, SimulatorResultTrigger)
+        assert trigger.is_simulator is True
+
+    def test_missing_helper_folder_is_a_configuration_error(self, mock_client, mock_js):
+        with pytest.raises(TargetServerTriggerConfigurationError) as exc:
+            make_target_server_result_trigger(mock_client, mock_js, 2, _simulate_profile(result="simulate_methods"))
+        message = str(exc.value)
+        assert "triggers.result.mode" in message
+        assert "SimulateResults" in message
+
+    def test_missing_helper_folder_never_degrades_to_external(self, mock_client, mock_js):
+        with pytest.raises(TargetServerTriggerConfigurationError):
+            make_target_server_result_trigger(mock_client, mock_js, 2, _simulate_profile(result="simulate_methods"))
+
+    async def test_builder_locates_the_folder_like_the_simulator_fixture(self, mock_client, mock_js, monkeypatch):
+        import helpers.target_server_triggers as tst
+
+        folder = MagicMock()
+        seen: list[tuple] = []
+
+        async def fake_find(js, ns_app, child):
+            seen.append((js, ns_app, child))
+            return folder
+
+        monkeypatch.setattr(tst, "find_simulation_child", fake_find)
+        trigger = await tst.build_target_server_result_trigger(
+            mock_client, mock_js, 2, _simulate_profile(result="simulate_methods")
+        )
+        assert isinstance(trigger, SimulatorResultTrigger)
+        assert seen == [(mock_js, 2, BN.SIMULATE_RESULTS_FOLDER)]
+
+    async def test_builder_skips_discovery_for_other_modes(self, mock_client, mock_js, monkeypatch):
+        import helpers.target_server_triggers as tst
+
+        async def fail_find(js, ns_app, child):  # pragma: no cover - must not run
+            raise AssertionError("simulator discovery must not run for non-simulate modes")
+
+        monkeypatch.setattr(tst, "find_simulation_child", fail_find)
+        trigger = await tst.build_target_server_result_trigger(mock_client, mock_js, None, build_default_profile())
+        assert isinstance(trigger, ExternalResultTrigger)
+
+    async def test_builder_reports_absent_helpers_as_configuration_error(self, mock_client, mock_js, monkeypatch):
+        import helpers.target_server_triggers as tst
+
+        async def no_folder(js, ns_app, child):
+            return None
+
+        monkeypatch.setattr(tst, "find_simulation_child", no_folder)
+        with pytest.raises(TargetServerTriggerConfigurationError):
+            await tst.build_target_server_result_trigger(
+                mock_client, mock_js, None, _simulate_profile(result="simulate_methods")
+            )
+
+
+class TestSimulateMethodsEventTrigger:
+    def test_simulate_methods_returns_the_existing_simulator_event_trigger(self):
+        trigger = make_target_server_event_trigger(
+            _simulate_profile(event="simulate_methods", condition="simulate_methods"),
+            client=MagicMock(),
+            ns_app=2,
+            simulate_events_folder=MagicMock(),
+        )
+        assert isinstance(trigger, SimulatorEventTrigger)
+
+    def test_missing_helper_folder_is_a_configuration_error(self):
+        with pytest.raises(TargetServerTriggerConfigurationError) as exc:
+            make_target_server_event_trigger(
+                _simulate_profile(event="simulate_methods", condition="simulate_methods"), client=MagicMock()
+            )
+        assert "SimulateEventsAndConditions" in str(exc.value)
+
+    def test_simulated_conditions_can_accompany_observed_events(self):
+        trigger = make_target_server_event_trigger(
+            _simulate_profile(event="observe_only", condition="simulate_methods"),
+            client=MagicMock(),
+            ns_app=2,
+            simulate_events_folder=MagicMock(),
+        )
+        assert isinstance(trigger, SplitEventTrigger)
+        assert isinstance(trigger._events, ExternalEventTrigger)
+        assert isinstance(trigger._conditions, SimulatorEventTrigger)
+
+    def test_condition_mode_error_names_the_condition_field(self):
+        with pytest.raises(TargetServerTriggerConfigurationError, match="triggers.condition.mode"):
+            make_target_server_event_trigger(
+                _simulate_profile(event="observe_only", condition="simulate_methods"), client=MagicMock()
+            )
+
+    async def test_split_trigger_routes_each_call_to_its_adapter(self):
+        events = MagicMock()
+        events.is_simulator = False
+        events.active_event_timeout_s = 7.0
+        events.passive_observation_timeout_s = 3.0
+        events.trigger_event = AsyncMock(return_value=TriggerOutcome(triggered=True, method="events"))
+        events.trigger_bulk_events = AsyncMock(return_value=TriggerOutcome(triggered=True, method="bulk"))
+        conditions = MagicMock()
+        conditions.trigger_condition = AsyncMock(return_value=TriggerOutcome(triggered=True, method="condition"))
+
+        split = SplitEventTrigger(events, conditions)
+        assert split.is_simulator is False
+        assert split.active_event_timeout_s == 7.0
+        assert split.passive_observation_timeout_s == 3.0
+        assert (await split.trigger_event(1, 2)).method == "events"
+        assert (await split.trigger_bulk_events(1, 2, 3, 4)).method == "bulk"
+        assert (await split.trigger_condition(1)).method == "condition"
+        events.trigger_event.assert_awaited_once_with(1, 2)
+        conditions.trigger_condition.assert_awaited_once_with(1)
+
+    async def test_builder_locates_the_events_folder(self, monkeypatch):
+        import helpers.target_server_triggers as tst
+
+        folder = MagicMock()
+        seen: list[tuple] = []
+
+        async def fake_find(js, ns_app, child):
+            seen.append((ns_app, child))
+            return folder
+
+        monkeypatch.setattr(tst, "find_simulation_child", fake_find)
+        trigger = await tst.build_target_server_event_trigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            _simulate_profile(event="simulate_methods", condition="simulate_methods"),
+        )
+        assert isinstance(trigger, SimulatorEventTrigger)
+        assert seen == [(2, BN.SIMULATE_EVENTS_AND_CONDITIONS)]
+
+    async def test_builder_skips_discovery_for_other_modes(self, monkeypatch):
+        import helpers.target_server_triggers as tst
+
+        async def fail_find(js, ns_app, child):  # pragma: no cover - must not run
+            raise AssertionError("simulator discovery must not run for non-simulate modes")
+
+        monkeypatch.setattr(tst, "find_simulation_child", fail_find)
+        trigger = await tst.build_target_server_event_trigger(MagicMock(), MagicMock(), None, build_default_profile())
+        assert isinstance(trigger, ExternalEventTrigger)
+
+    async def test_builder_reports_absent_helpers_as_configuration_error(self, monkeypatch):
+        import helpers.target_server_triggers as tst
+
+        async def no_folder(js, ns_app, child):
+            return None
+
+        monkeypatch.setattr(tst, "find_simulation_child", no_folder)
+        with pytest.raises(TargetServerTriggerConfigurationError):
+            await tst.build_target_server_event_trigger(
+                MagicMock(), MagicMock(), 2, _simulate_profile(event="simulate_methods")
+            )
+
+
+class TestSimulatorManifestUsesSimulateMethods:
+    """The checked-in simulator manifest must drive the real simulator triggers."""
+
+    def test_simulator_manifest_declares_simulate_methods(self):
+        from helpers.sut_manifest import build_preset
+
+        profile = build_preset("simulator").to_execution_profile()
+        assert profile.triggers.result.mode == "simulate_methods"
+        assert profile.triggers.event.mode == "simulate_methods"
+        assert profile.triggers.condition.mode == "simulate_methods"
+
+    def test_simulator_manifest_yields_simulator_triggers(self):
+        from helpers.sut_manifest import build_preset
+
+        profile = build_preset("simulator").to_execution_profile()
+        result = make_target_server_result_trigger(
+            MagicMock(), MagicMock(), 2, profile, simulate_results_folder=MagicMock()
+        )
+        events = make_target_server_event_trigger(
+            profile, client=MagicMock(), ns_app=2, simulate_events_folder=MagicMock()
+        )
+        assert isinstance(result, SimulatorResultTrigger)
+        assert isinstance(events, SimulatorEventTrigger)
+
+
+# ---------------------------------------------------------------------------
 # Extended branch coverage for Target Server triggers
 # ---------------------------------------------------------------------------
 
@@ -966,7 +1348,7 @@ class TestMakeTargetServerEventTrigger:
 class TestTargetServerTriggersExtendedBranches:
     @pytest.fixture
     def base_profile(self):
-        return load_target_server_profile_from_dict(
+        return build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://localhost:40451"},
@@ -1000,7 +1382,7 @@ class TestTargetServerTriggersExtendedBranches:
 
     @pytest.mark.asyncio
     async def test_ensure_tool_enabled_always_policy(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -1059,7 +1441,7 @@ class TestTargetServerTriggersExtendedBranches:
 
     @pytest.mark.asyncio
     async def test_trigger_intervention_unsupported_method(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -1075,7 +1457,7 @@ class TestTargetServerTriggersExtendedBranches:
 
     @pytest.mark.asyncio
     async def test_trigger_intervention_disallowed_method(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -1093,7 +1475,7 @@ class TestTargetServerTriggersExtendedBranches:
     async def test_trigger_intervention_abort_joining_process(self, base_profile):
         from helpers.method_caller import MethodCallResult
 
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -1123,7 +1505,7 @@ class TestTargetServerTriggersExtendedBranches:
     async def test_trigger_intervention_increment_count(self, base_profile):
         from helpers.method_caller import MethodCallResult
 
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -1151,7 +1533,7 @@ class TestTargetServerTriggersExtendedBranches:
 
     @pytest.mark.asyncio
     async def test_trigger_intervention_jpm_none_or_process_none(self, base_profile):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -1181,7 +1563,7 @@ class TestTargetServerTriggersExtendedBranches:
 
     @pytest.mark.asyncio
     async def test_resolve_tool_piu_from_profile_directly(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {"tool": {"product_instance_uri": "urn:tool:explicit"}},
@@ -1192,7 +1574,7 @@ class TestTargetServerTriggersExtendedBranches:
 
     @pytest.mark.asyncio
     async def test_run_workflow_enable_tool_fails(self, base_profile):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -1264,7 +1646,7 @@ class TestTargetServerTriggersExtendedBranches:
     async def test_trigger_intervention_identification_none_and_method_fail(self, base_profile):
         from helpers.method_caller import MethodCallResult
 
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -1312,7 +1694,7 @@ class TestTargetServerTriggersExtendedBranches:
 
         # Exact match with selection name match (line 383)
         p_name = MagicMock(AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="MatchName")])
-        profile_name = load_target_server_profile_from_dict(
+        profile_name = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {"joining_process": {"policy": "exact_match", "selection_name": "MatchName"}},
@@ -1322,7 +1704,7 @@ class TestTargetServerTriggersExtendedBranches:
         assert t_name._choose_joining_process([p_name]) is p_name
 
         # Exact match with configured IDs that match nothing (line 385)
-        profile_no_match = load_target_server_profile_from_dict(
+        profile_no_match = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {"joining_process": {"policy": "exact_match", "joining_process_id": "NonExistent"}},
@@ -1401,7 +1783,7 @@ class TestTargetServerTriggersExtendedBranches:
     def test_normalize_classification_and_get_selection(self):
         from helpers.namespaces import ResultClassification
 
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -1448,7 +1830,7 @@ class TestTargetServerTriggersExtendedBranches:
 
     @pytest.mark.asyncio
     async def test_choose_joining_process_with_classification(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -1484,7 +1866,7 @@ class TestTargetServerTriggersExtendedBranches:
 
     @pytest.mark.asyncio
     async def test_get_selection_for_intervention_with_counter_parent_process(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "cu_execution": {
@@ -1512,8 +1894,70 @@ class TestTargetServerTriggersExtendedBranches:
         assert sel.selection_name == "ParentName"
 
     @pytest.mark.asyncio
-    async def test_get_selection_for_intervention_with_joining_processes_present(self):
-        profile = load_target_server_profile_from_dict(
+    async def test_get_selection_for_intervention_accepts_selection_name_only_parent(self):
+        """selection_name alone is a usable selector (matching _selection_has_selector),
+        so a counter_parent_process configured with only a name must be honoured."""
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {"extension_fields": {"counter_parent_process": {"selection_name": "ParentOnlyName"}}},
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "Prog_1",
+                    }
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        sel, key = trigger._get_selection_for_classification("intervention")
+        assert key == "intervention"
+        assert sel is not profile.selection.joining_process
+        assert sel.selection_name == "ParentOnlyName"
+        assert sel.joining_process_id == ""
+        assert trigger._selection_has_selector(sel) is True
+
+        # ...and it must actually select the advertised parent process.
+        entity = MagicMock()
+        entity.Name = "SelectionName"
+        entity.EntityId = "ParentOnlyName"
+        parent = MagicMock()
+        parent.JoiningProcessId = "SOME-OTHER-ID"
+        parent.AssociatedEntities = [entity]
+        other = MagicMock()
+        other.JoiningProcessId = "Prog_1"
+        other.AssociatedEntities = []
+        assert trigger._choose_joining_process([other, parent], classification="intervention") is parent
+
+    @pytest.mark.asyncio
+    async def test_get_selection_for_intervention_ignores_selectorless_counter_parent_process(self):
+        """A counter_parent_process with no selector at all must still fall back to
+        the default selection instead of producing an unmatchable exact_match."""
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "extension_fields": {"counter_parent_process": {"joining_process_id": "", "selection_name": ""}}
+                },
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "Prog_1",
+                    }
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        sel, key = trigger._get_selection_for_classification("intervention")
+        assert key == "intervention"
+        assert sel is profile.selection.joining_process
+
+    @pytest.mark.asyncio
+    async def test_get_selection_for_intervention_falls_back_to_default_joining_process(self):
+        """Regression: an unconfigured intervention selection must fall back to the
+        documented default selection.joining_process entry, never to an empty
+        exact_match selector that can never match any advertised process."""
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -1533,12 +1977,84 @@ class TestTargetServerTriggersExtendedBranches:
         trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
         sel, key = trigger._get_selection_for_classification("intervention")
         assert key == "intervention"
+        assert sel is profile.selection.joining_process
         assert sel.policy == "exact_match"
-        assert sel.joining_process_id == ""
+        assert sel.joining_process_id == "Prog_1"
+
+        # The fallback must actually select a process rather than matching nothing.
+        proc = MagicMock()
+        proc.JoiningProcessId = "Prog_1"
+        proc.AssociatedEntities = []
+        assert trigger._choose_joining_process([proc], classification="intervention") is proc
+
+    @pytest.mark.asyncio
+    async def test_get_selection_for_intervention_prefers_explicit_intervention_entry(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "Prog_1",
+                    },
+                    "joining_processes": {
+                        "intervention": {
+                            "policy": "exact_match",
+                            "joining_process_id": "Intervention_1",
+                        }
+                    },
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        sel, key = trigger._get_selection_for_classification("intervention")
+        assert key == "intervention"
+        assert sel.joining_process_id == "Intervention_1"
+
+    def test_empty_exact_match_selection_is_reported_as_configuration_error(self):
+        """An exact_match selection with no selectors can never match — it must be
+        reported, not silently resolved to the first advertised process."""
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "selection": {"joining_process": {"policy": "exact_match"}},
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        proc = MagicMock()
+        proc.JoiningProcessId = "Prog_1"
+        proc.AssociatedEntities = []
+        assert trigger._choose_joining_process([proc]) is None
+        assert trigger._selection_has_selector(profile.selection.joining_process) is False
+
+    @pytest.mark.asyncio
+    async def test_run_workflow_reports_empty_exact_match_as_configuration_error(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {"allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining"]}
+                },
+                "selection": {
+                    "tool": {"policy": "exact_match", "product_instance_uri": "Tool_1"},
+                    "joining_process": {"policy": "exact_match"},
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile, ns_ijt=2)
+        proc = MagicMock()
+        proc.JoiningProcessId = "Prog_1"
+        proc.AssociatedEntities = []
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._get_joining_process_list = AsyncMock(return_value=[proc])
+
+        outcome = await trigger._run_workflow(1, classification="single")
+        assert outcome.triggered is False
+        assert "configuration error" in (outcome.skip_reason or "").lower()
 
     @pytest.mark.asyncio
     async def test_run_workflow_multi_operation_breaks_early_on_terminal_job_result(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://localhost:40451"},
@@ -1597,3 +2113,149 @@ class TestTargetServerTriggersExtendedBranches:
 
         assert outcome.triggered is True
         assert outcome.method == "StartSelectedJoining"
+        # The terminal JobResult arrives on the first operation, so the workflow
+        # must stop immediately instead of issuing the remaining five starts.
+        assert trigger._start_selected_joining.await_count == 1
+        assert mock_collector.collect_single_matching.await_count == 1
+        assert mock_collector.discard_pending.call_count == 1
+        assert outcome.operation_count == 1
+
+    @pytest.mark.asyncio
+    async def test_run_workflow_multi_operation_runs_all_starts_without_terminal_result(self):
+        """Without a terminal batch/job result every configured start must be issued."""
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://localhost:40451"},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining", "EnableAsset"]
+                    }
+                },
+                "selection": {
+                    "tool": {"policy": "exact_match", "product_instance_uri": "Tool_1"},
+                    "joining_processes": {
+                        "job": {"policy": "exact_match", "joining_process_id": "Job_1"},
+                    },
+                },
+                "workflow_execution": {
+                    "expected_operation_count": 3,
+                    "expected_results": {"timeout_seconds": 5},
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(), MagicMock(), 2, profile, ns_ijt=2, subscription_client=MagicMock()
+        )
+        proc = MagicMock()
+        proc.JoiningProcessId = "Job_1"
+        proc.JoiningProcessOriginId = "Job_Orig_1"
+        proc.AssociatedEntities = []
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._get_joining_process_list = AsyncMock(return_value=[proc])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._ensure_tool_enabled = AsyncMock(return_value=True)
+        trigger._start_selected_joining = AsyncMock(return_value=True)
+
+        meta = MagicMock()
+        meta.Classification = 1  # SingleResult — not terminal for a job workflow
+        meta.AssociatedEntities = [MagicMock(EntityId="Tool_1"), MagicMock(EntityId="Job_1")]
+        single_result = MagicMock(ResultMetaData=meta)
+
+        mock_collector = MagicMock()
+        mock_collector.__aenter__ = AsyncMock(return_value=mock_collector)
+        mock_collector.__aexit__ = AsyncMock(return_value=None)
+        mock_collector.discard_pending = MagicMock(return_value=None)
+        mock_collector.collect_single_matching = AsyncMock(return_value=single_result)
+
+        with patch("helpers.result_collector.ResultCollector", return_value=mock_collector):
+            outcome = await trigger._run_workflow(3, classification="job")
+
+        assert outcome.triggered is True
+        assert trigger._start_selected_joining.await_count == 3
+        assert mock_collector.collect_single_matching.await_count == 3
+        assert outcome.operation_count == 3
+
+    @pytest.mark.asyncio
+    async def test_multi_operation_result_wait_uses_workflow_timeout_not_passive_timeout(self):
+        """Regression: an accepted remote start must be given the workflow result
+        completion budget, never the short passive trigger observation budget."""
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {"allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining"]}
+                },
+                "selection": {
+                    "tool": {"policy": "exact_match", "product_instance_uri": "Tool_1"},
+                    "joining_process": {"policy": "exact_match", "joining_process_id": "Job_1"},
+                },
+                "triggers": {"result": {"mode": "start_selected_joining", "timeout_seconds": 5}},
+                "workflow_execution": {
+                    "expected_operation_count": 2,
+                    "expected_results": {"timeout_seconds": 60},
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(), MagicMock(), 2, profile, ns_ijt=2, subscription_client=MagicMock()
+        )
+        assert trigger.passive_observation_timeout_s == 5
+        assert trigger.active_result_timeout_s == 60
+
+        proc = MagicMock()
+        proc.JoiningProcessId = "Job_1"
+        proc.JoiningProcessOriginId = ""
+        proc.AssociatedEntities = []
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._get_joining_process_list = AsyncMock(return_value=[proc])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._start_selected_joining = AsyncMock(return_value=True)
+
+        meta = MagicMock()
+        meta.Classification = 1
+        meta.AssociatedEntities = [MagicMock(EntityId="Tool_1"), MagicMock(EntityId="Job_1")]
+
+        mock_collector = MagicMock()
+        mock_collector.__aenter__ = AsyncMock(return_value=mock_collector)
+        mock_collector.__aexit__ = AsyncMock(return_value=None)
+        mock_collector.discard_pending = MagicMock(return_value=None)
+        mock_collector.collect_single_matching = AsyncMock(return_value=MagicMock(ResultMetaData=meta))
+
+        with patch("helpers.result_collector.ResultCollector", return_value=mock_collector):
+            await trigger._run_workflow(2, classification="single")
+
+        for call in mock_collector.collect_single_matching.await_args_list:
+            assert call.kwargs["timeout_s"] == 60
+
+
+class TestTargetServerTriggerTimeoutBudgets:
+    def _profile(self):
+        return build_execution_profile(
+            {
+                "schema_version": 1,
+                "triggers": {
+                    "result": {"mode": "manual_trigger", "timeout_seconds": 12},
+                    "event": {"mode": "manual_trigger", "timeout_seconds": 8},
+                },
+                "workflow_execution": {"expected_results": {"timeout_seconds": 90}},
+            }
+        )
+
+    def test_manual_result_trigger_uses_profile_observation_budget(self):
+        trigger = ManualResultTrigger(self._profile())
+        assert trigger.passive_observation_timeout_s == 12
+        # A manual trigger never starts anything, so it must not claim the long
+        # workflow completion budget.
+        assert trigger.active_result_timeout_s == 12
+
+    def test_manual_event_trigger_uses_profile_event_budget(self):
+        trigger = ManualEventTrigger(self._profile())
+        assert trigger.passive_observation_timeout_s == 8
+        assert trigger.active_event_timeout_s == 8
+
+    def test_start_selected_joining_trigger_separates_the_two_budgets(self):
+        profile = self._profile()
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        assert trigger.passive_observation_timeout_s == 12
+        assert trigger.active_result_timeout_s == 90

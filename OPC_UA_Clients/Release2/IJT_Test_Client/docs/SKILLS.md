@@ -12,6 +12,7 @@ python run_all_tests.py
 
 # Skip the default Excel report only when explicitly needed
 python run_all_tests.py --excel=never
+```
 
 Use `run_all_tests.py` as the only test runner entry point. Pass `--profile FILE`
 to validate against a real Target Server instead of the simulator (see
@@ -36,7 +37,8 @@ unit stage and is currently 95%.
 - Unit-only and collect-only pytest sessions must not write or overwrite the live CU coverage report.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
 - Default is `always` locally and in CI; the Excel post-step is non-fatal. When tests fail, the workbook is diagnostic and includes a red warning banner.
-- Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`.
+- Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`. A `--profile`/`--endpoint` target run always writes its own `<output-dir>/report-controller.xlsx` and copies it to `--excel-out FILE` only when that flag is explicitly passed.
+- For target runs the workbook step is *not* non-fatal: only the declared policy skips (`--excel=never`, `--excel=on-success` after failures) are benign. A completed spec run whose JUnit XML or run-scoped CU coverage JSON is missing fails the target run instead of reporting a benign skip.
 - Excel and GitHub Actions summaries include explicit Validation Health and Server Support Coverage metrics, change from `test-results/report-baseline.json`, capability support, Action Items, Scope Notes, Facet Breakdown, CU Detail, and diagnostics when the live CU coverage report is present. The 0–100 composite score is an internal-only trend field in the baseline JSON.
 - Report wording separates `Server capability profile`, `Reference IJT facet`, `Reference full CU set`, `Server Supported CUs`, `Server Support %`, `Supported CUs Validated %`, `Result`, `Status`, and `Primary Reason` for public clarity.
 - `report-baseline.json` is local/job-local in the current implementation; do not add GitHub Actions cache or cross-run baseline download without a separate security review.
@@ -49,8 +51,10 @@ unit stage and is currently 95%.
 |---|---|---|
 | `OPCUA_SERVER_URL` | raw pytest: `opc.tcp://localhost:40451`; runner auto-launch: `opc.tcp://localhost:40462` | OPC UA server endpoint URL |
 | `OPCUA_SIMULATOR_EXE` | (none) | Path to simulator binary for auto-launch |
-| `OPCUA_CAPABILITIES_FILE` | `target_server_cu_profiles/default.capabilities.yaml` | Capability file for the server under test; auto-launched checked-in simulator uses `target_server_cu_profiles/simulator.capabilities.yaml` when this is unset |
+| `OPCUA_CAPABILITIES_FILE` | (none: all CUs claimed) | SUT manifest (`*.sut.yaml`) providing the authoritative CU claims; the auto-launched checked-in simulator uses `target_server_cu_profiles/simulator.sut.yaml` when this is unset. A manifest that **is** selected but is missing, unreadable, or invalid fails pytest configuration — it never silently disables CU gating |
 | `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
+| `OPCUA_TARGET_SERVER_PROFILE` | (none) | SUT manifest driving a Target Server run; also supplies the session security/authentication applied to every client |
+| `OPCUA_TARGET_INTERACTIVE_PROMPTS` | (none) | Set by the runner for `--interactive-prompts`; only then may `authentication.source: prompt` ask the operator for credentials |
 | `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install |
 
 ### Zero-Escape Testing Tools (Phase 1, auto-detected)
@@ -181,7 +185,6 @@ python -m pytest specification_tests/test_events.py events -q
 ```
 IJT_Test_Client/
 ├── docs/SKILLS.md                ← developer reference for this sub-project
-├── reference_workflows/          ← reference workflow YAML for demo/report lanes
 ├── conftest.py                   ← all pytest fixtures (session + function scoped)
 ├── pyproject.toml                ← asyncio_mode=auto, timeout=120, mypy check_untyped_defs=true (+ ruff, coverage, bandit); OPC UA test dirs have [[tool.mypy.overrides]] suppressing asyncua stub false-positives
 ├── helpers/
@@ -189,7 +192,6 @@ IJT_Test_Client/
 │   ├── cu_coverage_report.py     ← pytest plugin for CU coverage JSON
 │   ├── method_signature.py       ← NodeSet-derived method InputArguments guards
 │   ├── workbook_traceability.py  ← checked-in Test Cases workbook row metadata
-│   ├── reference_workflow.py     ← reference workflow demo/report renderer helpers
 │   ├── identifier_utils.py       ← shared identifier conformance helpers
 │   ├── node_discovery.py         ← async browse helpers (_browse_refs, find_child_by_browse_name)
 │   ├── event_collector.py        ← EventCollector for subscription tests
@@ -211,14 +213,13 @@ IJT_Test_Client/
 ├── joining_process/              ← JoiningProcessManagement structure + methods
 ├── joint/                        ← JointManagement structure + methods
 ├── specification_tests/          ← Specification Unit tests (asset, result, event, joining process, joint)
-├── target_server_cu_profiles/       ← Target Server CU execution profiles (sanitized examples)
-│   ├── README.md                 ← Profile usage, commands, sanitization rules
-│   ├── template.profile.yaml             ← Fully commented schema with safe defaults
-│   ├── example_multi_operation_job.profile.yaml ← Fully commented automated controller example
-│   ├── example_multi_operation_job.capabilities.yaml ← Fully commented paired CU declaration
-│   ├── example_manual_trigger.profile.yaml ← Fully commented manual trigger example
-│   └── example_simulation_methods.profile.yaml ← Fully commented simulator example
-├── scripts/run_reference_workflow.py ← Markdown + interactive reference workflow runner
+├── target_server_cu_profiles/       ← SUT manifests, one file per system under test (sanitized examples)
+│   ├── README.md                 ← Manifest usage, commands, sanitization rules
+│   ├── template.sut.yaml             ← Generated, fully commented template with safe defaults
+│   ├── simulator.sut.yaml            ← Generated, placeholder-free manifest for the checked-in simulator
+│   ├── controller_remote_start.sut.yaml ← Generated remote-start controller example
+│   └── controller_manual_trigger.sut.yaml ← Generated manual trigger example
+├── scripts/                      ← report/catalog generators (make_excel_report.py, export_cu_catalog.py, …)
 ├── tests/
     └── unit/                     ← Pure-logic helper tests (no OPC UA server needed)
         ├── conftest.py           ← SimpleNamespace fixtures for validator inputs
@@ -275,11 +276,15 @@ semantics, and CU coverage outputs are unchanged.
 
 | Mode | Adapter class | When to use |
 |---|---|---|
-| `simulate_methods` | `SimulatorResultTrigger` (existing) | Simulator only |
+| `simulate_methods` | `SimulatorResultTrigger` / `SimulatorEventTrigger` (existing) | A server exposing the simulator helper methods. The helper nodes are located under `JoiningSystem/Simulations` exactly as the default simulator fixtures do; when they are absent the run stops with a configuration error instead of degrading to `ExternalResultTrigger`. |
 | `start_selected_joining` | `StartSelectedJoiningResultTrigger` | Target server with OPC UA automation |
 | `manual_trigger` | `ManualResultTrigger` | Physical tool trigger; guided mode prompts |
 | `observe_only` | `ExternalResultTrigger` | Passive evidence; no trigger needed |
 | `none` | `ExternalResultTrigger` | No evidence path; dependent CUs blocked |
+
+`triggers.event.mode` and `triggers.condition.mode` are resolved independently; when
+only one of them is `simulate_methods` the two adapters are combined so conditions can
+be simulated while events are observed (or vice versa).
 
 ### Target Server CU Runner Commands
 
@@ -287,19 +292,19 @@ semantics, and CU coverage outputs are unchanged.
 
 ```bash
 # Preflight — no state changes, safe for any server:
-python run_all_tests.py --preflight-only --profile target_server_cu_profiles/template.profile.yaml
+python run_all_tests.py --preflight-only --profile target_server_cu_profiles/simulator.sut.yaml
 
 # Full validation (Phase 1 + strict preflight + specs + evidence):
-python run_all_tests.py --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml
+python run_all_tests.py --profile target_server_cu_profiles/controller_remote_start.sut.yaml
 
 # Preflight + specs + evidence only, skipping Phase 1:
-python run_all_tests.py --phase2 --profile target_server_cu_profiles/example_multi_operation_job.profile.yaml
+python run_all_tests.py --phase2 --profile target_server_cu_profiles/controller_remote_start.sut.yaml
 
 # Guided run with interactive prompts:
-python run_all_tests.py --phase2 --profile my_profile.yaml --mode guided --interactive-prompts
+python run_all_tests.py --phase2 --profile my_controller.sut.yaml --mode guided --interactive-prompts
 
 # Override endpoint (suppresses simulator auto-launch):
-python run_all_tests.py --preflight-only --profile target_server_cu_profiles/template.profile.yaml --endpoint opc.tcp://10.0.0.1:40451
+python run_all_tests.py --preflight-only --profile target_server_cu_profiles/template.sut.yaml --endpoint opc.tcp://10.0.0.1:40451
 ```
 
 Preflight is always strict: a profile with a blocking configuration issue

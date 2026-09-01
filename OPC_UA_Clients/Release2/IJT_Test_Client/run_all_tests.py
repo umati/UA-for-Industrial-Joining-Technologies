@@ -5,11 +5,11 @@ run_all_tests.py — Canonical test orchestrator for IJT Test Client.
 This is the ONE documented entry point for the IJT Test Client test suite.
 It manages a virtual environment, runs static analysis (Phase 1), and executes
 the full live specification_tests/ suite via pytest (Phase 2) — against either
-the checked-in simulator (auto-launched) or a real Target Server CU profile.
+the checked-in simulator (auto-launched) or a real Target Server described by a SUT manifest.
 
 Both the simulator and a Target Server are "OPC UA Servers Under Test": they
-run the exact same specification_tests/ suite. A Target Server CU profile
-(--profile) only controls applicability (which conformance units apply),
+run the exact same specification_tests/ suite. A SUT manifest
+(--profile FILE.sut.yaml) only controls applicability (which conformance units apply),
 safety (which state-changing methods/triggers are allowed), scoring, and
 evidence reporting — it does not fork the test suite.
 
@@ -17,7 +17,7 @@ Usage:
   python run_all_tests.py                    # full run: Phase 1 + Phase 2 (simulator auto-launch)
   python run_all_tests.py --phase1           # static analysis only (no server)
   python run_all_tests.py --phase2           # specification_tests only (simulator auto-launch if no target)
-  python run_all_tests.py --profile FILE     # Phase 1 + strict profile preflight + specs + target evidence
+  python run_all_tests.py --profile FILE.sut.yaml   # Phase 1 + strict preflight + specs + target evidence
   python run_all_tests.py --phase2 --profile FILE       # strict preflight + specs + target evidence only
   python run_all_tests.py --preflight-only --profile FILE  # configuration/readiness classification only
   python run_all_tests.py --endpoint opc.tcp://host:port    # ad hoc Target Server (no profile file needed)
@@ -29,9 +29,16 @@ Usage:
   python run_all_tests.py -- -k some_test    # forward extra pytest selectors after `--`
   python run_all_tests.py --help
 
+Stable subcommands (recommended for regular use):
+  python run_all_tests.py run --profile FILE.sut.yaml   # same as python run_all_tests.py --profile FILE
+  python run_all_tests.py run --phase1                  # same as --phase1
+  python run_all_tests.py inspect --endpoint URL        # read-only discovery + model inventory (no state change)
+  python run_all_tests.py inspect --profile FILE        # same, endpoint taken from manifest
+  python run_all_tests.py init-profile --endpoint URL --output FILE.sut.yaml  # guided manifest creation
+
 Target Server options (used with --profile and/or --endpoint):
   --endpoint URL                    Endpoint override; suppresses simulator auto-launch
-  --capabilities-file FILE          Capability declaration override
+  --capabilities-file FILE          CU claim source override (a *.sut.yaml manifest)
   --tool-product-instance-uri PIU   Tool selection override
   --joining-process-id ID           JoiningProcess selection override
   --joining-process-origin-id ID    JoiningProcess origin override
@@ -46,13 +53,15 @@ Environment variables:
   OPCUA_SERVER_URL           Override server endpoint (default: opc.tcp://localhost:40462)
   OPCUA_SIMULATOR_EXE        Path to opcua_ijt_demo_application(.exe)
   OPCUA_STARTUP_TIMEOUT_SEC  Seconds to wait for simulator start (default: 30)
-  OPCUA_CAPABILITIES_FILE    Capabilities file override (see --capabilities-file precedence)
+  OPCUA_CAPABILITIES_FILE    SUT manifest providing CU claims (see --capabilities-file precedence)
   SKIP_VENV_INSTALL          Set to "1" to skip pip install step (faster re-runs)
   IJT_RUNNER_NO_DELETE       Set to "1" to preserve runner outputs/tmp/caches
 
 Precedence (resolved once per run; see helpers/runner_plan.py):
-  Endpoint:      --endpoint > non-placeholder profile endpoint > OPCUA_SERVER_URL > simulator auto-launch
-  Capabilities:  --capabilities-file > profile capabilities_file > OPCUA_CAPABILITIES_FILE > simulator default
+  Endpoint:      --endpoint > non-placeholder manifest endpoint > OPCUA_SERVER_URL > simulator auto-launch
+                 (an already-running simulator on the default port is adopted, not ignored)
+  CU claims:     --capabilities-file > the manifest itself > OPCUA_CAPABILITIES_FILE > simulator manifest
+                 (a selected manifest that cannot be read fails the run; it never disables CU gating)
 
 """
 
@@ -115,7 +124,7 @@ _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-live.xml"
 _DEFAULT_EXCEL_OUT = _RESULTS_DIR / "report.xlsx"
 _TMP_DIR = _HERE / "tmp"
-_SIMULATOR_CAPABILITIES = _HERE / "target_server_cu_profiles" / "simulator.capabilities.yaml"
+_SIMULATOR_MANIFEST = _HERE / "target_server_cu_profiles" / "simulator.sut.yaml"
 _AUTO_INSTALL_TOOLS = False
 _AUTO_INSTALL_BLOCKED_REASON: str | None = None
 _RUN_START: float = 0.0  # set at main() entry; used to reject stale XML files
@@ -698,6 +707,22 @@ def _simulator_tmp_dir(port: int) -> Path:
     return _sourcecontrol_root() / suffix
 
 
+def _adopt_simulator_endpoint(server_url: str) -> None:
+    """Publish *server_url* (and the simulator manifest) as this run's endpoint.
+
+    Called for both an auto-launched simulator and one that was already
+    listening, so the resolved endpoint always reaches the frozen run plan and
+    the pytest child processes instead of being left unset.
+    """
+    global _RUNNER_SET_CAPABILITIES_FILE
+
+    os.environ["OPCUA_SERVER_URL"] = server_url
+    if "OPCUA_CAPABILITIES_FILE" not in os.environ and _SIMULATOR_MANIFEST.exists():
+        os.environ["OPCUA_CAPABILITIES_FILE"] = str(_SIMULATOR_MANIFEST)
+        _RUNNER_SET_CAPABILITIES_FILE = True
+        _log(f"  [server] Using simulator SUT manifest: {_SIMULATOR_MANIFEST.name}")
+
+
 def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
     """Copy the binary dir to a temp location, patch the port config, and launch.
 
@@ -705,7 +730,7 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
     finally block can remove it via ``shutil.rmtree(_server_tmp_dir, ignore_errors=True)``.
     Returns the Popen handle on success, None on failure (temp dir cleaned on failure).
     """
-    global _RUNNER_SET_CAPABILITIES_FILE, _server_tmp_dir
+    global _server_tmp_dir
 
     exe_path = Path(exe)
     if not exe_path.exists():
@@ -752,11 +777,7 @@ def _launch_simulator_on_port(port: int, exe: str) -> subprocess.Popen | None:
     server_url = f"opc.tcp://localhost:{port}"
     if _is_opcua_ready(server_url, timeout_s=_startup_timeout_s()):
         _log(f"  [server] Ready on port {port}")
-        os.environ["OPCUA_SERVER_URL"] = server_url
-        if "OPCUA_CAPABILITIES_FILE" not in os.environ and _SIMULATOR_CAPABILITIES.exists():
-            os.environ["OPCUA_CAPABILITIES_FILE"] = str(_SIMULATOR_CAPABILITIES)
-            _RUNNER_SET_CAPABILITIES_FILE = True
-            _log(f"  [server] Using simulator capabilities: {_SIMULATOR_CAPABILITIES.name}")
+        _adopt_simulator_endpoint(server_url)
         _server_tmp_dir = tmp_dir
         return proc
 
@@ -770,8 +791,10 @@ def _ensure_server(port: int = _OPCUA_SERVER_PORT) -> subprocess.Popen | None:
     """Start OPC UA server if not already running. Returns Popen handle or None.
 
     If OPCUA_SERVER_URL is already set the caller manages the server — skip auto-launch.
-    If the binary is found and started, os.environ["OPCUA_SERVER_URL"] is updated to
-    the client's port so that live tests can locate it.
+    If a simulator is already listening on *port*, or one is launched here,
+    ``os.environ["OPCUA_SERVER_URL"]`` is set to that endpoint so the run plan and
+    every live test can locate it. Returning None therefore does not mean
+    "no endpoint": it only means this runner does not own the server process.
     """
     if os.environ.get("OPCUA_SERVER_URL"):
         _log("  [server] OPCUA_SERVER_URL already set — skipping auto-launch")
@@ -780,6 +803,9 @@ def _ensure_server(port: int = _OPCUA_SERVER_PORT) -> subprocess.Popen | None:
         server_url = f"opc.tcp://localhost:{port}"
         if _is_opcua_ready(server_url, timeout_s=min(_startup_timeout_s(), 10.0)):
             _log(f"  [server] Already running on port {port}")
+            # Adopt the reachable simulator as this run's endpoint; without this
+            # the frozen plan would keep an empty endpoint and skip live tests.
+            _adopt_simulator_endpoint(server_url)
         else:
             _log(f"  [server] Port {port} is open but OPC UA handshake failed")
         return None
@@ -1443,7 +1469,6 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
             result.note = f"server not reachable at {host}:{port}"
             result.duration = time.monotonic() - t0
             return result
-
     live_selection_args = list(extra_pytest_args)
     if not _has_explicit_pytest_selection(live_selection_args):
         live_selection_args.append("specification_tests")
@@ -1459,6 +1484,24 @@ def _step_live_tests(extra_pytest_args: list[str], skip_server_check: bool) -> _
     result.ok = rc == 0
     if not result.ok:
         result.note = f"pytest exited with code {rc}"
+    return result
+
+
+def _step_model_inventory(endpoint: str) -> _StepResult:
+    """Create the mandatory read-only Phase 2 address-space inventory."""
+    from helpers.model_inventory import write_model_inventory
+
+    result = _StepResult("Read-only model inventory")
+    started = time.monotonic()
+    try:
+        inventory = write_model_inventory(endpoint, _RESULTS_DIR / "model-inventory.json")
+        warning_count = len(inventory["server_inventory"]["warnings"])
+        result.ok = warning_count == 0
+        result.warn = warning_count > 0
+        result.note = f"{inventory['server_inventory']['node_count']} nodes, {warning_count} warnings"
+    except Exception as exc:  # noqa: BLE001 - report a required Phase 2 artifact failure
+        result.note = f"{type(exc).__name__}: {exc}"
+    result.duration = time.monotonic() - started
     return result
 
 
@@ -1609,8 +1652,8 @@ def _step_excel_report(xml_path: Path, out_path: Path, *, tests_passed: bool) ->
     result = _StepResult("[POST] Excel report")
     t0 = time.monotonic()
     capabilities_path = os.environ.get("OPCUA_CAPABILITIES_FILE")
-    if not capabilities_path and _RUNNER_SET_CAPABILITIES_FILE and _SIMULATOR_CAPABILITIES.exists():
-        capabilities_path = str(_SIMULATOR_CAPABILITIES)
+    if not capabilities_path and _RUNNER_SET_CAPABILITIES_FILE and _SIMULATOR_MANIFEST.exists():
+        capabilities_path = str(_SIMULATOR_MANIFEST)
 
     cu_json_candidates = [
         xml_path.parent / "cu-coverage-report.json",
@@ -1660,10 +1703,25 @@ def _maybe_generate_excel(
     tests_passed: bool,
     explicit_junit_xml: str | None,
     excel_out: str | None,
+    *,
+    target_evidence_mode: bool = False,
 ) -> _StepResult:
-    """Generate (or skip) Excel report according to selected mode."""
+    """Generate (or skip) Excel report according to selected mode.
+
+    This is the *simulator* workbook step: it writes ``test-results/report.xlsx``
+    and refreshes the shared regression baseline ``test-results/report-baseline.json``.
+    A Target Server (``--profile``/``--endpoint``) run must never feed its own
+    results into that baseline, so it is skipped here — the target run generates
+    its own ``report-controller.xlsx`` inside its evidence directory instead.
+    """
     result = _StepResult("[POST] Excel report")
     t0 = time.monotonic()
+
+    if target_evidence_mode:
+        result.skipped = True
+        result.note = "target run writes its own report-controller.xlsx (simulator baseline untouched)"
+        result.duration = time.monotonic() - t0
+        return result
 
     if excel_mode == "never":
         result.skipped = True
@@ -1694,7 +1752,7 @@ def _maybe_generate_excel(
 # ---------------------------------------------------------------------------
 
 
-def _step_target_run(plan: RunPlan) -> _StepResult:
+def _step_target_run(plan: RunPlan, *, excel_mode: str = "always", excel_out: str | None = None) -> _StepResult:
     """Run the Target Server CU profile/endpoint execution path directly (no subprocess).
 
     Single execution path for --profile / --endpoint runs, whether used with
@@ -1703,6 +1761,10 @@ def _step_target_run(plan: RunPlan) -> _StepResult:
     helpers.target_server_execution.run_preflight / run_automated so there is
     exactly one implementation of Target Server CU preflight, scoring, and
     evidence reporting.
+
+    ``excel_mode``/``excel_out`` forward the ``--excel``/``--excel-out`` flags so
+    a target run honours them and writes its workbook inside its own evidence
+    directory instead of overwriting shared simulator artifacts.
     """
     from helpers.target_server_execution import run_automated, run_preflight
 
@@ -1714,7 +1776,13 @@ def _step_target_run(plan: RunPlan) -> _StepResult:
         # Guarded by main(): _step_target_run is only called when
         # plan.target_evidence_mode is True, which always implies a profile.
         raise RuntimeError("_step_target_run called without a resolved Target Server profile")
-    output_dir = plan.output_dir or plan.profile.output_dir_path(base_dir=_HERE)
+
+    # Use a unique timestamped subdirectory for each target run so evidence
+    # from different runs never overwrites each other.  A ``latest`` symlink
+    # (or junction) is updated to point to the newest run.
+    base_output = plan.output_dir or plan.profile.output_dir_path(base_dir=_HERE)
+    profile_name = Path(plan.profile.source_path).stem if plan.profile.source_path else "target"
+    output_dir = _make_unique_run_dir(base_output, profile_name)
 
     _log(f"  Endpoint:      {plan.endpoint or '<not set>'}  (source: {plan.endpoint_source})")
     _log(f"  Capabilities:  {plan.capabilities_file or '<default>'}  (source: {plan.capabilities_source})")
@@ -1731,6 +1799,8 @@ def _step_target_run(plan: RunPlan) -> _StepResult:
             skip_spec_tests=plan.skip_spec_tests,
             spec_tests_timeout=plan.spec_tests_timeout,
             verbose=plan.verbose,
+            excel_mode=excel_mode,
+            excel_out=excel_out,
         )
 
     result.duration = time.monotonic() - t0
@@ -1754,6 +1824,229 @@ def _apply_plan_runtime_env_overrides(plan: RunPlan) -> None:
         os.environ["OPCUA_JOINING_PROCESS_ID"] = plan.joining_process_id
     if plan.joining_process_origin_id:
         os.environ["OPCUA_JOINING_PROCESS_ORIGIN_ID"] = plan.joining_process_origin_id
+
+
+# ---------------------------------------------------------------------------
+# Stable subcommands: run / inspect / init-profile
+# ---------------------------------------------------------------------------
+# These are thin, documented wrappers over the existing flag-based API so
+# users have a stable, easy-to-remember interface that will not break when
+# internal flags evolve.  Each subcommand maps to exactly one existing path;
+# no logic is duplicated.
+
+
+def _subcommand_inspect(endpoint: str, profile_path: str | None) -> int:
+    """Read-only discovery + model inventory — no state changes.
+
+    Usage:
+        python run_all_tests.py inspect --endpoint opc.tcp://host:port
+        python run_all_tests.py inspect --profile controller.sut.yaml
+    """
+    ensure_venv()
+    install_requirements()
+    _relaunch_if_needed()
+
+    from helpers.model_inventory import write_model_inventory
+    from helpers.target_server_execution import run_discover_target
+
+    if not endpoint and profile_path:
+        from pathlib import Path as _P
+
+        from helpers.sut_manifest import load_sut_manifest
+
+        try:
+            m = load_sut_manifest(_P(profile_path))
+            endpoint = m.to_execution_profile().target.endpoint
+        except Exception as exc:  # noqa: BLE001
+            _log(_c(_ANSI_RED, f"[ERROR] Could not read profile endpoint: {exc}"))
+            return 2
+
+    if not endpoint or "<" in endpoint:
+        _log(_c(_ANSI_RED, "[ERROR] inspect requires a reachable endpoint (--endpoint or profile target.endpoint)"))
+        return 2
+
+    _section(f"inspect — {endpoint}")
+
+    # 1. Discover tools/processes (read-only, never changes state)
+    security = None
+    if profile_path:
+        from helpers.connection_security import connection_security_from_manifest_path
+
+        security = connection_security_from_manifest_path(profile_path)
+    rc = run_discover_target(endpoint, security=security)
+
+    # 2. Read-only model inventory
+    out_path = _RESULTS_DIR / "inspect-model-inventory.json"
+    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        inv = write_model_inventory(endpoint, out_path, security=security)
+        node_count = inv["server_inventory"]["node_count"]
+        warn_count = len(inv["server_inventory"]["warnings"])
+        _log(f"\n  Model inventory: {node_count} server nodes, {warn_count} warning(s)")
+        _log(f"  Written to: {out_path}")
+    except Exception as exc:  # noqa: BLE001
+        _log(_c(_ANSI_YELLOW, f"  [WARN] Model inventory failed: {exc}"))
+        rc = rc or 1
+
+    return rc
+
+
+def _subcommand_init_profile(endpoint: str, output_path: str) -> int:
+    """Discover the target server and generate a pre-filled *.sut.yaml manifest.
+
+    Usage:
+        python run_all_tests.py init-profile --endpoint opc.tcp://host:port --output controller.sut.yaml
+    """
+    ensure_venv()
+    install_requirements()
+    _relaunch_if_needed()
+
+    import asyncio
+
+    from helpers.sut_manifest import render_manifest_yaml
+    from helpers.target_server_execution import async_discover_target_server
+
+    if not endpoint or "<" in endpoint:
+        _log(_c(_ANSI_RED, "[ERROR] init-profile requires a valid --endpoint URL"))
+        return 2
+
+    out = Path(output_path)
+    if out.exists():
+        _log(_c(_ANSI_RED, f"[ERROR] Output file already exists: {out}. Remove it or choose another path."))
+        return 2
+
+    _section(f"init-profile — {endpoint}")
+    _log("  Connecting to server (read-only) …")
+    try:
+        data = asyncio.run(async_discover_target_server(endpoint, timeout=15.0))
+    except Exception as exc:  # noqa: BLE001
+        _log(_c(_ANSI_RED, f"  [ERROR] Discovery failed: {exc}"))
+        return 1
+
+    if data.get("error"):
+        _log(_c(_ANSI_RED, f"  [ERROR] {data['error']}"))
+        return 1
+
+    tools = data.get("tools", [])
+    processes = data.get("processes", [])
+    piu = tools[0]["product_instance_uri"] if tools else "<product-instance-uri>"
+
+    _log(f"  Discovered {len(tools)} tool(s) and {len(processes)} process(es)")
+
+    # Build a manifest from the remote_start_multi_operation template and
+    # patch the discovered endpoint and PIU into the content.
+    template_text = render_manifest_yaml("remote_start_multi_operation")
+    template_text = template_text.replace("opc.tcp://<target-server-host>:40451", endpoint, 1)
+    template_text = template_text.replace("<ProductInstanceUri-of-the-tightening-controller>", piu, 1)
+
+    # Append the discovered process suggestion as a YAML comment block so the
+    # tester can copy-paste the approved process IDs into the selection section.
+    suggestion_yaml = data.get("suggested_yaml", "")
+    if suggestion_yaml:
+        comment_lines = "\n".join(f"# {line}" if line.strip() else "#" for line in suggestion_yaml.splitlines())
+        template_text = (
+            template_text.rstrip()
+            + "\n\n"
+            + "# ── Discovered processes (copy approved IDs into the selection section above) ──\n"
+            + comment_lines
+            + "\n"
+        )
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(template_text, encoding="utf-8")
+    _log(_c(_ANSI_GREEN, f"\n  Manifest written to: {out}"))
+    _log("  Review the file, fill in any <placeholder> values, then run:")
+    _log(f"    python run_all_tests.py run --profile {out}")
+    return 0
+
+
+def _make_unique_run_dir(base_dir: Path, profile_name: str) -> Path:
+    """Return a timestamped subdirectory under *base_dir* for one target run.
+
+    Pattern: <base_dir>/<profile_name>/<YYYYMMDD-HHMMSS>/
+    A ``latest`` symlink (or junction on Windows) is updated to point to it.
+    """
+    import datetime
+
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    run_dir = base_dir / profile_name / stamp
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    latest_link = base_dir / profile_name / "latest"
+    # Write a ``latest-run.json`` inside the new dir so the path is always
+    # discoverable even without symlink support (e.g. Windows non-admin).
+    (run_dir / "latest-run.json").write_text(
+        json.dumps({"run_dir": str(run_dir), "profile": profile_name, "timestamp": stamp}, indent=2),
+        encoding="utf-8",
+    )
+    # Best-effort symlink/junction to ``latest``; silently skip on failure.
+    if latest_link.is_symlink() or latest_link.exists():
+        try:
+            latest_link.unlink(missing_ok=True)
+        except OSError:
+            pass
+    try:
+        if sys.platform == "win32":
+            latest_link.symlink_to(run_dir, target_is_directory=True)
+        else:
+            latest_link.symlink_to(run_dir)
+    except (OSError, NotImplementedError):
+        pass  # symlinks need admin rights on some Windows configurations; skip silently
+
+    return run_dir
+
+
+def _handle_subcommands(argv: list[str] | None = None) -> int | None:
+    """Detect and handle stable subcommands (run/inspect/init-profile).
+
+    Returns an exit code when a subcommand was handled, or None when
+    the caller should fall through to the legacy flag-based parser.
+    """
+    args = argv if argv is not None else sys.argv[1:]
+    if not args or args[0] not in {"run", "inspect", "init-profile"}:
+        return None
+
+    sub = args[0]
+    rest = args[1:]
+
+    sub_parser = argparse.ArgumentParser(
+        prog=f"run_all_tests.py {sub}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    if sub == "inspect":
+        sub_parser.description = (
+            "Read-only server inspection: discover tools/processes and capture model inventory.\n"
+            "No state is changed. Safe to run against any live server."
+        )
+        sub_parser.add_argument("--endpoint", metavar="URL", default="", help="OPC UA server endpoint URL")
+        sub_parser.add_argument(
+            "--profile", metavar="FILE", default=None, help="*.sut.yaml manifest (endpoint taken from it)"
+        )
+        parsed = sub_parser.parse_args(rest)
+        return _subcommand_inspect(parsed.endpoint, parsed.profile)
+
+    if sub == "init-profile":
+        sub_parser.description = (
+            "Discover a live server and generate a pre-filled *.sut.yaml manifest.\n"
+            "Review and approve the generated file before running full validation."
+        )
+        sub_parser.add_argument("--endpoint", metavar="URL", required=True, help="OPC UA server endpoint URL")
+        sub_parser.add_argument("--output", metavar="FILE", required=True, help="Output *.sut.yaml path")
+        parsed = sub_parser.parse_args(rest)
+        return _subcommand_init_profile(parsed.endpoint, parsed.output)
+
+    if sub == "run":
+        # Map ``run [options]`` to the existing flag-based parser by re-injecting args.
+        # Supported shortcuts:
+        #   run --profile FILE           -> full run with profile
+        #   run --phase1                 -> static analysis only
+        #   run --phase2 --profile FILE  -> spec tests + evidence only
+        #   run --endpoint URL           -> ad-hoc endpoint
+        sys.argv[1:] = rest  # replace argv so _build_parser().parse_args() picks them up
+        return None  # fall through to existing main() logic
+
+    return None  # unreachable but keeps mypy happy
 
 
 # ---------------------------------------------------------------------------
@@ -1784,12 +2077,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "--excel",
         choices=["never", "on-success", "always"],
         default=_default_excel_mode(),
-        help="Generate Excel report after tests (non-fatal). Default: always.",
+        help=(
+            "Generate Excel report after tests (non-fatal). Default: always. "
+            "Also honoured by --profile/--endpoint target runs."
+        ),
     )
     p.add_argument(
         "--excel-out",
         metavar="FILE",
-        help=f"Excel output path (default: {_DEFAULT_EXCEL_OUT})",
+        help=(
+            f"Excel output path for the simulator workbook (default: {_DEFAULT_EXCEL_OUT}). "
+            "For --profile/--endpoint runs the workbook is always written to "
+            "<output-dir>/report-controller.xlsx; it is copied to FILE only when "
+            "--excel-out is explicitly passed."
+        ),
     )
     p.add_argument(
         "--auto-install-tools",
@@ -1814,7 +2115,7 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         default=None,
         help=(
-            "Path to a Target Server CU profile YAML. No --phase1/--phase2/--preflight-only: "
+            "Path to one SUT manifest (*.sut.yaml). No --phase1/--phase2/--preflight-only: "
             "runs Phase 1 + strict profile preflight + applicable specification_tests + target evidence. "
             "With --phase2: preflight + specs + evidence only. With --preflight-only: classification only."
         ),
@@ -1843,7 +2144,7 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         dest="capabilities_file",
         default=None,
-        help="Override capabilities_file; environment: OPCUA_CAPABILITIES_FILE",
+        help="Override the CU claim source with another *.sut.yaml manifest; environment: OPCUA_CAPABILITIES_FILE",
     )
     p.add_argument(
         "--tool-product-instance-uri",
@@ -1930,6 +2231,12 @@ def main() -> int:
     _RUN_START = time.time()
     _RUNNER_SET_CAPABILITIES_FILE = False
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+
+    # Check for stable subcommands before the legacy flag-based parser.
+    subcommand_rc = _handle_subcommands()
+    if subcommand_rc is not None:
+        return subcommand_rc
+
     args = _build_parser().parse_args()
     _cleanup_caches(_HERE)  # pre-run: clear stale caches from interrupted runs
     global _USE_COLOUR, _AUTO_INSTALL_TOOLS, _VERBOSE
@@ -1951,7 +2258,8 @@ def main() -> int:
     # Step 3: Resolve the run plan (profile loading needs the venv's PyYAML, so this
     # must happen after the relaunch above). One resolution, used for every decision
     # below — see helpers/runner_plan.py for the precedence rules.
-    from helpers.runner_plan import RunnerConfigError, resolve_run_plan
+    from helpers.runner_plan import RunnerConfigError, resolve_run_plan, with_resolved_endpoint
+    from helpers.sut_manifest import SutManifestError
     from helpers.target_server_cu_config import TargetServerConfigError
 
     try:
@@ -1960,10 +2268,10 @@ def main() -> int:
         _log(_c(_ANSI_RED, f"[ERROR] Invalid CLI usage: {exc}"))
         return 2
     except FileNotFoundError as exc:
-        _log(_c(_ANSI_RED, f"[ERROR] Target Server profile not found: {exc}"))
+        _log(_c(_ANSI_RED, f"[ERROR] SUT manifest not found: {exc}"))
         return 2
-    except TargetServerConfigError as exc:
-        _log(_c(_ANSI_RED, f"[ERROR] Target Server profile configuration error: {exc}"))
+    except (SutManifestError, TargetServerConfigError) as exc:
+        _log(_c(_ANSI_RED, f"[ERROR] SUT manifest configuration error: {exc}"))
         return 2
 
     if getattr(args, "discover_target", False):
@@ -1973,7 +2281,12 @@ def main() -> int:
             return 2
         from helpers.target_server_execution import run_discover_target
 
-        return run_discover_target(endpoint)
+        discovery_security = None
+        if plan.manifest is not None:
+            from helpers.connection_security import connection_security_from_manifest
+
+            discovery_security = connection_security_from_manifest(plan.manifest)
+        return run_discover_target(endpoint, security=discovery_security)
 
     if plan.used_deprecated_profile_flag:
         _log(_c(_ANSI_YELLOW, "  [DEPRECATED] --target-server-profile is deprecated; use --profile instead."))
@@ -2026,12 +2339,19 @@ def main() -> int:
         if run_target:
             if plan.target_evidence_mode:
                 _section("Target Server (--profile/--endpoint)")
-                results.append(_step_target_run(plan))
+                if plan.launch_simulator:
+                    # lifecycle: auto_simulator — this runner owns the server process,
+                    # or adopts one already listening on the default port.
+                    _check_server(skip=args.no_server_check)
+                    server_proc = _ensure_server()
+                    plan = with_resolved_endpoint(plan, os.environ.get("OPCUA_SERVER_URL", ""))
+                results.append(_step_target_run(plan, excel_mode=args.excel, excel_out=args.excel_out))
             else:
                 _section("Phase 2: Live Tests")
                 _apply_plan_runtime_env_overrides(plan)
                 _check_server(skip=args.no_server_check)
                 server_proc = _ensure_server()
+                results.append(_step_model_inventory(os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40462")))
                 results.append(_step_live_tests(extra_pytest_args, skip_server_check=args.no_server_check))
 
     finally:
@@ -2066,6 +2386,7 @@ def main() -> int:
         tests_passed=not any_failed,
         explicit_junit_xml=args.junit_xml,
         excel_out=args.excel_out,
+        target_evidence_mode=run_target and plan.target_evidence_mode,
     )
     excel_result.print_line()
 

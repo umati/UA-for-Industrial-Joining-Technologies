@@ -20,7 +20,9 @@ import sys
 import time
 from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from helpers.namespaces import result_classification_value
 from helpers.target_server_cu_config import (
     OUTCOME_BLOCKED,
     OUTCOME_CLAIM_MISMATCH,
@@ -37,6 +39,9 @@ from helpers.target_server_readiness import (
     check_endpoint_reachable,
     run_config_preflight,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from helpers.connection_security import ConnectionSecurity, CredentialPrompt
 
 # _HERE resolves to the IJT_Test_Client project root (parent of helpers/), which is
 # identical to the ``_HERE`` computed independently by run_all_tests.py.
@@ -239,6 +244,8 @@ def _write_evidence_report(
         "profile_source": profile.source_path,
         "endpoint": profile.target.endpoint,
         "scoring_mode": profile.cu_execution.scoring_mode,
+        "canonical_outcome": preflight_report.canonical_outcome.value,
+        "canonical_label": preflight_report.canonical_outcome.label,
         "workflow": {
             "result_trigger_mode": profile.triggers.result.mode,
             "event_trigger_mode": profile.triggers.event.mode,
@@ -274,6 +281,7 @@ def _write_human_summary(
         f"  Mode:     {mode}",
         f"  Start:    {run_start}",
         f"  Outcome:  {outcome_summary}",
+        f"  Preflight Outcome: {preflight_report.canonical_outcome.label}",
         "",
         *preflight_report.summary_lines(),
         "",
@@ -311,17 +319,20 @@ def _write_markdown_summary(
         f"- **Mode:** `{mode}`",
         f"- **Start Time:** `{run_start}`",
         f"- **Outcome:** {badge} (`{outcome_summary}`)",
+        f"- **Preflight Outcome:** `{preflight_report.canonical_outcome.label}`",
         "",
         "## Preflight Checks",
         "",
-        "| Check Name | Status | Detail |",
-        "|---|:---:|---|",
+        "| Check Name | Status | Outcome | Detail |",
+        "|---|:---:|:---:|---|",
     ]
     for check in preflight_report.checks:
         status_icon = (
             "✅" if check.outcome == OUTCOME_PASSED else ("⚠️" if check.outcome == OUTCOME_MANUAL_REQUIRED else "❌")
         )
-        lines.append(f"| `{check.check_name}` | {status_icon} `{check.outcome}` | {check.detail} |")
+        lines.append(
+            f"| `{check.check_name}` | {status_icon} `{check.outcome}` | {check.canonical_label} | {check.detail} |"
+        )
 
     lines.extend(
         [
@@ -374,8 +385,105 @@ def _write_markdown_summary(
     return md_path
 
 
-async def async_discover_target_server(endpoint: str, timeout: float = 15.0) -> dict:
-    """Connect to a target OPC UA server, discover Tools and Joining Processes, and return structured metadata."""
+# ---------------------------------------------------------------------------
+# Target server auto-discovery
+# ---------------------------------------------------------------------------
+
+# Keyword hints used only when a process does not advertise a usable
+# ResultClassification value.  Each keyword maps to exactly one classification
+# key so a process can never be suggested under two conflicting keys.
+_CLASSIFICATION_NAME_HINTS: tuple[tuple[str, str], ...] = (
+    ("intervention", "intervention"),
+    ("stitch", "stitching"),
+    ("batch", "batch"),
+    ("job", "job"),
+    ("sequence", "job"),
+    ("sync", "sync"),
+    ("program", "single"),
+    ("pset", "single"),
+)
+
+# Classification keys offered in the suggested YAML snippet, in output order.
+_SUGGESTED_SELECTION_KEYS: tuple[str, ...] = ("single", "sync", "batch", "job", "stitching", "intervention")
+
+
+def classify_discovered_process(process: dict) -> str:
+    """Return the canonical classification key for one discovered joining process.
+
+    The server-reported ``Classification`` value is authoritative and is mapped
+    through the shared ``helpers.namespaces`` table (1 single, 2 sync, 3 batch,
+    4 job, 5 stitching, 6 intervention, 7 text).  Name/selection-name keyword
+    hints are only consulted when the server reports no usable classification.
+    Returns an empty string when the process cannot be classified.
+    """
+    from helpers.namespaces import result_classification_name
+
+    key = result_classification_name(process.get("classification"))
+    if key:
+        return key
+    haystack = f"{process.get('name', '')} {process.get('selection_name', '')}".lower()
+    for keyword, mapped_key in _CLASSIFICATION_NAME_HINTS:
+        if keyword in haystack:
+            return mapped_key
+    return ""
+
+
+def suggest_process_selection(processes: list[dict]) -> dict[str, dict]:
+    """Map each classification key to at most one discovered process.
+
+    A process is assigned to exactly one key, so the suggested YAML can never
+    configure the same process under two conflicting classifications.
+    """
+    suggestion: dict[str, dict] = {}
+    for process in processes:
+        key = classify_discovered_process(process)
+        if key and key not in suggestion:
+            suggestion[key] = process
+    return suggestion
+
+
+def render_suggested_selection_yaml(product_instance_uri: str, suggestion: dict[str, dict]) -> str:
+    """Render the suggested ``selection:`` YAML snippet for a discovery run."""
+    lines = [
+        "selection:",
+        "  tool:",
+        "    policy: first_ready",
+        f'    product_instance_uri: "{product_instance_uri}"',
+        "  joining_processes:",
+    ]
+    emitted = False
+    for key in _SUGGESTED_SELECTION_KEYS:
+        process = suggestion.get(key)
+        if process is None:
+            continue
+        emitted = True
+        lines.extend(
+            [
+                f"    {key}:",
+                "      policy: exact_match",
+                f'      joining_process_id: "{process.get("id", "")}"',
+                f'      joining_process_origin_id: "{process.get("origin_id", "")}"',
+                f'      selection_name: "{process.get("selection_name", "")}"',
+            ]
+        )
+    if not emitted:
+        lines.append("    # No joining process could be classified — configure selection.joining_process manually.")
+    return "\n".join(lines)
+
+
+async def async_discover_target_server(
+    endpoint: str,
+    timeout: float = 15.0,
+    *,
+    security: ConnectionSecurity | None = None,
+    prompt: CredentialPrompt | None = None,
+) -> dict:
+    """Connect to a target OPC UA server, discover Tools and Joining Processes, and return structured metadata.
+
+    ``security`` is an optional :class:`helpers.connection_security.ConnectionSecurity`
+    declaration; when given, its message security and user identity are applied to
+    the discovery session exactly as they are for the test session.
+    """
     import asyncio
 
     from asyncua import Client, ua
@@ -391,6 +499,10 @@ async def async_discover_target_server(endpoint: str, timeout: float = 15.0) -> 
     }
 
     client = Client(endpoint)
+    if security is not None:
+        from helpers.connection_security import apply_connection_security
+
+        await apply_connection_security(client, security, prompt=prompt)
     async with asyncio.timeout(timeout):
         await client.connect()
     try:
@@ -425,7 +537,13 @@ async def async_discover_target_server(endpoint: str, timeout: float = 15.0) -> 
                     jid = str(getattr(p, "JoiningProcessId", "") or "")
                     orig = str(getattr(p, "JoiningProcessOriginId", "") or "")
                     pname = str(getattr(p, "Name", "") or "")
-                    pcls = int(getattr(p, "Classification", 1) or 1)
+                    # 0 = Undefined: do not guess "single" when the server
+                    # reports nothing; the name hints decide instead.
+                    raw_cls = getattr(p, "Classification", None)
+                    try:
+                        pcls = int(raw_cls) if raw_cls is not None else 0
+                    except (TypeError, ValueError):
+                        pcls = 0
                     sel_name = ""
                     for entity in getattr(p, "AssociatedEntities", []) or []:
                         if getattr(entity, "Name", "") == "SelectionName":
@@ -440,73 +558,36 @@ async def async_discover_target_server(endpoint: str, timeout: float = 15.0) -> 
                         }
                     )
 
-        # 3. Format suggested YAML snippet
-        single_p = next(
-            (
-                p
-                for p in discovery_data["processes"]
-                if p["classification"] in (1, 2)
-                or "program" in p["name"].lower()
-                or "program" in p["selection_name"].lower()
-            ),
-            None,
-        )
-        job_p = next(
-            (
-                p
-                for p in discovery_data["processes"]
-                if p["classification"] in (3, 4, 5)
-                or "job" in p["name"].lower()
-                or "sequence" in p["name"].lower()
-                or "sequence" in p["selection_name"].lower()
-            ),
-            None,
-        )
-        batch_p = next(
-            (
-                p
-                for p in discovery_data["processes"]
-                if p["classification"] == 3 or "batch" in p["name"].lower() or "batch" in p["selection_name"].lower()
-            ),
-            None,
-        )
-
-        yaml_lines = [
-            "selection:",
-            "  tool:",
-            "    policy: first_ready",
-            f'    product_instance_uri: "{piu}"',
-            "  joining_processes:",
-            "    single:",
-            "      policy: exact_match",
-            f'      joining_process_id: "{single_p["id"] if single_p else ""}"',
-            f'      joining_process_origin_id: "{single_p["origin_id"] if single_p else ""}"',
-            f'      selection_name: "{single_p["selection_name"] if single_p else ""}"',
-            "    job:",
-            "      policy: exact_match",
-            f'      joining_process_id: "{job_p["id"] if job_p else ""}"',
-            f'      joining_process_origin_id: "{job_p["origin_id"] if job_p else ""}"',
-            f'      selection_name: "{job_p["selection_name"] if job_p else ""}"',
-            "    batch:",
-            "      policy: exact_match",
-            f'      joining_process_id: "{batch_p["id"] if batch_p else ""}"',
-            f'      joining_process_origin_id: "{batch_p["origin_id"] if batch_p else ""}"',
-            f'      selection_name: "{batch_p["selection_name"] if batch_p else ""}"',
-        ]
-        discovery_data["suggested_yaml"] = "\n".join(yaml_lines)
+        # 3. Format suggested YAML snippet.  Classification values follow the
+        # canonical ResultClassification enum (1 single, 2 sync, 3 batch,
+        # 4 job, 5 stitching, 6 intervention, 7 text) via the shared table in
+        # helpers/namespaces.py, so a process is never suggested under two
+        # conflicting classification keys.
+        discovery_data["suggested_selection"] = suggest_process_selection(discovery_data["processes"])
+        discovery_data["suggested_yaml"] = render_suggested_selection_yaml(piu, discovery_data["suggested_selection"])
     finally:
         await client.disconnect()
 
     return discovery_data
 
 
-def run_discover_target(endpoint: str, timeout: float = 15.0) -> int:
+def run_discover_target(
+    endpoint: str,
+    timeout: float = 15.0,
+    *,
+    security: ConnectionSecurity | None = None,
+    prompt: CredentialPrompt | None = None,
+) -> int:
     """CLI runner to discover target server tools and processes and print suggested YAML."""
     import asyncio
 
     _section(f"Target Server Auto-Discovery: {endpoint}")
+    if security is not None:
+        from helpers.connection_security import describe_connection_security
+
+        _log(f"  Session security: {describe_connection_security(security)}")
     try:
-        data = asyncio.run(async_discover_target_server(endpoint, timeout=timeout))
+        data = asyncio.run(async_discover_target_server(endpoint, timeout=timeout, security=security, prompt=prompt))
     except Exception as exc:  # noqa: BLE001
         _log(_c(_ANSI_RED, f"  [ERROR] Discovery failed: {exc}"))
         return 1
@@ -521,10 +602,12 @@ def run_discover_target(endpoint: str, timeout: float = 15.0) -> int:
 
     _log(f"\n  Discovered Joining Processes: {len(data['processes'])}")
     for p in data["processes"]:
-        cls_name = {1: "Single", 2: "Batch", 3: "Job", 4: "Job", 5: "Stitching", 6: "Intervention"}.get(
-            p["classification"], "Other"
+        key = classify_discovered_process(p)
+        cls_name = key.capitalize() if key else "Unclassified"
+        _log(
+            f"    - [{cls_name}] ID: {p['id']} | Origin: {p['origin_id']} | "
+            f"SelectionName: {p['selection_name']} | Classification: {p['classification']}"
         )
-        _log(f"    - [{cls_name}] ID: {p['id']} | Origin: {p['origin_id']} | SelectionName: {p['selection_name']}")
 
     _section("Suggested YAML Configuration Snippet")
     _log(data["suggested_yaml"])
@@ -536,6 +619,39 @@ def run_discover_target(endpoint: str, timeout: float = 15.0) -> int:
 # Target server CU evidence reporting helpers
 # ---------------------------------------------------------------------------
 
+# Workbook generation outcome vocabulary.  ``skipped`` is reserved for
+# deliberate policy decisions; anything that *should* have produced a workbook
+# but did not is ``failed`` so the target run cannot report success on missing
+# coverage evidence.
+EXCEL_STATUS_GENERATED = "generated"
+EXCEL_STATUS_SKIPPED = "skipped"
+EXCEL_STATUS_FAILED = "failed"
+
+EXCEL_REASON_NONE = ""
+EXCEL_REASON_DISABLED = "excel_disabled"
+EXCEL_REASON_ON_SUCCESS_AFTER_FAILURE = "on_success_after_failure"
+EXCEL_REASON_MISSING_EVIDENCE = "missing_evidence"
+EXCEL_REASON_GENERATOR_ERROR = "generator_error"
+
+# Only these reason codes may skip workbook generation without failing the run.
+BENIGN_EXCEL_SKIP_REASON_CODES = frozenset(
+    {
+        EXCEL_REASON_DISABLED,
+        EXCEL_REASON_ON_SUCCESS_AFTER_FAILURE,
+    }
+)
+
+
+def is_benign_excel_skip(excel_meta: dict) -> bool:
+    """Return True when workbook generation was skipped by deliberate policy.
+
+    Any other ``skipped`` result — for example one produced by an older or
+    unknown code path — is treated as evidence loss, not as a benign skip.
+    """
+    if excel_meta.get("status") != EXCEL_STATUS_SKIPPED:
+        return False
+    return excel_meta.get("reason_code") in BENIGN_EXCEL_SKIP_REASON_CODES
+
 
 def _generate_excel_report(
     profile: TargetServerCuProfile,
@@ -544,19 +660,56 @@ def _generate_excel_report(
     *,
     run_result: str,
     base_dir: Path | None = None,
+    excel_mode: str = "always",
+    excel_out: str | Path | None = None,
 ) -> dict:
-    """Generate a workbook from artifacts belonging to this exact target run."""
+    """Generate a workbook from artifacts belonging to this exact target run.
+
+    The workbook is always written inside the run's own ``output_dir`` as
+    ``report-controller.xlsx``.  It is copied to a second location only when the
+    caller explicitly asked for one via ``--excel-out``; the shared simulator
+    workbook at ``test-results/report.xlsx`` is never overwritten implicitly.
+
+    The target run also never passes ``--write-baseline``, so it cannot
+    overwrite the shared simulator regression baseline
+    (``test-results/report-baseline.json``).
+
+    Every returned dict carries a machine-readable ``reason_code`` so callers
+    can distinguish a deliberate policy skip from a broken run without parsing
+    the human-readable ``reason`` text.  ``status`` is one of:
+
+      ``generated`` — workbook written;
+      ``skipped``   — deliberately not generated (always a benign policy skip);
+      ``failed``    — should have been generated but could not be.
+    """
 
     base_dir = base_dir or _HERE
+    if excel_mode == "never":
+        return {
+            "status": EXCEL_STATUS_SKIPPED,
+            "reason_code": EXCEL_REASON_DISABLED,
+            "reason": "disabled (--excel=never)",
+            "path": None,
+        }
+    if excel_mode == "on-success" and run_result != "passed":
+        return {
+            "status": EXCEL_STATUS_SKIPPED,
+            "reason_code": EXCEL_REASON_ON_SUCCESS_AFTER_FAILURE,
+            "reason": "tests failed; skipped (--excel=on-success)",
+            "path": None,
+        }
+
     junit_xml = output_dir / "spec-tests.xml"
     cu_report = output_dir / "cu-coverage-report.json"
     workbook = output_dir / "report-controller.xlsx"
-    default_workbook = base_dir / "test-results" / "report.xlsx"
     if not junit_xml.exists() or not cu_report.exists():
+        missing = [str(p) for p in (junit_xml, cu_report) if not p.exists()]
         return {
-            "status": "skipped",
-            "reason": "JUnit XML or run-scoped CU coverage JSON is unavailable",
+            "status": EXCEL_STATUS_FAILED,
+            "reason_code": EXCEL_REASON_MISSING_EVIDENCE,
+            "reason": (f"run-scoped coverage evidence is missing after a completed spec run: {', '.join(missing)}"),
             "path": None,
+            "missing_artifacts": missing,
         }
 
     script = base_dir / "scripts" / "make_excel_report.py"
@@ -581,19 +734,33 @@ def _generate_excel_report(
     completed = subprocess.run(cmd, cwd=str(base_dir), text=True, capture_output=True)
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "unknown report generator error").strip()
-        return {"status": "failed", "reason": detail, "path": None}
+        return {
+            "status": EXCEL_STATUS_FAILED,
+            "reason_code": EXCEL_REASON_GENERATOR_ERROR,
+            "reason": detail,
+            "path": None,
+        }
 
-    if workbook.exists():
+    generated: dict = {
+        "status": EXCEL_STATUS_GENERATED,
+        "reason_code": EXCEL_REASON_NONE,
+        "reason": "",
+        "path": str(workbook),
+    }
+    if workbook.exists() and excel_out:
+        requested = Path(excel_out)
         try:
-            default_workbook.parent.mkdir(parents=True, exist_ok=True)
-            if default_workbook.resolve() != workbook.resolve():
-                shutil.copy2(workbook, default_workbook)
-        except Exception as exc:
+            requested.parent.mkdir(parents=True, exist_ok=True)
+            if requested.resolve() != workbook.resolve():
+                shutil.copy2(workbook, requested)
+        except Exception as exc:  # noqa: BLE001 — copying is a convenience, not evidence
             logging.getLogger(__name__).warning(
-                "Could not mirror workbook to default location %s: %s", default_workbook, exc
+                "Could not copy workbook to requested --excel-out location %s: %s", requested, exc
             )
+        else:
+            generated["copied_to"] = str(requested)
 
-    return {"status": "generated", "reason": "", "path": str(workbook)}
+    return generated
 
 
 # ---------------------------------------------------------------------------
@@ -619,14 +786,26 @@ def _find_venv_python(base_dir: Path | None = None) -> str:
 def _build_spec_test_env(
     profile: TargetServerCuProfile,
     base_dir: Path | None = None,
+    *,
+    interactive_prompts: bool = False,
 ) -> dict[str, str]:
     """Populate environment variables consumed by specification_tests/ fixtures."""
+    # Imported lazily: helpers.trigger pulls in asyncua, which is only available
+    # inside the test virtual environment.
+    from helpers.trigger import ENV_ACTIVE_RESULT_TIMEOUT, ENV_PASSIVE_OBSERVATION_TIMEOUT
+
     base_dir = base_dir or _HERE
     env = os.environ.copy()
     env["OPCUA_SERVER_URL"] = profile.target.endpoint
     if profile.source_path:
         env["OPCUA_TARGET_SERVER_PROFILE"] = profile.source_path
     env["OPCUA_TARGET_SERVER_MODE"] = profile.cu_execution.default_mode
+    # Only an explicitly interactive run may prompt for credentials; unattended
+    # runs must fail with a configuration error instead of blocking on stdin.
+    if interactive_prompts:
+        env["OPCUA_TARGET_INTERACTIVE_PROMPTS"] = "1"
+    else:
+        env.pop("OPCUA_TARGET_INTERACTIVE_PROMPTS", None)
     runtime_selection = {
         "OPCUA_TOOL_PRODUCT_INSTANCE_URI": profile.selection.tool.product_instance_uri,
         "OPCUA_TOOL_PIU": profile.selection.tool.product_instance_uri,
@@ -646,37 +825,34 @@ def _build_spec_test_env(
             if jp.joining_process_origin_id:
                 env[f"OPCUA_{prefix.upper()}_JOINING_PROCESS_ORIGIN_ID"] = jp.joining_process_origin_id
     expected_results = profile.workflow_execution.expected_results
-    # Use result trigger timeout (or default timeout) for individual spec test assertions,
-    # reserving the longer expected_results.timeout_seconds for full workflow sequences.
-    result_timeout = (
+    # Two distinct budgets, never conflated:
+    #   passive  — evidence observed without the test starting anything.
+    #   active   — a joining operation was actually started and a correlated
+    #              result/event must arrive; sized for a full workflow cycle.
+    passive_timeout = (
         profile.triggers.result.timeout_seconds
         if profile.triggers.result.timeout_seconds > 0
-        else (expected_results.timeout_seconds or 10)
+        else (expected_results.timeout_seconds or 10.0)
     )
-    env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] = str(result_timeout)
+    active_timeout = (
+        expected_results.timeout_seconds if expected_results.timeout_seconds > 0 else max(passive_timeout, 10.0)
+    )
+    env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] = str(passive_timeout)
+    env[ENV_PASSIVE_OBSERVATION_TIMEOUT] = str(passive_timeout)
+    env[ENV_ACTIVE_RESULT_TIMEOUT] = str(active_timeout)
     env["OPCUA_TARGET_FINAL_RESULT_REQUIRED"] = str(expected_results.final_result_required).lower()
-    required_classifications = {
-        "single": 1,
-        "sync": 2,
-        "batch": 3,
-        "job": 4,
-        "stitching": 5,
-        "intervention": 6,
-        "text": 7,
-    }
-    required_classification = required_classifications.get(expected_results.classification)
+    required_classification = result_classification_value(expected_results.classification)
     if required_classification is not None:
         env["OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION"] = str(required_classification)
     else:
         env.pop("OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION", None)
 
+    # The SUT manifest is its own claim source. When a run has no manifest (ad hoc
+    # --endpoint), leave OPCUA_CAPABILITIES_FILE unset so every CU is treated as
+    # applicable rather than silently adopting another server's claims.
     caps = profile.capabilities_file_path()
     if caps and caps.exists():
         env["OPCUA_CAPABILITIES_FILE"] = str(caps)
-    elif "OPCUA_CAPABILITIES_FILE" not in env:
-        default_caps = base_dir / "target_server_cu_profiles" / "default.capabilities.yaml"
-        if default_caps.exists():
-            env["OPCUA_CAPABILITIES_FILE"] = str(default_caps)
 
     excluded_cus = _excluded_cus_for_result_scope(
         expected_results.classification,
@@ -720,12 +896,13 @@ def _build_spec_test_command(
     """
     cmd: list[str] = [
         python_exe,
+        # Unbuffered so live progress is visible while a slow target run streams.
         "-u",
         "-m",
         "pytest",
         str(spec_dir),
         "--tb=short",
-        "-v",
+        "-v" if verbose else "-q",
         f"--junit-xml={junit_xml}",
         f"--timeout={test_timeout_seconds}",
     ]
@@ -742,6 +919,7 @@ def run_live_spec_tests(
     timeout_seconds: int = 600,
     verbose: bool = False,
     base_dir: Path | None = None,
+    interactive_prompts: bool = False,
 ) -> tuple[int, dict]:
     """Invoke specification_tests/ against the configured target server.
 
@@ -787,7 +965,7 @@ def run_live_spec_tests(
         return 0, {"status": "skipped", "reason": "spec_dir_not_found"}
 
     python_exe = _find_venv_python(base_dir)
-    env = _build_spec_test_env(profile, base_dir=base_dir)
+    env = _build_spec_test_env(profile, base_dir=base_dir, interactive_prompts=interactive_prompts)
 
     # Exclude simulator-only tests when the profile does not use simulate_methods.
     # The conftest fixture would skip them anyway (SimulateResults folder absent),
@@ -934,6 +1112,29 @@ def run_preflight(profile: TargetServerCuProfile, output_dir: Path) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _capture_model_inventory(profile: TargetServerCuProfile, output_dir: Path) -> dict:
+    """Capture required read-only Phase 2 model evidence for one target."""
+    from helpers.connection_security import (
+        ConnectionSecurity,
+        connection_security_from_manifest_path,
+    )
+    from helpers.model_inventory import write_model_inventory
+
+    endpoint = profile.target.endpoint
+    security = ConnectionSecurity(endpoint=endpoint)
+    source_path = Path(profile.source_path)
+    if source_path.name.endswith(".sut.yaml") and source_path.is_file():
+        security = connection_security_from_manifest_path(source_path)
+    inventory_path = output_dir / "model-inventory.json"
+    inventory = write_model_inventory(endpoint, inventory_path, timeout=15.0, security=security)
+    return {
+        "status": "completed" if inventory["complete"] else "inconclusive",
+        "path": str(inventory_path),
+        "server_node_count": inventory["server_inventory"]["node_count"],
+        "warning_count": len(inventory["server_inventory"]["warnings"]),
+    }
+
+
 def run_automated(
     profile: TargetServerCuProfile,
     output_dir: Path,
@@ -944,6 +1145,8 @@ def run_automated(
     spec_tests_timeout: int = 600,
     verbose: bool = False,
     base_dir: Path | None = None,
+    excel_mode: str = "always",
+    excel_out: str | Path | None = None,
 ) -> int:
     """Run Target Server CU validation in automated or guided mode.
 
@@ -956,11 +1159,18 @@ def run_automated(
        classification-only report without running live tests.
 
     Returns 0 on success, 1 on configuration errors, blocking preflight issues,
-    or spec test failures.
+    spec test failures, or missing/failed run-scoped coverage evidence.
+
+    ``excel_mode`` and ``excel_out`` mirror the ``--excel``/``--excel-out`` CLI
+    flags: ``never`` disables workbook generation entirely, ``on-success`` skips
+    it after failures, and ``excel_out`` names an additional copy destination.
+    Only those two deliberate policy skips are benign; a workbook that should
+    have been produced but could not be (for example because the JUnit XML or
+    run-scoped CU coverage JSON is missing) fails the target run.
     """
     _section(f"Target Server CU run ({mode})")
 
-    cfg_report = run_config_preflight(profile)
+    cfg_report = run_config_preflight(profile, allow_prompt=interactive_prompts or mode == "guided")
     tcp_check = check_endpoint_reachable(profile.target.endpoint)
     cfg_report.add(tcp_check)
 
@@ -1039,10 +1249,24 @@ def run_automated(
         }
     }
 
+    # Always capture the server's address space before Phase 2 methods can
+    # change state. Inventory browsing never reads values or calls methods.
+    endpoint = profile.target.endpoint
+    if endpoint and "<" not in endpoint:
+        try:
+            extra["model_inventory"] = _capture_model_inventory(profile, output_dir)
+            _log(
+                f"  Model inventory    : {extra['model_inventory']['status']} "
+                f"({extra['model_inventory']['server_node_count']} server nodes)"
+            )
+        except Exception as exc:  # noqa: BLE001 - convert inventory failure into explicit run evidence
+            extra["model_inventory"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+            _log(_c(_ANSI_RED, f"  Model inventory    : FAILED — {exc}"))
+
     # ── Live specification_tests/ run ──────────────────────────────────────
     spec_rc = 0
     spec_meta: dict | None = None
-    endpoint = profile.target.endpoint
+    inventory_failed = extra.get("model_inventory", {}).get("status") == "failed"
     if skip_spec_tests:
         _log("\n  Live specification_tests run skipped (--skip-spec-tests).")
         _log(f"  To run live tests: omit --skip-spec-tests (endpoint: {endpoint or '<not set>'})")
@@ -1056,6 +1280,7 @@ def run_automated(
             timeout_seconds=spec_tests_timeout,
             verbose=verbose,
             base_dir=base_dir,
+            interactive_prompts=interactive_prompts,
         )
         extra["spec_tests"] = spec_meta
         if spec_meta.get("status") == "completed":
@@ -1073,6 +1298,10 @@ def run_automated(
         _log("\n  Endpoint not configured — live specification_tests run skipped.")
         _log("  Configure target.endpoint in the profile or pass --endpoint <url>.")
 
+    if inventory_failed:
+        spec_rc = spec_rc or 1
+        outcome_summary = "MODEL_INVENTORY_FAILED"
+
     report_path = _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
     summary_path = _write_human_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary)
     md_summary_path = _write_markdown_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra)
@@ -1083,16 +1312,33 @@ def run_automated(
             report_path,
             run_result="passed" if spec_rc == 0 else "failed",
             base_dir=base_dir,
+            excel_mode=excel_mode,
+            excel_out=excel_out,
         )
         extra["excel_report"] = excel_meta
         report_path = _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
         md_summary_path = _write_markdown_summary(
             output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra
         )
-        if excel_meta["status"] == "generated":
+        if excel_meta["status"] == EXCEL_STATUS_GENERATED:
             _log(f"  Excel report:    {excel_meta['path']}")
+            if excel_meta.get("copied_to"):
+                _log(f"  Excel copy:      {excel_meta['copied_to']}")
+        elif is_benign_excel_skip(excel_meta):
+            _log(f"  Excel report:    skipped — {excel_meta['reason']}")
         else:
-            _log(_c(_ANSI_RED, f"  Excel report:    {excel_meta['status']} — {excel_meta['reason']}"))
+            _log(
+                _c(
+                    _ANSI_RED,
+                    f"  Excel report:    {excel_meta['status']} — {excel_meta.get('reason') or 'no reason reported'}",
+                )
+            )
+            _log(
+                _c(
+                    _ANSI_RED,
+                    "  Coverage evidence for this run is incomplete — the target run cannot be reported as passed.",
+                )
+            )
             spec_rc = spec_rc or 1
 
     _log(f"\n  Evidence report: {report_path}")
@@ -1101,7 +1347,13 @@ def run_automated(
     _log("")
 
     if spec_rc != 0:
-        _log(_c(_ANSI_RED, "  Target Server CU run FAILED — spec tests had failures or errors."))
+        _log(
+            _c(
+                _ANSI_RED,
+                "  Target Server CU run FAILED — spec tests had failures/errors, "
+                "or run-scoped coverage evidence could not be produced.",
+            )
+        )
         return 1
 
     if spec_meta and spec_meta.get("status") == "skipped":

@@ -614,6 +614,41 @@ class ResultClassification:
     VALID_VALUES: set[int] = {0, 1, 2, 3, 4, 5, 6, 7}
 
 
+# Canonical, single-source mapping between ResultClassification enum values and
+# the lower-case profile/config keys used by target server profiles, discovery
+# output and the trigger adapters.  Every consumer must use these helpers so a
+# classification can never be mapped to two different names.
+RESULT_CLASSIFICATION_NAMES: dict[int, str] = {
+    ResultClassification.SINGLE_RESULT: "single",
+    ResultClassification.SYNC_RESULT: "sync",
+    ResultClassification.BATCH_RESULT: "batch",
+    ResultClassification.JOB_RESULT: "job",
+    ResultClassification.STITCHING_RESULT: "stitching",
+    ResultClassification.INTERVENTION_RESULT: "intervention",
+    ResultClassification.TEXT_RESULT: "text",
+}
+
+RESULT_CLASSIFICATION_VALUES: dict[str, int] = {name: value for value, name in RESULT_CLASSIFICATION_NAMES.items()}
+
+
+def result_classification_name(value: int | None) -> str:
+    """Return the canonical profile key for a ResultClassification value.
+
+    Returns an empty string for ``None``, ``Undefined`` and unknown values so
+    callers can fall back deterministically instead of guessing.
+    """
+    if value is None or isinstance(value, bool):
+        return ""
+    return RESULT_CLASSIFICATION_NAMES.get(int(value), "")
+
+
+def result_classification_value(name: str | None) -> int | None:
+    """Return the ResultClassification enum value for a canonical profile key."""
+    if not name:
+        return None
+    return RESULT_CLASSIFICATION_VALUES.get(str(name).strip().lower())
+
+
 # ---------------------------------------------------------------------------
 # ResultEvaluation enum
 # ---------------------------------------------------------------------------

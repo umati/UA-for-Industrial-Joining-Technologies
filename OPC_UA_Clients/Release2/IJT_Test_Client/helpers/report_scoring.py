@@ -27,8 +27,14 @@ should not need label-specific edits.
 Public helpers include :func:`format_kpi_strip`, :func:`format_status_count`,
 :func:`format_status_label`, :func:`format_status_counts`,
 :func:`format_primary_reason_note`, :func:`format_delta_summary`, :func:`outcome_label`,
-:func:`format_outcome_label`, :func:`status_color_excel`, and
+:func:`format_outcome_label`, :func:`status_color_excel`,
+:func:`canonical_outcome_for`, :func:`canonical_outcome_label`, and
 :func:`is_healthy`.
+
+Canonical outcomes (helpers.canonical_outcomes) are the vocabulary the final
+JSON, Markdown, and Excel artifacts record. The public labels here stay the
+established report glossary wording; :func:`canonical_outcome_for` links the
+two so no generator invents its own status strings.
 """
 
 from __future__ import annotations
@@ -37,6 +43,11 @@ import re
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any
+
+from helpers.canonical_outcomes import (
+    CanonicalOutcome,
+    canonical_for_report_outcome,
+)
 
 # ``partial`` is produced when a CU has support coverage plus accepted policy,
 # environment, skipped, untested, blocked, or not-supported detail rows.
@@ -207,6 +218,38 @@ def status_for(cu_key: str, outcome: str, active_cus: set[str]) -> tuple[str, st
 def status_count_key(status: str) -> str:
     """Convert a public status label to the internal count key."""
     return STATUS_COUNT_KEYS.get(status, status.lower().replace(" ", "_"))
+
+
+def canonical_outcome_for(outcome: str, *, claimed: bool = False) -> CanonicalOutcome:
+    """Return the canonical final-report outcome for an internal CU outcome.
+
+    Public labels (``Supported``, ``Supported with Notes``, ``Blocked`` …) stay
+    the established report glossary wording. This function gives the canonical
+    outcome that final JSON/Markdown/Excel reports record alongside them, so
+    both generators classify from one vocabulary instead of ad-hoc strings.
+    """
+    return canonical_for_report_outcome(outcome, claimed=claimed)
+
+
+def canonical_outcome_label(outcome: str, *, claimed: bool = False) -> str:
+    """Return the canonical outcome label for an internal CU outcome."""
+    return canonical_outcome_for(outcome, claimed=claimed).label
+
+
+#: Public label -> canonical outcome for the labels that map unambiguously.
+#: ``With Notes`` is deliberately absent: it covers both a supported CU with
+#: notes and an out-of-scope not-supported CU, so its canonical outcome must be
+#: derived from the internal outcome via :func:`canonical_outcome_for`.
+CANONICAL_OUTCOME_FOR_LABEL: Mapping[str, CanonicalOutcome] = MappingProxyType(
+    {
+        "Supported": CanonicalOutcome.PASSED,
+        "Supported with Notes": CanonicalOutcome.INCONCLUSIVE,
+        "Failed": CanonicalOutcome.FAILED,
+        "Blocked": CanonicalOutcome.BLOCKED,
+        "Not Supported": CanonicalOutcome.NOT_SUPPORTED,
+        "Untested": CanonicalOutcome.NOT_TESTED,
+    }
+)
 
 
 def format_status_count(label: str, count: int) -> str:

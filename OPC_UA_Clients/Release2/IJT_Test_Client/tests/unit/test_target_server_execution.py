@@ -11,6 +11,7 @@ import json
 import sys
 from contextlib import redirect_stdout
 from io import StringIO
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,7 +20,7 @@ from helpers import target_server_execution as tse
 from helpers.target_server_cu_config import (
     OUTCOME_PASSED,
     build_default_profile,
-    load_target_server_profile_from_dict,
+    build_execution_profile,
 )
 from helpers.target_server_readiness import PreflightReport, ReadinessOutcome
 
@@ -92,7 +93,7 @@ class TestExcludedCusAndOverrides:
         assert tse._excluded_cus_for_result_scope("any") == frozenset()
 
     def test_apply_runtime_overrides_applies_all_fields(self, tmp_path):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://old:1"},
@@ -118,7 +119,7 @@ class TestExcludedCusAndOverrides:
 
 class TestBuildSpecTestEnvDirect:
     def test_build_spec_test_env_populates_all_expected_vars(self, tmp_path):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://target:40451"},
@@ -134,10 +135,6 @@ class TestBuildSpecTestEnvDirect:
                 },
             }
         )
-        default_dir = tmp_path / "target_server_cu_profiles"
-        default_dir.mkdir(parents=True, exist_ok=True)
-        (default_dir / "default.capabilities.yaml").write_text("", encoding="utf-8")
-
         env = tse._build_spec_test_env(profile, base_dir=tmp_path)
         assert env["OPCUA_SERVER_URL"] == "opc.tcp://target:40451"
         assert env["OPCUA_TOOL_PRODUCT_INSTANCE_URI"] == "urn:tool:123"
@@ -145,12 +142,13 @@ class TestBuildSpecTestEnvDirect:
         assert env["OPCUA_JOINING_PROCESS_ORIGIN_ID"] == "O1"
         assert env["OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION"] == "4"
         assert "OPCUA_TARGET_EXCLUDED_CUS" in env
-        assert env["OPCUA_CAPABILITIES_FILE"] == str(default_dir / "default.capabilities.yaml")
+        # No manifest -> no claim source is invented for the pytest process.
+        assert "OPCUA_CAPABILITIES_FILE" not in env
 
     def test_build_spec_test_env_with_explicit_existing_caps_file(self, tmp_path):
-        caps_file = tmp_path / "my.capabilities.yaml"
+        caps_file = tmp_path / "my.sut.yaml"
         caps_file.write_text("schema_version: 1", encoding="utf-8")
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://target:40451"},
@@ -213,13 +211,27 @@ class TestEvidenceWriters:
 
 
 class TestGenerateExcelReport:
-    def test_skips_when_junit_or_cu_json_missing(self, tmp_path):
+    def test_fails_when_junit_or_cu_json_missing(self, tmp_path):
+        """Missing run-scoped evidence is evidence loss, not a benign skip."""
         profile = build_default_profile(endpoint="opc.tcp://x:1")
         result = tse._generate_excel_report(
             profile, tmp_path, tmp_path / "target-server-cu-report.json", run_result="passed"
         )
-        assert result["status"] == "skipped"
+        assert result["status"] == tse.EXCEL_STATUS_FAILED
+        assert result["reason_code"] == tse.EXCEL_REASON_MISSING_EVIDENCE
         assert result["path"] is None
+        assert any("spec-tests.xml" in p for p in result["missing_artifacts"])
+        assert any("cu-coverage-report.json" in p for p in result["missing_artifacts"])
+        assert tse.is_benign_excel_skip(result) is False
+
+    def test_missing_only_cu_coverage_json_also_fails(self, tmp_path):
+        (tmp_path / "spec-tests.xml").write_text("<xml/>", encoding="utf-8")
+        profile = build_default_profile(endpoint="opc.tcp://x:1")
+        result = tse._generate_excel_report(
+            profile, tmp_path, tmp_path / "target-server-cu-report.json", run_result="passed"
+        )
+        assert result["status"] == tse.EXCEL_STATUS_FAILED
+        assert result["missing_artifacts"] == [str(tmp_path / "cu-coverage-report.json")]
 
     def test_generated_when_subprocess_succeeds(self, tmp_path, monkeypatch):
         (tmp_path / "spec-tests.xml").write_text("<xml/>", encoding="utf-8")
@@ -261,6 +273,7 @@ class TestGenerateExcelReport:
             base_dir=tmp_path,
         )
         assert result["status"] == "failed"
+        assert result["reason_code"] == tse.EXCEL_REASON_GENERATOR_ERROR
         assert "boom" in result["reason"]
 
     def test_includes_capabilities_flag_when_capabilities_file_exists(self, tmp_path, monkeypatch):
@@ -339,7 +352,7 @@ class TestRunPreflightDirect:
         assert report["mode"] == "preflight_only"
 
     def test_all_checks_pass_returns_zero(self, tmp_path, monkeypatch):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://reachable-host:1"},
@@ -357,7 +370,7 @@ class TestRunPreflightDirect:
         assert "PASSED" in summary
 
     def test_manual_required_is_non_blocking(self, tmp_path, monkeypatch):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://reachable-host:1"},
@@ -382,7 +395,7 @@ class TestRunPreflightDirect:
 
 class TestRunAutomatedDirect:
     def _reachable_profile(self, *, trigger_mode: str = "simulate_methods") -> object:
-        return load_target_server_profile_from_dict(
+        return build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://reachable-host:1"},
@@ -395,6 +408,16 @@ class TestRunAutomatedDirect:
             tse,
             "check_endpoint_reachable",
             lambda endpoint, **kw: ReadinessOutcome(outcome=OUTCOME_PASSED, check_name="endpoint_reachable"),
+        )
+        monkeypatch.setattr(
+            tse,
+            "_capture_model_inventory",
+            lambda profile, output_dir: {
+                "status": "completed",
+                "path": str(output_dir / "model-inventory.json"),
+                "server_node_count": 1,
+                "warning_count": 0,
+            },
         )
 
     def test_blocking_endpoint_returns_1_without_spec_tests_key(self, tmp_path):
@@ -498,7 +521,7 @@ class TestRunAutomatedDirect:
         assert rc == 1
 
     def test_automated_run_without_endpoint_logs_classification_only(self, tmp_path, monkeypatch):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": ""},
@@ -521,7 +544,7 @@ class TestRunAutomatedDirect:
 
 class TestRunLiveSpecTestsDirectExceptions:
     def test_timeout_expired_sets_timeout_metadata(self, tmp_path, monkeypatch):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://reachable-host:1"},
@@ -540,7 +563,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert meta["outcome"] == "failed"
 
     def test_generic_exception_sets_error_metadata(self, tmp_path, monkeypatch):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://reachable-host:1"},
@@ -560,7 +583,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert "Subprocess execution blocked" in meta["error"]
 
     def test_empty_endpoint_skipped(self, tmp_path):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": ""},
@@ -572,7 +595,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert meta["reason"] == "endpoint_not_configured"
 
     def test_normal_subprocess_run_completed(self, tmp_path, monkeypatch):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://reachable:40451"},
@@ -591,7 +614,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert meta["outcome"] == "passed"
 
     def test_apply_runtime_overrides_per_classification(self):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "selection": {
@@ -618,7 +641,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert "job_result" not in excluded
 
     def test_build_spec_test_env_exports_per_classification_ids(self, tmp_path):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "target": {"endpoint": "opc.tcp://localhost:40451"},
@@ -636,7 +659,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert env.get("OPCUA_BATCH_JOINING_PROCESS_ID") == "Batch_456"
 
     def test_write_markdown_summary_generates_file_and_content(self, tmp_path):
-        profile = load_target_server_profile_from_dict(
+        profile = build_execution_profile(
             {
                 "schema_version": 1,
                 "profile_name": "Test Profile",
@@ -668,7 +691,8 @@ class TestRunLiveSpecTestsDirectExceptions:
         content = md_path.read_text(encoding="utf-8")
         assert "# Target Server Conformance Unit Run Summary" in content
         assert "🟢 **PASSED**" in content
-        assert "| `TCP_PORT` | ✅ `passed` | Port reachable |" in content
+        assert "| `TCP_PORT` | ✅ `passed` | Passed | Port reachable |" in content
+        assert "- **Preflight Outcome:** `Passed`" in content
         assert "| `structure` | 10 |" in content
         assert "spec-tests.xml" in content
         assert "report.xlsx" in content
@@ -697,14 +721,14 @@ class TestRunLiveSpecTestsDirectExceptions:
             JoiningProcessId="Job_1",
             JoiningProcessOriginId="Job_Orig_1",
             Name="Sequence1",
-            Classification=5,
+            Classification=4,
             AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="SeqIndex_1")],
         )
         mock_proc_batch = MagicMock(
             JoiningProcessId="Batch_1",
             JoiningProcessOriginId="Batch_Orig_1",
             Name="Batch1",
-            Classification=2,
+            Classification=3,
             AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="BatchIndex_1")],
         )
         mock_jpm.call_method = AsyncMock(return_value=[[mock_proc_single, mock_proc_job, mock_proc_batch]])
@@ -723,6 +747,10 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert len(data["processes"]) == 3
         assert "Prog_1" in data["suggested_yaml"]
         assert "Job_1" in data["suggested_yaml"]
+        # Each process is suggested under exactly one canonical classification key.
+        assert data["suggested_selection"]["single"]["id"] == "Prog_1"
+        assert data["suggested_selection"]["job"]["id"] == "Job_1"
+        assert data["suggested_selection"]["batch"]["id"] == "Batch_1"
 
     @pytest.mark.asyncio
     async def test_async_discover_target_server_no_joining_system(self):
@@ -742,7 +770,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert "JoiningSystem node not found" in data["error"]
 
     def test_run_discover_target_success(self, monkeypatch):
-        async def fake_discover(endpoint, timeout=15.0):
+        async def fake_discover(endpoint, timeout=15.0, *, security=None, prompt=None):
             return {
                 "endpoint": endpoint,
                 "tools": [{"name": "Tool1", "product_instance_uri": "uri:test"}],
@@ -763,7 +791,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert rc == 0
 
     def test_run_discover_target_error_in_data(self, monkeypatch):
-        async def fake_discover(endpoint, timeout=15.0):
+        async def fake_discover(endpoint, timeout=15.0, *, security=None, prompt=None):
             return {"endpoint": endpoint, "error": "Connection refused"}
 
         monkeypatch.setattr(tse, "async_discover_target_server", fake_discover)
@@ -771,9 +799,552 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert rc == 1
 
     def test_run_discover_target_exception(self, monkeypatch):
-        async def fake_discover(endpoint, timeout=15.0):
+        async def fake_discover(endpoint, timeout=15.0, *, security=None, prompt=None):
             raise RuntimeError("Network down")
 
         monkeypatch.setattr(tse, "async_discover_target_server", fake_discover)
         rc = tse.run_discover_target("opc.tcp://localhost:40451")
         assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# Discovery classification mapping (ResultClassification enum alignment)
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoveryClassificationMapping:
+    @pytest.mark.parametrize(
+        ("classification", "expected"),
+        [
+            (1, "single"),
+            (2, "sync"),
+            (3, "batch"),
+            (4, "job"),
+            (5, "stitching"),
+            (6, "intervention"),
+            (7, "text"),
+        ],
+    )
+    def test_server_classification_is_authoritative(self, classification, expected):
+        process = {"name": "", "selection_name": "", "classification": classification}
+        assert tse.classify_discovered_process(process) == expected
+
+    def test_server_classification_wins_over_name_hint(self):
+        # Name says "batch" but the server reports JobResult(4) — the enum wins.
+        process = {"name": "Batch of tightenings", "selection_name": "", "classification": 4}
+        assert tse.classify_discovered_process(process) == "job"
+
+    def test_name_hint_only_used_when_classification_undefined(self):
+        assert tse.classify_discovered_process({"name": "Sequence 1", "selection_name": "", "classification": 0}) == (
+            "job"
+        )
+        assert tse.classify_discovered_process({"name": "Batch 1", "selection_name": "", "classification": 0}) == (
+            "batch"
+        )
+        assert tse.classify_discovered_process({"name": "PSet 12", "selection_name": "", "classification": 0}) == (
+            "single"
+        )
+        assert tse.classify_discovered_process({"name": "Mystery", "selection_name": "", "classification": 0}) == ""
+
+    def test_process_is_never_suggested_under_two_classifications(self):
+        processes = [
+            {"id": "P1", "origin_id": "O1", "name": "Batch job sequence", "selection_name": "", "classification": 3},
+            {"id": "P2", "origin_id": "O2", "name": "Job", "selection_name": "", "classification": 4},
+        ]
+        suggestion = tse.suggest_process_selection(processes)
+        assert suggestion["batch"]["id"] == "P1"
+        assert suggestion["job"]["id"] == "P2"
+        assigned_ids = [p["id"] for p in suggestion.values()]
+        assert len(assigned_ids) == len(set(assigned_ids))
+
+    def test_suggested_yaml_only_contains_classified_processes(self):
+        suggestion = tse.suggest_process_selection(
+            [{"id": "P1", "origin_id": "O1", "name": "Program", "selection_name": "", "classification": 1}]
+        )
+        yaml_text = tse.render_suggested_selection_yaml("urn:tool:1", suggestion)
+        assert "    single:" in yaml_text
+        assert "    job:" not in yaml_text
+        assert 'product_instance_uri: "urn:tool:1"' in yaml_text
+
+    def test_suggested_yaml_reports_when_nothing_could_be_classified(self):
+        yaml_text = tse.render_suggested_selection_yaml("urn:tool:1", {})
+        assert "No joining process could be classified" in yaml_text
+
+
+# ---------------------------------------------------------------------------
+# Spec test command construction (quiet/verbose)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildSpecTestCommand:
+    def _cmd(self, tmp_path, **kwargs):
+        return tse._build_spec_test_command(
+            "python", tmp_path / "specification_tests", tmp_path / "spec-tests.xml", **kwargs
+        )
+
+    def test_quiet_by_default(self, tmp_path):
+        cmd = self._cmd(tmp_path)
+        assert "-q" in cmd
+        assert "-v" not in cmd
+
+    def test_verbose_flag_switches_to_v(self, tmp_path):
+        cmd = self._cmd(tmp_path, verbose=True)
+        assert "-v" in cmd
+        assert "-q" not in cmd
+
+    def test_python_stays_unbuffered_and_carries_timeout(self, tmp_path):
+        cmd = self._cmd(tmp_path, test_timeout_seconds=321)
+        assert cmd[:4] == ["python", "-u", "-m", "pytest"]
+        assert "--timeout=321" in cmd
+
+    def test_simulation_marker_exclusion_is_optional(self, tmp_path):
+        assert "not simulation" in self._cmd(tmp_path)
+        assert "not simulation" not in self._cmd(tmp_path, exclude_simulation=False)
+
+
+# ---------------------------------------------------------------------------
+# Excel flag handling for target runs
+# ---------------------------------------------------------------------------
+
+
+class TestTargetExcelFlagHandling:
+    def _prepare(self, tmp_path):
+        (tmp_path / "spec-tests.xml").write_text("<xml/>", encoding="utf-8")
+        (tmp_path / "cu-coverage-report.json").write_text("{}", encoding="utf-8")
+        return build_default_profile(endpoint="opc.tcp://x:1")
+
+    class _FakeCompleted:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def test_excel_never_skips_generation(self, tmp_path, monkeypatch):
+        profile = self._prepare(tmp_path)
+        called = {"ran": False}
+
+        def fake_run(cmd, **kw):
+            called["ran"] = True
+            return self._FakeCompleted()
+
+        monkeypatch.setattr(tse.subprocess, "run", fake_run)
+        result = tse._generate_excel_report(
+            profile,
+            tmp_path,
+            tmp_path / "target-server-cu-report.json",
+            run_result="passed",
+            base_dir=tmp_path,
+            excel_mode="never",
+        )
+        assert result["status"] == "skipped"
+        assert result["reason_code"] == tse.EXCEL_REASON_DISABLED
+        assert tse.is_benign_excel_skip(result) is True
+        assert called["ran"] is False
+
+    def test_excel_on_success_skips_after_failure(self, tmp_path, monkeypatch):
+        profile = self._prepare(tmp_path)
+        monkeypatch.setattr(tse.subprocess, "run", lambda cmd, **kw: self._FakeCompleted())
+        result = tse._generate_excel_report(
+            profile,
+            tmp_path,
+            tmp_path / "target-server-cu-report.json",
+            run_result="failed",
+            base_dir=tmp_path,
+            excel_mode="on-success",
+        )
+        assert result["status"] == "skipped"
+        assert result["reason_code"] == tse.EXCEL_REASON_ON_SUCCESS_AFTER_FAILURE
+        assert tse.is_benign_excel_skip(result) is True
+
+    def test_unknown_skip_reason_code_is_not_benign(self):
+        """A skip the runner does not recognise must never be silently accepted."""
+        assert tse.is_benign_excel_skip({"status": "skipped", "reason_code": "something_new"}) is False
+        assert tse.is_benign_excel_skip({"status": "skipped"}) is False
+        assert tse.is_benign_excel_skip({"status": "generated", "reason_code": ""}) is False
+
+    def test_shared_report_xlsx_is_not_mirrored_by_default(self, tmp_path, monkeypatch):
+        profile = self._prepare(tmp_path)
+
+        def fake_run(cmd, **kw):
+            Path(cmd[cmd.index("--out") + 1]).write_bytes(b"workbook")
+            return self._FakeCompleted()
+
+        monkeypatch.setattr(tse.subprocess, "run", fake_run)
+        result = tse._generate_excel_report(
+            profile,
+            tmp_path,
+            tmp_path / "target-server-cu-report.json",
+            run_result="passed",
+            base_dir=tmp_path,
+        )
+        assert result["status"] == "generated"
+        assert result["path"] == str(tmp_path / "report-controller.xlsx")
+        assert "copied_to" not in result
+        assert not (tmp_path / "test-results" / "report.xlsx").exists()
+
+    def test_excel_out_copies_workbook_to_requested_path(self, tmp_path, monkeypatch):
+        profile = self._prepare(tmp_path)
+
+        def fake_run(cmd, **kw):
+            Path(cmd[cmd.index("--out") + 1]).write_bytes(b"workbook")
+            return self._FakeCompleted()
+
+        monkeypatch.setattr(tse.subprocess, "run", fake_run)
+        requested = tmp_path / "elsewhere" / "custom.xlsx"
+        result = tse._generate_excel_report(
+            profile,
+            tmp_path,
+            tmp_path / "target-server-cu-report.json",
+            run_result="passed",
+            base_dir=tmp_path,
+            excel_out=requested,
+        )
+        assert result["status"] == "generated"
+        assert result["copied_to"] == str(requested)
+        assert requested.exists()
+
+    def test_target_run_never_writes_the_shared_regression_baseline(self, tmp_path, monkeypatch):
+        profile = self._prepare(tmp_path)
+        captured: dict = {}
+
+        def fake_run(cmd, **kw):
+            captured["cmd"] = cmd
+            return self._FakeCompleted()
+
+        monkeypatch.setattr(tse.subprocess, "run", fake_run)
+        tse._generate_excel_report(
+            profile,
+            tmp_path,
+            tmp_path / "target-server-cu-report.json",
+            run_result="passed",
+            base_dir=tmp_path,
+        )
+        assert "--write-baseline" not in captured["cmd"]
+
+
+# ---------------------------------------------------------------------------
+# Result/observation timeout environment wiring
+# ---------------------------------------------------------------------------
+
+
+class TestSpecTestTimeoutEnv:
+    def test_active_and_passive_timeouts_are_separate(self, tmp_path):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://target:40451"},
+                "triggers": {"result": {"mode": "start_selected_joining", "timeout_seconds": 5}},
+                "workflow_execution": {"expected_results": {"timeout_seconds": 60}},
+            }
+        )
+        env = tse._build_spec_test_env(profile, base_dir=tmp_path)
+        assert env["OPCUA_TARGET_PASSIVE_OBSERVATION_TIMEOUT_SECONDS"] == "5.0"
+        assert env["OPCUA_TARGET_ACTIVE_RESULT_TIMEOUT_SECONDS"] == "60.0"
+        assert env["OPCUA_TARGET_RESULT_TIMEOUT_SECONDS"] == "5.0"
+
+    @pytest.mark.parametrize(
+        ("classification", "expected"),
+        [
+            ("single", "1"),
+            ("sync", "2"),
+            ("batch", "3"),
+            ("job", "4"),
+            ("stitching", "5"),
+            ("intervention", "6"),
+            ("text", "7"),
+        ],
+    )
+    def test_required_classification_matches_enum(self, tmp_path, classification, expected):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://target:40451"},
+                "workflow_execution": {"expected_results": {"classification": classification}},
+            }
+        )
+        env = tse._build_spec_test_env(profile, base_dir=tmp_path)
+        assert env["OPCUA_TARGET_REQUIRED_RESULT_CLASSIFICATION"] == expected
+
+
+class TestDiscoveryClassificationParsingEdgeCases:
+    @pytest.mark.asyncio
+    async def test_unreadable_classification_falls_back_to_name_hints(self):
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock()
+        mock_client.disconnect = AsyncMock()
+        mock_client.load_data_type_definitions = AsyncMock()
+        mock_client.get_namespace_index = AsyncMock(return_value=2)
+
+        mock_jpm = MagicMock()
+        mock_gjpl = MagicMock()
+        mock_gjpl.nodeid = "node:gjpl"
+        bad_process = MagicMock(
+            JoiningProcessId="P1",
+            JoiningProcessOriginId="O1",
+            Name="Batch program",
+            Classification="not-an-int",
+            AssociatedEntities=[],
+        )
+        mock_jpm.call_method = AsyncMock(return_value=[[bad_process]])
+
+        with (
+            patch("asyncua.Client", return_value=mock_client),
+            patch("helpers.node_discovery.find_joining_system", new=AsyncMock(return_value=MagicMock())),
+            patch("helpers.node_discovery.read_tool_product_instance_uri", new=AsyncMock(return_value="uri:tool1")),
+            patch("helpers.node_discovery.find_child_by_browse_name", new=AsyncMock(side_effect=[mock_jpm, mock_gjpl])),
+        ):
+            data = await tse.async_discover_target_server("opc.tcp://localhost:40451")
+
+        assert data["processes"][0]["classification"] == 0
+        assert data["suggested_selection"]["batch"]["id"] == "P1"
+
+
+class TestExcelCopyFailureIsNonFatal:
+    def test_copy_failure_is_logged_and_run_still_reports_generated(self, tmp_path, monkeypatch):
+        (tmp_path / "spec-tests.xml").write_text("<xml/>", encoding="utf-8")
+        (tmp_path / "cu-coverage-report.json").write_text("{}", encoding="utf-8")
+        profile = build_default_profile(endpoint="opc.tcp://x:1")
+
+        class FakeCompleted:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def fake_run(cmd, **kw):
+            Path(cmd[cmd.index("--out") + 1]).write_bytes(b"workbook")
+            return FakeCompleted()
+
+        def boom(*_a, **_kw):
+            raise OSError("destination is read-only")
+
+        monkeypatch.setattr(tse.subprocess, "run", fake_run)
+        monkeypatch.setattr(tse.shutil, "copy2", boom)
+        result = tse._generate_excel_report(
+            profile,
+            tmp_path,
+            tmp_path / "target-server-cu-report.json",
+            run_result="passed",
+            base_dir=tmp_path,
+            excel_out=tmp_path / "elsewhere" / "custom.xlsx",
+        )
+        assert result["status"] == "generated"
+        assert "copied_to" not in result
+
+
+class TestRunAutomatedExcelReporting:
+    def _profile(self):
+        return build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://reachable-host:1"},
+                "triggers": {"result": {"mode": "simulate_methods"}},
+            }
+        )
+
+    def _run(self, tmp_path, monkeypatch, excel_meta, capsys, **kwargs):
+        monkeypatch.setattr(
+            tse,
+            "check_endpoint_reachable",
+            lambda endpoint, **kw: ReadinessOutcome(outcome=OUTCOME_PASSED, check_name="endpoint_reachable"),
+        )
+        monkeypatch.setattr(
+            tse,
+            "run_live_spec_tests",
+            lambda *a, **kw: (0, {"status": "completed", "outcome": "passed"}),
+        )
+        monkeypatch.setattr(
+            tse,
+            "_capture_model_inventory",
+            lambda profile, output_dir: {
+                "status": "completed",
+                "path": str(output_dir / "model-inventory.json"),
+                "server_node_count": 1,
+                "warning_count": 0,
+            },
+        )
+        captured: dict = {}
+
+        def fake_excel(profile, output_dir, report_path, **kw):
+            captured.update(kw)
+            return excel_meta
+
+        monkeypatch.setattr(tse, "_generate_excel_report", fake_excel)
+        rc = tse.run_automated(self._profile(), tmp_path, base_dir=tmp_path, **kwargs)
+        return rc, captured, capsys.readouterr().out
+
+    def test_excel_flags_are_forwarded_and_copy_is_logged(self, tmp_path, monkeypatch, capsys):
+        rc, captured, out = self._run(
+            tmp_path,
+            monkeypatch,
+            {"status": "generated", "reason": "", "path": "wb.xlsx", "copied_to": "copy.xlsx"},
+            capsys,
+            excel_mode="always",
+            excel_out="copy.xlsx",
+        )
+        assert rc == 0
+        assert captured["excel_mode"] == "always"
+        assert captured["excel_out"] == "copy.xlsx"
+        assert "Excel copy:" in out
+
+    def test_intentional_policy_skip_does_not_fail_the_run(self, tmp_path, monkeypatch, capsys):
+        rc, _captured, out = self._run(
+            tmp_path,
+            monkeypatch,
+            {
+                "status": tse.EXCEL_STATUS_SKIPPED,
+                "reason_code": tse.EXCEL_REASON_DISABLED,
+                "reason": "disabled (--excel=never)",
+                "path": None,
+            },
+            capsys,
+            excel_mode="never",
+        )
+        assert rc == 0
+        assert "skipped — disabled (--excel=never)" in out
+
+    def test_on_success_policy_skip_is_benign(self, tmp_path, monkeypatch, capsys):
+        """`--excel=on-success` declines the workbook by policy; the excel step
+        itself must not add a failure (spec failures fail the run on their own)."""
+        rc, _captured, out = self._run(
+            tmp_path,
+            monkeypatch,
+            {
+                "status": tse.EXCEL_STATUS_SKIPPED,
+                "reason_code": tse.EXCEL_REASON_ON_SUCCESS_AFTER_FAILURE,
+                "reason": "tests failed; skipped (--excel=on-success)",
+                "path": None,
+            },
+            capsys,
+            excel_mode="on-success",
+        )
+        assert rc == 0
+        assert "skipped — tests failed; skipped (--excel=on-success)" in out
+
+    def test_missing_coverage_evidence_fails_the_run(self, tmp_path, monkeypatch, capsys):
+        """An otherwise completed spec run with no JUnit/CU artifacts must fail."""
+        rc, _captured, out = self._run(
+            tmp_path,
+            monkeypatch,
+            {
+                "status": tse.EXCEL_STATUS_FAILED,
+                "reason_code": tse.EXCEL_REASON_MISSING_EVIDENCE,
+                "reason": "run-scoped coverage evidence is missing after a completed spec run: spec-tests.xml",
+                "path": None,
+                "missing_artifacts": ["spec-tests.xml"],
+            },
+            capsys,
+        )
+        assert rc == 1
+        assert "run-scoped coverage evidence is missing" in out
+        assert "Coverage evidence for this run is incomplete" in out
+
+    def test_unrecognised_skip_reason_fails_the_run(self, tmp_path, monkeypatch, capsys):
+        """Only declared policy skips are benign; anything else fails the run."""
+        rc, _captured, out = self._run(
+            tmp_path,
+            monkeypatch,
+            {"status": tse.EXCEL_STATUS_SKIPPED, "reason_code": "not_a_known_policy", "reason": "", "path": None},
+            capsys,
+        )
+        assert rc == 1
+        assert "no reason reported" in out
+
+    def test_failed_excel_fails_the_run(self, tmp_path, monkeypatch, capsys):
+        rc, _captured, out = self._run(
+            tmp_path,
+            monkeypatch,
+            {
+                "status": "failed",
+                "reason_code": tse.EXCEL_REASON_GENERATOR_ERROR,
+                "reason": "generator crashed",
+                "path": None,
+            },
+            capsys,
+        )
+        assert rc == 1
+        assert "generator crashed" in out
+
+
+# ---------------------------------------------------------------------------
+# Connection security is applied to the discovery and spec-test sessions
+# ---------------------------------------------------------------------------
+
+
+class TestTargetSessionConnectionSecurity:
+    @pytest.mark.asyncio
+    async def test_discovery_applies_the_declared_security(self):
+        from helpers.connection_security import ConnectionSecurity
+
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock()
+        mock_client.disconnect = AsyncMock()
+        mock_client.load_data_type_definitions = AsyncMock()
+        mock_client.get_namespace_index = AsyncMock(return_value=2)
+        security = ConnectionSecurity(auth_source="environment", username="op", password_env_var="IJT_DISCOVER_PW")
+        applied = AsyncMock()
+
+        with (
+            patch("asyncua.Client", return_value=mock_client),
+            patch("helpers.node_discovery.find_joining_system", new=AsyncMock(return_value=None)),
+            patch("helpers.connection_security.apply_connection_security", new=applied),
+        ):
+            await tse.async_discover_target_server("opc.tcp://localhost:40451", security=security)
+
+        applied.assert_awaited_once()
+        await_args = applied.await_args
+        assert await_args is not None
+        assert await_args.args[1] is security
+
+    @pytest.mark.asyncio
+    async def test_discovery_without_a_manifest_stays_anonymous(self):
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock()
+        mock_client.disconnect = AsyncMock()
+        mock_client.load_data_type_definitions = AsyncMock()
+        mock_client.get_namespace_index = AsyncMock(return_value=2)
+        applied = AsyncMock()
+
+        with (
+            patch("asyncua.Client", return_value=mock_client),
+            patch("helpers.node_discovery.find_joining_system", new=AsyncMock(return_value=None)),
+            patch("helpers.connection_security.apply_connection_security", new=applied),
+        ):
+            await tse.async_discover_target_server("opc.tcp://localhost:40451")
+
+        applied.assert_not_awaited()
+
+    def test_run_discover_target_logs_the_redacted_security_summary(self, monkeypatch, capsys):
+        from helpers.connection_security import ConnectionSecurity
+
+        async def fake_discover(endpoint, timeout=15.0, *, security=None, prompt=None):
+            return {"endpoint": endpoint, "tools": [], "processes": [], "suggested_yaml": ""}
+
+        monkeypatch.setattr(tse, "async_discover_target_server", fake_discover)
+        security = ConnectionSecurity(auth_source="environment", username="op", password_env_var="IJT_PW")
+        assert tse.run_discover_target("opc.tcp://localhost:40451", security=security) == 0
+
+    def test_spec_test_env_withholds_prompting_by_default(self, tmp_path):
+        from helpers.target_server_cu_config import build_execution_profile
+
+        profile = build_execution_profile({"schema_version": 1, "target": {"endpoint": "opc.tcp://localhost:40451"}})
+        env = tse._build_spec_test_env(profile, base_dir=tmp_path)
+        assert "OPCUA_TARGET_INTERACTIVE_PROMPTS" not in env
+
+    def test_spec_test_env_enables_prompting_for_an_interactive_run(self, tmp_path, monkeypatch):
+        from helpers.target_server_cu_config import build_execution_profile
+
+        monkeypatch.setenv("OPCUA_TARGET_INTERACTIVE_PROMPTS", "1")
+        profile = build_execution_profile({"schema_version": 1, "target": {"endpoint": "opc.tcp://localhost:40451"}})
+        assert (
+            tse._build_spec_test_env(profile, base_dir=tmp_path, interactive_prompts=True)[
+                "OPCUA_TARGET_INTERACTIVE_PROMPTS"
+            ]
+            == "1"
+        )
+
+    def test_spec_test_env_clears_inherited_prompt_permission(self, tmp_path, monkeypatch):
+        from helpers.target_server_cu_config import build_execution_profile
+
+        monkeypatch.setenv("OPCUA_TARGET_INTERACTIVE_PROMPTS", "1")
+        profile = build_execution_profile({"schema_version": 1, "target": {"endpoint": "opc.tcp://localhost:40451"}})
+        env = tse._build_spec_test_env(profile, base_dir=tmp_path, interactive_prompts=False)
+        assert "OPCUA_TARGET_INTERACTIVE_PROMPTS" not in env

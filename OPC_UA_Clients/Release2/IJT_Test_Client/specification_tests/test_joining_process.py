@@ -64,7 +64,7 @@ from helpers.node_discovery import (
     read_tool_product_instance_uri,
 )
 from helpers.skip_reasons import skip_accepted_policy, skip_companion_spec_note
-from helpers.target_server_cu_config import load_target_server_profile
+from helpers.sut_manifest import load_sut_manifest
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -237,7 +237,7 @@ async def _first_joining_process_identification_arg(client, ns_indices, jpm_node
         pytest.skip("Tool ProductInstanceUri not available - cannot build JoiningProcessIdentification")
     target_profile_path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
     if target_profile_path:
-        profile = load_target_server_profile(Path(target_profile_path))
+        profile = load_sut_manifest(Path(target_profile_path)).to_execution_profile()
         selection = profile.selection.joining_process
         if selection.policy == "exact_match":
             jp_arg = _jp_identification_arg(
@@ -304,7 +304,7 @@ async def _select_counter_parent_if_configured(jpm_node, ns_ijt: int, pi_uri: st
     target_profile_path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
     if not target_profile_path:
         return
-    profile = load_target_server_profile(Path(target_profile_path))
+    profile = load_sut_manifest(Path(target_profile_path)).to_execution_profile()
     parent = profile.cu_execution.extension_fields.get("counter_parent_process")
     if not isinstance(parent, dict):
         return
@@ -1336,8 +1336,26 @@ async def test_set_joining_process_counter_callable_if_present(opcua_client, ns_
     Called with the tool's ProductInstanceUri and a zero counter value.
     Acceptable outcomes: Good (counter set), BadNotSupported, BadInvalidArgument
     (when zero is not a valid counter value on this server).
+
+    When the SUT manifest signals that external size input is disabled
+    (``cu_execution.extension_fields.set_joining_process_counter_blocked: true``),
+    the behavioral invocation is skipped as Blocked — the method signature test
+    still runs to confirm the declaration is correct.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
+
+    # Blocked outcome when the manifest explicitly disables behavioral execution
+    # (e.g. external size input is disabled on this controller variant).
+    target_profile_path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
+    if target_profile_path:
+        _profile = load_sut_manifest(Path(target_profile_path)).to_execution_profile()
+        if _profile.cu_execution.extension_fields.get("set_joining_process_counter_blocked"):
+            pytest.skip(
+                "SetJoiningProcessCounter behavioral invocation is Blocked: "
+                "manifest declares set_joining_process_counter_blocked — "
+                "external size input is disabled on this controller; "
+                "signature validation passes but counter cannot be set"
+            )
     ns_di = ns_indices.get(NS_DI)
     ns_app = ns_indices.get(NS_APP)
     jpm = await _get_jpm(opcua_client, ns_ijt)

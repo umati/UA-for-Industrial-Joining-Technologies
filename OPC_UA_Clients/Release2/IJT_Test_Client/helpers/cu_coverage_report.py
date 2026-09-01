@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from helpers.canonical_outcomes import canonical_for_pytest_outcome, canonical_for_report_outcome
 from helpers.cu_registry import format_cu_not_supported
 from helpers.workbook_traceability import workbook_ref_id, workbook_traceability_report
 
@@ -230,10 +231,17 @@ class CuCoverageReportRecorder:
             **{key: value for key, value in item.items() if key != "dependency_cus"},
             "cus": cus,
             "outcome": outcome,
+            "canonical_outcome": canonical_for_pytest_outcome(outcome, claimed=self._is_claimed(cus)).value,
             "phase": report.when,
             "duration_s": round(float(getattr(report, "duration", 0.0)), 6),
             "reason": reason,
         }
+
+    def _is_claimed(self, cu_keys) -> bool:
+        """True when the SUT manifest claims at least one of *cu_keys*."""
+        if self.supported_cus is None:
+            return False
+        return any(cu_key in self.supported_cus for cu_key in cu_keys)
 
     def pytest_sessionfinish(self, session, exitstatus):  # noqa: D401
         if _is_collect_only_session(session) or not self.items_by_nodeid:
@@ -248,6 +256,9 @@ class CuCoverageReportRecorder:
                     {
                         **public_item,
                         "outcome": "untested",
+                        "canonical_outcome": canonical_for_pytest_outcome(
+                            "untested", claimed=self._is_claimed(public_item.get("cus", []))
+                        ).value,
                         "phase": "collection",
                         "duration_s": 0.0,
                         "reason": "No pytest report was emitted for this collected CU test.",
@@ -281,10 +292,14 @@ class CuCoverageReportRecorder:
         for cu_key in [*self.all_cus, *extension_cus]:
             tests = tests_by_cu.get(cu_key, [])
             outcomes = [test["outcome"] for test in tests]
+            claimed = bool(self.supported_cus is not None and cu_key in self.supported_cus)
+            compliance = _rollup_compliance(outcomes)
             workbook_cu = workbook.get("by_cu", {}).get(cu_key, {}) if isinstance(workbook.get("by_cu"), dict) else {}
             by_cu[cu_key] = {
                 "outcome": _rollup_outcome(outcomes),
-                "compliance": _rollup_compliance(outcomes),
+                "compliance": compliance,
+                "canonical_outcome": canonical_for_report_outcome(compliance, claimed=claimed).value,
+                "claimed": claimed,
                 "test_count": len(tests),
                 "workbook_case_count": int(workbook_cu.get("case_count", 0) or 0),
                 "workbook_positive_case_count": int(workbook_cu.get("positive_case_count", 0) or 0),

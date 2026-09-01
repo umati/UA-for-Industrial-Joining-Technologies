@@ -261,3 +261,72 @@ def test_format_delta_summary_and_change_marker():
     assert change_marker("cu_001", "supported", baseline) == ""
     # Improved gives arrow
     assert change_marker("cu_002", "supported", baseline) == "↑"
+
+
+# ---------------------------------------------------------------------------
+# Canonical outcome consistency: public labels and canonical outcomes agree
+# ---------------------------------------------------------------------------
+
+
+def test_canonical_outcome_for_maps_every_internal_outcome():
+    from helpers.canonical_outcomes import CanonicalOutcome
+    from helpers.report_scoring import OUTCOME_LABELS, canonical_outcome_for
+
+    expected = {
+        "supported": CanonicalOutcome.PASSED,
+        "partial": CanonicalOutcome.INCONCLUSIVE,
+        "not_supported": CanonicalOutcome.NOT_SUPPORTED,
+        "blocked": CanonicalOutcome.BLOCKED,
+        "action_needed": CanonicalOutcome.FAILED,
+        "untested": CanonicalOutcome.NOT_TESTED,
+    }
+    assert set(expected) == set(OUTCOME_LABELS)
+    for outcome, canonical in expected.items():
+        assert canonical_outcome_for(outcome) is canonical
+
+
+def test_canonical_outcome_for_claimed_gap_is_a_failure():
+    from helpers.canonical_outcomes import CanonicalOutcome
+    from helpers.report_scoring import canonical_outcome_for
+
+    assert canonical_outcome_for("not_supported", claimed=True) is CanonicalOutcome.FAILED
+
+
+def test_public_labels_and_canonical_outcomes_stay_consistent():
+    """Each public glossary label must agree with its canonical outcome."""
+    from helpers.report_scoring import (
+        CANONICAL_OUTCOME_FOR_LABEL,
+        OUTCOME_LABELS,
+        canonical_outcome_for,
+        outcome_label,
+    )
+
+    for outcome, label in OUTCOME_LABELS.items():
+        canonical = canonical_outcome_for(outcome)
+        assert outcome_label(outcome) == label
+        assert CANONICAL_OUTCOME_FOR_LABEL[label] is canonical
+
+
+def test_canonical_outcome_label_uses_the_canonical_wording():
+    from helpers.report_scoring import canonical_outcome_label
+
+    assert canonical_outcome_label("action_needed") == "Failed"
+    assert canonical_outcome_label("partial") == "Inconclusive"
+    assert canonical_outcome_label("untested") == "Not Tested"
+    assert canonical_outcome_label("unknown") == "Inconclusive"
+
+
+def test_status_for_labels_match_their_canonical_severity():
+    """status_for keeps the report glossary wording; severity must not diverge."""
+    from helpers.report_scoring import canonical_outcome_for, status_for
+
+    active = {"cu_a"}
+    assert status_for("cu_a", "action_needed", active)[0] == "Failed"
+    assert canonical_outcome_for("action_needed").label == "Failed"
+    assert status_for("cu_a", "blocked", active)[0] == "Blocked"
+    assert canonical_outcome_for("blocked").label == "Blocked"
+    assert status_for("cu_a", "not_supported", active)[0] == "Not Supported"
+    assert canonical_outcome_for("not_supported").label == "Not Supported"
+    # Out-of-scope not-supported stays an informational note, never an action item.
+    assert status_for("cu_b", "not_supported", active)[0] == "With Notes"
+    assert canonical_outcome_for("not_supported").is_informational

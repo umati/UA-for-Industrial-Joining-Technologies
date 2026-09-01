@@ -786,12 +786,51 @@ async def test_joining_system_result_management_type_inherits_from_result_manage
     )
 
 
+async def _supertype_chain(client, start_nid: "ua.NodeId", max_depth: int = 10) -> list["ua.NodeId"]:
+    """Return the HasSubtype-inverse ancestry of *start_nid*, excluding itself.
+
+    Used to prove that an inherited InstanceDeclaration really originates from a
+    supertype of the node under test, rather than from an unrelated global type.
+    """
+    chain: list[ua.NodeId] = []
+    visited: set[tuple[int, object]] = {(start_nid.NamespaceIndex, start_nid.Identifier)}
+    current_nid = start_nid
+    for _ in range(max_depth):
+        node = client.get_node(current_nid)
+        try:
+            refs = await asyncio.wait_for(
+                node.get_references(
+                    refs=RefTypes.HAS_SUBTYPE,
+                    direction=ua.BrowseDirection.Inverse,
+                    includesubtypes=False,
+                ),
+                timeout=10.0,
+            )
+        except Exception:  # noqa: BLE001 — ancestry probing is best-effort
+            return chain
+        if not refs:
+            return chain
+        current_nid = refs[0].NodeId
+        key = (current_nid.NamespaceIndex, current_nid.Identifier)
+        if key in visited:
+            return chain
+        visited.add(key)
+        chain.append(current_nid)
+    return chain
+
+
 @pytest.mark.requires_cu(CU.RESULT_MANAGEMENT)
 async def test_joining_system_result_management_type_has_mandatory_results_folder_declared(opcua_client, ns_indices):
     """JoiningSystemResultManagementType must declare a Results folder as mandatory.
 
     Browses the type node for a HasComponent reference to the Results folder.
     TypeDefinition of Results must be FolderType. OPC 40450-1 Sec 7.5.
+
+    An OPC UA subtype inherits the InstanceDeclarations of its supertypes, so a
+    Results declaration found on a *verified supertype* of
+    JoiningSystemResultManagementType is equally valid.  The inheritance is
+    verified explicitly here by walking the HasSubtype-inverse ancestry — a
+    Results declaration on an unrelated global type node is never accepted.
     """
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     ns_mr = ns_indices.get(NS_MACH_RESULT)
@@ -800,19 +839,35 @@ async def test_joining_system_result_management_type_has_mandatory_results_folde
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
-    type_node = opcua_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_MANAGEMENT_TYPE, ns_ijt))
+    type_nid = ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_MANAGEMENT_TYPE, ns_ijt)
+    type_node = opcua_client.get_node(type_nid)
     # Results folder is declared with the Machinery/Result namespace BrowseName
     results_decl = await find_child_by_browse_name(type_node, BN.RESULTS, ns_mr)
+    declaration_origin = "JoiningSystemResultManagementType"
     if results_decl is None:
         # Try IJT Base ns as fallback (some servers may use different ns for this)
         results_decl = await find_child_by_browse_name(type_node, BN.RESULTS, ns_ijt)
+
+    ancestry: list[ua.NodeId] = []
     if results_decl is None:
-        # Check inherited parent type ResultManagementType in Machinery/Result namespace
-        parent_type_node = opcua_client.get_node(ua.NodeId(MachineryResultTypes.RESULT_MANAGEMENT_TYPE, ns_mr))
-        results_decl = await find_child_by_browse_name(parent_type_node, BN.RESULTS, ns_mr)
+        # Inherited declaration: only accept it from a proven supertype of
+        # JoiningSystemResultManagementType, walking the real ancestry chain.
+        ancestry = await _supertype_chain(opcua_client, type_nid)
+        for ancestor_nid in ancestry:
+            ancestor_node = opcua_client.get_node(ancestor_nid)
+            for ns_candidate in (ns_mr, ns_ijt):
+                inherited = await find_child_by_browse_name(ancestor_node, BN.RESULTS, ns_candidate)
+                if inherited is not None:
+                    results_decl = inherited
+                    declaration_origin = f"inherited from supertype {ancestor_nid}"
+                    break
+            if results_decl is not None:
+                break
 
     assert results_decl is not None, (
-        "JoiningSystemResultManagementType must declare a Results folder child. "
+        "JoiningSystemResultManagementType must declare a Results folder child, "
+        "either directly or inherited from one of its supertypes "
+        f"(ancestry checked: {[str(nid) for nid in ancestry] or '<none>'}). "
         "OPC 40450-1 Sec 7.5 requires this as a mandatory component."
     )
 
@@ -822,7 +877,10 @@ async def test_joining_system_result_management_type_has_mandatory_results_folde
         assert type_def.NamespaceIndex == 0 and type_def.Identifier == _folder_type_id, (
             f"Results folder declaration must have TypeDefinition=FolderType, got {type_def}"
         )
-    logger.info("JoiningSystemResultManagementType Results folder declaration confirmed")
+    logger.info(
+        "JoiningSystemResultManagementType Results folder declaration confirmed (%s)",
+        declaration_origin,
+    )
 
 
 # ─── result_management — instance checks ──────────────────────────────────────
