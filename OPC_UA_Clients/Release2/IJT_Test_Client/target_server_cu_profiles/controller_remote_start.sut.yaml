@@ -1,0 +1,472 @@
+# SUT Manifest - Generic remote-start multi-operation controller
+#
+# One SUT manifest describes one System Under Test end to end: connection,
+# authentication references, authoritative Conformance Unit claims, approved
+# workflows, trigger modes, execution/risk policy, timeout budgets, scoring
+# strictness, and reporting/redaction.
+#
+# GENERATED FILE - do not edit by hand.
+# Regenerate with:  python scripts/generate_sut_manifest_docs.py
+# Check for drift:  python scripts/generate_sut_manifest_docs.py --check
+#
+# Security:
+#   Never put a password, token, or key in this file. Reference a local
+#   credentials file or environment variable names instead.
+#   Do not commit real endpoints, ProductInstanceUris, or process IDs.
+#
+# Placeholders written as <like-this> must be replaced before an external
+# (non-simulator) run; the runner fails fast while any remain.
+#
+# This report describes what this client observed. It is not an OPC Foundation
+# certification and makes no certification claim.
+
+# Manifest schema version. Must be 1 for this release.
+# REQUIRED
+schema_version: 1
+
+# Human-readable SUT name used in reports.
+# REQUIRED
+name: Generic remote-start multi-operation controller
+
+# Short description of this SUT and its scope.
+description: Generic sanitized example for any vendor controller that runs a multi-operation job
+  started remotely. GetJoiningProcessList may return several programs, batches, or
+  jobs; this manifest pins one Job-producing JoiningProcess so the starts and result
+  layers are deterministic. Six remote starts exercise two batches of three operations,
+  producing SingleResult, BatchResult, and a final JobResult. IncrementJoiningProcessCounter
+  produces companion InterventionResult evidence.
+
+# --------------------------------------------------------------------------
+# lifecycle: Who starts and stops the server under test.
+# --------------------------------------------------------------------------
+lifecycle:
+
+  # auto_simulator: the runner launches the built-in simulator. external: the SUT is started and owned
+  # outside this tool.
+  # Values: auto_simulator, external
+  # REQUIRED
+  mode: external
+
+  # How long to wait for an auto-launched simulator to accept connections.
+  startup_timeout_seconds: 60.0
+
+# --------------------------------------------------------------------------
+# connection: Endpoint, security, and certificate material for the OPC UA session.
+# --------------------------------------------------------------------------
+connection:
+
+  # OPC UA endpoint URL of the SUT. Required for external lifecycle runs.
+  endpoint: opc.tcp://<target-server-host>:40451
+
+  # OPC UA message security mode.
+  # Values: None, Sign, SignAndEncrypt
+  security_mode: None
+
+  # OPC UA security policy.
+  # Values: Aes128_Sha256_RsaOaep, Aes256_Sha256_RsaPss, Basic256Sha256, None
+  security_policy: None
+
+  # Path to the client application certificate (DER/PEM).
+  client_certificate_path: ''
+
+  # Path to the client private key. Never inline key material here.
+  # Reference only - never place the secret value itself here.
+  client_private_key_path: ''
+
+  # Path to the expected server certificate, when pinned.
+  server_certificate_path: ''
+
+  # Directory holding trusted issuer/peer certificates.
+  trust_store_path: ''
+
+  # Optional server identity cross-check (warn-only by default).
+  expected_server:
+
+    # Expected ApplicationName; empty disables the check.
+    application_name: ''
+
+    # Expected application version; empty disables the check.
+    application_version: ''
+
+    # Warn instead of failing when the version differs.
+    warn_only_on_version_drift: true
+
+# --------------------------------------------------------------------------
+# authentication: How the client obtains credentials. The manifest holds references only - never a
+# literal password, token, or key.
+# --------------------------------------------------------------------------
+authentication:
+
+  # anonymous: no user identity. prompt: ask the operator at run time. file: read a local, git-ignored
+  # credentials file. environment: read environment/CI secret variables.
+  # Values: anonymous, environment, file, prompt
+  # REQUIRED
+  source: anonymous
+
+  # Non-secret user name. Leave empty for anonymous or prompt.
+  username: ''
+
+  # Path to a local credentials file (git-ignored). Required when source is 'file'.
+  # Reference only - never place the secret value itself here.
+  credentials_file: ''
+
+  # Environment variable holding the user name. Used when source is 'environment'.
+  # Reference only - never place the secret value itself here.
+  username_env_var: ''
+
+  # Environment variable holding the password. Required when source is 'environment'.
+  # Reference only - never place the secret value itself here.
+  password_env_var: ''
+
+# --------------------------------------------------------------------------
+# capability_claims: Authoritative Conformance Unit (CU) claims for this SUT. These claims define
+# the scored scope; discovery never silently changes them.
+# --------------------------------------------------------------------------
+capability_claims:
+
+  # Base CU profile from profiles/ that this SUT claims.
+  active_profile: general_joining_system
+
+  # Extra facet names claimed on top of the active profile.
+  supported_facets:
+    - batch_result_server_facet
+    - event_management_server_facet
+    - identifiers_methods_server_facet
+    - enable_tool_server_facet
+    - asset_connection_server_facet
+    - general_process_operations_server_facet
+    - sequential_process_operations_server_facet
+    - asset_management_assets_server_facet
+
+  # Per-CU claim overrides: supported, unsupported, or manual_required.
+  # Entry values: manual_required, supported, unsupported
+  cu_overrides:
+    acknowledge_results: unsupported
+    asset_management_accessory: unsupported
+    asset_management_battery: unsupported
+    asset_management_battery_operation_cycle_counter: unsupported
+    asset_management_cable: unsupported
+    asset_management_feeder: unsupported
+    asset_management_health: unsupported
+    asset_management_memory_device: unsupported
+    asset_management_monitoring_health: unsupported
+    asset_management_power_supply: unsupported
+    asset_management_sensor: unsupported
+    asset_management_servo: unsupported
+    asset_management_software: unsupported
+    asset_management_sub_component: unsupported
+    delete_joint: unsupported
+    delete_joint_component: unsupported
+    delete_joint_design: unsupported
+    deselect_joining_process: unsupported
+    disconnect_asset: unsupported
+    execute_operation: unsupported
+    feedback_methods: unsupported
+    get_error_information: unsupported
+    get_joining_process_revision_list: unsupported
+    get_joint: unsupported
+    get_joint_component: unsupported
+    get_joint_component_list: unsupported
+    get_joint_design: unsupported
+    get_joint_design_list: unsupported
+    get_joint_list: unsupported
+    get_joint_revision_list: unsupported
+    get_latest_result: unsupported
+    get_result_by_id: unsupported
+    get_result_with_filter_criteria: unsupported
+    intervention_result: supported
+    io_signals_methods: unsupported
+    job_result: supported
+    joint_component_data: unsupported
+    joint_data: unsupported
+    joint_design_data: unsupported
+    joint_management: unsupported
+    partial_consolidated_result: supported
+    reboot_asset: unsupported
+    request_results: unsupported
+    request_unacknowledged_results: unsupported
+    requested_result_event_access: unsupported
+    requested_result_variable_access: unsupported
+    result_extended_meta_data: unsupported
+    result_value_final_tag: supported
+    result_value_trace_point_index: unsupported
+    result_value_trace_point_time_offset: unsupported
+    select_joint: unsupported
+    send_joint: unsupported
+    send_joint_component: unsupported
+    send_joint_design: unsupported
+    set_calibration: unsupported
+    set_joining_process_counter: unsupported
+    set_joining_process_mapping: unsupported
+    set_offline_timer: unsupported
+    set_time: unsupported
+    start_joining_process: unsupported
+    sync_result: unsupported
+    sync_result_counters: unsupported
+
+  # Keep true: manifest claims win over discovery observations.
+  claims_are_authoritative: true
+
+  # Keep false: discovery must not silently downgrade a claim to unsupported.
+  allow_discovery_to_relax_claims: false
+
+# --------------------------------------------------------------------------
+# workflows: Selected and approved workflows, plus the tool/process selectors they use.
+# --------------------------------------------------------------------------
+workflows:
+
+  # Workflow names approved for this SUT (documentation and audit trail).
+  approved:
+    - remote_start_multi_operation_job
+    - counter_intervention
+
+  # How many start calls produce the required result evidence.
+  # Values: manual_operation_trigger, one_start_per_operation, single_start_produces_final_result
+  start_invocation_policy: one_start_per_operation
+
+  # Expected number of joining operations for batch/sync workflows.
+  expected_operation_count: 6
+
+  # How the Tool under test is discovered or pinned.
+  tool_selector:
+
+    # Tool selection policy.
+    # Values: exact_match, first_available, first_compatible, first_ready
+    policy: first_ready
+
+    # Exact Tool ProductInstanceUri. Leave empty for runtime discovery. Do not commit real serial
+    # numbers.
+    product_instance_uri: ''
+
+    # Optional tags used to narrow tool selection.
+    capability_tags: []
+
+  # Default joining-process selection for all result classifications.
+  process_selector:
+
+    # Joining process selection policy.
+    # Values: exact_match, first_available, first_compatible, first_ready
+    policy: first_ready
+
+    # Exact JoiningProcessId. Do not commit real IDs.
+    joining_process_id: ''
+
+    # Stable fallback when a controller regenerates its primary process ID.
+    joining_process_origin_id: ''
+
+    # Final controller-specific selection fallback.
+    selection_name: ''
+
+    # Optional tags used to narrow process selection.
+    capability_tags: []
+
+  # Optional per-classification process selectors (single, batch, job, sync ...). Each entry uses the
+  # same fields as process_selector.
+  process_selectors_by_classification:
+    single:
+      policy: first_ready
+      joining_process_id: ''
+      joining_process_origin_id: ''
+    job:
+      policy: first_ready
+      joining_process_id: ''
+      joining_process_origin_id: ''
+    batch:
+      policy: first_ready
+      joining_process_id: ''
+      joining_process_origin_id: ''
+
+  # Result evidence this SUT is expected to produce.
+  expected_results:
+
+    # Primary/final result classification.
+    # Values: any, batch, intervention, job, single, stitching, sync, text
+    classification: job
+
+    # Result classifications emitted before or alongside the final result.
+    intermediate_classifications:
+      - single
+      - batch
+      - sync
+      - intervention
+
+    # Require a final result before the workflow counts as complete.
+    final_result_required: true
+
+  # What the runner restores after a workflow.
+  cleanup:
+
+    # Cleanup policy after the run.
+    # Values: best_effort_with_evidence, no_cleanup, strict_cleanup
+    policy: best_effort_with_evidence
+
+    # Deselect the joining process after the run.
+    deselect_process: false
+
+    # Reset identifiers after the run.
+    reset_identifiers: false
+
+# --------------------------------------------------------------------------
+# triggers: How result, event, and condition evidence is produced on this SUT.
+# --------------------------------------------------------------------------
+triggers:
+
+  # Result evidence trigger.
+  result:
+
+    # Result trigger mode (simulator, remote start, manual operator, or passive).
+    # Values: manual_trigger, none, observe_only, simulate_methods, start_selected_joining
+    mode: start_selected_joining
+
+    # Deselect the joining process after each joining operation.
+    deselect_after_joining: false
+
+  # Event evidence trigger.
+  event:
+
+    # Event trigger mode.
+    # Values: manual_trigger, none, observe_only, simulate_methods
+    mode: none
+
+  # Condition evidence trigger.
+  condition:
+
+    # Condition trigger mode.
+    # Values: manual_trigger, none, observe_only, simulate_methods
+    mode: none
+
+# --------------------------------------------------------------------------
+# execution_policy: State/method execution policy and the risk approvals that back it.
+# --------------------------------------------------------------------------
+execution_policy:
+
+  # Execution mode for this SUT.
+  # Values: automated, guided, preflight_only
+  default_mode: automated
+
+  # Allow operator prompts and waits.
+  allow_manual_steps: false
+
+  # What to do when a claimed CU's runtime preconditions are missing.
+  # Values: blocked, failed, skip
+  precondition_failure_policy: blocked
+
+  # Per-method status classification overrides (method BrowseName -> accepted|warning|fail).
+  method_status_policies: {}
+
+  # Which state-changing OPC UA methods may be called on this SUT.
+  state_changing_methods:
+
+    # Safety default for state-changing method calls.
+    # Values: allow_all, deny_all, require_explicit_opt_in
+    default_policy: require_explicit_opt_in
+
+    # Safety permissions only: methods explicitly approved for this SUT. This list never creates or
+    # enables tests.
+    allowed_methods:
+      - EnableAsset
+      - SelectJoiningProcess
+      - StartSelectedJoining
+      - IncrementJoiningProcessCounter
+      - DecrementJoiningProcessCounter
+      - AbortJoiningProcess
+      - ResetJoiningProcess
+
+  # Explicit approvals for operations that change or disturb the SUT.
+  risk_approvals:
+
+    # Allow EnableAsset(false) on a real tool. Tests always restore true.
+    allow_disable_asset: false
+
+    # when_disabled: only re-enable when found disabled. always: reassert before every workflow.
+    # Values: always, when_disabled
+    enable_asset_policy: always
+
+    # Allow abort/reset style methods that disturb production state.
+    allow_destructive_methods: true
+
+    # Who approved these risk settings (name or role).
+    approved_by: test-user
+
+    # Change request, ticket, or document reference.
+    approval_reference: controller-test-run
+
+  # Method used to generate InterventionResult evidence, when applicable.
+  intervention:
+
+    # Intervention method BrowseName. Must also appear in allowed_methods.
+    method: IncrementJoiningProcessCounter
+
+    # Counter value for counter-style intervention methods.
+    count: 1
+
+    # Message recorded with the intervention.
+    message: ''
+
+    # Parent batch/job process some controllers require before counter or abort methods. Any one
+    # selector is enough.
+    parent_process:
+
+      # Parent process ID.
+      joining_process_id: ''
+
+      # Parent process origin ID.
+      joining_process_origin_id: ''
+
+      # Parent process selection name.
+      selection_name: ''
+
+# --------------------------------------------------------------------------
+# timeouts: Separated time budgets. Passive observation, active result completion, whole-workflow,
+# and operator budgets are independent so one slow phase cannot mask another.
+# --------------------------------------------------------------------------
+timeouts:
+
+  # Budget for evidence the client did not trigger itself (observe_only).
+  passive_observation_seconds: 5.0
+
+  # Budget for result completion after the client started a joining operation.
+  active_result_seconds: 60.0
+
+  # Budget for a complete workflow, including setup and cleanup.
+  workflow_seconds: 300.0
+
+  # Budget for a physical operator action (manual trigger modes).
+  operator_seconds: 300.0
+
+  # Budget for a single OPC UA method call or read.
+  method_call_seconds: 15.0
+
+# --------------------------------------------------------------------------
+# scoring: How the run is scored. Strict claimed scope is the default.
+# --------------------------------------------------------------------------
+scoring:
+
+  # strict_profile: strict claimed scope (default). diagnostic: report everything, no gate.
+  # acceptance: zero failed CUs and zero claim mismatches in claimed scope.
+  # Values: acceptance, diagnostic, strict_profile
+  mode: strict_profile
+
+  # Keep true: score only what this manifest claims; unclaimed gaps stay informational.
+  claimed_scope_only: true
+
+# --------------------------------------------------------------------------
+# reporting: Report output location and redaction settings.
+# --------------------------------------------------------------------------
+reporting:
+
+  # Directory for evidence reports, relative to the runner root or absolute.
+  output_dir: test-results/target-server-cu
+
+  # Redact hostnames, serial numbers, PIUs, and process IDs in shared artifacts.
+  sanitize_shared_artifacts: true
+
+  # Keep unredacted local debug artifacts. Keep false for shared or committed runs.
+  keep_local_exact_debug_artifacts: false
+
+  # Extra field names to redact in shared artifacts.
+  redact_fields:
+    - endpoint
+    - product_instance_uri
+    - joining_process_id
+    - serial_number
