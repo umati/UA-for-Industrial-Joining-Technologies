@@ -147,8 +147,10 @@ class TestSchemaAndRoundTrip:
         [
             ("timeouts", {"workflow_seconds": "soon"}, "must be a number"),
             ("timeouts", {"workflow_seconds": 0}, "must be >="),
-            ("workflows", {"expected_operation_count": 0}, "must be >="),
-            ("workflows", {"expected_operation_count": "six"}, "must be an integer"),
+            ("workflows", {"max_start_invocations": 0}, "must be >="),
+            ("workflows", {"max_start_invocations": "six"}, "must be an integer"),
+            ("workflows", {"consecutive_start_delay_seconds": "soon"}, "must be a number"),
+            ("workflows", {"consecutive_start_delay_seconds": -1.0}, "must be >="),
             ("workflows", {"approved": "one"}, "must be a list"),
             ("workflows", {"approved": [1]}, "must be a string"),
             ("capability_claims", {"cu_overrides": {"a": 1}}, "string keys to string values"),
@@ -663,8 +665,8 @@ class TestPresetsAndCommittedManifests:
         profile = build_preset("remote_start_multi_operation").to_execution_profile()
         expected = profile.workflow_execution.expected_results
         assert profile.triggers.result.mode == "start_selected_joining"
-        assert profile.workflow_execution.start_invocation_policy == "single_start_produces_final_result"
-        assert profile.workflow_execution.expected_operation_count == 1
+        assert profile.workflow_execution.max_start_invocations == 6
+        assert profile.workflow_execution.consecutive_start_delay_seconds == 0.25
         assert expected.classification == "job"
         assert expected.final_result_required is False
         assert "job" in profile.selection.joining_processes
@@ -674,7 +676,8 @@ class TestPresetsAndCommittedManifests:
     def test_manual_trigger_preset_waits_for_the_operator(self):
         profile = build_preset("manual_trigger").to_execution_profile()
         assert profile.triggers.result.mode == "manual_trigger"
-        assert profile.workflow_execution.start_invocation_policy == "manual_operation_trigger"
+        assert profile.workflow_execution.max_start_invocations == 1
+        assert profile.workflow_execution.consecutive_start_delay_seconds == 0.25
         assert profile.cu_execution.allow_manual_steps is True
 
     @pytest.mark.parametrize(

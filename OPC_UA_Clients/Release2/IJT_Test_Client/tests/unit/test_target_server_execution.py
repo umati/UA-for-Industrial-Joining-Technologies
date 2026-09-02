@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from helpers import target_server_execution as tse
+from helpers.namespaces import JoiningProcessClassification
 from helpers.target_server_cu_config import (
     OUTCOME_PASSED,
     build_default_profile,
@@ -714,21 +715,21 @@ class TestRunLiveSpecTestsDirectExceptions:
             JoiningProcessId="Prog_1",
             JoiningProcessOriginId="Prog_Orig_1",
             Name="Program1",
-            Classification=1,
+            Classification=JoiningProcessClassification.PROGRAM.value,
             AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="ProgIndex_1")],
         )
         mock_proc_job = MagicMock(
             JoiningProcessId="Job_1",
             JoiningProcessOriginId="Job_Orig_1",
             Name="Sequence1",
-            Classification=4,
+            Classification=JoiningProcessClassification.JOB.value,
             AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="SeqIndex_1")],
         )
         mock_proc_batch = MagicMock(
             JoiningProcessId="Batch_1",
             JoiningProcessOriginId="Batch_Orig_1",
             Name="Batch1",
-            Classification=3,
+            Classification=JoiningProcessClassification.BATCH.value,
             AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="BatchIndex_1")],
         )
         mock_jpm.call_method = AsyncMock(return_value=[[mock_proc_single, mock_proc_job, mock_proc_batch]])
@@ -808,7 +809,7 @@ class TestRunLiveSpecTestsDirectExceptions:
 
 
 # ---------------------------------------------------------------------------
-# Discovery classification mapping (ResultClassification enum alignment)
+# Discovery classification mapping (JoiningProcessClassification domain)
 # ---------------------------------------------------------------------------
 
 
@@ -816,13 +817,13 @@ class TestDiscoveryClassificationMapping:
     @pytest.mark.parametrize(
         ("classification", "expected"),
         [
-            (1, "single"),
-            (2, "sync"),
-            (3, "batch"),
-            (4, "job"),
-            (5, "stitching"),
-            (6, "intervention"),
-            (7, "text"),
+            (JoiningProcessClassification.OTHER.value, ""),
+            (JoiningProcessClassification.PROGRAM.value, "single"),
+            (JoiningProcessClassification.SYNC.value, "sync"),
+            (JoiningProcessClassification.BATCH.value, "batch"),
+            (JoiningProcessClassification.JOB.value, "job"),
+            (6, ""),
+            (7, ""),
         ],
     )
     def test_server_classification_is_authoritative(self, classification, expected):
@@ -830,9 +831,21 @@ class TestDiscoveryClassificationMapping:
         assert tse.classify_discovered_process(process) == expected
 
     def test_server_classification_wins_over_name_hint(self):
-        # Name says "batch" but the server reports JobResult(4) — the enum wins.
-        process = {"name": "Batch of tightenings", "selection_name": "", "classification": 4}
-        assert tse.classify_discovered_process(process) == "job"
+        # Name says "job" but the server reports Batch(4) — metadata wins.
+        process = {
+            "name": "Job of tightenings",
+            "selection_name": "",
+            "classification": JoiningProcessClassification.BATCH.value,
+        }
+        assert tse.classify_discovered_process(process) == "batch"
+
+    def test_explicit_other_classification_does_not_use_name_hint(self):
+        process = {
+            "name": "Job",
+            "selection_name": "",
+            "classification": JoiningProcessClassification.OTHER.value,
+        }
+        assert tse.classify_discovered_process(process) == ""
 
     def test_name_hint_only_used_when_classification_undefined(self):
         assert tse.classify_discovered_process({"name": "Sequence 1", "selection_name": "", "classification": 0}) == (
@@ -848,8 +861,20 @@ class TestDiscoveryClassificationMapping:
 
     def test_process_is_never_suggested_under_two_classifications(self):
         processes = [
-            {"id": "P1", "origin_id": "O1", "name": "Batch job sequence", "selection_name": "", "classification": 3},
-            {"id": "P2", "origin_id": "O2", "name": "Job", "selection_name": "", "classification": 4},
+            {
+                "id": "P1",
+                "origin_id": "O1",
+                "name": "Batch job sequence",
+                "selection_name": "",
+                "classification": JoiningProcessClassification.BATCH.value,
+            },
+            {
+                "id": "P2",
+                "origin_id": "O2",
+                "name": "Job",
+                "selection_name": "",
+                "classification": JoiningProcessClassification.JOB.value,
+            },
         ]
         suggestion = tse.suggest_process_selection(processes)
         assert suggestion["batch"]["id"] == "P1"
@@ -859,7 +884,15 @@ class TestDiscoveryClassificationMapping:
 
     def test_suggested_yaml_only_contains_classified_processes(self):
         suggestion = tse.suggest_process_selection(
-            [{"id": "P1", "origin_id": "O1", "name": "Program", "selection_name": "", "classification": 1}]
+            [
+                {
+                    "id": "P1",
+                    "origin_id": "O1",
+                    "name": "Program",
+                    "selection_name": "",
+                    "classification": JoiningProcessClassification.PROGRAM.value,
+                }
+            ]
         )
         yaml_text = tse.render_suggested_selection_yaml("urn:tool:1", suggestion)
         assert "    single:" in yaml_text

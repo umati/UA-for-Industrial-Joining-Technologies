@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any, Optional
 
 from asyncua import ua
@@ -103,6 +104,52 @@ def is_partial(result_data: Any) -> bool:
         return bool(partial)
     except (TypeError, ValueError):
         return False
+
+
+def is_terminal_matching_state(result_data: Any, target_cls: Optional[int], target_state: int = 1) -> bool:
+    """Return True if result matches target_cls, IsPartial is False/0, and ResultState == target_state."""
+    if result_data is None:
+        return False
+    if target_cls is not None and get_classification(result_data) != target_cls:
+        return False
+    meta = getattr(result_data, "ResultMetaData", None)
+    if meta is None:
+        return False
+    partial = getattr(meta, "IsPartial", None)
+    if isinstance(partial, ua.Variant):
+        partial = partial.Value
+    if partial not in (False, 0):
+        return False
+    state = getattr(meta, "ResultState", None)
+    if isinstance(state, ua.Variant):
+        state = state.Value
+    if isinstance(state, bool):
+        return False
+    try:
+        return state is not None and int(state) == int(target_state)
+    except (TypeError, ValueError):
+        return False
+
+
+def is_terminal_completed(result_data: Any, target_cls: Optional[int]) -> bool:
+    """Return True if result matches target_cls, IsPartial is False/0, and ResultState is 1 (COMPLETED)."""
+    return is_terminal_matching_state(result_data, target_cls, target_state=1)
+
+
+def is_terminal_aborted(result_data: Any, target_cls: Optional[int]) -> bool:
+    """Return True if result matches target_cls, IsPartial is False/0, and ResultState is 3 (ABORTED)."""
+    return is_terminal_matching_state(result_data, target_cls, target_state=3)
+
+
+@dataclass(frozen=True)
+class CorrelatedOperationOutcome:
+    """Outcome of observing result events after a single StartSelectedJoining invocation."""
+
+    operation_confirmed: bool = False
+    operation_result: Optional[Any] = None
+    terminal_result: Optional[Any] = None
+    latest_result: Optional[Any] = None
+    timed_out: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -342,6 +389,129 @@ class ResultCollector:
         )
         result = await self._collect_until(ResultClassification.JOB_RESULT, False, timeout)
         return self._require_final(result, "JobResult", timeout, ResultClassification.JOB_RESULT)
+
+    async def collect_correlated_operation_outcome(
+        self,
+        requested_result_classification: Optional[int],
+        predicate: Any,
+        operation_timeout_s: float,
+        terminal_drain_seconds: float = 0.25,
+        operation_predicate: Any = None,
+        expected_terminal_state: int = 1,
+    ) -> CorrelatedOperationOutcome:
+        """Consume correlated events from the active subscription stream.
+
+        Observes events until operation evidence or the requested terminal result is found,
+        then drains for up to terminal_drain_seconds to catch an immediate terminal result.
+        """
+        if self._collector is None:
+            raise RuntimeError("ResultCollector is not active — use as async context manager")
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + operation_timeout_s
+        operation_confirmed = False
+        operation_result: Optional[Any] = None
+        latest_result: Optional[Any] = None
+        operation_predicate = operation_predicate or predicate
+
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            events = await self._collector.collect(count=1, timeout_s=min(remaining, _INNER_POLL_S))
+            if not events:
+                continue
+            raw = getattr(events[0], "Result", None)
+            result_data = unwrap_result(raw) if raw is not None else None
+            if result_data is None:
+                continue
+
+            latest_result = result_data
+            is_operation_result = (
+                get_classification(result_data) == ResultClassification.SINGLE_RESULT
+                and operation_predicate(result_data)
+                and is_terminal_completed(result_data, ResultClassification.SINGLE_RESULT)
+            )
+            if predicate(result_data) and is_terminal_matching_state(
+                result_data, requested_result_classification, target_state=expected_terminal_state
+            ):
+                return CorrelatedOperationOutcome(
+                    operation_confirmed=True,
+                    operation_result=result_data if is_operation_result else operation_result,
+                    terminal_result=result_data,
+                    latest_result=result_data,
+                    timed_out=False,
+                )
+
+            if is_operation_result:
+                operation_confirmed = True
+                operation_result = result_data
+                break
+
+        if not operation_confirmed:
+            return CorrelatedOperationOutcome(
+                operation_confirmed=False,
+                operation_result=None,
+                terminal_result=None,
+                latest_result=None,
+                timed_out=True,
+            )
+
+        # Drain phase: check for terminal consolidated result arriving during the pacing window
+        if terminal_drain_seconds > 0:
+            drain_deadline = loop.time() + terminal_drain_seconds
+            while True:
+                drain_rem = drain_deadline - loop.time()
+                if drain_rem <= 0:
+                    break
+                events = await self._collector.collect(count=1, timeout_s=min(drain_rem, 0.05))
+                if not events:
+                    continue
+                raw = getattr(events[0], "Result", None)
+                result_data = unwrap_result(raw) if raw is not None else None
+                if result_data is None:
+                    continue
+                latest_result = result_data
+                if predicate(result_data) and is_terminal_matching_state(
+                    result_data, requested_result_classification, target_state=expected_terminal_state
+                ):
+                    return CorrelatedOperationOutcome(
+                        operation_confirmed=True,
+                        operation_result=operation_result,
+                        terminal_result=result_data,
+                        latest_result=result_data,
+                        timed_out=False,
+                    )
+
+        return CorrelatedOperationOutcome(
+            operation_confirmed=True,
+            operation_result=operation_result,
+            terminal_result=None,
+            latest_result=latest_result,
+            timed_out=False,
+        )
+
+    def collect_pending_terminal(
+        self,
+        requested_result_classification: Optional[int],
+        predicate: Any,
+        expected_terminal_state: int = 1,
+    ) -> Optional[Any]:
+        """Consume queued events and return the first matching completed terminal result."""
+        if self._collector is None:
+            raise RuntimeError("ResultCollector is not active — use as async context manager")
+        for event in self._collector.collect_pending():
+            raw = getattr(event, "Result", None)
+            result_data = unwrap_result(raw) if raw is not None else None
+            if (
+                result_data is not None
+                and predicate(result_data)
+                and is_terminal_matching_state(
+                    result_data, requested_result_classification, target_state=expected_terminal_state
+                )
+            ):
+                return result_data
+        return None
 
     def discard_pending(self) -> int:
         """Discard queued notifications before a correlated operation starts."""

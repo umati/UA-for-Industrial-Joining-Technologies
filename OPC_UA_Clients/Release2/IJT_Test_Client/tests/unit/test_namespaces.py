@@ -34,6 +34,7 @@ from helpers.namespaces import (
     DITypes,
     IJTTighteningTypes,
     IJTTypes,
+    JoiningProcessClassification,
     MachineryResultTypes,
     MachineryTypes,
     NsIndices,
@@ -265,6 +266,60 @@ class TestBNClass:
 
 
 # ---------------------------------------------------------------------------
+# JoiningProcessClassification
+# ---------------------------------------------------------------------------
+
+
+class TestJoiningProcessClassification:
+    def test_named_values_match_opc_40450_1(self):
+        assert {member.name: member.value for member in JoiningProcessClassification} == {
+            "OTHER": 1,
+            "PROGRAM": 2,
+            "SYNC": 3,
+            "BATCH": 4,
+            "JOB": 5,
+        }
+
+    def test_process_and_result_domains_do_not_compare_equal(self):
+        assert JoiningProcessClassification.PROGRAM != ResultClassification.SYNC_RESULT
+        assert JoiningProcessClassification.JOB != ResultClassification.STITCHING_RESULT
+
+    def test_canonical_name_value_mapping_round_trips(self):
+        from helpers.namespaces import (
+            joining_process_classification_name,
+            joining_process_classification_value,
+        )
+
+        assert joining_process_classification_name(2) == "single"
+        assert joining_process_classification_name(3) == "sync"
+        assert joining_process_classification_name(4) == "batch"
+        assert joining_process_classification_name(5) == "job"
+        assert joining_process_classification_name(1) == ""
+        assert joining_process_classification_name(None) == ""
+        assert joining_process_classification_name("invalid") == ""
+        assert joining_process_classification_value(" SYNC ") is JoiningProcessClassification.SYNC
+        assert joining_process_classification_value("unknown") is None
+        assert joining_process_classification_value("") is None
+        assert joining_process_classification_value(None) is None
+
+    def test_wire_parser_rejects_boolean_and_unknown_values(self):
+        from helpers.namespaces import parse_joining_process_classification
+
+        class _WrappedBool:
+            Value = True
+
+        class _InnerBool:
+            value = False
+
+        assert parse_joining_process_classification(True) is None
+        assert parse_joining_process_classification(False) is None
+        assert parse_joining_process_classification(_WrappedBool()) is None
+        assert parse_joining_process_classification(_InnerBool()) is None
+        assert parse_joining_process_classification(99) is None
+        assert parse_joining_process_classification(None) is None
+
+
+# ---------------------------------------------------------------------------
 # ResultClassification
 # ---------------------------------------------------------------------------
 
@@ -325,6 +380,29 @@ class TestResultEvaluation:
         assert ResultEvaluation.OK in ResultEvaluation.VALID_VALUES
         assert ResultEvaluation.NOK in ResultEvaluation.VALID_VALUES
         assert ResultEvaluation.NOT_DECIDABLE in ResultEvaluation.VALID_VALUES
+
+
+# ---------------------------------------------------------------------------
+# ResultState
+# ---------------------------------------------------------------------------
+
+
+class TestResultState:
+    def test_valid_values_is_set(self):
+        from helpers.namespaces import ResultState
+
+        assert isinstance(ResultState.VALID_VALUES, set)
+        assert ResultState.VALID_VALUES == {0, 1, 2, 3, 4}
+        assert ResultState.VALID_TERMINAL_STATES == {1, 3, 4}
+
+    def test_named_constants(self):
+        from helpers.namespaces import ResultState
+
+        assert ResultState.UNDEFINED == 0
+        assert ResultState.COMPLETED == 1
+        assert ResultState.PROCESSING == 2
+        assert ResultState.ABORTED == 3
+        assert ResultState.FAILED == 4
 
 
 # ---------------------------------------------------------------------------

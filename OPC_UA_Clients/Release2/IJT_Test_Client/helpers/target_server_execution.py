@@ -390,7 +390,7 @@ def _write_markdown_summary(
 # ---------------------------------------------------------------------------
 
 # Keyword hints used only when a process does not advertise a usable
-# ResultClassification value.  Each keyword maps to exactly one classification
+# JoiningProcessClassification value. Each keyword maps to exactly one classification
 # key so a process can never be suggested under two conflicting keys.
 _CLASSIFICATION_NAME_HINTS: tuple[tuple[str, str], ...] = (
     ("intervention", "intervention"),
@@ -410,17 +410,23 @@ _SUGGESTED_SELECTION_KEYS: tuple[str, ...] = ("single", "sync", "batch", "job", 
 def classify_discovered_process(process: dict) -> str:
     """Return the canonical classification key for one discovered joining process.
 
-    The server-reported ``Classification`` value is authoritative and is mapped
-    through the shared ``helpers.namespaces`` table (1 single, 2 sync, 3 batch,
-    4 job, 5 stitching, 6 intervention, 7 text).  Name/selection-name keyword
-    hints are only consulted when the server reports no usable classification.
+    The server-reported ``JoiningProcessMetaData.Classification`` value is
+    authoritative and uses the joining-process domain (1 Other, 2 Program,
+    3 Sync, 4 Batch, 5 Job). Name/selection-name keyword hints are only
+    consulted when the server reports no usable classification.
     Returns an empty string when the process cannot be classified.
     """
-    from helpers.namespaces import result_classification_name
+    from helpers.namespaces import (
+        joining_process_classification_name,
+        parse_joining_process_classification,
+    )
 
-    key = result_classification_name(process.get("classification"))
-    if key:
-        return key
+    raw_classification = process.get("classification")
+    if raw_classification not in (None, 0, "") and not isinstance(raw_classification, bool):
+        classification = parse_joining_process_classification(raw_classification)
+        if classification is not None:
+            return joining_process_classification_name(classification)
+
     haystack = f"{process.get('name', '')} {process.get('selection_name', '')}".lower()
     for keyword, mapped_key in _CLASSIFICATION_NAME_HINTS:
         if keyword in haystack:
@@ -558,11 +564,8 @@ async def async_discover_target_server(
                         }
                     )
 
-        # 3. Format suggested YAML snippet.  Classification values follow the
-        # canonical ResultClassification enum (1 single, 2 sync, 3 batch,
-        # 4 job, 5 stitching, 6 intervention, 7 text) via the shared table in
-        # helpers/namespaces.py, so a process is never suggested under two
-        # conflicting classification keys.
+        # 3. Format suggested YAML using the distinct JoiningProcess
+        # classification domain, never the ResultClassification domain.
         discovery_data["suggested_selection"] = suggest_process_selection(discovery_data["processes"])
         discovery_data["suggested_yaml"] = render_suggested_selection_yaml(piu, discovery_data["suggested_selection"])
     finally:
@@ -989,7 +992,7 @@ def run_live_spec_tests(
                     120,
                     (
                         4 * profile.cu_execution.default_timeout_seconds
-                        + profile.workflow_execution.expected_operation_count
+                        + profile.workflow_execution.max_start_invocations
                         * (
                             profile.cu_execution.default_timeout_seconds
                             + profile.workflow_execution.expected_results.timeout_seconds

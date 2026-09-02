@@ -4,7 +4,7 @@
 
 | Item | Value |
 |---|---|
-| **Server** | My IJT Server (`opc.tcp://fixture.ijt.test:40451`) |
+| **Server** | Fixture IJT Server (`opc.tcp://fixture.ijt.test:40451`) |
 | **Capability profile** | Full IJT Base Specification Coverage |
 | **Run** | 2026-05-13 14:00 UTC · Duration 1m 25s |
 | **Build** | commit `15bc900` · run logs: Not Applicable |

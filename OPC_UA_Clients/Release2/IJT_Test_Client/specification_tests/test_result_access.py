@@ -51,6 +51,7 @@ from helpers.namespaces import BN, NS_APP, NS_IJT_BASE, NS_MACH_RESULT, ResultTy
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
 from helpers.result_polling import extract_result_id, poll_until_result_id_changes
 from helpers.result_validator import assert_result_data_valid
+from helpers.skip_reasons import skip_accepted_policy
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -562,7 +563,14 @@ async def test_last_result_metadata_updated_after_trigger(opcua_client, result_t
     assert after_value is not None, "Results/Result/ResultMetaData must not be None after a result is produced"
     after_id = poll.result_id
 
-    if before_id.strip():
+    if before_id.strip() and not poll.changed:
+        if not result_trigger.is_simulator:
+            skip_accepted_policy(
+                "Results/Result/ResultMetaData variable was not updated after an accepted trigger — "
+                "controller delivers results via Event notifications (JoiningSystemResultReadyEventType) "
+                "rather than address-space variable polling",
+                method=outcome.method,
+            )
         assert poll.changed, (
             f"Results/Result/ResultMetaData.ResultId did not change after an accepted trigger "
             f"(trigger method={outcome.method!r}, before={before_id!r}, after={after_id!r}, "

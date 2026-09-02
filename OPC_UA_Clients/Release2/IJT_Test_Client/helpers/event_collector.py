@@ -158,11 +158,14 @@ class EventCollector:
 
     def discard_pending(self) -> int:
         """Discard queued events and return the number removed."""
-        removed = 0
+        return len(self.collect_pending())
+
+    def collect_pending(self) -> List:
+        """Return all currently queued events without waiting."""
+        pending: List = []
         while not self._queue.empty():
-            self._queue.get_nowait()
-            removed += 1
-        return removed
+            pending.append(self._queue.get_nowait())
+        return pending
 
     async def unsubscribe(self) -> None:
         """Delete the subscription if one is active."""

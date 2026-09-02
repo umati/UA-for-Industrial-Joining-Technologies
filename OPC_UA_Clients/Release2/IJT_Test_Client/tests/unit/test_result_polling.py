@@ -75,6 +75,20 @@ class TestExtractResultId:
     def test_stringifies_non_string_ids(self):
         assert extract_result_id(_payload(17)) == "17"
 
+    def test_extracts_result_id_from_binary_extension_object(self):
+        from asyncua import ua
+
+        raw = b"\x0e\xb0\xfb/$\x00\x00\x0086690dd4-6cbf-4a8b-9ad2-bfa72be419ad\x00\x00\x01\x00\x00\x00"
+        eo = ua.ExtensionObject(TypeId=ua.NodeId(5046, 7), Body=raw)
+        assert extract_result_id(eo) == "86690dd4-6cbf-4a8b-9ad2-bfa72be419ad"
+
+    def test_extracts_result_id_from_raw_bytes(self):
+        raw = b"\x00\x00\x00\x07\x00\x00\x00RES-999\x00"
+        assert extract_result_id(raw) == "RES-999"
+
+    def test_returns_empty_string_for_unmatched_bytes(self):
+        assert extract_result_id(b"\x00\x01\x02") == ""
+
 
 class TestPollUntilResultIdChanges:
     async def test_returns_immediately_when_already_changed(self):

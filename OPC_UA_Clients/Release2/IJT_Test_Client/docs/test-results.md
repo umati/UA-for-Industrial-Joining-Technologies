@@ -44,7 +44,7 @@ Prior runs are preserved; only the `latest` symlink advances.
 Target Server CU evidence is written only when `--profile`/`--endpoint` is used.
 It is never written during plain simulator runs.
 
-> `report.html` is **not** produced by `run_all_tests.py`. Use the manual `pytest --html=...` command below if you need an HTML report.
+> `report.html` is **not** produced by `run_all_tests.py`. Use the manual `pytest --html=...` command below when an HTML report is required.
 
 In CI, report files are uploaded as run artifacts.
 
@@ -76,7 +76,7 @@ python run_all_tests.py
 python run_all_tests.py --excel=never
 
 # custom Excel output path
-python run_all_tests.py --excel-out test-results/my-report.xlsx
+python run_all_tests.py --excel-out test-results/controller-report.xlsx
 ```
 
 If the test run fails, `report.xlsx` is still generated for diagnostics when

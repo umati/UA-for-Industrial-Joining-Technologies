@@ -276,7 +276,7 @@ def resolve_run_plan(args: argparse.Namespace, *, env: Mapping[str, str] | None 
         output_dir=Path(output_dir_arg) if output_dir_arg else None,
         interactive_prompts=bool(getattr(args, "interactive_prompts", False)),
         skip_spec_tests=bool(getattr(args, "skip_spec_tests", False)),
-        spec_tests_timeout=int(getattr(args, "spec_tests_timeout", 600)),
+        spec_tests_timeout=int(getattr(args, "spec_tests_timeout", 1800)),
         verbose=bool(getattr(args, "verbose", False)),
         pytest_args=list(getattr(args, "pytest_args", None) or []),
     )

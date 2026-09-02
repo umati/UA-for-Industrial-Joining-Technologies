@@ -164,15 +164,15 @@ capability_claims:
     feedback_methods: unsupported
     get_error_information: unsupported
     get_joining_process_revision_list: unsupported
-    get_joint: unsupported
+    get_joint: supported
     get_joint_component: unsupported
     get_joint_component_list: unsupported
     get_joint_design: unsupported
     get_joint_design_list: unsupported
-    get_joint_list: unsupported
+    get_joint_list: supported
     get_joint_revision_list: unsupported
-    get_latest_result: unsupported
-    get_result_by_id: unsupported
+    get_latest_result: supported
+    get_result_by_id: supported
     get_result_with_filter_criteria: unsupported
     intervention_result: supported
     io_signals_methods: unsupported
@@ -183,23 +183,23 @@ capability_claims:
     joint_management: unsupported
     partial_consolidated_result: supported
     reboot_asset: unsupported
-    request_results: unsupported
+    request_results: supported
     request_unacknowledged_results: unsupported
-    requested_result_event_access: unsupported
-    requested_result_variable_access: unsupported
+    requested_result_event_access: supported
+    requested_result_variable_access: supported
     result_extended_meta_data: unsupported
     result_value_final_tag: supported
     result_value_trace_point_index: unsupported
     result_value_trace_point_time_offset: unsupported
-    select_joint: unsupported
-    send_joint: unsupported
+    select_joint: supported
+    send_joint: supported
     send_joint_component: unsupported
     send_joint_design: unsupported
     set_calibration: unsupported
-    set_joining_process_counter: unsupported
+    set_joining_process_counter: supported
     set_joining_process_mapping: unsupported
     set_offline_timer: unsupported
-    set_time: unsupported
+    set_time: supported
     start_joining_process: unsupported
     sync_result: unsupported
     sync_result_counters: unsupported
@@ -215,17 +215,22 @@ capability_claims:
 # --------------------------------------------------------------------------
 workflows:
 
-  # Workflow names approved for this SUT (documentation and audit trail).
+  # Workflow names approved for this SUT (e.g. remote_start_multi_operation_job, counter_intervention,
+  # remote_abort_job, remote_reset_job).
   approved:
     - remote_start_multi_operation_job
     - counter_intervention
 
-  # How many start calls produce the required result evidence.
-  # Values: manual_operation_trigger, one_start_per_operation, single_start_produces_final_result
-  start_invocation_policy: single_start_produces_final_result
+  # Maximum accepted StartSelectedJoining RPC calls for a multi-operation compound process
+  # (Job/Batch/Sync) before stopping. Single/Program processes are always capped at 1 start. Execution
+  # exits early as soon as a terminal completed result arrives.
+  max_start_invocations: 6
 
-  # Expected number of joining operations for batch/sync workflows.
-  expected_operation_count: 1
+  # Pacing delay in seconds between consecutive StartSelectedJoining invocations for compound
+  # processes (Job/Batch/Sync). Allows controller state settlement and event drain (default: 0.25s).
+  # Not applied to single operations. Queue inspection and this drain reduce extra-start races but
+  # cannot eliminate the non-atomic check-to-start window.
+  consecutive_start_delay_seconds: 0.25
 
   # How the Tool under test is discovered or pinned.
   tool_selector:
@@ -244,9 +249,11 @@ workflows:
   # Default joining-process selection for all result classifications.
   process_selector:
 
-    # Joining process selection policy. first_ready: picks the first ready program automatically —
-    # good for simple controllers. exact_match: pin a specific joining_process_id for deterministic
-    # selection on controllers with many programs.
+    # Joining process selection policy. exact_match pins an advertised identifier and still requires
+    # matching standard Classification metadata. All non-exact policies select the first returned
+    # process with the requested standard Classification; they do not infer controller readiness from
+    # names or vendor fields. Missing, unreadable, or incompatible Classification metadata produces a
+    # clean skip.
     # Values: exact_match, first_available, first_compatible, first_ready
     policy: first_ready
 
@@ -259,24 +266,39 @@ workflows:
     # Final controller-specific selection fallback.
     selection_name: ''
 
+    # Strategy for populating JoiningProcessIdentificationDataType: id_only (default/portable, sends
+    # JoiningProcessId only with empty OriginId and SelectionName; recommended for generic profiles),
+    # id_with_origin (sends JoiningProcessId and OriginId), id_with_selection_name (sends
+    # JoiningProcessId and SelectionName, e.g. Atlas Copco SequenceIndex_1; use in local uncommitted
+    # manifests), all_available (sends all three identifiers; use only when hardware evidence proves
+    # all are required).
+    # Values: all_available, id_only, id_with_origin, id_with_selection_name
+    identifier_strategy: id_only
+
     # Optional tags used to narrow process selection.
     capability_tags: []
 
-  # Optional per-classification process selectors (single, batch, job, sync ...). Each entry uses the
-  # same fields as process_selector.
+  # Optional per-classification process selectors (single, batch, job, sync ...). Classification is
+  # resolved from server metadata (JoiningProcessMetaData.Classification: 1=Other, 2=Program, 3=Sync,
+  # 4=Batch, 5=Job), which is a different integer domain from ResultMetaData.Classification. YAML
+  # classification names are configuration keys only and are never sent as OPC UA Classification
+  # values. Each entry supports the same fields as process_selector.
   process_selectors_by_classification:
     single:
       policy: first_ready
       joining_process_id: ''
       joining_process_origin_id: ''
+      identifier_strategy: id_only
     job:
       policy: first_ready
       joining_process_id: ''
       joining_process_origin_id: ''
+      identifier_strategy: id_only
     batch:
       policy: first_ready
       joining_process_id: ''
       joining_process_origin_id: ''
+      identifier_strategy: id_only
 
   # Result evidence this SUT is expected to produce.
   expected_results:
@@ -294,6 +316,13 @@ workflows:
 
     # Require a final result before the workflow counts as complete.
     final_result_required: false
+
+    # Expected ResultState (OPC 40001-101 Machinery Result) for terminal completion: 1 (COMPLETED), 3
+    # (ABORTED), or 4 (FAILED).
+    expected_terminal_result_state: 1
+
+    # When true, abort workflows reject terminal results evaluated as OK (1).
+    reject_ok_evaluation_on_abort: false
 
   # What the runner restores after a workflow.
   cleanup:

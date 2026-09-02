@@ -44,6 +44,6 @@ FROZEN_ENV = ReportEnvironment(
     run_logs_url="Not Applicable",
     glossary_url="OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md",
     now_utc=datetime(2026, 5, 13, 14, 0, 0, tzinfo=timezone.utc),
-    server_name="My IJT Server",
+    server_name="Fixture IJT Server",
     active_profile="full_specification_coverage",
 )

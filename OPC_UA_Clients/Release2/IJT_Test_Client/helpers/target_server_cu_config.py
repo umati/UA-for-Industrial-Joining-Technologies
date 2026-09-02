@@ -55,6 +55,7 @@ from helpers.canonical_outcomes import (
     REASON_TOOL_DISCONNECTED,
     REASON_UNSAFE_METHOD_NOT_ENABLED,
 )
+from helpers.namespaces import ResultState
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +81,8 @@ VALID_CONDITION_TRIGGER_MODES: frozenset[str] = frozenset(
 VALID_SELECTION_POLICIES: frozenset[str] = frozenset(
     {"first_available", "first_ready", "first_compatible", "exact_match"}
 )
-VALID_START_INVOCATION_POLICIES: frozenset[str] = frozenset(
-    {"single_start_produces_final_result", "one_start_per_operation", "manual_operation_trigger"}
+VALID_IDENTIFIER_STRATEGIES: frozenset[str] = frozenset(
+    {"id_only", "id_with_origin", "id_with_selection_name", "all_available"}
 )
 VALID_CLEANUP_POLICIES: frozenset[str] = frozenset({"best_effort_with_evidence", "strict_cleanup", "no_cleanup"})
 VALID_RESULT_CLASSIFICATIONS: frozenset[str] = frozenset(
@@ -227,6 +228,7 @@ class JoiningProcessSelectionConfig:
     joining_process_id: str = ""
     joining_process_origin_id: str = ""
     selection_name: str = ""
+    identifier_strategy: str = "id_only"
     capability_tags: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -247,6 +249,8 @@ class ExpectedResultsConfig:
     intermediate_classifications: tuple[str, ...] = field(default_factory=tuple)
     final_result_required: bool = True
     timeout_seconds: float = 60.0
+    expected_terminal_result_state: int = 1
+    reject_ok_evaluation_on_abort: bool = False
 
 
 @dataclass(frozen=True)
@@ -262,8 +266,9 @@ class CleanupConfig:
 class WorkflowExecutionConfig:
     """Full joining workflow execution configuration."""
 
-    start_invocation_policy: str = "single_start_produces_final_result"
-    expected_operation_count: int = 1
+    approved_workflows: tuple[str, ...] = ()
+    max_start_invocations: int = 6
+    consecutive_start_delay_seconds: float = 0.25
     expected_results: ExpectedResultsConfig = field(default_factory=ExpectedResultsConfig)
     cleanup: CleanupConfig = field(default_factory=CleanupConfig)
 
@@ -400,6 +405,8 @@ def require_enum(mapping: dict, key: str, default: str, valid: frozenset[str], c
 
 def require_str_list(mapping: dict, key: str, context: str) -> list[str]:
     val = mapping.get(key, [])
+    if isinstance(val, tuple):
+        val = list(val)
     if not isinstance(val, list):
         raise TargetServerConfigError(f"{context}: '{key}' must be a list, got {type(val).__name__}")
     for i, item in enumerate(val):
@@ -487,12 +494,14 @@ def _parse_jp_selection(raw: dict, context: str) -> JoiningProcessSelectionConfi
     jp_id = require_str(raw, "joining_process_id", context)
     jp_origin = require_str(raw, "joining_process_origin_id", context)
     sel_name = require_str(raw, "selection_name", context)
+    strat = require_enum(raw, "identifier_strategy", "id_only", VALID_IDENTIFIER_STRATEGIES, context)
     tags = tuple(require_str_list(raw, "capability_tags", context))
     return JoiningProcessSelectionConfig(
         policy=policy,
         joining_process_id=jp_id,
         joining_process_origin_id=jp_origin,
         selection_name=sel_name,
+        identifier_strategy=strat,
         capability_tags=tags,
     )
 
@@ -533,11 +542,20 @@ def _parse_expected_results(raw: dict, context: str) -> ExpectedResultsConfig:
         )
     final_req = require_bool(raw, "final_result_required", True, context)
     timeout = require_number(raw, "timeout_seconds", 60.0, context, min_val=1.0)
+    expected_state = require_int(raw, "expected_terminal_result_state", ResultState.COMPLETED, context)
+    if expected_state not in ResultState.VALID_TERMINAL_STATES:
+        raise TargetServerConfigError(
+            f"{context}.expected_terminal_result_state must be one of "
+            f"{sorted(ResultState.VALID_TERMINAL_STATES)} (1=COMPLETED, 3=ABORTED, 4=FAILED); got {expected_state}"
+        )
+    reject_ok_eval = require_bool(raw, "reject_ok_evaluation_on_abort", False, context)
     return ExpectedResultsConfig(
         classification=classification,
         intermediate_classifications=intermediate,
         final_result_required=final_req,
         timeout_seconds=timeout,
+        expected_terminal_result_state=expected_state,
+        reject_ok_evaluation_on_abort=reject_ok_eval,
     )
 
 
@@ -549,14 +567,9 @@ def _parse_cleanup(raw: dict, context: str) -> CleanupConfig:
 
 
 def parse_workflow_execution(raw: dict, context: str = "workflow_execution") -> WorkflowExecutionConfig:
-    sip = require_enum(
-        raw,
-        "start_invocation_policy",
-        "single_start_produces_final_result",
-        VALID_START_INVOCATION_POLICIES,
-        context,
-    )
-    op_count = require_int(raw, "expected_operation_count", 1, context, min_val=1)
+    approved = tuple(require_str_list(raw, "approved_workflows", context)) if "approved_workflows" in raw else ()
+    max_starts = require_int(raw, "max_start_invocations", 6, context, min_val=1)
+    pacing = require_number(raw, "consecutive_start_delay_seconds", 0.25, context, min_val=0.0)
 
     er_raw = raw.get("expected_results", {})
     if not isinstance(er_raw, dict):
@@ -569,8 +582,9 @@ def parse_workflow_execution(raw: dict, context: str = "workflow_execution") -> 
     cleanup_cfg = _parse_cleanup(cleanup_raw, f"{context}.cleanup")
 
     return WorkflowExecutionConfig(
-        start_invocation_policy=sip,
-        expected_operation_count=op_count,
+        approved_workflows=approved,
+        max_start_invocations=max_starts,
+        consecutive_start_delay_seconds=pacing,
         expected_results=er_cfg,
         cleanup=cleanup_cfg,
     )

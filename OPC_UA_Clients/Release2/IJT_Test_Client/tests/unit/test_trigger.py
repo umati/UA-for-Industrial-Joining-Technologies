@@ -140,6 +140,18 @@ class TestExternalResultTrigger:
         )
         assert outcome.triggered is False
 
+    @pytest.mark.asyncio
+    async def test_trigger_abort_job_returns_not_triggered(self, trigger):
+        outcome = await trigger.trigger_abort_job()
+        assert outcome.triggered is False
+        assert outcome.skip_reason is not None
+
+    @pytest.mark.asyncio
+    async def test_trigger_reset_job_returns_not_triggered(self, trigger):
+        outcome = await trigger.trigger_reset_job()
+        assert outcome.triggered is False
+        assert outcome.skip_reason is not None
+
 
 # ---------------------------------------------------------------------------
 # ExternalEventTrigger
@@ -338,6 +350,22 @@ class TestSimulatorResultTrigger:
 
         assert outcome.triggered is True
 
+    @pytest.mark.asyncio
+    async def test_trigger_abort_job_simulator(self):
+        folder = MagicMock()
+        trigger = SimulatorResultTrigger(None, folder, ns_app=2)
+        outcome = await trigger.trigger_abort_job()
+        assert outcome.triggered is False
+        assert "autonomous abort workflow" in str(outcome.skip_reason)
+
+    @pytest.mark.asyncio
+    async def test_trigger_reset_job_simulator(self):
+        folder = MagicMock()
+        trigger = SimulatorResultTrigger(None, folder, ns_app=2)
+        outcome = await trigger.trigger_reset_job()
+        assert outcome.triggered is False
+        assert "autonomous reset workflow" in str(outcome.skip_reason)
+
 
 # ---------------------------------------------------------------------------
 # SimulatorEventTrigger — uses mocked folder/find_child_by_browse_name
@@ -489,7 +517,8 @@ class TestTriggerTimeoutBudgets:
         assert ExternalResultTrigger(wait_timeout_s=3.5).passive_observation_timeout_s == 3.5
         assert ExternalEventTrigger(wait_timeout_s=3.5).passive_observation_timeout_s == 3.5
 
-    def test_environment_overrides_are_honoured(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_environment_overrides_are_honoured(self, monkeypatch):
         """A trigger that does not override the budgets picks them up from the
         environment set by helpers/target_server_execution.py."""
         monkeypatch.setenv(trigger_mod.ENV_ACTIVE_RESULT_TIMEOUT, "45")
@@ -520,6 +549,8 @@ class TestTriggerTimeoutBudgets:
         assert probe.active_result_timeout_s == 45.0
         assert probe.passive_observation_timeout_s == 7.0
         assert ExternalResultTrigger().passive_observation_timeout_s == 7.0
+        assert (await probe.trigger_abort_job()).triggered is False
+        assert (await probe.trigger_reset_job()).triggered is False
 
     def test_invalid_or_non_positive_environment_values_are_ignored(self, monkeypatch):
         monkeypatch.setenv(trigger_mod.ENV_PASSIVE_OBSERVATION_TIMEOUT, "not-a-number")

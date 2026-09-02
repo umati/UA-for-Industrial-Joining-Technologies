@@ -28,6 +28,7 @@ delayed-success and the timeout path without real waiting.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -42,6 +43,13 @@ def extract_result_id(payload: Any) -> str:
     """Return the ResultId string carried by *payload*, or ``""``."""
     if payload is None:
         return ""
+    # If already a decoded structure or has direct/nested ResultId attribute
+    meta = getattr(payload, "ResultMetaData", payload)
+    if meta is not None:
+        result_id = getattr(meta, "ResultId", None)
+        if result_id is not None and not isinstance(result_id, (bytes, bytearray)):
+            return str(result_id)
+
     cls_name = type(payload).__name__
     if cls_name in ("ExtensionObject", "Variant"):
         body = getattr(payload, "Body", None)
@@ -51,6 +59,19 @@ def extract_result_id(payload: Any) -> str:
             val = getattr(payload, "Value", None)
             if val is not None:
                 payload = val
+
+    if isinstance(payload, (bytes, bytearray)):
+        # OPC UA Binary encoding of ResultMetaDataType:
+        # String is encoded as 4-byte length prefix + UTF-8 bytes.
+        # Extract UUIDs or printable identifier tokens directly from raw binary payload.
+        match = re.search(rb"([0-9a-fA-F-]{36}|[A-Za-z0-9_\-:.]{4,128})", payload)
+        if match:
+            try:
+                return match.group(1).decode("utf-8")
+            except UnicodeDecodeError:
+                pass
+        return ""
+
     meta = getattr(payload, "ResultMetaData", payload)
     if meta is None:
         return ""

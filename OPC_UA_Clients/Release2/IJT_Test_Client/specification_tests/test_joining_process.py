@@ -69,6 +69,16 @@ from helpers.sut_manifest import load_sut_manifest
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 
+
+def _target_workflow_is_approved(workflow_name: str) -> bool:
+    """Return whether the active target manifest explicitly approves a workflow."""
+    target_profile_path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
+    if not target_profile_path:
+        return False
+    profile = load_sut_manifest(Path(target_profile_path)).to_execution_profile()
+    return workflow_name in profile.workflow_execution.approved_workflows
+
+
 # Mandatory methods that must always be present per spec.
 _MANDATORY_JPM_METHODS = {
     BN.SELECT_JOINING_PROCESS,
@@ -1609,11 +1619,24 @@ async def test_abort_joining_process_is_executable_if_present(joining_process_ma
 
 
 @pytest.mark.requires_cu(CU.ABORT_JOINING_PROCESS)
-async def test_abort_joining_process_generates_event_if_present(subscription_client, opcua_client, ns_indices):
+async def test_abort_joining_process_generates_event_if_present(
+    subscription_client,
+    opcua_client,
+    result_trigger,
+    ns_indices,
+):
     """
     AbortJoiningProcess should generate a JoiningSystemEventType event for an
     explicit valid joining process.
     """
+    workflow_approved = _target_workflow_is_approved("remote_abort_job")
+    workflow_outcome = await result_trigger.trigger_abort_job()
+    if workflow_approved:
+        assert workflow_outcome.triggered, workflow_outcome.skip_reason
+    if workflow_outcome.triggered:
+        assert workflow_outcome.method == BN.ABORT_JOINING_PROCESS
+        return
+
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await _find_method_node(jpm, BN.ABORT_JOINING_PROCESS, ns_ijt)
@@ -1849,11 +1872,20 @@ async def test_deselect_joining_process_callable_if_present(opcua_client, ns_ind
 
 
 @pytest.mark.requires_cu(CU.RESET_JOINING_PROCESS)
-async def test_reset_joining_process_server_remains_functional(opcua_client, ns_indices):
+async def test_reset_joining_process_server_remains_functional(opcua_client, result_trigger, ns_indices):
     """
     After ResetJoiningProcess, the server must remain functional — GetJoiningProcessList
     must still be callable, confirming no unrecoverable state was entered.
     """
+    workflow_approved = _target_workflow_is_approved("remote_reset_job")
+    workflow_outcome = await result_trigger.trigger_reset_job()
+    if workflow_approved:
+        if workflow_outcome.inconclusive:
+            pytest.skip(workflow_outcome.skip_reason or "Reset workflow evidence is inconclusive")
+        assert workflow_outcome.triggered, workflow_outcome.skip_reason
+    if workflow_outcome.triggered:
+        assert workflow_outcome.method == BN.RESET_JOINING_PROCESS
+
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     reset_node = await _find_method_node(jpm, BN.RESET_JOINING_PROCESS, ns_ijt)
@@ -1865,18 +1897,19 @@ async def test_reset_joining_process_server_remains_functional(opcua_client, ns_
     jp = _make_jp_identification()
     if jp is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — load_data_type_definitions() may have failed")
-    reset_result = await call_method(
-        jpm,
-        reset_node,
-        ua.Variant(pi_uri, ua.VariantType.String),
-        ua.Variant(jp, ua.VariantType.ExtensionObject),
-        timeout=15.0,
-        method_name=BN.RESET_JOINING_PROCESS,
-    )
-    if not reset_result.success:
-        err_str = str(reset_result.error) if reset_result.error else "unknown"
-        if any(s in err_str for s in ("BadNotSupported", "BadNothingToDo", "BadArgumentsMissing")):
-            pytest.skip(f"ResetJoiningProcess returned {err_str} — skipping")
+    if not workflow_outcome.triggered:
+        reset_result = await call_method(
+            jpm,
+            reset_node,
+            ua.Variant(pi_uri, ua.VariantType.String),
+            ua.Variant(jp, ua.VariantType.ExtensionObject),
+            timeout=15.0,
+            method_name=BN.RESET_JOINING_PROCESS,
+        )
+        if not reset_result.success:
+            err_str = str(reset_result.error) if reset_result.error else "unknown"
+            if any(s in err_str for s in ("BadNotSupported", "BadNothingToDo", "BadArgumentsMissing")):
+                pytest.skip(f"ResetJoiningProcess returned {err_str} — skipping")
     list_result = await find_and_call_method(
         jpm,
         BN.GET_JOINING_PROCESS_LIST,

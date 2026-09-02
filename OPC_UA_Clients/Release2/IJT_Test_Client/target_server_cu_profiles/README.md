@@ -53,17 +53,24 @@ All commands run via `run_all_tests.py` from `OPC_UA_Clients/Release2/IJT_Test_C
 python run_all_tests.py inspect --endpoint opc.tcp://<host>:40451
 
 # 2. Auto-create a manifest from live discovery:
-python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output target_server_cu_profiles/my_controller.sut.yaml
+python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output target_server_cu_profiles/controller.sut.yaml
 
 # 3. Classification-only preflight (validates config & TCP; no live tests):
-python run_all_tests.py run --profile target_server_cu_profiles/my_controller.sut.yaml --endpoint opc.tcp://<host>:40451 --preflight-only
+python run_all_tests.py run --profile target_server_cu_profiles/controller.sut.yaml --endpoint opc.tcp://<host>:40451 --preflight-only
 
 # 4. Full validation run (Phase 1 quality + preflight + live specification tests + evidence):
-python run_all_tests.py run --profile target_server_cu_profiles/my_controller.sut.yaml --endpoint opc.tcp://<host>:40451
+python run_all_tests.py run --profile target_server_cu_profiles/controller.sut.yaml --endpoint opc.tcp://<host>:40451
 
 # 5. Specification tests only (skips Phase 1 static analysis):
-python run_all_tests.py run --phase2 --profile target_server_cu_profiles/my_controller.sut.yaml --endpoint opc.tcp://<host>:40451
+python run_all_tests.py run --phase2 --profile target_server_cu_profiles/controller.sut.yaml --endpoint opc.tcp://<host>:40451
 ```
+
+Before step 3, review the generated manifest and discovered-process comment block:
+
+- Confirm every copied process suggestion against advertised `JoiningProcessMetaData.Classification`; name hints are advisory.
+- Keep `identifier_strategy: id_only` unless controller evidence requires OriginId or SelectionName.
+- Keep real endpoints, Tool PIUs, serial numbers, and process identifiers only in this ignored local manifest.
+- Set `max_start_invocations` to a conservative safety cap. Pacing and queue inspection reduce extra-start races but cannot make the server interaction atomic.
 
 ---
 

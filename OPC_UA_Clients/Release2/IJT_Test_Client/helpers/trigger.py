@@ -7,17 +7,17 @@ Decouples test logic from the trigger mechanism, allowing the same tests to run 
 
 Usage in tests::
 
-    # Simulator — result trigger:
+    # Simulator - result trigger:
     outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=True)
     if not outcome.triggered:
         pytest.skip(outcome.skip_reason)
 
-    # Simulator — event trigger:
+    # Simulator - event trigger:
     outcome = await event_trigger.trigger_event(SimulateEventType.TOOL_CONNECTED, count=2)
     if not outcome.triggered:
         pytest.skip(outcome.skip_reason)
 
-    # Real controller: outcome.triggered=False, outcome.skip_reason is set → test calls pytest.skip()
+    # Real controller: outcome.triggered=False, outcome.skip_reason is set -> test calls pytest.skip()
 
 Controller teams can extend by subclassing::
 
@@ -42,16 +42,16 @@ from helpers.node_discovery import find_child_by_browse_name
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TIMEOUT = 60.0  # seconds — job results can be slow
-_EXTERNAL_SKIP_REASON = "External trigger required — run test with a real controller and trigger manually"
+_DEFAULT_TIMEOUT = 60.0  # seconds - job results can be slow
+_EXTERNAL_SKIP_REASON = "External trigger required - run test with a real controller and trigger manually"
 
 # Evidence-wait budgets.  These are deliberately split so a test never spends a
 # long completion budget when nothing was actively started, and never uses a
 # short passive-observation budget after a remote start was accepted.
 #
-#   active   — an operation was actively started by the trigger and a correlated
+#   active   - an operation was actively started by the trigger and a correlated
 #              result/event MUST arrive; sized for a real joining cycle.
-#   passive  — nothing was started by the test; the trigger only observes
+#   passive  - nothing was started by the test; the trigger only observes
 #              whatever the server produces on its own.  Kept short so an
 #              unattended run cannot stall for hours.
 DEFAULT_SIMULATOR_ACTIVE_RESULT_TIMEOUT_S = 15.0
@@ -91,11 +91,13 @@ class TriggerOutcome:
         triggered:   True when the trigger method was called successfully.
         skip_reason: Human-readable reason to pass to pytest.skip() when triggered=False.
         method:      Name of the OPC UA method that was invoked (for logging/debugging).
+        inconclusive: True when optional server evidence is unavailable, rather than invalid.
     """
 
     triggered: bool
     skip_reason: str | None = field(default=None)
     method: str | None = field(default=None)
+    inconclusive: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +202,22 @@ class ResultTrigger(ABC):
             TriggerOutcome with triggered=True on success.
         """
 
+    async def trigger_abort_job(self) -> TriggerOutcome:
+        """Return an unsupported outcome unless an adapter implements abort."""
+        return TriggerOutcome(
+            triggered=False,
+            skip_reason="This result trigger does not implement an autonomous abort workflow",
+            method=BN.ABORT_JOINING_PROCESS,
+        )
+
+    async def trigger_reset_job(self) -> TriggerOutcome:
+        """Return an unsupported outcome unless an adapter implements reset."""
+        return TriggerOutcome(
+            triggered=False,
+            skip_reason="This result trigger does not implement an autonomous reset workflow",
+            method=BN.RESET_JOINING_PROCESS,
+        )
+
 
 class EventTrigger(ABC):
     """Abstract base for event-trigger implementations.
@@ -294,7 +312,7 @@ class SimulatorResultTrigger(ResultTrigger):
 
     @property
     def is_simulator(self) -> bool:
-        """True — this trigger drives the OPC UA simulator."""
+        """True - this trigger drives the OPC UA simulator."""
         return True
 
     @property
@@ -387,6 +405,22 @@ class SimulatorResultTrigger(ResultTrigger):
             ua.Variant(update_vars, ua.VariantType.Boolean),
         )
 
+    async def trigger_abort_job(self) -> TriggerOutcome:
+        """Call SimulateJobResult or return skip outcome."""
+        return TriggerOutcome(
+            triggered=False,
+            skip_reason="Simulator does not implement autonomous abort workflow simulation",
+            method=BN.ABORT_JOINING_PROCESS,
+        )
+
+    async def trigger_reset_job(self) -> TriggerOutcome:
+        """Call SimulateJobResult or return skip outcome."""
+        return TriggerOutcome(
+            triggered=False,
+            skip_reason="Simulator does not implement autonomous reset workflow simulation",
+            method=BN.RESET_JOINING_PROCESS,
+        )
+
 
 class SimulatorEventTrigger(EventTrigger):
     """Drives the OPC UA simulator by calling SimulateEvents and SimulateBulkEvents.
@@ -407,7 +441,7 @@ class SimulatorEventTrigger(EventTrigger):
 
     @property
     def is_simulator(self) -> bool:
-        """True — this trigger drives the OPC UA simulator."""
+        """True - this trigger drives the OPC UA simulator."""
         return True
 
     @property
@@ -507,7 +541,7 @@ class SimulatorEventTrigger(EventTrigger):
 
 
 class ExternalResultTrigger(ResultTrigger):
-    """No-op trigger for real controllers — tests must be triggered externally.
+    """No-op trigger for real controllers - tests must be triggered externally.
 
     All trigger methods immediately return a ``TriggerOutcome(triggered=False)``
     with a human-readable ``skip_reason``.  Tests should call ``pytest.skip()``
@@ -521,7 +555,7 @@ class ExternalResultTrigger(ResultTrigger):
 
     @property
     def is_simulator(self) -> bool:
-        """False — external trigger required for real controllers."""
+        """False - external trigger required for real controllers."""
         return False
 
     def __init__(self, wait_timeout_s: float = 0.0) -> None:
@@ -529,7 +563,7 @@ class ExternalResultTrigger(ResultTrigger):
 
     @property
     def active_result_timeout_s(self) -> float:
-        """This trigger never starts an operation — observation budget only."""
+        """This trigger never starts an operation - observation budget only."""
         return self.passive_observation_timeout_s
 
     @property
@@ -543,7 +577,7 @@ class ExternalResultTrigger(ResultTrigger):
         return TriggerOutcome(triggered=False, skip_reason=_EXTERNAL_SKIP_REASON, method=method)
 
     async def trigger_single(self, result_type: int, include_traces: bool = False) -> TriggerOutcome:
-        """Return skip outcome — external trigger required."""
+        """Return skip outcome - external trigger required."""
         return self._skip(BN.SIMULATE_SINGLE_RESULT)
 
     async def trigger_batch_or_sync(
@@ -553,11 +587,11 @@ class ExternalResultTrigger(ResultTrigger):
         include_traces: bool = False,
         send_as_refs: bool = False,
     ) -> TriggerOutcome:
-        """Return skip outcome — external trigger required."""
+        """Return skip outcome - external trigger required."""
         return self._skip(BN.SIMULATE_BATCH_OR_SYNC_RESULT)
 
     async def trigger_job(self, send_as_refs: bool = False) -> TriggerOutcome:
-        """Return skip outcome — external trigger required."""
+        """Return skip outcome - external trigger required."""
         return self._skip(BN.SIMULATE_JOB_RESULT)
 
     async def trigger_bulk_results(
@@ -569,12 +603,20 @@ class ExternalResultTrigger(ResultTrigger):
         min_duration_ms: int = 100,
         update_vars: bool = True,
     ) -> TriggerOutcome:
-        """Return skip outcome — external trigger required."""
+        """Return skip outcome - external trigger required."""
         return self._skip(BN.SIMULATE_BULK_RESULTS)
+
+    async def trigger_abort_job(self) -> TriggerOutcome:
+        """Return skip outcome - external trigger required."""
+        return self._skip(BN.ABORT_JOINING_PROCESS)
+
+    async def trigger_reset_job(self) -> TriggerOutcome:
+        """Return skip outcome - external trigger required."""
+        return self._skip(BN.RESET_JOINING_PROCESS)
 
 
 class ExternalEventTrigger(EventTrigger):
-    """No-op trigger for real controllers — events must be triggered externally.
+    """No-op trigger for real controllers - events must be triggered externally.
 
     All trigger methods immediately return a ``TriggerOutcome(triggered=False)``
     with a human-readable ``skip_reason``.  Tests should call ``pytest.skip()``
@@ -588,7 +630,7 @@ class ExternalEventTrigger(EventTrigger):
 
     @property
     def is_simulator(self) -> bool:
-        """False — external trigger required for real controllers."""
+        """False - external trigger required for real controllers."""
         return False
 
     def __init__(self, wait_timeout_s: float = 0.0) -> None:
@@ -596,7 +638,7 @@ class ExternalEventTrigger(EventTrigger):
 
     @property
     def active_event_timeout_s(self) -> float:
-        """This trigger never fires an event — observation budget only."""
+        """This trigger never fires an event - observation budget only."""
         return self.passive_observation_timeout_s
 
     @property
@@ -610,7 +652,7 @@ class ExternalEventTrigger(EventTrigger):
         return TriggerOutcome(triggered=False, skip_reason=_EXTERNAL_SKIP_REASON, method=method)
 
     async def trigger_event(self, event_type: int, count: int = 1) -> TriggerOutcome:
-        """Return skip outcome — external trigger required."""
+        """Return skip outcome - external trigger required."""
         return self._skip(BN.SIMULATE_EVENTS)
 
     async def trigger_bulk_events(
@@ -621,11 +663,11 @@ class ExternalEventTrigger(EventTrigger):
         to_seq: int,
         min_duration_ms: int = 100,
     ) -> TriggerOutcome:
-        """Return skip outcome — external trigger required."""
+        """Return skip outcome - external trigger required."""
         return self._skip(BN.SIMULATE_BULK_EVENTS)
 
     async def trigger_condition(self, event_type: int) -> TriggerOutcome:
-        """Return skip outcome — external trigger required."""
+        """Return skip outcome - external trigger required."""
         return self._skip(BN.SIMULATE_CONDITIONS)
 
 

@@ -125,8 +125,8 @@ triggers:
     timeout_seconds: 60
 
 workflow_execution:
-  start_invocation_policy: single_start_produces_final_result
-  expected_operation_count: 1
+  max_start_invocations: 6
+  consecutive_start_delay_seconds: 0.25
   expected_results:
     classification: single
     final_result_required: true
@@ -224,12 +224,27 @@ class TestFullValidProfile:
     def test_workflow_execution_policy(self):
         raw = yaml.safe_load(FULL_VALID)
         profile = build_execution_profile(raw)
-        assert profile.workflow_execution.start_invocation_policy == "single_start_produces_final_result"
+        assert profile.workflow_execution.max_start_invocations == 6
+        assert profile.workflow_execution.consecutive_start_delay_seconds == 0.25
+        assert profile.workflow_execution.expected_results.expected_terminal_result_state == 1
 
     def test_reporting_output_dir(self):
         raw = yaml.safe_load(FULL_VALID)
         profile = build_execution_profile(raw)
         assert "target-server-cu" in profile.reporting.output_dir
+
+    def test_custom_expected_terminal_result_state(self):
+        raw = yaml.safe_load(FULL_VALID)
+        raw["workflow_execution"]["expected_results"]["expected_terminal_result_state"] = 3
+        profile = build_execution_profile(raw)
+        assert profile.workflow_execution.expected_results.expected_terminal_result_state == 3
+
+    def test_invalid_expected_terminal_result_state_is_rejected(self):
+        raw = yaml.safe_load(FULL_VALID)
+        for invalid in (0, 2, 5, -1):
+            raw["workflow_execution"]["expected_results"]["expected_terminal_result_state"] = invalid
+            with pytest.raises(TargetServerConfigError, match="expected_terminal_result_state must be one of"):
+                build_execution_profile(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -301,12 +316,12 @@ class TestInvalidEnumValues:
                 }
             )
 
-    def test_invalid_start_invocation_policy_raises(self):
+    def test_invalid_identifier_strategy_raises(self):
         with pytest.raises(TargetServerConfigError, match="invalid value"):
             build_execution_profile(
                 {
                     "schema_version": 1,
-                    "workflow_execution": {"start_invocation_policy": "spam"},
+                    "selection": {"joining_process": {"identifier_strategy": "spam"}},
                 }
             )
 
@@ -582,3 +597,19 @@ class TestParserHelpersAndValidation:
     def test_joining_processes_invalid_key_type(self):
         with pytest.raises(TargetServerConfigError, match="keys must be strings"):
             build_execution_profile({"schema_version": 1, "selection": {"joining_processes": {123: {}}}})
+
+    def test_expected_results_reject_ok_evaluation_on_abort(self):
+        profile_default = build_execution_profile({"schema_version": 1})
+        assert profile_default.workflow_execution.expected_results.reject_ok_evaluation_on_abort is False
+
+        profile_enabled = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {
+                    "expected_results": {
+                        "reject_ok_evaluation_on_abort": True,
+                    }
+                },
+            }
+        )
+        assert profile_enabled.workflow_execution.expected_results.reject_ok_evaluation_on_abort is True

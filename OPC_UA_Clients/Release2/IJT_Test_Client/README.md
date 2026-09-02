@@ -32,9 +32,9 @@ python run_all_tests.py                                        # Phase 1 + Phase
 python run_all_tests.py --phase1                               # static analysis only
 python run_all_tests.py --phase2                               # specification_tests only
 python run_all_tests.py inspect --endpoint opc.tcp://<host>:40451          # read-only discovery (no state change)
-python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output my_controller.sut.yaml  # guided manifest creation
+python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output controller.sut.yaml  # guided manifest creation
 python run_all_tests.py run --profile target_server_cu_profiles/controller_remote_start.sut.yaml --endpoint opc.tcp://<host>:40451  # full controller run
-python run_all_tests.py run --profile my_controller.sut.yaml --endpoint opc.tcp://<host>:40451 --preflight-only  # classification only
+python run_all_tests.py run --profile controller.sut.yaml --endpoint opc.tcp://<host>:40451 --preflight-only  # classification only
 ```
 
 See [Target Server CU Guide](docs/TARGET_SERVER_CU_GUIDE.md) for the
@@ -49,9 +49,9 @@ python run_all_tests.py run --profile target_server_cu_profiles/controller_remot
 
 Use [`controller_manual_trigger.sut.yaml`](target_server_cu_profiles/controller_manual_trigger.sut.yaml) instead if the operator physically triggers the tool.
 
-**Only create a custom manifest** if your controller has different capability claims. Use `init-profile` to auto-generate one from live discovery:
+**Only create a custom manifest** when the target controller has different capability claims. Use `init-profile` to auto-generate one from live discovery:
 ```bash
-python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output my_controller.sut.yaml
+python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output controller.sut.yaml
 ```
 
 Optional read-only discovery (safe, no state change, no manifest needed):

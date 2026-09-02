@@ -8,6 +8,7 @@ server required.
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -487,3 +488,429 @@ class TestPublicCollectMethods:
         await rc.collect_single()
         _, _, timeout = rc._collect_until.call_args[0]
         assert timeout == pytest.approx(60.0)
+
+
+# ---------------------------------------------------------------------------
+# is_terminal_completed
+# ---------------------------------------------------------------------------
+
+
+class TestIsTerminalCompleted:
+    def test_none_result_data_returns_false(self):
+        from helpers.result_collector import is_terminal_completed
+
+        assert is_terminal_completed(None, 4) is False
+
+    def test_classification_mismatch_returns_false(self):
+        from helpers.result_collector import is_terminal_completed
+
+        data = MagicMock()
+        data.ResultMetaData.Classification = 1
+        data.ResultMetaData.IsPartial = False
+        data.ResultMetaData.ResultState = 1
+        assert is_terminal_completed(data, 4) is False
+
+    def test_missing_result_metadata_returns_false(self):
+        from helpers.result_collector import is_terminal_completed
+
+        data = MagicMock()
+        data.ResultMetaData = None
+        assert is_terminal_completed(data, None) is False
+
+    def test_partial_true_returns_false(self):
+        from helpers.result_collector import is_terminal_completed
+
+        data = MagicMock()
+        data.ResultMetaData.Classification = 4
+        data.ResultMetaData.IsPartial = True
+        data.ResultMetaData.ResultState = 1
+        assert is_terminal_completed(data, 4) is False
+
+    def test_partial_variant_true_returns_false(self):
+        from helpers.result_collector import is_terminal_completed
+
+        data = MagicMock()
+        data.ResultMetaData.Classification = 4
+        data.ResultMetaData.IsPartial = ua.Variant(True, ua.VariantType.Boolean)
+        data.ResultMetaData.ResultState = 1
+        assert is_terminal_completed(data, 4) is False
+
+    def test_result_state_not_completed_returns_false(self):
+        from helpers.result_collector import is_terminal_completed
+
+        data = MagicMock()
+        data.ResultMetaData.Classification = 4
+        data.ResultMetaData.IsPartial = False
+        data.ResultMetaData.ResultState = 0  # e.g. InProgress
+        assert is_terminal_completed(data, 4) is False
+
+    def test_result_state_invalid_returns_false(self):
+        from helpers.result_collector import is_terminal_completed
+
+        data = MagicMock()
+        data.ResultMetaData.Classification = 4
+        data.ResultMetaData.IsPartial = False
+        data.ResultMetaData.ResultState = "invalid"
+        assert is_terminal_completed(data, 4) is False
+
+    def test_boolean_result_state_is_not_completed_enum(self):
+        from helpers.result_collector import is_terminal_completed
+
+        data = MagicMock()
+        data.ResultMetaData.Classification = 4
+        data.ResultMetaData.IsPartial = False
+        data.ResultMetaData.ResultState = True
+        assert is_terminal_completed(data, 4) is False
+
+    def test_valid_terminal_result_returns_true(self):
+        from helpers.result_collector import is_terminal_completed
+
+        data = MagicMock()
+        data.ResultMetaData.Classification = 4
+        data.ResultMetaData.IsPartial = False
+        data.ResultMetaData.ResultState = 1
+        assert is_terminal_completed(data, 4) is True
+
+    def test_valid_terminal_result_with_variant_state_returns_true(self):
+        from helpers.result_collector import is_terminal_completed
+
+        data = MagicMock()
+        data.ResultMetaData.Classification = 4
+        data.ResultMetaData.IsPartial = ua.Variant(False, ua.VariantType.Boolean)
+        data.ResultMetaData.ResultState = ua.Variant(1, ua.VariantType.Int32)
+        assert is_terminal_completed(data, 4) is True
+
+    def test_is_terminal_aborted_checks_state_three(self):
+        from helpers.namespaces import ResultState
+        from helpers.result_collector import is_terminal_aborted, is_terminal_matching_state
+
+        data = MagicMock()
+        data.ResultMetaData.Classification = 4
+        data.ResultMetaData.IsPartial = False
+        data.ResultMetaData.ResultState = ResultState.ABORTED
+        assert is_terminal_aborted(data, 4) is True
+        assert is_terminal_matching_state(data, 4, target_state=3) is True
+        assert is_terminal_matching_state(data, 4, target_state=1) is False
+
+    def test_is_terminal_aborted_rejects_completed(self):
+        from helpers.result_collector import is_terminal_aborted
+
+        data = MagicMock()
+        data.ResultMetaData.Classification = 4
+        data.ResultMetaData.IsPartial = False
+        data.ResultMetaData.ResultState = 1
+        assert is_terminal_aborted(data, 4) is False
+
+
+# ---------------------------------------------------------------------------
+# collect_correlated_operation_outcome
+# ---------------------------------------------------------------------------
+
+
+class TestCollectCorrelatedOperationOutcome:
+    @pytest.mark.asyncio
+    async def test_raises_when_not_active_in_context(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        with pytest.raises(RuntimeError, match="not active"):
+            await rc.collect_correlated_operation_outcome(
+                requested_result_classification=4,
+                predicate=lambda _: True,
+                operation_timeout_s=1.0,
+            )
+
+    @pytest.mark.asyncio
+    async def test_times_out_when_no_matching_events(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        mock_raw_collector = MagicMock()
+        mock_raw_collector.collect = AsyncMock(return_value=[])
+        rc._collector = mock_raw_collector
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_timeout_s=0.01,
+            terminal_drain_seconds=0.0,
+        )
+        assert outcome.operation_confirmed is False
+        assert outcome.timed_out is True
+        assert outcome.terminal_result is None
+
+    @pytest.mark.asyncio
+    async def test_skips_events_failing_predicate(self):
+        import asyncio
+
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        event_unmatched = MagicMock(Result="other_result")
+        calls = [event_unmatched]
+
+        async def _collect(*_a, **_kw):
+            if calls:
+                return [calls.pop(0)]
+            await asyncio.sleep(0.01)
+            return []
+
+        mock_raw_collector = MagicMock()
+        mock_raw_collector.collect = _collect
+        rc._collector = mock_raw_collector
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda r: r == "matching_result",
+            operation_timeout_s=0.01,
+            terminal_drain_seconds=0.0,
+        )
+        assert outcome.operation_confirmed is False
+        assert outcome.timed_out is True
+
+    @pytest.mark.asyncio
+    async def test_returns_immediately_when_terminal_result_arrives(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        meta = MagicMock(Classification=4, IsPartial=False, ResultState=1)
+        job_result = MagicMock(ResultMetaData=meta)
+        event = MagicMock(Result=job_result)
+        mock_raw_collector = MagicMock()
+        mock_raw_collector.collect = AsyncMock(return_value=[event])
+        rc._collector = mock_raw_collector
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_timeout_s=1.0,
+            terminal_drain_seconds=0.25,
+        )
+        assert outcome.operation_confirmed is True
+        assert outcome.terminal_result is job_result
+        assert outcome.timed_out is False
+
+    @pytest.mark.asyncio
+    async def test_drain_catches_terminal_result_after_intermediate_evidence(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        # First event: single result (operation confirmed, not terminal for job)
+        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1)
+        single_result = MagicMock(ResultMetaData=single_meta)
+        event1 = MagicMock(Result=single_result)
+
+        # Second event during drain: terminal job result
+        job_meta = MagicMock(Classification=4, IsPartial=False, ResultState=1)
+        job_result = MagicMock(ResultMetaData=job_meta)
+        event2 = MagicMock(Result=job_result)
+
+        mock_raw_collector = MagicMock()
+        mock_raw_collector.collect = AsyncMock(side_effect=[[event1], [event2]])
+        rc._collector = mock_raw_collector
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_timeout_s=1.0,
+            terminal_drain_seconds=0.25,
+        )
+        assert outcome.operation_confirmed is True
+        assert outcome.operation_result is single_result
+        assert outcome.terminal_result is job_result
+        assert outcome.latest_result is job_result
+        assert outcome.timed_out is False
+
+    @pytest.mark.asyncio
+    async def test_drain_completes_without_terminal_result(self):
+        import asyncio
+
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1)
+        single_result = MagicMock(ResultMetaData=single_meta)
+        calls = [single_result]
+
+        async def _collect(*_a, **_kw):
+            if calls:
+                return [MagicMock(Result=calls.pop(0))]
+            await asyncio.sleep(0.01)
+            return []
+
+        mock_raw_collector = MagicMock()
+        mock_raw_collector.collect = _collect
+        rc._collector = mock_raw_collector
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_timeout_s=1.0,
+            terminal_drain_seconds=0.01,
+        )
+        assert outcome.operation_confirmed is True
+        assert outcome.operation_result is single_result
+        assert outcome.terminal_result is None
+        assert outcome.latest_result is single_result
+        assert outcome.timed_out is False
+
+    def test_collect_pending_terminal_raises_when_not_active(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        with pytest.raises(RuntimeError, match="not active"):
+            rc.collect_pending_terminal(4, lambda _: True)
+
+    def test_collect_pending_terminal_returns_none_when_no_match(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        mock_raw = MagicMock()
+        event_none = MagicMock(Result=None)
+        event_other = MagicMock(
+            Result=MagicMock(ResultMetaData=MagicMock(Classification=1, IsPartial=False, ResultState=1))
+        )
+        mock_raw.collect_pending = MagicMock(return_value=[event_none, event_other])
+        rc._collector = mock_raw
+
+        assert rc.collect_pending_terminal(4, lambda _: True) is None
+
+    @pytest.mark.asyncio
+    async def test_collect_correlated_operation_outcome_handles_none_event_results(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        event_none = MagicMock(Result=None)
+        job_meta = MagicMock(Classification=4, IsPartial=False, ResultState=1)
+        event_job = MagicMock(Result=MagicMock(ResultMetaData=job_meta))
+
+        mock_raw = MagicMock()
+        mock_raw.collect = AsyncMock(side_effect=[[event_none], [event_job], [event_none]])
+        rc._collector = mock_raw
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_timeout_s=1.0,
+            terminal_drain_seconds=0.01,
+        )
+        assert outcome.operation_confirmed is True
+        assert outcome.terminal_result is not None
+        assert outcome.timed_out is False
+
+    @pytest.mark.asyncio
+    async def test_partial_status_does_not_confirm_operation(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        partial_meta = MagicMock(Classification=4, IsPartial=True, ResultState=2)
+        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1)
+        events = [
+            MagicMock(Result=MagicMock(ResultMetaData=partial_meta)),
+            MagicMock(Result=MagicMock(ResultMetaData=single_meta)),
+        ]
+        mock_raw_collector = MagicMock()
+        mock_raw_collector.collect = AsyncMock(side_effect=[[events[0]], [events[1]]])
+        rc._collector = mock_raw_collector
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_predicate=lambda _: True,
+            operation_timeout_s=1.0,
+            terminal_drain_seconds=0.0,
+        )
+
+        assert outcome.operation_confirmed is True
+        assert outcome.operation_result is events[1].Result
+        assert outcome.latest_result is events[1].Result
+
+    @pytest.mark.asyncio
+    async def test_completed_non_single_result_does_not_confirm_operation(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        batch_result = MagicMock(
+            ResultMetaData=MagicMock(
+                Classification=ResultClassification.BATCH_RESULT,
+                IsPartial=False,
+                ResultState=1,
+            )
+        )
+        calls = iter([[MagicMock(Result=batch_result)]])
+
+        async def collect_until_timeout(**_kwargs):
+            try:
+                return next(calls)
+            except StopIteration:
+                await asyncio.sleep(0.01)
+                return []
+
+        mock_raw_collector = MagicMock()
+        mock_raw_collector.collect = AsyncMock(side_effect=collect_until_timeout)
+        rc._collector = mock_raw_collector
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=ResultClassification.JOB_RESULT,
+            predicate=lambda _: True,
+            operation_predicate=lambda _: True,
+            operation_timeout_s=0.01,
+            terminal_drain_seconds=0.0,
+        )
+
+        assert outcome.operation_confirmed is False
+        assert outcome.timed_out is True
+
+    @pytest.mark.asyncio
+    async def test_drain_handles_none_event_result(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1)
+        single_result = MagicMock(ResultMetaData=single_meta)
+        event_single = MagicMock(Result=single_result)
+        event_none = MagicMock(Result=None)
+        job_meta = MagicMock(Classification=4, IsPartial=False, ResultState=1)
+        job_result = MagicMock(ResultMetaData=job_meta)
+        event_job = MagicMock(Result=job_result)
+
+        mock_raw = MagicMock()
+        mock_raw.collect = AsyncMock(side_effect=[[event_single], [event_none], [event_job]])
+        rc._collector = mock_raw
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_timeout_s=1.0,
+            terminal_drain_seconds=0.05,
+        )
+        assert outcome.operation_confirmed is True
+        assert outcome.terminal_result is job_result
+
+    def test_collect_pending_terminal_preserves_strict_matching(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        partial = MagicMock(ResultMetaData=MagicMock(Classification=4, IsPartial=True, ResultState=2))
+        terminal = MagicMock(ResultMetaData=MagicMock(Classification=4, IsPartial=False, ResultState=1))
+        rc._collector = MagicMock()
+        rc._collector.collect_pending.return_value = [
+            MagicMock(Result=partial),
+            MagicMock(Result=terminal),
+        ]
+
+        assert rc.collect_pending_terminal(4, lambda _: True) is terminal
+
+    def test_collect_pending_terminal_supports_expected_terminal_state_three(self):
+        from helpers.namespaces import ResultState
+
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        completed = MagicMock(ResultMetaData=MagicMock(Classification=4, IsPartial=False, ResultState=1))
+        aborted = MagicMock(
+            ResultMetaData=MagicMock(Classification=4, IsPartial=False, ResultState=ResultState.ABORTED)
+        )
+        rc._collector = MagicMock()
+        rc._collector.collect_pending.return_value = [
+            MagicMock(Result=completed),
+            MagicMock(Result=aborted),
+        ]
+
+        assert rc.collect_pending_terminal(4, lambda _: True, expected_terminal_state=3) is aborted
+
+    @pytest.mark.asyncio
+    async def test_collect_correlated_operation_outcome_matches_aborted_terminal_state(self):
+        from helpers.namespaces import ResultState
+
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        aborted_meta = MagicMock(Classification=4, IsPartial=False, ResultState=ResultState.ABORTED)
+        aborted_result = MagicMock(ResultMetaData=aborted_meta)
+        event = MagicMock(Result=aborted_result)
+
+        mock_raw = MagicMock()
+        mock_raw.collect = AsyncMock(return_value=[event])
+        rc._collector = mock_raw
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_timeout_s=1.0,
+            terminal_drain_seconds=0.01,
+            expected_terminal_state=3,
+        )
+        assert outcome.operation_confirmed is True
+        assert outcome.terminal_result is aborted_result
+        assert outcome.latest_result is aborted_result

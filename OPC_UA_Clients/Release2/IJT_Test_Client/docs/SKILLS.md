@@ -301,7 +301,7 @@ python run_all_tests.py --profile target_server_cu_profiles/controller_remote_st
 python run_all_tests.py --phase2 --profile target_server_cu_profiles/controller_remote_start.sut.yaml
 
 # Guided run with interactive prompts:
-python run_all_tests.py --phase2 --profile my_controller.sut.yaml --mode guided --interactive-prompts
+python run_all_tests.py --phase2 --profile controller.sut.yaml --mode guided --interactive-prompts
 
 # Override endpoint (suppresses simulator auto-launch):
 python run_all_tests.py --preflight-only --profile target_server_cu_profiles/template.sut.yaml --endpoint opc.tcp://10.0.0.1:40451
@@ -517,11 +517,11 @@ Use this retry pattern only in standalone GetLatestResult-specific tests in
 For servers that cannot simulate their own results, implement a trigger adapter:
 
 ```python
-# my_server/trigger.py
+# custom_server/trigger.py
 from helpers.trigger import ResultTrigger, TriggerOutcome, ResultType
 
 
-class MyServerTrigger(ResultTrigger):
+class CustomServerTrigger(ResultTrigger):
     async def trigger_single(self, result_type: ResultType, include_traces=False):
         await self._api.run_program(result_type.value)
         return TriggerOutcome(triggered=True, method="api.run_program")
@@ -530,7 +530,7 @@ class MyServerTrigger(ResultTrigger):
 Register it before running:
 
 ```bash
-export OPCUA_TRIGGER_CLASS=my_server.trigger.MyServerTrigger
+export OPCUA_TRIGGER_CLASS=custom_server.trigger.CustomServerTrigger
 pytest specification_tests/
 ```
 

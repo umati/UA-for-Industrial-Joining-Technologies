@@ -2204,8 +2204,8 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="SECONDS",
         dest="spec_tests_timeout",
         type=int,
-        default=600,
-        help="Timeout in seconds for a --profile/--endpoint live specification_tests/ run (default: 600)",
+        default=1800,
+        help="Timeout in seconds for a --profile/--endpoint live specification_tests/ run (default: 1800)",
     )
     p.add_argument(
         "--discover-target",

@@ -44,20 +44,23 @@ Outcomes in the final report use the canonical vocabulary (Passed, Failed, Not S
 | `capability_claims.cu_overrides` | mapping | No | `{}` | `manual_required`, `supported`, `unsupported` | Per-CU claim overrides: supported, unsupported, or manual_required. |
 | `capability_claims.claims_are_authoritative` | bool | No | `true` | - | Keep true: manifest claims win over discovery observations. |
 | `capability_claims.allow_discovery_to_relax_claims` | bool | No | `false` | - | Keep false: discovery must not silently downgrade a claim to unsupported. |
-| `workflows.approved` | list of strings | No | `[]` | - | Workflow names approved for this SUT (documentation and audit trail). |
-| `workflows.start_invocation_policy` | str | No | `single_start_produces_final_result` | `manual_operation_trigger`, `one_start_per_operation`, `single_start_produces_final_result` | How many start calls produce the required result evidence. |
-| `workflows.expected_operation_count` | int | No | `1` | - | Expected number of joining operations for batch/sync workflows. |
+| `workflows.approved` | list of strings | No | `[]` | - | Workflow names approved for this SUT (e.g. remote_start_multi_operation_job, counter_intervention, remote_abort_job, remote_reset_job). |
+| `workflows.max_start_invocations` | int | No | `6` | - | Maximum accepted StartSelectedJoining RPC calls for a multi-operation compound process (Job/Batch/Sync) before stopping. Single/Program processes are always capped at 1 start. Execution exits early as soon as a terminal completed result arrives. |
+| `workflows.consecutive_start_delay_seconds` | number | No | `0.25` | - | Pacing delay in seconds between consecutive StartSelectedJoining invocations for compound processes (Job/Batch/Sync). Allows controller state settlement and event drain (default: 0.25s). Not applied to single operations. Queue inspection and this drain reduce extra-start races but cannot eliminate the non-atomic check-to-start window. |
 | `workflows.tool_selector.policy` | str | No | `first_ready` | `exact_match`, `first_available`, `first_compatible`, `first_ready` | Tool selection policy. |
 | `workflows.tool_selector.product_instance_uri` | str | No | `''` | - | Exact Tool ProductInstanceUri. Leave empty for runtime discovery. Do not commit real serial numbers. |
 | `workflows.tool_selector.capability_tags` | list of strings | No | `[]` | - | Optional tags used to narrow tool selection. |
-| `workflows.process_selector.policy` | str | No | `first_compatible` | `exact_match`, `first_available`, `first_compatible`, `first_ready` | Joining process selection policy. first_ready: picks the first ready program automatically — good for simple controllers. exact_match: pin a specific joining_process_id for deterministic selection on controllers with many programs. |
+| `workflows.process_selector.policy` | str | No | `first_compatible` | `exact_match`, `first_available`, `first_compatible`, `first_ready` | Joining process selection policy. exact_match pins an advertised identifier and still requires matching standard Classification metadata. All non-exact policies select the first returned process with the requested standard Classification; they do not infer controller readiness from names or vendor fields. Missing, unreadable, or incompatible Classification metadata produces a clean skip. |
 | `workflows.process_selector.joining_process_id` | str | No | `''` | - | Exact JoiningProcessId. Do not commit real IDs. |
 | `workflows.process_selector.joining_process_origin_id` | str | No | `''` | - | Stable fallback when a controller regenerates its primary process ID. |
 | `workflows.process_selector.selection_name` | str | No | `''` | - | Final controller-specific selection fallback. |
+| `workflows.process_selector.identifier_strategy` | str | No | `id_only` | `all_available`, `id_only`, `id_with_origin`, `id_with_selection_name` | Strategy for populating JoiningProcessIdentificationDataType: id_only (default/portable, sends JoiningProcessId only with empty OriginId and SelectionName; recommended for generic profiles), id_with_origin (sends JoiningProcessId and OriginId), id_with_selection_name (sends JoiningProcessId and SelectionName, e.g. Atlas Copco SequenceIndex_1; use in local uncommitted manifests), all_available (sends all three identifiers; use only when hardware evidence proves all are required). |
 | `workflows.process_selector.capability_tags` | list of strings | No | `[]` | - | Optional tags used to narrow process selection. |
 | `workflows.expected_results.classification` | str | No | `single` | `any`, `batch`, `intervention`, `job`, `single`, `stitching`, `sync`, `text` | Primary/final result classification. |
 | `workflows.expected_results.intermediate_classifications` | list of strings | No | `[]` | - | Result classifications emitted before or alongside the final result. |
 | `workflows.expected_results.final_result_required` | bool | No | `true` | - | Require a final result before the workflow counts as complete. |
+| `workflows.expected_results.expected_terminal_result_state` | int | No | `1` | - | Expected ResultState (OPC 40001-101 Machinery Result) for terminal completion: 1 (COMPLETED), 3 (ABORTED), or 4 (FAILED). |
+| `workflows.expected_results.reject_ok_evaluation_on_abort` | bool | No | `false` | - | When true, abort workflows reject terminal results evaluated as OK (1). |
 | `workflows.cleanup.policy` | str | No | `best_effort_with_evidence` | `best_effort_with_evidence`, `no_cleanup`, `strict_cleanup` | Cleanup policy after the run. |
 | `workflows.cleanup.deselect_process` | bool | No | `true` | - | Deselect the joining process after the run. |
 | `workflows.cleanup.reset_identifiers` | bool | No | `false` | - | Reset identifiers after the run. |
@@ -96,7 +99,7 @@ Outcomes in the final report use the canonical vocabulary (Passed, Failed, Not S
 
 ## Built-in presets
 
-Presets are code, not companion files. They seed generation of the committed examples; at run time you supply exactly one manifest.
+Presets are code, not companion files. They seed generation of the committed examples; each run supplies exactly one manifest.
 
 | Preset | Name | Lifecycle | Result trigger |
 |---|---|---|---|

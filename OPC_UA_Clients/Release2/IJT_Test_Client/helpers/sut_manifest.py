@@ -59,12 +59,12 @@ from helpers.target_server_cu_config import (
     VALID_CONDITION_TRIGGER_MODES,
     VALID_EVENT_TRIGGER_MODES,
     VALID_EXECUTION_MODES,
+    VALID_IDENTIFIER_STRATEGIES,
     VALID_PRECONDITION_POLICIES,
     VALID_RESULT_CLASSIFICATIONS,
     VALID_RESULT_TRIGGER_MODES,
     VALID_SCORING_MODES,
     VALID_SELECTION_POLICIES,
-    VALID_START_INVOCATION_POLICIES,
     VALID_STATE_CHANGING_POLICIES,
     TargetServerConfigError,
     TargetServerCuProfile,
@@ -338,21 +338,26 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
             FieldSpec(
                 "approved",
                 "str_list",
-                "Workflow names approved for this SUT (documentation and audit trail).",
+                "Workflow names approved for this SUT (e.g. remote_start_multi_operation_job, counter_intervention, remote_abort_job, remote_reset_job).",
             ),
             FieldSpec(
-                "start_invocation_policy",
-                "str",
-                "How many start calls produce the required result evidence.",
-                default="single_start_produces_final_result",
-                choices=VALID_START_INVOCATION_POLICIES,
-            ),
-            FieldSpec(
-                "expected_operation_count",
+                "max_start_invocations",
                 "int",
-                "Expected number of joining operations for batch/sync workflows.",
-                default=1,
+                "Maximum accepted StartSelectedJoining RPC calls for a multi-operation compound process "
+                "(Job/Batch/Sync) before stopping. Single/Program processes are always capped at 1 start. "
+                "Execution exits early as soon as a terminal completed result arrives.",
+                default=6,
                 min_value=1,
+            ),
+            FieldSpec(
+                "consecutive_start_delay_seconds",
+                "number",
+                "Pacing delay in seconds between consecutive StartSelectedJoining invocations for "
+                "compound processes (Job/Batch/Sync). Allows controller state settlement and event drain "
+                "(default: 0.25s). Not applied to single operations. Queue inspection and this drain "
+                "reduce extra-start races but cannot eliminate the non-atomic check-to-start window.",
+                default=0.25,
+                min_value=0.0,
             ),
         ),
         subsections=(
@@ -383,7 +388,11 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                     FieldSpec(
                         "policy",
                         "str",
-                        "Joining process selection policy. first_ready: picks the first ready program automatically — good for simple controllers. exact_match: pin a specific joining_process_id for deterministic selection on controllers with many programs.",
+                        "Joining process selection policy. exact_match pins an advertised identifier "
+                        "and still requires matching standard Classification metadata. All non-exact "
+                        "policies select the first returned process with the requested standard "
+                        "Classification; they do not infer controller readiness from names or vendor fields. "
+                        "Missing, unreadable, or incompatible Classification metadata produces a clean skip.",
                         default="first_compatible",
                         choices=VALID_SELECTION_POLICIES,
                     ),
@@ -394,6 +403,17 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "Stable fallback when a controller regenerates its primary process ID.",
                     ),
                     FieldSpec("selection_name", "str", "Final controller-specific selection fallback."),
+                    FieldSpec(
+                        "identifier_strategy",
+                        "str",
+                        "Strategy for populating JoiningProcessIdentificationDataType: "
+                        "id_only (default/portable, sends JoiningProcessId only with empty OriginId and SelectionName; recommended for generic profiles), "
+                        "id_with_origin (sends JoiningProcessId and OriginId), "
+                        "id_with_selection_name (sends JoiningProcessId and SelectionName, e.g. Atlas Copco SequenceIndex_1; use in local uncommitted manifests), "
+                        "all_available (sends all three identifiers; use only when hardware evidence proves all are required).",
+                        default="id_only",
+                        choices=VALID_IDENTIFIER_STRATEGIES,
+                    ),
                     FieldSpec("capability_tags", "str_list", "Optional tags used to narrow process selection."),
                 ),
             ),
@@ -401,7 +421,11 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                 name="process_selectors_by_classification",
                 description=(
                     "Optional per-classification process selectors (single, batch, job, sync ...). "
-                    "Each entry uses the same fields as process_selector."
+                    "Classification is resolved from server metadata (JoiningProcessMetaData.Classification: "
+                    "1=Other, 2=Program, 3=Sync, 4=Batch, 5=Job), which is a different integer domain from "
+                    "ResultMetaData.Classification. YAML classification names are configuration keys only "
+                    "and are never sent as OPC UA Classification values. Each entry supports the same fields "
+                    "as process_selector."
                 ),
                 fields=(),
             ),
@@ -426,6 +450,18 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "bool",
                         "Require a final result before the workflow counts as complete.",
                         default=True,
+                    ),
+                    FieldSpec(
+                        "expected_terminal_result_state",
+                        "int",
+                        "Expected ResultState (OPC 40001-101 Machinery Result) for terminal completion: 1 (COMPLETED), 3 (ABORTED), or 4 (FAILED).",
+                        default=1,
+                    ),
+                    FieldSpec(
+                        "reject_ok_evaluation_on_abort",
+                        "bool",
+                        "When true, abort workflows reject terminal results evaluated as OK (1).",
+                        default=False,
                     ),
                 ),
             ),
@@ -1109,8 +1145,9 @@ class SutManifest:
                 },
             },
             "workflow_execution": {
-                "start_invocation_policy": workflows["start_invocation_policy"],
-                "expected_operation_count": workflows["expected_operation_count"],
+                "approved_workflows": tuple(workflows.get("approved", ())),
+                "max_start_invocations": workflows.get("max_start_invocations", 6),
+                "consecutive_start_delay_seconds": float(workflows.get("consecutive_start_delay_seconds", 0.25)),
                 "expected_results": {
                     **dict(workflows["expected_results"]),
                     "timeout_seconds": timeouts.active_result_seconds,
@@ -1381,15 +1418,15 @@ _REMOTE_START_CU_OVERRIDES: dict[str, str] = {
     "feedback_methods": "unsupported",
     "get_error_information": "unsupported",
     "get_joining_process_revision_list": "unsupported",
-    "get_joint": "unsupported",
+    "get_joint": "supported",
     "get_joint_component": "unsupported",
     "get_joint_component_list": "unsupported",
     "get_joint_design": "unsupported",
     "get_joint_design_list": "unsupported",
-    "get_joint_list": "unsupported",
+    "get_joint_list": "supported",
     "get_joint_revision_list": "unsupported",
-    "get_latest_result": "unsupported",
-    "get_result_by_id": "unsupported",
+    "get_latest_result": "supported",
+    "get_result_by_id": "supported",
     "get_result_with_filter_criteria": "unsupported",
     "intervention_result": "supported",
     "io_signals_methods": "unsupported",
@@ -1400,23 +1437,23 @@ _REMOTE_START_CU_OVERRIDES: dict[str, str] = {
     "joint_management": "unsupported",
     "partial_consolidated_result": "supported",
     "reboot_asset": "unsupported",
-    "request_results": "unsupported",
+    "request_results": "supported",
     "request_unacknowledged_results": "unsupported",
-    "requested_result_event_access": "unsupported",
-    "requested_result_variable_access": "unsupported",
+    "requested_result_event_access": "supported",
+    "requested_result_variable_access": "supported",
     "result_extended_meta_data": "unsupported",
     "result_value_final_tag": "supported",
     "result_value_trace_point_index": "unsupported",
     "result_value_trace_point_time_offset": "unsupported",
-    "select_joint": "unsupported",
-    "send_joint": "unsupported",
+    "select_joint": "supported",
+    "send_joint": "supported",
     "send_joint_component": "unsupported",
     "send_joint_design": "unsupported",
     "set_calibration": "unsupported",
-    "set_joining_process_counter": "unsupported",
+    "set_joining_process_counter": "supported",
     "set_joining_process_mapping": "unsupported",
     "set_offline_timer": "unsupported",
-    "set_time": "unsupported",
+    "set_time": "supported",
     "start_joining_process": "unsupported",
     "sync_result": "unsupported",
     "sync_result_counters": "unsupported",
@@ -1496,28 +1533,32 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
         },
         "workflows": {
             "approved": ["remote_start_multi_operation_job", "counter_intervention"],
-            "start_invocation_policy": "single_start_produces_final_result",
-            "expected_operation_count": 1,
+            "max_start_invocations": 6,
+            "consecutive_start_delay_seconds": 0.25,
             "process_selector": {
                 "policy": "first_ready",
                 "joining_process_id": "",
                 "joining_process_origin_id": "",
+                "identifier_strategy": "id_only",
             },
             "process_selectors_by_classification": {
                 "single": {
                     "policy": "first_ready",
                     "joining_process_id": "",
                     "joining_process_origin_id": "",
+                    "identifier_strategy": "id_only",
                 },
                 "job": {
                     "policy": "first_ready",
                     "joining_process_id": "",
                     "joining_process_origin_id": "",
+                    "identifier_strategy": "id_only",
                 },
                 "batch": {
                     "policy": "first_ready",
                     "joining_process_id": "",
                     "joining_process_origin_id": "",
+                    "identifier_strategy": "id_only",
                 },
             },
             "expected_results": {
@@ -1583,8 +1624,8 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
         },
         "workflows": {
             "approved": ["manual_operator_single_result"],
-            "start_invocation_policy": "manual_operation_trigger",
-            "expected_operation_count": 1,
+            "max_start_invocations": 1,
+            "consecutive_start_delay_seconds": 0.25,
             "expected_results": {"classification": "single", "final_result_required": True},
             "cleanup": {"policy": "best_effort_with_evidence", "deselect_process": False},
         },
@@ -1819,7 +1860,7 @@ def render_field_reference() -> str:
             "## Built-in presets",
             "",
             "Presets are code, not companion files. They seed generation of the committed "
-            "examples; at run time you supply exactly one manifest.",
+            "examples; each run supplies exactly one manifest.",
             "",
             "| Preset | Name | Lifecycle | Result trigger |",
             "|---|---|---|---|",

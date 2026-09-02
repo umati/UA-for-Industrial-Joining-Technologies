@@ -54,7 +54,7 @@ The test structure mirrors the specification chapters:
 Before writing or editing a manifest, connect to the target server to automatically discover its Tool `ProductInstanceUri`, available Joining Processes, and generate a recommended YAML snippet:
 
 ```bash
-python run_all_tests.py init-profile --endpoint opc.tcp://<controller-host>:40451 --output my_controller.sut.yaml
+python run_all_tests.py init-profile --endpoint opc.tcp://<controller-host>:40451 --output controller.sut.yaml
 ```
 
 ---
@@ -103,16 +103,16 @@ Create a local manifest when the controller's workflow or claimed CUs differ fro
 **Windows (PowerShell):**
 ```powershell
 Copy-Item target_server_cu_profiles/template.sut.yaml `
-  target_server_cu_profiles/my_controller.sut.yaml
+  target_server_cu_profiles/controller.sut.yaml
 ```
 
 **Linux / macOS (Bash / Zsh):**
 ```bash
 cp target_server_cu_profiles/template.sut.yaml \
-   target_server_cu_profiles/my_controller.sut.yaml
+   target_server_cu_profiles/controller.sut.yaml
 ```
 
-Then update `my_controller.sut.yaml`:
+Then update `controller.sut.yaml`:
 
 | Setting | What to enter |
 |---|---|
@@ -122,14 +122,14 @@ Then update `my_controller.sut.yaml`:
 | `authentication.source` | `anonymous`, `prompt`, `file`, or `environment` - references only, never a secret value |
 | `capability_claims.active_profile` / `supported_facets` / `cu_overrides` | The controller's authoritative CU claims |
 | `workflows.tool_selector.product_instance_uri` | Leave empty for runtime Tool discovery; otherwise enter the Tool PIU |
-| `workflows.process_selector.policy` | `first_ready` (default — picks the first ready program automatically, safe for small program lists); `exact_match` (pin a specific ID, required for deterministic runs on controllers with many programs); `first_available` or `first_compatible` for looser matching |
+| `workflows.process_selector.policy` | `first_compatible` is the schema default; committed presets may use `first_ready`. All non-exact policies select the first returned process with the requested standard Classification and do not infer readiness from names or vendor fields. `exact_match` pins an advertised ID/origin/name and still requires matching Classification metadata. |
 | `workflows.process_selector.joining_process_id` | Default/fallback Process ID returned by `GetJoiningProcessList` |
 | `workflows.process_selector.joining_process_origin_id` | Stable origin fallback if the controller regenerates the primary ID |
 | `workflows.process_selector.selection_name` | Final fallback when neither configured ID is advertised |
 | `workflows.process_selectors_by_classification.<classification>` | Optional per-classification selectors (`single`, `job`, `batch`, `sync`) |
-| `execution_policy.state_changing_methods.allowed_methods` | Safety authorization only: methods approved for this run; it does not enable CUs or create tests |
-| `execution_policy.risk_approvals` | Who approved elevated risk (asset disable, destructive methods) and under which reference |
-| `workflows.expected_operation_count` | Starts needed to complete the selected JoiningProcess |
+| `workflows.max_start_invocations` | Maximum accepted StartSelectedJoining invocations before stopping (default: 6) |
+| `workflows.consecutive_start_delay_seconds` | Pacing delay in seconds between consecutive starts (default: 0.25s) |
+| `workflows.process_selector.identifier_strategy` | Strategy for populating JoiningProcessIdentificationDataType (`id_only`, `id_with_origin`, `id_with_selection_name`, `all_available`) |
 | `workflows.expected_results.classification` | Final result layer, such as `single`, `batch`, or `job` |
 | `workflows.expected_results.intermediate_classifications` | Earlier layers, such as `[single, batch, intervention]` |
 | `triggers.result.mode` | `start_selected_joining`, `manual_trigger`, `observe_only`, or `none` |
@@ -168,23 +168,23 @@ holds a secret value, and no credential is ever written to a log, report, or err
 
 - **Safe preflight check:**
   ```bash
-  python run_all_tests.py --preflight-only --profile target_server_cu_profiles/my_controller.sut.yaml
+  python run_all_tests.py --preflight-only --profile target_server_cu_profiles/controller.sut.yaml
   ```
 - **Classification without invoking specification tests:**
   ```bash
-  python run_all_tests.py --profile target_server_cu_profiles/my_controller.sut.yaml --skip-spec-tests
+  python run_all_tests.py --profile target_server_cu_profiles/controller.sut.yaml --skip-spec-tests
   ```
 - **Full validation (Phase 1 + preflight + specs + evidence):**
   ```bash
-  python run_all_tests.py run --profile target_server_cu_profiles/my_controller.sut.yaml --endpoint opc.tcp://<host>:40451
+  python run_all_tests.py run --profile target_server_cu_profiles/controller.sut.yaml --endpoint opc.tcp://<host>:40451
   ```
 - **Preflight + specs + evidence only (skipping Phase 1):**
   ```bash
-  python run_all_tests.py run --phase2 --profile target_server_cu_profiles/my_controller.sut.yaml --endpoint opc.tcp://<host>:40451
+  python run_all_tests.py run --phase2 --profile target_server_cu_profiles/controller.sut.yaml --endpoint opc.tcp://<host>:40451
   ```
 - **Guided / manual run with interactive prompts:**
   ```bash
-  python run_all_tests.py --phase2 --profile target_server_cu_profiles/my_controller.sut.yaml --mode guided --interactive-prompts --output-dir test-results/target-server-cu/my-controller-guided
+  python run_all_tests.py --phase2 --profile target_server_cu_profiles/controller.sut.yaml --mode guided --interactive-prompts --output-dir test-results/target-server-cu/controller-guided
   ```
 
 ---
@@ -230,11 +230,46 @@ selection:
 If a test requires a Job process but none is configured or advertised, the runner skips cleanly in milliseconds instead of hanging.
 
 ### Result layering & multi-operation starts
+Joining-process and result classifications are different OPC 40450-1 domains:
+
+- `JoiningProcessMetaData.Classification`: Other=1, Program=2, Sync=3, Batch=4, Job=5.
+- `ResultMetaData.Classification`: Single=1, Sync=2, Batch=3, Job=4, Stitching=5, Intervention=6, Text=7.
+
+Runtime selection and `init-profile` use the joining-process domain. Never copy a
+numeric value from one domain into the other. Discovery treats advertised process
+metadata as authoritative; name-based suggestions are advisory only when that
+metadata is absent or unusable and must be reviewed before use.
+
+YAML keys such as `single:`, `sync:`, `batch:`, and `job:` are human-readable
+configuration labels only. They are converted at the configuration boundary;
+execution and OPC UA comparisons use the integer result constants and the distinct
+joining-process classification enum. These strings are never sent as OPC UA
+Classification values.
+
 Result classification describes the evidence emitted by the workflow, not the vendor name of the process:
-- For a sequence that produces multiple result layers, set `workflow_execution.start_invocation_policy: one_start_per_operation` and configure its real `expected_operation_count`.
-- The reusable trigger subscribes before starting, selects the generic `JoiningProcess`, waits for each correlated SingleResult, and only then starts the next operation.
-- The trigger exits early the moment a terminal `JobResult` (Classification 4) or `BatchResult` (Classification 3) arrives.
+- For a compound process that produces multiple result layers (Job, Batch, or Sync), configure `workflows.max_start_invocations` (default: 6) and `workflows.consecutive_start_delay_seconds` (default: 0.25s).
+- Exact process selectors still require `JoiningProcessMetaData.Classification` to match the requested Program, Sync, Batch, or Job domain; an ID match never overrides incompatible or unreadable classification metadata.
+- The reusable trigger subscribes before starting, selects the generic `JoiningProcess`, waits for a completed Tool-correlated `SingleResult` as operation evidence, and applies the pacing delay between starts.
+- The trigger exits early when the matching terminal completed `SyncResult`, `BatchResult`, or `JobResult` arrives with `ResultState=1` and `IsPartial=False`.
+- Queue inspection and the pacing drain reduce extra-start races, but cannot eliminate the small check-to-start window without an atomic controller readiness/completion signal.
 - The runner preserves CUs for the primary `classification` and every declared item in `intermediate_classifications` (e.g. `classification: job` with `intermediate_classifications: [single, batch, intervention]`).
+
+### Autonomous Abort and Reset Workflows
+The Test Client provides dedicated trigger methods for compound multi-step sequence abort and reset testing:
+- **Required permissions**: Add `AbortJoiningProcess` and/or `ResetJoiningProcess` to `cu_execution.state_changing_methods.allowed_methods`.
+- **Approved workflows**: Add `remote_abort_job` and/or `remote_reset_job` to `workflows.approved`.
+- **Abort workflow (`trigger_abort_job`)**:
+  - Selects a multi-step Job (Classification 5) or Batch (Classification 4).
+  - Starts step 1 via `StartSelectedJoining` and waits for its completed intermediate `SingleResult` to confirm active sequence state, strictly ensuring the parent sequence did not finish prematurely.
+  - Invokes `AbortJoiningProcess(ToolPIU, Identification, LocalizedText(Message))` with `target_server_authorized=True`.
+  - Asserts that the terminal consolidated result arrives with `ResultState=3 (ABORTED)` and `IsPartial=False`. Set `results.reject_ok_evaluation_on_abort: true` only when the server contract requires rejection of an aborted result evaluated as `OK (1)`.
+- **Reset workflow (`trigger_reset_job`)**:
+  - Requires a live subscription client to establish and verify sequence state.
+  - Starts step 1 and verifies the intermediate `SingleResult`.
+  - Invokes `ResetJoiningProcess(ToolPIU, Identification)` with `target_server_authorized=True`.
+  - Drains queued notifications, issues `StartSelectedJoining` again, and requires a new `ResultId`, increasing `SequenceNumber`, and matching non-empty `StepId`. This rejects stale notifications and proves return to the same first step.
+  - Reports the conformance probe as inconclusive and skips it when `StepId` is absent because OPC 40001-101 makes this field optional; observing another `SingleResult` alone cannot prove which step ran.
+- **Dedicated Trigger Routing**: The Abort event and Reset functional conformance tests call the dedicated trigger methods. Unsupported adapters return a non-triggering outcome, while approved `start_selected_joining` profiles run the autonomous workflows. `trigger_job()` remains strictly dedicated to standard completed Job execution (`ResultState=1: COMPLETED`).
 
 ### State-change safety & permissions
 - Adding a method to `state_changing_methods.allowed_methods` is a **safety permission only** — it does not enable CUs or create tests. The manifest's `capability_claims` determine which CUs are enabled.

@@ -23,6 +23,8 @@ Import pattern (all test modules):
 
 from __future__ import annotations
 
+from enum import Enum
+
 # ---------------------------------------------------------------------------
 # Namespace URIs (order irrelevant — indices are resolved at runtime)
 # ---------------------------------------------------------------------------
@@ -593,8 +595,58 @@ class ResultType:
 
 
 # ---------------------------------------------------------------------------
-# ResultClassification enum
+# JoiningProcess and Result classification domains
 # ---------------------------------------------------------------------------
+class JoiningProcessClassification(Enum):
+    """JoiningProcessMetaData.Classification values defined by OPC 40450-1."""
+
+    OTHER = 1
+    PROGRAM = 2
+    SYNC = 3
+    BATCH = 4
+    JOB = 5
+
+
+JOINING_PROCESS_CLASSIFICATION_NAMES: dict[JoiningProcessClassification, str] = {
+    JoiningProcessClassification.PROGRAM: "single",
+    JoiningProcessClassification.SYNC: "sync",
+    JoiningProcessClassification.BATCH: "batch",
+    JoiningProcessClassification.JOB: "job",
+}
+JOINING_PROCESS_CLASSIFICATION_VALUES: dict[str, JoiningProcessClassification] = {
+    name: value for value, name in JOINING_PROCESS_CLASSIFICATION_NAMES.items()
+}
+
+
+def parse_joining_process_classification(value: object) -> JoiningProcessClassification | None:
+    """Convert an OPC UA wire value to the joining-process classification domain."""
+    if value is None or isinstance(value, bool):
+        return None
+    raw = getattr(value, "Value", value)
+    raw = getattr(raw, "value", raw)
+    if isinstance(raw, bool):
+        return None
+    try:
+        return JoiningProcessClassification(int(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def joining_process_classification_name(value: object) -> str:
+    """Return the result-workflow key associated with a process classification."""
+    classification = parse_joining_process_classification(value)
+    if classification is None:
+        return ""
+    return JOINING_PROCESS_CLASSIFICATION_NAMES.get(classification, "")
+
+
+def joining_process_classification_value(name: str | None) -> JoiningProcessClassification | None:
+    """Return the process classification associated with a result-workflow key."""
+    if not name:
+        return None
+    return JOINING_PROCESS_CLASSIFICATION_VALUES.get(str(name).strip().lower())
+
+
 class ResultClassification:
     """
     Valid ResultClassification enum values per OPC 40450-1 §9 (ResultMetaDataType).
@@ -660,6 +712,21 @@ class ResultEvaluation:
     NOK = 2
     NOT_DECIDABLE = 3
     VALID_VALUES: set[int] = {0, 1, 2, 3}
+
+
+# ---------------------------------------------------------------------------
+# ResultState enum
+# ---------------------------------------------------------------------------
+class ResultState:
+    """Valid ResultState enum values per OPC 40001-101 Machinery Result (ResultMetaDataType)."""
+
+    UNDEFINED = 0
+    COMPLETED = 1
+    PROCESSING = 2
+    ABORTED = 3
+    FAILED = 4
+    VALID_VALUES: set[int] = {0, 1, 2, 3, 4}
+    VALID_TERMINAL_STATES: set[int] = {1, 3, 4}
 
 
 # ---------------------------------------------------------------------------
