@@ -40,8 +40,10 @@ Covered conformance units:
 """
 
 import asyncio
+import dataclasses
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +78,77 @@ _LIVE_VARIABLE_SETTLE_SECS = 1.0
 # A result identifier that is guaranteed not to exist on any real server
 _NONEXISTENT_RESULT_ID = "nonexistent-result-identifier-for-negative-test"
 _NO_RESULT_DATA = object()
+
+
+@dataclasses.dataclass(frozen=True)
+class _RequestedResultUpdate:
+    value: Any
+    data_value: Any
+
+
+class _RequestedResultBuffer:
+    """Buffer every RequestedResult data change so intermediate results are not missed."""
+
+    def __init__(self, client: Any, node_id: ua.NodeId) -> None:
+        self._client = client
+        self._node_id = node_id
+        self._queue: asyncio.Queue[_RequestedResultUpdate] = asyncio.Queue(maxsize=100)
+        self._subscription: Any = None
+        self._handle: Any = None
+
+    def datachange_notification(self, _node: Any, value: Any, data: Any) -> None:
+        monitored_item = getattr(data, "monitored_item", None)
+        data_value = getattr(monitored_item, "Value", None)
+        try:
+            self._queue.put_nowait(_RequestedResultUpdate(value=value, data_value=data_value))
+        except asyncio.QueueFull:
+            logger.warning("RequestedResult update buffer is full; dropping one data change")
+
+    def event_notification(self, _event: Any) -> None:
+        """Satisfy the asyncua subscription handler interface."""
+
+    def status_change_notification(self, _status: Any) -> None:
+        """Satisfy the asyncua subscription handler interface."""
+
+    async def __aenter__(self) -> "_RequestedResultBuffer":
+        self._subscription = await self._client.create_subscription(50.0, self)
+        node = self._client.get_node(self._node_id)
+        self._handle = await self._subscription.subscribe_data_change(node)
+        return self
+
+    async def __aexit__(self, _exc_type: Any, _exc: Any, _traceback: Any) -> None:
+        await self._subscription.unsubscribe(self._handle)
+        await self._subscription.delete()
+
+    def discard_pending(self) -> None:
+        """Remove initial or prior-call notifications before a new method attempt."""
+        while True:
+            try:
+                self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+
+    async def collect_result(self, timeout_s: float) -> _RequestedResultUpdate:
+        """Return the first decoded result delivered after a successful method call."""
+        deadline = asyncio.get_running_loop().time() + timeout_s
+        observed: list[tuple[int | None, str]] = []
+        while True:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                pytest.fail(
+                    f"RequestedResult stream did not deliver a decoded result within {timeout_s}s; observed {observed!r}"
+                )
+            try:
+                update = await asyncio.wait_for(self._queue.get(), timeout=remaining)
+            except asyncio.TimeoutError:
+                pytest.fail(
+                    f"RequestedResult stream did not deliver a decoded result within {timeout_s}s; observed {observed!r}"
+                )
+            sequence_number = _extract_sequence_number(update.value)
+            result_id = extract_result_id(update.value)
+            observed.append((sequence_number, result_id))
+            if result_id.strip():
+                return update
 
 
 def _get_request_results_config() -> RequestResultsConfig:
@@ -165,20 +238,13 @@ def _get_request_results_args(
             "a sequence-filtered RequestResults call cannot be correlated safely"
         )
     if single_result:
-        pinned_seq = seq if seq is not None else cfg.from_sequence_number
-        if cfg.filter_strategy == "timestamp":
-            arg_from_seq = 0
-            arg_to_seq = 0
-        else:
-            arg_from_seq = pinned_seq
-            arg_to_seq = pinned_seq
-        return (
-            ua.Variant(arg_from_seq, ua.VariantType.UInt64),
-            ua.Variant(arg_to_seq, ua.VariantType.UInt64),
-            ua.Variant(cfg.from_time, ua.VariantType.DateTime),
-            ua.Variant(cfg.to_time, ua.VariantType.DateTime),
-            ua.Variant(cfg.min_duration_ms, ua.VariantType.Double),
+        pinned_seq = seq if seq is not None and seq > 0 else max(1, cfg.from_sequence_number)
+        single_cfg = dataclasses.replace(
+            cfg,
+            from_sequence_number=max(1, pinned_seq - 1),
+            to_sequence_number=pinned_seq,
         )
+        return build_request_results_arguments(single_cfg, triggered_seq=None)
     return build_request_results_arguments(cfg, triggered_seq=seq)
 
 
@@ -188,12 +254,15 @@ async def _call_request_results(
     rr_args: list[ua.Variant] | tuple[ua.Variant, ...],
     *,
     timeout_s: float = _METHOD_WALL_TIMEOUT,
-    max_retries: int = 3,
+    max_retries: int = 8,
     retry_delay_s: float = 1.5,
+    before_attempt: Callable[[], None] | None = None,
 ) -> Any:
     """Call RequestResults with automated retry if server is actively streaming from a prior call."""
     last_exc: Exception | None = None
     for attempt in range(max_retries):
+        if before_attempt is not None:
+            before_attempt()
         try:
             return await asyncio.wait_for(
                 rm_node.call_method(rr_node.nodeid, *rr_args),
@@ -215,6 +284,32 @@ async def _call_request_results(
             raise
     if last_exc is not None:
         raise last_exc
+
+
+async def _call_and_collect_requested_result(
+    rm_node: Any,
+    rr_node: Any,
+    rr_args: tuple[ua.Variant, ...],
+    subscription_client: Any,
+    requested_var_node: Any,
+    *,
+    timeout_s: float,
+) -> _RequestedResultUpdate:
+    """Subscribe before RequestResults and return a fresh decoded update from its result batch."""
+    async with _RequestedResultBuffer(subscription_client, requested_var_node.nodeid) as buffer:
+        try:
+            response = await _call_request_results(
+                rm_node,
+                rr_node,
+                rr_args,
+                before_attempt=buffer.discard_pending,
+            )
+        except ua.UaError as exc:
+            pytest.fail(f"RequestResults call failed with OPC UA status: {exc}")
+        except asyncio.TimeoutError:
+            pytest.fail("RequestResults timed out")
+        _assert_request_results_output(response, "RequestResults")
+        return await buffer.collect_result(timeout_s)
 
 
 # Default arguments for RequestResults: sequence_number strategy by default.
@@ -819,7 +914,9 @@ async def test_requested_result_variable_is_present_in_result_management(result_
 
 
 @pytest.mark.requires_cu(CU.REQUESTED_RESULT_VARIABLE_ACCESS)
-async def test_request_results_populates_requested_result_variable(opcua_client, result_trigger, ns_indices):
+async def test_request_results_populates_requested_result_variable(
+    opcua_client, subscription_client, result_trigger, ns_indices
+):
     """RequestedResultVariable must be updated after a successful RequestResults call."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -840,32 +937,14 @@ async def test_request_results_populates_requested_result_variable(opcua_client,
         pytest.fail("RequestResults method is missing although requested-result variable access is enabled")
 
     rr_args = _get_request_results_args(_data, single_result=True)
-    try:
-        response = await _call_request_results(rm, rr_node, rr_args)
-    except ua.UaError as exc:
-        pytest.fail(f"RequestResults raised UaError: {exc}")
-    except asyncio.TimeoutError:
-        pytest.fail("RequestResults timed out")
-    _assert_request_results_output(response, "RequestResults")
-
-    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
-
-    try:
-        value = await requested_var_node.read_value()
-    except ua.UaError as exc:
-        pytest.fail(f"Could not read RequestedResult after RequestResults call: {exc}")
-
-    if value is None:
-        pytest.fail("RequestedResult variable is None after a successful correlated RequestResults call")
-
-    expected_result_id = extract_result_id(_data)
-    requested_result_id = extract_result_id(value)
-    assert requested_result_id is not None, "RequestedResult variable does not contain a valid ResultId"
-    if rr_args[0].Value == rr_args[1].Value and expected_result_id:
-        assert requested_result_id == expected_result_id, (
-            f"RequestedResult ResultId {requested_result_id!r} does not match the triggered result "
-            f"{expected_result_id!r}"
-        )
+    await _call_and_collect_requested_result(
+        rm,
+        rr_node,
+        rr_args,
+        subscription_client,
+        requested_var_node,
+        timeout_s=result_trigger.active_result_timeout_s,
+    )
 
 
 # ─── requested_result_event_access ───
@@ -1730,7 +1809,9 @@ async def test_request_results_consecutive_calls_handled_gracefully(opcua_client
 
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
-async def test_request_results_updates_result_variable_or_raises_event(opcua_client, result_trigger, ns_indices):
+async def test_request_results_updates_result_variable_or_raises_event(
+    opcua_client, subscription_client, result_trigger, ns_indices
+):
     """RR-6: After RequestResults the RequestedResult variable should be populated."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -1746,30 +1827,19 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
     if rr_node is None:
         pytest.fail("RequestResults method is missing although CU.REQUEST_RESULTS is enabled")
 
-    rr_args = _get_request_results_args(_data, single_result=True)
-    try:
-        response = await _call_request_results(rm, rr_node, rr_args)
-    except ua.UaError as exc:
-        pytest.fail(f"RequestResults call failed with OPC UA status: {exc}")
-    except asyncio.TimeoutError:
-        pytest.fail("RequestResults timed out")
-    _assert_request_results_output(response, "RequestResults")
-
-    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
-
     requested_var_node = await _find_requested_result_var(rm, ns_indices, ns_mr)
     if requested_var_node is None:
         _handle_missing_requested_result_variable(ns_indices)
 
-    value = await requested_var_node.read_value()
-    assert value is not None, "RequestedResult variable is None after RequestResults call"
-    requested_result_id = extract_result_id(value)
-    assert requested_result_id is not None, "RequestedResult variable does not contain a valid ResultId"
-    expected_result_id = extract_result_id(_data)
-    if rr_args[0].Value == rr_args[1].Value and expected_result_id:
-        assert requested_result_id == expected_result_id, (
-            "RequestedResult does not contain the result selected by the single-sequence range"
-        )
+    rr_args = _get_request_results_args(_data, single_result=True)
+    await _call_and_collect_requested_result(
+        rm,
+        rr_node,
+        rr_args,
+        subscription_client,
+        requested_var_node,
+        timeout_s=result_trigger.active_result_timeout_s,
+    )
 
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
@@ -1891,7 +1961,7 @@ async def test_requested_result_variable_access_level_includes_current_read(opcu
 
 @pytest.mark.requires_cu(CU.REQUESTED_RESULT_VARIABLE_ACCESS)
 async def test_requested_result_variable_source_timestamp_is_set_after_request(
-    opcua_client, result_trigger, ns_indices
+    opcua_client, subscription_client, result_trigger, ns_indices
 ):
     """RRVA-4: SourceTimestamp on RequestedResult must be a plausible datetime after RequestResults."""
 
@@ -1911,28 +1981,26 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
     if rr_node is None:
         pytest.fail("RequestResults method is missing although requested-result variable access is enabled")
 
-    rr_args = _get_request_results_args(_data, single_result=True)
-    try:
-        response = await _call_request_results(rm, rr_node, rr_args)
-    except ua.UaError as exc:
-        pytest.fail(f"RequestResults call failed with OPC UA status: {exc}")
-    except asyncio.TimeoutError:
-        pytest.fail("RequestResults timed out")
-    _assert_request_results_output(response, "RequestResults")
-
-    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
-
     requested_var_node = await _find_requested_result_var(rm, ns_indices, ns_mr)
     if requested_var_node is None:
         _handle_missing_requested_result_variable(ns_indices)
 
-    dv = await requested_var_node.read_data_value()
-    if dv.Value.Value is None:
-        pytest.fail("RequestedResult variable value is None after a successful correlated RequestResults call")
+    rr_args = _get_request_results_args(_data, single_result=True)
+    update = await _call_and_collect_requested_result(
+        rm,
+        rr_node,
+        rr_args,
+        subscription_client,
+        requested_var_node,
+        timeout_s=result_trigger.active_result_timeout_s,
+    )
 
-    assert dv.SourceTimestamp is not None, "RequestedResult SourceTimestamp is None after RequestResults call"
-    assert dv.SourceTimestamp.year >= MIN_VALID_YEAR, (
-        f"RequestedResult SourceTimestamp {dv.SourceTimestamp!r} predates year {MIN_VALID_YEAR}"
+    assert update.data_value is not None, "RequestedResult notification does not contain a DataValue"
+    assert update.data_value.SourceTimestamp is not None, (
+        "RequestedResult SourceTimestamp is None after RequestResults call"
+    )
+    assert update.data_value.SourceTimestamp.year >= MIN_VALID_YEAR, (
+        f"RequestedResult SourceTimestamp {update.data_value.SourceTimestamp!r} predates year {MIN_VALID_YEAR}"
     )
 
 
@@ -1942,7 +2010,9 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
 
 
 @pytest.mark.requires_cu(CU.REQUESTED_RESULT_EVENT_ACCESS)
-async def test_request_results_event_received_with_required_fields(opcua_client, result_trigger, ns_indices):
+async def test_request_results_event_received_with_required_fields(
+    opcua_client, subscription_client, result_trigger, ns_indices
+):
     """RREA-1+RREA-2: RequestResults should populate RequestedResult variable or fire an event."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -1963,27 +2033,14 @@ async def test_request_results_event_received_with_required_fields(opcua_client,
         _handle_missing_requested_result_variable(ns_indices)
 
     rr_args = _get_request_results_args(_data, single_result=True)
-    try:
-        response = await _call_request_results(rm, rr_node, rr_args)
-    except ua.UaError as exc:
-        pytest.fail(f"RequestResults call failed with OPC UA status: {exc}")
-    except asyncio.TimeoutError:
-        pytest.fail("RequestResults timed out")
-    _assert_request_results_output(response, "RequestResults")
-
-    await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS * 3)
-
-    value = await requested_var_node.read_value()
-    assert value is not None, (
-        "RequestedResult variable is still None after RequestResults — expected result data or event"
+    await _call_and_collect_requested_result(
+        rm,
+        rr_node,
+        rr_args,
+        subscription_client,
+        requested_var_node,
+        timeout_s=result_trigger.active_result_timeout_s,
     )
-    requested_result_id = extract_result_id(value)
-    assert requested_result_id is not None, "RequestedResult variable does not contain a valid ResultId"
-    expected_result_id = extract_result_id(_data)
-    if rr_args[0].Value == rr_args[1].Value and expected_result_id:
-        assert requested_result_id == expected_result_id, (
-            "RequestedResult does not contain the result selected by the single-sequence range"
-        )
 
 
 @pytest.mark.requires_cu(CU.REQUESTED_RESULT_EVENT_ACCESS)

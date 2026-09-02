@@ -24,6 +24,7 @@ from specification_tests.test_result_access import (
     _extract_sequence_number,
     _get_request_results_args,
     _get_request_results_config,
+    _RequestedResultBuffer,
 )
 
 
@@ -129,12 +130,20 @@ class TestGetRequestResultsConfig:
 
 class TestSingleResultAndCallRequestResults:
     def test_single_result_with_known_sequence(self):
+        import datetime
+
+        from asyncua.ua.ua_binary import variant_to_binary
+
         obj = SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=142))
         args = _get_request_results_args(
             obj, RequestResultsConfig(from_sequence_number=10, to_sequence_number=50), single_result=True
         )
-        assert args[0].Value == 142
+        assert args[0].Value == 141
         assert args[1].Value == 142
+        assert isinstance(args[2].Value, datetime.datetime)
+        assert isinstance(args[3].Value, datetime.datetime)
+        assert args[2].Value.tzinfo is not None
+        assert all(variant_to_binary(arg) for arg in args)
 
     def test_single_result_without_triggered_sequence_uses_configured_from(self):
         from specification_tests.test_result_access import _NO_RESULT_DATA
@@ -142,7 +151,7 @@ class TestSingleResultAndCallRequestResults:
         args = _get_request_results_args(
             _NO_RESULT_DATA, RequestResultsConfig(from_sequence_number=100, to_sequence_number=150), single_result=True
         )
-        assert args[0].Value == 100
+        assert args[0].Value == 99
         assert args[1].Value == 100
 
     def test_single_result_with_timestamp_strategy_zeros_sequences(self):
@@ -151,14 +160,58 @@ class TestSingleResultAndCallRequestResults:
         assert args[0].Value == 0
         assert args[1].Value == 0
 
+    def test_single_result_window_clamps_at_uint64_lower_bound(self):
+        obj = SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=1))
+        args = _get_request_results_args(obj, RequestResultsConfig(), single_result=True)
+        assert args[0].Value == 1
+        assert args[1].Value == 1
+
+    async def test_result_buffer_accepts_single_matching_update(self):
+        buffer = _RequestedResultBuffer(MagicMock(), ua.NodeId(1, 1))
+        expected = SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=42, ResultId="EXPECTED"))
+        buffer.datachange_notification(None, expected, None)
+        update = await buffer.collect_result(timeout_s=0.1)
+        assert update.value is expected
+
+    async def test_result_buffer_accepts_vendor_batch_with_new_ids(self):
+        buffer = _RequestedResultBuffer(MagicMock(), ua.NodeId(1, 1))
+        for sequence_number in range(40, 45):
+            value = SimpleNamespace(
+                ResultMetaData=SimpleNamespace(
+                    SequenceNumber=sequence_number,
+                    ResultId=f"REPLAY-{sequence_number}",
+                )
+            )
+            buffer.datachange_notification(None, value, None)
+        update = await buffer.collect_result(timeout_s=0.1)
+        assert update.value.ResultMetaData.SequenceNumber == 40
+        assert update.value.ResultMetaData.ResultId == "REPLAY-40"
+
+    async def test_result_buffer_discards_stale_initial_update(self):
+        buffer = _RequestedResultBuffer(MagicMock(), ua.NodeId(1, 1))
+        stale = SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=41, ResultId="STALE"))
+        fresh = SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=42, ResultId="FRESH"))
+        buffer.datachange_notification(None, stale, None)
+        buffer.discard_pending()
+        buffer.datachange_notification(None, fresh, None)
+        update = await buffer.collect_result(timeout_s=0.1)
+        assert update.value is fresh
+
     async def test_call_request_results_success_first_attempt(self):
         rm_node = MagicMock()
         rm_node.call_method = AsyncMock(return_value=[0.0, 0, "OK"])
         rr_node = MagicMock(nodeid=ua.NodeId(1234, 1))
+        before_attempt = MagicMock()
 
-        res = await _call_request_results(rm_node, rr_node, [ua.Variant(1, ua.VariantType.UInt64)])
+        res = await _call_request_results(
+            rm_node,
+            rr_node,
+            [ua.Variant(1, ua.VariantType.UInt64)],
+            before_attempt=before_attempt,
+        )
         assert res == [0.0, 0, "OK"]
         assert rm_node.call_method.await_count == 1
+        before_attempt.assert_called_once_with()
 
     async def test_call_request_results_retries_on_uncertain_and_succeeds(self):
         rm_node = MagicMock()
@@ -169,6 +222,18 @@ class TestSingleResultAndCallRequestResults:
         res = await _call_request_results(rm_node, rr_node, [], max_retries=2, retry_delay_s=0.01)
         assert res == [0.0, 0, "OK"]
         assert rm_node.call_method.await_count == 2
+
+    async def test_call_request_results_default_retry_window_outlasts_prior_stream(self):
+        rm_node = MagicMock()
+        uncertain_error = ua.UaError("The operation was uncertain.(Uncertain)")
+        rm_node.call_method = AsyncMock(side_effect=[uncertain_error] * 4 + [[0.0, 0, "OK"]])
+        rr_node = MagicMock(nodeid=ua.NodeId(1234, 1))
+
+        with patch("specification_tests.test_result_access.asyncio.sleep", new=AsyncMock()):
+            res = await _call_request_results(rm_node, rr_node, [])
+
+        assert res == [0.0, 0, "OK"]
+        assert rm_node.call_method.await_count == 5
 
     async def test_call_request_results_exhausts_retries_and_raises(self):
         rm_node = MagicMock()
