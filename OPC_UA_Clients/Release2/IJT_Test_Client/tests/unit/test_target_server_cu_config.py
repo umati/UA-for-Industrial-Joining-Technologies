@@ -28,9 +28,11 @@ from helpers.target_server_cu_config import (
     StateChangingMethodsConfig,
     TargetServerConfigError,
     TargetServerCuProfile,
+    _validate_request_results_config,
     build_default_profile,
     build_execution_profile,
     build_request_results_arguments,
+    require_number,
 )
 
 
@@ -911,3 +913,36 @@ class TestRequestResultsConfig:
                     },
                 }
             )
+
+    def test_validate_request_results_config_direct_edges(self):
+        # bool sequence number
+        cfg_bool_seq = RequestResultsConfig()
+        object.__setattr__(cfg_bool_seq, "from_sequence_number", True)
+        with pytest.raises(TargetServerConfigError, match="must be an integer"):
+            _validate_request_results_config(cfg_bool_seq, "test_ctx")
+
+        # to_sequence_number < from_sequence_number
+        cfg_inverted = RequestResultsConfig(from_sequence_number=10, to_sequence_number=5)
+        with pytest.raises(TargetServerConfigError, match="to_sequence_number must be >= from_sequence_number"):
+            _validate_request_results_config(cfg_inverted, "test_ctx")
+
+        # bool min_duration_ms
+        cfg_bool_dur = RequestResultsConfig()
+        object.__setattr__(cfg_bool_dur, "min_duration_ms", True)
+        with pytest.raises(TargetServerConfigError, match="min_duration_ms must be a number"):
+            _validate_request_results_config(cfg_bool_dur, "test_ctx")
+
+        # non-string from_time
+        cfg_bad_time = RequestResultsConfig()
+        object.__setattr__(cfg_bad_time, "from_time", 123)
+        with pytest.raises(TargetServerConfigError, match="from_time and to_time must be ISO 8601 strings"):
+            _validate_request_results_config(cfg_bad_time, "test_ctx")
+
+    def test_require_number_overflow(self):
+        with pytest.raises(TargetServerConfigError, match="must be a finite number"):
+            require_number({"val": 10**1000}, "val", 0.0, "test_ctx")
+
+    def test_require_str_list_tuple(self):
+        from helpers.target_server_cu_config import require_str_list
+
+        assert require_str_list({"items": ("a", "b")}, "items", "ctx") == ["a", "b"]

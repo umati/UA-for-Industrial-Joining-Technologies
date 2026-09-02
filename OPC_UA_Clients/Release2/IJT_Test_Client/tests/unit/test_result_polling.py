@@ -89,6 +89,35 @@ class TestExtractResultId:
     def test_returns_empty_string_for_unmatched_bytes(self):
         assert extract_result_id(b"\x00\x01\x02") == ""
 
+    def test_extracts_from_variant_with_value(self):
+        class Variant:
+            def __init__(self, val):
+                self.Value = val
+
+        payload = Variant(_payload("VARIANT-1"))
+        assert extract_result_id(payload) == "VARIANT-1"
+
+    def test_extracts_from_custom_object_result_id(self):
+        class CustomId:
+            def __str__(self):
+                return "CUSTOM-ID-99"
+
+        payload = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId=CustomId()))
+        assert extract_result_id(payload) == "CUSTOM-ID-99"
+
+    def test_binary_decode_handles_invalid_utf8(self, monkeypatch):
+        import re
+
+        import helpers.result_polling as rp
+
+        # Mock re.search to return a Match with bytes that raise UnicodeDecodeError on decode("utf-8")
+        class FakeMatch:
+            def group(self, idx):
+                return b"\xff\xfe\xfd"
+
+        monkeypatch.setattr(re, "search", lambda pat, string: FakeMatch())
+        assert rp.extract_result_id(b"some_raw_bytes") == ""
+
 
 class TestPollUntilResultIdChanges:
     async def test_returns_immediately_when_already_changed(self):

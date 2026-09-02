@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from asyncua import ua
@@ -20,6 +20,7 @@ from asyncua import ua
 from helpers.target_server_cu_config import UINT64_MAX, RequestResultsConfig
 from specification_tests.test_result_access import (
     _assert_request_results_output,
+    _call_request_results,
     _extract_sequence_number,
     _get_request_results_args,
     _get_request_results_config,
@@ -124,3 +125,67 @@ class TestGetRequestResultsConfig:
         with patch.dict(os.environ, {"OPCUA_REQUEST_RESULTS_FILTER_STRATEGY": "both"}):
             cfg = _get_request_results_config()
             assert cfg.filter_strategy == "both"
+
+
+class TestSingleResultAndCallRequestResults:
+    def test_single_result_with_known_sequence(self):
+        obj = SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=142))
+        args = _get_request_results_args(
+            obj, RequestResultsConfig(from_sequence_number=10, to_sequence_number=50), single_result=True
+        )
+        assert args[0].Value == 142
+        assert args[1].Value == 142
+
+    def test_single_result_without_triggered_sequence_uses_configured_from(self):
+        from specification_tests.test_result_access import _NO_RESULT_DATA
+
+        args = _get_request_results_args(
+            _NO_RESULT_DATA, RequestResultsConfig(from_sequence_number=100, to_sequence_number=150), single_result=True
+        )
+        assert args[0].Value == 100
+        assert args[1].Value == 100
+
+    def test_single_result_with_timestamp_strategy_zeros_sequences(self):
+        obj = SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=142))
+        args = _get_request_results_args(obj, RequestResultsConfig(filter_strategy="timestamp"), single_result=True)
+        assert args[0].Value == 0
+        assert args[1].Value == 0
+
+    async def test_call_request_results_success_first_attempt(self):
+        rm_node = MagicMock()
+        rm_node.call_method = AsyncMock(return_value=[0.0, 0, "OK"])
+        rr_node = MagicMock(nodeid=ua.NodeId(1234, 1))
+
+        res = await _call_request_results(rm_node, rr_node, [ua.Variant(1, ua.VariantType.UInt64)])
+        assert res == [0.0, 0, "OK"]
+        assert rm_node.call_method.await_count == 1
+
+    async def test_call_request_results_retries_on_uncertain_and_succeeds(self):
+        rm_node = MagicMock()
+        uncertain_error = ua.UaError("The operation was uncertain.(Uncertain)")
+        rm_node.call_method = AsyncMock(side_effect=[uncertain_error, [0.0, 0, "OK"]])
+        rr_node = MagicMock(nodeid=ua.NodeId(1234, 1))
+
+        res = await _call_request_results(rm_node, rr_node, [], max_retries=2, retry_delay_s=0.01)
+        assert res == [0.0, 0, "OK"]
+        assert rm_node.call_method.await_count == 2
+
+    async def test_call_request_results_exhausts_retries_and_raises(self):
+        rm_node = MagicMock()
+        uncertain_error = ua.UaError("The operation was uncertain.(Uncertain)")
+        rm_node.call_method = AsyncMock(side_effect=uncertain_error)
+        rr_node = MagicMock(nodeid=ua.NodeId(1234, 1))
+
+        with pytest.raises(ua.UaError, match="uncertain"):
+            await _call_request_results(rm_node, rr_node, [], max_retries=2, retry_delay_s=0.01)
+        assert rm_node.call_method.await_count == 2
+
+    async def test_call_request_results_raises_immediately_on_non_retryable_error(self):
+        rm_node = MagicMock()
+        bad_syntax_error = ua.UaError("Bad syntax error")
+        rm_node.call_method = AsyncMock(side_effect=bad_syntax_error)
+        rr_node = MagicMock(nodeid=ua.NodeId(1234, 1))
+
+        with pytest.raises(ua.UaError, match="Bad syntax error"):
+            await _call_request_results(rm_node, rr_node, [], max_retries=3, retry_delay_s=0.01)
+        assert rm_node.call_method.await_count == 1

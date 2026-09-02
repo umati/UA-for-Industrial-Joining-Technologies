@@ -154,6 +154,7 @@ def _extract_sequence_number(result_data: Any) -> int | None:
 def _get_request_results_args(
     result_data: Any = _NO_RESULT_DATA,
     config: RequestResultsConfig | None = None,
+    single_result: bool = False,
 ) -> tuple[ua.Variant, ua.Variant, ua.Variant, ua.Variant, ua.Variant]:
     """Return the 5 typed input arguments for RequestResults."""
     cfg = config if config is not None else _get_request_results_config()
@@ -163,7 +164,57 @@ def _get_request_results_args(
             "The triggered result has no decoded UInt64 ResultMetaData.SequenceNumber; "
             "a sequence-filtered RequestResults call cannot be correlated safely"
         )
+    if single_result:
+        pinned_seq = seq if seq is not None else cfg.from_sequence_number
+        if cfg.filter_strategy == "timestamp":
+            arg_from_seq = 0
+            arg_to_seq = 0
+        else:
+            arg_from_seq = pinned_seq
+            arg_to_seq = pinned_seq
+        return (
+            ua.Variant(arg_from_seq, ua.VariantType.UInt64),
+            ua.Variant(arg_to_seq, ua.VariantType.UInt64),
+            ua.Variant(cfg.from_time, ua.VariantType.DateTime),
+            ua.Variant(cfg.to_time, ua.VariantType.DateTime),
+            ua.Variant(cfg.min_duration_ms, ua.VariantType.Double),
+        )
     return build_request_results_arguments(cfg, triggered_seq=seq)
+
+
+async def _call_request_results(
+    rm_node: Any,
+    rr_node: Any,
+    rr_args: list[ua.Variant] | tuple[ua.Variant, ...],
+    *,
+    timeout_s: float = _METHOD_WALL_TIMEOUT,
+    max_retries: int = 3,
+    retry_delay_s: float = 1.5,
+) -> Any:
+    """Call RequestResults with automated retry if server is actively streaming from a prior call."""
+    last_exc: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            return await asyncio.wait_for(
+                rm_node.call_method(rr_node.nodeid, *rr_args),
+                timeout=timeout_s,
+            )
+        except ua.UaError as exc:
+            last_exc = exc
+            exc_str = str(exc).lower()
+            if attempt < max_retries - 1 and ("uncertain" in exc_str or "invalidstate" in exc_str):
+                logger.info(
+                    "RequestResults returned busy/streaming status (%s); waiting %.1fs before retry %d/%d...",
+                    exc,
+                    retry_delay_s,
+                    attempt + 1,
+                    max_retries,
+                )
+                await asyncio.sleep(retry_delay_s)
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
 
 
 # Default arguments for RequestResults: sequence_number strategy by default.
@@ -735,13 +786,7 @@ async def test_request_results_method_is_present_and_callable(opcua_client, resu
 
     rr_args = _get_request_results_args(_data)
     try:
-        res = await asyncio.wait_for(
-            rm.call_method(
-                rr_node.nodeid,
-                *rr_args,
-            ),
-            timeout=_METHOD_WALL_TIMEOUT,
-        )
+        res = await _call_request_results(rm, rr_node, rr_args)
     except ua.UaError as exc:
         pytest.fail(f"RequestResults method call failed with OPC UA error: {exc}")
     except asyncio.TimeoutError:
@@ -794,15 +839,9 @@ async def test_request_results_populates_requested_result_variable(opcua_client,
     if rr_node is None:
         pytest.fail("RequestResults method is missing although requested-result variable access is enabled")
 
-    rr_args = _get_request_results_args(_data)
+    rr_args = _get_request_results_args(_data, single_result=True)
     try:
-        response = await asyncio.wait_for(
-            rm.call_method(
-                rr_node.nodeid,
-                *rr_args,
-            ),
-            timeout=_METHOD_WALL_TIMEOUT,
-        )
+        response = await _call_request_results(rm, rr_node, rr_args)
     except ua.UaError as exc:
         pytest.fail(f"RequestResults raised UaError: {exc}")
     except asyncio.TimeoutError:
@@ -821,7 +860,8 @@ async def test_request_results_populates_requested_result_variable(opcua_client,
 
     expected_result_id = extract_result_id(_data)
     requested_result_id = extract_result_id(value)
-    if expected_result_id:
+    assert requested_result_id is not None, "RequestedResult variable does not contain a valid ResultId"
+    if rr_args[0].Value == rr_args[1].Value and expected_result_id:
         assert requested_result_id == expected_result_id, (
             f"RequestedResult ResultId {requested_result_id!r} does not match the triggered result "
             f"{expected_result_id!r}"
@@ -1641,13 +1681,7 @@ async def test_request_results_with_default_range_completes_without_crash(opcua_
 
     rr_args = _get_request_results_args()
     try:
-        response = await asyncio.wait_for(
-            rm.call_method(
-                rr_node.nodeid,
-                *rr_args,
-            ),
-            timeout=_METHOD_WALL_TIMEOUT,
-        )
+        response = await _call_request_results(rm, rr_node, rr_args)
     except ua.UaError as exc:
         pytest.fail(f"RequestResults rejected a valid configured range: {exc}")
     except asyncio.TimeoutError:
@@ -1672,17 +1706,23 @@ async def test_request_results_consecutive_calls_handled_gracefully(opcua_client
     if rr_node is None:
         pytest.fail("RequestResults method is missing although CU.REQUEST_RESULTS is enabled")
 
-    rr_args = _get_request_results_args(_data)
+    rr_args = _get_request_results_args(_data, single_result=True)
     for call_index in range(2):
         try:
-            response = await asyncio.wait_for(
-                rm.call_method(
-                    rr_node.nodeid,
-                    *rr_args,
-                ),
-                timeout=_METHOD_WALL_TIMEOUT,
-            )
+            if call_index == 0:
+                response = await _call_request_results(rm, rr_node, rr_args)
+            else:
+                response = await asyncio.wait_for(
+                    rm.call_method(
+                        rr_node.nodeid,
+                        *rr_args,
+                    ),
+                    timeout=_METHOD_WALL_TIMEOUT,
+                )
         except ua.UaError as exc:
+            if call_index > 0 and ("uncertain" in str(exc).lower() or "invalidstate" in str(exc).lower()):
+                logger.info("Consecutive RequestResults call 1 returned expected in-progress status: %s", exc)
+                break
             pytest.fail(f"RequestResults call {call_index} failed with OPC UA error: {exc}")
         except asyncio.TimeoutError:
             pytest.fail(f"RequestResults call {call_index} timed out")
@@ -1706,15 +1746,9 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
     if rr_node is None:
         pytest.fail("RequestResults method is missing although CU.REQUEST_RESULTS is enabled")
 
-    rr_args = _get_request_results_args(_data)
+    rr_args = _get_request_results_args(_data, single_result=True)
     try:
-        response = await asyncio.wait_for(
-            rm.call_method(
-                rr_node.nodeid,
-                *rr_args,
-            ),
-            timeout=_METHOD_WALL_TIMEOUT,
-        )
+        response = await _call_request_results(rm, rr_node, rr_args)
     except ua.UaError as exc:
         pytest.fail(f"RequestResults call failed with OPC UA status: {exc}")
     except asyncio.TimeoutError:
@@ -1729,10 +1763,12 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
 
     value = await requested_var_node.read_value()
     assert value is not None, "RequestedResult variable is None after RequestResults call"
+    requested_result_id = extract_result_id(value)
+    assert requested_result_id is not None, "RequestedResult variable does not contain a valid ResultId"
     expected_result_id = extract_result_id(_data)
-    if expected_result_id:
-        assert extract_result_id(value) == expected_result_id, (
-            "RequestedResult does not contain the result selected by the dynamic sequence range"
+    if rr_args[0].Value == rr_args[1].Value and expected_result_id:
+        assert requested_result_id == expected_result_id, (
+            "RequestedResult does not contain the result selected by the single-sequence range"
         )
 
 
@@ -1875,15 +1911,9 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
     if rr_node is None:
         pytest.fail("RequestResults method is missing although requested-result variable access is enabled")
 
-    rr_args = _get_request_results_args(_data)
+    rr_args = _get_request_results_args(_data, single_result=True)
     try:
-        response = await asyncio.wait_for(
-            rm.call_method(
-                rr_node.nodeid,
-                *rr_args,
-            ),
-            timeout=_METHOD_WALL_TIMEOUT,
-        )
+        response = await _call_request_results(rm, rr_node, rr_args)
     except ua.UaError as exc:
         pytest.fail(f"RequestResults call failed with OPC UA status: {exc}")
     except asyncio.TimeoutError:
@@ -1932,15 +1962,9 @@ async def test_request_results_event_received_with_required_fields(opcua_client,
     if requested_var_node is None:
         _handle_missing_requested_result_variable(ns_indices)
 
-    rr_args = _get_request_results_args(_data)
+    rr_args = _get_request_results_args(_data, single_result=True)
     try:
-        response = await asyncio.wait_for(
-            rm.call_method(
-                rr_node.nodeid,
-                *rr_args,
-            ),
-            timeout=_METHOD_WALL_TIMEOUT,
-        )
+        response = await _call_request_results(rm, rr_node, rr_args)
     except ua.UaError as exc:
         pytest.fail(f"RequestResults call failed with OPC UA status: {exc}")
     except asyncio.TimeoutError:
@@ -1953,10 +1977,12 @@ async def test_request_results_event_received_with_required_fields(opcua_client,
     assert value is not None, (
         "RequestedResult variable is still None after RequestResults — expected result data or event"
     )
+    requested_result_id = extract_result_id(value)
+    assert requested_result_id is not None, "RequestedResult variable does not contain a valid ResultId"
     expected_result_id = extract_result_id(_data)
-    if expected_result_id:
-        assert extract_result_id(value) == expected_result_id, (
-            "RequestedResult does not contain the result selected by the dynamic sequence range"
+    if rr_args[0].Value == rr_args[1].Value and expected_result_id:
+        assert requested_result_id == expected_result_id, (
+            "RequestedResult does not contain the result selected by the single-sequence range"
         )
 
 

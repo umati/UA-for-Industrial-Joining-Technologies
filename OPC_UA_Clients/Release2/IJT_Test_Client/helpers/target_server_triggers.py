@@ -995,26 +995,26 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             completed_operations = 0
             confirmed_operations = 0
             completion_collector = None
-            if max_starts > 1:
-                if self._subscription_client is None:
-                    return TargetServerTriggerOutcome(
-                        triggered=False,
-                        skip_reason=(
-                            "Multi-operation remote start requires a separate subscription client "
-                            "for correlated operation-completion events"
-                        ),
-                        method="StartSelectedJoining",
-                        trigger_mode="start_selected_joining",
-                        product_instance_uri=piu,
-                        joining_process_id=jp_id,
-                        joining_process_origin_id=jp_origin,
-                    )
+            if self._subscription_client is not None:
                 completion_collector = await stack.enter_async_context(
                     ResultCollector(
                         self._subscription_client,
                         {NS_IJT_BASE: await self._resolve_ijt_namespace_index()},
                         is_simulator=False,
                     )
+                )
+            elif max_starts > 1:
+                return TargetServerTriggerOutcome(
+                    triggered=False,
+                    skip_reason=(
+                        "Multi-operation remote start requires a separate subscription client "
+                        "for correlated operation-completion events"
+                    ),
+                    method="StartSelectedJoining",
+                    trigger_mode="start_selected_joining",
+                    product_instance_uri=piu,
+                    joining_process_id=jp_id,
+                    joining_process_origin_id=jp_origin,
                 )
 
             pacing = float(getattr(self._profile.workflow_execution, "consecutive_start_delay_seconds", 0.25))
@@ -1081,7 +1081,8 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                             triggered=False,
                             skip_reason=(
                                 "No correlated result confirming the selected Tool and JoiningProcess "
-                                f"arrived on operation {operation_number}/{max_starts}"
+                                f"arrived on operation {operation_number}/{max_starts} within "
+                                f"{self.active_result_timeout_s:.1f}s (requires physical operator action or auto-cycle)"
                             ),
                             method="StartSelectedJoining",
                             trigger_mode="start_selected_joining",

@@ -24,6 +24,7 @@ from helpers.sut_manifest import (
     LegacyPairedFileError,
     SutManifest,
     SutManifestError,
+    _validate_consistency,
     build_preset,
     iter_field_specs,
     load_capability_claims,
@@ -849,3 +850,53 @@ class TestGeneration:
         reference = render_field_reference()
         assert "Passed, Failed, Not Supported, Blocked, Not Tested, Inconclusive" in reference
         assert "no OPC Foundation certification claim" in reference
+
+
+class TestSutManifestValidationCoverage:
+    def test_parse_number_overflow_error(self):
+        from helpers.sut_manifest import FieldSpec, _validate_scalar
+
+        spec = FieldSpec("test_num", "number", "test")
+        with pytest.raises(SutManifestError, match="must be a finite number"):
+            _validate_scalar(10**1000, spec, "test_path")
+
+    def test_parse_number_max_value(self):
+        from helpers.sut_manifest import FieldSpec, _validate_scalar
+
+        spec = FieldSpec("test_num", "number", "test", max_value=10.0)
+        with pytest.raises(SutManifestError, match="must be <= 10.0"):
+            _validate_scalar(20.0, spec, "test_path")
+
+    def test_request_results_consistency_sequence_types(self):
+        # bool from_sequence_number
+        manifest = build_preset("simulator")
+        manifest.data["execution_policy"]["request_results"]["from_sequence_number"] = True
+        with pytest.raises(SutManifestError, match="from_sequence_number must be an integer"):
+            _validate_consistency(manifest)
+
+        # bool to_sequence_number
+        manifest = build_preset("simulator")
+        manifest.data["execution_policy"]["request_results"]["to_sequence_number"] = True
+        with pytest.raises(SutManifestError, match="to_sequence_number must be an integer"):
+            _validate_consistency(manifest)
+
+    def test_request_results_consistency_naive_and_invalid_timestamps(self):
+        # Naive datetime strings (no offset/Z) are normalized to UTC in consistency check
+        manifest = build_preset("simulator")
+        manifest.data["execution_policy"]["request_results"]["from_time"] = "2024-01-01T10:00:00"
+        manifest.data["execution_policy"]["request_results"]["to_time"] = "2024-01-01T11:00:00"
+        _validate_consistency(manifest)
+
+        # Invalid timestamp string falls through gracefully in consistency check
+        manifest.data["execution_policy"]["request_results"]["from_time"] = "invalid-date"
+        _validate_consistency(manifest)
+
+    def test_request_results_consistency_min_duration_validation(self):
+        manifest = build_preset("simulator")
+        manifest.data["execution_policy"]["request_results"]["min_duration_ms"] = True
+        with pytest.raises(SutManifestError, match="min_duration_ms must be a finite non-negative number"):
+            _validate_consistency(manifest)
+
+        manifest.data["execution_policy"]["request_results"]["min_duration_ms"] = -5.0
+        with pytest.raises(SutManifestError, match="min_duration_ms must be a finite non-negative number"):
+            _validate_consistency(manifest)

@@ -1381,3 +1381,38 @@ class TestTargetSessionConnectionSecurity:
         profile = build_execution_profile({"schema_version": 1, "target": {"endpoint": "opc.tcp://localhost:40451"}})
         env = tse._build_spec_test_env(profile, base_dir=tmp_path, interactive_prompts=False)
         assert "OPCUA_TARGET_INTERACTIVE_PROMPTS" not in env
+
+    def test_capture_model_inventory_success(self, tmp_path, monkeypatch):
+        from helpers.sut_manifest import render_manifest_yaml
+
+        manifest_file = tmp_path / "test.sut.yaml"
+        manifest_file.write_text(render_manifest_yaml("simulator"))
+        profile = build_execution_profile(
+            {"schema_version": 1, "target": {"endpoint": "opc.tcp://localhost:40451"}},
+            source_path=str(manifest_file),
+        )
+        fake_inv = {"complete": True, "server_inventory": {"node_count": 42, "warnings": []}}
+        monkeypatch.setattr("helpers.model_inventory.write_model_inventory", lambda *args, **kwargs: fake_inv)
+        res = tse._capture_model_inventory(profile, tmp_path)
+        assert res["status"] == "completed"
+        assert res["server_node_count"] == 42
+        assert res["warning_count"] == 0
+
+    def test_run_automated_inventory_failure(self, tmp_path, monkeypatch):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://localhost:40451"},
+                "triggers": {"result": {"mode": "simulate_methods"}},
+            }
+        )
+        monkeypatch.setattr(
+            tse,
+            "check_endpoint_reachable",
+            lambda endpoint, **kw: ReadinessOutcome(outcome=OUTCOME_PASSED, check_name="endpoint_reachable"),
+        )
+        monkeypatch.setattr(tse, "_capture_model_inventory", MagicMock(side_effect=RuntimeError("inventory boom")))
+        monkeypatch.setattr(tse, "run_live_spec_tests", lambda *args, **kwargs: (0, {"status": "completed"}))
+        monkeypatch.setattr(tse, "_generate_excel_report", lambda *args, **kwargs: {"status": "skipped"})
+        rc = tse.run_automated(profile, tmp_path)
+        assert rc == 1
