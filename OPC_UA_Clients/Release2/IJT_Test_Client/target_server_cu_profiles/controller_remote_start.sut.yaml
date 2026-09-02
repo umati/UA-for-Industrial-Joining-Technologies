@@ -447,6 +447,41 @@ execution_policy:
       # Parent process selection name.
       selection_name: ''
 
+  # Configuration for the RequestResults method filter strategy and parameter ranges.
+  request_results:
+
+    # RequestResults filtering mode: sequence_number (default and preferred), timestamp, or both.
+    # Timestamp mode transmits both sequence arguments as zero. Both mode populates all five
+    # arguments, but conforming servers use timestamps only when both sequence arguments are zero (OPC
+    # 40450-1).
+    # Values: both, sequence_number, timestamp
+    filter_strategy: sequence_number
+
+    # Configured inclusive lower sequence bound for sequence_number or both mode (1..UInt64 max).
+    # Active result tests adjust the transmitted window when needed to include the result they just
+    # triggered. Timestamp mode ignores this setting and transmits 0.
+    from_sequence_number: 1
+
+    # Configured inclusive upper sequence bound for sequence_number or both mode (at least
+    # from_sequence_number, up to UInt64 max; default: 50, providing a safe 50-result compliance
+    # window). Active result tests dynamically shift this window to cover recent history ending at the
+    # triggered sequence number. Timestamp mode ignores this setting and transmits 0.
+    to_sequence_number: 50
+
+    # Inclusive lower timestamp for timestamp or both mode, as ISO 8601. Use Z or an explicit UTC
+    # offset; a timestamp without an offset is interpreted as UTC. When both timestamps are valid,
+    # from_time must not be later than to_time. Invalid text uses the safe runtime lower default.
+    from_time: '2000-01-01T00:00:00Z'
+
+    # Inclusive upper timestamp for timestamp or both mode, as ISO 8601. Use Z or an explicit UTC
+    # offset; a timestamp without an offset is interpreted as UTC. Invalid text uses the safe runtime
+    # upper default. Conforming servers ignore both timestamps when sequence bounds are non-zero.
+    to_time: '9999-01-01T00:00:00Z'
+
+    # RequestedMinimumDurationBetweenResults as a finite, non-negative number of milliseconds. It is
+    # sent as the OPC UA Duration/Double argument; 100.0 ms is the recommended default interval.
+    min_duration_ms: 100.0
+
 # --------------------------------------------------------------------------
 # timeouts: Separated time budgets. Passive observation, active result completion, whole-workflow,
 # and operator budgets are independent so one slow phase cannot mask another.

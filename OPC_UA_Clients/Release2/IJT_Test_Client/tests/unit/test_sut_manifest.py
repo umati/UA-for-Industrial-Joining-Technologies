@@ -20,6 +20,7 @@ from helpers.sut_manifest import (
     CURRENT_MANIFEST_SCHEMA_VERSION,
     MANIFEST_SCHEMA,
     MANIFEST_SUFFIX,
+    UINT64_MAX,
     LegacyPairedFileError,
     SutManifest,
     SutManifestError,
@@ -443,6 +444,112 @@ class TestExecutionPolicyAndRisk:
         assert extension["intervention_method"] == "IncrementJoiningProcessCounter"
         assert extension["intervention_count"] == 2
         assert extension["counter_parent_process"]["joining_process_id"] == "parent-1"
+
+    def test_request_results_defaults_to_sequence_number(self):
+        manifest = parse_sut_manifest(_minimal())
+        rr = manifest.data["execution_policy"]["request_results"]
+        assert rr["filter_strategy"] == "sequence_number"
+        assert rr["from_sequence_number"] == 1
+        assert rr["to_sequence_number"] == 50
+        assert rr["min_duration_ms"] == 100.0
+
+        profile = manifest.to_execution_profile()
+        assert profile.cu_execution.request_results.filter_strategy == "sequence_number"
+        assert profile.cu_execution.request_results.from_sequence_number == 1
+        assert profile.cu_execution.request_results.to_sequence_number == 50
+
+    def test_request_results_inverted_sequence_range_rejected(self):
+        with pytest.raises(SutManifestError, match="must be >= from_sequence_number"):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "request_results": {
+                            "filter_strategy": "sequence_number",
+                            "from_sequence_number": 100,
+                            "to_sequence_number": 10,
+                        }
+                    }
+                )
+            )
+
+    def test_request_results_sequence_mode_rejects_zero(self):
+        with pytest.raises(SutManifestError, match="must be >= 1"):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "request_results": {
+                            "filter_strategy": "sequence_number",
+                            "from_sequence_number": 0,
+                            "to_sequence_number": 100,
+                        }
+                    }
+                )
+            )
+
+    def test_request_results_uint64_bounds(self):
+        # Valid uint64 max
+        manifest = parse_sut_manifest(
+            _minimal(
+                execution_policy={
+                    "request_results": {
+                        "filter_strategy": "sequence_number",
+                        "from_sequence_number": 1,
+                        "to_sequence_number": UINT64_MAX,
+                    }
+                }
+            )
+        )
+        assert manifest.data["execution_policy"]["request_results"]["to_sequence_number"] == UINT64_MAX
+
+        # Out of bounds uint64
+        with pytest.raises(SutManifestError, match="must be <="):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "request_results": {
+                            "filter_strategy": "sequence_number",
+                            "from_sequence_number": 1,
+                            "to_sequence_number": UINT64_MAX + 1,
+                        }
+                    }
+                )
+            )
+
+    def test_request_results_inverted_timestamps_rejected(self):
+        with pytest.raises(SutManifestError, match="must be <= to_time"):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "request_results": {
+                            "filter_strategy": "timestamp",
+                            "from_time": "2025-01-01T00:00:00Z",
+                            "to_time": "2024-01-01T00:00:00Z",
+                        }
+                    }
+                )
+            )
+
+    def test_request_results_nan_or_negative_duration_rejected(self):
+        with pytest.raises(SutManifestError, match="must be >= 0.0"):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "request_results": {
+                            "min_duration_ms": -5.0,
+                        }
+                    }
+                )
+            )
+        with pytest.raises(SutManifestError, match="must be a finite number"):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "request_results": {
+                            "min_duration_ms": float("nan"),
+                        }
+                    }
+                )
+            )
 
 
 # ---------------------------------------------------------------------------

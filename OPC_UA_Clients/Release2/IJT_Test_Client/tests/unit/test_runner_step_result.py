@@ -34,6 +34,11 @@ _mod = importlib.import_module("run_all_tests")
 _StepResult: Any = _mod._StepResult
 
 
+def test_clean_pytest_remainder_removes_only_separator():
+    assert _mod._clean_pytest_remainder(["--", "-k", "request_results"]) == ["-k", "request_results"]
+    assert _mod._clean_pytest_remainder(None) == []
+
+
 # ---------------------------------------------------------------------------
 # _StepResult state model
 # ---------------------------------------------------------------------------

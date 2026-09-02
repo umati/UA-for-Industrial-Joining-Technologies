@@ -54,6 +54,7 @@ unit stage and is currently 95%.
 | `OPCUA_CAPABILITIES_FILE` | (none: all CUs claimed) | SUT manifest (`*.sut.yaml`) providing the authoritative CU claims; the auto-launched checked-in simulator uses `target_server_cu_profiles/simulator.sut.yaml` when this is unset. A manifest that **is** selected but is missing, unreadable, or invalid fails pytest configuration — it never silently disables CU gating |
 | `OPCUA_STARTUP_TIMEOUT_SEC` | `30` | Seconds to wait for server OPC UA readiness |
 | `OPCUA_TARGET_SERVER_PROFILE` | (none) | SUT manifest driving a Target Server run; also supplies the session security/authentication applied to every client |
+| `OPCUA_REQUEST_RESULTS_FILTER_STRATEGY` | (none, uses profile or `sequence_number`) | Override the `RequestResults` filter strategy: `sequence_number`, `timestamp`, or `both` |
 | `OPCUA_TARGET_INTERACTIVE_PROMPTS` | (none) | Set by the runner for `--interactive-prompts`; only then may `authentication.source: prompt` ask the operator for credentials |
 | `SKIP_VENV_INSTALL` | (none) | Set to `1` to skip pip install |
 

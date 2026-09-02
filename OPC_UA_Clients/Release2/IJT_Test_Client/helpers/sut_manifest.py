@@ -44,8 +44,10 @@ Public API (stable for the next workstream)::
 from __future__ import annotations
 
 import copy
+import datetime
 import functools
 import logging
+import math
 import os
 import re
 from dataclasses import dataclass, field
@@ -77,6 +79,8 @@ MANIFEST_SUFFIX = ".sut.yaml"
 SUPPORTED_MANIFEST_SCHEMA_VERSIONS: frozenset[int] = frozenset({1})
 CURRENT_MANIFEST_SCHEMA_VERSION = 1
 
+UINT64_MAX: int = (1 << 64) - 1
+
 VALID_LIFECYCLE_MODES: frozenset[str] = frozenset({"auto_simulator", "external"})
 VALID_AUTH_SOURCES: frozenset[str] = frozenset({"anonymous", "prompt", "file", "environment"})
 VALID_SECURITY_MODES: frozenset[str] = frozenset({"None", "Sign", "SignAndEncrypt"})
@@ -85,6 +89,7 @@ VALID_SECURITY_POLICIES: frozenset[str] = frozenset(
 )
 VALID_CLAIM_DISPOSITIONS: frozenset[str] = frozenset({"supported", "unsupported", "manual_required"})
 VALID_ENABLE_ASSET_POLICIES: frozenset[str] = frozenset({"when_disabled", "always"})
+VALID_REQUEST_RESULTS_FILTER_STRATEGIES: frozenset[str] = frozenset({"sequence_number", "timestamp", "both"})
 
 #: Keys that must never appear anywhere in a reusable manifest.
 FORBIDDEN_SECRET_KEYS: frozenset[str] = frozenset(
@@ -136,6 +141,7 @@ class FieldSpec:
     choices: frozenset[str] | None = None
     required: bool = False
     min_value: float | None = None
+    max_value: float | None = None
     value_choices: frozenset[str] | None = None  # for str_map values
     secret_reference: bool = False  # value names a secret, never holds one
     prose: bool = False  # free text for humans; never scanned for placeholders
@@ -633,6 +639,67 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                     ),
                 ),
             ),
+            SectionSpec(
+                name="request_results",
+                description="Configuration for the RequestResults method filter strategy and parameter ranges.",
+                fields=(
+                    FieldSpec(
+                        "filter_strategy",
+                        "str",
+                        "RequestResults filtering mode: sequence_number (default and preferred), timestamp, or both. "
+                        "Timestamp mode transmits both sequence arguments as zero. Both mode populates all five "
+                        "arguments, but conforming servers use timestamps only when both sequence arguments are zero "
+                        "(OPC 40450-1).",
+                        default="sequence_number",
+                        choices=VALID_REQUEST_RESULTS_FILTER_STRATEGIES,
+                    ),
+                    FieldSpec(
+                        "from_sequence_number",
+                        "int",
+                        "Configured inclusive lower sequence bound for sequence_number or both mode (1..UInt64 max). "
+                        "Active result tests adjust the transmitted window when needed to include the result they just "
+                        "triggered. Timestamp mode ignores this setting and transmits 0.",
+                        default=1,
+                        min_value=0,
+                        max_value=UINT64_MAX,
+                    ),
+                    FieldSpec(
+                        "to_sequence_number",
+                        "int",
+                        "Configured inclusive upper sequence bound for sequence_number or both mode (at least "
+                        "from_sequence_number, up to UInt64 max; default: 50, providing a safe 50-result compliance window). "
+                        "Active result tests dynamically shift this window to cover recent history ending at the triggered "
+                        "sequence number. Timestamp mode ignores this setting and transmits 0.",
+                        default=50,
+                        min_value=0,
+                        max_value=UINT64_MAX,
+                    ),
+                    FieldSpec(
+                        "from_time",
+                        "str",
+                        "Inclusive lower timestamp for timestamp or both mode, as ISO 8601. Use Z or an explicit UTC "
+                        "offset; a timestamp without an offset is interpreted as UTC. When both timestamps are valid, "
+                        "from_time must not be later than to_time. Invalid text uses the safe runtime lower default.",
+                        default="2000-01-01T00:00:00Z",
+                    ),
+                    FieldSpec(
+                        "to_time",
+                        "str",
+                        "Inclusive upper timestamp for timestamp or both mode, as ISO 8601. Use Z or an explicit UTC "
+                        "offset; a timestamp without an offset is interpreted as UTC. Invalid text uses the safe runtime "
+                        "upper default. Conforming servers ignore both timestamps when sequence bounds are non-zero.",
+                        default="9999-01-01T00:00:00Z",
+                    ),
+                    FieldSpec(
+                        "min_duration_ms",
+                        "number",
+                        "RequestedMinimumDurationBetweenResults as a finite, non-negative number of milliseconds. It "
+                        "is sent as the OPC UA Duration/Double argument; 100.0 ms is the recommended default interval.",
+                        default=100.0,
+                        min_value=0.0,
+                    ),
+                ),
+            ),
         ),
     ),
     SectionSpec(
@@ -764,13 +831,22 @@ def _validate_scalar(value: Any, spec: FieldSpec, path: str) -> Any:
             raise SutManifestError(f"{path}: must be an integer, got {type(value).__name__}")
         if spec.min_value is not None and value < spec.min_value:
             raise SutManifestError(f"{path}: must be >= {int(spec.min_value)}, got {value}")
+        if spec.max_value is not None and value > spec.max_value:
+            raise SutManifestError(f"{path}: must be <= {int(spec.max_value)}, got {value}")
         return value
     if spec.kind == "number":
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise SutManifestError(f"{path}: must be a number, got {type(value).__name__}")
-        number = float(value)
+        try:
+            number = float(value)
+        except OverflowError as exc:
+            raise SutManifestError(f"{path}: must be a finite number") from exc
+        if not math.isfinite(number):
+            raise SutManifestError(f"{path}: must be a finite number, got {number}")
         if spec.min_value is not None and number < spec.min_value:
             raise SutManifestError(f"{path}: must be >= {spec.min_value}, got {number}")
+        if spec.max_value is not None and number > spec.max_value:
+            raise SutManifestError(f"{path}: must be <= {spec.max_value}, got {number}")
         return number
     if spec.kind == "str_list":
         if not isinstance(value, list):
@@ -1126,6 +1202,7 @@ class SutManifest:
                 "default_timeout_seconds": timeouts.method_call_seconds,
                 "state_changing_methods": dict(policy["state_changing_methods"]),
                 "method_status_policies": dict(policy["method_status_policies"]),
+                "request_results": dict(policy.get("request_results") or {}),
                 "extension_fields": extension_fields,
             },
             "selection": selection,
@@ -1283,6 +1360,62 @@ def _validate_consistency(manifest: SutManifest) -> None:
     invalid = sorted(set(intermediate) - (VALID_RESULT_CLASSIFICATIONS - {"any"}))
     if invalid:
         raise SutManifestError(f"workflows.expected_results.intermediate_classifications: invalid values {invalid}")
+
+    rr = policy.get("request_results") or {}
+    strat = rr.get("filter_strategy", "sequence_number")
+    from_seq = rr.get("from_sequence_number", 1)
+    to_seq = rr.get("to_sequence_number", 50)
+    if isinstance(from_seq, bool) or not isinstance(from_seq, int) or from_seq < 0 or from_seq > UINT64_MAX:
+        raise SutManifestError(
+            f"execution_policy.request_results.from_sequence_number must be an integer between 0 and {UINT64_MAX}"
+        )
+    if isinstance(to_seq, bool) or not isinstance(to_seq, int) or to_seq < 0 or to_seq > UINT64_MAX:
+        raise SutManifestError(
+            f"execution_policy.request_results.to_sequence_number must be an integer between 0 and {UINT64_MAX}"
+        )
+    if strat in ("sequence_number", "both"):
+        if from_seq < 1:
+            raise SutManifestError(
+                f"execution_policy.request_results: from_sequence_number must be >= 1 when filter_strategy is '{strat}'"
+            )
+        if to_seq < from_seq:
+            raise SutManifestError(
+                f"execution_policy.request_results: to_sequence_number ({to_seq}) must be >= "
+                f"from_sequence_number ({from_seq})"
+            )
+
+    from_time_raw = str(rr.get("from_time", "") or "").strip()
+    to_time_raw = str(rr.get("to_time", "") or "").strip()
+    if from_time_raw and to_time_raw:
+        try:
+            dt_from = datetime.datetime.fromisoformat(from_time_raw.replace("Z", "+00:00"))
+            dt_to = datetime.datetime.fromisoformat(to_time_raw.replace("Z", "+00:00"))
+            if dt_from.tzinfo is None:
+                dt_from = dt_from.replace(tzinfo=datetime.timezone.utc)
+            else:
+                dt_from = dt_from.astimezone(datetime.timezone.utc)
+            if dt_to.tzinfo is None:
+                dt_to = dt_to.replace(tzinfo=datetime.timezone.utc)
+            else:
+                dt_to = dt_to.astimezone(datetime.timezone.utc)
+            if dt_from > dt_to:
+                raise SutManifestError(
+                    f"execution_policy.request_results: from_time ('{from_time_raw}') must be <= "
+                    f"to_time ('{to_time_raw}')"
+                )
+        except SutManifestError:
+            raise
+        except Exception:
+            pass
+
+    min_dur = rr.get("min_duration_ms", 100.0)
+    if (
+        isinstance(min_dur, bool)
+        or not isinstance(min_dur, (int, float))
+        or not math.isfinite(min_dur)
+        or min_dur < 0.0
+    ):
+        raise SutManifestError("execution_policy.request_results.min_duration_ms must be a finite non-negative number")
 
     try:
         manifest.to_execution_profile()

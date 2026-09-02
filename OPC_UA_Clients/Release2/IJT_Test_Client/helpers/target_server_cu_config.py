@@ -26,7 +26,9 @@ Usage::
 
 from __future__ import annotations
 
+import datetime
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -88,6 +90,8 @@ VALID_CLEANUP_POLICIES: frozenset[str] = frozenset({"best_effort_with_evidence",
 VALID_RESULT_CLASSIFICATIONS: frozenset[str] = frozenset(
     {"single", "batch", "sync", "job", "stitching", "intervention", "text", "any"}
 )
+VALID_REQUEST_RESULTS_FILTER_STRATEGIES: frozenset[str] = frozenset({"sequence_number", "timestamp", "both"})
+UINT64_MAX: int = (1 << 64) - 1
 
 # The outcome and reason-code vocabulary lives in helpers.canonical_outcomes —
 # it is the single vocabulary source. These names are re-exported here so
@@ -122,6 +126,7 @@ __all__ = [
     "ExpectedServerConfig",
     "JoiningProcessSelectionConfig",
     "ReportingConfig",
+    "RequestResultsConfig",
     "SelectionConfig",
     "StateChangingMethodsConfig",
     "TargetConfig",
@@ -130,9 +135,12 @@ __all__ = [
     "ToolSelectionConfig",
     "TriggerConfig",
     "TriggersConfig",
+    "UINT64_MAX",
+    "VALID_REQUEST_RESULTS_FILTER_STRATEGIES",
     "WorkflowExecutionConfig",
     "build_default_profile",
     "build_execution_profile",
+    "build_request_results_arguments",
     "parse_cu_execution",
     "parse_reporting",
     "parse_selection",
@@ -180,6 +188,73 @@ class StateChangingMethodsConfig:
 
 
 @dataclass(frozen=True)
+class RequestResultsConfig:
+    """Policy and parameters for the RequestResults method call."""
+
+    filter_strategy: str = "sequence_number"
+    from_sequence_number: int = 1
+    to_sequence_number: int = 50
+    from_time: str = "2000-01-01T00:00:00Z"
+    to_time: str = "9999-01-01T00:00:00Z"
+    min_duration_ms: float = 100.0
+
+
+def _request_results_datetime(value: str) -> datetime.datetime | None:
+    """Parse an ISO timestamp and normalize it to an aware UTC datetime."""
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.astimezone(datetime.timezone.utc)
+
+
+def _validate_request_results_config(config: RequestResultsConfig, context: str) -> None:
+    """Enforce RequestResults invariants for parsed and directly constructed configs."""
+    if config.filter_strategy not in VALID_REQUEST_RESULTS_FILTER_STRATEGIES:
+        raise TargetServerConfigError(
+            f"{context}: invalid filter_strategy '{config.filter_strategy}'. "
+            f"Valid values: {sorted(VALID_REQUEST_RESULTS_FILTER_STRATEGIES)}"
+        )
+    for field_name, value in (
+        ("from_sequence_number", config.from_sequence_number),
+        ("to_sequence_number", config.to_sequence_number),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TargetServerConfigError(f"{context}: '{field_name}' must be an integer")
+        if not 0 <= value <= UINT64_MAX:
+            raise TargetServerConfigError(f"{context}: '{field_name}' must be between 0 and {UINT64_MAX}")
+    if config.filter_strategy in ("sequence_number", "both"):
+        if config.from_sequence_number < 1:
+            raise TargetServerConfigError(
+                f"{context}: from_sequence_number must be >= 1 when filter_strategy is '{config.filter_strategy}'"
+            )
+        if config.to_sequence_number < config.from_sequence_number:
+            raise TargetServerConfigError(f"{context}: to_sequence_number must be >= from_sequence_number")
+
+    if isinstance(config.min_duration_ms, bool) or not isinstance(config.min_duration_ms, (int, float)):
+        raise TargetServerConfigError(f"{context}: min_duration_ms must be a number")
+    try:
+        min_duration = float(config.min_duration_ms)
+    except OverflowError as exc:
+        raise TargetServerConfigError(f"{context}: min_duration_ms must be a finite non-negative number") from exc
+    if not math.isfinite(min_duration) or min_duration < 0:
+        raise TargetServerConfigError(f"{context}: min_duration_ms must be a finite non-negative number")
+
+    if not isinstance(config.from_time, str) or not isinstance(config.to_time, str):
+        raise TargetServerConfigError(f"{context}: from_time and to_time must be ISO 8601 strings")
+    from_dt = _request_results_datetime(config.from_time)
+    to_dt = _request_results_datetime(config.to_time)
+    if from_dt is not None and to_dt is not None and from_dt > to_dt:
+        raise TargetServerConfigError(
+            f"{context}: from_time ('{config.from_time}') must be <= to_time ('{config.to_time}')"
+        )
+
+
+@dataclass(frozen=True)
 class CuExecutionConfig:
     """CU test execution policy."""
 
@@ -190,6 +265,7 @@ class CuExecutionConfig:
     default_timeout_seconds: float = 60.0
     state_changing_methods: StateChangingMethodsConfig = field(default_factory=StateChangingMethodsConfig)
     method_status_policies: dict[str, str] = field(default_factory=dict)
+    request_results: RequestResultsConfig = field(default_factory=RequestResultsConfig)
     extension_fields: dict[str, Any] = field(default_factory=dict)
 
 
@@ -377,20 +453,35 @@ def require_bool(mapping: dict, key: str, default: bool, context: str) -> bool:
 
 def require_number(mapping: dict, key: str, default: float, context: str, *, min_val: float | None = None) -> float:
     val = mapping.get(key, default)
-    if not isinstance(val, (int, float)):
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
         raise TargetServerConfigError(f"{context}: '{key}' must be a number, got {type(val).__name__}")
-    f_val = float(val)
+    try:
+        f_val = float(val)
+    except OverflowError as exc:
+        raise TargetServerConfigError(f"{context}: '{key}' must be a finite number") from exc
+    if not math.isfinite(f_val):
+        raise TargetServerConfigError(f"{context}: '{key}' must be a finite number, got {f_val}")
     if min_val is not None and f_val < min_val:
         raise TargetServerConfigError(f"{context}: '{key}' must be >= {min_val}, got {f_val}")
     return f_val
 
 
-def require_int(mapping: dict, key: str, default: int, context: str, *, min_val: int | None = None) -> int:
+def require_int(
+    mapping: dict,
+    key: str,
+    default: int,
+    context: str,
+    *,
+    min_val: int | None = None,
+    max_val: int | None = None,
+) -> int:
     val = mapping.get(key, default)
     if not isinstance(val, int) or isinstance(val, bool):
         raise TargetServerConfigError(f"{context}: '{key}' must be an integer, got {type(val).__name__}")
     if min_val is not None and val < min_val:
         raise TargetServerConfigError(f"{context}: '{key}' must be >= {min_val}, got {val}")
+    if max_val is not None and val > max_val:
+        raise TargetServerConfigError(f"{context}: '{key}' must be <= {max_val}, got {val}")
     return val
 
 
@@ -421,6 +512,34 @@ def _parse_state_changing(raw: dict, context: str) -> StateChangingMethodsConfig
     return StateChangingMethodsConfig(default_policy=policy, allowed_methods=allowed_methods)
 
 
+def _parse_request_results(raw: dict, context: str) -> RequestResultsConfig:
+    strat = require_enum(raw, "filter_strategy", "sequence_number", VALID_REQUEST_RESULTS_FILTER_STRATEGIES, context)
+    from_seq = require_int(raw, "from_sequence_number", 1, context, min_val=0, max_val=UINT64_MAX)
+    to_seq = require_int(raw, "to_sequence_number", 50, context, min_val=0, max_val=UINT64_MAX)
+    if strat in ("sequence_number", "both"):
+        if from_seq < 1:
+            raise TargetServerConfigError(
+                f"{context}: from_sequence_number ({from_seq}) must be >= 1 when filter_strategy is '{strat}'"
+            )
+        if to_seq < from_seq:
+            raise TargetServerConfigError(
+                f"{context}: to_sequence_number ({to_seq}) must be >= from_sequence_number ({from_seq})"
+            )
+    from_time = require_str(raw, "from_time", context) or "2000-01-01T00:00:00Z"
+    to_time = require_str(raw, "to_time", context) or "9999-01-01T00:00:00Z"
+    min_dur = require_number(raw, "min_duration_ms", 100.0, context, min_val=0.0)
+    config = RequestResultsConfig(
+        filter_strategy=strat,
+        from_sequence_number=from_seq,
+        to_sequence_number=to_seq,
+        from_time=from_time,
+        to_time=to_time,
+        min_duration_ms=min_dur,
+    )
+    _validate_request_results_config(config, context)
+    return config
+
+
 def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionConfig:
     mode = require_enum(raw, "default_mode", "automated", VALID_EXECUTION_MODES, context)
     scoring = require_enum(raw, "scoring_mode", "diagnostic", VALID_SCORING_MODES, context)
@@ -440,6 +559,11 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
         if not isinstance(k, str) or not isinstance(v, str):
             raise TargetServerConfigError(f"{context}: 'method_status_policies' must map string→string")
 
+    rr_raw = raw.get("request_results", {})
+    if not isinstance(rr_raw, dict):
+        raise TargetServerConfigError(f"{context}: 'request_results' must be a mapping")
+    rr_cfg = _parse_request_results(rr_raw, f"{context}.request_results")
+
     ext = raw.get("extension_fields", {})
     if not isinstance(ext, dict):
         raise TargetServerConfigError(f"{context}: 'extension_fields' must be a mapping")
@@ -452,6 +576,7 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
         default_timeout_seconds=timeout,
         state_changing_methods=sc_cfg,
         method_status_policies=dict(msp),
+        request_results=rr_cfg,
         extension_fields=dict(ext),
     )
 
@@ -701,4 +826,84 @@ def build_default_profile(endpoint: str = "") -> TargetServerCuProfile:
         triggers=TriggersConfig(),
         workflow_execution=WorkflowExecutionConfig(),
         reporting=ReportingConfig(),
+    )
+
+
+def build_request_results_arguments(
+    config: RequestResultsConfig | None = None,
+    triggered_seq: int | None = None,
+) -> tuple[Any, Any, Any, Any, Any]:
+    """Build the 5 typed input arguments for OPC UA RequestResults.
+
+    Arguments per OPC 40450-1 Section 7:
+    1. FromSequenceNumber: UInt64
+    2. ToSequenceNumber: UInt64
+    3. FromTime: DateTime (UtcTime)
+    4. ToTime: DateTime (UtcTime)
+    5. RequestedMinimumDurationBetweenResults: Duration (Double)
+
+    Strategies:
+    - sequence_number (default/preferred): FromSequenceNumber >= 1, ToSequenceNumber >= FromSequenceNumber.
+      FromTime and ToTime are default values (conforming servers ignore timestamps when sequence
+      numbers are non-zero per OPC 40450-1 Section 7).
+    - timestamp: FromSequenceNumber = 0, ToSequenceNumber = 0.
+      FromTime and ToTime define the filter range (conforming servers evaluate timestamps only when
+      both sequence arguments are set to 0 per UAModel.IJTBase.NodeSet2.xml).
+    - both: Populates both non-zero sequence numbers (>= 1) and timestamp arguments. Per OPC 40450-1,
+      conforming servers prioritize sequence numbers over timestamps; this strategy transmits both
+      for servers supporting dual evaluation or diagnostics.
+    """
+    from asyncua import ua
+
+    cfg = config if config is not None else RequestResultsConfig()
+    _validate_request_results_config(cfg, "request_results")
+    strat = cfg.filter_strategy
+    if triggered_seq is not None and (
+        isinstance(triggered_seq, bool) or not isinstance(triggered_seq, int) or not 0 < triggered_seq <= UINT64_MAX
+    ):
+        raise TargetServerConfigError(f"request_results: triggered_seq must be an integer between 1 and {UINT64_MAX}")
+
+    from_seq = cfg.from_sequence_number
+    to_seq = cfg.to_sequence_number
+    if triggered_seq is not None:
+        if strat in ("sequence_number", "both"):
+            # Determine window span from configured bounds (default 50, capped at 100 for compliance safety)
+            span = max(1, min(100, to_seq - from_seq + 1))
+            if triggered_seq > to_seq:
+                # Sequence counter exceeds configured window: shift window to request recent history
+                # ending at the triggered sequence number, protecting the controller from massive queries.
+                from_seq = max(1, triggered_seq - span + 1)
+                to_seq = triggered_seq
+            elif triggered_seq < from_seq:
+                from_seq = max(1, triggered_seq)
+                to_seq = min(UINT64_MAX, from_seq + span - 1)
+
+    if strat == "timestamp":
+        arg_from_seq = 0
+        arg_to_seq = 0
+    else:
+        arg_from_seq = from_seq
+        arg_to_seq = to_seq
+
+    def _parse_dt(val: str, default: datetime.datetime) -> datetime.datetime:
+        parsed = _request_results_datetime(val)
+        if parsed is None:
+            if val:
+                logger.warning(
+                    "Invalid ISO datetime '%s' in RequestResults config; falling back to default %s",
+                    val,
+                    default,
+                )
+            return default
+        return parsed
+
+    from_dt = _parse_dt(cfg.from_time, datetime.datetime(2000, 1, 1, tzinfo=datetime.timezone.utc))
+    to_dt = _parse_dt(cfg.to_time, datetime.datetime(9999, 1, 1, tzinfo=datetime.timezone.utc))
+
+    return (
+        ua.Variant(arg_from_seq, ua.VariantType.UInt64),
+        ua.Variant(arg_to_seq, ua.VariantType.UInt64),
+        ua.Variant(from_dt, ua.VariantType.DateTime),
+        ua.Variant(to_dt, ua.VariantType.DateTime),
+        ua.Variant(float(cfg.min_duration_ms), ua.VariantType.Double),
     )

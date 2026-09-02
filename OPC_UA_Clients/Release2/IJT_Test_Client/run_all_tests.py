@@ -1428,6 +1428,11 @@ def _has_explicit_pytest_selection(args: list[str]) -> bool:
     return False
 
 
+def _clean_pytest_remainder(args: list[str] | None) -> list[str]:
+    """Remove argparse's option separator before forwarding arguments to pytest."""
+    return [arg for arg in (args or []) if arg != "--"]
+
+
 def _has_explicit_coverage_option(args: list[str]) -> bool:
     """Return True when forwarded pytest args explicitly request coverage behavior."""
     return any(arg == "--no-cov" or arg == "--cov" or arg.startswith("--cov") for arg in args)
@@ -2306,7 +2311,7 @@ def main() -> int:
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Build pytest arg list from CLI flags + any raw remainder args
-    extra_pytest_args: list[str] = list(args.pytest_args or [])
+    extra_pytest_args = _clean_pytest_remainder(args.pytest_args)
     if args.verbose:
         extra_pytest_args = ["-v"] + extra_pytest_args
     if args.junit_xml:

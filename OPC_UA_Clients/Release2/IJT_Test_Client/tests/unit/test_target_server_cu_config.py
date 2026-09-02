@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 import yaml
+from asyncua import ua
 
 from helpers.target_server_cu_config import (
     OUTCOME_BLOCKED,
@@ -22,11 +23,14 @@ from helpers.target_server_cu_config import (
     OUTCOME_MANUAL_REQUIRED,
     OUTCOME_PASSED,
     OUTCOME_UNSUPPORTED,
+    UINT64_MAX,
+    RequestResultsConfig,
     StateChangingMethodsConfig,
     TargetServerConfigError,
     TargetServerCuProfile,
     build_default_profile,
     build_execution_profile,
+    build_request_results_arguments,
 )
 
 
@@ -613,3 +617,297 @@ class TestParserHelpersAndValidation:
             }
         )
         assert profile_enabled.workflow_execution.expected_results.reject_ok_evaluation_on_abort is True
+
+
+# ---------------------------------------------------------------------------
+# RequestResults config and argument builder
+# ---------------------------------------------------------------------------
+
+
+class TestRequestResultsConfig:
+    def test_default_values(self):
+        cfg = RequestResultsConfig()
+        assert cfg.filter_strategy == "sequence_number"
+        assert cfg.from_sequence_number == 1
+        assert cfg.to_sequence_number == 50
+        assert cfg.from_time == "2000-01-01T00:00:00Z"
+        assert cfg.to_time == "9999-01-01T00:00:00Z"
+        assert cfg.min_duration_ms == 100.0
+
+    def test_build_arguments_sequence_number_default(self):
+        cfg = RequestResultsConfig(filter_strategy="sequence_number", from_sequence_number=1, to_sequence_number=50)
+        args = build_request_results_arguments(cfg)
+        assert len(args) == 5
+        assert args[0].VariantType == ua.VariantType.UInt64
+        assert args[1].VariantType == ua.VariantType.UInt64
+        assert args[2].VariantType == ua.VariantType.DateTime
+        assert args[3].VariantType == ua.VariantType.DateTime
+        assert args[4].VariantType == ua.VariantType.Double
+        assert args[0].Value == 1
+        assert args[1].Value == 50
+        assert args[4].Value == 100.0
+
+    def test_build_arguments_narrow_window_dynamic_expansion(self):
+        # When triggered_seq is higher than configured window, shift safe compliance window
+        # to request recent history ending at triggered_seq
+        cfg = RequestResultsConfig(filter_strategy="sequence_number", from_sequence_number=1, to_sequence_number=50)
+        args = build_request_results_arguments(cfg, triggered_seq=500)
+        assert args[0].Value == 451  # 500 - 50 + 1 (50 results total)
+        assert args[1].Value == 500
+
+    def test_build_arguments_narrow_window_low_triggered_seq(self):
+        # When triggered_seq is lower than configured from_sequence_number
+        cfg = RequestResultsConfig(filter_strategy="sequence_number", from_sequence_number=50, to_sequence_number=100)
+        args = build_request_results_arguments(cfg, triggered_seq=10)
+        assert args[0].Value == 10
+        assert args[1].Value == 60  # 10 + 51 - 1 (51 results total)
+
+    def test_build_arguments_sequence_already_covers_triggered_seq(self):
+        # When triggered_seq is already inside the range, no change to configured window
+        cfg = RequestResultsConfig(filter_strategy="sequence_number", from_sequence_number=1, to_sequence_number=100)
+        args = build_request_results_arguments(cfg, triggered_seq=50)
+        assert args[0].Value == 1
+        assert args[1].Value == 100
+
+    def test_build_arguments_timestamp(self):
+        cfg = RequestResultsConfig(
+            filter_strategy="timestamp",
+            from_time="2024-01-01T00:00:00Z",
+            to_time="2025-01-01T00:00:00Z",
+            min_duration_ms=50.0,
+        )
+        args = build_request_results_arguments(cfg)
+        assert args[0].VariantType == ua.VariantType.UInt64
+        assert args[1].VariantType == ua.VariantType.UInt64
+        assert args[2].VariantType == ua.VariantType.DateTime
+        assert args[3].VariantType == ua.VariantType.DateTime
+        assert args[4].VariantType == ua.VariantType.Double
+        assert args[0].Value == 0
+        assert args[1].Value == 0
+        assert args[2].Value.year == 2024
+        assert args[3].Value.year == 2025
+        assert args[4].Value == 50.0
+
+    def test_build_arguments_both(self):
+        cfg = RequestResultsConfig(
+            filter_strategy="both",
+            from_sequence_number=10,
+            to_sequence_number=20,
+            from_time="2024-01-01T00:00:00Z",
+            to_time="2025-01-01T00:00:00Z",
+        )
+        args = build_request_results_arguments(cfg)
+        assert args[0].Value == 10
+        assert args[1].Value == 20
+        assert args[2].Value.year == 2024
+        assert args[3].Value.year == 2025
+
+    def test_build_arguments_invalid_iso_falls_back(self):
+        cfg = RequestResultsConfig(
+            filter_strategy="timestamp",
+            from_time="not-a-valid-date",
+            to_time="",
+        )
+        args = build_request_results_arguments(cfg)
+        assert args[2].Value.year == 2000
+        assert args[3].Value.year == 9999
+
+    def test_build_arguments_invalid_strategy_raises(self):
+        cfg = RequestResultsConfig(filter_strategy="unknown")
+        with pytest.raises(TargetServerConfigError, match="invalid filter_strategy"):
+            build_request_results_arguments(cfg)
+
+    @pytest.mark.parametrize(
+        "cfg",
+        [
+            RequestResultsConfig(filter_strategy="sequence_number", from_sequence_number=0, to_sequence_number=0),
+            RequestResultsConfig(from_sequence_number=1, to_sequence_number=UINT64_MAX + 1),
+            RequestResultsConfig(min_duration_ms=float("nan")),
+            RequestResultsConfig(min_duration_ms=float("inf")),
+            RequestResultsConfig(min_duration_ms=10**1000),
+        ],
+    )
+    def test_build_arguments_rejects_invalid_direct_config(self, cfg):
+        with pytest.raises(TargetServerConfigError):
+            build_request_results_arguments(cfg)
+
+    def test_parse_cu_execution_compares_mixed_timezone_timestamps(self):
+        with pytest.raises(TargetServerConfigError, match="must be <= to_time"):
+            build_execution_profile(
+                {
+                    "schema_version": 1,
+                    "cu_execution": {
+                        "request_results": {
+                            "filter_strategy": "timestamp",
+                            "from_time": "2025-01-01T00:00:00",
+                            "to_time": "2024-01-01T00:00:00Z",
+                        }
+                    },
+                }
+            )
+
+    @pytest.mark.parametrize("triggered_seq", [True, 1.5, "42", 0, UINT64_MAX + 1])
+    def test_build_arguments_rejects_invalid_triggered_sequence(self, triggered_seq):
+        with pytest.raises(TargetServerConfigError, match="triggered_seq"):
+            build_request_results_arguments(RequestResultsConfig(), triggered_seq=triggered_seq)
+
+    def test_parse_cu_execution_valid_request_results(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "request_results": {
+                        "filter_strategy": "timestamp",
+                        "from_sequence_number": 0,
+                        "to_sequence_number": 0,
+                        "from_time": "2023-01-01T00:00:00Z",
+                        "to_time": "2024-01-01T00:00:00Z",
+                        "min_duration_ms": 10.0,
+                    }
+                },
+            }
+        )
+        rr = profile.cu_execution.request_results
+        assert rr.filter_strategy == "timestamp"
+        assert rr.from_sequence_number == 0
+        assert rr.to_sequence_number == 0
+        assert rr.from_time == "2023-01-01T00:00:00Z"
+        assert rr.to_time == "2024-01-01T00:00:00Z"
+        assert rr.min_duration_ms == 10.0
+
+    def test_parse_cu_execution_sequence_mode_rejects_zero(self):
+        with pytest.raises(TargetServerConfigError, match="must be >= 1"):
+            build_execution_profile(
+                {
+                    "schema_version": 1,
+                    "cu_execution": {
+                        "request_results": {
+                            "filter_strategy": "sequence_number",
+                            "from_sequence_number": 0,
+                            "to_sequence_number": 100,
+                        }
+                    },
+                }
+            )
+
+    def test_parse_cu_execution_uint64_bounds(self):
+        # Valid uint64 max
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "request_results": {
+                        "filter_strategy": "sequence_number",
+                        "from_sequence_number": 1,
+                        "to_sequence_number": UINT64_MAX,
+                    }
+                },
+            }
+        )
+        assert profile.cu_execution.request_results.to_sequence_number == UINT64_MAX
+
+        # Out of bounds uint64
+        with pytest.raises(TargetServerConfigError, match="must be <="):
+            build_execution_profile(
+                {
+                    "schema_version": 1,
+                    "cu_execution": {
+                        "request_results": {
+                            "filter_strategy": "sequence_number",
+                            "from_sequence_number": 1,
+                            "to_sequence_number": UINT64_MAX + 1,
+                        }
+                    },
+                }
+            )
+
+    def test_parse_cu_execution_inverted_sequence_range_raises(self):
+        with pytest.raises(TargetServerConfigError, match="must be >= from_sequence_number"):
+            build_execution_profile(
+                {
+                    "schema_version": 1,
+                    "cu_execution": {
+                        "request_results": {
+                            "filter_strategy": "sequence_number",
+                            "from_sequence_number": 50,
+                            "to_sequence_number": 10,
+                        }
+                    },
+                }
+            )
+
+    def test_parse_cu_execution_inverted_timestamps_raises(self):
+        with pytest.raises(TargetServerConfigError, match="must be <= to_time"):
+            build_execution_profile(
+                {
+                    "schema_version": 1,
+                    "cu_execution": {
+                        "request_results": {
+                            "filter_strategy": "timestamp",
+                            "from_time": "2025-01-01T00:00:00Z",
+                            "to_time": "2024-01-01T00:00:00Z",
+                        }
+                    },
+                }
+            )
+
+    def test_parse_cu_execution_nan_or_inf_duration_raises(self):
+        with pytest.raises(TargetServerConfigError, match="must be a finite number"):
+            build_execution_profile(
+                {
+                    "schema_version": 1,
+                    "cu_execution": {
+                        "request_results": {
+                            "min_duration_ms": float("nan"),
+                        }
+                    },
+                }
+            )
+        with pytest.raises(TargetServerConfigError, match="must be a finite number"):
+            build_execution_profile(
+                {
+                    "schema_version": 1,
+                    "cu_execution": {
+                        "request_results": {
+                            "min_duration_ms": float("inf"),
+                        }
+                    },
+                }
+            )
+
+    def test_parse_cu_execution_invalid_filter_strategy_raises(self):
+        with pytest.raises(TargetServerConfigError, match="invalid value 'bogus'"):
+            build_execution_profile(
+                {
+                    "schema_version": 1,
+                    "cu_execution": {
+                        "request_results": {
+                            "filter_strategy": "bogus",
+                        }
+                    },
+                }
+            )
+
+    def test_parse_cu_execution_negative_sequence_number_raises(self):
+        with pytest.raises(TargetServerConfigError, match="from_sequence_number"):
+            build_execution_profile(
+                {
+                    "schema_version": 1,
+                    "cu_execution": {
+                        "request_results": {
+                            "from_sequence_number": -5,
+                        }
+                    },
+                }
+            )
+
+    def test_parse_cu_execution_not_a_mapping_raises(self):
+        with pytest.raises(TargetServerConfigError, match="request_results' must be a mapping"):
+            build_execution_profile(
+                {
+                    "schema_version": 1,
+                    "cu_execution": {
+                        "request_results": "invalid",
+                    },
+                }
+            )

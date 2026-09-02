@@ -4,7 +4,7 @@ Byte-identity regression tests for the specification test summary renderer
 (`scripts/reporting/specification_test_summary.py`).
 
 The byte-identity test
-([`test_render_specification_test_summary.py`](test_render_specification_test_summary.py))
+([`test_render_specification_summary.py`](test_render_specification_summary.py))
 calls `render_specification_test_summary(...)` against each fixture under
 [`fixtures/`](fixtures/) and asserts that the produced Markdown matches
 the corresponding file under [`fixtures/expected/`](fixtures/expected/)
@@ -31,7 +31,7 @@ The renderer routes **every** runtime-derived value through the
 `ReportEnvironment` seam (no `datetime.now()`, `platform.*`,
 `importlib.metadata`, git, capability-file selection, or process-environment reads outside
 that seam). Two companion tests in
-[`test_render_specification_test_summary.py`](test_render_specification_test_summary.py)
+[`test_render_specification_summary.py`](test_render_specification_summary.py)
 guard the seam:
 
 - `test_renderer_ignores_live_environment_when_frozen_env_passed` —

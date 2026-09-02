@@ -40,8 +40,10 @@ Covered conformance units:
 """
 
 import asyncio
-import datetime
 import logging
+import os
+from pathlib import Path
+from typing import Any
 
 import pytest
 from asyncua import ua
@@ -52,14 +54,17 @@ from helpers.node_discovery import find_child_by_browse_name, find_joining_syste
 from helpers.result_polling import extract_result_id, poll_until_result_id_changes
 from helpers.result_validator import assert_result_data_valid
 from helpers.skip_reasons import skip_accepted_policy
+from helpers.target_server_cu_config import (
+    UINT64_MAX,
+    RequestResultsConfig,
+    build_request_results_arguments,
+)
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 
-# OPC UA method timeout in milliseconds for standard result calls
-_OPCUA_TIMEOUT_MS = 5000
-
-# OPC UA method timeout for a zero-wait call (returns immediately if no result ready)
+# Timeout in milliseconds for GetLatestResult / RequestResults calls
+_OPCUA_TIMEOUT_MS = 10000
 _OPCUA_ZERO_TIMEOUT_MS = 0
 
 # Wall-clock timeout used when wrapping async OPC UA calls
@@ -70,14 +75,104 @@ _LIVE_VARIABLE_SETTLE_SECS = 1.0
 
 # A result identifier that is guaranteed not to exist on any real server
 _NONEXISTENT_RESULT_ID = "nonexistent-result-identifier-for-negative-test"
+_NO_RESULT_DATA = object()
 
-# Default arguments for RequestResults: request all stored results with no time/sequence filter.
-# ToSequenceNumber=0 disables the sequence filter and uses the time range instead.
-_RR_FROM_SEQ = ua.Variant(0, ua.VariantType.UInt64)
-_RR_TO_SEQ = ua.Variant(0, ua.VariantType.UInt64)
-_RR_FROM_TIME = ua.Variant(datetime.datetime(2000, 1, 1), ua.VariantType.DateTime)
-_RR_TO_TIME = ua.Variant(datetime.datetime(9999, 1, 1), ua.VariantType.DateTime)
-_RR_MIN_DURATION = ua.Variant(0.0, ua.VariantType.Double)
+
+def _get_request_results_config() -> RequestResultsConfig:
+    """Load RequestResultsConfig from the active profile or environment, defaulting to sequence_number."""
+    profile_path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE", "").strip()
+    cfg = RequestResultsConfig()
+    if profile_path:
+        path = Path(profile_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Configured profile does not exist: {profile_path}")
+        from helpers.sut_manifest import load_sut_manifest
+
+        manifest = load_sut_manifest(path)
+        cfg = manifest.to_execution_profile().cu_execution.request_results
+
+    env_strategy = os.environ.get("OPCUA_REQUEST_RESULTS_FILTER_STRATEGY", "").strip().lower()
+    if env_strategy in ("sequence_number", "timestamp", "both"):
+        from dataclasses import replace
+
+        cfg = replace(cfg, filter_strategy=env_strategy)
+    return cfg
+
+
+def _extract_sequence_number(result_data: Any) -> int | None:
+    """Extract integer SequenceNumber from result data if present across live formats."""
+    if result_data is None:
+        return None
+
+    payload = result_data
+    for _ in range(4):
+        body = getattr(payload, "Body", None)
+        if body is not None:
+            payload = body
+            continue
+        val = getattr(payload, "Value", None)
+        if val is not None:
+            payload = val
+            continue
+        val_lower = getattr(payload, "value", None)
+        if val_lower is not None:
+            payload = val_lower
+            continue
+        break
+
+    meta = getattr(payload, "ResultMetaData", None)
+    if meta is None and hasattr(payload, "get"):
+        meta = payload.get("ResultMetaData")
+    if meta is None:
+        meta = payload  # In case ResultMetaData itself was passed
+
+    seq = None
+    for field_name in ("SequenceNumber", "sequence_number", "Sequence_Number"):
+        if hasattr(meta, field_name):
+            seq = getattr(meta, field_name)
+            break
+        if hasattr(meta, "get"):
+            val = meta.get(field_name)
+            if val is not None:
+                seq = val
+                break
+
+    for _ in range(3):
+        if hasattr(seq, "Value"):
+            seq = seq.Value
+        elif hasattr(seq, "value"):
+            seq = seq.value
+        elif hasattr(seq, "Body"):
+            seq = seq.Body
+
+    if isinstance(seq, bool) or not isinstance(seq, int):
+        return None
+
+    return seq if 0 < seq <= UINT64_MAX else None
+
+
+def _get_request_results_args(
+    result_data: Any = _NO_RESULT_DATA,
+    config: RequestResultsConfig | None = None,
+) -> tuple[ua.Variant, ua.Variant, ua.Variant, ua.Variant, ua.Variant]:
+    """Return the 5 typed input arguments for RequestResults."""
+    cfg = config if config is not None else _get_request_results_config()
+    seq = None if result_data is _NO_RESULT_DATA else _extract_sequence_number(result_data)
+    if result_data is not _NO_RESULT_DATA and cfg.filter_strategy in ("sequence_number", "both") and seq is None:
+        pytest.fail(
+            "The triggered result has no decoded UInt64 ResultMetaData.SequenceNumber; "
+            "a sequence-filtered RequestResults call cannot be correlated safely"
+        )
+    return build_request_results_arguments(cfg, triggered_seq=seq)
+
+
+# Default arguments for RequestResults: sequence_number strategy by default.
+_DEFAULT_RR_ARGS = build_request_results_arguments()
+_RR_FROM_SEQ = _DEFAULT_RR_ARGS[0]
+_RR_TO_SEQ = _DEFAULT_RR_ARGS[1]
+_RR_FROM_TIME = _DEFAULT_RR_ARGS[2]
+_RR_TO_TIME = _DEFAULT_RR_ARGS[3]
+_RR_MIN_DURATION = _DEFAULT_RR_ARGS[4]
 _RUR_MAX_RESULTS = ua.Variant(1, ua.VariantType.UInt32)
 _RUR_MIN_DURATION = ua.Variant(0.0, ua.VariantType.Double)
 
@@ -129,6 +224,34 @@ def _assert_request_unacknowledged_output(raw, context: str) -> list:
         "[RevisedMinimumDurationBetweenResults, UnacknowledgedResultCount, Status, StatusMessage], "
         f"got {output!r}"
     )
+    return output
+
+
+def _request_results_status(raw, context: str) -> int:
+    """Validate the three RequestResults outputs and return the integer Status."""
+    output = _method_output_list(raw)
+    assert len(output) >= 3, (
+        f"{context} must return [RevisedMinimumDurationBetweenResults, Status, StatusMessage], got {output!r}"
+    )
+    status = output[1]
+    for _ in range(2):
+        if hasattr(status, "Value"):
+            status = status.Value
+        elif hasattr(status, "value"):
+            status = status.value
+    assert status is not None, f"{context} returned no Status: {output!r}"
+    try:
+        status_value = int(status)
+    except (TypeError, ValueError) as exc:
+        pytest.fail(f"{context} returned a non-integer Status {status!r}: {exc}")
+    return status_value
+
+
+def _assert_request_results_output(raw, context: str) -> list:
+    """Validate the three RequestResults outputs and require a successful Status."""
+    output = _method_output_list(raw)
+    status_value = _request_results_status(output, context)
+    assert status_value == 0, f"{context} returned non-zero Status={status_value}"
     return output
 
 
@@ -600,40 +723,31 @@ async def test_result_management_results_folder_contains_result_nodes(result_man
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
 async def test_request_results_method_is_present_and_callable(opcua_client, result_trigger, ns_indices):
     """The Server supports RequestResults method — method node is present and can be invoked."""
-    ns_mr = ns_indices.get(NS_MACH_RESULT)
-    if ns_mr is None:
-        pytest.skip("Machinery/Result namespace not registered on server")
+    rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
 
-    outcome = await result_trigger.trigger_single(
-        result_type=ResultType.MULTI_STEP_OK_RESULT,
-        include_traces=False,
-    )
-    if not outcome.triggered:
-        pytest.skip(outcome.skip_reason)
-
-    rm = await _get_result_management(opcua_client, ns_mr)
     # RequestResults is registered in NS_IJT_BASE, not NS_MACH_RESULT
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
     rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
-        pytest.skip("RequestResults method not found on ResultManagement — optional per spec")
+        pytest.fail("RequestResults method is missing although CU.REQUEST_RESULTS is enabled")
 
+    rr_args = _get_request_results_args(_data)
     try:
-        await asyncio.wait_for(
+        res = await asyncio.wait_for(
             rm.call_method(
                 rr_node.nodeid,
-                _RR_FROM_SEQ,
-                _RR_TO_SEQ,
-                _RR_FROM_TIME,
-                _RR_TO_TIME,
-                _RR_MIN_DURATION,
+                *rr_args,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError as exc:
-        logger.debug("RequestResults raised UaError (may be acceptable): %s", exc)
+        pytest.fail(f"RequestResults method call failed with OPC UA error: {exc}")
+    except asyncio.TimeoutError:
+        pytest.fail("RequestResults method call timed out")
+
+    _assert_request_results_output(res, "RequestResults")
 
 
 # ─── requested_result_variable_access ───
@@ -666,14 +780,7 @@ async def test_request_results_populates_requested_result_variable(opcua_client,
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
-    outcome = await result_trigger.trigger_single(
-        result_type=ResultType.MULTI_STEP_OK_RESULT,
-        include_traces=False,
-    )
-    if not outcome.triggered:
-        pytest.skip(outcome.skip_reason)
-
-    rm = await _get_result_management(opcua_client, ns_mr)
+    rm, _handle, _data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
 
     requested_var_node = await _find_requested_result_var(rm, ns_indices, ns_mr)
     if requested_var_node is None:
@@ -685,34 +792,40 @@ async def test_request_results_populates_requested_result_variable(opcua_client,
         pytest.skip("IJT Base namespace not registered on server")
     rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
-        pytest.skip("RequestResults method not found on ResultManagement")
+        pytest.fail("RequestResults method is missing although requested-result variable access is enabled")
 
+    rr_args = _get_request_results_args(_data)
     try:
-        await asyncio.wait_for(
+        response = await asyncio.wait_for(
             rm.call_method(
                 rr_node.nodeid,
-                _RR_FROM_SEQ,
-                _RR_TO_SEQ,
-                _RR_FROM_TIME,
-                _RR_TO_TIME,
-                _RR_MIN_DURATION,
+                *rr_args,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError as exc:
-        pytest.skip(f"RequestResults raised UaError: {exc}")
+        pytest.fail(f"RequestResults raised UaError: {exc}")
+    except asyncio.TimeoutError:
+        pytest.fail("RequestResults timed out")
+    _assert_request_results_output(response, "RequestResults")
 
     await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
 
     try:
         value = await requested_var_node.read_value()
     except ua.UaError as exc:
-        pytest.skip(f"Could not read RequestedResult after RequestResults call: {exc}")
+        pytest.fail(f"Could not read RequestedResult after RequestResults call: {exc}")
 
     if value is None:
-        pytest.skip("RequestedResult variable is None after RequestResults — no stored results may be available yet")
+        pytest.fail("RequestedResult variable is None after a successful correlated RequestResults call")
 
-    assert value is not None, "RequestedResult variable must be populated after a successful RequestResults call"
+    expected_result_id = extract_result_id(_data)
+    requested_result_id = extract_result_id(value)
+    if expected_result_id:
+        assert requested_result_id == expected_result_id, (
+            f"RequestedResult ResultId {requested_result_id!r} does not match the triggered result "
+            f"{expected_result_id!r}"
+        )
 
 
 # ─── requested_result_event_access ───
@@ -1524,24 +1637,22 @@ async def test_request_results_with_default_range_completes_without_crash(opcua_
         pytest.skip("IJT Base namespace not registered on server")
     rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
-        pytest.skip("RequestResults method not found — optional per spec")
+        pytest.fail("RequestResults method is missing although CU.REQUEST_RESULTS is enabled")
 
+    rr_args = _get_request_results_args()
     try:
-        await asyncio.wait_for(
+        response = await asyncio.wait_for(
             rm.call_method(
                 rr_node.nodeid,
-                _RR_FROM_SEQ,
-                _RR_TO_SEQ,
-                _RR_FROM_TIME,
-                _RR_TO_TIME,
-                _RR_MIN_DURATION,
+                *rr_args,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        pytest.skip("Server rejected RequestResults — method may not be implemented")
+    except ua.UaError as exc:
+        pytest.fail(f"RequestResults rejected a valid configured range: {exc}")
     except asyncio.TimeoutError:
-        pytest.skip("RequestResults timed out with empty URI")
+        pytest.fail("RequestResults timed out with a valid configured range")
+    _assert_request_results_output(response, "RequestResults")
 
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
@@ -1559,29 +1670,23 @@ async def test_request_results_consecutive_calls_handled_gracefully(opcua_client
         pytest.skip("IJT Base namespace not registered on server")
     rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
-        pytest.skip("RequestResults method not found — optional per spec")
+        pytest.fail("RequestResults method is missing although CU.REQUEST_RESULTS is enabled")
 
+    rr_args = _get_request_results_args(_data)
     for call_index in range(2):
         try:
-            await asyncio.wait_for(
+            response = await asyncio.wait_for(
                 rm.call_method(
                     rr_node.nodeid,
-                    _RR_FROM_SEQ,
-                    _RR_TO_SEQ,
-                    _RR_FROM_TIME,
-                    _RR_TO_TIME,
-                    _RR_MIN_DURATION,
+                    *rr_args,
                 ),
                 timeout=_METHOD_WALL_TIMEOUT,
             )
         except ua.UaError as exc:
-            logging.getLogger(__name__).debug(
-                "RequestResults call %d raised ua.UaError (acceptable): %s",
-                call_index,
-                exc,
-            )
+            pytest.fail(f"RequestResults call {call_index} failed with OPC UA error: {exc}")
         except asyncio.TimeoutError:
-            pytest.skip(f"RequestResults call {call_index} timed out")
+            pytest.fail(f"RequestResults call {call_index} timed out")
+        _assert_request_results_output(response, f"RequestResults call {call_index}")
 
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
@@ -1599,24 +1704,22 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
         pytest.skip("IJT Base namespace not registered on server")
     rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
-        pytest.skip("RequestResults method not found — optional per spec")
+        pytest.fail("RequestResults method is missing although CU.REQUEST_RESULTS is enabled")
 
+    rr_args = _get_request_results_args(_data)
     try:
-        await asyncio.wait_for(
+        response = await asyncio.wait_for(
             rm.call_method(
                 rr_node.nodeid,
-                _RR_FROM_SEQ,
-                _RR_TO_SEQ,
-                _RR_FROM_TIME,
-                _RR_TO_TIME,
-                _RR_MIN_DURATION,
+                *rr_args,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError as exc:
-        pytest.skip(f"RequestResults call failed with OPC UA status ({exc}) — cannot check RequestedResult variable")
+        pytest.fail(f"RequestResults call failed with OPC UA status: {exc}")
     except asyncio.TimeoutError:
-        pytest.skip("RequestResults timed out")
+        pytest.fail("RequestResults timed out")
+    _assert_request_results_output(response, "RequestResults")
 
     await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
 
@@ -1626,6 +1729,11 @@ async def test_request_results_updates_result_variable_or_raises_event(opcua_cli
 
     value = await requested_var_node.read_value()
     assert value is not None, "RequestedResult variable is None after RequestResults call"
+    expected_result_id = extract_result_id(_data)
+    if expected_result_id:
+        assert extract_result_id(value) == expected_result_id, (
+            "RequestedResult does not contain the result selected by the dynamic sequence range"
+        )
 
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
@@ -1650,7 +1758,7 @@ async def test_request_results_with_inverted_sequence_range_handled_gracefully(
         pytest.skip("IJT Base namespace not registered on server")
     rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
-        pytest.skip("RequestResults method not found — optional per spec")
+        pytest.fail("RequestResults method is missing although CU.REQUEST_RESULTS is enabled")
 
     try:
         result = await asyncio.wait_for(
@@ -1664,20 +1772,20 @@ async def test_request_results_with_inverted_sequence_range_handled_gracefully(
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-        # Server accepted the call — check Status output (index 1) for NOT_OK
+        # Server accepted the RPC — verify it reported failure in Status output (index 1)
         outputs = list(result) if isinstance(result, (list, tuple)) else [result]
-        if len(outputs) > 1:
-            status_val = int(outputs[1]) if outputs[1] is not None else 0
+        if len(outputs) > 1 and outputs[1] is not None:
+            status_val = int(outputs[1])
             if status_val != 0:
                 logger.debug("Server correctly returned non-zero Status=%d for inverted range", status_val)
             else:
-                pytest.skip("Server accepted inverted sequence range with Status=0 — lenient implementation")
+                pytest.fail("Server incorrectly accepted inverted sequence range (100 > 1) with Status=0")
         else:
-            pytest.skip("Server returned unexpected output shape for inverted range test")
+            pytest.fail("Server accepted inverted sequence range without returning error Status")
     except ua.UaError:
-        pass  # Server rejected with OPC UA error — also acceptable
+        pass  # Server rejected with OPC UA error — expected
     except asyncio.TimeoutError:
-        pytest.skip("RequestResults timed out during negative inverted-range test")
+        pytest.fail("RequestResults timed out during negative inverted-range test")
 
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
@@ -1698,17 +1806,14 @@ async def test_request_results_with_no_pending_results_does_not_crash(opcua_clie
         pytest.skip("IJT Base namespace not registered on server")
     rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
-        pytest.skip("RequestResults method not found — optional per spec")
+        pytest.fail("RequestResults method is missing although CU.REQUEST_RESULTS is enabled")
 
+    rr_args = _get_request_results_args()
     try:
-        await asyncio.wait_for(
+        response = await asyncio.wait_for(
             rm.call_method(
                 rr_node.nodeid,
-                _RR_FROM_SEQ,
-                _RR_TO_SEQ,
-                _RR_FROM_TIME,
-                _RR_TO_TIME,
-                _RR_MIN_DURATION,
+                *rr_args,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
@@ -1716,6 +1821,8 @@ async def test_request_results_with_no_pending_results_does_not_crash(opcua_clie
         pass  # Acceptable — server may signal no results via error
     except asyncio.TimeoutError:
         pytest.fail("RequestResults did not return within timeout when no results pending")
+    else:
+        _request_results_status(response, "RequestResults")
 
 
 # ---------------------------------------------------------------------------
@@ -1766,24 +1873,22 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
         pytest.skip("IJT Base namespace not registered on server")
     rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
-        pytest.skip("RequestResults method not found — cannot exercise variable")
+        pytest.fail("RequestResults method is missing although requested-result variable access is enabled")
 
+    rr_args = _get_request_results_args(_data)
     try:
-        await asyncio.wait_for(
+        response = await asyncio.wait_for(
             rm.call_method(
                 rr_node.nodeid,
-                _RR_FROM_SEQ,
-                _RR_TO_SEQ,
-                _RR_FROM_TIME,
-                _RR_TO_TIME,
-                _RR_MIN_DURATION,
+                *rr_args,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError as exc:
-        pytest.skip(f"RequestResults call failed with OPC UA status ({exc}) — cannot check RequestedResult timestamp")
+        pytest.fail(f"RequestResults call failed with OPC UA status: {exc}")
     except asyncio.TimeoutError:
-        pytest.skip("RequestResults timed out")
+        pytest.fail("RequestResults timed out")
+    _assert_request_results_output(response, "RequestResults")
 
     await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS)
 
@@ -1793,7 +1898,7 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
 
     dv = await requested_var_node.read_data_value()
     if dv.Value.Value is None:
-        pytest.skip("RequestedResult variable value is None — no result available")
+        pytest.fail("RequestedResult variable value is None after a successful correlated RequestResults call")
 
     assert dv.SourceTimestamp is not None, "RequestedResult SourceTimestamp is None after RequestResults call"
     assert dv.SourceTimestamp.year >= MIN_VALID_YEAR, (
@@ -1821,28 +1926,26 @@ async def test_request_results_event_received_with_required_fields(opcua_client,
         pytest.skip("IJT Base namespace not registered on server")
     rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
-        pytest.skip("RequestResults method not found — optional per spec")
+        pytest.fail("RequestResults method is missing although requested-result event access is enabled")
 
     requested_var_node = await _find_requested_result_var(rm, ns_indices, ns_mr)
     if requested_var_node is None:
         _handle_missing_requested_result_variable(ns_indices)
 
+    rr_args = _get_request_results_args(_data)
     try:
-        await asyncio.wait_for(
+        response = await asyncio.wait_for(
             rm.call_method(
                 rr_node.nodeid,
-                _RR_FROM_SEQ,
-                _RR_TO_SEQ,
-                _RR_FROM_TIME,
-                _RR_TO_TIME,
-                _RR_MIN_DURATION,
+                *rr_args,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
     except ua.UaError as exc:
-        pytest.skip(f"RequestResults call failed with OPC UA status ({exc}) — cannot verify event/variable update")
+        pytest.fail(f"RequestResults call failed with OPC UA status: {exc}")
     except asyncio.TimeoutError:
-        pytest.skip("RequestResults timed out")
+        pytest.fail("RequestResults timed out")
+    _assert_request_results_output(response, "RequestResults")
 
     await asyncio.sleep(_LIVE_VARIABLE_SETTLE_SECS * 3)
 
@@ -1850,6 +1953,11 @@ async def test_request_results_event_received_with_required_fields(opcua_client,
     assert value is not None, (
         "RequestedResult variable is still None after RequestResults — expected result data or event"
     )
+    expected_result_id = extract_result_id(_data)
+    if expected_result_id:
+        assert extract_result_id(value) == expected_result_id, (
+            "RequestedResult does not contain the result selected by the dynamic sequence range"
+        )
 
 
 @pytest.mark.requires_cu(CU.REQUESTED_RESULT_EVENT_ACCESS)
@@ -1891,17 +1999,14 @@ async def test_request_results_no_data_does_not_crash_server(opcua_client, ns_in
         pytest.skip("IJT Base namespace not registered on server")
     rr_node = await find_child_by_browse_name(rm, BN.REQUEST_RESULTS, ns_ijt)
     if rr_node is None:
-        pytest.skip("RequestResults method not found — optional per spec")
+        pytest.fail("RequestResults method is missing although requested-result event access is enabled")
 
+    rr_args = _get_request_results_args()
     try:
         await asyncio.wait_for(
             rm.call_method(
                 rr_node.nodeid,
-                _RR_FROM_SEQ,
-                _RR_TO_SEQ,
-                _RR_FROM_TIME,
-                _RR_TO_TIME,
-                _RR_MIN_DURATION,
+                *rr_args,
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
