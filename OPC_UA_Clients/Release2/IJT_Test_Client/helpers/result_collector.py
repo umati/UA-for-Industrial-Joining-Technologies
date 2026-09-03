@@ -523,6 +523,7 @@ class ResultCollector:
         require_partials: bool = False,
         expected_terminal_state: int = 1,
         allow_partial_references: bool = False,
+        require_reference_closure: bool = True,
     ) -> ResultProgression:
         """Collect all fresh evidence through a terminal consolidated result and child closure."""
         if self._collector is None:
@@ -545,7 +546,7 @@ class ResultCollector:
             if is_terminal_matching_state(result, classification, target_state=expected_terminal_state):
                 final_result = result
         unresolved: tuple[str, ...] = ()
-        if final_result is not None:
+        if final_result is not None and require_reference_closure:
             unresolved = self._reference_closure(
                 final_result,
                 all_results,
@@ -582,11 +583,12 @@ class ResultCollector:
                 children.append(result_data)
 
             if final_result is not None:
-                unresolved = self._reference_closure(
-                    final_result,
-                    all_results,
-                    allow_partial_results=allow_partial_references,
-                )
+                if require_reference_closure:
+                    unresolved = self._reference_closure(
+                        final_result,
+                        all_results,
+                        allow_partial_results=allow_partial_references,
+                    )
                 if not unresolved and (not require_partials or partials):
                     break
 

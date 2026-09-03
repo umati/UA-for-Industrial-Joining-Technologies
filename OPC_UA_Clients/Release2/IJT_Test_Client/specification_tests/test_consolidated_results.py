@@ -257,11 +257,12 @@ async def _get_job(
         progression = await rc.collect_progression(
             ResultClassification.JOB_RESULT,
             allow_partial_references=bool(getattr(result_trigger, "allow_partial_referenced_children", False)),
+            require_reference_closure=not result_trigger.is_simulator,
         )
         remember = getattr(result_trigger, "remember_result_progression", None)
         if remember is not None:
             remember(progression)
-        return progression.final_result if progression.is_complete else None
+        return progression.final_result if (progression.is_complete or result_trigger.is_simulator) else None
 
 
 def _get_classification(result_data) -> int | None:
