@@ -7,10 +7,10 @@ This module wraps EventCollector to provide high-level, filtered result retrieva
 that works for both the simulator and real controllers of any batch/job size.
 
 Key design principle — dynamic, not count-bounded:
-  Events are consumed ONE AT A TIME.  Collection stops the instant a result with
-  the correct classification AND IsPartial=False is found.  This means a batch
-  with 3 sub-results and a batch with 300 sub-results are handled identically —
-  no fixed ceiling, no unnecessary waiting.
+  Events are consumed one at a time. Progression collection retains partial
+  parents and child results until a completed final parent closes all references
+  or the configured timeout expires. Batch size is learned from evidence rather
+  than a fixed event-count ceiling.
 
 Timeouts are tuned per trigger type (is_simulator flag):
   - Simulator: results generated in < 2 s → short timeouts keep test suite fast
@@ -23,7 +23,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from asyncua import ua
 
@@ -90,6 +90,59 @@ def get_classification(result_data: Any) -> Optional[int]:
         return None
 
 
+def get_result_id(result_data: Any) -> str:
+    """Return a normalized ResultId from a result envelope or reference."""
+    direct = getattr(result_data, "ResultId", "")
+    if isinstance(direct, ua.Variant):
+        direct = direct.Value
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+    meta = getattr(result_data, "ResultMetaData", None)
+    value = getattr(meta, "ResultId", "") if meta is not None else ""
+    if isinstance(value, ua.Variant):
+        value = value.Value
+    return value.strip() if isinstance(value, str) else ""
+
+
+def references_result_id(
+    result_data: Any,
+    expected_result_id: str,
+    related_results: tuple[Any, ...] = (),
+) -> bool:
+    """Return whether a result directly or transitively references the expected ID."""
+    if not expected_result_id:
+        return False
+    related_by_id: dict[str, list[Any]] = {}
+    for candidate in related_results:
+        result_id = get_result_id(candidate)
+        if result_id:
+            related_by_id.setdefault(result_id, []).append(candidate)
+    pending = [result_data]
+    visited: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in visited:
+            continue
+        visited.add(id(current))
+        for field_name in ("ResultContent", "References"):
+            values = getattr(current, field_name, None)
+            if not isinstance(values, (list, tuple)):
+                continue
+            for raw_value in values:
+                value = unwrap_result(raw_value)
+                if value is None:
+                    continue
+                result_id = get_result_id(value)
+                if result_id == expected_result_id:
+                    return True
+                if result_id:
+                    pending.extend(related_by_id.get(result_id, ()))
+                child_content = getattr(value, "ResultContent", None)
+                if isinstance(child_content, (list, tuple)) and child_content:
+                    pending.append(value)
+    return False
+
+
 def is_partial(result_data: Any) -> bool:
     """Return True when ResultMetaData.IsPartial is truthy."""
     meta = getattr(result_data, "ResultMetaData", None)
@@ -152,6 +205,48 @@ class CorrelatedOperationOutcome:
     timed_out: bool = False
 
 
+@dataclass(frozen=True)
+class ResultProgression:
+    """Immutable partial-to-final evidence for one consolidated classification."""
+
+    classification: int
+    partial_results: tuple[Any, ...] = ()
+    final_result: Optional[Any] = None
+    child_results: tuple[Any, ...] = ()
+    all_results: tuple[Any, ...] = ()
+    source_events: tuple[Any, ...] = ()
+    unresolved_reference_ids: tuple[str, ...] = ()
+    duplicate_event_count: int = 0
+    queue_overflow_count: int = 0
+    timed_out: bool = False
+    missing_required_partials: bool = False
+
+    @property
+    def is_complete(self) -> bool:
+        """Return whether a completed final parent and all referenced children were captured."""
+        return (
+            self.final_result is not None
+            and not self.unresolved_reference_ids
+            and not self.missing_required_partials
+            and self.queue_overflow_count == 0
+        )
+
+
+@dataclass(frozen=True)
+class ResultEventCapture:
+    """Loss-aware result events retained until a caller-defined evidence condition is met."""
+
+    all_results: tuple[Any, ...] = ()
+    source_events: tuple[Any, ...] = ()
+    duplicate_event_count: int = 0
+    queue_overflow_count: int = 0
+    timed_out: bool = False
+
+    @property
+    def is_lossless(self) -> bool:
+        return self.queue_overflow_count == 0
+
+
 # ---------------------------------------------------------------------------
 # ResultCollector
 # ---------------------------------------------------------------------------
@@ -188,6 +283,10 @@ class ResultCollector:
         self._ns_indices = ns_indices
         self._is_simulator = is_simulator
         self._collector: Optional[EventCollector] = None
+        self._captured_results: list[Any] = []
+        self._captured_source_events: list[Any] = []
+        self._captured_event_ids: set[tuple[str, Any]] = set()
+        self._captured_duplicate_count = 0
         self._target_timeout = self._read_target_timeout()
         self._final_result_required = not is_simulator and os.environ.get(
             "OPCUA_TARGET_FINAL_RESULT_REQUIRED", ""
@@ -230,6 +329,10 @@ class ResultCollector:
         server_node = self._client.nodes.server
         event_type_node = self._client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
 
+        self._captured_results.clear()
+        self._captured_source_events.clear()
+        self._captured_event_ids.clear()
+        self._captured_duplicate_count = 0
         self._collector = EventCollector(self._client)
         await self._collector.subscribe(server_node, event_type_node)
         return self
@@ -251,10 +354,7 @@ class ResultCollector:
         Returns:
             Matching result_data, or None.
         """
-        raw = getattr(event, "Result", None)
-        if raw is None:
-            return None
-        result_data = unwrap_result(raw)
+        result_data = self._record_event(event)
         if result_data is None:
             return None
         if target_cls is not None and get_classification(result_data) != target_cls:
@@ -262,6 +362,251 @@ class ResultCollector:
         if is_partial(result_data) != want_partial:
             return None
         return result_data
+
+    def _record_event(self, event: Any) -> Optional[Any]:
+        """Archive one unique event so trigger-owned collection can build progression evidence."""
+        identity = self._event_identity(event)
+        if identity in self._captured_event_ids:
+            self._captured_duplicate_count += 1
+            return None
+        self._captured_event_ids.add(identity)
+        self._captured_source_events.append(event)
+        raw = getattr(event, "Result", None)
+        result_data = unwrap_result(raw) if raw is not None else None
+        if result_data is not None:
+            self._captured_results.append(result_data)
+        return result_data
+
+    @staticmethod
+    def _result_id(result_data: Any) -> str:
+        """Return a normalized ResultId, or an empty string when unavailable."""
+        return get_result_id(result_data)
+
+    @staticmethod
+    def _event_identity(event: Any) -> tuple[str, Any]:
+        """Return a stable event identity without merging distinct progression updates."""
+        event_id = getattr(event, "EventId", None)
+        if isinstance(event_id, ua.Variant):
+            event_id = event_id.Value
+        if isinstance(event_id, bytearray):
+            event_id = bytes(event_id)
+        if isinstance(event_id, (bytes, str)) and event_id:
+            return ("event_id", event_id)
+        return ("object", id(event))
+
+    @classmethod
+    def _reference_closure(
+        cls,
+        final_result: Any,
+        captured_results: list[Any],
+        *,
+        allow_partial_results: bool = False,
+    ) -> tuple[str, ...]:
+        """Return unresolved IDs across the final parent's complete child-reference graph."""
+        required: set[str] = set()
+        resolved: set[str] = set()
+        captured_by_id: dict[str, list[Any]] = {}
+        for result in captured_results:
+            result_id = cls._result_id(result)
+            if result_id:
+                captured_by_id.setdefault(result_id, []).append(result)
+
+        pending = [final_result]
+        visited: set[int] = set()
+        while pending:
+            parent = pending.pop()
+            if id(parent) in visited:
+                continue
+            visited.add(id(parent))
+            parent_id = cls._result_id(parent)
+
+            content = getattr(parent, "ResultContent", None)
+            if isinstance(content, (list, tuple)):
+                for raw_child in content:
+                    child = unwrap_result(raw_child)
+                    child_id = cls._result_id(child)
+                    if not child_id:
+                        continue
+                    child_content = getattr(child, "ResultContent", None)
+                    child_classification = get_classification(child)
+                    child_is_resolved = is_terminal_completed(child, child_classification) or (
+                        allow_partial_results and is_partial(child)
+                    )
+                    if isinstance(child_content, (list, tuple)) and child_content and child_is_resolved:
+                        resolved.add(child_id)
+                        pending.append(child)
+                        continue
+                    required.add(child_id)
+                    if child_id == parent_id:
+                        continue
+                    candidates = [
+                        candidate
+                        for candidate in captured_by_id.get(child_id, [])
+                        if candidate is not parent
+                        and (
+                            is_terminal_completed(candidate, get_classification(candidate))
+                            or (allow_partial_results and is_partial(candidate))
+                        )
+                    ]
+                    if candidates:
+                        resolved.add(child_id)
+                        pending.extend(candidates)
+
+            references = getattr(parent, "References", None)
+            if isinstance(references, (list, tuple)):
+                for raw_reference in references:
+                    reference = unwrap_result(raw_reference)
+                    reference_id = cls._result_id(reference)
+                    if not reference_id:
+                        continue
+                    required.add(reference_id)
+                    if reference_id == parent_id:
+                        continue
+                    candidates = [
+                        candidate
+                        for candidate in captured_by_id.get(reference_id, [])
+                        if candidate is not parent
+                        and (
+                            is_terminal_completed(candidate, get_classification(candidate))
+                            or (allow_partial_results and is_partial(candidate))
+                        )
+                    ]
+                    if candidates:
+                        resolved.add(reference_id)
+                        pending.extend(candidates)
+
+        return tuple(sorted(required - resolved))
+
+    async def collect_evidence(
+        self,
+        predicate: Callable[[tuple[Any, ...]], bool],
+        timeout_s: float,
+    ) -> ResultEventCapture:
+        """Collect one loss-aware event stream until its decoded results satisfy predicate."""
+        if self._collector is None:
+            raise RuntimeError("ResultCollector is not active — use as async context manager")
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_s
+        all_results = list(self._captured_results)
+        satisfied = predicate(tuple(all_results))
+
+        while not satisfied:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            events = await self._collector.collect(count=1, timeout_s=min(remaining, _INNER_POLL_S))
+            if not events:
+                continue
+
+            event = events[0]
+            result_data = self._record_event(event)
+            if result_data is not None:
+                all_results = list(self._captured_results)
+                satisfied = predicate(tuple(all_results))
+
+        dropped = getattr(self._collector, "dropped_event_count", 0)
+        queue_overflow_count = dropped if isinstance(dropped, int) and not isinstance(dropped, bool) else 0
+        return ResultEventCapture(
+            all_results=tuple(self._captured_results),
+            source_events=tuple(self._captured_source_events),
+            duplicate_event_count=self._captured_duplicate_count,
+            queue_overflow_count=queue_overflow_count,
+            timed_out=not satisfied,
+        )
+
+    async def collect_progression(
+        self,
+        classification: int,
+        timeout_s: Optional[float] = None,
+        *,
+        require_partials: bool = False,
+        expected_terminal_state: int = 1,
+        allow_partial_references: bool = False,
+    ) -> ResultProgression:
+        """Collect all fresh evidence through a terminal consolidated result and child closure."""
+        if self._collector is None:
+            raise RuntimeError("ResultCollector is not active — use as async context manager")
+
+        timeout = (
+            timeout_s
+            if timeout_s is not None
+            else (_SIM_COMBINED_TIMEOUT if self._is_simulator else self._target_timeout or _CTRL_COMBINED_TIMEOUT)
+        )
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        all_results = list(self._captured_results)
+        partials = [
+            result for result in all_results if get_classification(result) == classification and is_partial(result)
+        ]
+        children = [result for result in all_results if get_classification(result) != classification]
+        final_result: Optional[Any] = None
+        for result in all_results:
+            if is_terminal_matching_state(result, classification, target_state=expected_terminal_state):
+                final_result = result
+        unresolved: tuple[str, ...] = ()
+        if final_result is not None:
+            unresolved = self._reference_closure(
+                final_result,
+                all_results,
+                allow_partial_results=allow_partial_references,
+            )
+
+        while True:
+            if final_result is not None and not unresolved and (not require_partials or partials):
+                break
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            events = await self._collector.collect(count=1, timeout_s=min(remaining, _INNER_POLL_S))
+            if not events:
+                continue
+
+            event = events[0]
+            result_data = self._record_event(event)
+            if result_data is None:
+                continue
+
+            all_results = list(self._captured_results)
+            result_classification = get_classification(result_data)
+            if result_classification == classification:
+                if is_partial(result_data):
+                    partials.append(result_data)
+                elif is_terminal_matching_state(
+                    result_data,
+                    classification,
+                    target_state=expected_terminal_state,
+                ):
+                    final_result = result_data
+            else:
+                children.append(result_data)
+
+            if final_result is not None:
+                unresolved = self._reference_closure(
+                    final_result,
+                    all_results,
+                    allow_partial_results=allow_partial_references,
+                )
+                if not unresolved and (not require_partials or partials):
+                    break
+
+        missing_partials = require_partials and not partials
+        timed_out = final_result is None or bool(unresolved) or missing_partials
+        dropped = getattr(self._collector, "dropped_event_count", 0)
+        queue_overflow_count = dropped if isinstance(dropped, int) and not isinstance(dropped, bool) else 0
+        return ResultProgression(
+            classification=classification,
+            partial_results=tuple(partials),
+            final_result=final_result,
+            child_results=tuple(children),
+            all_results=tuple(self._captured_results),
+            source_events=tuple(self._captured_source_events),
+            unresolved_reference_ids=unresolved,
+            duplicate_event_count=self._captured_duplicate_count,
+            queue_overflow_count=queue_overflow_count,
+            timed_out=timed_out,
+            missing_required_partials=missing_partials,
+        )
 
     async def _collect_until(
         self,
@@ -349,7 +694,11 @@ class ResultCollector:
             if timeout_s is not None
             else (_SIM_COMBINED_TIMEOUT if self._is_simulator else self._target_timeout or _CTRL_COMBINED_TIMEOUT)
         )
-        result = await self._collect_until(classification, False, timeout)
+        if classification == ResultClassification.INTERVENTION_RESULT:
+            result = await self._collect_until(classification, False, timeout)
+        else:
+            progression = await self.collect_progression(classification, timeout)
+            result = progression.final_result
         return self._require_final(result, f"classification {classification}", timeout, classification)
 
     async def collect_partial(self, classification: int, timeout_s: Optional[float] = None) -> Optional[Any]:
@@ -387,7 +736,8 @@ class ResultCollector:
             if timeout_s is not None
             else (_SIM_JOB_TIMEOUT if self._is_simulator else self._target_timeout or _CTRL_JOB_TIMEOUT)
         )
-        result = await self._collect_until(ResultClassification.JOB_RESULT, False, timeout)
+        progression = await self.collect_progression(ResultClassification.JOB_RESULT, timeout)
+        result = progression.final_result
         return self._require_final(result, "JobResult", timeout, ResultClassification.JOB_RESULT)
 
     async def collect_correlated_operation_outcome(
@@ -421,8 +771,7 @@ class ResultCollector:
             events = await self._collector.collect(count=1, timeout_s=min(remaining, _INNER_POLL_S))
             if not events:
                 continue
-            raw = getattr(events[0], "Result", None)
-            result_data = unwrap_result(raw) if raw is not None else None
+            result_data = self._record_event(events[0])
             if result_data is None:
                 continue
 
@@ -467,8 +816,7 @@ class ResultCollector:
                 events = await self._collector.collect(count=1, timeout_s=min(drain_rem, 0.05))
                 if not events:
                     continue
-                raw = getattr(events[0], "Result", None)
-                result_data = unwrap_result(raw) if raw is not None else None
+                result_data = self._record_event(events[0])
                 if result_data is None:
                     continue
                 latest_result = result_data
@@ -501,8 +849,7 @@ class ResultCollector:
         if self._collector is None:
             raise RuntimeError("ResultCollector is not active — use as async context manager")
         for event in self._collector.collect_pending():
-            raw = getattr(event, "Result", None)
-            result_data = unwrap_result(raw) if raw is not None else None
+            result_data = self._record_event(event)
             if (
                 result_data is not None
                 and predicate(result_data)

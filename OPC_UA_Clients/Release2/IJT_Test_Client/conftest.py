@@ -931,6 +931,8 @@ async def event_trigger(opcua_client, joining_system, ns_indices):
             joining_system,
             ns_indices.get(NS_APP),
             profile,
+            ns_ijt=ns_indices.get(NS_IJT_BASE),
+            ns_di=ns_indices.get(NS_DI),
             allow_waiting=_target_server_mode_allows_waiting(),
         )
 

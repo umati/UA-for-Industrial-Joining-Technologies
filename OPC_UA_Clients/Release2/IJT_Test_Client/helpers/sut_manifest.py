@@ -62,6 +62,7 @@ from helpers.target_server_cu_config import (
     VALID_EVENT_TRIGGER_MODES,
     VALID_EXECUTION_MODES,
     VALID_IDENTIFIER_STRATEGIES,
+    VALID_JOINING_PROCESS_SELECTION_POLICIES,
     VALID_PRECONDITION_POLICIES,
     VALID_RESULT_CLASSIFICATIONS,
     VALID_RESULT_TRIGGER_MODES,
@@ -135,7 +136,7 @@ class FieldSpec:
     """One manifest field: how it is validated, documented, and templated."""
 
     name: str
-    kind: str  # str | bool | int | number | str_list | str_map | mapping
+    kind: str  # str | bool | int | number | str_list | str_map | mapping_list
     description: str
     default: Any = None
     choices: frozenset[str] | None = None
@@ -164,9 +165,9 @@ class SectionSpec:
 
 
 def _empty_for(kind: str) -> Any:
-    if kind == "str_list":
+    if kind in {"str_list", "mapping_list"}:
         return []
-    if kind in {"str_map", "mapping"}:
+    if kind in {"str_map", "int_map", "mapping"}:
         return {}
     return ""
 
@@ -356,6 +357,17 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                 min_value=1,
             ),
             FieldSpec(
+                "max_start_invocations_by_result_classification",
+                "int_map",
+                (
+                    "Maximum accepted StartSelectedJoining calls while waiting for each result "
+                    "classification. Supported keys are single, batch, sync, and job. Every value "
+                    "is also capped by max_start_invocations."
+                ),
+                default={"single": 1, "batch": 3, "sync": 3, "job": 6},
+                min_value=1,
+            ),
+            FieldSpec(
                 "consecutive_start_delay_seconds",
                 "number",
                 "Pacing delay in seconds between consecutive StartSelectedJoining invocations for "
@@ -394,13 +406,16 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                     FieldSpec(
                         "policy",
                         "str",
-                        "Joining process selection policy. exact_match pins an advertised identifier "
-                        "and still requires matching standard Classification metadata. All non-exact "
-                        "policies select the first returned process with the requested standard "
-                        "Classification; they do not infer controller readiness from names or vendor fields. "
-                        "Missing, unreadable, or incompatible Classification metadata produces a clean skip.",
+                        "Joining process selection policy. Non-exact policies order direct standard-"
+                        "classification matches first and may then try a Job process as bounded evidence "
+                        "for Batch or Sync results; only a completed requested-classification result proves "
+                        "support. all_compatible exercises every ordered candidate, while the other non-exact "
+                        "policies stop after the first proof. exact_match pins an advertised identifier; a "
+                        "result-specific exact selector may intentionally cross process-classification "
+                        "metadata, but still requires result-stream proof. Names and vendor fields never "
+                        "prove capability.",
                         default="first_compatible",
-                        choices=VALID_SELECTION_POLICIES,
+                        choices=VALID_JOINING_PROCESS_SELECTION_POLICIES,
                     ),
                     FieldSpec("joining_process_id", "str", "Exact JoiningProcessId. Do not commit real IDs."),
                     FieldSpec(
@@ -458,6 +473,17 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         default=True,
                     ),
                     FieldSpec(
+                        "referenced_child_completion_policy",
+                        "str",
+                        (
+                            "How captured results resolve a referenced child ResultId. "
+                            "terminal_required waits for IsPartial=false; partial_allowed accepts "
+                            "the latest partial update for open or effectively infinite batches."
+                        ),
+                        default="terminal_required",
+                        choices=frozenset({"terminal_required", "partial_allowed"}),
+                    ),
+                    FieldSpec(
                         "expected_terminal_result_state",
                         "int",
                         "Expected ResultState (OPC 40001-101 Machinery Result) for terminal completion: 1 (COMPLETED), 3 (ABORTED), or 4 (FAILED).",
@@ -484,6 +510,25 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                     ),
                     FieldSpec("deselect_process", "bool", "Deselect the joining process after the run.", default=True),
                     FieldSpec("reset_identifiers", "bool", "Reset identifiers after the run.", default=False),
+                ),
+            ),
+            SectionSpec(
+                name="evidence_reuse",
+                description="Reuse immutable joining-workflow evidence within one runner invocation.",
+                fields=(
+                    FieldSpec(
+                        "enabled",
+                        "bool",
+                        "Reuse one provenance-keyed capture across compatible CU assertions.",
+                        default=False,
+                    ),
+                    FieldSpec(
+                        "scope",
+                        "str",
+                        "Evidence lifetime. current_run never persists evidence across runner invocations.",
+                        default="current_run",
+                        choices=frozenset({"current_run"}),
+                    ),
                 ),
             ),
         ),
@@ -521,6 +566,11 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "Event trigger mode.",
                         default="observe_only",
                         choices=VALID_EVENT_TRIGGER_MODES,
+                    ),
+                    FieldSpec(
+                        "actions",
+                        "str_map",
+                        "Event CU key to approved workflow name. Used only by workflow_actions mode.",
                     ),
                 ),
             ),
@@ -562,6 +612,17 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                 "method_status_policies",
                 "str_map",
                 "Per-method status classification overrides (method BrowseName -> accepted|warning|fail).",
+            ),
+            FieldSpec(
+                "counter_effects",
+                "mapping_list",
+                "Explicit counter-effect scenarios. Every entry has these fields: method is the OPC UA "
+                "BrowseName; count is a positive bounded change; process_policy must be exact_match because "
+                "physical counter mutations may affect only one explicitly reviewed process; "
+                "joining_process_id pins that current discovered process; "
+                "expected_result_classification optionally requires a partial or final affected-result "
+                "update that explicitly references the completed InterventionResult; accepted values are "
+                "single, batch, sync, job, stitching, intervention, or text.",
             ),
         ),
         subsections=(
@@ -636,6 +697,41 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                             FieldSpec("joining_process_origin_id", "str", "Parent process origin ID."),
                             FieldSpec("selection_name", "str", "Parent process selection name."),
                         ),
+                    ),
+                ),
+            ),
+            SectionSpec(
+                name="identifier_workflows",
+                description="Safety contract for structured and text identifier round trips.",
+                fields=(
+                    FieldSpec(
+                        "enabled",
+                        "bool",
+                        "Allow approved identifier workflows to mutate test-owned identifiers.",
+                        default=False,
+                    ),
+                    FieldSpec(
+                        "value_policy",
+                        "str",
+                        "How identifier workflows create collision-safe values.",
+                        default="run_unique",
+                        choices=frozenset({"run_unique"}),
+                    ),
+                    FieldSpec(
+                        "cleanup_policy",
+                        "str",
+                        "Cleanup may reset only identifiers created by the current test workflow.",
+                        default="selective_test_owned_only",
+                        choices=frozenset({"selective_test_owned_only"}),
+                    ),
+                    FieldSpec(
+                        "allow_reset_all",
+                        "bool",
+                        (
+                            "Allow broad ResetAll only through the separately approved "
+                            "reset_all_identifiers workflow; never use it as cleanup."
+                        ),
+                        default=False,
                     ),
                 ),
             ),
@@ -866,6 +962,24 @@ def _validate_scalar(value: Any, spec: FieldSpec, path: str) -> Any:
                     f"{path}.{key}: invalid value '{item}'. Valid values: {_sorted_choices(spec.value_choices)}"
                 )
         return dict(value)
+    if spec.kind == "int_map":
+        if not isinstance(value, dict):
+            raise SutManifestError(f"{path}: must be a mapping, got {type(value).__name__}")
+        for key, item in value.items():
+            if not isinstance(key, str) or not isinstance(item, int) or isinstance(item, bool):
+                raise SutManifestError(f"{path}: must map string keys to integer values")
+            if spec.min_value is not None and item < spec.min_value:
+                raise SutManifestError(f"{path}.{key}: must be >= {int(spec.min_value)}, got {item}")
+            if spec.max_value is not None and item > spec.max_value:
+                raise SutManifestError(f"{path}.{key}: must be <= {int(spec.max_value)}, got {item}")
+        return dict(value)
+    if spec.kind == "mapping_list":
+        if not isinstance(value, list):
+            raise SutManifestError(f"{path}: must be a list, got {type(value).__name__}")
+        for index, item in enumerate(value):
+            if not isinstance(item, dict):
+                raise SutManifestError(f"{path}[{index}]: must be a mapping, got {type(item).__name__}")
+        return copy.deepcopy(value)
     raise SutManifestError(f"{path}: unsupported field kind '{spec.kind}'")  # pragma: no cover - guard
 
 
@@ -1203,6 +1317,8 @@ class SutManifest:
                 "state_changing_methods": dict(policy["state_changing_methods"]),
                 "method_status_policies": dict(policy["method_status_policies"]),
                 "request_results": dict(policy.get("request_results") or {}),
+                "identifier_workflows": dict(policy["identifier_workflows"]),
+                "counter_effects": list(policy["counter_effects"]),
                 "extension_fields": extension_fields,
             },
             "selection": selection,
@@ -1215,6 +1331,7 @@ class SutManifest:
                 "event": {
                     "mode": triggers["event"]["mode"],
                     "timeout_seconds": timeouts.passive_observation_seconds,
+                    "actions": dict(triggers["event"]["actions"]),
                 },
                 "condition": {
                     "mode": triggers["condition"]["mode"],
@@ -1224,12 +1341,19 @@ class SutManifest:
             "workflow_execution": {
                 "approved_workflows": tuple(workflows.get("approved", ())),
                 "max_start_invocations": workflows.get("max_start_invocations", 6),
+                "max_start_invocations_by_result_classification": dict(
+                    workflows.get(
+                        "max_start_invocations_by_result_classification",
+                        {"single": 1, "batch": 3, "sync": 3, "job": 6},
+                    )
+                ),
                 "consecutive_start_delay_seconds": float(workflows.get("consecutive_start_delay_seconds", 0.25)),
                 "expected_results": {
                     **dict(workflows["expected_results"]),
                     "timeout_seconds": timeouts.active_result_seconds,
                 },
                 "cleanup": dict(workflows["cleanup"]),
+                "evidence_reuse": dict(workflows["evidence_reuse"]),
             },
             "reporting": {
                 "output_dir": data["reporting"]["output_dir"],
@@ -1338,7 +1462,7 @@ def _validate_consistency(manifest: SutManifest) -> None:
 
     policy = manifest.data["execution_policy"]
     intervention_method = str(policy["intervention"]["method"])
-    allowed = list(policy["state_changing_methods"]["allowed_methods"])
+    allowed = set(policy["state_changing_methods"]["allowed_methods"])
     if (
         intervention_method
         and policy["state_changing_methods"]["default_policy"] == "require_explicit_opt_in"
@@ -1349,7 +1473,115 @@ def _validate_consistency(manifest: SutManifest) -> None:
             "execution_policy.state_changing_methods.allowed_methods"
         )
 
-    expected = manifest.data["workflows"]["expected_results"]
+    approved = set(manifest.data["workflows"]["approved"])
+    event = manifest.data["triggers"]["event"]
+    event_actions = dict(event["actions"])
+    if event["mode"] == "workflow_actions" and not event_actions:
+        raise SutManifestError("triggers.event.actions must not be empty when mode is 'workflow_actions'")
+    unapproved_actions = sorted(set(event_actions.values()) - approved)
+    if unapproved_actions:
+        raise SutManifestError(f"triggers.event.actions references unapproved workflows: {unapproved_actions}")
+
+    identifiers = policy["identifier_workflows"]
+    if identifiers["allow_reset_all"]:
+        if "reset_all_identifiers" not in approved:
+            raise SutManifestError(
+                "execution_policy.identifier_workflows.allow_reset_all requires "
+                "workflows.approved to include 'reset_all_identifiers'"
+            )
+        if "ResetIdentifiers" not in allowed:
+            raise SutManifestError(
+                "execution_policy.identifier_workflows.allow_reset_all requires "
+                "ResetIdentifiers in execution_policy.state_changing_methods.allowed_methods"
+            )
+    if identifiers["enabled"]:
+        required_identifier_methods = {"SendIdentifiers", "SendTextIdentifiers", "ResetIdentifiers"}
+        missing_methods = sorted(required_identifier_methods - allowed)
+        if missing_methods:
+            raise SutManifestError(
+                f"execution_policy.identifier_workflows requires allowed_methods entries: {missing_methods}"
+            )
+        required_identifier_workflows = {
+            "structured_identifier_round_trip",
+            "text_identifier_round_trip",
+        }
+        missing_workflows = sorted(required_identifier_workflows - approved)
+        if missing_workflows:
+            raise SutManifestError(
+                f"execution_policy.identifier_workflows requires approved workflows: {missing_workflows}"
+            )
+
+    counter_effects = policy["counter_effects"]
+    destructive_workflows = {"remote_abort_job", "remote_reset_job"} & approved
+    if destructive_workflows and not policy["risk_approvals"]["allow_destructive_methods"]:
+        raise SutManifestError(
+            "execution_policy.risk_approvals.allow_destructive_methods must be true for approved workflows: "
+            f"{sorted(destructive_workflows)}"
+        )
+
+    counter_effect_keys = {
+        "method",
+        "count",
+        "process_policy",
+        "joining_process_id",
+        "expected_result_classification",
+    }
+    for index, effect in enumerate(counter_effects):
+        path = f"execution_policy.counter_effects[{index}]"
+        unknown = sorted(set(effect) - counter_effect_keys)
+        if unknown:
+            raise SutManifestError(f"{path}: unknown field(s): {', '.join(unknown)}")
+
+        method = effect.get("method", "")
+        if not isinstance(method, str) or not method:
+            raise SutManifestError(f"execution_policy.counter_effects[{index}].method must not be empty")
+        if method not in allowed:
+            raise SutManifestError(
+                f"execution_policy.counter_effects[{index}].method '{method}' must also appear in "
+                "execution_policy.state_changing_methods.allowed_methods"
+            )
+        count = effect.get("count", 1)
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+            raise SutManifestError(f"{path}.count must be a positive integer")
+        process_policy = effect.get("process_policy", "exact_match")
+        if process_policy != "exact_match":
+            raise SutManifestError(f"{path}.process_policy must be 'exact_match' for a physical counter mutation")
+        process_id = effect.get("joining_process_id", "")
+        if not isinstance(process_id, str):
+            raise SutManifestError(f"{path}.joining_process_id must be a string")
+        if not process_id:
+            raise SutManifestError(f"execution_policy.counter_effects[{index}].joining_process_id is required")
+        expected_classification = effect.get("expected_result_classification", "")
+        if (
+            not isinstance(expected_classification, str)
+            or expected_classification
+            and expected_classification not in VALID_RESULT_CLASSIFICATIONS - {"any"}
+        ):
+            raise SutManifestError(
+                f"{path}.expected_result_classification must be empty or one of "
+                f"{_sorted_choices(VALID_RESULT_CLASSIFICATIONS - {'any'})}"
+            )
+
+    if counter_effects and "counter_intervention" not in approved:
+        raise SutManifestError(
+            "execution_policy.counter_effects requires workflows.approved to include 'counter_intervention'"
+        )
+
+    workflows = manifest.data["workflows"]
+    start_limits = workflows["max_start_invocations_by_result_classification"]
+    supported_start_limit_keys = {"single", "batch", "sync", "job"}
+    unknown_start_limit_keys = sorted(set(start_limits) - supported_start_limit_keys)
+    if unknown_start_limit_keys:
+        raise SutManifestError(
+            f"workflows.max_start_invocations_by_result_classification has unsupported keys: {unknown_start_limit_keys}"
+        )
+    for classification, limit in start_limits.items():
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise SutManifestError(
+                f"workflows.max_start_invocations_by_result_classification.{classification} must be a positive integer"
+            )
+
+    expected = workflows["expected_results"]
     primary = str(expected["classification"])
     intermediate = list(expected["intermediate_classifications"])
     if primary in intermediate:
@@ -1943,7 +2175,13 @@ def render_manifest_yaml(preset: str = "template", title: str | None = None) -> 
 
 
 def _reference_row(path: str, spec: FieldSpec) -> str:
-    kind = {"str_list": "list of strings", "str_map": "mapping", "number": "number"}.get(spec.kind, spec.kind)
+    kind = {
+        "str_list": "list of strings",
+        "str_map": "mapping",
+        "int_map": "mapping",
+        "mapping_list": "list of mappings",
+        "number": "number",
+    }.get(spec.kind, spec.kind)
     allowed = ", ".join(f"`{item}`" for item in _sorted_choices(spec.choices)) if spec.choices else ""
     if not allowed and spec.value_choices:
         allowed = ", ".join(f"`{item}`" for item in _sorted_choices(spec.value_choices))

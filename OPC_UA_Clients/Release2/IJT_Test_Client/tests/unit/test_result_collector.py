@@ -9,6 +9,7 @@ server required.
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,8 +18,12 @@ from asyncua import ua
 from helpers.namespaces import NS_IJT_BASE, ResultClassification
 from helpers.result_collector import (
     ResultCollector,
+    ResultEventCapture,
+    ResultProgression,
     get_classification,
+    get_result_id,
     is_partial,
+    references_result_id,
     unwrap_result,
 )
 
@@ -281,6 +286,49 @@ class TestResultCollectorContextManager:
         await rc.__aexit__(None, None, None)
         assert rc._collector is None
 
+    def test_event_identity_normalizes_bytearray_and_uses_object_fallback(self):
+        event = MagicMock(EventId=bytearray(b"event-1"))
+        assert ResultCollector._event_identity(event) == ("event_id", b"event-1")
+
+        event.EventId = ua.Variant(b"event-2", ua.VariantType.ByteString)
+        assert ResultCollector._event_identity(event) == ("event_id", b"event-2")
+
+        event.EventId = ""
+        assert ResultCollector._event_identity(event) == ("object", id(event))
+
+        event.EventId = 42
+        assert ResultCollector._event_identity(event) == ("object", id(event))
+
+    def test_result_id_and_reference_helpers_support_both_reference_shapes(self):
+        metadata_reference = MagicMock()
+        metadata_reference.ResultId = ""
+        metadata_reference.ResultMetaData.ResultId = "intervention-1"
+        direct_reference = MagicMock(ResultId="intervention-2")
+        parent = MagicMock(ResultContent=[metadata_reference], References=[direct_reference])
+
+        assert get_result_id(metadata_reference) == "intervention-1"
+        assert references_result_id(parent, "intervention-1") is True
+        assert references_result_id(parent, "intervention-2") is True
+        assert references_result_id(parent, "missing") is False
+        assert references_result_id(parent, "") is False
+
+        metadata_reference.ResultMetaData.ResultId = ua.Variant("intervention-1", ua.VariantType.String)
+        assert get_result_id(metadata_reference) == "intervention-1"
+        direct_reference.ResultId = ua.Variant("intervention-2", ua.VariantType.String)
+        assert get_result_id(direct_reference) == "intervention-2"
+
+        batch_without_intervention = MagicMock(ResultId="batch-1", ResultContent=[], References=[])
+        batch = MagicMock(ResultId="batch-1", ResultContent=[metadata_reference, None], References=[])
+        job = MagicMock(ResultContent=[], References=[MagicMock(ResultId="batch-1")])
+        assert references_result_id(job, "intervention-1", (batch, batch_without_intervention)) is True
+
+    def test_reference_helper_handles_cycles_empty_entries_and_non_list_fields(self):
+        root = SimpleNamespace(ResultId="", ResultContent=[], References="not-a-list")
+        child = SimpleNamespace(ResultId="", ResultContent=[root], References=[None])
+        root.ResultContent = [None, child]
+
+        assert references_result_id(root, "missing") is False
+
 
 # ---------------------------------------------------------------------------
 # ResultCollector._collect_until
@@ -431,12 +479,16 @@ class TestPublicCollectMethods:
 
     @pytest.mark.asyncio
     async def test_collect_combined_delegates_correctly(self):
-        rc = self._make_rc_returning("batch")
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7}, is_simulator=True)
+        rc.collect_progression = AsyncMock(
+            return_value=ResultProgression(
+                classification=ResultClassification.BATCH_RESULT,
+                final_result="batch",
+            )
+        )
         result = await rc.collect_combined(ResultClassification.BATCH_RESULT)
         assert result == "batch"
-        cls_arg, partial_arg, _ = rc._collect_until.call_args[0]
-        assert cls_arg == ResultClassification.BATCH_RESULT
-        assert partial_arg is False
+        rc.collect_progression.assert_awaited_once_with(ResultClassification.BATCH_RESULT, pytest.approx(15.0))
 
     @pytest.mark.asyncio
     async def test_required_primary_classification_does_not_fail_optional_intermediate_timeout(self, monkeypatch):
@@ -460,7 +512,12 @@ class TestPublicCollectMethods:
             str(ResultClassification.JOB_RESULT),
         )
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7}, is_simulator=False)
-        rc._collect_until = AsyncMock(return_value=None)
+        rc.collect_progression = AsyncMock(
+            return_value=ResultProgression(
+                classification=ResultClassification.JOB_RESULT,
+                timed_out=True,
+            )
+        )
 
         with pytest.raises(TimeoutError, match="Required final JobResult"):
             await rc.collect_job()
@@ -474,12 +531,16 @@ class TestPublicCollectMethods:
 
     @pytest.mark.asyncio
     async def test_collect_job_delegates_correctly(self):
-        rc = self._make_rc_returning("job")
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7}, is_simulator=True)
+        rc.collect_progression = AsyncMock(
+            return_value=ResultProgression(
+                classification=ResultClassification.JOB_RESULT,
+                final_result="job",
+            )
+        )
         result = await rc.collect_job()
         assert result == "job"
-        cls_arg, partial_arg, _ = rc._collect_until.call_args[0]
-        assert cls_arg == ResultClassification.JOB_RESULT
-        assert partial_arg is False
+        rc.collect_progression.assert_awaited_once_with(ResultClassification.JOB_RESULT, pytest.approx(30.0))
 
     @pytest.mark.asyncio
     async def test_non_simulator_uses_longer_timeouts(self):
@@ -488,6 +549,370 @@ class TestPublicCollectMethods:
         await rc.collect_single()
         _, _, timeout = rc._collect_until.call_args[0]
         assert timeout == pytest.approx(60.0)
+
+
+class TestCollectProgression:
+    @staticmethod
+    def _result(
+        classification,
+        *,
+        result_id,
+        partial,
+        state,
+        content=None,
+        references=None,
+    ):
+        return MagicMock(
+            ResultMetaData=MagicMock(
+                Classification=classification,
+                ResultId=result_id,
+                IsPartial=partial,
+                ResultState=state,
+            ),
+            ResultContent=[] if content is None else content,
+            References=[] if references is None else references,
+        )
+
+    @staticmethod
+    def _active_collector(events):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        rc._collector = MagicMock()
+        pending = list(events)
+
+        async def collect(**_kwargs):
+            if pending:
+                return [pending.pop(0)]
+            await asyncio.sleep(0.01)
+            return []
+
+        rc._collector.collect = AsyncMock(side_effect=collect)
+        return rc
+
+    @pytest.mark.asyncio
+    async def test_collects_partial_children_and_completed_final(self):
+        partial = self._result(3, result_id="batch-1", partial=True, state=2)
+        child = self._result(1, result_id="single-1", partial=False, state=1)
+        stub = self._result(1, result_id="single-1", partial=False, state=1)
+        final = self._result(3, result_id="batch-1", partial=False, state=1, content=[stub])
+        rc = self._active_collector(
+            [
+                MagicMock(EventId=b"1", Result=partial),
+                MagicMock(EventId=b"2", Result=child),
+                MagicMock(EventId=b"3", Result=final),
+            ]
+        )
+
+        progression = await rc.collect_progression(3, timeout_s=1.0, require_partials=True)
+
+        assert progression.partial_results == (partial,)
+        assert progression.child_results == (child,)
+        assert progression.final_result is final
+        assert progression.source_events
+        assert progression.unresolved_reference_ids == ()
+        assert progression.is_complete is True
+
+    @pytest.mark.asyncio
+    async def test_rejects_non_completed_non_partial_parent(self):
+        failed = self._result(3, result_id="batch-1", partial=False, state=4)
+        rc = self._active_collector([MagicMock(EventId=b"1", Result=failed)])
+
+        progression = await rc.collect_progression(3, timeout_s=0.01)
+
+        assert progression.final_result is None
+        assert progression.timed_out is True
+
+    @pytest.mark.asyncio
+    async def test_collects_required_partial_that_arrives_after_final(self):
+        final = self._result(3, result_id="batch-1", partial=False, state=1)
+        partial = self._result(3, result_id="batch-1", partial=True, state=2)
+        rc = self._active_collector(
+            [
+                MagicMock(EventId=b"1", Result=final),
+                MagicMock(EventId=b"2", Result=partial),
+            ]
+        )
+
+        progression = await rc.collect_progression(3, timeout_s=1.0, require_partials=True)
+
+        assert progression.final_result is final
+        assert progression.partial_results == (partial,)
+        assert progression.timed_out is False
+        assert progression.is_complete is True
+
+    @pytest.mark.asyncio
+    async def test_reports_missing_required_partials(self):
+        final = self._result(3, result_id="batch-1", partial=False, state=1, content=[MagicMock()])
+        final.ResultContent[0].ResultMetaData = MagicMock(
+            ResultId="single-1",
+            Classification=1,
+        )
+        final.ResultContent[0].ResultContent = [MagicMock()]
+        rc = self._active_collector([MagicMock(EventId=b"1", Result=final)])
+
+        progression = await rc.collect_progression(3, timeout_s=0.01, require_partials=True)
+
+        assert progression.missing_required_partials is True
+        assert progression.timed_out is True
+        assert progression.is_complete is False
+
+    @pytest.mark.asyncio
+    async def test_reports_unresolved_reference_stub(self):
+        stub = self._result(1, result_id="missing-child", partial=False, state=1)
+        final = self._result(3, result_id="batch-1", partial=False, state=1, content=[stub])
+        rc = self._active_collector([MagicMock(EventId=b"1", Result=final)])
+
+        progression = await rc.collect_progression(3, timeout_s=0.01)
+
+        assert progression.unresolved_reference_ids == ("missing-child",)
+        assert progression.timed_out is True
+        assert progression.is_complete is False
+
+    @pytest.mark.asyncio
+    async def test_partial_referenced_child_does_not_close_progression(self):
+        partial_child = self._result(1, result_id="single-1", partial=True, state=2)
+        stub = self._result(1, result_id="single-1", partial=False, state=1)
+        final = self._result(3, result_id="batch-1", partial=False, state=1, content=[stub])
+        rc = self._active_collector(
+            [
+                MagicMock(EventId=b"1", Result=partial_child),
+                MagicMock(EventId=b"2", Result=final),
+            ]
+        )
+
+        progression = await rc.collect_progression(3, timeout_s=0.01)
+
+        assert progression.unresolved_reference_ids == ("single-1",)
+        assert progression.timed_out is True
+        assert progression.is_complete is False
+
+    @pytest.mark.asyncio
+    async def test_child_arriving_after_final_closes_reference(self):
+        stub = self._result(1, result_id="single-1", partial=False, state=1)
+        final = self._result(3, result_id="batch-1", partial=False, state=1, content=[stub])
+        child = self._result(1, result_id="single-1", partial=False, state=1, content=[MagicMock()])
+        rc = self._active_collector(
+            [
+                MagicMock(EventId=b"final", Result=final),
+                MagicMock(EventId=b"child", Result=child),
+            ]
+        )
+
+        progression = await rc.collect_progression(3, timeout_s=1.0)
+
+        assert progression.final_result is final
+        assert progression.child_results == (child,)
+        assert progression.unresolved_reference_ids == ()
+        assert progression.is_complete is True
+
+    @pytest.mark.asyncio
+    async def test_references_array_is_resolved_by_captured_child(self):
+        reference = MagicMock(ResultId="single-1")
+        final = self._result(
+            3,
+            result_id="batch-1",
+            partial=False,
+            state=1,
+            references=[reference],
+        )
+        child = self._result(1, result_id="single-1", partial=False, state=1, content=[MagicMock()])
+        rc = self._active_collector(
+            [
+                MagicMock(EventId=b"child", Result=child),
+                MagicMock(EventId=b"final", Result=final),
+            ]
+        )
+
+        progression = await rc.collect_progression(3, timeout_s=1.0)
+
+        assert progression.unresolved_reference_ids == ()
+        assert progression.is_complete is True
+
+    @pytest.mark.asyncio
+    async def test_inline_child_closes_without_separate_event(self):
+        inline_child = self._result(
+            1,
+            result_id="single-1",
+            partial=False,
+            state=1,
+            content=[MagicMock()],
+        )
+        final = self._result(3, result_id="batch-1", partial=False, state=1, content=[inline_child])
+        rc = self._active_collector([MagicMock(EventId=b"1", Result=final)])
+
+        progression = await rc.collect_progression(3, timeout_s=1.0)
+
+        assert progression.unresolved_reference_ids == ()
+        assert progression.is_complete is True
+
+    @pytest.mark.asyncio
+    async def test_duplicate_event_id_is_counted_once(self):
+        partial = self._result(3, result_id="batch-1", partial=True, state=2)
+        final = self._result(3, result_id="batch-1", partial=False, state=1)
+        rc = self._active_collector(
+            [
+                MagicMock(EventId=b"same", Result=partial),
+                MagicMock(EventId=b"same", Result=partial),
+                MagicMock(EventId=b"final", Result=final),
+            ]
+        )
+
+        progression = await rc.collect_progression(3, timeout_s=1.0)
+
+        assert progression.partial_results == (partial,)
+        assert progression.duplicate_event_count == 1
+
+    @pytest.mark.asyncio
+    async def test_queue_overflow_prevents_complete_evidence(self):
+        inline_child = self._result(
+            1,
+            result_id="single-1",
+            partial=False,
+            state=1,
+            content=[MagicMock()],
+        )
+        final = self._result(3, result_id="batch-1", partial=False, state=1, content=[inline_child])
+        rc = self._active_collector([MagicMock(EventId=b"1", Result=final)])
+        rc._collector.dropped_event_count = 2
+
+        progression = await rc.collect_progression(3, timeout_s=1.0)
+
+        assert progression.queue_overflow_count == 2
+        assert progression.is_complete is False
+
+    @pytest.mark.asyncio
+    async def test_collect_evidence_retains_one_deduplicated_lossless_stream(self):
+        first = self._result(6, result_id="intervention-1", partial=False, state=1)
+        second = self._result(3, result_id="batch-1", partial=True, state=2)
+        rc = self._active_collector(
+            [
+                MagicMock(EventId=bytearray(b"1"), Result=first),
+                MagicMock(EventId=bytearray(b"1"), Result=first),
+                MagicMock(EventId=b"2", Result=second),
+            ]
+        )
+
+        capture = await rc.collect_evidence(lambda results: len(results) == 2, timeout_s=1.0)
+
+        assert isinstance(capture, ResultEventCapture)
+        assert capture.all_results == (first, second)
+        assert capture.duplicate_event_count == 1
+        assert capture.timed_out is False
+        assert capture.is_lossless is True
+
+    @pytest.mark.asyncio
+    async def test_collect_evidence_reports_timeout_and_queue_loss(self):
+        rc = self._active_collector([])
+        rc._collector.dropped_event_count = 1
+
+        capture = await rc.collect_evidence(lambda _results: False, timeout_s=0.01)
+
+        assert capture.timed_out is True
+        assert capture.queue_overflow_count == 1
+        assert capture.is_lossless is False
+
+    @pytest.mark.asyncio
+    async def test_collect_evidence_requires_active_context(self):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+
+        with pytest.raises(RuntimeError, match="async context manager"):
+            await rc.collect_evidence(lambda _results: True, timeout_s=0.01)
+
+        with pytest.raises(RuntimeError, match="async context manager"):
+            await rc.collect_progression(3, timeout_s=0.01)
+
+    def test_same_result_id_cannot_falsely_resolve_parent_reference(self):
+        child_stub = self._result(1, result_id="shared-id", partial=False, state=1)
+        final = self._result(3, result_id="shared-id", partial=False, state=1, content=[child_stub])
+        duplicate_id_result = self._result(1, result_id="shared-id", partial=False, state=1, content=[MagicMock()])
+
+        assert ResultCollector._reference_closure(final, [duplicate_id_result, final]) == ("shared-id",)
+
+    def test_reference_closure_follows_nested_job_batch_child_graph(self):
+        intervention = self._result(6, result_id="intervention-1", partial=False, state=1)
+        intervention_stub = self._result(6, result_id="intervention-1", partial=False, state=1)
+        batch = self._result(3, result_id="batch-1", partial=True, state=2, content=[intervention_stub])
+        batch_stub = self._result(3, result_id="batch-1", partial=True, state=2)
+        job = self._result(4, result_id="job-1", partial=False, state=1, content=[batch_stub])
+
+        assert ResultCollector._reference_closure(job, [batch, job], allow_partial_results=True) == ("intervention-1",)
+        assert ResultCollector._reference_closure(job, [intervention, batch, job], allow_partial_results=True) == ()
+
+    def test_reference_closure_merges_reordered_updates_with_same_parent_id(self):
+        intervention = self._result(6, result_id="intervention-1", partial=False, state=1)
+        single = self._result(1, result_id="single-1", partial=False, state=1, content=[MagicMock()])
+        old_batch = self._result(
+            3,
+            result_id="batch-1",
+            partial=True,
+            state=2,
+            content=[self._result(6, result_id="intervention-1", partial=False, state=1)],
+        )
+        new_batch = self._result(
+            3,
+            result_id="batch-1",
+            partial=True,
+            state=2,
+            content=[self._result(1, result_id="single-1", partial=False, state=1)],
+        )
+        job = self._result(
+            4,
+            result_id="job-1",
+            partial=False,
+            state=1,
+            references=[MagicMock(ResultId="batch-1")],
+        )
+
+        assert (
+            ResultCollector._reference_closure(
+                job,
+                [new_batch, old_batch, single, intervention, job],
+                allow_partial_results=True,
+            )
+            == ()
+        )
+
+    def test_reference_closure_ignores_empty_ids_and_rejects_parent_self_reference(self):
+        parent = self._result(
+            4,
+            result_id="job-1",
+            partial=False,
+            state=1,
+            content=[SimpleNamespace(ResultId="", ResultContent=[])],
+            references=[SimpleNamespace(ResultId=""), SimpleNamespace(ResultId="job-1")],
+        )
+
+        assert ResultCollector._reference_closure(parent, [parent]) == ("job-1",)
+
+    def test_reference_closure_terminates_inline_cycles(self):
+        parent = self._result(4, result_id="job-1", partial=False, state=1)
+        child = self._result(3, result_id="batch-1", partial=False, state=1, content=[parent])
+        parent.ResultContent = [child]
+
+        assert ResultCollector._reference_closure(parent, [parent, child]) == ()
+
+    @pytest.mark.asyncio
+    async def test_collect_progression_ignores_event_without_result(self):
+        final = self._result(3, result_id="batch-1", partial=False, state=1)
+        rc = self._active_collector(
+            [
+                MagicMock(EventId=b"empty", Result=None),
+                MagicMock(EventId=b"final", Result=final),
+            ]
+        )
+
+        progression = await rc.collect_progression(3, timeout_s=1.0)
+
+        assert progression.final_result is final
+        assert len(progression.source_events) == 2
+
+    @pytest.mark.asyncio
+    async def test_collect_progression_with_completed_initial_results(self):
+        final = self._result(3, result_id="batch-1", partial=False, state=1)
+        rc = self._active_collector([])
+        rc._captured_results.append(final)
+        progression = await rc.collect_progression(3, timeout_s=1.0)
+        assert progression.final_result is final
+        assert progression.is_complete is True
 
 
 # ---------------------------------------------------------------------------

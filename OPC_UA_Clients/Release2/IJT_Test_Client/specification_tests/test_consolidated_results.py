@@ -141,7 +141,26 @@ async def _get_combined(
     num_children: int = _DEFAULT_CHILD_COUNT,
     send_as_refs: bool = True,
 ) -> object:
-    """Events-primary combined result retrieval. Returns final combined result or None."""
+    """Return complete progression evidence, reusing an identical run when enabled."""
+    get_cached = getattr(result_trigger, "get_reusable_progression", None)
+    if get_cached is not None:
+        cached = await get_cached(classification, num_children)
+        if cached is not None:
+            return cached.final_result
+    if getattr(result_trigger, "owns_result_subscription", False):
+        outcome = await result_trigger.trigger_batch_or_sync(
+            classification=classification,
+            num_children=num_children,
+            include_traces=False,
+            send_as_refs=send_as_refs,
+        )
+        progression = getattr(outcome, "result_progression", None)
+        if not outcome.triggered or progression is None:
+            return None
+        remember = getattr(result_trigger, "remember_result_progression", None)
+        if remember is not None:
+            remember(progression)
+        return progression.final_result if progression.is_complete else None
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_batch_or_sync(
             classification=classification,
@@ -151,7 +170,14 @@ async def _get_combined(
         )
         if not outcome.triggered:
             return None
-        return await rc.collect_combined(classification)
+        progression = await rc.collect_progression(
+            classification,
+            allow_partial_references=bool(getattr(result_trigger, "allow_partial_referenced_children", False)),
+        )
+        remember = getattr(result_trigger, "remember_result_progression", None)
+        if remember is not None:
+            remember(progression)
+        return progression.final_result if progression.is_complete else None
 
 
 async def _get_partial(
@@ -161,7 +187,27 @@ async def _get_partial(
     classification: int,
     num_children: int = _DEFAULT_CHILD_COUNT,
 ) -> object:
-    """Events-primary partial result retrieval (IsPartial=True). Returns partial result or None."""
+    """Return partial evidence only from a progression that also reached a complete final result."""
+    get_cached = getattr(result_trigger, "get_reusable_progression", None)
+    if get_cached is not None:
+        cached = await get_cached(classification, num_children, require_partials=True)
+        if cached is not None and cached.partial_results:
+            return cached.partial_results[0]
+    if getattr(result_trigger, "owns_result_subscription", False):
+        outcome = await result_trigger.trigger_batch_or_sync(
+            classification=classification,
+            num_children=num_children,
+            include_traces=False,
+            send_as_refs=True,
+            require_partials=True,
+        )
+        progression = getattr(outcome, "result_progression", None)
+        if not outcome.triggered or progression is None:
+            return None
+        remember = getattr(result_trigger, "remember_result_progression", None)
+        if remember is not None:
+            remember(progression)
+        return progression.partial_results[0] if progression.is_complete and progression.partial_results else None
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_batch_or_sync(
             classification=classification,
@@ -171,7 +217,17 @@ async def _get_partial(
         )
         if not outcome.triggered:
             return None
-        return await rc.collect_partial(classification)
+        progression = await rc.collect_progression(
+            classification,
+            require_partials=True,
+            allow_partial_references=bool(getattr(result_trigger, "allow_partial_referenced_children", False)),
+        )
+        remember = getattr(result_trigger, "remember_result_progression", None)
+        if remember is not None:
+            remember(progression)
+        if progression.is_complete and progression.partial_results:
+            return progression.partial_results[0]
+        return None
 
 
 async def _get_job(
@@ -179,12 +235,33 @@ async def _get_job(
     result_trigger,
     ns_indices,
 ) -> object:
-    """Events-primary job result retrieval. Returns final job result or None."""
+    """Return complete JobResult progression evidence, with safe run-scoped reuse."""
+    get_cached = getattr(result_trigger, "get_reusable_progression", None)
+    if get_cached is not None:
+        cached = await get_cached(ResultClassification.JOB_RESULT)
+        if cached is not None:
+            return cached.final_result
+    if getattr(result_trigger, "owns_result_subscription", False):
+        outcome = await result_trigger.trigger_job(send_as_refs=True)
+        progression = getattr(outcome, "result_progression", None)
+        if not outcome.triggered or progression is None:
+            return None
+        remember = getattr(result_trigger, "remember_result_progression", None)
+        if remember is not None:
+            remember(progression)
+        return progression.final_result if progression.is_complete else None
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_job(send_as_refs=True)
         if not outcome.triggered:
             return None
-        return await rc.collect_job()
+        progression = await rc.collect_progression(
+            ResultClassification.JOB_RESULT,
+            allow_partial_references=bool(getattr(result_trigger, "allow_partial_referenced_children", False)),
+        )
+        remember = getattr(result_trigger, "remember_result_progression", None)
+        if remember is not None:
+            remember(progression)
+        return progression.final_result if progression.is_complete else None
 
 
 def _get_classification(result_data) -> int | None:

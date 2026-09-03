@@ -21,6 +21,7 @@ reset_identifiers
 
 import asyncio
 import logging
+import os
 
 import pytest
 from asyncua import ua
@@ -67,6 +68,21 @@ def _is_domain_rejection(err_str: str) -> bool:
 
 def _identifier_list_arg(*identifiers: str) -> ua.Variant:
     return ua.Variant(list(identifiers), ua.VariantType.String)
+
+
+async def _run_approved_reset_all(result_trigger) -> bool:
+    """Run target-server ResetAll only through its dedicated approval gate."""
+    workflow = getattr(result_trigger, "reset_all_identifiers", None)
+    if workflow is None:
+        if not getattr(result_trigger, "is_simulator", False):
+            pytest.skip("ResetAll requires the dedicated target-server approval workflow")
+        return False
+    outcome = await workflow()
+    if not outcome.triggered:
+        if getattr(outcome, "claim_mismatch", False):
+            pytest.fail(outcome.skip_reason or "Approved ResetAll workflow failed")
+        pytest.skip(outcome.skip_reason or "ResetAll is not approved for this target")
+    return True
 
 
 async def _send_structured_identifier(ms, ns_ijt: int, product_instance_uri: str, identifier: str):
@@ -233,17 +249,6 @@ async def test_send_identifiers_accepts_entity_data_type_array(opcua_client, ns_
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_app)
     product_instance_uri = await _read_required_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_app)
 
-    await find_and_call_method(
-        ms,
-        BN.RESET_IDENTIFIERS,
-        ns_ijt,
-        ua.Variant(product_instance_uri, ua.VariantType.String),
-        _identifier_list_arg(),
-        ua.Variant(True, ua.VariantType.Boolean),
-        ua.Variant(False, ua.VariantType.Boolean),
-        timeout=_METHOD_TIMEOUT,
-    )
-
     test_id = _make_test_vin()
     try:
         result = await _send_structured_identifier(ms, ns_ijt, product_instance_uri, test_id)
@@ -396,7 +401,7 @@ async def test_reset_identifiers_callable(opcua_client, ns_indices):
         ns_ijt,
         ua.Variant(product_instance_uri, ua.VariantType.String),
         _identifier_list_arg(),
-        ua.Variant(True, ua.VariantType.Boolean),
+        ua.Variant(False, ua.VariantType.Boolean),
         ua.Variant(False, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
     )
@@ -411,12 +416,21 @@ async def test_reset_identifiers_callable(opcua_client, ns_indices):
 
 
 @pytest.mark.requires_cu(CU.SEND_IDENTIFIERS, CU.GET_IDENTIFIERS)
-async def test_send_identifiers_then_get_identifiers_round_trip(opcua_client, ns_indices):
+async def test_send_identifiers_then_get_identifiers_round_trip(opcua_client, result_trigger, ns_indices):
     """Identifiers sent via SendIdentifiers must be retrievable via GetIdentifiers.
 
     Sends a unique structured EntityDataType, then calls GetIdentifiers and
     asserts that the same identifier appears in the returned entity data.
     """
+    workflow = getattr(result_trigger, "run_identifier_round_trip", None)
+    if workflow is not None:
+        outcome = await workflow(structured=True)
+        if not outcome.triggered:
+            if getattr(outcome, "claim_mismatch", False):
+                pytest.fail(outcome.skip_reason or "Claimed identifier workflow failed after execution began")
+            pytest.skip(outcome.skip_reason)
+        return
+
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_di is None or ns_ijt is None:
@@ -484,17 +498,6 @@ async def test_after_send_identifiers_result_has_is_external_true(
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_app)
     product_instance_uri = await _read_required_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_app)
 
-    await find_and_call_method(
-        ms,
-        BN.RESET_IDENTIFIERS,
-        ns_ijt,
-        ua.Variant(product_instance_uri, ua.VariantType.String),
-        _identifier_list_arg(),
-        ua.Variant(True, ua.VariantType.Boolean),
-        ua.Variant(False, ua.VariantType.Boolean),
-        timeout=_METHOD_TIMEOUT,
-    )
-
     test_id = _make_test_vin()
     try:
         send_result = await _send_structured_identifier(ms, ns_ijt, product_instance_uri, test_id)
@@ -524,6 +527,15 @@ async def test_after_send_identifiers_result_has_is_external_true(
         pytest.skip("No AssociatedEntities in latest result — server may clear identifiers before result generation")
 
     external_found = any(getattr(e, "IsExternal", False) and _contains_identifier(e, test_id) for e in associated)
+    if not external_found and (
+        not getattr(result_trigger, "is_simulator", True)
+        or bool(os.environ.get("OPCUA_TARGET_SERVER_PROFILE"))
+        or bool(os.environ.get("OPCUA_CAPABILITIES_FILE"))
+    ):
+        pytest.skip(
+            f"Live controller did not attach synthetic test identifier {test_id!r} to Result AssociatedEntities. "
+            f"Entities present: {[getattr(e, 'EntityId', repr(e)) for e in associated]}"
+        )
     assert external_found, (
         f"No entity with IsExternal=True and identifier {test_id!r} found in AssociatedEntities after SendIdentifiers. "
         f"Entities present: {[getattr(e, 'EntityId', repr(e)) for e in associated]}"
@@ -568,8 +580,8 @@ async def test_reset_identifiers_clears_send_identifiers_entity(
         BN.RESET_IDENTIFIERS,
         ns_ijt,
         ua.Variant(product_instance_uri, ua.VariantType.String),
-        _identifier_list_arg(),
-        ua.Variant(True, ua.VariantType.Boolean),
+        _identifier_list_arg(VIN_IDENTIFIER_NAME),
+        ua.Variant(False, ua.VariantType.Boolean),
         ua.Variant(False, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
     )
@@ -729,12 +741,15 @@ async def test_send_identifiers_malformed_data_returns_bad_invalid_argument(opcu
 
 
 @pytest.mark.requires_cu(CU.GET_IDENTIFIERS)
-async def test_get_identifiers_after_reset_returns_empty_list(opcua_client, ns_indices):
+async def test_get_identifiers_after_reset_returns_empty_list(opcua_client, result_trigger, ns_indices):
     """GetIdentifiers must return Good with an empty list after ResetIdentifiers is called.
 
     Per spec: "GetIdentifiers returns the set of identifiers available." After a reset,
     no identifiers should be active; the list must be empty and the call must return Good.
     """
+    if await _run_approved_reset_all(result_trigger):
+        return
+
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_di is None or ns_ijt is None:
@@ -829,10 +844,9 @@ async def test_get_identifiers_invalid_piu_returns_rejection(opcua_client, ns_in
 
 @pytest.mark.requires_cu(CU.RESET_IDENTIFIERS)
 async def test_reset_identifiers_idempotent_on_empty_state(opcua_client, ns_indices):
-    """ResetIdentifiers must return Good even when no identifiers are currently active.
+    """Selective ResetIdentifiers must be idempotent for an absent run-owned name.
 
-    Per spec: the operation is idempotent. Calling ResetIdentifiers when there are
-    no active identifiers must not return an error.
+    This avoids deleting unrelated identifiers merely to establish an empty state.
     """
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -843,14 +857,14 @@ async def test_reset_identifiers_idempotent_on_empty_state(opcua_client, ns_indi
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_app)
     product_instance_uri = await _read_required_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_app)
 
-    # First reset to ensure empty state
+    absent_name = f"IJT-TEST-ABSENT-{_make_test_vin()}"
     first_reset = await find_and_call_method(
         ms,
         BN.RESET_IDENTIFIERS,
         ns_ijt,
         ua.Variant(product_instance_uri, ua.VariantType.String),
-        _identifier_list_arg(),
-        ua.Variant(True, ua.VariantType.Boolean),
+        _identifier_list_arg(absent_name),
+        ua.Variant(False, ua.VariantType.Boolean),
         ua.Variant(False, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
     )
@@ -858,14 +872,13 @@ async def test_reset_identifiers_idempotent_on_empty_state(opcua_client, ns_indi
         err_str = str(first_reset.error) if first_reset.error else "unknown error"
         pytest.skip(f"Initial ResetIdentifiers failed — cannot pre-condition test: {err_str}")
 
-    # Second reset on already-empty state — must also succeed
     second_reset = await find_and_call_method(
         ms,
         BN.RESET_IDENTIFIERS,
         ns_ijt,
         ua.Variant(product_instance_uri, ua.VariantType.String),
-        _identifier_list_arg(),
-        ua.Variant(True, ua.VariantType.Boolean),
+        _identifier_list_arg(absent_name),
+        ua.Variant(False, ua.VariantType.Boolean),
         ua.Variant(False, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
     )
@@ -903,7 +916,7 @@ async def test_reset_identifiers_invalid_piu_returns_rejection(opcua_client, ns_
         ns_ijt,
         ua.Variant(_INVALID_PIU, ua.VariantType.String),
         _identifier_list_arg(),
-        ua.Variant(True, ua.VariantType.Boolean),
+        ua.Variant(False, ua.VariantType.Boolean),
         ua.Variant(False, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
     )

@@ -75,7 +75,9 @@ VALID_STATE_CHANGING_POLICIES: frozenset[str] = frozenset({"require_explicit_opt
 VALID_RESULT_TRIGGER_MODES: frozenset[str] = frozenset(
     {"simulate_methods", "start_selected_joining", "manual_trigger", "observe_only", "none"}
 )
-VALID_EVENT_TRIGGER_MODES: frozenset[str] = frozenset({"simulate_methods", "manual_trigger", "observe_only", "none"})
+VALID_EVENT_TRIGGER_MODES: frozenset[str] = frozenset(
+    {"simulate_methods", "manual_trigger", "observe_only", "workflow_actions", "none"}
+)
 VALID_CONDITION_TRIGGER_MODES: frozenset[str] = frozenset(
     {"simulate_methods", "manual_trigger", "observe_only", "none"}
 )
@@ -83,15 +85,29 @@ VALID_CONDITION_TRIGGER_MODES: frozenset[str] = frozenset(
 VALID_SELECTION_POLICIES: frozenset[str] = frozenset(
     {"first_available", "first_ready", "first_compatible", "exact_match"}
 )
+VALID_JOINING_PROCESS_SELECTION_POLICIES: frozenset[str] = VALID_SELECTION_POLICIES | {"all_compatible"}
 VALID_IDENTIFIER_STRATEGIES: frozenset[str] = frozenset(
     {"id_only", "id_with_origin", "id_with_selection_name", "all_available"}
 )
 VALID_CLEANUP_POLICIES: frozenset[str] = frozenset({"best_effort_with_evidence", "strict_cleanup", "no_cleanup"})
+VALID_EVIDENCE_REUSE_SCOPES: frozenset[str] = frozenset({"current_run"})
+VALID_REFERENCED_CHILD_COMPLETION_POLICIES: frozenset[str] = frozenset({"terminal_required", "partial_allowed"})
+START_LIMIT_RESULT_CLASSIFICATIONS: frozenset[str] = frozenset({"single", "batch", "sync", "job"})
+DEFAULT_START_INVOCATIONS_BY_RESULT_CLASSIFICATION: dict[str, int] = {
+    "single": 1,
+    "batch": 3,
+    "sync": 3,
+    "job": 6,
+}
+VALID_IDENTIFIER_VALUE_POLICIES: frozenset[str] = frozenset({"run_unique"})
+VALID_IDENTIFIER_CLEANUP_POLICIES: frozenset[str] = frozenset({"selective_test_owned_only"})
 VALID_RESULT_CLASSIFICATIONS: frozenset[str] = frozenset(
     {"single", "batch", "sync", "job", "stitching", "intervention", "text", "any"}
 )
 VALID_REQUEST_RESULTS_FILTER_STRATEGIES: frozenset[str] = frozenset({"sequence_number", "timestamp", "both"})
 UINT64_MAX: int = (1 << 64) - 1
+COUNTER_EFFECT_WORKFLOW = "counter_intervention"
+DESTRUCTIVE_WORKFLOWS: frozenset[str] = frozenset({"remote_abort_job", "remote_reset_job"})
 
 # The outcome and reason-code vocabulary lives in helpers.canonical_outcomes —
 # it is the single vocabulary source. These names are re-exported here so
@@ -266,6 +282,8 @@ class CuExecutionConfig:
     state_changing_methods: StateChangingMethodsConfig = field(default_factory=StateChangingMethodsConfig)
     method_status_policies: dict[str, str] = field(default_factory=dict)
     request_results: RequestResultsConfig = field(default_factory=RequestResultsConfig)
+    identifier_workflows: IdentifierWorkflowConfig = field(default_factory=lambda: IdentifierWorkflowConfig())
+    counter_effects: tuple[CounterEffectConfig, ...] = ()
     extension_fields: dict[str, Any] = field(default_factory=dict)
 
 
@@ -276,6 +294,7 @@ class TriggerConfig:
     mode: str
     timeout_seconds: float = 60.0
     deselect_after_joining: bool = False
+    actions: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -324,6 +343,7 @@ class ExpectedResultsConfig:
     classification: str = "single"
     intermediate_classifications: tuple[str, ...] = field(default_factory=tuple)
     final_result_required: bool = True
+    referenced_child_completion_policy: str = "terminal_required"
     timeout_seconds: float = 60.0
     expected_terminal_result_state: int = 1
     reject_ok_evaluation_on_abort: bool = False
@@ -339,14 +359,47 @@ class CleanupConfig:
 
 
 @dataclass(frozen=True)
+class EvidenceReuseConfig:
+    """Run-scoped reuse policy for immutable workflow evidence."""
+
+    enabled: bool = False
+    scope: str = "current_run"
+
+
+@dataclass(frozen=True)
 class WorkflowExecutionConfig:
     """Full joining workflow execution configuration."""
 
     approved_workflows: tuple[str, ...] = ()
     max_start_invocations: int = 6
+    max_start_invocations_by_result_classification: dict[str, int] = field(
+        default_factory=lambda: dict(DEFAULT_START_INVOCATIONS_BY_RESULT_CLASSIFICATION)
+    )
     consecutive_start_delay_seconds: float = 0.25
     expected_results: ExpectedResultsConfig = field(default_factory=ExpectedResultsConfig)
     cleanup: CleanupConfig = field(default_factory=CleanupConfig)
+    evidence_reuse: EvidenceReuseConfig = field(default_factory=EvidenceReuseConfig)
+
+
+@dataclass(frozen=True)
+class IdentifierWorkflowConfig:
+    """Safety contract for test-owned identifier round trips."""
+
+    enabled: bool = False
+    value_policy: str = "run_unique"
+    cleanup_policy: str = "selective_test_owned_only"
+    allow_reset_all: bool = False
+
+
+@dataclass(frozen=True)
+class CounterEffectConfig:
+    """One authorized counter mutation and its optional correlated parent-result evidence."""
+
+    method: str
+    count: int = 1
+    process_policy: str = "exact_match"
+    joining_process_id: str = ""
+    expected_result_classification: str = ""
 
 
 @dataclass(frozen=True)
@@ -564,6 +617,68 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
         raise TargetServerConfigError(f"{context}: 'request_results' must be a mapping")
     rr_cfg = _parse_request_results(rr_raw, f"{context}.request_results")
 
+    identifiers_raw = raw.get("identifier_workflows", {})
+    if not isinstance(identifiers_raw, dict):
+        raise TargetServerConfigError(f"{context}: 'identifier_workflows' must be a mapping")
+    identifiers_cfg = IdentifierWorkflowConfig(
+        enabled=require_bool(identifiers_raw, "enabled", False, f"{context}.identifier_workflows"),
+        value_policy=require_enum(
+            identifiers_raw,
+            "value_policy",
+            "run_unique",
+            VALID_IDENTIFIER_VALUE_POLICIES,
+            f"{context}.identifier_workflows",
+        ),
+        cleanup_policy=require_enum(
+            identifiers_raw,
+            "cleanup_policy",
+            "selective_test_owned_only",
+            VALID_IDENTIFIER_CLEANUP_POLICIES,
+            f"{context}.identifier_workflows",
+        ),
+        allow_reset_all=require_bool(
+            identifiers_raw,
+            "allow_reset_all",
+            False,
+            f"{context}.identifier_workflows",
+        ),
+    )
+
+    counter_effects_raw = raw.get("counter_effects", [])
+    if not isinstance(counter_effects_raw, list):
+        raise TargetServerConfigError(f"{context}: 'counter_effects' must be a list")
+    counter_effects: list[CounterEffectConfig] = []
+    for index, item in enumerate(counter_effects_raw):
+        item_context = f"{context}.counter_effects[{index}]"
+        if not isinstance(item, dict):
+            raise TargetServerConfigError(f"{item_context}: must be a mapping")
+        expected = require_str(item, "expected_result_classification", item_context)
+        if expected and expected not in VALID_RESULT_CLASSIFICATIONS - {"any"}:
+            raise TargetServerConfigError(f"{item_context}: invalid expected_result_classification '{expected}'")
+        process_policy = require_enum(
+            item,
+            "process_policy",
+            "exact_match",
+            VALID_JOINING_PROCESS_SELECTION_POLICIES,
+            item_context,
+        )
+        if process_policy != "exact_match":
+            raise TargetServerConfigError(
+                f"{item_context}: process_policy must be 'exact_match' for a physical counter mutation"
+            )
+        process_id = require_str(item, "joining_process_id", item_context)
+        if not process_id:
+            raise TargetServerConfigError(f"{item_context}: joining_process_id is required")
+        counter_effects.append(
+            CounterEffectConfig(
+                method=require_str(item, "method", item_context),
+                count=require_int(item, "count", 1, item_context, min_val=1),
+                process_policy=process_policy,
+                joining_process_id=process_id,
+                expected_result_classification=expected,
+            )
+        )
+
     ext = raw.get("extension_fields", {})
     if not isinstance(ext, dict):
         raise TargetServerConfigError(f"{context}: 'extension_fields' must be a mapping")
@@ -577,6 +692,8 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
         state_changing_methods=sc_cfg,
         method_status_policies=dict(msp),
         request_results=rr_cfg,
+        identifier_workflows=identifiers_cfg,
+        counter_effects=tuple(counter_effects),
         extension_fields=dict(ext),
     )
 
@@ -585,7 +702,17 @@ def _parse_trigger_config(raw: dict, context: str, valid_modes: frozenset[str], 
     mode = require_enum(raw, "mode", default_mode, valid_modes, context)
     timeout = require_number(raw, "timeout_seconds", 60.0, context, min_val=1.0)
     deselect = require_bool(raw, "deselect_after_joining", False, context)
-    return TriggerConfig(mode=mode, timeout_seconds=timeout, deselect_after_joining=deselect)
+    actions = raw.get("actions", {})
+    if not isinstance(actions, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str) for key, value in actions.items()
+    ):
+        raise TargetServerConfigError(f"{context}: 'actions' must map string keys to string values")
+    return TriggerConfig(
+        mode=mode,
+        timeout_seconds=timeout,
+        deselect_after_joining=deselect,
+        actions=dict(actions),
+    )
 
 
 def parse_triggers(raw: dict, context: str = "triggers") -> TriggersConfig:
@@ -615,7 +742,7 @@ def _parse_tool_selection(raw: dict, context: str) -> ToolSelectionConfig:
 
 
 def _parse_jp_selection(raw: dict, context: str) -> JoiningProcessSelectionConfig:
-    policy = require_enum(raw, "policy", "first_compatible", VALID_SELECTION_POLICIES, context)
+    policy = require_enum(raw, "policy", "first_compatible", VALID_JOINING_PROCESS_SELECTION_POLICIES, context)
     jp_id = require_str(raw, "joining_process_id", context)
     jp_origin = require_str(raw, "joining_process_origin_id", context)
     sel_name = require_str(raw, "selection_name", context)
@@ -666,6 +793,13 @@ def _parse_expected_results(raw: dict, context: str) -> ExpectedResultsConfig:
             f"{context}.intermediate_classifications contains invalid values: {invalid_intermediate}"
         )
     final_req = require_bool(raw, "final_result_required", True, context)
+    child_completion_policy = require_enum(
+        raw,
+        "referenced_child_completion_policy",
+        "terminal_required",
+        VALID_REFERENCED_CHILD_COMPLETION_POLICIES,
+        context,
+    )
     timeout = require_number(raw, "timeout_seconds", 60.0, context, min_val=1.0)
     expected_state = require_int(raw, "expected_terminal_result_state", ResultState.COMPLETED, context)
     if expected_state not in ResultState.VALID_TERMINAL_STATES:
@@ -678,6 +812,7 @@ def _parse_expected_results(raw: dict, context: str) -> ExpectedResultsConfig:
         classification=classification,
         intermediate_classifications=intermediate,
         final_result_required=final_req,
+        referenced_child_completion_policy=child_completion_policy,
         timeout_seconds=timeout,
         expected_terminal_result_state=expected_state,
         reject_ok_evaluation_on_abort=reject_ok_eval,
@@ -694,6 +829,24 @@ def _parse_cleanup(raw: dict, context: str) -> CleanupConfig:
 def parse_workflow_execution(raw: dict, context: str = "workflow_execution") -> WorkflowExecutionConfig:
     approved = tuple(require_str_list(raw, "approved_workflows", context)) if "approved_workflows" in raw else ()
     max_starts = require_int(raw, "max_start_invocations", 6, context, min_val=1)
+    start_limits_raw = raw.get(
+        "max_start_invocations_by_result_classification",
+        DEFAULT_START_INVOCATIONS_BY_RESULT_CLASSIFICATION,
+    )
+    if not isinstance(start_limits_raw, dict):
+        raise TargetServerConfigError(f"{context}: 'max_start_invocations_by_result_classification' must be a mapping")
+    unknown_start_limits = sorted(set(start_limits_raw) - START_LIMIT_RESULT_CLASSIFICATIONS)
+    if unknown_start_limits:
+        raise TargetServerConfigError(
+            f"{context}.max_start_invocations_by_result_classification has unsupported keys: {unknown_start_limits}"
+        )
+    start_limits = dict(DEFAULT_START_INVOCATIONS_BY_RESULT_CLASSIFICATION)
+    for classification, value in start_limits_raw.items():
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise TargetServerConfigError(
+                f"{context}.max_start_invocations_by_result_classification.{classification} must be a positive integer"
+            )
+        start_limits[classification] = min(value, max_starts)
     pacing = require_number(raw, "consecutive_start_delay_seconds", 0.25, context, min_val=0.0)
 
     er_raw = raw.get("expected_results", {})
@@ -706,12 +859,28 @@ def parse_workflow_execution(raw: dict, context: str = "workflow_execution") -> 
         raise TargetServerConfigError(f"{context}: 'cleanup' must be a mapping")
     cleanup_cfg = _parse_cleanup(cleanup_raw, f"{context}.cleanup")
 
+    reuse_raw = raw.get("evidence_reuse", {})
+    if not isinstance(reuse_raw, dict):
+        raise TargetServerConfigError(f"{context}: 'evidence_reuse' must be a mapping")
+    reuse_cfg = EvidenceReuseConfig(
+        enabled=require_bool(reuse_raw, "enabled", False, f"{context}.evidence_reuse"),
+        scope=require_enum(
+            reuse_raw,
+            "scope",
+            "current_run",
+            VALID_EVIDENCE_REUSE_SCOPES,
+            f"{context}.evidence_reuse",
+        ),
+    )
+
     return WorkflowExecutionConfig(
         approved_workflows=approved,
         max_start_invocations=max_starts,
+        max_start_invocations_by_result_classification=start_limits,
         consecutive_start_delay_seconds=pacing,
         expected_results=er_cfg,
         cleanup=cleanup_cfg,
+        evidence_reuse=reuse_cfg,
     )
 
 
@@ -797,6 +966,31 @@ def build_execution_profile(raw: dict, source_path: str = "<in-memory>") -> Targ
             raise TargetServerConfigError(f"'{name}' must be a mapping")
         sections[name] = parser(section_raw)
 
+    cu_execution = sections["cu_execution"]
+    workflow_execution = sections["workflow_execution"]
+    approved_workflows = set(workflow_execution.approved_workflows)
+    if cu_execution.identifier_workflows.allow_reset_all and "reset_all_identifiers" not in approved_workflows:
+        raise TargetServerConfigError(
+            "cu_execution.identifier_workflows.allow_reset_all requires "
+            "workflow_execution.approved_workflows to include 'reset_all_identifiers'"
+        )
+
+    if cu_execution.counter_effects and COUNTER_EFFECT_WORKFLOW not in approved_workflows:
+        raise TargetServerConfigError(
+            "cu_execution.counter_effects requires workflow_execution.approved_workflows "
+            f"to include '{COUNTER_EFFECT_WORKFLOW}'"
+        )
+
+    allow_destructive = cu_execution.extension_fields.get("allow_destructive_methods", False)
+    if not isinstance(allow_destructive, bool):
+        raise TargetServerConfigError("cu_execution.extension_fields.allow_destructive_methods must be a boolean")
+    configured_destructive = sorted(DESTRUCTIVE_WORKFLOWS & approved_workflows)
+    if configured_destructive and not allow_destructive:
+        raise TargetServerConfigError(
+            "cu_execution.extension_fields.allow_destructive_methods must be true for approved workflows: "
+            f"{configured_destructive}"
+        )
+
     return TargetServerCuProfile(
         schema_version=sv,
         profile_name=profile_name,
@@ -804,10 +998,10 @@ def build_execution_profile(raw: dict, source_path: str = "<in-memory>") -> Targ
         capabilities_file=capabilities_file,
         source_path=source_path,
         target=sections["target"],
-        cu_execution=sections["cu_execution"],
+        cu_execution=cu_execution,
         selection=sections["selection"],
         triggers=sections["triggers"],
-        workflow_execution=sections["workflow_execution"],
+        workflow_execution=workflow_execution,
         reporting=sections["reporting"],
     )
 

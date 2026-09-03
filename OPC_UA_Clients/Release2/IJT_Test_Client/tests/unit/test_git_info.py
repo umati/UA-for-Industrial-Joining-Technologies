@@ -70,3 +70,16 @@ def test_short_git_sha_reads_packed_refs(tmp_path, monkeypatch):
     )
 
     assert short_git_sha(project_root) == "abcdef1"
+
+
+def test_short_git_sha_reads_loose_ref(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
+    repo_root = tmp_path / "repo"
+    project_root = _project_root_under(repo_root)
+    git_dir = repo_root / ".git"
+    ref_path = git_dir / "refs" / "heads" / "main"
+    ref_path.parent.mkdir(parents=True)
+    (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    ref_path.write_text("1234567890abcdef1234567890abcdef12345678\n", encoding="utf-8")
+
+    assert short_git_sha(project_root) == "1234567"

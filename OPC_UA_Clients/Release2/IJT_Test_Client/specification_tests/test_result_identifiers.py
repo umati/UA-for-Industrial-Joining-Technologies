@@ -278,17 +278,6 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
     _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_app)
     product_instance_uri = await _read_required_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_app)
 
-    await find_and_call_method(
-        ms,
-        BN.RESET_IDENTIFIERS,
-        ns_ijt,
-        ua.Variant(product_instance_uri, ua.VariantType.String),
-        ua.Variant([], ua.VariantType.String),  # IdentifierList (clear all)
-        ua.Variant(True, ua.VariantType.Boolean),
-        ua.Variant(False, ua.VariantType.Boolean),
-        timeout=_METHOD_TIMEOUT,
-    )
-
     test_id = _make_test_vin()
     try:
         send_result = await find_and_call_method(

@@ -15,15 +15,17 @@ import pytest
 
 from helpers.method_caller import MethodCallResult
 from helpers.namespaces import BN, JoiningProcessClassification, ResultClassification
-from helpers.result_collector import CorrelatedOperationOutcome
+from helpers.result_collector import CorrelatedOperationOutcome, ResultEventCapture, ResultProgression
 from helpers.target_server_cu_config import build_default_profile, build_execution_profile
 from helpers.target_server_triggers import (
     ManualEventTrigger,
     ManualResultTrigger,
+    RunScopedEvidenceStore,
     SplitEventTrigger,
     StartSelectedJoiningResultTrigger,
     TargetServerTriggerConfigurationError,
     TargetServerTriggerOutcome,
+    WorkflowActionEventTrigger,
     make_target_server_event_trigger,
     make_target_server_result_trigger,
 )
@@ -54,6 +56,9 @@ class TestTargetServerTriggerOutcome:
         assert o.starts_issued == 0
         assert o.results_confirmed == 0
         assert o.pre_trigger_baseline == {}
+        assert o.candidate_process_ids == ()
+        assert o.proven_process_ids == ()
+        assert o.rejected_process_ids == ()
 
     def test_starts_and_confirmations_are_reported_separately(self):
         """Started-but-unconfirmed evidence must be distinguishable."""
@@ -66,6 +71,1047 @@ class TestTargetServerTriggerOutcome:
         assert o.starts_issued == 2
         assert o.results_confirmed == 1
         assert o.operation_count == o.starts_issued
+
+
+@pytest.mark.asyncio
+async def test_target_combined_result_uses_only_trigger_owned_subscription():
+    from specification_tests.test_consolidated_results import _get_combined
+
+    final_result = MagicMock()
+    progression = ResultProgression(
+        classification=ResultClassification.BATCH_RESULT,
+        final_result=final_result,
+        all_results=(final_result,),
+    )
+    trigger = MagicMock()
+    trigger.owns_result_subscription = True
+    trigger.get_reusable_progression = AsyncMock(return_value=None)
+    trigger.trigger_batch_or_sync = AsyncMock(
+        return_value=TargetServerTriggerOutcome(
+            triggered=True,
+            result_progression=progression,
+        )
+    )
+    trigger.remember_result_progression = MagicMock(return_value=True)
+
+    with patch("specification_tests.test_consolidated_results.ResultCollector") as collector_type:
+        result = await _get_combined(
+            MagicMock(),
+            trigger,
+            {},
+            ResultClassification.BATCH_RESULT,
+        )
+
+    assert result is final_result
+    collector_type.assert_not_called()
+    trigger.trigger_batch_or_sync.assert_awaited_once()
+
+
+class TestRunScopedEvidenceStore:
+    def test_accepts_only_complete_lossless_progression(self):
+        store = RunScopedEvidenceStore()
+        key = ("evidence-key",)
+        complete = SimpleNamespace(is_complete=True, queue_overflow_count=0)
+        incomplete = SimpleNamespace(is_complete=False, queue_overflow_count=0)
+        overflowed = SimpleNamespace(is_complete=True, queue_overflow_count=1)
+
+        assert store.put(key, incomplete) is False
+        assert store.put(key, overflowed) is False
+        assert store.put(key, complete) is True
+        assert store.get(key) is complete
+        store.clear()
+        assert store.get(key) is None
+
+    @pytest.mark.asyncio
+    async def test_trigger_reuses_only_matching_fresh_process_fingerprint(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://evidence-test:4840"},
+                "workflow_execution": {"evidence_reuse": {"enabled": True}},
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        process = MagicMock(JoiningProcessId="Batch-1", JoiningProcessOriginId="Origin-1")
+        process.JoiningProcessMetaData.Classification = JoiningProcessClassification.BATCH
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        trigger._get_joining_process_list = AsyncMock(return_value=[process])
+        trigger._pending_evidence_key = trigger._workflow_evidence_key(
+            piu="Tool-1",
+            process_id="Batch-1",
+            process_origin_id="Origin-1",
+            processes=[process],
+            classification=ResultClassification.BATCH_RESULT,
+            selection_policy="first_compatible",
+            operation_count=3,
+            require_partials=False,
+        )
+        progression = SimpleNamespace(
+            classification=ResultClassification.BATCH_RESULT,
+            is_complete=True,
+            queue_overflow_count=0,
+        )
+
+        assert trigger.remember_result_progression(progression) is True
+        assert await trigger.get_reusable_progression(ResultClassification.BATCH_RESULT, 3) is progression
+        assert await trigger.get_reusable_progression(ResultClassification.BATCH_RESULT, 2) is None
+        assert (
+            await trigger.get_reusable_progression(
+                ResultClassification.BATCH_RESULT,
+                3,
+                require_partials=True,
+            )
+            is None
+        )
+
+        reconnected = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        reconnected._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        reconnected._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        reconnected._get_joining_process_list = AsyncMock(return_value=[process])
+        assert await reconnected.get_reusable_progression(ResultClassification.BATCH_RESULT, 3) is None
+
+        changed = MagicMock(JoiningProcessId="Batch-1", JoiningProcessOriginId="Origin-2")
+        changed.JoiningProcessMetaData.Classification = JoiningProcessClassification.BATCH
+        trigger._get_joining_process_list.return_value = [changed]
+        assert await trigger.get_reusable_progression(ResultClassification.BATCH_RESULT, 3) is None
+
+    @pytest.mark.asyncio
+    async def test_reuse_short_circuits_when_disabled_or_management_is_missing(self):
+        disabled = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            build_execution_profile({"schema_version": 1}),
+        )
+        assert await disabled.get_reusable_progression(ResultClassification.BATCH_RESULT) is None
+        assert disabled.remember_result_progression(SimpleNamespace(classification=3)) is False
+
+        enabled_profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"evidence_reuse": {"enabled": True}},
+            }
+        )
+        enabled = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, enabled_profile)
+        enabled._get_joining_process_management = AsyncMock(return_value=None)
+        assert await enabled.get_reusable_progression(ResultClassification.BATCH_RESULT) is None
+
+
+class TestPhysicalWorkflowSafety:
+    @staticmethod
+    def _identifier_profile():
+        return build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SendIdentifiers", "SendTextIdentifiers", "ResetIdentifiers"],
+                    },
+                    "identifier_workflows": {"enabled": True},
+                },
+                "workflow_execution": {
+                    "approved_workflows": [
+                        "structured_identifier_round_trip",
+                        "text_identifier_round_trip",
+                    ]
+                },
+            }
+        )
+
+    @pytest.mark.asyncio
+    async def test_identifier_failure_still_runs_selective_cleanup(self):
+        profile = self._identifier_profile()
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile, ns_ijt=2)
+        trigger._get_asset_method_set = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        calls = [
+            MethodCallResult(success=True),
+            MethodCallResult(success=True, output=[]),
+            MethodCallResult(success=True),
+            MethodCallResult(success=True, output=[]),
+        ]
+
+        with patch("helpers.method_caller.find_and_call_method", new=AsyncMock(side_effect=calls)) as method:
+            outcome = await trigger.run_identifier_round_trip(structured=False)
+
+        assert outcome.triggered is False
+        assert "did not return" in (outcome.skip_reason or "")
+        assert method.await_count == 4
+        cleanup_args = method.await_args_list[-2].args
+        assert cleanup_args[1] == BN.RESET_IDENTIFIERS
+        assert cleanup_args[-2].Value is False
+        assert cleanup_args[-1].Value is False
+
+    @pytest.mark.asyncio
+    async def test_identifier_cleanup_failure_is_reported(self):
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            self._identifier_profile(),
+            ns_ijt=2,
+        )
+        trigger._get_asset_method_set = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        calls = [
+            MethodCallResult(success=True),
+            MethodCallResult(success=True, output=["IJT-TEST-VALUE"]),
+            MethodCallResult(success=False, error="reset failed"),
+            MethodCallResult(success=False, error="final reset failed"),
+        ]
+
+        with (
+            patch("helpers.target_server_triggers.uuid.uuid4", return_value=SimpleNamespace(hex="VALUE")),
+            patch("helpers.method_caller.find_and_call_method", new=AsyncMock(side_effect=calls)) as method,
+        ):
+            outcome = await trigger.run_identifier_round_trip(structured=False)
+
+        assert outcome.triggered is False
+        assert "Final selective cleanup failed" in (outcome.skip_reason or "")
+        assert method.await_count == 4
+
+    @pytest.mark.asyncio
+    async def test_identifier_send_failure_still_attempts_selective_cleanup(self):
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            self._identifier_profile(),
+            ns_ijt=2,
+        )
+        trigger._get_asset_method_set = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+
+        with patch(
+            "helpers.method_caller.find_and_call_method",
+            new=AsyncMock(
+                side_effect=[
+                    MethodCallResult(success=False, error="send failed"),
+                    MethodCallResult(success=True),
+                    MethodCallResult(success=True, output=[]),
+                ]
+            ),
+        ) as method:
+            outcome = await trigger.run_identifier_round_trip(structured=False)
+
+        assert outcome.triggered is False
+        assert "SendTextIdentifiers failed" in (outcome.skip_reason or "")
+        assert method.await_count == 3
+        assert method.await_args_list[-2].args[1] == BN.RESET_IDENTIFIERS
+
+    @pytest.mark.asyncio
+    async def test_identifier_remaining_after_reset_is_reported(self):
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            self._identifier_profile(),
+            ns_ijt=2,
+        )
+        trigger._get_asset_method_set = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        calls = [
+            MethodCallResult(success=True),
+            MethodCallResult(success=True, output=["IJT-TEST-VALUE"]),
+            MethodCallResult(success=True),
+            MethodCallResult(success=True, output=["IJT-TEST-VALUE"]),
+            MethodCallResult(success=True),
+            MethodCallResult(success=True, output=[]),
+        ]
+
+        with (
+            patch("helpers.target_server_triggers.uuid.uuid4", return_value=SimpleNamespace(hex="VALUE")),
+            patch("helpers.method_caller.find_and_call_method", new=AsyncMock(side_effect=calls)),
+        ):
+            outcome = await trigger.run_identifier_round_trip(structured=False)
+
+        assert outcome.triggered is False
+        assert "remained after selective cleanup" in (outcome.skip_reason or "")
+        assert outcome.claim_mismatch is True
+
+    @pytest.mark.asyncio
+    async def test_dedicated_reset_all_requires_approval_and_verifies_empty_state(self):
+        denied = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            self._identifier_profile(),
+            ns_ijt=2,
+        )
+        assert (await denied.reset_all_identifiers()).triggered is False
+
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {"allowed_methods": ["ResetIdentifiers"]},
+                    "identifier_workflows": {"allow_reset_all": True},
+                },
+                "workflow_execution": {"approved_workflows": ["reset_all_identifiers"]},
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile, ns_ijt=2)
+        trigger._get_asset_method_set = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        with patch(
+            "helpers.method_caller.find_and_call_method",
+            new=AsyncMock(
+                side_effect=[
+                    MethodCallResult(success=True),
+                    MethodCallResult(success=True, output=[]),
+                ]
+            ),
+        ) as method:
+            outcome = await trigger.reset_all_identifiers()
+
+        assert outcome.triggered is True
+        reset_args = method.await_args_list[0].args
+        assert reset_args[1] == BN.RESET_IDENTIFIERS
+        assert reset_args[-3].Value == []
+        assert reset_args[-2].Value is True
+        assert reset_args[-1].Value is False
+
+    @pytest.mark.asyncio
+    async def test_structured_identifier_rejects_missing_loaded_type(self):
+        from asyncua import ua
+
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            self._identifier_profile(),
+            ns_ijt=2,
+        )
+        trigger._get_asset_method_set = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+
+        with patch.object(ua, "EntityDataType", None, create=True):
+            outcome = await trigger.run_identifier_round_trip(structured=True)
+
+        assert outcome.triggered is False
+        assert "EntityDataType is unavailable" in (outcome.skip_reason or "")
+
+    @pytest.mark.asyncio
+    async def test_asset_method_set_discovery_handles_missing_and_resolved_nodes(self):
+        client = MagicMock()
+        client.get_namespace_index = AsyncMock(return_value=3)
+        trigger = StartSelectedJoiningResultTrigger(client, MagicMock(), 2, self._identifier_profile(), ns_ijt=2)
+        trigger._resolve_ijt_namespace_index = AsyncMock(return_value=2)
+        method_set = MagicMock()
+
+        with (
+            patch(
+                "helpers.node_discovery.find_child_by_browse_name",
+                new=AsyncMock(side_effect=[None, MagicMock()]),
+            ),
+            patch(
+                "helpers.node_discovery.find_method_set",
+                new=AsyncMock(return_value=method_set),
+            ) as find_method_set,
+        ):
+            assert await trigger._get_asset_method_set() is None
+            assert await trigger._get_asset_method_set() is method_set
+
+        client.get_namespace_index.assert_awaited_once()
+        find_method_set.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_identifier_workflow_enforces_enablement_authorization_and_context(self):
+        disabled = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            build_execution_profile({"schema_version": 1}),
+        )
+        assert (await disabled.run_identifier_round_trip(structured=False)).triggered is False
+
+        profile = self._identifier_profile()
+        unauthorized_profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {"identifier_workflows": {"enabled": True}},
+                "workflow_execution": {
+                    "approved_workflows": [
+                        "structured_identifier_round_trip",
+                        "text_identifier_round_trip",
+                    ]
+                },
+            }
+        )
+        unauthorized = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, unauthorized_profile)
+        assert (await unauthorized.run_identifier_round_trip(structured=False)).triggered is False
+
+        missing_context = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        missing_context._get_asset_method_set = AsyncMock(return_value=None)
+        missing_context._resolve_tool_piu = AsyncMock(return_value="")
+        assert (await missing_context.run_identifier_round_trip(structured=False)).triggered is False
+
+    @pytest.mark.asyncio
+    async def test_structured_identifier_round_trip_verifies_and_cleans_owned_value(self):
+        from asyncua import ua
+
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            self._identifier_profile(),
+            ns_ijt=2,
+        )
+        trigger._get_asset_method_set = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        captured = {}
+
+        async def call_method(_parent, method_name, _ns, *args, **_kwargs):
+            if method_name == BN.SEND_IDENTIFIERS:
+                captured["value"] = args[1].Value[0].EntityId
+                return MethodCallResult(success=True)
+            if method_name == BN.GET_IDENTIFIERS:
+                if captured.get("read_once"):
+                    return MethodCallResult(success=True, output=[])
+                captured["read_once"] = True
+                return MethodCallResult(
+                    success=True,
+                    output=[SimpleNamespace(EntityId=captured["value"])],
+                )
+            return MethodCallResult(success=True)
+
+        with (
+            patch.object(ua, "EntityDataType", SimpleNamespace, create=True),
+            patch("helpers.method_caller.find_and_call_method", new=AsyncMock(side_effect=call_method)),
+        ):
+            outcome = await trigger.run_identifier_round_trip(structured=True)
+
+        assert outcome.triggered is True
+        assert captured["value"].startswith("IJT-TEST-")
+        assert outcome.expected_event_entity_ids == (captured["value"],)
+
+    @pytest.mark.asyncio
+    async def test_workflow_event_adapter_maps_only_known_physical_causes(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "triggers": {
+                    "event": {
+                        "mode": "workflow_actions",
+                        "actions": {
+                            "select_process_event": "select_process_event",
+                            "asset_enable_state_event": "asset_enable_state_event",
+                        },
+                    }
+                },
+            }
+        )
+        trigger = WorkflowActionEventTrigger(MagicMock(), MagicMock(), 2, profile)
+        trigger._driver = MagicMock()
+        trigger._driver.trigger_select_process_event = AsyncMock(return_value=TriggerOutcome(triggered=True))
+        trigger._driver.trigger_asset_enable_event = AsyncMock(return_value=TriggerOutcome(triggered=True))
+
+        from helpers.namespaces import SimulateEventType
+
+        selected = await trigger.trigger_event(SimulateEventType.PROGRAM_SELECTED)
+        disabled = await trigger.trigger_event(SimulateEventType.ASSET_DISABLED)
+        unsupported = await trigger.trigger_event(SimulateEventType.TOOL_CONNECTED)
+
+        assert selected.triggered is True
+        assert disabled.triggered is True
+        trigger._driver.trigger_select_process_event.assert_awaited_once_with()
+        trigger._driver.trigger_asset_enable_event.assert_awaited_once_with(False)
+        assert unsupported.triggered is False
+        assert trigger.is_simulator is False
+        assert trigger.active_event_timeout_s == profile.triggers.event.timeout_seconds
+        assert trigger.passive_observation_timeout_s == profile.triggers.event.timeout_seconds
+        assert (await trigger.trigger_event(SimulateEventType.PROGRAM_SELECTED, count=2)).triggered is False
+        assert (await trigger.trigger_bulk_events(1, 2, 1, 2)).triggered is False
+        assert (await trigger.trigger_condition(1)).triggered is False
+
+    def test_event_correlation_reads_entity_id_and_origin_id(self):
+        from specification_tests.test_events import _event_entity_ids
+
+        event = SimpleNamespace(
+            AssociatedEntities=[
+                SimpleNamespace(EntityId="Tool-1", EntityOriginId=""),
+                SimpleNamespace(EntityId="Process-1", EntityOriginId="Origin-1"),
+            ]
+        )
+        assert _event_entity_ids([event]) == {"tool-1", "process-1", "origin-1"}
+
+    @pytest.mark.asyncio
+    async def test_disable_event_action_unconditionally_restores_tool_enabled(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {"allowed_methods": ["EnableAsset"]},
+                    "extension_fields": {"allow_disable_asset": True},
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        trigger._set_tool_enabled = AsyncMock(side_effect=[True, True])
+
+        outcome = await trigger.trigger_asset_enable_event(False)
+
+        assert outcome.triggered is True
+        assert outcome.expected_event_entity_ids == ("Tool-1",)
+        assert trigger._set_tool_enabled.await_args_list[0].args == ("Tool-1", False)
+        assert trigger._set_tool_enabled.await_args_list[1].args == ("Tool-1", True)
+
+    @pytest.mark.asyncio
+    async def test_asset_event_action_enforces_permissions_and_reports_restore_failure(self):
+        unauthorized = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            build_execution_profile({"schema_version": 1}),
+        )
+        assert (await unauthorized.trigger_asset_enable_event(True)).triggered is False
+
+        allowed = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {"allowed_methods": ["EnableAsset"]},
+                },
+            }
+        )
+        no_disable = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, allowed)
+        assert (await no_disable.trigger_asset_enable_event(False)).triggered is False
+
+        restore_failure = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, allowed)
+        restore_failure._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        restore_failure._set_tool_enabled = AsyncMock(side_effect=[True, False])
+        outcome = await restore_failure.trigger_asset_enable_event(True)
+        assert outcome.triggered is False
+        assert "CRITICAL" in (outcome.skip_reason or "")
+
+    @pytest.mark.asyncio
+    async def test_select_process_event_uses_discovered_current_process(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {"allowed_methods": ["SelectJoiningProcess"]},
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        process = MagicMock(JoiningProcessId="Current-1")
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        trigger._get_joining_process_list = AsyncMock(return_value=[process])
+        trigger._choose_joining_process = MagicMock(return_value=process)
+        trigger._select_joining_process = AsyncMock(return_value=True)
+
+        outcome = await trigger.trigger_select_process_event()
+
+        assert outcome.triggered is True
+        assert outcome.joining_process_id == "Current-1"
+        assert outcome.expected_event_entity_ids == ("Current-1",)
+        trigger._get_joining_process_list.return_value = []
+        trigger._choose_joining_process.return_value = None
+        assert (await trigger.trigger_select_process_event()).triggered is False
+        assert (
+            await StartSelectedJoiningResultTrigger(
+                MagicMock(),
+                MagicMock(),
+                2,
+                build_execution_profile({"schema_version": 1}),
+            ).trigger_select_process_event()
+        ).triggered is False
+
+    @pytest.mark.asyncio
+    async def test_counter_effect_correlates_intervention_with_partial_affected_result(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "IncrementJoiningProcessCounter"],
+                    },
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "count": 1,
+                            "process_policy": "exact_match",
+                            "joining_process_id": "Job-1",
+                            "expected_result_classification": "batch",
+                        }
+                    ],
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            profile,
+            ns_ijt=2,
+            subscription_client=MagicMock(),
+        )
+        process = MagicMock(JoiningProcessId="Job-1")
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        trigger._get_joining_process_list = AsyncMock(return_value=[process])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._make_process_identification = MagicMock(return_value=MagicMock())
+        intervention = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(
+                Classification=ResultClassification.INTERVENTION_RESULT,
+                ResultId="intervention-1",
+                IsPartial=False,
+                ResultState=1,
+            ),
+            ResultContent=[],
+            References=[],
+        )
+        intervention_reference = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(ResultId="intervention-1"),
+        )
+        partial_batch = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(
+                Classification=ResultClassification.BATCH_RESULT,
+                ResultId="batch-1",
+                IsPartial=True,
+                ResultState=2,
+            ),
+            ResultContent=[intervention_reference],
+            References=[],
+        )
+        capture = ResultEventCapture(all_results=(partial_batch, intervention))
+        collector = MagicMock()
+        collector.__aenter__ = AsyncMock(return_value=collector)
+        collector.__aexit__ = AsyncMock(return_value=None)
+
+        async def collect_evidence(predicate, _timeout):
+            assert predicate(capture.all_results) is True
+            return capture
+
+        collector.collect_evidence = AsyncMock(side_effect=collect_evidence)
+
+        with (
+            patch("helpers.result_collector.ResultCollector", return_value=collector) as collector_type,
+            patch(
+                "helpers.method_caller.find_and_call_method",
+                new=AsyncMock(return_value=MethodCallResult(success=True)),
+            ),
+        ):
+            outcome = await trigger.trigger_counter_effect()
+
+        assert outcome.triggered is True
+        assert outcome.results_confirmed == 2
+        collector_type.assert_called_once()
+        collector.collect_evidence.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_counter_effect_rechecks_workflow_approval_at_runtime(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["IncrementJoiningProcessCounter"],
+                    },
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "joining_process_id": "Job-1",
+                        }
+                    ],
+                },
+            }
+        )
+        object.__setattr__(profile.workflow_execution, "approved_workflows", ())
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+
+        outcome = await trigger.trigger_counter_effect()
+
+        assert outcome.triggered is False
+        assert "not approved at runtime" in str(outcome.skip_reason)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("intervention_id", ["intervention-1", ""])
+    async def test_counter_effect_rejects_unrelated_affected_result(self, intervention_id):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "IncrementJoiningProcessCounter"],
+                    },
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "count": 1,
+                            "process_policy": "exact_match",
+                            "joining_process_id": "Job-1",
+                            "expected_result_classification": "batch",
+                        }
+                    ],
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            profile,
+            ns_ijt=2,
+            subscription_client=MagicMock(),
+        )
+        process = MagicMock(JoiningProcessId="Job-1")
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        trigger._get_joining_process_list = AsyncMock(return_value=[process])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._make_process_identification = MagicMock(return_value=MagicMock())
+        intervention = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(
+                Classification=ResultClassification.INTERVENTION_RESULT,
+                ResultId=intervention_id,
+                IsPartial=False,
+                ResultState=1,
+            ),
+            ResultContent=[],
+            References=[],
+        )
+        unrelated_batch = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(
+                Classification=ResultClassification.BATCH_RESULT,
+                ResultId="batch-1",
+                IsPartial=False,
+                ResultState=1,
+            ),
+            ResultContent=[],
+            References=[SimpleNamespace(ResultId="another-intervention")],
+        )
+        capture = ResultEventCapture(
+            all_results=(intervention, unrelated_batch),
+            timed_out=True,
+        )
+        collector = MagicMock()
+        collector.__aenter__ = AsyncMock(return_value=collector)
+        collector.__aexit__ = AsyncMock(return_value=None)
+        collector.collect_evidence = AsyncMock(return_value=capture)
+
+        with (
+            patch("helpers.result_collector.ResultCollector", return_value=collector),
+            patch(
+                "helpers.method_caller.find_and_call_method",
+                new=AsyncMock(return_value=MethodCallResult(success=True)),
+            ),
+        ):
+            outcome = await trigger.trigger_counter_effect()
+
+        assert outcome.triggered is False
+        assert "referencing the observed InterventionResult" in (outcome.skip_reason or "")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("capture", "expected_message"),
+        [
+            (ResultEventCapture(all_results=(), timed_out=True), "no complete InterventionResult"),
+            (
+                ResultEventCapture(
+                    all_results=(
+                        SimpleNamespace(
+                            ResultMetaData=SimpleNamespace(
+                                Classification=ResultClassification.INTERVENTION_RESULT,
+                                ResultId="intervention-1",
+                                IsPartial=False,
+                                ResultState=1,
+                            ),
+                            ResultContent=[],
+                            References=[],
+                        ),
+                    ),
+                    queue_overflow_count=1,
+                ),
+                "were dropped",
+            ),
+        ],
+    )
+    async def test_counter_effect_rejects_missing_or_lossy_intervention_evidence(self, capture, expected_message):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "IncrementJoiningProcessCounter"],
+                    },
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "joining_process_id": "Job-1",
+                        }
+                    ],
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            profile,
+            ns_ijt=2,
+            subscription_client=MagicMock(),
+        )
+        process = MagicMock(JoiningProcessId="Job-1")
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        trigger._get_joining_process_list = AsyncMock(return_value=[process])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._make_process_identification = MagicMock(return_value=MagicMock())
+        collector = MagicMock()
+        collector.__aenter__ = AsyncMock(return_value=collector)
+        collector.__aexit__ = AsyncMock(return_value=None)
+        collector.collect_evidence = AsyncMock(return_value=capture)
+
+        with (
+            patch("helpers.result_collector.ResultCollector", return_value=collector),
+            patch(
+                "helpers.method_caller.find_and_call_method",
+                new=AsyncMock(return_value=MethodCallResult(success=True)),
+            ),
+        ):
+            outcome = await trigger.trigger_counter_effect()
+
+        assert outcome.triggered is False
+        assert expected_message in (outcome.skip_reason or "")
+
+    @pytest.mark.asyncio
+    async def test_counter_effect_without_parent_expectation_requires_only_intervention(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "IncrementJoiningProcessCounter"],
+                    },
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "joining_process_id": "Job-1",
+                        }
+                    ],
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            profile,
+            ns_ijt=2,
+            subscription_client=MagicMock(),
+        )
+        process = MagicMock(JoiningProcessId="Job-1")
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        trigger._get_joining_process_list = AsyncMock(return_value=[process])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._make_process_identification = MagicMock(return_value=MagicMock())
+        intervention = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(
+                Classification=ResultClassification.INTERVENTION_RESULT,
+                ResultId="",
+                IsPartial=False,
+                ResultState=1,
+            ),
+            ResultContent=[],
+            References=[],
+        )
+        capture = ResultEventCapture(all_results=(intervention,))
+        collector = MagicMock()
+        collector.__aenter__ = AsyncMock(return_value=collector)
+        collector.__aexit__ = AsyncMock(return_value=None)
+
+        async def collect_evidence(predicate, _timeout):
+            assert predicate(capture.all_results) is True
+            return capture
+
+        collector.collect_evidence = AsyncMock(side_effect=collect_evidence)
+
+        with (
+            patch("helpers.result_collector.ResultCollector", return_value=collector),
+            patch(
+                "helpers.method_caller.find_and_call_method",
+                new=AsyncMock(return_value=MethodCallResult(success=True)),
+            ),
+        ):
+            outcome = await trigger.trigger_counter_effect()
+
+        assert outcome.triggered is True
+        assert outcome.results_confirmed == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("failure_stage", ["missing_process", "selection", "identification", "method"])
+    async def test_counter_effect_reports_pre_evidence_failures(self, failure_stage):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "IncrementJoiningProcessCounter"],
+                    },
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "joining_process_id": "Job-1",
+                        }
+                    ],
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            profile,
+            ns_ijt=2,
+            subscription_client=MagicMock(),
+        )
+        process = MagicMock(JoiningProcessId="Job-1")
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        trigger._get_joining_process_list = AsyncMock(
+            return_value=[] if failure_stage == "missing_process" else [process]
+        )
+        trigger._select_joining_process = AsyncMock(return_value=failure_stage != "selection")
+        trigger._make_process_identification = MagicMock(
+            return_value=None if failure_stage == "identification" else MagicMock()
+        )
+        collector = MagicMock()
+        collector.__aenter__ = AsyncMock(return_value=collector)
+        collector.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch("helpers.result_collector.ResultCollector", return_value=collector),
+            patch(
+                "helpers.method_caller.find_and_call_method",
+                new=AsyncMock(
+                    return_value=MethodCallResult(
+                        success=failure_stage != "method",
+                        error="counter failed",
+                    )
+                ),
+            ),
+        ):
+            outcome = await trigger.trigger_counter_effect()
+
+        assert outcome.triggered is False
+        expected = {
+            "missing_process": "No current process matched",
+            "selection": "SelectJoiningProcess failed",
+            "identification": "IdentificationDataType is unavailable",
+            "method": "IncrementJoiningProcessCounter failed",
+        }
+        assert expected[failure_stage] in (outcome.skip_reason or "")
+
+    @pytest.mark.asyncio
+    async def test_counter_effect_rejects_missing_scenario_and_subscription(self):
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            build_execution_profile({"schema_version": 1}),
+        )
+        assert (await trigger.trigger_counter_effect()).triggered is False
+
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["IncrementJoiningProcessCounter"],
+                    },
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "joining_process_id": "Job-1",
+                        }
+                    ],
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        assert (await trigger.trigger_counter_effect()).triggered is False
+
+    @pytest.mark.asyncio
+    async def test_counter_effect_rejects_unauthorized_method_before_controller_access(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "joining_process_id": "Job-1",
+                        }
+                    ],
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        trigger._get_joining_process_management = AsyncMock()
+
+        outcome = await trigger.trigger_counter_effect()
+
+        assert outcome.triggered is False
+        assert "not authorized" in (outcome.skip_reason or "")
+        trigger._get_joining_process_management.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_event_adapter_routes_identifier_workflow_and_factory(self):
+        from helpers.namespaces import SimulateEventType
+
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "triggers": {
+                    "event": {
+                        "mode": "workflow_actions",
+                        "actions": {"identifiers_event": "text_identifier_round_trip"},
+                    }
+                },
+            }
+        )
+        trigger = make_target_server_event_trigger(
+            profile,
+            client=MagicMock(),
+            joining_system_node=MagicMock(),
+            ns_app=2,
+        )
+        assert isinstance(trigger, WorkflowActionEventTrigger)
+        trigger._driver.run_identifier_round_trip = AsyncMock(return_value=TriggerOutcome(triggered=True))
+        outcome = await trigger.trigger_event(SimulateEventType.RECEIVED_IDENTIFIER)
+        assert outcome.triggered is True
+        trigger._driver.run_identifier_round_trip.assert_awaited_once_with(structured=False)
+
+        invalid_profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "triggers": {
+                    "event": {
+                        "mode": "workflow_actions",
+                        "actions": {},
+                    }
+                },
+            }
+        )
+        invalid = WorkflowActionEventTrigger(MagicMock(), MagicMock(), 2, invalid_profile)
+        assert (await invalid.trigger_event(SimulateEventType.RECEIVED_IDENTIFIER)).triggered is False
+
+        assert (await invalid.trigger_event(SimulateEventType.PROGRAM_SELECTED)).triggered is False
 
     def test_target_server_fields_set(self):
         o = TargetServerTriggerOutcome(
@@ -799,21 +1845,22 @@ class TestStartSelectedJoiningResultTrigger:
         )
         assert trigger._result_matches_context(result, "123e4567-e89b-12d3-a456-426614174000", "other") is False
 
-    def test_result_matches_context_accepts_origin_id_fallback(self, profile, mock_client, mock_joining_system):
-        """Servers that only tag the result with the origin id must still correlate."""
+    def test_result_matches_context_requires_process_id_and_origin_pair(
+        self, profile, mock_client, mock_joining_system
+    ):
+        """Origin correlation must use EntityOriginId on the selected process entity."""
         trigger = self._make_trigger(profile, mock_client, mock_joining_system)
         result = MagicMock(
             ResultMetaData=MagicMock(
                 AssociatedEntities=[
                     MagicMock(EntityId="urn:tool:1"),
-                    MagicMock(EntityId="ORIGIN-1"),
+                    MagicMock(EntityId="PROCESS-1", EntityOriginId="origin-1"),
                 ]
             )
         )
-        # Neither id alone: the configured process id is absent from the result.
-        assert trigger._result_matches_context(result, "urn:tool:1", "PROCESS-1") is False
-        # With the origin id supplied, the fallback matches.
+        assert trigger._result_matches_context(result, "urn:tool:1", "PROCESS-1") is True
         assert trigger._result_matches_context(result, "urn:tool:1", "PROCESS-1", "origin-1") is True
+        assert trigger._result_matches_context(result, "urn:tool:1", "PROCESS-1", "other-origin") is False
         # Tool correlation is still mandatory.
         assert trigger._result_matches_context(result, "urn:tool:2", "PROCESS-1", "ORIGIN-1") is False
 
@@ -1757,7 +2804,7 @@ class TestTargetServerTriggersExtendedBranches:
         trigger._resolve_tool_piu = AsyncMock(return_value="urn:tool:1")
         trigger._ensure_tool_enabled = AsyncMock(return_value=True)
         trigger._get_joining_process_list = AsyncMock(return_value=[MagicMock(JoiningProcessId="P1")])
-        trigger._choose_joining_process = MagicMock(return_value=None)
+        trigger._choose_joining_processes = MagicMock(return_value=[])
         outcome = await trigger._run_workflow(1)
         assert outcome.triggered is False
         assert "No joining process matched" in (outcome.skip_reason or "")
@@ -2023,7 +3070,7 @@ class TestTargetServerTriggersExtendedBranches:
         chosen_unknown = trigger._choose_joining_process(processes, classification="sync")
         assert chosen_unknown is None
 
-    def test_exact_match_rejects_process_with_wrong_or_unreadable_classification(self):
+    def test_result_specific_exact_match_allows_candidate_with_different_process_classification(self):
         profile = build_execution_profile(
             {
                 "schema_version": 1,
@@ -2043,8 +3090,72 @@ class TestTargetServerTriggersExtendedBranches:
         unreadable_class = MagicMock(JoiningProcessId="ConfiguredJob")
         unreadable_class.JoiningProcessMetaData.Classification = None
 
-        assert trigger._choose_joining_process([wrong_class], classification="job") is None
-        assert trigger._choose_joining_process([unreadable_class], classification="job") is None
+        assert trigger._choose_joining_process([wrong_class], classification="job") is wrong_class
+        assert trigger._choose_joining_process([unreadable_class], classification="job") is unreadable_class
+
+    def test_default_exact_selector_does_not_cross_classifications(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "ConfiguredProgram",
+                    }
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        program = MagicMock(JoiningProcessId="ConfiguredProgram")
+        program.JoiningProcessMetaData.Classification = JoiningProcessClassification.PROGRAM
+
+        assert trigger._choose_joining_process([program], classification="batch") is None
+
+    def test_first_compatible_batch_falls_back_to_job_candidate(self):
+        profile = build_execution_profile({"schema_version": 1})
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        program = MagicMock(JoiningProcessId="Program")
+        program.JoiningProcessMetaData.Classification = JoiningProcessClassification.PROGRAM
+        job = MagicMock(JoiningProcessId="Job")
+        job.JoiningProcessMetaData.Classification = JoiningProcessClassification.JOB
+
+        assert trigger._choose_joining_process([program, job], classification="batch") is job
+
+    def test_first_compatible_prefers_direct_batch_over_job(self):
+        profile = build_execution_profile({"schema_version": 1})
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        job = MagicMock(JoiningProcessId="Job")
+        job.JoiningProcessMetaData.Classification = JoiningProcessClassification.JOB
+        batch = MagicMock(JoiningProcessId="Batch")
+        batch.JoiningProcessMetaData.Classification = JoiningProcessClassification.BATCH
+
+        assert trigger._choose_joining_process([job, batch], classification="batch") is batch
+
+    def test_all_compatible_returns_direct_and_compound_candidates(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_processes": {
+                        "batch": {
+                            "policy": "all_compatible",
+                        }
+                    }
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        program = MagicMock(JoiningProcessId="Program")
+        program.JoiningProcessMetaData.Classification = JoiningProcessClassification.PROGRAM
+        job = MagicMock(JoiningProcessId="Job")
+        job.JoiningProcessMetaData.Classification = JoiningProcessClassification.JOB
+        batch = MagicMock(JoiningProcessId="Batch")
+        batch.JoiningProcessMetaData.Classification = JoiningProcessClassification.BATCH
+
+        assert trigger._choose_joining_processes([program, job, batch], classification="batch") == [
+            batch,
+            job,
+        ]
 
     @pytest.mark.asyncio
     async def test_get_selection_for_intervention_with_counter_parent_process(self):
@@ -2293,6 +3404,12 @@ class TestTargetServerTriggersExtendedBranches:
         mock_collector.collect_correlated_operation_outcome = AsyncMock(
             return_value=CorrelatedOperationOutcome(operation_confirmed=True, terminal_result=job_result)
         )
+        progression = ResultProgression(
+            classification=ResultClassification.JOB_RESULT,
+            final_result=job_result,
+            all_results=(job_result,),
+        )
+        mock_collector.collect_progression = AsyncMock(return_value=progression)
 
         with patch("helpers.result_collector.ResultCollector", return_value=mock_collector):
             outcome = await trigger._run_workflow(6, classification="job")
@@ -2305,10 +3422,11 @@ class TestTargetServerTriggersExtendedBranches:
         assert mock_collector.collect_correlated_operation_outcome.await_count == 1
         assert mock_collector.discard_pending.call_count == 1
         assert outcome.operation_count == 1
+        assert outcome.result_progression is progression
 
     @pytest.mark.asyncio
-    async def test_run_workflow_multi_operation_runs_all_starts_without_terminal_result(self):
-        """Without a terminal batch/job result every configured start must be issued."""
+    async def test_run_workflow_rejects_candidate_without_terminal_result_evidence(self):
+        """Operation results cannot prove that a candidate emits the requested JobResult."""
         profile = build_execution_profile(
             {
                 "schema_version": 1,
@@ -2356,10 +3474,179 @@ class TestTargetServerTriggersExtendedBranches:
         with patch("helpers.result_collector.ResultCollector", return_value=mock_collector):
             outcome = await trigger._run_workflow(20, classification="job")
 
-        assert outcome.triggered is True
+        assert outcome.triggered is False
+        assert "metadata alone does not prove result capability" in (outcome.skip_reason or "")
         assert trigger._start_selected_joining.await_count == 3
         assert mock_collector.collect_correlated_operation_outcome.await_count == 3
         assert outcome.operation_count == 3
+
+    @pytest.mark.asyncio
+    async def test_batch_workflow_never_exceeds_requested_operation_count(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {"allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining"]}
+                },
+                "selection": {
+                    "tool": {"policy": "exact_match", "product_instance_uri": "Tool_1"},
+                    "joining_processes": {
+                        "batch": {"policy": "exact_match", "joining_process_id": "Batch_1"},
+                    },
+                },
+                "workflow_execution": {
+                    "max_start_invocations": 6,
+                    "expected_results": {"timeout_seconds": 5},
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(), MagicMock(), 2, profile, ns_ijt=2, subscription_client=MagicMock()
+        )
+        process = MagicMock()
+        process.JoiningProcessId = "Batch_1"
+        process.JoiningProcessOriginId = "Batch_Origin_1"
+        process.JoiningProcessMetaData.Classification = JoiningProcessClassification.BATCH
+        process.AssociatedEntities = []
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._get_joining_process_list = AsyncMock(return_value=[process])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._start_selected_joining = AsyncMock(return_value=True)
+
+        collector = MagicMock()
+        collector.__aenter__ = AsyncMock(return_value=collector)
+        collector.__aexit__ = AsyncMock(return_value=None)
+        collector.discard_pending = MagicMock(return_value=None)
+        collector.collect_pending_terminal = MagicMock(return_value=None)
+        collector.collect_correlated_operation_outcome = AsyncMock(
+            return_value=CorrelatedOperationOutcome(operation_confirmed=True, terminal_result=None)
+        )
+
+        with patch("helpers.result_collector.ResultCollector", return_value=collector):
+            outcome = await trigger._run_workflow(20, classification="batch")
+
+        assert outcome.triggered is False
+        assert trigger._start_selected_joining.await_count == 3
+        assert outcome.starts_issued == 3
+
+    @pytest.mark.asyncio
+    async def test_cross_classification_candidate_requires_subscription_evidence(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining"],
+                    }
+                },
+                "selection": {
+                    "tool": {"policy": "exact_match", "product_instance_uri": "Tool_1"},
+                    "joining_processes": {
+                        "batch": {
+                            "policy": "exact_match",
+                            "joining_process_id": "ImplicitBatchJob",
+                        }
+                    },
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile, ns_ijt=2)
+        process = MagicMock(JoiningProcessId="ImplicitBatchJob", JoiningProcessOriginId="")
+        process.JoiningProcessMetaData.Classification = JoiningProcessClassification.JOB
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._get_joining_process_list = AsyncMock(return_value=[process])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._start_selected_joining = AsyncMock(return_value=True)
+
+        outcome = await trigger._run_workflow(1, classification="batch")
+
+        assert outcome.triggered is False
+        assert "subscription client" in (outcome.skip_reason or "")
+        trigger._start_selected_joining.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("policy", "terminal_by_candidate", "proven_ids", "rejected_ids", "selected_id"),
+        [
+            ("first_compatible", (False, True), ("ImplicitBatchJob",), ("DirectBatch",), "ImplicitBatchJob"),
+            ("all_compatible", (True, False), ("DirectBatch",), ("ImplicitBatchJob",), "DirectBatch"),
+        ],
+    )
+    async def test_run_workflow_exercises_ordered_candidates_by_policy(
+        self,
+        policy,
+        terminal_by_candidate,
+        proven_ids,
+        rejected_ids,
+        selected_id,
+    ):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining"],
+                    }
+                },
+                "selection": {
+                    "tool": {"policy": "exact_match", "product_instance_uri": "Tool_1"},
+                    "joining_processes": {"batch": {"policy": policy}},
+                },
+                "workflow_execution": {"max_start_invocations": 1},
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            profile,
+            ns_ijt=2,
+            subscription_client=MagicMock(),
+        )
+        direct = MagicMock(JoiningProcessId="DirectBatch", JoiningProcessOriginId="")
+        direct.JoiningProcessMetaData.Classification = JoiningProcessClassification.BATCH
+        compound = MagicMock(JoiningProcessId="ImplicitBatchJob", JoiningProcessOriginId="")
+        compound.JoiningProcessMetaData.Classification = JoiningProcessClassification.JOB
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._get_joining_process_list = AsyncMock(return_value=[compound, direct])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._start_selected_joining = AsyncMock(return_value=True)
+
+        terminal = MagicMock()
+        collectors = []
+        for has_terminal in terminal_by_candidate:
+            collector = MagicMock()
+            collector.__aenter__ = AsyncMock(return_value=collector)
+            collector.__aexit__ = AsyncMock(return_value=None)
+            collector.discard_pending.return_value = 0
+            collector.collect_pending_terminal.return_value = None
+            collector.collect_correlated_operation_outcome = AsyncMock(
+                return_value=CorrelatedOperationOutcome(
+                    operation_confirmed=True,
+                    terminal_result=terminal if has_terminal else None,
+                )
+            )
+            collector.collect_progression = AsyncMock(
+                return_value=ResultProgression(
+                    classification=ResultClassification.BATCH_RESULT,
+                    final_result=terminal,
+                    all_results=(terminal,),
+                )
+            )
+            collectors.append(collector)
+
+        with patch("helpers.result_collector.ResultCollector", side_effect=collectors):
+            outcome = await trigger._run_workflow(1, classification="batch")
+
+        assert outcome.triggered is True
+        assert outcome.joining_process_id == selected_id
+        assert outcome.candidate_process_ids == ("DirectBatch", "ImplicitBatchJob")
+        assert outcome.proven_process_ids == proven_ids
+        assert outcome.rejected_process_ids == rejected_ids
+        assert outcome.starts_issued == 2
+        assert outcome.results_confirmed == 2
+        assert trigger._select_joining_process.await_count == 2
+        assert trigger._start_selected_joining.await_count == 2
 
     @pytest.mark.asyncio
     async def test_run_workflow_consumes_late_queued_terminal_before_next_start(self):
@@ -2401,6 +3688,13 @@ class TestTargetServerTriggersExtendedBranches:
             return_value=CorrelatedOperationOutcome(operation_confirmed=True)
         )
         collector.collect_pending_terminal.return_value = terminal
+        collector.collect_progression = AsyncMock(
+            return_value=ResultProgression(
+                classification=ResultClassification.JOB_RESULT,
+                final_result=terminal,
+                all_results=(terminal,),
+            )
+        )
 
         with patch("helpers.result_collector.ResultCollector", return_value=collector):
             outcome = await trigger._run_workflow(6, classification="job")
@@ -2525,7 +3819,8 @@ class TestAbortAndResetWorkflows:
                             "ResetJoiningProcess",
                             "EnableAsset",
                         ]
-                    }
+                    },
+                    "extension_fields": {"allow_destructive_methods": True},
                 },
                 "triggers": {"result": {"mode": "start_selected_joining"}},
                 "workflow_execution": {
@@ -2590,6 +3885,22 @@ class TestAbortAndResetWorkflows:
         outcome_reset = await t.trigger_reset_job()
         assert outcome_reset.triggered is False
         assert "is not listed in workflows.approved" in str(outcome_reset.skip_reason)
+
+    @pytest.mark.asyncio
+    async def test_abort_and_reset_recheck_destructive_approval_at_runtime(self, trigger):
+        trigger._profile.cu_execution.extension_fields["allow_destructive_methods"] = False
+        trigger._run_abort_workflow = AsyncMock()
+        trigger._run_reset_workflow = AsyncMock()
+
+        abort = await trigger.trigger_abort_job()
+        reset = await trigger.trigger_reset_job()
+
+        assert abort.triggered is False
+        assert reset.triggered is False
+        assert "runtime destructive-operation approval" in str(abort.skip_reason)
+        assert "runtime destructive-operation approval" in str(reset.skip_reason)
+        trigger._run_abort_workflow.assert_not_awaited()
+        trigger._run_reset_workflow.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_abort_workflow_success(self, trigger):
@@ -2733,7 +4044,8 @@ class TestAbortAndResetWorkflows:
             "cu_execution": {
                 "state_changing_methods": {
                     "allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining", "AbortJoiningProcess"]
-                }
+                },
+                "extension_fields": {"allow_destructive_methods": True},
             },
             "triggers": {"result": {"mode": "start_selected_joining"}},
             "workflow_execution": {"approved_workflows": ["remote_abort_job", "remote_reset_job"]},
@@ -3052,3 +4364,216 @@ class TestAbortAndResetWorkflows:
         assert res_reset.triggered is False
         assert res_reset.inconclusive is True
         assert "StepId is unavailable" in str(res_reset.skip_reason)
+
+    @pytest.mark.asyncio
+    async def test_trigger_defensive_coverage_branches(self, trigger):
+        from dataclasses import replace
+
+        # 1. line 278: owns_result_subscription
+        assert trigger.owns_result_subscription is True
+
+        # 2. line 335: _result_matches_context with only origin
+        entity_tool = MagicMock(EntityId="urn:tool:1", EntityOriginId="")
+        entity_proc = MagicMock(EntityId="process-1", EntityOriginId="origin-only")
+        res_meta = MagicMock(AssociatedEntities=[entity_tool, entity_proc])
+        res_data = MagicMock(ResultMetaData=res_meta)
+        assert (
+            trigger._result_matches_context(
+                res_data,
+                piu="urn:tool:1",
+                joining_process_id="",
+                joining_process_origin_id="origin-only",
+            )
+            is True
+        )
+        assert (
+            trigger._result_matches_context(
+                res_data,
+                piu="urn:tool:1",
+                joining_process_id="",
+                joining_process_origin_id="wrong-origin",
+            )
+            is False
+        )
+
+        # 3. line 879: trigger_counter_effect index out of bounds
+        orig_profile = trigger._profile
+        trigger._profile = replace(
+            orig_profile,
+            workflow_execution=replace(
+                orig_profile.workflow_execution,
+                approved_workflows=("counter_intervention",),
+            ),
+        )
+        try:
+            res_bounds = await trigger.trigger_counter_effect(999)
+            assert res_bounds.triggered is False
+            assert "No counter-effect scenario exists" in res_bounds.skip_reason
+        finally:
+            trigger._profile = orig_profile
+
+        # 4. lines 791, 801, 823, 841: reset_all_identifiers defensive paths
+        profile_reset_all = replace(
+            orig_profile,
+            workflow_execution=replace(
+                orig_profile.workflow_execution,
+                approved_workflows=("reset_all_identifiers",),
+            ),
+            cu_execution=replace(
+                orig_profile.cu_execution,
+                identifier_workflows=replace(
+                    orig_profile.cu_execution.identifier_workflows,
+                    allow_reset_all=True,
+                ),
+            ),
+        )
+        # line 791: not allowed
+        profile_disallowed = replace(
+            profile_reset_all,
+            cu_execution=replace(
+                profile_reset_all.cu_execution,
+                state_changing_methods=replace(
+                    profile_reset_all.cu_execution.state_changing_methods,
+                    allowed_methods=(),
+                ),
+            ),
+        )
+        trigger._profile = profile_disallowed
+        try:
+            res = await trigger.reset_all_identifiers()
+            assert res.triggered is False
+            assert "not authorized" in res.skip_reason
+
+            # line 801: method_set is None
+            profile_allowed = replace(
+                profile_reset_all,
+                cu_execution=replace(
+                    profile_reset_all.cu_execution,
+                    state_changing_methods=replace(
+                        profile_reset_all.cu_execution.state_changing_methods,
+                        allowed_methods=(BN.RESET_IDENTIFIERS,),
+                    ),
+                ),
+            )
+            trigger._profile = profile_allowed
+            with patch.object(trigger, "_get_asset_method_set", AsyncMock(return_value=None)):
+                res = await trigger.reset_all_identifiers()
+                assert res.triggered is False
+                assert "unavailable" in res.skip_reason
+
+            # line 823: reset fails
+            mock_ms = MagicMock()
+            with (
+                patch.object(trigger, "_get_asset_method_set", AsyncMock(return_value=mock_ms)),
+                patch.object(trigger, "_resolve_tool_piu", AsyncMock(return_value="urn:tool:1")),
+                patch.object(trigger, "_resolve_ijt_namespace_index", AsyncMock(return_value=1)),
+                patch(
+                    "helpers.method_caller.find_and_call_method",
+                    AsyncMock(return_value=MethodCallResult(success=False, error="BadError")),
+                ),
+            ):
+                res = await trigger.reset_all_identifiers()
+                assert res.triggered is False
+                assert "ResetAll ResetIdentifiers failed" in res.skip_reason
+
+            # line 841: after verification fails or has non-empty output
+            with (
+                patch.object(trigger, "_get_asset_method_set", AsyncMock(return_value=mock_ms)),
+                patch.object(trigger, "_resolve_tool_piu", AsyncMock(return_value="urn:tool:1")),
+                patch.object(trigger, "_resolve_ijt_namespace_index", AsyncMock(return_value=1)),
+                patch(
+                    "helpers.method_caller.find_and_call_method",
+                    AsyncMock(
+                        side_effect=[
+                            MethodCallResult(success=True, output=[]),
+                            MethodCallResult(success=True, output=["remaining-id"]),
+                        ]
+                    ),
+                ),
+            ):
+                res = await trigger.reset_all_identifiers()
+                assert res.triggered is False
+                assert "did not verify an empty identifier state" in res.skip_reason
+        finally:
+            trigger._profile = orig_profile
+
+        # 5. line 761: run_identifier_round_trip cleanup verification not verified
+        profile_rt = replace(
+            orig_profile,
+            workflow_execution=replace(
+                orig_profile.workflow_execution,
+                approved_workflows=("text_identifier_round_trip",),
+            ),
+            cu_execution=replace(
+                orig_profile.cu_execution,
+                state_changing_methods=replace(
+                    orig_profile.cu_execution.state_changing_methods,
+                    allowed_methods=(
+                        "SendTextIdentifiers",
+                        "SendIdentifiers",
+                        "ResetIdentifiers",
+                    ),
+                ),
+                identifier_workflows=replace(
+                    orig_profile.cu_execution.identifier_workflows,
+                    enabled=True,
+                ),
+            ),
+        )
+        trigger._profile = profile_rt
+        try:
+            with (
+                patch.object(trigger, "_resolve_tool_piu", AsyncMock(return_value="urn:tool:1")),
+                patch.object(trigger, "_get_asset_method_set", AsyncMock(return_value=MagicMock())),
+                patch.object(trigger, "_resolve_ijt_namespace_index", AsyncMock(return_value=1)),
+                patch(
+                    "helpers.identifier_utils.contains_identifier",
+                    side_effect=[True, True, True],
+                ),
+                patch(
+                    "helpers.method_caller.find_and_call_method",
+                    AsyncMock(
+                        side_effect=[
+                            MethodCallResult(success=True, output=[]),  # send
+                            MethodCallResult(success=True, output=[]),  # get (read_back)
+                            MethodCallResult(success=True, output=[]),  # reset
+                            MethodCallResult(success=True, output=[]),  # get (after)
+                            MethodCallResult(success=True, output=[]),  # final_reset
+                            MethodCallResult(success=True, output=[]),  # final_after
+                        ]
+                    ),
+                ),
+            ):
+                res_rt = await trigger.run_identifier_round_trip(structured=False)
+                assert res_rt.triggered is False
+                assert "Final selective cleanup could not be verified" in res_rt.skip_reason
+        finally:
+            trigger._profile = orig_profile
+
+        # 6. line 1373: get_reusable_progression when operation_count is None
+        profile_proc = replace(
+            orig_profile,
+            workflow_execution=replace(
+                orig_profile.workflow_execution,
+                evidence_reuse=replace(
+                    orig_profile.workflow_execution.evidence_reuse,
+                    enabled=True,
+                ),
+                max_start_invocations_by_result_classification={"single": 3},
+                max_start_invocations=5,
+            ),
+        )
+        trigger._profile = profile_proc
+        try:
+            with (
+                patch.object(trigger, "_get_joining_process_management", AsyncMock(return_value=MagicMock())),
+                patch.object(trigger, "_resolve_tool_piu", AsyncMock(return_value="urn:tool:1")),
+                patch.object(
+                    trigger, "_get_joining_process_list", AsyncMock(return_value=[{"JoiningProcessId": "p1"}])
+                ),
+                patch.object(trigger, "_choose_joining_processes", return_value=[{"JoiningProcessId": "p1"}]),
+            ):
+                proc_out = await trigger.get_reusable_progression(1, operation_count=None)
+                assert proc_out is None
+        finally:
+            trigger._profile = orig_profile

@@ -32,6 +32,7 @@ class EventCollector:
             maxsize=1_000
         )  # bounded; prevents unbounded memory growth in long sessions
         self._subscription: Optional[Any] = None
+        self._dropped_event_count = 0
 
     @property
     def subscription_id(self) -> int | None:
@@ -47,6 +48,7 @@ class EventCollector:
         try:
             self._queue.put_nowait(event)
         except asyncio.QueueFull:
+            self._dropped_event_count += 1
             logger.warning("EventCollector queue full, dropping event: %s", event)
 
     def datachange_notification(self, _node, _val, _data) -> None:
@@ -106,6 +108,7 @@ class EventCollector:
         # delete was issued (or if delete failed and delivery continued briefly).
         while not self._queue.empty():
             self._queue.get_nowait()
+        self._dropped_event_count = 0
 
         last_exc: Optional[Exception] = None
         nodes = list(event_type_nodes) if isinstance(event_type_nodes, (list, tuple)) else [event_type_nodes]
@@ -166,6 +169,11 @@ class EventCollector:
         while not self._queue.empty():
             pending.append(self._queue.get_nowait())
         return pending
+
+    @property
+    def dropped_event_count(self) -> int:
+        """Return events dropped by the local queue during the current subscription."""
+        return self._dropped_event_count
 
     async def unsubscribe(self) -> None:
         """Delete the subscription if one is active."""

@@ -55,7 +55,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from dataclasses import dataclass, field
+import time
+import uuid
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from helpers.namespaces import (
@@ -137,6 +139,9 @@ class TargetServerTriggerOutcome(TriggerOutcome):
                                 ``starts_issued > results_confirmed`` means
                                 "started but not confirmed".
         pre_trigger_baseline:   Snapshot captured before the trigger.
+        candidate_process_ids:  Ordered process IDs actually attempted.
+        proven_process_ids:     Candidates that emitted the requested evidence.
+        rejected_process_ids:   Attempted candidates that did not prove capability.
     """
 
     trigger_mode: str = ""
@@ -147,6 +152,71 @@ class TargetServerTriggerOutcome(TriggerOutcome):
     starts_issued: int = 0
     results_confirmed: int = 0
     pre_trigger_baseline: dict[str, Any] = field(default_factory=dict)
+    candidate_process_ids: tuple[str, ...] = ()
+    proven_process_ids: tuple[str, ...] = ()
+    rejected_process_ids: tuple[str, ...] = ()
+    result_progression: Any | None = None
+    claim_mismatch: bool = False
+    expected_event_entity_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class WorkflowEvidenceKey:
+    """Inputs that make captured result evidence safe to reuse within this process."""
+
+    endpoint: str
+    application_name: str
+    application_version: str
+    client_identity: int
+    product_instance_uri: str
+    joining_process_id: str
+    joining_process_origin_id: str
+    process_list_fingerprint: tuple[tuple[str, str, int | None], ...]
+    result_classification: int
+    selection_policy: str
+    operation_count: int
+    require_partials: bool
+    referenced_child_completion_policy: str
+    max_start_invocations: int
+    consecutive_start_delay_seconds: float
+
+
+@dataclass(frozen=True)
+class WorkflowEvidenceRecord:
+    """Immutable run-scoped result progression with capture provenance."""
+
+    key: WorkflowEvidenceKey
+    progression: Any
+    captured_monotonic: float
+
+
+class RunScopedEvidenceStore:
+    """In-memory evidence store; records never cross a Python test run."""
+
+    def __init__(self) -> None:
+        self._records: dict[WorkflowEvidenceKey, WorkflowEvidenceRecord] = {}
+
+    def get(self, key: WorkflowEvidenceKey) -> Any | None:
+        record = self._records.get(key)
+        return record.progression if record is not None else None
+
+    def put(self, key: WorkflowEvidenceKey, progression: Any) -> bool:
+        if not getattr(progression, "is_complete", False):
+            return False
+        if getattr(progression, "queue_overflow_count", 0):
+            return False
+        self._records[key] = WorkflowEvidenceRecord(
+            key=key,
+            progression=progression,
+            captured_monotonic=time.monotonic(),
+        )
+        return True
+
+    def clear(self) -> None:
+        self._records.clear()
+
+
+_RUN_SCOPED_EVIDENCE = RunScopedEvidenceStore()
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +266,17 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         """Observation budget when no operation was started by this trigger."""
         return self._profile.triggers.result.timeout_seconds
 
+    @property
+    def allow_partial_referenced_children(self) -> bool:
+        """Return whether open-batch partials may resolve referenced child IDs."""
+        policy = self._profile.workflow_execution.expected_results.referenced_child_completion_policy
+        return policy == "partial_allowed"
+
+    @property
+    def owns_result_subscription(self) -> bool:
+        """Return True because this trigger captures and returns its own result evidence."""
+        return True
+
     def __init__(
         self,
         client: Any,
@@ -214,6 +295,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         self._profile = profile
         self._subscription_client = subscription_client
         self._last_method_failure = ""
+        self._pending_evidence_key: WorkflowEvidenceKey | None = None
 
     @staticmethod
     def _result_matches_context(
@@ -224,22 +306,33 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
 
         meta = getattr(result_data, "ResultMetaData", None)
         entities = getattr(meta, "AssociatedEntities", None) or ()
-        entity_ids: set[str] = set()
+        entity_identities: set[tuple[str, str]] = set()
         for entity in entities:
             value = entity.Value if isinstance(entity, ua.Variant) else entity
             entity_id = getattr(value, "EntityId", None)
             if entity_id is not None and str(entity_id):
-                entity_ids.add(str(entity_id).lower().strip())
+                entity_origin_id = getattr(value, "EntityOriginId", None)
+                entity_identities.add(
+                    (
+                        str(entity_id).lower().strip(),
+                        str(entity_origin_id or "").lower().strip(),
+                    )
+                )
 
         piu_lower = piu.lower().strip()
         jp_id_lower = joining_process_id.lower().strip()
         jp_origin_lower = joining_process_origin_id.lower().strip()
+        entity_ids = {entity_id for entity_id, _ in entity_identities}
 
         piu_match = not piu_lower or piu_lower in entity_ids
-        jp_match = (not jp_id_lower and not jp_origin_lower) or (
-            (bool(jp_id_lower) and jp_id_lower in entity_ids)
-            or (bool(jp_origin_lower) and jp_origin_lower in entity_ids)
-        )
+        if not jp_id_lower and not jp_origin_lower:
+            jp_match = True
+        elif jp_id_lower and jp_origin_lower:
+            jp_match = (jp_id_lower, jp_origin_lower) in entity_identities
+        elif jp_id_lower:
+            jp_match = jp_id_lower in entity_ids
+        else:
+            jp_match = any(origin_id == jp_origin_lower for _, origin_id in entity_identities)
         return piu_match and jp_match
 
     @staticmethod
@@ -365,8 +458,8 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         ns_ijt = await self._resolve_ijt_namespace_index()
         return await find_child_by_browse_name(self._joining_system, BN.JOINING_PROCESS_MANAGEMENT, ns_ijt)
 
-    async def _enable_tool(self, piu: str) -> bool:
-        """Enable the selected tool before starting when the profile allows it."""
+    async def _set_tool_enabled(self, piu: str, enabled: bool) -> bool:
+        """Set the selected Tool state through the authorized EnableAsset method."""
         from asyncua import ua
 
         from helpers.method_caller import find_and_call_method
@@ -391,11 +484,15 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             BN.ENABLE_ASSET,
             ns_ijt,
             ua.Variant(piu, ua.VariantType.String),
-            ua.Variant(True, ua.VariantType.Boolean),
+            ua.Variant(enabled, ua.VariantType.Boolean),
             timeout=self._profile.cu_execution.default_timeout_seconds,
             target_server_authorized=True,
         )
         return self._method_succeeded(BN.ENABLE_ASSET, result)
+
+    async def _enable_tool(self, piu: str) -> bool:
+        """Enable the selected tool before starting when the profile allows it."""
+        return await self._set_tool_enabled(piu, True)
 
     async def _read_tool_enabled(self, piu: str) -> bool | None:
         """Read the current persistent Tool enabled state."""
@@ -421,6 +518,532 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         if await self._read_tool_enabled(piu) is True:
             return True
         return await self._enable_tool(piu)
+
+    async def trigger_select_process_event(self) -> TargetServerTriggerOutcome:
+        """Invoke exactly one SelectJoiningProcess action after the caller subscribes."""
+        if not self._profile.cu_execution.state_changing_methods.allow_state_changing_method("SelectJoiningProcess"):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="SelectJoiningProcess is not authorized by the SUT manifest.",
+                method="SelectJoiningProcess",
+                trigger_mode="workflow_actions",
+            )
+        jpm_node = await self._get_joining_process_management()
+        piu = await self._resolve_tool_piu()
+        processes = await self._get_joining_process_list(jpm_node, piu) if jpm_node is not None else []
+        process = self._choose_joining_process(processes)
+        if process is None:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="No joining process matched the configured event action selection.",
+                method="SelectJoiningProcess",
+                trigger_mode="workflow_actions",
+                product_instance_uri=piu,
+            )
+        selected = await self._select_joining_process(jpm_node, process, piu)
+        process_id = self._process_field(
+            process,
+            "JoiningProcessId",
+            "JoiningProcessIdentification",
+            "Id",
+        )
+        return TargetServerTriggerOutcome(
+            triggered=selected,
+            skip_reason=None if selected else f"SelectJoiningProcess failed: {self._last_method_failure}",
+            method="SelectJoiningProcess",
+            trigger_mode="workflow_actions",
+            product_instance_uri=piu,
+            joining_process_id=process_id,
+            expected_event_entity_ids=(process_id,) if selected and process_id else (),
+        )
+
+    async def trigger_asset_enable_event(self, enabled: bool) -> TargetServerTriggerOutcome:
+        """Cause one asset-enable transition and always leave the persistent Tool enabled."""
+        if not self._profile.cu_execution.state_changing_methods.allow_state_changing_method("EnableAsset"):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="EnableAsset is not authorized by the SUT manifest.",
+                method="EnableAsset",
+                trigger_mode="workflow_actions",
+            )
+        if not enabled and not self._profile.cu_execution.extension_fields.get("allow_disable_asset", False):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="EnableAsset(false) requires risk_approvals.allow_disable_asset=true.",
+                method="EnableAsset",
+                trigger_mode="workflow_actions",
+            )
+
+        piu = await self._resolve_tool_piu()
+        changed = False
+        failure = ""
+        try:
+            changed = await self._set_tool_enabled(piu, enabled)
+            failure = self._last_method_failure
+        finally:
+            restored = await self._set_tool_enabled(piu, True)
+            restore_failure = self._last_method_failure
+
+        if not restored:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"CRITICAL: final EnableAsset(true) restoration failed: {restore_failure}",
+                method="EnableAsset",
+                trigger_mode="workflow_actions",
+                product_instance_uri=piu,
+            )
+        return TargetServerTriggerOutcome(
+            triggered=changed,
+            skip_reason=None if changed else f"EnableAsset({enabled}) failed: {failure}",
+            method="EnableAsset",
+            trigger_mode="workflow_actions",
+            product_instance_uri=piu,
+            expected_event_entity_ids=(piu,) if changed and piu else (),
+        )
+
+    async def _get_asset_method_set(self) -> Any | None:
+        from helpers.namespaces import BN, NS_DI
+        from helpers.node_discovery import find_child_by_browse_name, find_method_set
+
+        ns_ijt = await self._resolve_ijt_namespace_index()
+        asset_management = await find_child_by_browse_name(self._joining_system, BN.ASSET_MANAGEMENT, ns_ijt)
+        if asset_management is None:
+            return None
+        if self._ns_di is None:
+            self._ns_di = await self._client.get_namespace_index(NS_DI)
+        return await find_method_set(asset_management, self._ns_di, ns_ijt, self._ns_app)
+
+    async def run_identifier_round_trip(self, *, structured: bool) -> TargetServerTriggerOutcome:
+        """Send one run-owned identifier, verify it, and selectively clean it in all paths."""
+        from asyncua import ua
+
+        from helpers.identifier_utils import contains_identifier
+        from helpers.method_caller import find_and_call_method
+        from helpers.namespaces import BN
+
+        config = self._profile.cu_execution.identifier_workflows
+        workflow = "structured_identifier_round_trip" if structured else "text_identifier_round_trip"
+        method_name = BN.SEND_IDENTIFIERS if structured else BN.SEND_TEXT_IDENTIFIERS
+        required_methods = {method_name, BN.RESET_IDENTIFIERS}
+        allowed = self._profile.cu_execution.state_changing_methods
+        if not config.enabled or workflow not in self._profile.workflow_execution.approved_workflows:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"Workflow '{workflow}' is not enabled and approved.",
+                method=method_name,
+                trigger_mode="identifier_round_trip",
+            )
+        if any(not allowed.allow_state_changing_method(name) for name in required_methods):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"Workflow '{workflow}' is missing method authorization.",
+                method=method_name,
+                trigger_mode="identifier_round_trip",
+            )
+
+        method_set = await self._get_asset_method_set()
+        piu = await self._resolve_tool_piu()
+        if method_set is None or not piu:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="AssetManagement MethodSet or Tool ProductInstanceUri is unavailable.",
+                method=method_name,
+                trigger_mode="identifier_round_trip",
+            )
+
+        owned_value = f"IJT-TEST-{uuid.uuid4().hex.upper()}"
+        identifier_name = owned_value
+        if structured:
+            entity_type = getattr(ua, "EntityDataType", None)
+            if entity_type is None:
+                return TargetServerTriggerOutcome(
+                    triggered=False,
+                    skip_reason="EntityDataType is unavailable after type-definition loading.",
+                    method=method_name,
+                    trigger_mode="identifier_round_trip",
+                )
+            entity = entity_type()
+            entity.Name = identifier_name
+            entity.Description = "Run-owned IJT conformance identifier"
+            entity.EntityId = owned_value
+            entity.EntityOriginId = ""
+            entity.IsExternal = True
+            entity.EntityType = 20
+            send_payload = ua.Variant([entity], ua.VariantType.ExtensionObject)
+        else:
+            send_payload = ua.Variant([owned_value], ua.VariantType.String)
+
+        piu_arg = ua.Variant(piu, ua.VariantType.String)
+        names_arg = ua.Variant([identifier_name], ua.VariantType.String)
+        cleanup_verified = False
+        execution_started = False
+        failure = ""
+        try:
+            execution_started = True
+            sent = await find_and_call_method(
+                method_set,
+                method_name,
+                await self._resolve_ijt_namespace_index(),
+                piu_arg,
+                send_payload,
+                timeout=self._profile.cu_execution.default_timeout_seconds,
+                target_server_authorized=True,
+            )
+            if not self._method_succeeded(method_name, sent):
+                failure = f"{method_name} failed: {self._last_method_failure}"
+            if not failure:
+                read_back = await find_and_call_method(
+                    method_set,
+                    BN.GET_IDENTIFIERS,
+                    await self._resolve_ijt_namespace_index(),
+                    piu_arg,
+                    names_arg,
+                    timeout=self._profile.cu_execution.default_timeout_seconds,
+                )
+                if not read_back.success or not contains_identifier(read_back.output_list, owned_value):
+                    failure = f"GetIdentifiers did not return the run-owned value {owned_value!r}."
+            if not failure:
+                reset = await find_and_call_method(
+                    method_set,
+                    BN.RESET_IDENTIFIERS,
+                    await self._resolve_ijt_namespace_index(),
+                    piu_arg,
+                    names_arg,
+                    ua.Variant(False, ua.VariantType.Boolean),
+                    ua.Variant(False, ua.VariantType.Boolean),
+                    timeout=self._profile.cu_execution.default_timeout_seconds,
+                    target_server_authorized=True,
+                )
+                if not self._method_succeeded(BN.RESET_IDENTIFIERS, reset):
+                    failure = f"Selective ResetIdentifiers failed: {self._last_method_failure}"
+            if not failure:
+                after = await find_and_call_method(
+                    method_set,
+                    BN.GET_IDENTIFIERS,
+                    await self._resolve_ijt_namespace_index(),
+                    piu_arg,
+                    names_arg,
+                    timeout=self._profile.cu_execution.default_timeout_seconds,
+                )
+                cleanup_verified = after.success and not contains_identifier(after.output_list, owned_value)
+                if not cleanup_verified:
+                    failure = f"Run-owned identifier {owned_value!r} remained after selective cleanup."
+        finally:
+            if not cleanup_verified:
+                final_reset = await find_and_call_method(
+                    method_set,
+                    BN.RESET_IDENTIFIERS,
+                    await self._resolve_ijt_namespace_index(),
+                    piu_arg,
+                    names_arg,
+                    ua.Variant(False, ua.VariantType.Boolean),
+                    ua.Variant(False, ua.VariantType.Boolean),
+                    timeout=self._profile.cu_execution.default_timeout_seconds,
+                    target_server_authorized=True,
+                )
+                reset_succeeded = self._method_succeeded(BN.RESET_IDENTIFIERS, final_reset)
+                if reset_succeeded:
+                    final_after = await find_and_call_method(
+                        method_set,
+                        BN.GET_IDENTIFIERS,
+                        await self._resolve_ijt_namespace_index(),
+                        piu_arg,
+                        names_arg,
+                        timeout=self._profile.cu_execution.default_timeout_seconds,
+                    )
+                    cleanup_verified = final_after.success and not contains_identifier(
+                        final_after.output_list,
+                        owned_value,
+                    )
+                if not reset_succeeded:
+                    failure = f"{failure} Final selective cleanup failed: {self._last_method_failure}".strip()
+                elif not cleanup_verified:
+                    failure = f"{failure} Final selective cleanup could not be verified.".strip()
+
+        return TargetServerTriggerOutcome(
+            triggered=not failure and cleanup_verified,
+            skip_reason=failure or None,
+            method=method_name,
+            trigger_mode="identifier_round_trip",
+            product_instance_uri=piu,
+            claim_mismatch=execution_started and bool(failure),
+            expected_event_entity_ids=(owned_value,) if not failure and cleanup_verified else (),
+        )
+
+    async def reset_all_identifiers(self) -> TargetServerTriggerOutcome:
+        """Run the separately approved broad identifier reset and verify empty state."""
+        from asyncua import ua
+
+        from helpers.method_caller import find_and_call_method
+        from helpers.namespaces import BN
+
+        config = self._profile.cu_execution.identifier_workflows
+        approved = set(self._profile.workflow_execution.approved_workflows)
+        allowed = self._profile.cu_execution.state_changing_methods
+        if not config.allow_reset_all or "reset_all_identifiers" not in approved:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="Dedicated workflow 'reset_all_identifiers' is not explicitly approved.",
+                method=BN.RESET_IDENTIFIERS,
+                trigger_mode="reset_all_identifiers",
+            )
+        if not allowed.allow_state_changing_method(BN.RESET_IDENTIFIERS):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="ResetIdentifiers is not authorized by the SUT manifest.",
+                method=BN.RESET_IDENTIFIERS,
+                trigger_mode="reset_all_identifiers",
+            )
+
+        method_set = await self._get_asset_method_set()
+        piu = await self._resolve_tool_piu()
+        if method_set is None or not piu:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="AssetManagement MethodSet or Tool ProductInstanceUri is unavailable.",
+                method=BN.RESET_IDENTIFIERS,
+                trigger_mode="reset_all_identifiers",
+            )
+
+        ns_ijt = await self._resolve_ijt_namespace_index()
+        piu_arg = ua.Variant(piu, ua.VariantType.String)
+        empty_names = ua.Variant([], ua.VariantType.String)
+        reset = await find_and_call_method(
+            method_set,
+            BN.RESET_IDENTIFIERS,
+            ns_ijt,
+            piu_arg,
+            empty_names,
+            ua.Variant(True, ua.VariantType.Boolean),
+            ua.Variant(False, ua.VariantType.Boolean),
+            timeout=self._profile.cu_execution.default_timeout_seconds,
+            target_server_authorized=True,
+        )
+        if not self._method_succeeded(BN.RESET_IDENTIFIERS, reset):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"ResetAll ResetIdentifiers failed: {self._last_method_failure}",
+                method=BN.RESET_IDENTIFIERS,
+                trigger_mode="reset_all_identifiers",
+                product_instance_uri=piu,
+                claim_mismatch=True,
+            )
+
+        after = await find_and_call_method(
+            method_set,
+            BN.GET_IDENTIFIERS,
+            ns_ijt,
+            piu_arg,
+            empty_names,
+            timeout=self._profile.cu_execution.default_timeout_seconds,
+        )
+        if not after.success or any(after.output_list):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="ResetAll completed, but GetIdentifiers did not verify an empty identifier state.",
+                method=BN.RESET_IDENTIFIERS,
+                trigger_mode="reset_all_identifiers",
+                product_instance_uri=piu,
+                claim_mismatch=True,
+            )
+        return TargetServerTriggerOutcome(
+            triggered=True,
+            method=BN.RESET_IDENTIFIERS,
+            trigger_mode="reset_all_identifiers",
+            product_instance_uri=piu,
+        )
+
+    async def trigger_counter_effect(self, effect_index: int = 0) -> TargetServerTriggerOutcome:
+        """Invoke one counter mutation and correlate its InterventionResult with the affected parent."""
+        from asyncua import ua
+
+        from helpers.method_caller import find_and_call_method
+        from helpers.namespaces import NS_IJT_BASE
+        from helpers.result_collector import (
+            ResultCollector,
+            get_classification,
+            get_result_id,
+            is_terminal_completed,
+            references_result_id,
+        )
+
+        effects = self._profile.cu_execution.counter_effects
+        if "counter_intervention" not in self._profile.workflow_execution.approved_workflows:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="Workflow 'counter_intervention' is not approved at runtime.",
+                method="CounterEffect",
+                trigger_mode="counter_effect",
+            )
+        if effect_index < 0 or effect_index >= len(effects):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"No counter-effect scenario exists at index {effect_index}.",
+                method="CounterEffect",
+                trigger_mode="counter_effect",
+            )
+        effect = effects[effect_index]
+        if not self._profile.cu_execution.state_changing_methods.allow_state_changing_method(effect.method):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"{effect.method} is not authorized by the SUT manifest.",
+                method=effect.method,
+                trigger_mode="counter_effect",
+            )
+        if self._subscription_client is None:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="Counter-effect workflows require a separate subscription client.",
+                method=effect.method,
+                trigger_mode="counter_effect",
+            )
+
+        jpm_node = await self._get_joining_process_management()
+        piu = await self._resolve_tool_piu()
+        processes = await self._get_joining_process_list(jpm_node, piu) if jpm_node is not None else []
+        candidates = [
+            process
+            for process in processes
+            if self._process_field(
+                process,
+                "JoiningProcessId",
+                "JoiningProcessIdentification",
+                "Id",
+            ).lower()
+            == effect.joining_process_id.lower()
+        ]
+        if not candidates:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="No current process matched the configured counter-effect scenario.",
+                method=effect.method,
+                trigger_mode="counter_effect",
+                product_instance_uri=piu,
+            )
+
+        process = candidates[0]
+        process_id = self._process_field(
+            process,
+            "JoiningProcessId",
+            "JoiningProcessIdentification",
+            "Id",
+        )
+        if not await self._select_joining_process(jpm_node, process, piu):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"SelectJoiningProcess failed for counter candidate '{process_id}'.",
+                method=effect.method,
+                trigger_mode="counter_effect",
+                product_instance_uri=piu,
+                joining_process_id=process_id,
+            )
+        identification = self._make_process_identification(process)
+        if identification is None:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="JoiningProcessIdentificationDataType is unavailable.",
+                method=effect.method,
+                trigger_mode="counter_effect",
+                product_instance_uri=piu,
+                joining_process_id=process_id,
+            )
+
+        expected_classification = self._result_classification_value(effect.expected_result_classification)
+        ns_indices = {NS_IJT_BASE: await self._resolve_ijt_namespace_index()}
+
+        def find_evidence(results: tuple[Any, ...]) -> tuple[Any | None, Any | None]:
+            interventions = [
+                candidate
+                for candidate in results
+                if is_terminal_completed(candidate, ResultClassification.INTERVENTION_RESULT)
+            ]
+            for intervention_candidate in reversed(interventions):
+                if expected_classification is None:
+                    return intervention_candidate, None
+                intervention_id = get_result_id(intervention_candidate)
+                if not intervention_id:
+                    continue
+                for affected_candidate in reversed(results):
+                    if get_classification(affected_candidate) == expected_classification and references_result_id(
+                        affected_candidate, intervention_id, results
+                    ):
+                        return intervention_candidate, affected_candidate
+            return (interventions[-1], None) if interventions else (None, None)
+
+        def evidence_ready(results: tuple[Any, ...]) -> bool:
+            intervention_candidate, affected_candidate = find_evidence(results)
+            return intervention_candidate is not None and (
+                expected_classification is None or affected_candidate is not None
+            )
+
+        async with ResultCollector(self._subscription_client, ns_indices, is_simulator=False) as collector:
+            result = await find_and_call_method(
+                jpm_node,
+                effect.method,
+                await self._resolve_ijt_namespace_index(),
+                ua.Variant(piu, ua.VariantType.String),
+                ua.Variant(identification, ua.VariantType.ExtensionObject),
+                ua.Variant(effect.count, ua.VariantType.UInt32),
+                timeout=self._profile.cu_execution.default_timeout_seconds,
+                target_server_authorized=True,
+            )
+            if not self._method_succeeded(effect.method, result, observe_uncertain=True):
+                return TargetServerTriggerOutcome(
+                    triggered=False,
+                    skip_reason=f"{effect.method} failed: {self._last_method_failure}",
+                    method=effect.method,
+                    trigger_mode="counter_effect",
+                    product_instance_uri=piu,
+                    joining_process_id=process_id,
+                )
+            capture = await collector.collect_evidence(
+                evidence_ready,
+                self.active_result_timeout_s,
+            )
+        intervention, affected = find_evidence(capture.all_results)
+
+        if capture.queue_overflow_count:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=(
+                    f"{effect.method} result evidence is incomplete because "
+                    f"{capture.queue_overflow_count} subscribed event(s) were dropped."
+                ),
+                method=effect.method,
+                trigger_mode="counter_effect",
+                product_instance_uri=piu,
+                joining_process_id=process_id,
+            )
+        if intervention is None:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=f"{effect.method} produced no complete InterventionResult evidence.",
+                method=effect.method,
+                trigger_mode="counter_effect",
+                product_instance_uri=piu,
+                joining_process_id=process_id,
+            )
+        if expected_classification is not None and affected is None:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=(
+                    f"{effect.method} produced no {expected_classification} result update "
+                    "referencing the observed InterventionResult."
+                ),
+                method=effect.method,
+                trigger_mode="counter_effect",
+                product_instance_uri=piu,
+                joining_process_id=process_id,
+                results_confirmed=1,
+            )
+        return TargetServerTriggerOutcome(
+            triggered=True,
+            method=effect.method,
+            trigger_mode="counter_effect",
+            product_instance_uri=piu,
+            joining_process_id=process_id,
+            results_confirmed=1 + int(affected is not None),
+        )
 
     async def _resolve_tool_piu(self) -> str:
         """Return the configured or discovered tool ProductInstanceUri."""
@@ -561,27 +1184,20 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             or getattr(selection, "selection_name", "")
         )
 
-    def _choose_joining_process(self, processes: list[Any], classification: str | int | None = None) -> Any | None:
-        """Choose a process dynamically according to manifest input or specification metadata.
-
-        1. If exact input is configured in manifest: match configured JoiningProcessId (preferred),
-           JoiningProcessOriginId, or SelectionName.
-        2. If first_ready / default:
-           - For 'single': pick the first process with joining-process Classification == 2 (PROGRAM).
-           - For 'sync': pick the first process with joining-process Classification == 3 (SYNC).
-           - For 'batch': pick the first process with joining-process Classification == 4 (BATCH).
-           - For 'job': pick the first process with joining-process Classification == 5 (JOB).
-           - If no classification is requested: return processes[0].
-           - If a specific classification IS requested and not found: return None (clean skip).
-        """
+    def _choose_joining_processes(
+        self,
+        processes: list[Any],
+        classification: str | int | None = None,
+    ) -> list[Any]:
+        """Return ordered process candidates from fresh GetJoiningProcessList evidence."""
         if not processes:
-            return None
+            return []
 
         selection, _ = self._get_selection_for_classification(classification)
         norm_key = self._normalize_classification(classification)
         required_process_classification = joining_process_classification_value(norm_key)
         if norm_key and norm_key != "intervention" and required_process_classification is None:
-            return None
+            return []
 
         def matches_requested_classification(process: Any) -> bool:
             return (
@@ -589,14 +1205,13 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 or _process_classification(process) == required_process_classification
             )
 
-        # Path 1: User provided explicit input in profile/manifest
         if selection.policy == "exact_match":
             if not self._selection_has_selector(selection):
                 logger.warning(
                     "Joining process selection policy is 'exact_match' but no "
                     "joining_process_id/joining_process_origin_id/selection_name is configured"
                 )
-                return None
+                return []
 
             selectors = (
                 (
@@ -620,29 +1235,185 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             for configured_value, read_value in selectors:
                 if not configured_value:
                     continue
-                for process in processes:
-                    if read_value(
-                        process
-                    ).strip().lower() == configured_value.strip().lower() and matches_requested_classification(process):
-                        return process
+                matches = [
+                    process
+                    for process in processes
+                    if read_value(process).strip().lower() == configured_value.strip().lower()
+                ]
+                if matches:
+                    return self._validate_exact_candidates(
+                        matches,
+                        norm_key,
+                        matches_requested_classification,
+                    )
             if selection.selection_name:
-                for process in processes:
-                    if matches_requested_classification(process) and any(
+                matches = [
+                    process
+                    for process in processes
+                    if any(
                         selection.selection_name.strip().lower() == name.strip().lower()
                         for name in self._selection_names(process)
-                    ):
-                        return process
-                return None
-            return None
+                    )
+                ]
+                return self._validate_exact_candidates(
+                    matches,
+                    norm_key,
+                    matches_requested_classification,
+                )
+            return []
 
-        # Path 2: Specification metadata classification
         if not norm_key or norm_key == "intervention":
-            return processes[0]
+            return list(processes) if selection.policy == "all_compatible" else [processes[0]]
 
-        return next(
-            (process for process in processes if _process_classification(process) == required_process_classification),
-            None,
+        direct = [process for process in processes if matches_requested_classification(process)]
+        compound = (
+            [
+                process
+                for process in processes
+                if _process_classification(process) == JoiningProcessClassification.JOB and process not in direct
+            ]
+            if norm_key in {"batch", "sync"}
+            else []
         )
+        return direct + compound
+
+    def _validate_exact_candidates(
+        self,
+        matches: list[Any],
+        norm_key: str,
+        matches_requested_classification: Any,
+    ) -> list[Any]:
+        """Allow cross-classification exact candidates only for an explicit result-specific selector."""
+        if not matches or not norm_key or norm_key == "intervention":
+            return matches[:1]
+        direct = [process for process in matches if matches_requested_classification(process)]
+        if direct:
+            return direct[:1]
+        if norm_key in self._profile.selection.joining_processes:
+            logger.info(
+                "Trying explicitly configured %s process candidate with process classification %s; "
+                "the result stream must prove the requested result classification",
+                norm_key,
+                _process_classification(matches[0]),
+            )
+            return matches[:1]
+        return []
+
+    def _choose_joining_process(self, processes: list[Any], classification: str | int | None = None) -> Any | None:
+        """Return the first ordered process candidate for backward-compatible callers."""
+        candidates = self._choose_joining_processes(processes, classification)
+        return candidates[0] if candidates else None
+
+    def _process_list_fingerprint(self, processes: list[Any]) -> tuple[tuple[str, str, int | None], ...]:
+        """Return a stable fingerprint of the current advertised process list."""
+        entries = [
+            (
+                self._process_field(process, "JoiningProcessId", "JoiningProcessIdentification", "Id"),
+                self._process_field(
+                    process,
+                    "JoiningProcessOriginId",
+                    "JoiningProcessIdentificationOrigin",
+                ),
+                _process_classification(process),
+            )
+            for process in processes
+        ]
+        return tuple(sorted(entries, key=lambda item: (item[0], item[1], -1 if item[2] is None else item[2])))
+
+    def _workflow_evidence_key(
+        self,
+        *,
+        piu: str,
+        process_id: str,
+        process_origin_id: str,
+        processes: list[Any],
+        classification: int,
+        selection_policy: str,
+        operation_count: int,
+        require_partials: bool,
+    ) -> WorkflowEvidenceKey:
+        return WorkflowEvidenceKey(
+            endpoint=self._profile.target.endpoint,
+            application_name=self._profile.target.expected_server.application_name,
+            application_version=self._profile.target.expected_server.application_version,
+            client_identity=id(self._client),
+            product_instance_uri=piu,
+            joining_process_id=process_id,
+            joining_process_origin_id=process_origin_id,
+            process_list_fingerprint=self._process_list_fingerprint(processes),
+            result_classification=classification,
+            selection_policy=selection_policy,
+            operation_count=operation_count,
+            require_partials=require_partials,
+            referenced_child_completion_policy=(
+                self._profile.workflow_execution.expected_results.referenced_child_completion_policy
+            ),
+            max_start_invocations=self._profile.workflow_execution.max_start_invocations,
+            consecutive_start_delay_seconds=self._profile.workflow_execution.consecutive_start_delay_seconds,
+        )
+
+    async def get_reusable_progression(
+        self,
+        classification: int,
+        operation_count: int | None = None,
+        *,
+        require_partials: bool = False,
+    ) -> Any | None:
+        """Return complete evidence only when fresh discovery reproduces its provenance key."""
+        if not self._profile.workflow_execution.evidence_reuse.enabled:
+            return None
+        jpm_node = await self._get_joining_process_management()
+        if jpm_node is None:
+            return None
+        piu = await self._resolve_tool_piu()
+        processes = await self._get_joining_process_list(jpm_node, piu)
+        selection, _ = self._get_selection_for_classification(classification)
+        classification_key = self._normalize_classification(classification)
+        if operation_count is None:
+            operation_count = self._profile.workflow_execution.max_start_invocations_by_result_classification.get(
+                classification_key,
+                self._profile.workflow_execution.max_start_invocations,
+            )
+        operation_count = min(operation_count, self._profile.workflow_execution.max_start_invocations)
+        for candidate in self._choose_joining_processes(processes, classification):
+            process_id = self._process_field(
+                candidate,
+                "JoiningProcessId",
+                "JoiningProcessIdentification",
+                "Id",
+            )
+            process_origin_id = self._process_field(
+                candidate,
+                "JoiningProcessOriginId",
+                "JoiningProcessIdentificationOrigin",
+            )
+            key = self._workflow_evidence_key(
+                piu=piu,
+                process_id=process_id,
+                process_origin_id=process_origin_id,
+                processes=processes,
+                classification=classification,
+                selection_policy=selection.policy,
+                operation_count=operation_count,
+                require_partials=require_partials,
+            )
+            progression = _RUN_SCOPED_EVIDENCE.get(key)
+            if progression is not None:
+                return progression
+        return None
+
+    def remember_result_progression(self, progression: Any) -> bool:
+        """Store complete progression captured immediately after this trigger."""
+        key = self._pending_evidence_key
+        if (
+            not self._profile.workflow_execution.evidence_reuse.enabled
+            or key is None
+            or getattr(progression, "classification", None) != key.result_classification
+        ):
+            return False
+        stored = _RUN_SCOPED_EVIDENCE.put(key, progression)
+        self._pending_evidence_key = None
+        return stored
 
     def _describe_joining_processes(self, processes: list[Any]) -> str:
         """Return compact identifiers for selection diagnostics."""
@@ -872,12 +1643,16 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         return self._method_succeeded(BN.START_SELECTED_JOINING, result)
 
     async def _run_workflow(
-        self, operation_count: int = 1, classification: str | int | None = None
+        self,
+        operation_count: int = 1,
+        classification: str | int | None = None,
+        *,
+        require_partials: bool = False,
     ) -> TargetServerTriggerOutcome:
-        """Execute the full StartSelectedJoining workflow."""
+        """Discover and exercise ordered candidates within the configured policy."""
+        self._pending_evidence_key = None
         sc = self._profile.cu_execution.state_changing_methods
 
-        # Permission check — abort before any state changes
         if not sc.allow_state_changing_method("SelectJoiningProcess"):
             skip_reason = (
                 "SelectJoiningProcess is not in the allowed state-changing methods list. "
@@ -910,7 +1685,6 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
 
         processes = await self._get_joining_process_list(jpm_node, piu)
-
         if not processes:
             return TargetServerTriggerOutcome(
                 triggered=False,
@@ -919,8 +1693,8 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 trigger_mode="start_selected_joining",
             )
 
-        target_process = self._choose_joining_process(processes, classification=classification)
-        if target_process is None:
+        candidates = self._choose_joining_processes(processes, classification=classification)
+        if not candidates:
             selection, norm_key = self._get_selection_for_classification(classification)
             label = f"{norm_key} " if norm_key else ""
             if selection.policy == "exact_match" and not self._selection_has_selector(selection):
@@ -946,6 +1720,82 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 product_instance_uri=piu,
             )
 
+        selection, _ = self._get_selection_for_classification(classification)
+        candidate_ids = tuple(
+            self._process_field(
+                candidate,
+                "JoiningProcessId",
+                "JoiningProcessIdentification",
+                "Id",
+            )
+            for candidate in candidates
+        )
+        attempted_ids: list[str] = []
+        proven_ids: list[str] = []
+        rejected_ids: list[str] = []
+        outcomes: list[TargetServerTriggerOutcome] = []
+
+        for candidate, candidate_id in zip(candidates, candidate_ids, strict=True):
+            attempted_ids.append(candidate_id)
+            outcome = await self._run_candidate_workflow(
+                jpm_node,
+                piu,
+                candidate,
+                operation_count=operation_count,
+                classification=classification,
+                require_partials=require_partials,
+            )
+            outcomes.append(outcome)
+            if outcome.triggered:
+                proven_ids.append(candidate_id)
+                if selection.policy != "all_compatible":
+                    break
+            else:
+                rejected_ids.append(candidate_id)
+
+        successful = next((outcome for outcome in outcomes if outcome.triggered), None)
+        final_outcome = successful or outcomes[-1]
+        summarized = replace(
+            final_outcome,
+            operation_count=sum(outcome.operation_count for outcome in outcomes),
+            starts_issued=sum(outcome.starts_issued for outcome in outcomes),
+            results_confirmed=sum(outcome.results_confirmed for outcome in outcomes),
+            candidate_process_ids=tuple(attempted_ids),
+            proven_process_ids=tuple(proven_ids),
+            rejected_process_ids=tuple(rejected_ids),
+        )
+        requested_classification = self._result_classification_value(classification)
+        if summarized.triggered and requested_classification is not None:
+            self._pending_evidence_key = self._workflow_evidence_key(
+                piu=piu,
+                process_id=summarized.joining_process_id,
+                process_origin_id=summarized.joining_process_origin_id,
+                processes=processes,
+                classification=requested_classification,
+                selection_policy=selection.policy,
+                operation_count=min(
+                    operation_count,
+                    self._profile.workflow_execution.max_start_invocations_by_result_classification.get(
+                        self._normalize_classification(classification),
+                        self._profile.workflow_execution.max_start_invocations,
+                    ),
+                    self._profile.workflow_execution.max_start_invocations,
+                ),
+                require_partials=require_partials,
+            )
+        return summarized
+
+    async def _run_candidate_workflow(
+        self,
+        jpm_node: Any,
+        piu: str,
+        target_process: Any,
+        *,
+        operation_count: int,
+        classification: str | int | None,
+        require_partials: bool = False,
+    ) -> TargetServerTriggerOutcome:
+        """Select, start, and collect capability evidence for one candidate."""
         jp_id = self._process_field(
             target_process,
             "JoiningProcessId",
@@ -974,17 +1824,13 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         requested_result_cls = self._result_classification_value(classification)
         if target_process_cls == JoiningProcessClassification.PROGRAM:
             max_starts = 1
-        elif target_process_cls in {
-            JoiningProcessClassification.SYNC,
-            JoiningProcessClassification.BATCH,
-            JoiningProcessClassification.JOB,
-        }:
-            max_starts = self._profile.workflow_execution.max_start_invocations
         else:
-            max_starts = min(
+            classification_key = self._normalize_classification(classification)
+            configured_limit = self._profile.workflow_execution.max_start_invocations_by_result_classification.get(
+                classification_key,
                 max(operation_count, 1),
-                self._profile.workflow_execution.max_start_invocations,
             )
+            max_starts = min(configured_limit, self._profile.workflow_execution.max_start_invocations)
 
         from contextlib import AsyncExitStack
 
@@ -994,6 +1840,8 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         async with AsyncExitStack() as stack:
             completed_operations = 0
             confirmed_operations = 0
+            terminal_result_confirmed = False
+            result_progression = None
             completion_collector = None
             if self._subscription_client is not None:
                 completion_collector = await stack.enter_async_context(
@@ -1003,12 +1851,15 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                         is_simulator=False,
                     )
                 )
-            elif max_starts > 1:
+            elif max_starts > 1 or requested_result_cls not in {
+                None,
+                ResultClassification.SINGLE_RESULT,
+            }:
                 return TargetServerTriggerOutcome(
                     triggered=False,
                     skip_reason=(
-                        "Multi-operation remote start requires a separate subscription client "
-                        "for correlated operation-completion events"
+                        "The requested result workflow requires a separate subscription client "
+                        "to prove correlated result-classification evidence"
                     ),
                     method="StartSelectedJoining",
                     trigger_mode="start_selected_joining",
@@ -1039,6 +1890,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                         expected_terminal_state=expected_state,
                     )
                     if pending_terminal is not None:
+                        terminal_result_confirmed = True
                         logger.info(
                             "Queued terminal result (classification %s) confirmed before operation %d/%d",
                             requested_result_cls,
@@ -1095,6 +1947,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                         )
                     confirmed_operations = operation_number
                     if obs.terminal_result is not None:
+                        terminal_result_confirmed = True
                         logger.info(
                             "Terminal result (classification %s) confirmed on operation %d/%d; workflow completed",
                             requested_result_cls,
@@ -1103,6 +1956,44 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                         )
                         completed_operations = operation_number
                         break
+
+            if completion_collector is not None and requested_result_cls is not None and terminal_result_confirmed:
+                result_progression = await completion_collector.collect_progression(
+                    requested_result_cls,
+                    timeout_s=self.active_result_timeout_s,
+                    require_partials=require_partials,
+                    expected_terminal_state=expected_state,
+                    allow_partial_references=self.allow_partial_referenced_children,
+                )
+                terminal_result_confirmed = result_progression.is_complete
+
+        if (
+            completion_collector is not None
+            and requested_result_cls
+            in {
+                ResultClassification.BATCH_RESULT,
+                ResultClassification.SYNC_RESULT,
+                ResultClassification.JOB_RESULT,
+            }
+            and not terminal_result_confirmed
+        ):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason=(
+                    f"Process '{jp_id}' accepted {completed_operations} start(s), but no completed "
+                    f"result with requested classification {requested_result_cls} was observed; "
+                    "process metadata alone does not prove result capability"
+                ),
+                method="StartSelectedJoining",
+                trigger_mode="start_selected_joining",
+                product_instance_uri=piu,
+                joining_process_id=jp_id,
+                joining_process_origin_id=jp_origin,
+                operation_count=completed_operations,
+                starts_issued=completed_operations,
+                results_confirmed=confirmed_operations,
+                result_progression=result_progression,
+            )
 
         logger.debug(
             "StartSelectedJoining succeeded: PIU=%s, process=%s, starts=%d, results confirmed=%d",
@@ -1121,24 +2012,38 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             operation_count=completed_operations,
             starts_issued=completed_operations,
             results_confirmed=confirmed_operations,
+            result_progression=result_progression,
         )
 
     async def _trigger_operations(
-        self, operation_count: int, classification: str | int | None = None
+        self,
+        operation_count: int,
+        classification: str | int | None = None,
+        *,
+        require_partials: bool = False,
     ) -> TriggerOutcome:
         """Trigger one selected process for the requested operation count."""
         method_timeout = self._profile.cu_execution.default_timeout_seconds
         result_timeout = self._profile.workflow_execution.expected_results.timeout_seconds
-        requested_result_cls = self._result_classification_value(classification)
-        max_starts = (
-            1
-            if requested_result_cls == ResultClassification.SINGLE_RESULT
-            else self._profile.workflow_execution.max_start_invocations
+        classification_key = self._normalize_classification(classification)
+        max_starts = self._profile.workflow_execution.max_start_invocations_by_result_classification.get(
+            classification_key,
+            self._profile.workflow_execution.max_start_invocations,
         )
+        max_starts = min(max_starts, self._profile.workflow_execution.max_start_invocations)
         workflow_timeout = (4 * method_timeout) + max_starts * (method_timeout + result_timeout)
         try:
+            workflow = (
+                self._run_workflow(
+                    operation_count,
+                    classification=classification,
+                    require_partials=True,
+                )
+                if require_partials
+                else self._run_workflow(operation_count, classification=classification)
+            )
             return await asyncio.wait_for(
-                self._run_workflow(operation_count, classification=classification),
+                workflow,
                 timeout=workflow_timeout,
             )
         except asyncio.TimeoutError:
@@ -1166,6 +2071,8 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         num_children: int = 3,
         include_traces: bool = False,
         send_as_refs: bool = False,
+        *,
+        require_partials: bool = False,
     ) -> TriggerOutcome:
         """Trigger joining workflow for batch/sync evidence.
 
@@ -1174,7 +2081,11 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         """
         if classification == ResultClassification.INTERVENTION_RESULT:
             return await self._trigger_intervention()
-        return await self._trigger_operations(num_children, classification=classification)
+        return await self._trigger_operations(
+            num_children,
+            classification=classification,
+            require_partials=require_partials,
+        )
 
     async def trigger_job(self, send_as_refs: bool = False) -> TriggerOutcome:
         """Trigger joining workflow for job-level evidence."""
@@ -1645,6 +2556,13 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 method="AbortJoiningProcess",
                 trigger_mode="start_selected_joining",
             )
+        if not self._profile.cu_execution.extension_fields.get("allow_destructive_methods", False):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="Workflow 'remote_abort_job' lacks runtime destructive-operation approval.",
+                method="AbortJoiningProcess",
+                trigger_mode="start_selected_joining",
+            )
         return await self._run_abort_workflow()
 
     async def trigger_reset_job(self) -> TriggerOutcome:
@@ -1654,6 +2572,13 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             return TargetServerTriggerOutcome(
                 triggered=False,
                 skip_reason="Workflow 'remote_reset_job' is not listed in workflows.approved.",
+                method="ResetJoiningProcess",
+                trigger_mode="start_selected_joining",
+            )
+        if not self._profile.cu_execution.extension_fields.get("allow_destructive_methods", False):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="Workflow 'remote_reset_job' lacks runtime destructive-operation approval.",
                 method="ResetJoiningProcess",
                 trigger_mode="start_selected_joining",
             )
@@ -1767,6 +2692,119 @@ class ManualResultTrigger(ResultTrigger):
 # ---------------------------------------------------------------------------
 # ManualEventTrigger
 # ---------------------------------------------------------------------------
+
+
+class WorkflowActionEventTrigger(EventTrigger):
+    """Map event-test requests to explicitly approved physical causes."""
+
+    def __init__(
+        self,
+        client: Any,
+        joining_system_node: Any,
+        ns_app: int,
+        profile: TargetServerCuProfile,
+        *,
+        ns_ijt: int | None = None,
+        ns_di: int | None = None,
+    ) -> None:
+        self._profile = profile
+        self._driver = StartSelectedJoiningResultTrigger(
+            client,
+            joining_system_node,
+            ns_app,
+            profile,
+            ns_ijt=ns_ijt,
+            ns_di=ns_di,
+        )
+
+    @property
+    def is_simulator(self) -> bool:
+        return False
+
+    @property
+    def active_event_timeout_s(self) -> float:
+        return self._profile.triggers.event.timeout_seconds
+
+    @property
+    def passive_observation_timeout_s(self) -> float:
+        return self._profile.triggers.event.timeout_seconds
+
+    def _configured_action(self, cu_key: str, required_workflow: str) -> TriggerOutcome | None:
+        configured = self._profile.triggers.event.actions.get(cu_key)
+        if configured == required_workflow:
+            return None
+        return TriggerOutcome(
+            triggered=False,
+            skip_reason=(
+                f"Event action '{cu_key}' must map to approved workflow '{required_workflow}', got {configured!r}."
+            ),
+            method="WorkflowActionEventTrigger",
+        )
+
+    async def trigger_event(self, event_type: int, count: int = 1) -> TriggerOutcome:
+        from helpers.namespaces import SimulateEventType
+
+        if count != 1:
+            return TriggerOutcome(
+                triggered=False,
+                skip_reason="Physical workflow event actions support exactly one bounded cause.",
+                method="WorkflowActionEventTrigger",
+            )
+        if event_type == SimulateEventType.PROGRAM_SELECTED:
+            invalid = self._configured_action("select_process_event", "select_process_event")
+            return invalid or await self._driver.trigger_select_process_event()
+        if event_type in {SimulateEventType.ASSET_ENABLED, SimulateEventType.ASSET_DISABLED}:
+            invalid = self._configured_action(
+                "asset_enable_state_event",
+                "asset_enable_state_event",
+            )
+            return invalid or await self._driver.trigger_asset_enable_event(
+                event_type == SimulateEventType.ASSET_ENABLED
+            )
+        if event_type in {
+            SimulateEventType.RECEIVED_ENTITY,
+            SimulateEventType.ACCEPTED_ENTITY,
+            SimulateEventType.RECEIVED_AND_ACCEPTED,
+        }:
+            workflow = self._profile.triggers.event.actions.get("identifiers_event")
+            if workflow not in {
+                "structured_identifier_round_trip",
+                "text_identifier_round_trip",
+            }:
+                return TriggerOutcome(
+                    triggered=False,
+                    skip_reason="identifiers_event has no approved identifier round-trip action.",
+                    method="WorkflowActionEventTrigger",
+                )
+            return await self._driver.run_identifier_round_trip(
+                structured=workflow == "structured_identifier_round_trip"
+            )
+        return TriggerOutcome(
+            triggered=False,
+            skip_reason=f"No deterministic physical action is configured for event type {event_type}.",
+            method="WorkflowActionEventTrigger",
+        )
+
+    async def trigger_bulk_events(
+        self,
+        event_type: int,
+        count: int,
+        from_seq: int,
+        to_seq: int,
+        min_duration_ms: int = 100,
+    ) -> TriggerOutcome:
+        return TriggerOutcome(
+            triggered=False,
+            skip_reason="Bulk physical event generation is not authorized.",
+            method="WorkflowActionEventTrigger",
+        )
+
+    async def trigger_condition(self, event_type: int) -> TriggerOutcome:
+        return TriggerOutcome(
+            triggered=False,
+            skip_reason="No deterministic physical condition action is configured.",
+            method="WorkflowActionEventTrigger",
+        )
 
 
 class ManualEventTrigger(EventTrigger):
@@ -1987,6 +3025,9 @@ def make_target_server_event_trigger(
     allow_waiting: bool = False,
     client: Any = None,
     ns_app: int = 0,
+    joining_system_node: Any = None,
+    ns_ijt: int | None = None,
+    ns_di: int | None = None,
     simulate_events_folder: Any = None,
 ) -> EventTrigger:
     """Return the appropriate event trigger based on the profile trigger config.
@@ -2036,6 +3077,16 @@ def make_target_server_event_trigger(
         if mode == "manual_trigger":
             logger.debug("TargetServer event trigger: ManualEventTrigger (allow_waiting=%s)", allow_waiting)
             return ManualEventTrigger(profile, allow_waiting=allow_waiting)
+        if mode == "workflow_actions":
+            logger.debug("TargetServer event trigger: WorkflowActionEventTrigger")
+            return WorkflowActionEventTrigger(
+                client,
+                joining_system_node,
+                ns_app,
+                profile,
+                ns_ijt=ns_ijt,
+                ns_di=ns_di,
+            )
         logger.debug("TargetServer event trigger: ExternalEventTrigger (mode=%s)", mode)
         return ExternalEventTrigger()
 
@@ -2086,6 +3137,8 @@ async def build_target_server_event_trigger(
     ns_app: int | None,
     profile: TargetServerCuProfile,
     *,
+    ns_ijt: int | None = None,
+    ns_di: int | None = None,
     allow_waiting: bool = False,
 ) -> EventTrigger:
     """Discover any needed simulator helper node, then build the event trigger.
@@ -2102,5 +3155,8 @@ async def build_target_server_event_trigger(
         allow_waiting=allow_waiting,
         client=client,
         ns_app=ns_app or 0,
+        joining_system_node=joining_system_node,
+        ns_ijt=ns_ijt,
+        ns_di=ns_di,
         simulate_events_folder=folder,
     )

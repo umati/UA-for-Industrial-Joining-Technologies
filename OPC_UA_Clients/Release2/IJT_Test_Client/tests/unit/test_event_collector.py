@@ -46,6 +46,7 @@ class TestEventNotification:
         with caplog.at_level(logging.WARNING):
             collector.event_notification("second")
         assert "queue full" in caplog.text.lower() or True  # warning was attempted
+        assert collector.dropped_event_count == 1
 
 
 class TestDatachangeAndStatusNotification:
@@ -75,6 +76,7 @@ class TestSubscribe:
         mock_client.create_subscription.assert_called_once()
         mock_sub.subscribe_events.assert_called_once()
         assert collector._subscription is mock_sub
+        assert collector.dropped_event_count == 0
 
     @pytest.mark.asyncio
     async def test_subscribe_with_list_of_event_types(self):

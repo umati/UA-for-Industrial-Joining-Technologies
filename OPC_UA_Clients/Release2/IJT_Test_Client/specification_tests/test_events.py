@@ -113,6 +113,19 @@ def _require_ns_ijt(ns_indices):
     return ns_ijt
 
 
+def _event_entity_ids(events) -> set[str]:
+    """Return normalized EntityId and EntityOriginId values from event payloads."""
+    observed_ids = set()
+    for event in events:
+        for entity in _event_payload_field(event, "AssociatedEntities") or ():
+            entity = _unwrap_variant(entity)
+            for field in ("EntityId", "EntityOriginId"):
+                value = str(getattr(entity, field, "") or "").strip().lower()
+                if value:
+                    observed_ids.add(value)
+    return observed_ids
+
+
 async def _collect_events_after_trigger(
     subscription_client,
     event_trigger,
@@ -137,6 +150,18 @@ async def _collect_events_after_trigger(
         if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "No deterministic event trigger is configured")
         events = await collector.collect(count=count, timeout_s=timeout_s)
+
+    expected_ids = {
+        str(value).strip().lower() for value in getattr(outcome, "expected_event_entity_ids", ()) if str(value).strip()
+    }
+    if expected_ids:
+        if not events:
+            pytest.fail("The approved physical action completed, but no correlatable event was received")
+        observed_ids = _event_entity_ids(events)
+        assert expected_ids & observed_ids, (
+            "Observed event cannot be correlated to the approved Tool/process/identifier action: "
+            f"expected one of {sorted(expected_ids)!r}, observed {sorted(observed_ids)!r}"
+        )
 
     return events
 

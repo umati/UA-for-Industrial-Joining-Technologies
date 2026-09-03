@@ -88,7 +88,16 @@ class TestSchemaAndRoundTrip:
         assert len(paths) == len(set(paths)), "duplicate field paths in the schema"
         for path, spec in iter_field_specs():
             assert spec.description.strip(), f"{path} has no description"
-            assert spec.kind in {"str", "bool", "int", "number", "str_list", "str_map"}
+            assert spec.kind in {
+                "str",
+                "bool",
+                "int",
+                "number",
+                "str_list",
+                "str_map",
+                "int_map",
+                "mapping_list",
+            }
 
     def test_minimal_manifest_round_trips_through_yaml(self, tmp_path):
         path = _write(tmp_path, _minimal())
@@ -325,6 +334,29 @@ class TestClaimsAndWorkflows:
         manifest = parse_sut_manifest(_minimal(workflows={"approved": ["remote_start", "counter_intervention"]}))
         assert manifest.approved_workflows == ("remote_start", "counter_intervention")
 
+    def test_start_invocation_limits_have_portable_defaults(self):
+        manifest = parse_sut_manifest(_minimal())
+        limits = manifest.data["workflows"]["max_start_invocations_by_result_classification"]
+        assert limits == {"single": 1, "batch": 3, "sync": 3, "job": 6}
+
+    @pytest.mark.parametrize(
+        ("limits", "message"),
+        [
+            ({"batch": 0}, "must be >= 1"),
+            ({"batch": True}, "integer values"),
+            ({"intervention": 1}, "unsupported keys"),
+        ],
+    )
+    def test_start_invocation_limits_are_validated(self, limits, message):
+        with pytest.raises(SutManifestError, match=message):
+            parse_sut_manifest(
+                _minimal(
+                    workflows={
+                        "max_start_invocations_by_result_classification": limits,
+                    }
+                )
+            )
+
     def test_per_classification_selectors_are_validated(self):
         manifest = parse_sut_manifest(
             _minimal(
@@ -337,6 +369,225 @@ class TestClaimsAndWorkflows:
         )
         profile = manifest.to_execution_profile()
         assert profile.selection.joining_processes["job"].joining_process_id == "job-1"
+
+    def test_adaptive_workflow_fields_are_forwarded(self):
+        manifest = parse_sut_manifest(
+            _minimal(
+                workflows={
+                    "approved": [
+                        "counter_intervention",
+                        "select_process_event",
+                        "structured_identifier_round_trip",
+                        "text_identifier_round_trip",
+                    ],
+                    "process_selector": {"policy": "all_compatible"},
+                    "evidence_reuse": {"enabled": True, "scope": "current_run"},
+                },
+                triggers={
+                    "event": {
+                        "mode": "workflow_actions",
+                        "actions": {"select_process_event": "select_process_event"},
+                    }
+                },
+                execution_policy={
+                    "state_changing_methods": {
+                        "allowed_methods": [
+                            "SendIdentifiers",
+                            "SendTextIdentifiers",
+                            "ResetIdentifiers",
+                            "IncrementJoiningProcessCounter",
+                        ]
+                    },
+                    "identifier_workflows": {
+                        "enabled": True,
+                        "value_policy": "run_unique",
+                        "cleanup_policy": "selective_test_owned_only",
+                        "allow_reset_all": False,
+                    },
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "count": 1,
+                            "process_policy": "exact_match",
+                            "joining_process_id": "job-1",
+                            "expected_result_classification": "batch",
+                        }
+                    ],
+                },
+            )
+        )
+
+        profile = manifest.to_execution_profile()
+        assert profile.selection.joining_process.policy == "all_compatible"
+        assert profile.workflow_execution.evidence_reuse.enabled is True
+        assert profile.triggers.event.actions == {"select_process_event": "select_process_event"}
+        assert profile.cu_execution.identifier_workflows.enabled is True
+        assert profile.cu_execution.counter_effects[0].joining_process_id == "job-1"
+
+    def test_workflow_event_action_must_be_approved(self):
+        with pytest.raises(SutManifestError, match="unapproved workflows"):
+            parse_sut_manifest(
+                _minimal(
+                    triggers={
+                        "event": {
+                            "mode": "workflow_actions",
+                            "actions": {"select_process_event": "select_process_event"},
+                        }
+                    }
+                )
+            )
+
+    def test_enabled_identifier_workflows_require_methods_and_workflow_approvals(self):
+        with pytest.raises(SutManifestError, match="allowed_methods"):
+            parse_sut_manifest(
+                _minimal(
+                    workflows={
+                        "approved": [
+                            "structured_identifier_round_trip",
+                            "text_identifier_round_trip",
+                        ]
+                    },
+                    execution_policy={"identifier_workflows": {"enabled": True}},
+                )
+            )
+
+    def test_counter_effect_requires_allowed_method_and_exact_process_id(self):
+        effect = {
+            "method": "IncrementJoiningProcessCounter",
+            "process_policy": "exact_match",
+        }
+        with pytest.raises(SutManifestError, match="allowed_methods"):
+            parse_sut_manifest(_minimal(execution_policy={"counter_effects": [effect]}))
+
+        with pytest.raises(SutManifestError, match="joining_process_id"):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "state_changing_methods": {"allowed_methods": ["IncrementJoiningProcessCounter"]},
+                        "counter_effects": [effect],
+                    }
+                )
+            )
+
+    def test_counter_effect_requires_workflow_approval(self):
+        effect = {
+            "method": "IncrementJoiningProcessCounter",
+            "process_policy": "exact_match",
+            "joining_process_id": "job-1",
+        }
+        with pytest.raises(SutManifestError, match="counter_intervention"):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "state_changing_methods": {"allowed_methods": ["IncrementJoiningProcessCounter"]},
+                        "counter_effects": [effect],
+                    }
+                )
+            )
+
+    def test_identifier_contract_requires_dedicated_reset_all_workflow(self):
+        with pytest.raises(SutManifestError, match="reset_all_identifiers"):
+            parse_sut_manifest(_minimal(execution_policy={"identifier_workflows": {"allow_reset_all": True}}))
+
+        manifest = parse_sut_manifest(
+            _minimal(
+                workflows={"approved": ["reset_all_identifiers"]},
+                execution_policy={
+                    "state_changing_methods": {"allowed_methods": ["ResetIdentifiers"]},
+                    "identifier_workflows": {"allow_reset_all": True},
+                },
+            )
+        )
+        assert manifest.risk_approvals is not None
+
+    def test_destructive_workflow_requires_risk_approval(self):
+        with pytest.raises(SutManifestError, match="allow_destructive_methods must be true"):
+            parse_sut_manifest(_minimal(workflows={"approved": ["remote_abort_job"]}))
+
+    @pytest.mark.parametrize(
+        ("override", "message"),
+        [
+            ({"count": 0}, "positive integer"),
+            ({"process_policy": "random"}, "process_policy"),
+            ({"process_policy": "first_compatible"}, "exact_match"),
+            ({"expected_result_classification": "vendor"}, "expected_result_classification"),
+            ({"unexpected": True}, "unknown field"),
+        ],
+    )
+    def test_counter_effect_fields_are_strictly_validated(self, override, message):
+        effect = {
+            "method": "IncrementJoiningProcessCounter",
+            "count": 1,
+            "process_policy": "exact_match",
+            "joining_process_id": "job-1",
+            **override,
+        }
+        with pytest.raises(SutManifestError, match=message):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "state_changing_methods": {"allowed_methods": ["IncrementJoiningProcessCounter"]},
+                        "counter_effects": [effect],
+                    }
+                )
+            )
+
+    @pytest.mark.parametrize(
+        ("counter_effects", "message"),
+        [
+            ({}, "must be a list"),
+            (["bad"], "must be a mapping"),
+        ],
+    )
+    def test_counter_effect_collection_shape_is_validated(self, counter_effects, message):
+        with pytest.raises(SutManifestError, match=message):
+            parse_sut_manifest(_minimal(execution_policy={"counter_effects": counter_effects}))
+
+    def test_workflow_actions_require_at_least_one_mapping(self):
+        with pytest.raises(SutManifestError, match="must not be empty"):
+            parse_sut_manifest(
+                _minimal(
+                    triggers={"event": {"mode": "workflow_actions", "actions": {}}},
+                )
+            )
+
+    def test_identifier_workflows_require_both_approved_round_trips(self):
+        with pytest.raises(SutManifestError, match="approved workflows"):
+            parse_sut_manifest(
+                _minimal(
+                    workflows={"approved": ["structured_identifier_round_trip"]},
+                    execution_policy={
+                        "state_changing_methods": {
+                            "allowed_methods": ["SendIdentifiers", "SendTextIdentifiers", "ResetIdentifiers"],
+                        },
+                        "identifier_workflows": {"enabled": True},
+                    },
+                )
+            )
+
+    @pytest.mark.parametrize(
+        ("override", "message"),
+        [
+            ({"method": ""}, "method must not be empty"),
+            ({"joining_process_id": 42}, "joining_process_id must be a string"),
+        ],
+    )
+    def test_counter_effect_requires_string_identity_fields(self, override, message):
+        effect = {
+            "method": "IncrementJoiningProcessCounter",
+            "process_policy": "exact_match",
+            "joining_process_id": "job-1",
+            **override,
+        }
+        with pytest.raises(SutManifestError, match=message):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "state_changing_methods": {"allowed_methods": ["IncrementJoiningProcessCounter"]},
+                        "counter_effects": [effect],
+                    }
+                )
+            )
 
     def test_unknown_classification_selector_is_rejected(self):
         with pytest.raises(SutManifestError, match="unknown classification"):
@@ -899,4 +1150,36 @@ class TestSutManifestValidationCoverage:
 
         manifest.data["execution_policy"]["request_results"]["min_duration_ms"] = -5.0
         with pytest.raises(SutManifestError, match="min_duration_ms must be a finite non-negative number"):
+            _validate_consistency(manifest)
+
+    def test_int_map_and_identifier_validation_defensive_branches(self):
+        from helpers.sut_manifest import FieldSpec, _validate_scalar
+
+        # 1. spec.kind == "int_map" with non-dict
+        manifest = build_preset("simulator")
+        manifest.data["workflows"]["max_start_invocations_by_result_classification"] = "not_a_dict"
+        with pytest.raises(SutManifestError, match="must be a mapping"):
+            parse_sut_manifest(manifest.data)
+
+        # 2. spec.kind == "int_map" with item > spec.max_value
+        spec = FieldSpec("test_map", "int_map", "doc", max_value=5)
+        with pytest.raises(SutManifestError, match="must be <= 5, got 10"):
+            _validate_scalar({"single": 10}, spec, "workflows.test_map")
+
+        # 3. allow_reset_all with ResetIdentifiers not in allowed_methods
+        manifest = build_preset("simulator")
+        manifest.data["execution_policy"]["identifier_workflows"]["allow_reset_all"] = True
+        manifest.data["workflows"]["approved"].append("reset_all_identifiers")
+        intervention_method = manifest.data["execution_policy"]["intervention"]["method"]
+        manifest.data["execution_policy"]["state_changing_methods"]["allowed_methods"] = [
+            intervention_method,
+            "SendIdentifiers",
+        ]
+        with pytest.raises(SutManifestError, match="ResetIdentifiers in execution_policy"):
+            _validate_consistency(manifest)
+
+        # 4. max_start_invocations_by_result_classification non-positive limit
+        manifest = build_preset("simulator")
+        manifest.data["workflows"]["max_start_invocations_by_result_classification"]["single"] = 0
+        with pytest.raises(SutManifestError, match="must be a positive integer"):
             _validate_consistency(manifest)

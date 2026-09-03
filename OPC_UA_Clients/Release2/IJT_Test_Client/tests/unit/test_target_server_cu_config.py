@@ -50,6 +50,72 @@ def test_expected_results_accepts_intermediate_classifications():
     )
 
     assert profile.workflow_execution.expected_results.intermediate_classifications == ("batch",)
+    assert profile.workflow_execution.expected_results.referenced_child_completion_policy == "terminal_required"
+
+
+def test_expected_results_accepts_partial_referenced_children_policy():
+    profile = build_execution_profile(
+        {
+            "schema_version": 1,
+            "workflow_execution": {
+                "expected_results": {
+                    "referenced_child_completion_policy": "partial_allowed",
+                }
+            },
+        }
+    )
+
+    assert profile.workflow_execution.expected_results.referenced_child_completion_policy == "partial_allowed"
+
+
+def test_start_limits_have_global_defaults_and_support_overrides():
+    defaults = build_execution_profile({"schema_version": 1})
+    assert defaults.workflow_execution.max_start_invocations_by_result_classification == {
+        "single": 1,
+        "batch": 3,
+        "sync": 3,
+        "job": 6,
+    }
+
+    overridden = build_execution_profile(
+        {
+            "schema_version": 1,
+            "workflow_execution": {
+                "max_start_invocations": 8,
+                "max_start_invocations_by_result_classification": {
+                    "batch": 4,
+                    "job": 8,
+                },
+            },
+        }
+    )
+    assert overridden.workflow_execution.max_start_invocations_by_result_classification == {
+        "single": 1,
+        "batch": 4,
+        "sync": 3,
+        "job": 8,
+    }
+
+
+@pytest.mark.parametrize(
+    ("limits", "message"),
+    [
+        ([], "must be a mapping"),
+        ({"batch": 0}, "positive integer"),
+        ({"batch": True}, "positive integer"),
+        ({"intervention": 1}, "unsupported keys"),
+    ],
+)
+def test_start_limits_reject_invalid_configuration(limits, message):
+    with pytest.raises(TargetServerConfigError, match=message):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {
+                    "max_start_invocations_by_result_classification": limits,
+                },
+            }
+        )
 
 
 def test_expected_results_rejects_invalid_intermediate_classification():
@@ -65,6 +131,190 @@ def test_expected_results_rejects_invalid_intermediate_classification():
                 },
             }
         )
+
+
+def test_adaptive_workflow_contracts_are_typed():
+    profile = build_execution_profile(
+        {
+            "schema_version": 1,
+            "selection": {
+                "joining_process": {
+                    "policy": "all_compatible",
+                }
+            },
+            "triggers": {
+                "event": {
+                    "mode": "workflow_actions",
+                    "actions": {"select_process_event": "select_process_event"},
+                }
+            },
+            "workflow_execution": {
+                "approved_workflows": ["counter_intervention"],
+                "evidence_reuse": {
+                    "enabled": True,
+                    "scope": "current_run",
+                },
+            },
+            "cu_execution": {
+                "identifier_workflows": {
+                    "enabled": True,
+                    "value_policy": "run_unique",
+                    "cleanup_policy": "selective_test_owned_only",
+                    "allow_reset_all": False,
+                },
+                "counter_effects": [
+                    {
+                        "method": "IncrementJoiningProcessCounter",
+                        "count": 1,
+                        "process_policy": "exact_match",
+                        "joining_process_id": "job-1",
+                        "expected_result_classification": "batch",
+                    }
+                ],
+            },
+        }
+    )
+
+    assert profile.selection.joining_process.policy == "all_compatible"
+    assert profile.triggers.event.actions == {"select_process_event": "select_process_event"}
+    assert profile.workflow_execution.evidence_reuse.enabled is True
+    assert profile.cu_execution.identifier_workflows.allow_reset_all is False
+    assert profile.cu_execution.counter_effects[0].expected_result_classification == "batch"
+
+
+def test_all_compatible_is_not_valid_for_tool_selection():
+    with pytest.raises(TargetServerConfigError, match="all_compatible"):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "tool": {
+                        "policy": "all_compatible",
+                    }
+                },
+            }
+        )
+
+
+@pytest.mark.parametrize("policy", ["first_available", "first_ready", "first_compatible", "all_compatible"])
+def test_counter_effect_requires_one_exact_process(policy):
+    with pytest.raises(TargetServerConfigError, match="exact_match"):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "process_policy": policy,
+                            "joining_process_id": "job-1",
+                        }
+                    ]
+                },
+            }
+        )
+
+
+def test_counter_effect_requires_process_id_at_typed_boundary():
+    with pytest.raises(TargetServerConfigError, match="joining_process_id"):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "process_policy": "exact_match",
+                        }
+                    ]
+                },
+            }
+        )
+
+
+def test_identifier_contract_requires_dedicated_reset_all_workflow():
+    with pytest.raises(TargetServerConfigError, match="reset_all_identifiers"):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {"identifier_workflows": {"allow_reset_all": True}},
+            }
+        )
+
+    profile = build_execution_profile(
+        {
+            "schema_version": 1,
+            "cu_execution": {"identifier_workflows": {"allow_reset_all": True}},
+            "workflow_execution": {"approved_workflows": ["reset_all_identifiers"]},
+        }
+    )
+    assert profile.cu_execution.identifier_workflows.allow_reset_all is True
+
+
+def test_counter_effect_requires_workflow_approval_at_typed_boundary():
+    with pytest.raises(TargetServerConfigError, match="counter_intervention"):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "joining_process_id": "job-1",
+                        }
+                    ]
+                },
+            }
+        )
+
+
+def test_destructive_workflow_requires_risk_approval_at_typed_boundary():
+    with pytest.raises(TargetServerConfigError, match="allow_destructive_methods must be true"):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["remote_abort_job"]},
+            }
+        )
+
+
+def test_allow_destructive_methods_must_be_boolean():
+    with pytest.raises(TargetServerConfigError, match="allow_destructive_methods must be a boolean"):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {"extension_fields": {"allow_destructive_methods": "yes"}},
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        ({"cu_execution": {"identifier_workflows": []}}, "identifier_workflows"),
+        ({"cu_execution": {"counter_effects": {}}}, "counter_effects"),
+        ({"cu_execution": {"counter_effects": ["bad"]}}, "must be a mapping"),
+        (
+            {
+                "cu_execution": {
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "joining_process_id": "job-1",
+                            "expected_result_classification": "vendor",
+                        }
+                    ]
+                }
+            },
+            "expected_result_classification",
+        ),
+        ({"triggers": {"event": {"actions": []}}}, "actions"),
+        ({"workflow_execution": {"evidence_reuse": []}}, "evidence_reuse"),
+    ],
+)
+def test_new_workflow_sections_reject_malformed_types(raw, message):
+    with pytest.raises(TargetServerConfigError, match=message):
+        build_execution_profile({"schema_version": 1, **raw})
 
 
 # ---------------------------------------------------------------------------

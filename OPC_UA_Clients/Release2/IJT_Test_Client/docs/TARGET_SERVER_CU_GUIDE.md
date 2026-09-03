@@ -122,7 +122,7 @@ Then update `controller.sut.yaml`:
 | `authentication.source` | `anonymous`, `prompt`, `file`, or `environment` - references only, never a secret value |
 | `capability_claims.active_profile` / `supported_facets` / `cu_overrides` | The controller's authoritative CU claims |
 | `workflows.tool_selector.product_instance_uri` | Leave empty for runtime Tool discovery; otherwise enter the Tool PIU |
-| `workflows.process_selector.policy` | `first_compatible` is the schema default; committed presets may use `first_ready`. All non-exact policies select the first returned process with the requested standard Classification and do not infer readiness from names or vendor fields. `exact_match` pins an advertised ID/origin/name and still requires matching Classification metadata. |
+| `workflows.process_selector.policy` | `first_compatible` is the schema default; committed presets may use `first_ready`. Non-exact policies order direct Classification matches first, then bounded Job candidates for Batch or Sync evidence. `all_compatible` exercises every ordered candidate; the other policies stop after the first proof. A result-specific `exact_match` may intentionally cross process Classification, but the requested completed result is always the capability proof. |
 | `workflows.process_selector.joining_process_id` | Default/fallback Process ID returned by `GetJoiningProcessList` |
 | `workflows.process_selector.joining_process_origin_id` | Stable origin fallback if the controller regenerates the primary ID |
 | `workflows.process_selector.selection_name` | Final fallback when neither configured ID is advertised |
@@ -224,10 +224,11 @@ selection:
       policy: exact_match
       joining_process_id: "<job-id>"
     batch:
-      policy: exact_match
-      joining_process_id: "<batch-id>"
+      policy: first_compatible
 ```
-If a test requires a Job process but none is configured or advertised, the runner skips cleanly in milliseconds instead of hanging.
+`first_compatible` prefers direct standard-classification matches and may then try a
+bounded Job candidate for Batch or Sync evidence. `all_compatible` is an explicit
+opt-in that exercises every ordered candidate within the per-candidate start limit.
 
 ### Result layering & multi-operation starts
 Joining-process and result classifications are different OPC 40450-1 domains:
@@ -248,11 +249,21 @@ Classification values.
 
 Result classification describes the evidence emitted by the workflow, not the vendor name of the process:
 - For a compound process that produces multiple result layers (Job, Batch, or Sync), configure `workflows.max_start_invocations` (default: 6) and `workflows.consecutive_start_delay_seconds` (default: 0.25s).
-- Exact process selectors still require `JoiningProcessMetaData.Classification` to match the requested Program, Sync, Batch, or Job domain; an ID match never overrides incompatible or unreadable classification metadata.
+- An exact result-specific selector may authorize a cross-classification candidate, but metadata never proves result capability. Success requires a correlated completed result with the requested result classification.
 - The reusable trigger subscribes before starting, selects the generic `JoiningProcess`, waits for a completed Tool-correlated `SingleResult` as operation evidence, and applies the pacing delay between starts.
 - The trigger exits early when the matching terminal completed `SyncResult`, `BatchResult`, or `JobResult` arrives with `ResultState=1` and `IsPartial=False`.
 - Queue inspection and the pacing drain reduce extra-start races, but cannot eliminate the small check-to-start window without an atomic controller readiness/completion signal.
 - The runner preserves CUs for the primary `classification` and every declared item in `intermediate_classifications` (e.g. `classification: job` with `intermediate_classifications: [single, batch, intervention]`).
+- With `workflows.evidence_reuse.enabled: true`, complete lossless progression evidence is immutable and reusable only while endpoint, Tool PIU, current process-list fingerprint, selected process, policy, start bound, and pacing still match. Event-causation and state-mutation workflows never use this cache.
+- OPC 40450-1 defines an optional Self-Contained Consolidated Result CU, and the simulator exposes that mode only for demonstration/conformance coverage. It is not the production controller contract.
+- Production controllers use reference-mode combined results: metadata stubs identify separately transferred children. This is the only recommended scalable implementation path. The Test Client can validate either explicitly claimed CU, never trusts arrival order, and closes controller references by ResultId.
+
+### Transactional physical workflows
+
+- Identifier workflows generate one run-unique value, verify it through `GetIdentifiers`, selectively reset only that value, verify absence, and retry selective cleanup in `finally`. `ResetAll` remains prohibited.
+- Counter-effect scenarios are explicit entries under `execution_policy.counter_effects`. Every physical mutation requires `process_policy: exact_match` and one current reviewed JoiningProcessId; broad discovery policies are rejected. A completed `InterventionResult` is mandatory. When an affected classification is configured, one loss-aware subscription must also observe a partial or final Batch/Sync/Job update that explicitly references that InterventionResult; the counter action does not imply that the parent has reached its final boundary.
+- `triggers.event.mode: workflow_actions` maps an event CU to one approved physical cause. Select-process events use one `SelectJoiningProcess`; asset-enable-state events use `EnableAsset` and always finish with `EnableAsset(true)`.
+- Identifier events and Conditions should remain unclaimed when the controller firmware provides no safe deterministic cause.
 
 ### Autonomous Abort and Reset Workflows
 The Test Client provides dedicated trigger methods for compound multi-step sequence abort and reset testing:

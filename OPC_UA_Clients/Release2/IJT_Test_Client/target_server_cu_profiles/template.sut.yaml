@@ -150,6 +150,15 @@ workflows:
   # exits early as soon as a terminal completed result arrives.
   max_start_invocations: 6
 
+  # Maximum accepted StartSelectedJoining calls while waiting for each result classification.
+  # Supported keys are single, batch, sync, and job. Every value is also capped by
+  # max_start_invocations.
+  max_start_invocations_by_result_classification:
+    single: 1
+    batch: 3
+    sync: 3
+    job: 6
+
   # Pacing delay in seconds between consecutive StartSelectedJoining invocations for compound
   # processes (Job/Batch/Sync). Allows controller state settlement and event drain (default: 0.25s).
   # Not applied to single operations. Queue inspection and this drain reduce extra-start races but
@@ -173,12 +182,14 @@ workflows:
   # Default joining-process selection for all result classifications.
   process_selector:
 
-    # Joining process selection policy. exact_match pins an advertised identifier and still requires
-    # matching standard Classification metadata. All non-exact policies select the first returned
-    # process with the requested standard Classification; they do not infer controller readiness from
-    # names or vendor fields. Missing, unreadable, or incompatible Classification metadata produces a
-    # clean skip.
-    # Values: exact_match, first_available, first_compatible, first_ready
+    # Joining process selection policy. Non-exact policies order direct standard-classification
+    # matches first and may then try a Job process as bounded evidence for Batch or Sync results; only
+    # a completed requested-classification result proves support. all_compatible exercises every
+    # ordered candidate, while the other non-exact policies stop after the first proof. exact_match
+    # pins an advertised identifier; a result-specific exact selector may intentionally cross
+    # process-classification metadata, but still requires result-stream proof. Names and vendor fields
+    # never prove capability.
+    # Values: all_compatible, exact_match, first_available, first_compatible, first_ready
     policy: first_compatible
 
     # Exact JoiningProcessId. Do not commit real IDs.
@@ -222,6 +233,12 @@ workflows:
     # Require a final result before the workflow counts as complete.
     final_result_required: true
 
+    # How captured results resolve a referenced child ResultId. terminal_required waits for
+    # IsPartial=false; partial_allowed accepts the latest partial update for open or effectively
+    # infinite batches.
+    # Values: partial_allowed, terminal_required
+    referenced_child_completion_policy: terminal_required
+
     # Expected ResultState (OPC 40001-101 Machinery Result) for terminal completion: 1 (COMPLETED), 3
     # (ABORTED), or 4 (FAILED).
     expected_terminal_result_state: 1
@@ -242,6 +259,16 @@ workflows:
     # Reset identifiers after the run.
     reset_identifiers: false
 
+  # Reuse immutable joining-workflow evidence within one runner invocation.
+  evidence_reuse:
+
+    # Reuse one provenance-keyed capture across compatible CU assertions.
+    enabled: false
+
+    # Evidence lifetime. current_run never persists evidence across runner invocations.
+    # Values: current_run
+    scope: current_run
+
 # --------------------------------------------------------------------------
 # triggers: How result, event, and condition evidence is produced on this SUT.
 # --------------------------------------------------------------------------
@@ -261,8 +288,11 @@ triggers:
   event:
 
     # Event trigger mode.
-    # Values: manual_trigger, none, observe_only, simulate_methods
+    # Values: manual_trigger, none, observe_only, simulate_methods, workflow_actions
     mode: observe_only
+
+    # Event CU key to approved workflow name. Used only by workflow_actions mode.
+    actions: {}
 
   # Condition evidence trigger.
   condition:
@@ -289,6 +319,14 @@ execution_policy:
 
   # Per-method status classification overrides (method BrowseName -> accepted|warning|fail).
   method_status_policies: {}
+
+  # Explicit counter-effect scenarios. Every entry has these fields: method is the OPC UA BrowseName;
+  # count is a positive bounded change; process_policy must be exact_match because physical counter
+  # mutations may affect only one explicitly reviewed process; joining_process_id pins that current
+  # discovered process; expected_result_classification optionally requires a partial or final
+  # affected-result update that explicitly references the completed InterventionResult; accepted
+  # values are single, batch, sync, job, stitching, intervention, or text.
+  counter_effects: []
 
   # Which state-changing OPC UA methods may be called on this SUT.
   state_changing_methods:
@@ -344,6 +382,24 @@ execution_policy:
 
       # Parent process selection name.
       selection_name: ''
+
+  # Safety contract for structured and text identifier round trips.
+  identifier_workflows:
+
+    # Allow approved identifier workflows to mutate test-owned identifiers.
+    enabled: false
+
+    # How identifier workflows create collision-safe values.
+    # Values: run_unique
+    value_policy: run_unique
+
+    # Cleanup may reset only identifiers created by the current test workflow.
+    # Values: selective_test_owned_only
+    cleanup_policy: selective_test_owned_only
+
+    # Allow broad ResetAll only through the separately approved reset_all_identifiers workflow; never
+    # use it as cleanup.
+    allow_reset_all: false
 
   # Configuration for the RequestResults method filter strategy and parameter ranges.
   request_results:

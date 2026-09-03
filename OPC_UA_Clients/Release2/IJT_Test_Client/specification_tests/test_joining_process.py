@@ -2791,3 +2791,13 @@ async def test_get_joining_process_revision_list_with_nonexistent_id_returns_emp
             logger.info("GetJoiningProcessRevisionList correctly returned empty list for non-existent ID")
     except ua.UaError as exc:
         logger.info("Correctly raised ua.UaError for non-existent ID: %s", exc)
+
+
+@pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
+async def test_configured_counter_effect_produces_intervention_evidence(result_trigger):
+    """Authorized counter mutations must produce complete correlated InterventionResult evidence."""
+    workflow = getattr(result_trigger, "trigger_counter_effect", None)
+    if workflow is None:
+        pytest.skip("No target-server counter workflow is configured")
+    outcome = await workflow(0)
+    assert outcome.triggered, outcome.skip_reason

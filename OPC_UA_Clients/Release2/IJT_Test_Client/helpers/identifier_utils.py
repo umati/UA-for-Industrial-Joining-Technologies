@@ -10,7 +10,12 @@ from helpers.node_discovery import read_tool_product_instance_uri
 ENTITY_TYPE_VEHICLE = 20
 VIN_IDENTIFIER_NAME = "VIN"
 VIN_IDENTIFIER_DESCRIPTION = "Vehicle Identification Number"
-UNSUPPORTED_IDENTIFIER_ERROR_KEYWORDS = ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")
+UNSUPPORTED_IDENTIFIER_ERROR_KEYWORDS = (
+    "BadNotSupported",
+    "BadMethodInvalid",
+    "BadUserAccessDenied",
+    "BadNoMatch",
+)
 
 
 def make_test_vin() -> str:
