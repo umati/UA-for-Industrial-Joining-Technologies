@@ -889,6 +889,7 @@ def _ensure_opc_server_running(endpoint: str, *, allow_launch: bool, context: st
                 log.warning("Failed to launch OPC UA simulator '%s': %s", exe, e)
     elif allow_launch and IS_DOCKER:
         log.info("Docker mode detected (IS_DOCKER=true). Skipping local OPC UA simulator launch.")
+        return False
 
     startup_timeout = _env_float("OPCUA_STARTUP_TIMEOUT_SEC", 45.0, 1.0)
     startup_poll = _env_float("OPCUA_STARTUP_POLL_SEC", 0.5, 0.1)
@@ -1350,15 +1351,25 @@ def _start_server(args):
     log.info("Starting local server on %s ...", browser_url)
 
     try:
-        cmd = [
-            str(npx),
-            "--yes",
-            "serve",
-            "--listen",
-            f"tcp://0.0.0.0:{http_port}",
-            "--no-clipboard",
-            "--no-request-logging",
-        ]
+        local_serve_bin = PROJECT_DIR / "node_modules" / ".bin" / ("serve.cmd" if IS_WINDOWS else "serve")
+        if local_serve_bin.exists():
+            cmd = [
+                str(local_serve_bin),
+                "--listen",
+                f"tcp://0.0.0.0:{http_port}",
+                "--no-clipboard",
+                "--no-request-logging",
+            ]
+        else:
+            cmd = [
+                str(npx),
+                "--yes",
+                "serve",
+                "--listen",
+                f"tcp://0.0.0.0:{http_port}",
+                "--no-clipboard",
+                "--no-request-logging",
+            ]
         if args.silent:
             cmd.append("--no-request-logging")
 

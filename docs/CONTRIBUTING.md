@@ -28,6 +28,12 @@ Central version files:
 python run_precommit_all.py
 ```
 
+`run_precommit_all.py` enforces dependency audits at high severity. For npm lockfile
+audits it defaults to **strict** connectivity mode (`IJT_NPM_AUDIT_MODE=strict`):
+registry timeout/connectivity failures fail the run because vulnerability status is
+unknown. Use `IJT_NPM_AUDIT_MODE=degraded` only for explicitly offline local runs;
+actual vulnerability findings still fail in both modes.
+
 ### Full Test Suite
 
 ```bash

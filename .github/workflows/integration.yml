@@ -404,6 +404,7 @@ jobs:
           docker run -d --name ijt-web-prod \
             -p 3000:3000 \
             -e IS_DOCKER=true \
+            -e IJT_SKIP_OPCUA_STARTUP_CHECK=true \
             ijt-web-client:prod-ci
           echo "Waiting for HTTP on port 3000..."
           for i in $(seq 1 20); do

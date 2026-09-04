@@ -73,6 +73,12 @@ repos:
       # Does NOT auto-fix — remove them manually before committing.
       - id: debug-statements
 
+      # Validates Python abstract syntax trees to catch syntax errors instantly.
+      - id: check-ast
+
+      # Checks for file name collisions on case-insensitive filesystems (Windows/macOS vs Linux).
+      - id: check-case-conflict
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.12
     hooks:

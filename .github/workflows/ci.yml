@@ -367,7 +367,16 @@ jobs:
       - name: npm Audit (JS Security)
         id: npm_audit
         continue-on-error: true
-        run: npm audit --audit-level=high --json > test-results/npm-audit.json
+        run: |
+          for attempt in 1 2 3; do
+            if npm audit --audit-level=high --json > test-results/npm-audit.json; then
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "npm audit failed (attempt $attempt/3); retrying in 5s..."
+              sleep 5
+            fi
+          done
 
       - name: Publish Test Reports
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0

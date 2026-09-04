@@ -29,7 +29,8 @@ pip install pre-commit          # or: pip install -r requirements-dev.txt
 pre-commit install              # installs hooks into .git/hooks/
 ```
 The three Python runners (Console, Web, Test) call `pre-commit install` automatically on first local, non-CI run. For CSharp, Node, and Server runners — or direct git use — run it manually once after cloning.
-For the simplest all-in-one pre-commit check before committing, run `python run_precommit_all.py` from the IJT repo root. It runs the root hooks and Envelope hooks (when present), then runs dependency vulnerability gates: `npm audit --package-lock-only --audit-level=high` for Node Client, Web Client, and Envelope lockfiles, plus `pip-audit` across IJT + Envelope Python requirement files.
+For the simplest all-in-one pre-commit check before committing, run `python run_precommit_all.py` from the IJT repo root. It runs the root hooks and Envelope hooks (when present), then runs dependency vulnerability gates: `npm audit --package-lock-only --audit-level=high` for Node Client, Web Client, and Envelope lockfiles, `pip-audit` across IJT + Envelope Python requirement files, plus NuGet vulnerability audit for the C# Client (`dotnet list package --vulnerable --include-transitive`).
+`run_precommit_all.py` enforces npm audit in **strict mode by default** (`IJT_NPM_AUDIT_MODE=strict`): registry timeout/connectivity errors fail the run, because vulnerability status is unknown. For explicitly offline local runs only, you may set `IJT_NPM_AUDIT_MODE=degraded` to allow continuing on npm registry connectivity failures; real vulnerability findings still fail.
 
 ---
 

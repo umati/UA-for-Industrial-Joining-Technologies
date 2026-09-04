@@ -45,6 +45,10 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
   `pip-audit` (Python dependencies), `npm audit` (Node.js dependencies), the C# NuGet
   vulnerability scan, `bandit` (Python SAST), and CodeQL static analysis (C#, Python,
   JavaScript) using the `security-extended` query suite (`.github/workflows/codeql.yml`).
+  Local `run_precommit_all.py` enforces npm audit in strict mode by default
+  (`IJT_NPM_AUDIT_MODE=strict`), so npm registry timeout/connectivity failures fail because
+  vulnerability status is unknown. `IJT_NPM_AUDIT_MODE=degraded` exists only for explicitly
+  offline/restricted local development and should not be used for CI or release qualification.
 - GitHub Actions workflow files are audited by [zizmor](https://woodruffw.github.io/zizmor/)
   in the CI workflow when `.github/workflows/` changes, or on manual dispatch. Findings are
   uploaded as SARIF to GitHub Code Scanning (Security → Code scanning alerts). High/Critical

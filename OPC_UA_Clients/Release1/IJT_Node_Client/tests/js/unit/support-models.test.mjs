@@ -28,22 +28,6 @@ describe('KeyValuePair', () => {
 })
 
 describe('KeyValuePair — toHTML()', () => {
-  beforeEach(() => {
-    globalThis.document = {
-      createElement: vi.fn((tag) => {
-        const el = {
-          tag,
-          children: [],
-          textContent: '',
-          appendChild: vi.fn(function (child) { this.children.push(child); return child }),
-        }
-        return el
-      })
-    }
-  })
-  afterEach(() => {
-    delete globalThis.document
-  })
 
   it('toHTML() returns a container element', () => {
     const mm = makeModelManager()
