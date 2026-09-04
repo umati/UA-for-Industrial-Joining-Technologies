@@ -202,11 +202,14 @@ This runs:
 - Dependency CVE checks
 - Blocks on high-severity security issues
 
-npm lockfile audits in `run_precommit_all.py` run in strict mode by default
-(`IJT_NPM_AUDIT_MODE=strict`): npm registry timeout/connectivity failures fail the run
-because security status is unknown. For explicitly offline local development only,
+npm lockfile audits in `run_precommit_all.py` and the Node/Web Client
+`run_all_tests.py` runners use a bounded 15-second process timeout and run in strict
+mode by default (`IJT_NPM_AUDIT_MODE=strict`). npm registry timeout/connectivity
+failures therefore fail quickly because security status is unknown, rather than
+hanging the suite. For explicitly offline local development only,
 `IJT_NPM_AUDIT_MODE=degraded` allows continuing on connectivity failures while still
-failing on reported vulnerabilities.
+failing on reported high/critical vulnerabilities and non-network tool errors.
+Degraded mode must not be used for CI or release qualification.
 
 ### Test Tiers
 

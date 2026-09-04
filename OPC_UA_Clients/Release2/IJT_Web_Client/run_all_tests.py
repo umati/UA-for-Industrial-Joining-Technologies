@@ -139,6 +139,19 @@ _REQUIREMENTS = ROOT / "requirements.txt"
 _REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
 _PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
 _NPM_INSTALL_FLAGS = ["--legacy-peer-deps", "--no-audit", "--no-fund"]
+_NPM_AUDIT_TIMEOUT_SECONDS = 15
+_NPM_AUDIT_MODE_ENV = "IJT_NPM_AUDIT_MODE"
+_NPM_AUDIT_NETWORK_TOKENS = (
+    "econnreset",
+    "etimedout",
+    "enotfound",
+    "err_socket",
+    "fetch failed",
+    "network timeout at",
+    "audit endpoint returned an error",
+    "service unavailable",
+    "request to https://registry.npmjs.org",
+)
 _PIP_AUDIT_MAX_ATTEMPTS = 2
 _PIP_AUDIT_HTTP_TIMEOUT_SECONDS = 20
 _PIP_AUDIT_PROCESS_TIMEOUT_SECONDS = 180 if IS_CI else 90
@@ -662,6 +675,41 @@ def _looks_like_transient_network_failure(output: str) -> bool:
             "timed out",
         )
     )
+
+
+def _npm_audit_mode() -> str:
+    mode = os.getenv(_NPM_AUDIT_MODE_ENV, "strict").strip().lower()
+    if mode not in {"strict", "degraded"}:
+        _warn(f"invalid {_NPM_AUDIT_MODE_ENV}={mode!r}; using strict mode")
+        return "strict"
+    return mode
+
+
+def _npm_audit_network_failure(output: str) -> bool:
+    lowered = output.lower()
+    return any(token in lowered for token in _NPM_AUDIT_NETWORK_TOKENS)
+
+
+def _npm_audit_counts(output: str) -> tuple[int, int]:
+    try:
+        payload = json.loads(output)
+    except (TypeError, ValueError):
+        return 0, 0
+    vulnerabilities = payload.get("metadata", {}).get("vulnerabilities", {})
+    return int(vulnerabilities.get("critical", 0)), int(vulnerabilities.get("high", 0))
+
+
+def _npm_audit_outcome(rc: int, output: str) -> tuple[int, str]:
+    critical, high = _npm_audit_counts(output)
+    if critical > 0 or high > 0:
+        return 1, f"npm audit: {critical} critical, {high} high"
+    if rc == -1 or _npm_audit_network_failure(output):
+        if _npm_audit_mode() == "degraded":
+            return 0, "npm audit registry unavailable (degraded mode)"
+        return 1, "npm audit registry unavailable (strict mode)"
+    if rc != 0:
+        return rc, f"npm audit tool error (exit {rc})"
+    return 0, ""
 
 
 def _requirements_hash() -> str:
@@ -1507,13 +1555,28 @@ def _stage_js_lint() -> StageResult:
 
     if npm:
         results_dir.mkdir(parents=True, exist_ok=True)
-        rc = _run_to_file(
-            [npm, "audit", "--audit-level=high", "--json"],
-            results_dir / "npm-audit.json",
+        rc, audit_output = _run_captured(
+            [
+                npm,
+                "audit",
+                "--package-lock-only",
+                "--audit-level=high",
+                "--json",
+                "--fetch-timeout=10000",
+                "--fetch-retries=1",
+            ],
             label="npm audit",
+            timeout=_NPM_AUDIT_TIMEOUT_SECONDS,
         )
-        if rc not in (0, 1):  # 1 = vulnerabilities found (informational)
-            overall_rc = rc
+        audit_report = results_dir / "npm-audit.json"
+        audit_report.write_text(audit_output, encoding="utf-8")
+        audit_rc, audit_note = _npm_audit_outcome(rc, audit_output)
+        if audit_rc != 0:
+            overall_rc = audit_rc
+        if audit_note:
+            if audit_rc == 0:
+                _warn("npm audit registry unavailable; degraded mode allows continuing")
+            notes.append(audit_note)
 
     if (ROOT / "node_modules" / "depcheck").exists() or _cmd_available("depcheck"):
         results_dir.mkdir(parents=True, exist_ok=True)

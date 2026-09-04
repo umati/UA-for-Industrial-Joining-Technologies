@@ -68,6 +68,19 @@ _WELL_KNOWN_SIMULATOR_PATHS = [
 ]
 _DEFAULT_SERVER_URL = "opc.tcp://localhost:40451"
 _NPM_INSTALL_FLAGS = ["--no-audit", "--no-fund"]
+_NPM_AUDIT_TIMEOUT_SECONDS = 15
+_NPM_AUDIT_MODE_ENV = "IJT_NPM_AUDIT_MODE"
+_NPM_AUDIT_NETWORK_TOKENS = (
+    "econnreset",
+    "etimedout",
+    "enotfound",
+    "err_socket",
+    "fetch failed",
+    "network timeout at",
+    "audit endpoint returned an error",
+    "service unavailable",
+    "request to https://registry.npmjs.org",
+)
 _TMP_DIR = _PROJECT_DIR / "tmp"
 _NPM_CACHE = _TMP_DIR / "npm-cache"
 _NODE_MODULES = _PROJECT_DIR / "node_modules"
@@ -191,20 +204,30 @@ def _run(
     cwd: Path = _PROJECT_DIR,
     env: dict | None = None,
     capture_stdout: bool = False,
+    timeout: float | None = None,
 ) -> tuple[int, str]:
     """Run *cmd* and return (returncode, stdout_text).
 
     stderr is inherited (visible in terminal).  stdout is captured when
     *capture_stdout* is True, otherwise also inherited.
     """
-    result = subprocess.run(
-        cmd,
-        cwd=str(cwd),
-        env=_subprocess_env(env),
-        check=False,
-        stdout=subprocess.PIPE if capture_stdout else None,
-        text=True,
-    )
+    kwargs: dict[str, object] = {
+        "cwd": str(cwd),
+        "env": _subprocess_env(env),
+        "check": False,
+        "stdout": subprocess.PIPE if capture_stdout else None,
+        "stderr": subprocess.STDOUT if capture_stdout else None,
+        "text": True,
+    }
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    try:
+        result = subprocess.run(cmd, **kwargs)
+    except subprocess.TimeoutExpired as exc:
+        captured = exc.stdout or ""
+        if isinstance(captured, bytes):
+            captured = captured.decode(errors="replace")
+        return -1, f"{captured}\nnpm audit timed out after {timeout:g}s"
     stdout = result.stdout or ""
     return result.returncode, stdout
 
@@ -266,6 +289,34 @@ def _parse_audit_json(path: Path) -> tuple[int, int]:
         return vulns.get("critical", 0), vulns.get("high", 0)
     except Exception:
         return 0, 0
+
+
+def _npm_audit_mode() -> str:
+    mode = os.getenv(_NPM_AUDIT_MODE_ENV, "strict").strip().lower()
+    if mode not in {"strict", "degraded"}:
+        print(
+            f"WARNING: invalid {_NPM_AUDIT_MODE_ENV}={mode!r}; using strict mode.",
+            file=sys.stderr,
+        )
+        return "strict"
+    return mode
+
+
+def _npm_audit_network_failure(output: str) -> bool:
+    lowered = output.lower()
+    return any(token in lowered for token in _NPM_AUDIT_NETWORK_TOKENS)
+
+
+def _npm_audit_outcome(rc: int, output: str, critical: int, high: int) -> tuple[str, str]:
+    if critical > 0 or high > 0:
+        return "FAIL", f"{critical} critical, {high} high"
+    if rc == -1 or _npm_audit_network_failure(output):
+        if _npm_audit_mode() == "degraded":
+            return "WARN", "registry unavailable (degraded mode)"
+        return "FAIL", "registry unavailable (strict mode)"
+    if rc != 0:
+        return "ERROR", f"tool error (exit {rc})"
+    return "PASS", f"{critical} critical, {high} high"
 
 
 def _parse_coverage_summary(results_dir: Path) -> float | None:
@@ -493,17 +544,24 @@ def _step_npm_audit(results_dir: Path) -> StepResult:
     out_file = results_dir / "npm-audit.json"
     t0 = time.monotonic()
     rc, stdout = _run(
-        [_NPM, "audit", "--audit-level=high", "--json"],
+        [
+            _NPM,
+            "audit",
+            "--package-lock-only",
+            "--audit-level=high",
+            "--json",
+            "--fetch-timeout=10000",
+            "--fetch-retries=1",
+        ],
         capture_stdout=True,
+        timeout=_NPM_AUDIT_TIMEOUT_SECONDS,
     )
     dur = time.monotonic() - t0
     with contextlib.suppress(Exception):
         out_file.write_text(stdout, encoding="utf-8")
     critical, high = _parse_audit_json(out_file)
-    detail = f"{critical} critical, {high} high"
-    if rc != 0 and (critical > 0 or high > 0):
-        return StepResult(label, "PHASE 1", "FAIL", detail, dur)
-    return StepResult(label, "PHASE 1", "PASS", detail, dur)
+    status, detail = _npm_audit_outcome(rc, stdout, critical, high)
+    return StepResult(label, "PHASE 1", status, detail, dur)
 
 
 def _step_depcheck() -> StepResult:

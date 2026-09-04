@@ -1557,6 +1557,61 @@ def test_node_and_web_npm_install_steps_suppress_funding_and_inline_audit_noise(
         assert "--no-fund" in module._NPM_INSTALL_FLAGS
 
 
+def test_node_and_web_npm_audit_network_policy_is_strict_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("IJT_NPM_AUDIT_MODE", raising=False)
+    node = _load_runner_at(
+        "OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests.py",
+        "ijt_node_runner_npm_audit_strict",
+    )
+    web = _load_runner_at(
+        "OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py",
+        "ijt_web_client_runner_npm_audit_strict",
+    )
+
+    node_status, node_detail = node._npm_audit_outcome(
+        1, "npm error audit endpoint returned an error: 503 Service Unavailable", 0, 0
+    )
+    web_rc, web_detail = web._npm_audit_outcome(
+        1, "npm error audit endpoint returned an error: 503 Service Unavailable"
+    )
+
+    assert (node_status, node_detail) == ("FAIL", "registry unavailable (strict mode)")
+    assert (web_rc, web_detail) == (1, "npm audit registry unavailable (strict mode)")
+
+
+def test_node_and_web_npm_audit_degraded_mode_only_allows_network_failure(monkeypatch) -> None:
+    monkeypatch.setenv("IJT_NPM_AUDIT_MODE", "degraded")
+    node = _load_runner_at(
+        "OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests.py",
+        "ijt_node_runner_npm_audit_degraded",
+    )
+    web = _load_runner_at(
+        "OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py",
+        "ijt_web_client_runner_npm_audit_degraded",
+    )
+    network_output = "npm error audit endpoint returned an error: 503 Service Unavailable"
+    vulnerability_output = json.dumps({"metadata": {"vulnerabilities": {"critical": 1, "high": 2}}})
+
+    assert node._npm_audit_outcome(1, network_output, 0, 0)[0] == "WARN"
+    assert web._npm_audit_outcome(1, network_output)[0] == 0
+    assert node._npm_audit_outcome(1, vulnerability_output, 1, 2)[0] == "FAIL"
+    assert web._npm_audit_outcome(1, vulnerability_output)[0] == 1
+
+
+def test_node_and_web_npm_audit_timeouts_are_bounded() -> None:
+    node = _load_runner_at(
+        "OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests.py",
+        "ijt_node_runner_npm_audit_timeout",
+    )
+    web = _load_runner_at(
+        "OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py",
+        "ijt_web_client_runner_npm_audit_timeout",
+    )
+
+    assert node._NPM_AUDIT_TIMEOUT_SECONDS == 15
+    assert web._NPM_AUDIT_TIMEOUT_SECONDS == 15
+
+
 def test_optional_import_typing_guard_passes_current_files() -> None:
     result = _runner._check_optional_import_typing()
 
@@ -1653,10 +1708,11 @@ def test_node_runner_subprocess_env_disables_npm_update_notifier(monkeypatch) ->
         returncode = 0
         stdout = "ok"
 
-    def _fake_run(cmd, *, cwd, env, check, stdout=None, text=None):
+    def _fake_run(cmd, *, cwd, env, check, stdout=None, stderr=None, text=None):
         captured.update(env)
         assert cwd == str(module._PROJECT_DIR)
         assert check is False
+        assert stderr is subprocess.STDOUT
         return _FakeCompleted()
 
     monkeypatch.setattr(module.subprocess, "run", _fake_run)
