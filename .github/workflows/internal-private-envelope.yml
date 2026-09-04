@@ -71,4 +71,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/OPC_UA_Clients/Release2/IJT_Web_Client:${{ github.workspace }}/OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope/python
           PYTEST_ADDOPTS: "--ignore=tests/python"
+          # Private-module validation remains blocking for findings/tool errors;
+          # npm advisory-service availability is reported as infrastructure.
+          IJT_NPM_AUDIT_MODE: offline
         run: python run_all_tests.py --suite web-client-static --private-modules require

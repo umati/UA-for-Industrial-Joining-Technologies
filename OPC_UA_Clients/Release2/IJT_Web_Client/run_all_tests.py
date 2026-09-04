@@ -679,7 +679,7 @@ def _looks_like_transient_network_failure(output: str) -> bool:
 
 def _npm_audit_mode() -> str:
     mode = os.getenv(_NPM_AUDIT_MODE_ENV, "strict").strip().lower()
-    if mode not in {"strict", "degraded"}:
+    if mode not in {"strict", "offline"}:
         _warn(f"invalid {_NPM_AUDIT_MODE_ENV}={mode!r}; using strict mode")
         return "strict"
     return mode
@@ -704,8 +704,8 @@ def _npm_audit_outcome(rc: int, output: str) -> tuple[int, str]:
     if critical > 0 or high > 0:
         return 1, f"npm audit: {critical} critical, {high} high"
     if rc == -1 or _npm_audit_network_failure(output):
-        if _npm_audit_mode() == "degraded":
-            return 0, "npm audit registry unavailable (degraded mode)"
+        if _npm_audit_mode() == "offline":
+            return 0, "npm audit registry unavailable (offline mode)"
         return 1, "npm audit registry unavailable (strict mode)"
     if rc != 0:
         return rc, f"npm audit tool error (exit {rc})"
@@ -1575,7 +1575,7 @@ def _stage_js_lint() -> StageResult:
             overall_rc = audit_rc
         if audit_note:
             if audit_rc == 0:
-                _warn("npm audit registry unavailable; degraded mode allows continuing")
+                _warn("npm audit registry unavailable; offline mode allows continuing")
             notes.append(audit_note)
 
     if (ROOT / "node_modules" / "depcheck").exists() or _cmd_available("depcheck"):

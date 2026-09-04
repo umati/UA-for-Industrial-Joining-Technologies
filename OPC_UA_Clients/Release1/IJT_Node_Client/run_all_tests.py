@@ -293,7 +293,7 @@ def _parse_audit_json(path: Path) -> tuple[int, int]:
 
 def _npm_audit_mode() -> str:
     mode = os.getenv(_NPM_AUDIT_MODE_ENV, "strict").strip().lower()
-    if mode not in {"strict", "degraded"}:
+    if mode not in {"strict", "offline"}:
         print(
             f"WARNING: invalid {_NPM_AUDIT_MODE_ENV}={mode!r}; using strict mode.",
             file=sys.stderr,
@@ -311,8 +311,8 @@ def _npm_audit_outcome(rc: int, output: str, critical: int, high: int) -> tuple[
     if critical > 0 or high > 0:
         return "FAIL", f"{critical} critical, {high} high"
     if rc == -1 or _npm_audit_network_failure(output):
-        if _npm_audit_mode() == "degraded":
-            return "WARN", "registry unavailable (degraded mode)"
+        if _npm_audit_mode() == "offline":
+            return "WARN", "registry unavailable (offline mode)"
         return "FAIL", "registry unavailable (strict mode)"
     if rc != 0:
         return "ERROR", f"tool error (exit {rc})"

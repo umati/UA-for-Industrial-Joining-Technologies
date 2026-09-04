@@ -67,7 +67,7 @@ PYTHON_AUDIT_REQUIREMENTS: tuple[Path, ...] = (
 PRECOMMIT_ARGS = ("run", "--all-files", "--show-diff-on-failure", "--color=always")
 NPM_AUDIT_MODE_ENV: Final[str] = "IJT_NPM_AUDIT_MODE"
 NPM_AUDIT_MODE_STRICT: Final[str] = "strict"
-NPM_AUDIT_MODE_DEGRADED: Final[str] = "degraded"
+NPM_AUDIT_MODE_OFFLINE: Final[str] = "offline"
 NPM_AUDIT_NETWORK_PATTERNS: Final[tuple[str, ...]] = (
     "ECONNRESET",
     "ETIMEDOUT",
@@ -198,7 +198,7 @@ def _safe_subprocess_run(
 def _run_npm_lock_audit(
     cwd: Path, label: str, retries: int = 1, timeout_seconds: float = 15.0
 ) -> int:
-    """Run npm audit on package-lock.json with strict/degraded network policy."""
+    """Run npm audit on package-lock.json with strict/offline policy."""
     package_lock = cwd / "package-lock.json"
     package_json = cwd / "package.json"
     if not package_json.exists():
@@ -217,7 +217,7 @@ def _run_npm_lock_audit(
         return 0
 
     audit_mode = os.environ.get(NPM_AUDIT_MODE_ENV, NPM_AUDIT_MODE_STRICT).strip().lower()
-    if audit_mode not in (NPM_AUDIT_MODE_STRICT, NPM_AUDIT_MODE_DEGRADED):
+    if audit_mode not in (NPM_AUDIT_MODE_STRICT, NPM_AUDIT_MODE_OFFLINE):
         log.warning(
             "[security] %s: invalid %s=%r; defaulting to '%s'",
             label,
@@ -277,10 +277,10 @@ def _run_npm_lock_audit(
                     )
                     time.sleep(2 * attempt)
                     continue
-                if audit_mode == NPM_AUDIT_MODE_DEGRADED:
+                if audit_mode == NPM_AUDIT_MODE_OFFLINE:
                     log.warning(
                         "[security] %s: npm audit registry endpoint unreachable/timed out "
-                        "(offline or restricted network); degraded mode allows continuing.",
+                        "(offline or restricted network); offline mode allows continuing.",
                         label,
                     )
                     return 0
@@ -290,7 +290,7 @@ def _run_npm_lock_audit(
                     "runs.",
                     label,
                     NPM_AUDIT_MODE_ENV,
-                    NPM_AUDIT_MODE_DEGRADED,
+                    NPM_AUDIT_MODE_OFFLINE,
                 )
                 return 1
 
@@ -312,10 +312,10 @@ def _run_npm_lock_audit(
                 )
                 time.sleep(2 * attempt)
                 continue
-            if audit_mode == NPM_AUDIT_MODE_DEGRADED:
+            if audit_mode == NPM_AUDIT_MODE_OFFLINE:
                 log.warning(
                     "[security] %s: npm audit registry request timed out (offline/slow network); "
-                    "degraded mode allows continuing.",
+                    "offline mode allows continuing.",
                     label,
                 )
                 return 0
@@ -325,7 +325,7 @@ def _run_npm_lock_audit(
                 "runs.",
                 label,
                 NPM_AUDIT_MODE_ENV,
-                NPM_AUDIT_MODE_DEGRADED,
+                NPM_AUDIT_MODE_OFFLINE,
             )
             return 1
 
@@ -483,7 +483,12 @@ def _run_all_npm_lock_audits() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args(argv)
+    parser.add_argument(
+        "--audits-only",
+        action="store_true",
+        help="Run dependency vulnerability audits without pre-commit hooks.",
+    )
+    args = parser.parse_args(argv)
 
     if not find_cmd("git.exe", "git"):
         print(
@@ -494,20 +499,23 @@ def main(argv: list[str] | None = None) -> int:
 
     overall_t0 = time.monotonic()
     try:
-        root_code = _run_precommit(REPO_ROOT, "IJT root")
-        if root_code != 0:
-            return root_code
+        if not args.audits_only:
+            root_code = _run_precommit(REPO_ROOT, "IJT root")
+            if root_code != 0:
+                return root_code
 
-        envelope_config = ENVELOPE_DIR / ".pre-commit-config.yaml"
-        if envelope_config.exists():
-            envelope_code = _run_precommit(ENVELOPE_DIR, "Envelope")
-            if envelope_code != 0:
-                return envelope_code
-        else:
-            log.info("[pre-commit] Envelope skipped: %s not found", envelope_config)
+            envelope_config = ENVELOPE_DIR / ".pre-commit-config.yaml"
+            if envelope_config.exists():
+                envelope_code = _run_precommit(ENVELOPE_DIR, "Envelope")
+                if envelope_code != 0:
+                    return envelope_code
+            else:
+                log.info("[pre-commit] Envelope skipped: %s not found", envelope_config)
 
         # Run audits sequentially to prevent package managers from competing for
-        # network sockets and triggering Cloudflare/registry concurrency rate limits.
+        # network sockets. Run every audit even after a failure so one unavailable
+        # ecosystem never hides the security status of the remaining ecosystems.
+        audit_failures: list[tuple[str, int]] = []
         for label, fn in [
             ("C# Client", _run_csharp_nuget_audit),
             ("npm audits", _run_all_npm_lock_audits),
@@ -516,10 +524,21 @@ def main(argv: list[str] | None = None) -> int:
             code = fn()
             if code != 0:
                 log.error("[security] %s audit failed with code %d", label, code)
-                return code
+                audit_failures.append((label, code))
+
+        if audit_failures:
+            log.error(
+                "[security] %d dependency audit group(s) failed: %s",
+                len(audit_failures),
+                ", ".join(label for label, _code in audit_failures),
+            )
+            return 1
 
         elapsed = time.monotonic() - overall_t0
-        log.info("All pre-commit checks and audits completed successfully in %.2fs", elapsed)
+        if args.audits_only:
+            log.info("All dependency vulnerability audits completed successfully in %.2fs", elapsed)
+        else:
+            log.info("All pre-commit checks and audits completed successfully in %.2fs", elapsed)
         return 0
     except RuntimeError as exc:
         print(f"Error: {exc}", file=sys.stderr)

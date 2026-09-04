@@ -207,9 +207,14 @@ npm lockfile audits in `run_precommit_all.py` and the Node/Web Client
 mode by default (`IJT_NPM_AUDIT_MODE=strict`). npm registry timeout/connectivity
 failures therefore fail quickly because security status is unknown, rather than
 hanging the suite. For explicitly offline local development only,
-`IJT_NPM_AUDIT_MODE=degraded` allows continuing on connectivity failures while still
+`IJT_NPM_AUDIT_MODE=offline` allows continuing on connectivity failures
+while still
 failing on reported high/critical vulnerabilities and non-network tool errors.
-Degraded mode must not be used for CI or release qualification.
+GitHub application/static lanes use offline handling so a recognized
+npm advisory-service outage is an infrastructure warning rather than a product
+failure. The dependency-security workflow reviews dependency changes on pull
+requests, monitors all ecosystems daily in offline mode, and provides
+manual strict release qualification.
 
 ### Test Tiers
 

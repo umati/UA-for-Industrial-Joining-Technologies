@@ -130,7 +130,7 @@ def test_npm_lock_audit_fails_on_network_error_in_strict_mode(tmp_path, monkeypa
     assert module._run_npm_lock_audit(d, "test-label", retries=1) == 1
 
 
-def test_npm_lock_audit_allows_network_error_in_degraded_mode(tmp_path, monkeypatch):
+def test_npm_lock_audit_allows_network_error_in_offline_mode(tmp_path, monkeypatch):
     module = _load_module()
     d = tmp_path / "proj"
     d.mkdir()
@@ -144,7 +144,7 @@ def test_npm_lock_audit_allows_network_error_in_degraded_mode(tmp_path, monkeypa
             cmd, 1, stdout="", stderr="ETIMEDOUT"
         ),
     )
-    monkeypatch.setenv("IJT_NPM_AUDIT_MODE", "degraded")
+    monkeypatch.setenv("IJT_NPM_AUDIT_MODE", "offline")
     assert module._run_npm_lock_audit(d, "test-label", retries=1) == 0
 
 
@@ -160,6 +160,34 @@ def test_audit_failure_returns_non_zero(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(module, "_run_npm_lock_audit", lambda *args: 1)
     assert module.main([]) != 0
+
+
+def test_audits_only_runs_every_ecosystem_and_skips_precommit(tmp_path, monkeypatch):
+    module = _load_module()
+    root = tmp_path / "root"
+    monkeypatch.setattr(module, "REPO_ROOT", root)
+    monkeypatch.setattr(module, "ENVELOPE_DIR", root / "missing_envelope")
+    monkeypatch.setattr(module, "find_cmd", lambda *args: "git")
+    monkeypatch.setattr(
+        module,
+        "_run_precommit",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("pre-commit must not run")),
+    )
+    calls = []
+
+    def audit(name, code):
+        def run():
+            calls.append(name)
+            return code
+
+        return run
+
+    monkeypatch.setattr(module, "_run_csharp_nuget_audit", audit("nuget", 0))
+    monkeypatch.setattr(module, "_run_all_npm_lock_audits", audit("npm", 1))
+    monkeypatch.setattr(module, "_run_python_requirements_audit", audit("python", 0))
+
+    assert module.main(["--audits-only"]) == 1
+    assert calls == ["nuget", "npm", "python"]
 
 
 def test_csharp_nuget_audit_skipped_when_sln_missing(tmp_path, monkeypatch):

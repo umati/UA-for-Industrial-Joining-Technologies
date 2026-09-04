@@ -49,8 +49,14 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
   strict mode by default (`IJT_NPM_AUDIT_MODE=strict`), so npm registry
   timeout/connectivity failures fail because vulnerability status is unknown. Audit
   subprocesses are bounded to 15 seconds to prevent an unavailable advisory endpoint from
-  hanging validation. `IJT_NPM_AUDIT_MODE=degraded` exists only for explicitly
-  offline/restricted local development and must not be used for CI or release qualification.
+  hanging validation. `IJT_NPM_AUDIT_MODE=offline` exists only for
+  explicitly
+  offline/restricted local development. GitHub application/static lanes also use this
+  availability policy so a verified advisory-service outage is reported as infrastructure
+  rather than a product defect; high/critical findings and non-network tool errors remain
+  blocking. The dedicated dependency-security workflow reviews dependency changes
+  on pull requests, monitors all ecosystems daily in offline mode, and
+  provides a manual strict release-qualification audit.
 - GitHub Actions workflow files are audited by [zizmor](https://woodruffw.github.io/zizmor/)
   in the CI workflow when `.github/workflows/` changes, or on manual dispatch. Findings are
   uploaded as SARIF to GitHub Code Scanning (Security → Code scanning alerts). High/Critical

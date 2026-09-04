@@ -32,9 +32,13 @@ python run_precommit_all.py
 at high severity. npm lockfile audits use a bounded 15-second process timeout and
 default to **strict** connectivity mode (`IJT_NPM_AUDIT_MODE=strict`): registry
 timeout/connectivity failures fail quickly because vulnerability status is unknown.
-Use `IJT_NPM_AUDIT_MODE=degraded` only for explicitly offline local runs; actual
-high/critical vulnerability findings and non-network tool failures still fail in
-both modes. Never use degraded mode for CI or release qualification.
+Use `IJT_NPM_AUDIT_MODE=offline` for explicitly offline local runs. GitHub
+application/static lanes use the same availability policy so recognized npm
+advisory-service outages are reported as infrastructure warnings rather than
+product failures. Actual high/critical findings and non-network tool failures
+still fail in both modes. The dependency-security workflow reviews pull-request
+dependency changes, runs daily monitoring, and provides manual strict release
+qualification.
 
 ### Full Test Suite
 

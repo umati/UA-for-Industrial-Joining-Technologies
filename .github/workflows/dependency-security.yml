@@ -1,0 +1,83 @@
+name: "Security - Dependency Review and Audits"
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  dependency-review:
+    name: PR Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Block newly introduced high or critical vulnerabilities
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0
+        with:
+          fail-on-severity: high
+
+  dependency-audits:
+    name: Cross-Ecosystem Dependency Audits
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version-file: ".python-version"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: ".nvmrc"
+          check-latest: true
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Run dependency vulnerability audits
+        env:
+          IJT_NPM_AUDIT_MODE: ${{ github.event_name == 'workflow_dispatch' && 'strict' || 'offline' }}
+        run: python run_precommit_all.py --audits-only 2>&1 | tee dependency-audit.log
+
+      - name: Upload dependency audit log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: dependency-audit-${{ github.run_id }}
+          path: dependency-audit.log
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record audit policy
+        if: always()
+        env:
+          AUDIT_MODE: ${{ github.event_name == 'workflow_dispatch' && 'strict' || 'offline' }}
+        run: |
+          {
+            echo "## Dependency audit"
+            echo
+            echo "- Mode: \`$AUDIT_MODE\`"
+            echo "- Ecosystems: npm, Python, NuGet"
+            echo "- Daily scheduled runs report recognized advisory-service outages without misclassifying product code."
+            echo "- Manual runs fail closed and provide release-qualification evidence for the selected ref."
+          } >> "$GITHUB_STEP_SUMMARY"

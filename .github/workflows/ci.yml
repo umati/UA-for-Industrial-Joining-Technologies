@@ -185,6 +185,11 @@ jobs:
       - name: Run Web Client JavaScript Phase 1 runner
         id: web_js_runner
         continue-on-error: true
+        env:
+          # Product CI remains blocking for findings/tool errors, but a verified
+          # npm advisory-service outage is infrastructure availability, not a
+          # Web Client defect.
+          IJT_NPM_AUDIT_MODE: offline
         run: python run_all_tests.py --phase1-js
 
       - name: "Publish Test Reports — JS"
@@ -368,15 +373,29 @@ jobs:
         id: npm_audit
         continue-on-error: true
         run: |
+          audit_rc=1
           for attempt in 1 2 3; do
-            if npm audit --audit-level=high --json > test-results/npm-audit.json; then
-              break
+            if npm audit --package-lock-only --audit-level=high --json \
+              --fetch-timeout=10000 --fetch-retries=1 \
+              > test-results/npm-audit.json 2> test-results/npm-audit.stderr.log; then
+              exit 0
+            else
+              audit_rc=$?
+            fi
+            audit_output="$(cat test-results/npm-audit.json test-results/npm-audit.stderr.log)"
+            if ! grep -Eqi \
+              'ECONNRESET|ETIMEDOUT|ENOTFOUND|ERR_SOCKET|fetch failed|network timeout at|audit endpoint returned an error|service unavailable|request to https://registry\.npmjs\.org' \
+              <<< "$audit_output"; then
+              cat test-results/npm-audit.stderr.log >&2
+              exit "$audit_rc"
             fi
             if [ "$attempt" -lt 3 ]; then
-              echo "npm audit failed (attempt $attempt/3); retrying in 5s..."
+              echo "::warning::npm audit advisory endpoint unavailable (attempt $attempt/3); retrying in 5s"
               sleep 5
             fi
           done
+          echo "::warning::npm audit advisory endpoint remained unavailable; dependency findings could not be refreshed"
+          exit 0
 
       - name: Publish Test Reports
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0

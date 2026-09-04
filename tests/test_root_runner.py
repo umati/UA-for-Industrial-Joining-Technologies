@@ -1579,15 +1579,17 @@ def test_node_and_web_npm_audit_network_policy_is_strict_by_default(monkeypatch)
     assert (web_rc, web_detail) == (1, "npm audit registry unavailable (strict mode)")
 
 
-def test_node_and_web_npm_audit_degraded_mode_only_allows_network_failure(monkeypatch) -> None:
-    monkeypatch.setenv("IJT_NPM_AUDIT_MODE", "degraded")
+def test_node_and_web_npm_audit_offline_mode_only_allows_network_failure(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("IJT_NPM_AUDIT_MODE", "offline")
     node = _load_runner_at(
         "OPC_UA_Clients/Release1/IJT_Node_Client/run_all_tests.py",
-        "ijt_node_runner_npm_audit_degraded",
+        "ijt_node_runner_npm_audit_offline",
     )
     web = _load_runner_at(
         "OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py",
-        "ijt_web_client_runner_npm_audit_degraded",
+        "ijt_web_client_runner_npm_audit_offline",
     )
     network_output = "npm error audit endpoint returned an error: 503 Service Unavailable"
     vulnerability_output = json.dumps({"metadata": {"vulnerabilities": {"critical": 1, "high": 2}}})
@@ -1849,6 +1851,38 @@ def test_ci_web_client_splits_local_phase1_runner_by_language_lane() -> None:
     assert "npx vitest run --coverage" not in web_jobs
     assert "steps.web_python_runner.outcome" in web_jobs
     assert "steps.web_js_runner.outcome" in web_jobs
+    assert "IJT_NPM_AUDIT_MODE: offline" in web_jobs
+
+
+def test_ci_npm_audit_outages_are_advisory_but_findings_still_block() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    node_job = workflow.split("  node-client:", 1)[1].split("  docker-smoke:", 1)[0]
+    private_workflow = (
+        _runner.REPO_ROOT / ".github" / "workflows" / "internal-private-envelope.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "--audit-level=high" in node_job
+    assert "--fetch-timeout=10000" in node_job
+    assert "audit_rc=$?" in node_job
+    assert 'exit "$audit_rc"' in node_job
+    assert "advisory endpoint remained unavailable" in node_job
+    assert "IJT_NPM_AUDIT_MODE: offline" in private_workflow
+
+
+def test_dependency_security_workflow_separates_monitoring_and_release_policy() -> None:
+    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "dependency-security.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "pull_request:" in workflow
+    assert "schedule:" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294" in workflow
+    assert "fail-on-severity: high" in workflow
+    assert "python run_precommit_all.py --audits-only" in workflow
+    assert "'strict' || 'offline'" in workflow
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in workflow
+    assert "contents: read" in workflow
 
 
 def test_ci_web_client_docker_smoke_uses_immutable_stack_without_remote_cache() -> None:
