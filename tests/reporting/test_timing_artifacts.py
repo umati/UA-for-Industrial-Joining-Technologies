@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -91,7 +90,7 @@ def test_local_runner_payload_records_suite_results() -> None:
     assert payload["jobs"][0]["stages"][0]["duration_seconds"] == 1.234
 
 
-def test_write_timing_bundle_writes_aggregate_latest_and_per_job() -> None:
+def test_write_timing_bundle_writes_aggregate_latest_and_per_job(tmp_path: Path) -> None:
     payload = actions_payload_from_jobs(
         workflow_name="CI",
         generated_utc="2026-05-17T10:00:00Z",
@@ -108,19 +107,13 @@ def test_write_timing_bundle_writes_aggregate_latest_and_per_job() -> None:
         ],
     )
 
-    scratch = REPO_ROOT / "test-results" / "timing-artifacts-unit"
-    if scratch.exists():
-        shutil.rmtree(scratch, ignore_errors=True)
-    try:
-        paths = write_timing_bundle(payload, scratch)
+    scratch = tmp_path / "timing-artifacts-unit"
+    paths = write_timing_bundle(payload, scratch)
 
-        assert paths["aggregate"].is_file()
-        assert paths["latest"].is_file()
-        assert paths["jobs"][0].is_file()
-        aggregate = json.loads(paths["aggregate"].read_text(encoding="utf-8"))
-        job_payload = json.loads(paths["jobs"][0].read_text(encoding="utf-8"))
-        assert aggregate["schema_version"] == 1
-        assert job_payload["jobs"][0]["name"] == "Job One"
-    finally:
-        if scratch.exists():
-            shutil.rmtree(scratch, ignore_errors=True)
+    assert paths["aggregate"].is_file()
+    assert paths["latest"].is_file()
+    assert paths["jobs"][0].is_file()
+    aggregate = json.loads(paths["aggregate"].read_text(encoding="utf-8"))
+    job_payload = json.loads(paths["jobs"][0].read_text(encoding="utf-8"))
+    assert aggregate["schema_version"] == 1
+    assert job_payload["jobs"][0]["name"] == "Job One"

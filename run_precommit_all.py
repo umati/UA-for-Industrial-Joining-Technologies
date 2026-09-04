@@ -196,7 +196,7 @@ def _safe_subprocess_run(
 
 
 def _run_npm_lock_audit(
-    cwd: Path, label: str, retries: int = 1, timeout_seconds: float = 15.0
+    cwd: Path, label: str, retries: int = 2, timeout_seconds: float = 15.0
 ) -> int:
     """Run npm audit on package-lock.json with strict/offline policy."""
     package_lock = cwd / "package-lock.json"

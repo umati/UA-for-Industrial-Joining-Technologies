@@ -318,6 +318,7 @@ def write_timing_bundle(payload: dict[str, Any], output_dir: str | Path) -> dict
             "warnings": payload.get("warnings", []),
         }
         job_path = jobs_dir / f"{index:02d}-{_slug(_text(job.get('name'), 'job'))}.json"
+        job_path.parent.mkdir(parents=True, exist_ok=True)
         job_path.write_text(
             json.dumps(job_payload, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

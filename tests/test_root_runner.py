@@ -4,7 +4,6 @@ import importlib.util
 import json
 import logging
 import re
-import shutil
 import subprocess
 import sys
 import tomllib
@@ -543,10 +542,8 @@ def test_total_test_outcomes_show_pass_fail_skip_breakdown() -> None:
     )
 
 
-def test_root_runner_writes_timing_artifacts(monkeypatch) -> None:
-    scratch = _runner.REPO_ROOT / "test-results" / "root-runner-timing-unit"
-    if scratch.exists():
-        shutil.rmtree(scratch, ignore_errors=True)
+def test_root_runner_writes_timing_artifacts(monkeypatch, tmp_path: Path) -> None:
+    scratch = tmp_path / "root-runner-timing-unit"
     monkeypatch.setattr(_runner, "ROOT", scratch)
     result = _runner.SuiteResult(
         "repo-static-gitignore-check",
@@ -555,20 +552,16 @@ def test_root_runner_writes_timing_artifacts(monkeypatch) -> None:
         notes=["ok"],
     )
 
-    try:
-        _runner._write_timing_artifacts([result], 2.5, "suite:repo-static-gitignore-check")
+    _runner._write_timing_artifacts([result], 2.5, "suite:repo-static-gitignore-check")
 
-        aggregate_path = scratch / "test-results" / "timing" / "timing-aggregate.json"
-        per_job_path = scratch / "test-results" / "timing" / "jobs" / "01-local-root-runner.json"
-        payload = json.loads(aggregate_path.read_text(encoding="utf-8"))
-        per_job = json.loads(per_job_path.read_text(encoding="utf-8"))
-        assert payload["schema_version"] == 1
-        assert payload["source"]["mode"] == "suite:repo-static-gitignore-check"
-        assert payload["jobs"][0]["stages"][0]["name"] == "repo-static-gitignore-check"
-        assert per_job["jobs"][0]["name"] == "Local Root Runner"
-    finally:
-        if scratch.exists():
-            shutil.rmtree(scratch, ignore_errors=True)
+    aggregate_path = scratch / "test-results" / "timing" / "timing-aggregate.json"
+    per_job_path = scratch / "test-results" / "timing" / "jobs" / "01-local-root-runner.json"
+    payload = json.loads(aggregate_path.read_text(encoding="utf-8"))
+    per_job = json.loads(per_job_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 1
+    assert payload["source"]["mode"] == "suite:repo-static-gitignore-check"
+    assert payload["jobs"][0]["stages"][0]["name"] == "repo-static-gitignore-check"
+    assert per_job["jobs"][0]["name"] == "Local Root Runner"
 
 
 def test_suite_ids_match_naming_pattern() -> None:
