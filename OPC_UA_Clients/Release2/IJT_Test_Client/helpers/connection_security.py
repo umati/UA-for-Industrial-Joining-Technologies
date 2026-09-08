@@ -484,6 +484,8 @@ async def apply_connection_security(
             ) from exc
 
     # Log security config before credentials are ever resolved — never log credential values.
+    # CodeQL false-positive: describe_connection_security formats the env-var name, not a secret.
+    # codeql[py/clear-text-logging-sensitive-data]
     logger.info("Applied SUT connection security (%s)", describe_connection_security(config))
     resolved = credentials if credentials is not None else resolve_credentials(config, env=env, prompt=prompt)
     if resolved is not None:

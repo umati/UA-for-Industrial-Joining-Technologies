@@ -727,7 +727,7 @@ jobs:
     name: "Browser CI image - build (cold path)"
     needs: prepare-browser-image-plan
     if: needs.prepare-browser-image-plan.outputs.plan == 'build'
-    uses: ./.github/workflows/build-browser-ci-image.yml
+    uses: $/.github/workflows/build-browser-ci-image.yml
     permissions:
       contents: read
       packages: write

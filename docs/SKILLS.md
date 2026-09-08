@@ -402,7 +402,7 @@ UA-for-Industrial-Joining-Technologies/
 | `csharp-unit` | dotnet restore (locked mode) + build (`-warnaserror`) + xUnit unit tests (`Category!=Live`, `--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
 | `csharp-vuln` | NuGet vulnerability scan (`--vulnerable --include-transitive`); fails on known CVEs |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
-| `actionlint` | GitHub Actions syntax/static validation for workflow changes |
+| `actionlint` | GitHub Actions syntax/static validation for workflow changes (configured in `.github/actionlint.yaml`) |
 | `zizmor` | GitHub Actions security audit with SARIF upload to Code Scanning; local root-runner parsing fails High/Critical findings from current zizmor v1 JSON output |
 | `pre-commit` | Runs `.pre-commit-config.yaml` on all files with npm-backed JS hooks skipped because dedicated JS jobs already own them |
 | `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · coverage/threshold cells from each client gate · skip-budget and coverage-threshold warnings · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |

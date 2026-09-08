@@ -1,0 +1,8 @@
+# Configuration for actionlint
+# https://github.com/rhysd/actionlint/blob/main/docs/config.md
+paths:
+  .github/workflows/integration.yml:
+    ignore:
+      # GitHub's dedicated self-repository syntax ($/) is required by zizmor/self-repository.
+      # Upstream actionlint currently expects owner/repo or ./ only.
+      - 'reusable workflow call "\$\/\.github\/workflows\/build-browser-ci-image\.yml" at "uses"'

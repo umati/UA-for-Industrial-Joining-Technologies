@@ -1292,22 +1292,29 @@ def _find_zizmor() -> str | None:
     found = shutil.which("zizmor")
     if found:
         return found
-    if sys.platform == "win32":
-        candidates: list[Path] = [
-            Path(sys.executable).parent / "Scripts" / "zizmor.exe",
-            Path(sys.prefix) / "Scripts" / "zizmor.exe",
-            Path(sys.exec_prefix) / "Scripts" / "zizmor.exe",
-        ]
-        with contextlib.suppress(Exception):
-            import site
+    binary_name = "zizmor.exe" if sys.platform == "win32" else "zizmor"
+    script_subdir = "Scripts" if sys.platform == "win32" else "bin"
+    user_scheme = "nt_user" if sys.platform == "win32" else "posix_user"
+    candidates: list[Path] = [
+        # In a virtual environment or root install, executable parent often houses scripts
+        Path(sys.executable).parent / binary_name,
+        Path(sys.executable).parent / script_subdir / binary_name,
+        Path(sys.prefix) / script_subdir / binary_name,
+        Path(sys.exec_prefix) / script_subdir / binary_name,
+    ]
+    with contextlib.suppress(Exception):
+        import sysconfig
 
-            user_base = site.getuserbase()
-            if user_base:
-                candidates.append(Path(user_base) / "Scripts" / "zizmor.exe")
-        for candidate in candidates:
-            if candidate.is_file():
-                _prepend_to_path(str(candidate.parent))
-                return str(candidate)
+        scripts_dir = sysconfig.get_path("scripts")
+        if scripts_dir:
+            candidates.append(Path(scripts_dir) / binary_name)
+        user_scripts = sysconfig.get_path("scripts", scheme=user_scheme)
+        if user_scripts:
+            candidates.append(Path(user_scripts) / binary_name)
+    for candidate in candidates:
+        if candidate.is_file():
+            _prepend_to_path(str(candidate.parent))
+            return str(candidate)
     return None
 
 
