@@ -19,7 +19,10 @@ from defusedxml import ElementTree as ET
 REPO = "umati/UA-for-Industrial-Joining-Technologies"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_PATH = REPO_ROOT / "tests" / "baselines" / "integration-test-counts.json"
-INTEGRATION_WORKFLOW = "System Tests — Live OPC UA, Browser, Docker, Conformance"
+INTEGRATION_WORKFLOWS = (
+    "System Tests — Live OPC UA, Browser, Docker, Specification Testing",
+    "System Tests — Live OPC UA, Browser, Docker, Conformance",
+)
 
 ARTIFACT_SPECS: dict[str, list[tuple[str, tuple[str, ...]]]] = {
     "sd_smoke": [("results-server-smoke-docker", ("smoke.xml",))],
@@ -154,7 +157,7 @@ def _collect_suite_counts(run_id: str, suite: str) -> dict[str, int]:
 def _validate_run(run_id: str) -> dict:
     payload = _run_gh_json(run_id)
     workflow_name = payload.get("workflowName") or payload.get("displayTitle")
-    if workflow_name != INTEGRATION_WORKFLOW:
+    if workflow_name not in INTEGRATION_WORKFLOWS:
         raise SystemExit(f"Run {run_id} is not an Integration run.")
     if payload.get("conclusion") != "success":
         raise SystemExit(f"Run {run_id} is not green; conclusion={payload.get('conclusion')!r}.")

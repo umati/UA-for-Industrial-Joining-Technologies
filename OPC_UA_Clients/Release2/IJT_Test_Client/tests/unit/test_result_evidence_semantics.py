@@ -76,9 +76,9 @@ def _meta_node(result_ids: list[str]) -> MagicMock:
     return node
 
 
-def _accepted_trigger() -> MagicMock:
+def _accepted_trigger(*, is_simulator: bool = True) -> MagicMock:
     trigger = MagicMock()
-    trigger.is_simulator = False
+    trigger.is_simulator = is_simulator
     trigger.active_result_timeout_s = 60.0
     trigger.passive_observation_timeout_s = 5.0
     trigger.trigger_single = AsyncMock(return_value=TriggerOutcome(triggered=True, method="StartSelectedJoining"))
@@ -125,6 +125,23 @@ class TestLastResultMetadataAfterTrigger:
         ):
             await _access.test_last_result_metadata_updated_after_trigger(MagicMock(), _accepted_trigger(), _NS)
         # The whole 60 s budget was exercised on the virtual clock only.
+        assert clock["slept"] >= 60.0
+
+    async def test_accepted_start_on_controller_without_variable_update_skips_as_accepted_policy(self):
+        """Accepted trigger on physical controller where variable is not updated skips as accepted policy."""
+        meta_node = _meta_node(["RESULT-1", "RESULT-1"])
+        p1, p2, p3 = self._patches(meta_node)
+        with (
+            _virtual_clock() as clock,
+            p1,
+            p2,
+            p3,
+            pytest.raises(_SKIPPED) as exc_info,
+        ):
+            await _access.test_last_result_metadata_updated_after_trigger(
+                MagicMock(), _accepted_trigger(is_simulator=False), _NS
+            )
+        assert "ACCEPTED POLICY" in str(exc_info.value)
         assert clock["slept"] >= 60.0
 
     async def test_accepted_start_with_new_result_passes(self):
