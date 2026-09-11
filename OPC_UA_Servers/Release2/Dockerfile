@@ -28,30 +28,29 @@
 #   OPCUA_SERVER_PORT=40452 docker compose up
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Multi-stage build: stage 1 extracts the Linux simulator ZIP using minimal BusyBox.
+FROM busybox:stable-musl AS extractor
+WORKDIR /tmp
+COPY OPC_UA_IJT_Server_Simulator_Linux.zip server.zip
+RUN unzip -q server.zip
+
 FROM ubuntu:26.04
-ARG DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 
-# ── Extract server ZIP + install system utilities ─────────────────────────────
-# All steps in one layer: install unzip, extract, purge unzip → no size bloat.
-# iproute2       : IP address detection for OPCUA_HOSTNAME auto-resolve
-# netcat-openbsd : TCP probe used in HEALTHCHECK
-# hadolint ignore=DL3008,DL3009
-COPY OPC_UA_IJT_Server_Simulator_Linux.zip /tmp/server.zip
+# Run as dedicated non-root user with deterministic UID/GID (CIS Benchmark 4.1 / 4.2)
+RUN groupadd -g 10001 opcua && \
+    useradd -u 10001 -g opcua -d /app -s /bin/false opcua
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        iproute2 \
-        netcat-openbsd \
-        unzip && \
-    unzip -q /tmp/server.zip -d /tmp/ && \
-    cp -a /tmp/OPC_UA_IJT_Server_Simulator_Linux/. /app/ && \
-    chmod +x /app/opcua_ijt_demo_application && \
+# Copy the extracted simulator from the extractor stage.
+# No package installation (apt-get) is needed: the Linux binary is statically
+# linked (requiring only glibc from the base image), IP detection uses standard
+# GNU hostname -I, and the TCP healthcheck uses native bash /dev/tcp.
+# Setting ownership on COPY avoids duplicate layer storage overhead in OverlayFS.
+COPY --chown=10001:10001 --from=extractor /tmp/OPC_UA_IJT_Server_Simulator_Linux/. /app/
+RUN chmod +x /app/opcua_ijt_demo_application && \
     mkdir -p /app/pki && \
-    apt-get purge -y unzip && \
-    apt-get autoremove -y && \
-    rm -rf /tmp/server.zip /tmp/OPC_UA_IJT_Server_Simulator_Linux /var/lib/apt/lists/*
+    chown -R opcua:opcua /app
 
 # ── Entrypoint — inline shell script written to /entrypoint.sh ───────────────
 # Kept inline (heredoc) so the entire Docker configuration lives in one file.
@@ -62,14 +61,15 @@ RUN printf '%s\n' \
     '#!/bin/bash' \
     'set -euo pipefail' \
     '' \
-    '# Resolve OPCUA_HOSTNAME: explicit env > host.docker.internal > default route > 0.0.0.0' \
+    '# Resolve OPCUA_HOSTNAME: explicit env > default route egress > local interface IP > localhost' \
     'if [ -z "${OPCUA_HOSTNAME:-}" ]; then' \
-    '  OPCUA_HOSTNAME=$(getent hosts host.docker.internal 2>/dev/null | awk "{print \$1}" | head -1) || true' \
-    '  if [ -z "$OPCUA_HOSTNAME" ]; then' \
-    '    # Extract src IP from: "1.0.0.0 via <gw> dev <if> src <ip> uid 0"' \
-    '    OPCUA_HOSTNAME=$(ip route get 1.0.0.0 2>/dev/null | grep -oP "src \K\S+") || true' \
+    '  if command -v ip >/dev/null 2>&1; then' \
+    '    OPCUA_HOSTNAME=$(ip route get 1.0.0.0 2>/dev/null | awk "{for(i=1;i<=NF;i++) if(\$i==\"src\") print \$(i+1); exit}") || true' \
     '  fi' \
-    '  OPCUA_HOSTNAME="${OPCUA_HOSTNAME:-0.0.0.0}"' \
+    '  if [ -z "$OPCUA_HOSTNAME" ]; then' \
+    '    OPCUA_HOSTNAME=$(hostname -I 2>/dev/null | awk "{print \$1}") || true' \
+    '  fi' \
+    '  OPCUA_HOSTNAME="${OPCUA_HOSTNAME:-localhost}"' \
     'fi' \
     'export OPCUA_HOSTNAME' \
     '' \
@@ -95,12 +95,12 @@ ENV RUNNING_IN_DOCKER=1 \
     OPCUA_HOSTNAME="" \
     OPCUA_SERVER_PORT="40451"
 
-# Run as non-root for security
-RUN useradd -r -s /bin/false opcua && chown -R opcua:opcua /app
 USER opcua
 
-# TCP readiness probe. start-period covers server init (~3 s; no Wine JIT overhead).
+# TCP readiness probe via native bash /dev/tcp (zero external tools required).
+# Wrapped with timeout 3 to prevent blocking socket hangs.
+# start-period covers server init (~3 s; no Wine JIT overhead).
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 \
-    CMD nc -z localhost ${OPCUA_SERVER_PORT:-40451} || exit 1
+    CMD timeout 3 bash -c "</dev/tcp/127.0.0.1/${OPCUA_SERVER_PORT:-40451}" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

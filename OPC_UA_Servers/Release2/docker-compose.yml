@@ -33,7 +33,7 @@ services:
       OPCUA_SERVER_PORT: ${OPCUA_SERVER_PORT:-40451}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost ${OPCUA_SERVER_PORT:-40451} || exit 1"]
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/${OPCUA_SERVER_PORT:-40451}' || exit 1"]
       interval: 10s
       timeout: 5s
       start_period: 20s

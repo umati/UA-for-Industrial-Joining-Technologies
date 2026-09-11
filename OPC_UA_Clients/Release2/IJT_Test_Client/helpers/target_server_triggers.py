@@ -1314,7 +1314,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                     "JoiningProcessOriginId",
                     "JoiningProcessIdentificationOrigin",
                 ),
-                _process_classification(process),
+                cls.value if (cls := _process_classification(process)) is not None else None,
             )
             for process in processes
         ]

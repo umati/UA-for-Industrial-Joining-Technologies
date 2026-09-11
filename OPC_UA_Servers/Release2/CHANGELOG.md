@@ -1,5 +1,13 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-09-11
+
+1. Refactored the Linux simulator Docker build to a production-grade multi-stage architecture using an ephemeral BusyBox stage to extract the server archive, eliminating all `apt-get` external package downloads during container build.
+2. Fixed cold Docker build timeouts caused by corporate firewalls or proxy rules blocking outbound HTTP (port 80) traffic to Ubuntu archive package mirrors.
+3. Hardened Docker container security compliant with CIS Docker Benchmarks by executing as dedicated non-root user `opcua` (UID/GID 10001) and eliminating duplicate layer storage bloat via `COPY --chown=10001:10001`.
+4. Synchronized `docker-compose.yml` healthcheck with Dockerfile using native Bash `/dev/tcp` with a 3-second timeout, resolving `nc: not found` container health check failures.
+5. Improved entrypoint IP resolution by removing the `host.docker.internal` gateway address trap and ensuring clean discovery fallback across isolated and bridge networks.
+
 ## 2026-06-03
 
 1. Updated the simulator version to 1.15.0.
