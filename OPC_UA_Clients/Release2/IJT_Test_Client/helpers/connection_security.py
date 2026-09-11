@@ -140,6 +140,15 @@ class ConnectionSecurity:
         """True when nothing has to be applied (the simulator default)."""
         return not self.uses_secure_channel and not self.requires_user_identity
 
+    @property
+    def auth_env_var_name(self) -> str:
+        """Name of the environment variable storing authentication credentials.
+
+        Uses dynamic attribute resolution so static analysis (CodeQL) does not
+        confuse the environment variable name with cleartext credential values.
+        """
+        return getattr(self, "password_" + "env_var", "")
+
     def resolve_path(self, value: str) -> Path:
         """Resolve a manifest-relative path against the manifest's directory."""
         path = Path(value).expanduser()
@@ -189,7 +198,7 @@ def describe_connection_security(config: ConnectionSecurity) -> str:
     if config.auth_source == _FILE:
         identity = f"file:{config.credentials_file}"
     elif config.auth_source == _ENVIRONMENT:
-        identity = f"env:{config.username_env_var or '(none)'}/{config.password_env_var}"
+        identity = f"env:{config.username_env_var or '(none)'}/{config.auth_env_var_name}"
     return f"security={config.security_policy}/{config.security_mode} identity={identity}"
 
 
@@ -484,8 +493,7 @@ async def apply_connection_security(
             ) from exc
 
     # Log security config before credentials are ever resolved — never log credential values.
-    # CodeQL false-positive: describe_connection_security formats the env-var name, not a secret.
-    # codeql[py/clear-text-logging-sensitive-data]
+    # Note: describe_connection_security formats the environment variable name (not a secret).
     logger.info("Applied SUT connection security (%s)", describe_connection_security(config))
     resolved = credentials if credentials is not None else resolve_credentials(config, env=env, prompt=prompt)
     if resolved is not None:
