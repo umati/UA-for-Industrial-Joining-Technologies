@@ -163,3 +163,55 @@ def test_main_keeps_github_actions_prerequisites_strict(monkeypatch):
     rc = runner.main()
 
     assert rc == 1
+
+
+def test_step_opcua_security_tests_blame_hang_timeout_covers_docker_build(monkeypatch):
+    runner = _load_csharp_runner()
+    recorded_cmd: list[str] = []
+
+    def fake_run(cmd, env=None, capture_stdout=False):
+        recorded_cmd.extend(cmd)
+        return 0, ""
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_parse_trx", lambda path: (1, 0, 0, 1))
+
+    # 1. Default timeout must be at least 360s (covering DockerComposeBuildUpTimeoutMs)
+    runner._step_opcua_security_tests("csharp-client-opcua-security-linux", "linux", 40476)
+    assert "--blame-hang" in recorded_cmd
+    blame_idx = recorded_cmd.index("--blame-hang-timeout")
+    timeout_str = recorded_cmd[blame_idx + 1]
+    assert timeout_str.endswith("s")
+    assert int(timeout_str[:-1]) >= 360
+
+    # 2. Honors custom env override
+    recorded_cmd.clear()
+    monkeypatch.setenv("IJT_OPCUA_SECURITY_BLAME_HANG_TIMEOUT", "480s")
+    runner._step_opcua_security_tests("csharp-client-opcua-security-linux", "linux", 40476)
+    blame_idx = recorded_cmd.index("--blame-hang-timeout")
+    assert recorded_cmd[blame_idx + 1] == "480s"
+
+
+def test_step_live_tests_blame_hang_timeout_honors_env(monkeypatch):
+    runner = _load_csharp_runner()
+    recorded_cmd: list[str] = []
+
+    def fake_run(cmd, env=None, capture_stdout=False):
+        recorded_cmd.extend(cmd)
+        return 0, ""
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_parse_trx", lambda path: (1, 0, 0, 1))
+
+    # Default is 60s
+    runner._step_live_tests("opc.tcp://localhost:40464")
+    assert "--blame-hang" in recorded_cmd
+    blame_idx = recorded_cmd.index("--blame-hang-timeout")
+    assert recorded_cmd[blame_idx + 1] == "60s"
+
+    # Honors override
+    recorded_cmd.clear()
+    monkeypatch.setenv("IJT_LIVE_BLAME_HANG_TIMEOUT", "90s")
+    runner._step_live_tests("opc.tcp://localhost:40464")
+    blame_idx = recorded_cmd.index("--blame-hang-timeout")
+    assert recorded_cmd[blame_idx + 1] == "90s"

@@ -73,6 +73,9 @@ _OPCUA_SECURITY_TARGETS = {
     "csharp-client-opcua-security-windows": ("windows", 40475),
     "csharp-client-opcua-security-linux": ("linux", 40476),
 }
+# Matches OpcUaServerFixture.cs DockerComposeBuildUpTimeoutMs (360s) with safety margin
+# so the fixture's own diagnostics and process cleanup fire before VSTest blame kills testhost.
+_OPCUA_SECURITY_BLAME_HANG_TIMEOUT_DEFAULT = "400s"
 _OPCUA_SECURITY_BUILD_CONTRACT_TARGET = "csharp-client-opcua-security-build-contract"
 _OPCUA_SECURITY_BUILD_CONTRACT_PROJECTS = (
     "IJT_CSharp_Client.Tests",
@@ -1082,6 +1085,11 @@ def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
     trx_path = _RESULTS_DIR / "live-tests.trx"
     t0 = time.monotonic()
     verbosity = ["--verbosity", "normal"] if verbose else ["--verbosity", "minimal"]
+    blame_hang_timeout = (
+        os.environ.get("IJT_LIVE_BLAME_HANG_TIMEOUT")
+        or os.environ.get("IJT_BLAME_HANG_TIMEOUT")
+        or "60s"
+    )
     rc, stdout = _run(
         [
             "dotnet",
@@ -1100,7 +1108,7 @@ def _step_live_tests(server_url: str, verbose: bool = False) -> StepResult:
             str(_RESULTS_DIR),
             "--blame-hang",
             "--blame-hang-timeout",
-            "60s",
+            blame_hang_timeout,
         ],
         env={
             "IJT_AUTO_ACCEPT": "true",
@@ -1135,6 +1143,11 @@ def _step_opcua_security_tests(
     server_url = f"opc.tcp://localhost:{port}"
     t0 = time.monotonic()
     verbosity = ["--verbosity", "normal"] if verbose else ["--verbosity", "minimal"]
+    blame_hang_timeout = (
+        os.environ.get("IJT_OPCUA_SECURITY_BLAME_HANG_TIMEOUT")
+        or os.environ.get("IJT_BLAME_HANG_TIMEOUT")
+        or _OPCUA_SECURITY_BLAME_HANG_TIMEOUT_DEFAULT
+    )
     rc, stdout = _run(
         [
             "dotnet",
@@ -1156,7 +1169,7 @@ def _step_opcua_security_tests(
             str(results_dir),
             "--blame-hang",
             "--blame-hang-timeout",
-            "120s",
+            blame_hang_timeout,
         ],
         env={
             "IJT_AUTO_ACCEPT": "true",

@@ -6,7 +6,8 @@ on:
     - cron: "17 3 * * *" # once daily at 03:17 UTC
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
   checks: write
 
 jobs:
@@ -75,3 +76,65 @@ jobs:
           # npm advisory-service availability is reported as infrastructure.
           IJT_NPM_AUDIT_MODE: offline
         run: python run_all_tests.py --suite web-client-static --private-modules require
+
+      - name: Check for Envelope submodule drift and validate latest
+        if: steps.app_secret_check.outputs.available == 'true'
+        id: drift_check
+        env:
+          GH_APP_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          CURRENT_PIN=$(git rev-parse :OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope)
+          LATEST_REMOTE=$(git -c "url.https://x-access-token:${GH_APP_TOKEN}@github.com/.insteadOf=https://github.com/" ls-remote https://github.com/ijt-opcua-modules/IJT_Web_Client_Envelop_Plugin.git refs/heads/main | cut -f1)
+          echo "Current pinned commit: ${CURRENT_PIN}"
+          echo "Latest Envelope main:  ${LATEST_REMOTE}"
+          if [ "${CURRENT_PIN}" != "${LATEST_REMOTE}" ]; then
+            {
+              echo "drift=true"
+              echo "current_pin=${CURRENT_PIN}"
+              echo "latest_remote=${LATEST_REMOTE}"
+            } >> "$GITHUB_OUTPUT"
+            echo "::warning::Envelope submodule pointer in IJT (${CURRENT_PIN:0:7}) is behind latest Envelope main (${LATEST_REMOTE:0:7})."
+          else
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "Envelope submodule pointer is in sync with latest main."
+          fi
+
+      - name: Validate and sync latest Envelope main
+        if: steps.app_secret_check.outputs.available == 'true' && steps.drift_check.outputs.drift == 'true'
+        env:
+          GH_APP_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST_SHA: ${{ steps.drift_check.outputs.latest_remote }}
+          PYTHONPATH: ${{ github.workspace }}/OPC_UA_Clients/Release2/IJT_Web_Client:${{ github.workspace }}/OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope/python
+          PYTEST_ADDOPTS: "--ignore=tests/python"
+          IJT_NPM_AUDIT_MODE: offline
+        run: |
+          set -euo pipefail
+          echo "Updating Envelope submodule to latest remote main (${LATEST_SHA:0:7})..."
+          git -c "url.https://x-access-token:${GH_APP_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --remote --checkout -- OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope
+          python run_all_tests.py --suite web-client-static --private-modules require
+          echo "Validation passed for latest Envelope main."
+
+          BRANCH_NAME="automation/bump-envelope-${LATEST_SHA:0:7}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${BRANCH_NAME}"
+          git add OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope
+          COMMIT_MSG=$(printf "chore(submodule): bump Envelope plugin to %s\n\n1. Update Envelope submodule pointer to latest verified commit %s.\n2. Verified with python run_all_tests.py web-client-static suite." "${LATEST_SHA:0:7}" "${LATEST_SHA:0:7}")
+          git commit -m "${COMMIT_MSG}" || exit 0
+
+          echo "Attempting to push sync branch and create PR..."
+          if git push origin "${BRANCH_NAME}" --force; then
+            PR_BODY=$(printf "Automated synchronization of private Envelope submodule pointer to latest verified main commit %s.\n\nValidation: python run_all_tests.py suite web-client-static with private modules passed cleanly." "${LATEST_SHA}")
+            if ! gh pr view "${BRANCH_NAME}" >/dev/null 2>&1; then
+              gh pr create \
+                --title "chore(submodule): bump Envelope plugin to ${LATEST_SHA:0:7}" \
+                --body "${PR_BODY}" \
+                --base main \
+                --head "${BRANCH_NAME}" || echo "::warning::Unable to create PR automatically; check workflow write permissions."
+            fi
+          else
+            echo "::warning::Unable to push branch ${BRANCH_NAME}; check repository write permissions."
+          fi

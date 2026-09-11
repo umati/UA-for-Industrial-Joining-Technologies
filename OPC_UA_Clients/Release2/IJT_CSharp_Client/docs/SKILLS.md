@@ -381,7 +381,7 @@ Always call `JoiningSystem.BrowseMethod(objectId, name, fallbackConstant)` — n
 
 ## Live Test Stability Guards
 
-- `run_all_tests.py` uses `--blame-hang --blame-hang-timeout 60s` in both unit and live dotnet test runs.
+- `run_all_tests.py` uses `--blame-hang --blame-hang-timeout 60s` for unit and live test runs, and `400s` (configurable via `IJT_OPCUA_SECURITY_BLAME_HANG_TIMEOUT` / `IJT_BLAME_HANG_TIMEOUT`) for OPC UA Security test runs to cover cold Docker image builds without premature testhost termination.
 - `run_all_tests.py` avoids duplicate execution in full runs: Phase 1 excludes `Live` and `OpcUaSecurity` tests; Phase 2 runs `FullyQualifiedName~LiveIntegration`; dedicated OPC UA Security jobs run `Category=OpcUaSecurity`.
 - `LiveIntegrationTests` wraps synchronous OPC UA calls in `Task.Run` + hard timeout guards.
 - On timeout in environment-sensitive live paths, tests use explicit `Skip` messages instead of hanging.

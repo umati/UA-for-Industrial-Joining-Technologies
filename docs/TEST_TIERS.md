@@ -323,6 +323,7 @@ safe path-length threshold.
 - Phase 2 passes `IJT_PHASE1_ONLY=false`; an all-skipped managed live run is a failure, not accepted as a valid live result
 - If the resolved port is already open, the fixture probes OPC UA readiness first and reuses the server when it is ready; runner-managed mode kills and relaunches only when that readiness probe fails.
 - Native and Docker launch paths both require an OPC UA readiness probe after TCP opens, so tests do not start against a listener whose OPC UA stack is still initialising.
+- For OPC UA Security on Linux, Docker compose launch budgets 120s warm / 300s cold (up to 360s process timeout); the C# runner pairs this with a 400s blame-hang timeout (override via `IJT_OPCUA_SECURITY_BLAME_HANG_TIMEOUT`) so VSTest never aborts the test host before fixture diagnostics finish.
 - Cleaned up in `Dispose()` — works for both local dev and CI
 
 - **CI non-Web live jobs** (`scripts/start_server_on_port.py`): temp dir in `{RUNNER_TEMP or system temp}/ijt-sim/server_{port}/`
