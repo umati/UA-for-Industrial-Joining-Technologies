@@ -22,7 +22,7 @@
 #   node:24-bookworm-slim - manifest-list HEAD digest captured 2026-05-20
 #   (Renovate PR #394 superseded by this update).
 # ---------------------------------------------------------------------------
-FROM node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS node
+FROM node:24-bookworm-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS node
 
 # ---------------------------------------------------------------------------
 # Stage 2: Python 3.14 source stage (digest-pinned).
@@ -43,7 +43,7 @@ FROM python:3.14-slim-bookworm@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c
 #   glibc 2.36 is too old. Python 3.14 is copied from the official python
 #   stage above (no third-party PPA, no source build).
 # ---------------------------------------------------------------------------
-FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
+FROM ubuntu:24.04@sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin \
