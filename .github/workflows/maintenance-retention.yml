@@ -14,34 +14,51 @@ on:
     - cron: '17 3 * * 0'   # weekly on Sunday at 03:17 UTC
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: "List records without deleting them"
+      target:
+        description: "Scope: What to clean (Default: all)"
         required: false
-        default: "false"
+        default: "all"
         type: choice
         options:
-          - "false"
-          - "true"
+          - "all"
+          - "caches-only"
+          - "workflow-runs-only"
+          - "deployments-only"
+      dry_run:
+        description: "Dry Run: Preview items in summary without deleting anything (Default: false / unchecked)"
+        required: false
+        default: false
+        type: boolean
+      protect_releases:
+        description: "Safety: Protect release and git-tag runs from deletion (Default: true / checked)"
+        required: false
+        default: true
+        type: boolean
       cache_max_age_days:
-        description: "Delete Actions caches not accessed for this many days"
+        description: "Actions Cache: Days of inactivity before delete (Default: 14, enter 0 to purge all caches)"
         required: false
         default: "14"
-      keep_docker_deployments:
-        description: "Always keep this many newest docker-hub deployments"
+        type: string
+      keep_workflow_runs:
+        description: "Workflow Runs: Minimum newest runs to always keep (Default: 50, enter 0 to disable buffer)"
         required: false
         default: "50"
-      docker_deployment_max_age_days:
-        description: "Delete older docker-hub deployments after this many days, except the newest kept records"
-        required: false
-        default: "30"
-      keep_workflow_runs:
-        description: "Always keep this many newest workflow runs"
-        required: false
-        default: "500"
+        type: string
       workflow_run_max_age_days:
-        description: "Delete older completed workflow runs after this many days, except the newest kept records"
+        description: "Workflow Runs: Delete completed runs older than N days (Default: 60, enter 0 to delete all beyond buffer)"
         required: false
         default: "60"
+        type: string
+      keep_docker_deployments:
+        description: "Deployments: Minimum newest docker-hub records to keep (Default: 50, enter 0 to disable buffer)"
+        required: false
+        default: "50"
+        type: string
+      docker_deployment_max_age_days:
+        description: "Deployments: Delete docker-hub records older than N days (Default: 30, enter 0 to delete all beyond buffer)"
+        required: false
+        default: "30"
+        type: string
 
 permissions:
   actions: write
@@ -63,14 +80,25 @@ jobs:
 
     steps:
       - name: Delete stale Actions caches
+        if: ${{ github.event_name == 'schedule' || inputs.target == 'all' || inputs.target == 'caches-only' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          DRY_RUN: ${{ inputs.dry_run }}
           CACHE_MAX_AGE_DAYS: ${{ inputs.cache_max_age_days || '14' }}
         run: |
           set -euo pipefail
 
-          cutoff_epoch="$(date -u -d "${CACHE_MAX_AGE_DAYS} days ago" +%s)"
+          if ! [[ "${CACHE_MAX_AGE_DAYS}" =~ ^[0-9]+$ ]]; then
+            echo "::error::cache_max_age_days must be a non-negative integer, got '${CACHE_MAX_AGE_DAYS}'"
+            exit 1
+          fi
+
+          if [ "${CACHE_MAX_AGE_DAYS}" -eq 0 ]; then
+            cutoff_epoch="$(date -u +%s)"
+          else
+            cutoff_epoch="$(date -u -d "${CACHE_MAX_AGE_DAYS} days ago" +%s)"
+          fi
+
           deleted_count=0
           deleted_bytes=0
           kept_count=0
@@ -84,45 +112,78 @@ jobs:
             last_epoch="$(date -u -d "${last_accessed}" +%s)"
 
             if [ "${last_epoch}" -lt "${cutoff_epoch}" ]; then
-              echo "Delete cache ${cache_id}: ${cache_key} (${cache_ref}), last accessed ${last_accessed}, ${size_bytes} bytes"
               deleted_count=$((deleted_count + 1))
               deleted_bytes=$((deleted_bytes + size_bytes))
-              if [ "${DRY_RUN}" != "true" ]; then
+              if [ "${DRY_RUN:-false}" = "true" ]; then
+                echo "[DRY RUN] Would delete cache ${cache_id}: ${cache_key} (${cache_ref}), last accessed ${last_accessed}, ${size_bytes} bytes"
+              else
+                echo "[DELETE] Cache ${cache_id}: ${cache_key} (${cache_ref}), last accessed ${last_accessed}, ${size_bytes} bytes"
                 if ! gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/caches/${cache_id}" >/dev/null; then
                   echo "::warning::Could not delete cache ${cache_id}; it may already be gone."
                 fi
+                sleep 0.1
               fi
             else
               kept_count=$((kept_count + 1))
             fi
           done < "${cache_records}"
 
+          if [ "${deleted_bytes}" -ge 1048576 ]; then
+            formatted_size="$((deleted_bytes / 1024 / 1024)) MB"
+          elif [ "${deleted_bytes}" -gt 0 ]; then
+            formatted_size="$((deleted_bytes / 1024)) KB"
+          else
+            formatted_size="0 MB"
+          fi
+
           {
             echo "## Actions cache retention"
             echo
+            if [ "${DRY_RUN:-false}" = "true" ]; then
+              echo "> [!NOTE]"
+              echo "> **DRY RUN MODE**: No caches were deleted. Numbers below represent candidates."
+              echo
+            fi
             echo "| Setting | Value |"
             echo "|---|---:|"
-            echo "| Dry run | ${DRY_RUN} |"
+            echo "| Dry run | ${DRY_RUN:-false} |"
             echo "| Max age days | ${CACHE_MAX_AGE_DAYS} |"
             echo "| Deleted candidates | ${deleted_count} |"
-            echo "| Deleted candidate size | $((deleted_bytes / 1024 / 1024)) MB |"
+            echo "| Deleted candidate size | ${formatted_size} |"
             echo "| Kept recent caches | ${kept_count} |"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Delete old completed workflow runs
+        if: ${{ github.event_name == 'schedule' || inputs.target == 'all' || inputs.target == 'workflow-runs-only' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          DRY_RUN: ${{ inputs.dry_run || 'false' }}
-          KEEP_WORKFLOW_RUNS: ${{ inputs.keep_workflow_runs || '500' }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          PROTECT_RELEASES: ${{ inputs.protect_releases }}
+          KEEP_WORKFLOW_RUNS: ${{ inputs.keep_workflow_runs || '50' }}
           WORKFLOW_RUN_MAX_AGE_DAYS: ${{ inputs.workflow_run_max_age_days || '60' }}
         run: |
           set -euo pipefail
 
-          cutoff_epoch="$(date -u -d "${WORKFLOW_RUN_MAX_AGE_DAYS} days ago" +%s)"
+          if ! [[ "${KEEP_WORKFLOW_RUNS}" =~ ^[0-9]+$ ]]; then
+            echo "::error::keep_workflow_runs must be a non-negative integer, got '${KEEP_WORKFLOW_RUNS}'"
+            exit 1
+          fi
+          if ! [[ "${WORKFLOW_RUN_MAX_AGE_DAYS}" =~ ^[0-9]+$ ]]; then
+            echo "::error::workflow_run_max_age_days must be a non-negative integer, got '${WORKFLOW_RUN_MAX_AGE_DAYS}'"
+            exit 1
+          fi
+
+          if [ "${WORKFLOW_RUN_MAX_AGE_DAYS}" -eq 0 ]; then
+            cutoff_epoch="$(date -u +%s)"
+          else
+            cutoff_epoch="$(date -u -d "${WORKFLOW_RUN_MAX_AGE_DAYS} days ago" +%s)"
+          fi
+
           deleted_count=0
           kept_recent_count=0
           kept_young_count=0
           kept_active_count=0
+          kept_protected_count=0
           index=0
           run_records="$(mktemp)"
 
@@ -138,7 +199,14 @@ jobs:
               continue
             fi
 
-            if [ "${index}" -le "${KEEP_WORKFLOW_RUNS}" ]; then
+            if [ "${PROTECT_RELEASES}" != "false" ]; then
+              if [ "${event}" = "release" ] || [[ "${branch}" =~ ^v?[0-9]+\.[0-9]+ ]] || [[ "${branch}" =~ ^refs/tags/ ]]; then
+                kept_protected_count=$((kept_protected_count + 1))
+                continue
+              fi
+            fi
+
+            if [ "${KEEP_WORKFLOW_RUNS}" -gt 0 ] && [ "${index}" -le "${KEEP_WORKFLOW_RUNS}" ]; then
               kept_recent_count=$((kept_recent_count + 1))
               continue
             fi
@@ -154,12 +222,15 @@ jobs:
               continue
             fi
 
-            echo "Delete workflow run ${run_id}: ${run_name}, ${event}/${branch}, ${conclusion}, created ${created_at}"
             deleted_count=$((deleted_count + 1))
-            if [ "${DRY_RUN}" != "true" ]; then
+            if [ "${DRY_RUN:-false}" = "true" ]; then
+              echo "[DRY RUN] Would delete workflow run ${run_id}: ${run_name}, ${event}/${branch}, ${conclusion}, created ${created_at}"
+            else
+              echo "[DELETE] Workflow run ${run_id}: ${run_name}, ${event}/${branch}, ${conclusion}, created ${created_at}"
               if ! gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" >/dev/null; then
                 echo "::warning::Could not delete workflow run ${run_id}; it may already be gone or protected by GitHub."
               fi
+              sleep 0.1
             fi
           done < "${run_records}"
 
@@ -167,27 +238,50 @@ jobs:
             echo
             echo "## Workflow run retention"
             echo
+            if [ "${DRY_RUN:-false}" = "true" ]; then
+              echo "> [!NOTE]"
+              echo "> **DRY RUN MODE**: No workflow runs were deleted. Numbers below represent candidates."
+              echo
+            fi
             echo "| Setting | Value |"
             echo "|---|---:|"
-            echo "| Dry run | ${DRY_RUN} |"
+            echo "| Dry run | ${DRY_RUN:-false} |"
             echo "| Newest runs always kept | ${KEEP_WORKFLOW_RUNS} |"
             echo "| Max age days for older completed runs | ${WORKFLOW_RUN_MAX_AGE_DAYS} |"
             echo "| Deleted candidates | ${deleted_count} |"
             echo "| Kept by newest-run buffer | ${kept_recent_count} |"
             echo "| Kept by age | ${kept_young_count} |"
             echo "| Kept active/current | ${kept_active_count} |"
+            if [ "${PROTECT_RELEASES}" != "false" ]; then
+              echo "| Kept release/tag runs | ${kept_protected_count} |"
+            fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Delete old docker-hub deployment records
+        if: ${{ github.event_name == 'schedule' || inputs.target == 'all' || inputs.target == 'deployments-only' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          DRY_RUN: ${{ inputs.dry_run }}
           KEEP_DOCKER_DEPLOYMENTS: ${{ inputs.keep_docker_deployments || '50' }}
           DOCKER_DEPLOYMENT_MAX_AGE_DAYS: ${{ inputs.docker_deployment_max_age_days || '30' }}
         run: |
           set -euo pipefail
 
-          cutoff_epoch="$(date -u -d "${DOCKER_DEPLOYMENT_MAX_AGE_DAYS} days ago" +%s)"
+          if ! [[ "${KEEP_DOCKER_DEPLOYMENTS}" =~ ^[0-9]+$ ]]; then
+            echo "::error::keep_docker_deployments must be a non-negative integer, got '${KEEP_DOCKER_DEPLOYMENTS}'"
+            exit 1
+          fi
+          if ! [[ "${DOCKER_DEPLOYMENT_MAX_AGE_DAYS}" =~ ^[0-9]+$ ]]; then
+            echo "::error::docker_deployment_max_age_days must be a non-negative integer, got '${DOCKER_DEPLOYMENT_MAX_AGE_DAYS}'"
+            exit 1
+          fi
+
+          if [ "${DOCKER_DEPLOYMENT_MAX_AGE_DAYS}" -eq 0 ]; then
+            cutoff_epoch="$(date -u +%s)"
+          else
+            cutoff_epoch="$(date -u -d "${DOCKER_DEPLOYMENT_MAX_AGE_DAYS} days ago" +%s)"
+          fi
+
           deleted_count=0
           kept_recent_count=0
           kept_young_count=0
@@ -202,7 +296,7 @@ jobs:
             index=$((index + 1))
             created_epoch="$(date -u -d "${created_at}" +%s)"
 
-            if [ "${index}" -le "${KEEP_DOCKER_DEPLOYMENTS}" ]; then
+            if [ "${KEEP_DOCKER_DEPLOYMENTS}" -gt 0 ] && [ "${index}" -le "${KEEP_DOCKER_DEPLOYMENTS}" ]; then
               kept_recent_count=$((kept_recent_count + 1))
               continue
             fi
@@ -212,9 +306,11 @@ jobs:
               continue
             fi
 
-            echo "Delete docker-hub deployment ${deployment_id}: ${ref} ${sha}, created ${created_at}"
             deleted_count=$((deleted_count + 1))
-            if [ "${DRY_RUN}" != "true" ]; then
+            if [ "${DRY_RUN:-false}" = "true" ]; then
+              echo "[DRY RUN] Would delete docker-hub deployment ${deployment_id}: ${ref} ${sha}, created ${created_at}"
+            else
+              echo "[DELETE] Docker-hub deployment ${deployment_id}: ${ref} ${sha}, created ${created_at}"
               if ! gh api -X POST "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" \
                 -f state=inactive \
                 -f auto_inactive=false >/dev/null; then
@@ -224,6 +320,7 @@ jobs:
               if ! gh api -X DELETE "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}" >/dev/null; then
                 echo "::warning::Could not delete docker-hub deployment ${deployment_id}; it may already be gone or protected by GitHub."
               fi
+              sleep 0.1
             fi
           done < "${deployment_records}"
 
@@ -231,9 +328,14 @@ jobs:
             echo
             echo "## docker-hub deployment retention"
             echo
+            if [ "${DRY_RUN:-false}" = "true" ]; then
+              echo "> [!NOTE]"
+              echo "> **DRY RUN MODE**: No deployment records were deleted. Numbers below represent candidates."
+              echo
+            fi
             echo "| Setting | Value |"
             echo "|---|---:|"
-            echo "| Dry run | ${DRY_RUN} |"
+            echo "| Dry run | ${DRY_RUN:-false} |"
             echo "| Newest records always kept | ${KEEP_DOCKER_DEPLOYMENTS} |"
             echo "| Max age days for older records | ${DOCKER_DEPLOYMENT_MAX_AGE_DAYS} |"
             echo "| Deleted candidates | ${deleted_count} |"
