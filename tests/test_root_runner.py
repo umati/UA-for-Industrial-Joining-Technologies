@@ -504,7 +504,8 @@ def test_clarify_suite_counts_explains_optional_and_excluded_cases() -> None:
         _runner._clarify_suite_counts("console-client-live", "18 passed, 39 deselected")
         == "18 passed; 39 security cases excluded"
     )
-    assert _runner._clarify_suite_counts("web-client-static", "858 passed") == "858 passed"
+    assert _runner._clarify_suite_counts("web-client-static-python", "858 passed") == "858 passed"
+    assert _runner._clarify_suite_counts("web-client-static-js", "909 passed") == "909 passed"
 
 
 def test_check_counts_do_not_contribute_to_test_totals() -> None:
@@ -577,6 +578,7 @@ def test_suite_ids_match_naming_pattern() -> None:
                 "node-client",
                 "web-client",
                 "test-client",
+                "performance-client",
             ),
             key=len,
             reverse=True,
@@ -647,6 +649,7 @@ def test_suite_ids_match_naming_pattern() -> None:
         "node-client",
         "web-client",
         "test-client",
+        "performance-client",
     }
     expected_tiers = {
         "static",
@@ -695,7 +698,8 @@ def test_suite_registry_has_no_duplicate_ids() -> None:
         "node-client-static",
         "test-client-static",
         "console-client-static",
-        "web-client-static",
+        "web-client-static-python",
+        "web-client-static-js",
         "web-client-performance",
         "csharp-client-static",
         "server-smoke",
@@ -736,7 +740,7 @@ def test_private_envelope_performance_suite_requires_private_module(monkeypatch,
     assert set(_runner.phase1_performance_specs()) == {"web-client-performance"}
     assert (
         _runner.SUITE_REGISTRY["web-client-performance"].display_name
-        == "Web Client - Private Envelope performance (isolated)"
+        == "Web Client - Private Envelope Performance (Isolated)"
     )
 
     monkeypatch.setenv("IJT_PRIVATE_MODULES", "skip")
@@ -1192,7 +1196,7 @@ def test_webclient_compatibility_smoke_is_opt_in_suite(monkeypatch) -> None:
     result = _runner._suite_webclient_compatibility_smoke()
 
     assert _runner.SuiteGroup.PHASE2_WEB_COMPATIBILITY.value == "phase2-web-compatibility"
-    assert spec.display_name == "Web Client - Edge compatibility smoke"
+    assert spec.display_name == "Web Client - Edge Compatibility Smoke"
     assert spec.group is _runner.SuiteGroup.PHASE2_WEB_COMPATIBILITY
     assert spec.runner is _runner._suite_webclient_compatibility_smoke
     assert "web-client-compatibility-smoke" not in _runner.phase1_specs()
@@ -1260,7 +1264,7 @@ def test_delegate_to_runner_reports_child_failure(monkeypatch, capsys) -> None:
     assert result.ok is False
     assert result.skipped is False
     assert rc == 1
-    assert "Web Client - Browser feature coverage" in output
+    assert "Web Client - Browser Feature Coverage" in output
     assert "FAIL" in output
     assert "ONE OR MORE SUITES FAILED" in output
 
@@ -1307,14 +1311,14 @@ def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
 
     output = capsys.readouterr().out
     assert rc == 0
-    assert "Server - Native smoke" in output
+    assert "Server - Native Smoke" in output
     assert "10 passed" in output
-    assert "Web Client - Docker image smoke" in output
+    assert "Web Client - Docker Image Smoke" in output
     assert "C# OPC UA Security - Windows" in output
     assert "Not reported" in output
     assert "4 total suites; 4 passed, 0 failed, 0 skipped" in output
     assert "872 total tests; 732 passed, 0 failed, 0 errors, 140 skipped" in output
-    assert "WALL TIME (parallel)" in output
+    assert "WALL TIME (Parallel)" in output
     assert "Slowest suites:" in output
 
 
@@ -1611,7 +1615,7 @@ def test_optional_import_typing_guard_passes_current_files() -> None:
     result = _runner._check_optional_import_typing()
 
     assert result.status == "PASS"
-    assert result.detail == "9 file(s) verified"
+    assert result.detail == "10 file(s) verified"
 
 
 def test_optional_import_typing_guard_detects_unsuppressed_requests(monkeypatch) -> None:

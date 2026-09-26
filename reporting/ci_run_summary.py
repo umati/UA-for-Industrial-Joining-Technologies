@@ -459,6 +459,7 @@ def main() -> None:
     web_py_r = E("WEB_PY_RESULT", "unknown")
     web_js_r = E("WEB_JS_RESULT", "unknown")
     con_r = E("CONSOLE_RESULT", "unknown")
+    perf_client_r = E("PERF_CLIENT_RESULT", "unknown")
     nod_r = E("NODE_RESULT", "unknown")
     dck_r = E("DOCKER_RESULT", "unknown")
     cs_u_r = E("CS_UNIT_RESULT", "unknown")
@@ -474,6 +475,8 @@ def main() -> None:
     web_mypy = E("WEB_PY_MYPY", "")
     con_ruff = E("CONSOLE_RUFF", "")
     con_mypy = E("CONSOLE_MYPY", "")
+    perf_client_ruff = E("PERF_CLIENT_RUFF", "")
+    perf_client_mypy = E("PERF_CLIENT_MYPY", "")
     nod_eslint = E("NODE_ESLINT", "")
     cs_build = E("CS_BUILD", "")
     cs_format = E("CS_FORMAT", "")
@@ -505,6 +508,9 @@ def main() -> None:
     con_pip = parse_pip_audit("all-results/results-console-client/pip-audit.json")
     con_cov = parse_coverage("all-results/results-console-client/coverage.xml")
 
+    perf_client_t = parse_junit("all-results/results-performance-client/pytest.xml")
+    perf_client_cov = parse_coverage("all-results/results-performance-client/coverage.xml")
+
     nod_js_t = parse_junit("all-results/results-node-client/vitest.xml")
     nod_esl = parse_eslint("all-results/results-node-client/eslint.json")
     nod_npm = parse_npm_audit("all-results/results-node-client/npm-audit.json")
@@ -526,6 +532,7 @@ def main() -> None:
     web_py_skips = collect_skips("all-results/results-web-client-python/pytest.xml")
     web_js_skips = collect_skips("all-results/results-web-client-js/vitest.xml")
     con_py_skips = collect_skips("all-results/results-console-client/pytest.xml")
+    perf_client_skips = collect_skips("all-results/results-performance-client/pytest.xml")
     nod_js_skips = collect_skips("all-results/results-node-client/vitest.xml")
     cs_unit_skips = collect_skips("all-results/results-csharp-unit/tests.xml")
     tc_py_skips = collect_skips("all-results/results-test-client/pytest.xml")
@@ -548,6 +555,8 @@ def main() -> None:
     _warn(web_js_r, web_js_cov, "web-client-js", "coverage/cobertura-coverage.xml")
     _warn(con_r, con_py_t[0], "console-client", "pytest.xml")
     _warn(con_r, con_cov, "console-client", "coverage.xml")
+    _warn(perf_client_r, perf_client_t[0], "performance-client", "pytest.xml")
+    _warn(perf_client_r, perf_client_cov, "performance-client", "coverage.xml")
     _warn(nod_r, nod_js_t[0], "node-client", "vitest.xml")
     _warn(nod_r, nod_cov, "node-client", "coverage/cobertura-coverage.xml")
     _warn(cs_u_r, cs_unit_t[0], "csharp-unit", "tests.xml")
@@ -561,6 +570,7 @@ def main() -> None:
         ("Web Client — Python", web_cov, 95.0),
         ("Web Client — JavaScript", web_js_cov, 95.0),
         ("Console Client — Python", con_cov, 95.0),
+        ("Performance Client — Python", perf_client_cov, 85.0),
         ("Node Client — Legacy JavaScript", nod_cov, 95.0),
         ("C# Client — Unit", cs_cov, 95.0),
         ("Test Client — Python", tc_cov, 95.0),
@@ -639,6 +649,7 @@ def main() -> None:
         web_py_r,
         web_js_r,
         con_r,
+        perf_client_r,
         nod_r,
         dck_r,
         cs_u_r,
@@ -668,7 +679,16 @@ def main() -> None:
         status_icon = "❌"
         status_msg = f"{n_fail} / {n_total} Jobs Failed  ·  {n_pass} Passed"
 
-    suites = [web_py_t, web_js_t, con_py_t, nod_js_t, cs_unit_t, tc_py_t, ss_smoke]
+    suites = [
+        web_py_t,
+        web_js_t,
+        con_py_t,
+        perf_client_t,
+        nod_js_t,
+        cs_unit_t,
+        tc_py_t,
+        ss_smoke,
+    ]
     total_t = sum(s[0] for s in suites if s[0] is not None)
     total_f = sum(s[2] for s in suites if s[2] is not None)
     total_sk = sum(s[3] for s in suites if s[3] is not None)
@@ -702,6 +722,8 @@ def main() -> None:
     cq_web_type = tool(web_mypy, "mypy", web_py_r)
     cq_con_lint = tool(con_ruff, "ruff", con_r)
     cq_con_type = tool(con_mypy, "mypy", con_r)
+    cq_perf_client_lint = tool(perf_client_ruff, "ruff", perf_client_r)
+    cq_perf_client_type = tool(perf_client_mypy, "mypy", perf_client_r)
     cq_nod_lint = eslint_fmt(nod_eslint, nod_esl, nod_r)
     cq_cs_lint = cs_quality
     cq_tc_lint = tool(tc_ruff, "ruff", tc_r)
@@ -717,7 +739,9 @@ def main() -> None:
     sec_tc_scan = bandit_fmt(tc_ban[0], tc_ban[1], tc_r)
     sec_tc_dep = pip_audit_fmt(tc_pip[0], tc_pip[1], tc_pip[2], tc_r)
     validation_check_count = len(suites)
-    quality_component_count = len([web_quality, con_ruff, nod_eslint, cs_quality, tc_ruff])
+    quality_component_count = len(
+        [web_quality, con_ruff, perf_client_ruff, nod_eslint, cs_quality, tc_ruff]
+    )
     security_component_count = len([web_dep_audit, con_pip, nod_npm, cs_vuln, tc_pip])
     infrastructure_check_count = len([dck_r, al_r, zz_r, pc_r])
     quick_index_entry_count = len(
@@ -793,6 +817,12 @@ def main() -> None:
             f"{skips(con_py_t[3], con_r)} | {cov(con_cov, 95, con_r)} |"
         ),
         (
+            f"| Performance Client — Python | Ubuntu Python unit suite | "
+            f"{tests_cell(perf_client_t, perf_client_r)} | "
+            f"{skips(perf_client_t[3], perf_client_r)} | "
+            f"{cov(perf_client_cov, 85, perf_client_r)} |"
+        ),
+        (
             "| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit suite | "
             f"{tests_cell(nod_js_t, nod_r)} | "
             f"{skips(nod_js_t[3], nod_r)} | {cov(nod_cov, 95, nod_r)} |"
@@ -831,6 +861,11 @@ def main() -> None:
             f"| {row_status_icon(cq_con_lint, cq_con_type)} "
             f"| Console Client | Python static quality "
             f"| {cq_con_lint} | {cq_con_type} |"
+        ),
+        (
+            f"| {row_status_icon(cq_perf_client_lint, cq_perf_client_type)} "
+            f"| Performance Client | Python static quality "
+            f"| {cq_perf_client_lint} | {cq_perf_client_type} |"
         ),
         (
             f"| {row_status_icon(cq_nod_lint)} "
@@ -960,6 +995,7 @@ def main() -> None:
         ("Web Client — Python", web_py_skips, web_py_t[3]),
         ("Web Client — JavaScript", web_js_skips, web_js_t[3]),
         ("Console Client — Python", con_py_skips, con_py_t[3]),
+        ("Performance Client — Python", perf_client_skips, perf_client_t[3]),
         ("Node Client — Legacy JavaScript", nod_js_skips, nod_js_t[3]),
         ("C# Client — Unit", cs_unit_skips, cs_unit_t[3]),
         ("Test Client — Python", tc_py_skips, tc_py_t[3]),

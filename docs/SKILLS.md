@@ -315,6 +315,9 @@ UA-for-Industrial-Joining-Technologies/
         ├── IJT_Test_Client/         # OPC UA IJT specification test suite
         │   ├── docs/SKILLS.md
         │   └── run_all_tests.py
+        ├── IJT_Performance_Client/  # High-scale multi-controller latency & diagnostic benchmark
+        │   ├── docs/SKILLS.md
+        │   └── README.md
         └── IJT_CSharp_Client/       # C# .NET OPC UA client
             ├── docs/SKILLS.md
             └── run_all_tests.py
@@ -344,6 +347,13 @@ UA-for-Industrial-Joining-Technologies/
 - **Tests**: specification tests (`specification_tests/` — require running OPC UA server); unit (`tests/unit/` — pure-logic helper coverage, no server needed)
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
+
+### IJT Performance Client (`OPC_UA_Clients/Release2/IJT_Performance_Client/`)
+- **Stack**: Python 3.14+, asyncua == 2.0.1, pyyaml, pytest, pytest-asyncio
+- **Purpose**: Multi-controller latency and diagnostic benchmark client for controlled validation across 1 to 500+ endpoints. It reduces per-connection thread growth through process-sharded asyncio loops and computes result-transfer timing diagnostics ($T_{\text{end}} \to T_{\text{event}} \to T_{\text{client}}$). Scale conclusions require measured runs in the target environment.
+- **Execution**: CLI (`python -m ijt_performance_client --config profiles/single_server.yaml`) and importable Python SDK (`from ijt_performance_client import OpcUaClientPool`).
+- **Tests**: unit (`tests/unit/` — latency math, config validation, root-cause attribution); live (`tests/live/` — live controller benchmark on port 40485).
+- **Details**: read `OPC_UA_Clients/Release2/IJT_Performance_Client/README.md`
 
 ### IJT CSharp Client (`OPC_UA_Clients/Release2/IJT_CSharp_Client/`)
 - **Stack**: C# .NET 10+, OPC Foundation UA SDK, xUnit, Moq, coverlet
@@ -599,3 +609,5 @@ project `docs/SKILLS.md`, and `docs/TEST_TIERS.md`.
 | `OPC_UA_Servers/Release2/docs/opc-ua-server-context.md` | Address space map, namespaces, event hierarchy, server limitations |
 | `OPC_UA_Clients/Release2/IJT_CSharp_Client/docs/SKILLS.md` | C# client architecture, test commands, Softing SDK DLL integration |
 | `OPC_UA_Clients/Release1/IJT_Node_Client/docs/SKILLS.md` | Node Client architecture, socket protocol, test commands |
+| `OPC_UA_Clients/Release2/IJT_Performance_Client/docs/SKILLS.md` | Performance Client developer guide: process sharding, async multiplexing, latency model, attribution heuristics |
+| `OPC_UA_Clients/Release2/IJT_Performance_Client/docs/PERFORMANCE_GUIDE.md` | Authoritative Performance & Benchmarking Guide: latency breakdown, architecture, clock skew calibration, profiles, and reports |

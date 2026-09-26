@@ -1238,6 +1238,9 @@ def main() -> None:
     con_live_perf = load_perf_benchmarks("all-results/results-live-console/**/pytest-live.xml")
     if con_live_perf:
         perf_lanes.append(("Console Client — Result Transfer Time", con_live_perf))
+    perf_client_perf = load_perf_benchmarks("all-results/results-live-performance/**/perf-live.xml")
+    if perf_client_perf:
+        perf_lanes.append(("IJT Performance Client — Result Latency Benchmark", perf_client_perf))
     perf_section_lines = render_perf_section(perf_lanes)
 
     suite_counts = [

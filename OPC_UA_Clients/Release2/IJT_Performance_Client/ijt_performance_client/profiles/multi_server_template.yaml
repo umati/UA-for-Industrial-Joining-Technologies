@@ -1,0 +1,31 @@
+# High-Scale Multi-Server Profile Template
+# Target: 50 to 500+ physical or virtual controllers
+schema_version: 1
+name: "Multi-Server Benchmark"
+description: "Large-scale multi-controller latency and throughput benchmarking"
+
+fleet:
+  lifecycle: external
+  # Option A: List explicit controller endpoints:
+  # endpoints:
+  #   - "opc.tcp://10.0.0.101:40451"
+  #   - "opc.tcp://10.0.0.102:40451"
+  #
+  # Option B: Range-based endpoints (ideal for multi-instance staging):
+  url_template: "opc.tcp://127.0.0.1:{port}"
+  port_range: [40001, 40100]    # 100 controllers / tools
+
+execution:
+  mode: passive                # Passively listen for production / testbench joining operations
+  duration_seconds: 60.0
+  target_sample_count: 500
+  burst_trigger_count: 0
+
+engine:
+  max_worker_processes: 4      # 1 process per CPU core
+  connect_concurrency: 20      # Prevents TCP SYN connection flood on OS network stack
+  sub_period_ms: 100
+
+thresholds:
+  warn_p90_ms: 200.0
+  fail_p90_ms: 1000.0

@@ -224,6 +224,7 @@ _NATIVE_BINARY_LINUX = (
 _LINUX_PACKAGE_ZIP = SERVER_DIR / "OPC_UA_IJT_Server_Simulator_Linux.zip"
 CSHARP_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client"
 CONSOLE_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Console_Client"
+PERFORMANCE_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Performance_Client"
 TEST_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Test_Client"
 WEB_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client"
 _PRIVATE_ENVELOPE_DIR = WEB_CLIENT_DIR / "src" / "javascripts" / "views" / "envelope"
@@ -236,6 +237,7 @@ _RUNNER_SCRIPT_PATHS: tuple[Path, ...] = (
     NODE_CLIENT_DIR / "run_all_tests.py",
     CSHARP_DIR / "run_all_tests.py",
     CONSOLE_DIR / "run_all_tests.py",
+    PERFORMANCE_DIR / "run_all_tests.py",
     TEST_CLIENT_DIR / "run_all_tests.py",
     WEB_CLIENT_DIR / "run_all_tests.py",
     SERVER_DIR / "run_all_tests.py",
@@ -265,6 +267,7 @@ OPCUA_SERVER_PORT_CSHARP_OPCUA_SECURITY_LINUX = 40476
 OPCUA_SERVER_PORT_CONSOLE_OPCUA_SECURITY_WINDOWS = 40477
 OPCUA_SERVER_PORT_CONSOLE_OPCUA_SECURITY_LINUX = 40478
 OPCUA_SERVER_PORT_WEB_CLIENT_E2E_REGRESSION = 40480
+OPCUA_SERVER_PORT_PERFORMANCE_CLIENT = 40485  # server port the Performance Client connects to
 WEB_CLIENT_WS_PORT_BACKEND = 8002
 WEB_CLIENT_WS_PORT_LIFECYCLE = 8003
 WEB_CLIENT_WS_PORT_E2E_SMOKE = 8004
@@ -1163,13 +1166,13 @@ def _check_actionlint(results_dir: Path) -> StepResult:
     actionlint_bin = _find_actionlint()
     if not actionlint_bin:
         return StepResult(
-            "GHA actionlint",
+            "GHA Actionlint",
             "SKIP",
             "Install: go install github.com/rhysd/actionlint/cmd/actionlint@latest",
         )
     workflows = list((ROOT / ".github/workflows").glob("*.yml"))
     if not workflows:
-        return StepResult("GHA actionlint", "SKIP", "No workflow files found")
+        return StepResult("GHA Actionlint", "SKIP", "No workflow files found")
     # Disable actionlint's auto-spawned shellcheck/pyflakes subprocesses: on some
     # Windows hosts they hang indefinitely (no upstream timeout) and freeze Phase 1.
     # Workflow syntax + action-reference validation still runs from actionlint itself.
@@ -1193,7 +1196,7 @@ def _check_actionlint(results_dir: Path) -> StepResult:
         out_file = results_dir / "actionlint.json"
         out_file.write_text("[]", encoding="utf-8")
         return StepResult(
-            "GHA actionlint",
+            "GHA Actionlint",
             "FAIL",
             "actionlint did not return within 60s (likely environmental hang)",
         )
@@ -1202,10 +1205,10 @@ def _check_actionlint(results_dir: Path) -> StepResult:
     if result.returncode != 0:
         try:
             errors = json.loads(result.stdout or "[]")
-            return StepResult("GHA actionlint", "FAIL", f"{len(errors)} workflow error(s)")
+            return StepResult("GHA Actionlint", "FAIL", f"{len(errors)} workflow error(s)")
         except Exception:
-            return StepResult("GHA actionlint", "FAIL", result.stderr[:200])
-    return StepResult("GHA actionlint", "PASS", f"{len(workflows)} workflow(s) valid")
+            return StepResult("GHA Actionlint", "FAIL", result.stderr[:200])
+    return StepResult("GHA Actionlint", "PASS", f"{len(workflows)} workflow(s) valid")
 
 
 def _check_action_versions() -> StepResult:
@@ -1222,7 +1225,7 @@ def _check_action_versions() -> StepResult:
 
     workflows_dir = ROOT / ".github/workflows"
     if not workflows_dir.exists():
-        return StepResult("GHA version guard", "SKIP", "No .github/workflows/ directory")
+        return StepResult("GHA Version Guard", "SKIP", "No .github/workflows/ directory")
 
     # Matches SHA-pinned actions: owner/repo@<40 hex chars>  (optional trailing comment)
     sha_pattern = re.compile(r"uses:\s+([\w/-]+)@([0-9a-f]{40})")
@@ -1248,12 +1251,12 @@ def _check_action_versions() -> StepResult:
         for issue in issues:
             print(f"  \u26a0  {issue}", flush=True)
         return StepResult(
-            "GHA version guard", "FAIL", f"{len(issues)} downgraded action(s) detected"
+            "GHA Version Guard", "FAIL", f"{len(issues)} downgraded action(s) detected"
         )
 
     total = sha_total + tag_total
     detail = f"{total} action pins verified ({sha_total} SHA-pinned, {tag_total} tag-pinned)"
-    return StepResult("GHA version guard", "PASS", detail)
+    return StepResult("GHA Version Guard", "PASS", detail)
 
 
 def _parse_zizmor_output(stdout: str, returncode: int) -> StepResult:
@@ -1261,13 +1264,13 @@ def _parse_zizmor_output(stdout: str, returncode: int) -> StepResult:
     finding_exit_codes = {13, 14}
     if not stdout.strip():
         if returncode == 0 or returncode in finding_exit_codes:
-            return StepResult("GHA zizmor (security)", "PASS", "0 finding(s), none high/critical")
-        return StepResult("GHA zizmor (security)", "SKIP", "zizmor error — skipping")
+            return StepResult("GHA Zizmor (Security)", "PASS", "0 finding(s), none high/critical")
+        return StepResult("GHA Zizmor (Security)", "SKIP", "zizmor error — skipping")
     try:
         data = json.loads(stdout)
         if not isinstance(data, list):
             return StepResult(
-                "GHA zizmor (security)", "SKIP", "Could not parse output — zizmor version mismatch"
+                "GHA Zizmor (Security)", "SKIP", "Could not parse output — zizmor version mismatch"
             )
         findings = data
         high = []
@@ -1277,14 +1280,14 @@ def _parse_zizmor_output(stdout: str, returncode: int) -> StepResult:
                 high.append(finding)
         if high:
             return StepResult(
-                "GHA zizmor (security)", "FAIL", f"{len(high)} high/critical finding(s)"
+                "GHA Zizmor (Security)", "FAIL", f"{len(high)} high/critical finding(s)"
             )
         return StepResult(
-            "GHA zizmor (security)", "PASS", f"{len(findings)} finding(s), none high/critical"
+            "GHA Zizmor (Security)", "PASS", f"{len(findings)} finding(s), none high/critical"
         )
     except Exception:
         return StepResult(
-            "GHA zizmor (security)", "SKIP", "Could not parse output — zizmor version mismatch"
+            "GHA Zizmor (Security)", "SKIP", "Could not parse output — zizmor version mismatch"
         )
 
 
@@ -1323,7 +1326,7 @@ def _check_zizmor(results_dir: Path) -> StepResult:
     zizmor_bin = _find_zizmor()
     if not zizmor_bin:
         return StepResult(
-            "GHA zizmor (security)", "SKIP", "Install: cargo install zizmor  OR  pip install zizmor"
+            "GHA Zizmor (Security)", "SKIP", "Install: cargo install zizmor  OR  pip install zizmor"
         )
     workflows_dir = ROOT / ".github/workflows"
     result = subprocess.run(
@@ -1377,12 +1380,12 @@ def _check_optional_import_typing() -> StepResult:
         for issue in issues:
             print(f"  optional import typing issue: {issue}", flush=True)
         return StepResult(
-            "Optional import typing guard",
+            "Optional Import Typing Guard",
             "FAIL",
             f"{len(issues)} optional import typing issue(s)",
         )
     return StepResult(
-        "Optional import typing guard",
+        "Optional Import Typing Guard",
         "PASS",
         f"{len(_OPTIONAL_IMPORT_GUARD_PATHS)} file(s) verified",
     )
@@ -1470,16 +1473,29 @@ def _suite_console_unit() -> SuiteResult:
     )
 
 
-def _suite_webclient_unit() -> SuiteResult:
-    """Web Client -- Phase 1 (static + unit).  Delegates to sub-project runner.
+def _suite_webclient_python_unit() -> SuiteResult:
+    """Web Client -- Python Phase 1 (static + unit).  Delegates to sub-project runner.
 
-    Covers: ruff, mypy, bandit, pytest unit tests, ESLint, npm audit, vitest.
+    Covers: ruff, mypy, bandit, pip-audit, pytest unit tests.
     """
     return _delegate_to_runner(
-        name="web-client-static",
+        name="web-client-static-python",
         runner_dir=WEB_CLIENT_DIR,
-        phase_args=["--phase1", "--skip-performance"],
-        label="webclient runner (phase1)",
+        phase_args=["--phase1-python"],
+        label="webclient runner (phase1-python)",
+    )
+
+
+def _suite_webclient_js_unit() -> SuiteResult:
+    """Web Client -- JavaScript Phase 1 (static + unit).  Delegates to sub-project runner.
+
+    Covers: ESLint, stylelint, npm audit, vitest unit tests.
+    """
+    return _delegate_to_runner(
+        name="web-client-static-js",
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--phase1-js", "--skip-performance"],
+        label="webclient runner (phase1-js)",
     )
 
 
@@ -1503,6 +1519,19 @@ def _suite_testclient_phase1() -> SuiteResult:
         runner_dir=TEST_CLIENT_DIR,
         phase_args=["--phase1"],
         label="testclient runner (phase1)",
+    )
+
+
+def _suite_performance_unit() -> SuiteResult:
+    """Performance Client -- Phase 1 (static + unit).  Delegates to sub-project runner.
+
+    Covers: ruff, mypy, bandit, pytest unit tests with coverage.
+    """
+    return _delegate_to_runner(
+        name="performance-client-static",
+        runner_dir=PERFORMANCE_DIR,
+        phase_args=["--phase1"],
+        label="performance runner (phase1)",
     )
 
 
@@ -2131,6 +2160,24 @@ def _suite_testclient_full() -> SuiteResult:
     )
 
 
+def _suite_performance_live() -> SuiteResult:
+    """Performance Client -- Phase 2 (live benchmark).  Delegates to sub-project runner.
+
+    Runs live throughput & latency benchmark against standalone OPC UA mock server on port 40485.
+    """
+    return _delegate_to_runner(
+        name="performance-client-live",
+        runner_dir=PERFORMANCE_DIR,
+        phase_args=["--phase2"],
+        label="performance runner (phase2)",
+        extra_env={
+            "OPCUA_SERVER_PORT": str(OPCUA_SERVER_PORT_PERFORMANCE_CLIENT),
+            "OPCUA_SERVER_URL": f"opc.tcp://localhost:{OPCUA_SERVER_PORT_PERFORMANCE_CLIENT}",
+        },
+        timeout=300,
+    )
+
+
 def _webclient_live_env(
     *,
     suite_name: str,
@@ -2364,79 +2411,91 @@ SUITE_RENAMED_GUIDANCE = "Suite IDs were renamed in Slice 1. Run --list for curr
 SUITE_REGISTRY: dict[str, SuiteSpec] = {
     "repo-static-gitignore-check": SuiteSpec(
         id="repo-static-gitignore-check",
-        display_name="Repo - Gitignore check",
+        display_name="Repo - Gitignore Check",
         group=SuiteGroup.REPO_CHECKS,
         runner=_suite_gitignore_sanity,
     ),
     "repo-static-markdown-leak-check": SuiteSpec(
         id="repo-static-markdown-leak-check",
-        display_name="Repo - Markdown leak check",
+        display_name="Repo - Markdown Leak Check",
         group=SuiteGroup.REPO_CHECKS,
         runner=_suite_md_hygiene,
     ),
     "server-static": SuiteSpec(
         id="server-static",
-        display_name="Server - Static checks",
+        display_name="Server - Static Checks",
         group=SuiteGroup.PHASE1_STATIC,
         runner=_suite_server_static,
     ),
     "node-client-static": SuiteSpec(
         id="node-client-static",
-        display_name="Node Client - Static + unit",
+        display_name="Node Client - Static + Unit",
         group=SuiteGroup.PHASE1_STATIC,
         runner=_suite_node_unit,
     ),
     "test-client-static": SuiteSpec(
         id="test-client-static",
-        display_name="Test Client - Static + unit",
+        display_name="Test Client - Static + Unit",
         group=SuiteGroup.PHASE1_STATIC,
         runner=_suite_testclient_phase1,
     ),
+    "performance-client-static": SuiteSpec(
+        id="performance-client-static",
+        display_name="Performance Client - Static + Unit",
+        group=SuiteGroup.PHASE1_STATIC,
+        runner=_suite_performance_unit,
+    ),
     "console-client-static": SuiteSpec(
         id="console-client-static",
-        display_name="Console Client - Static + unit",
+        display_name="Console Client - Static + Unit",
         group=SuiteGroup.PHASE1_STATIC,
         runner=_suite_console_unit,
     ),
-    "web-client-static": SuiteSpec(
-        id="web-client-static",
-        display_name="Web Client - Static + unit (Python + JS)",
+    "web-client-static-python": SuiteSpec(
+        id="web-client-static-python",
+        display_name="Web Client - Static + Unit (Python)",
         group=SuiteGroup.PHASE1_STATIC,
-        runner=_suite_webclient_unit,
+        runner=_suite_webclient_python_unit,
+    ),
+    "web-client-static-js": SuiteSpec(
+        id="web-client-static-js",
+        display_name="Web Client - Static + Unit (JS)",
+        group=SuiteGroup.PHASE1_STATIC,
+        runner=_suite_webclient_js_unit,
     ),
     "web-client-performance": SuiteSpec(
         id="web-client-performance",
-        display_name="Web Client - Private Envelope performance (isolated)",
+        display_name="Web Client - Private Envelope Performance (Isolated)",
         group=SuiteGroup.PHASE1_PERFORMANCE,
         runner=_suite_webclient_performance,
     ),
     "csharp-client-static": SuiteSpec(
         id="csharp-client-static",
-        display_name="C# Client - Static + unit",
+        display_name="C# Client - Static + Unit",
         group=SuiteGroup.PHASE1_STATIC,
         runner=_suite_csharp_unit,
     ),
     "server-smoke": SuiteSpec(
         id="server-smoke",
-        display_name="Server - Native smoke (port 40451)",
+        display_name="Server - Native Smoke (Port 40451)",
         group=SuiteGroup.PHASE2_LIVE,
         runner=_suite_server_smoke,
     ),
     "server-linux-package-smoke": SuiteSpec(
         id="server-linux-package-smoke",
-        display_name="Server - Linux package smoke (Docker, port 40465)",
+        display_name="Server - Linux Package Smoke (Docker, Port 40465)",
         group=SuiteGroup.PHASE2_PACKAGE,
         runner=_suite_server_linux_package_smoke,
     ),
     "csharp-client-live": SuiteSpec(
         id="csharp-client-live",
-        display_name="C# Client - Live OPC UA integration",
+        display_name="C# Client - Live OPC UA Integration",
         group=SuiteGroup.PHASE2_LIVE,
         runner=_suite_csharp_live,
     ),
     "console-client-live": SuiteSpec(
         id="console-client-live",
-        display_name="Console Client - Live OPC UA integration",
+        display_name="Console Client - Live OPC UA Integration",
         group=SuiteGroup.PHASE2_LIVE,
         runner=_suite_console_live,
     ),
@@ -2466,55 +2525,61 @@ SUITE_REGISTRY: dict[str, SuiteSpec] = {
     ),
     "test-client-live-specification-tests": SuiteSpec(
         id="test-client-live-specification-tests",
-        display_name="Test Client - Live specification tests",
+        display_name="Test Client - Live Specification Tests",
         group=SuiteGroup.PHASE2_LIVE,
         runner=_suite_testclient_full,
     ),
+    "performance-client-live": SuiteSpec(
+        id="performance-client-live",
+        display_name="Performance Client - Live Benchmark (Port 40485)",
+        group=SuiteGroup.PHASE2_LIVE,
+        runner=_suite_performance_live,
+    ),
     "web-client-live-opcua-direct": SuiteSpec(
         id="web-client-live-opcua-direct",
-        display_name="Web Client - Direct OPC UA live tests",
+        display_name="Web Client - Direct OPC UA Live Tests",
         group=SuiteGroup.PHASE2_WEB_LIVE,
         runner=_suite_webclient_live_python_opcua,
     ),
     "web-client-live-websocket-api": SuiteSpec(
         id="web-client-live-websocket-api",
-        display_name="Web Client - WebSocket API live tests",
+        display_name="Web Client - WebSocket API Live Tests",
         group=SuiteGroup.PHASE2_WEB_LIVE,
         runner=_suite_webclient_live_python_backend,
     ),
     "web-client-live-websocket-connection": SuiteSpec(
         id="web-client-live-websocket-connection",
-        display_name="Web Client - WebSocket connection live tests",
+        display_name="Web Client - WebSocket Connection Live Tests",
         group=SuiteGroup.PHASE2_WEB_LIVE,
         runner=_suite_webclient_live_python_lifecycle,
     ),
     "web-client-e2e-smoke": SuiteSpec(
         id="web-client-e2e-smoke",
-        display_name="Web Client - Browser smoke",
+        display_name="Web Client - Browser Smoke",
         group=SuiteGroup.PHASE2_WEB_LIVE,
         runner=_suite_webclient_live_e2e_smoke,
     ),
     "web-client-e2e-features": SuiteSpec(
         id="web-client-e2e-features",
-        display_name="Web Client - Browser feature coverage",
+        display_name="Web Client - Browser Feature Coverage",
         group=SuiteGroup.PHASE2_WEB_LIVE,
         runner=_suite_webclient_live_e2e_features,
     ),
     "web-client-e2e-regression": SuiteSpec(
         id="web-client-e2e-regression",
-        display_name="Web Client - Browser regression journey",
+        display_name="Web Client - Browser Regression Journey",
         group=SuiteGroup.PHASE2_WEB_LIVE,
         runner=_suite_webclient_live_e2e_regression,
     ),
     "web-client-docker-smoke": SuiteSpec(
         id="web-client-docker-smoke",
-        display_name="Web Client - Docker image smoke",
+        display_name="Web Client - Docker Image Smoke",
         group=SuiteGroup.PHASE2_WEB_LIVE,
         runner=_suite_webclient_docker_smoke,
     ),
     "web-client-compatibility-smoke": SuiteSpec(
         id="web-client-compatibility-smoke",
-        display_name="Web Client - Edge compatibility smoke",
+        display_name="Web Client - Edge Compatibility Smoke",
         group=SuiteGroup.PHASE2_WEB_COMPATIBILITY,
         runner=_suite_webclient_compatibility_smoke,
     ),
@@ -2807,13 +2872,13 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
                 out(_row("", blank_s, "", f"  \u2514 {note}") + "\n")
 
     _emit_group("GHA / Repo Checks", gha_rows)
-    _emit_group("Phase 1a \u2014 Unit & Static (parallel)", p1_rows)
-    _emit_group("Phase 1b \u2014 Private Envelope Performance (isolated)", p1_performance_rows)
-    _emit_group("Phase 2 \u2014 Live / Integration", p2_rows)
+    _emit_group("Phase 1a — Unit & Static (Parallel)", p1_rows)
+    _emit_group("Phase 1b — Private Envelope Performance (Isolated)", p1_performance_rows)
+    _emit_group("Phase 2 — Live / Integration", p2_rows)
 
     # ── Totals row ────────────────────────────────────────────────────────────
     out(_hcols(LM, CR, RM) + "\n")
-    out(_row("WALL TIME (parallel)", blank_s, f"{total_time:.1f}s", suite_totals) + "\n")
+    out(_row("WALL TIME (Parallel)", blank_s, f"{total_time:.1f}s", suite_totals) + "\n")
     out(_row("", blank_s, "", f"  \u2514 {total_test_detail}") + "\n")
     out(_hcols(BL, BT, BR) + "\n\n")
 

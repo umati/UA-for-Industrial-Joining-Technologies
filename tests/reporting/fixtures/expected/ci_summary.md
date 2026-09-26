@@ -1,6 +1,6 @@
 ## IJT OPC UA — CI
 
-> ✅ **All 12 / 12 Jobs Passed**
+> ✅ **All 13 / 13 Jobs Passed**
 > **Branch:** `c2-phase-1b` &nbsp;·&nbsp; **Commit:** `12345678` &nbsp;·&nbsp; **Run:** [#42](https://github.example/ijt/actions/runs/42)
 
 > Full report below: [Outcome](#ci-outcome-overview) · [Validation](#ci-validation-results) · [Code Quality](#ci-code-quality-checks) · [Security](#ci-source-dependency-security) · [Infrastructure](#ci-infrastructure) · [Timing](#ci-performance-timings) · [Skip Details](#ci-skip-details)
@@ -15,23 +15,24 @@
 
 | 🚦  | Outcome |   Count |
 | :-: | :------ | ------: |
-| ✅  | Passed  |      21 |
+| ✅  | Passed  |      24 |
 | ❌  | Failed  |       0 |
 | ⏭️  | Skipped |      16 |
-| 🧮  | Total   |      37 |
-| 🛠️  | Jobs    | 12 / 12 |
+| 🧮  | Total   |      40 |
+| 🛠️  | Jobs    | 13 / 13 |
 
 ---
 
 <a id="ci-validation-results"></a>
 
-### 🧪 Validation Results — 7 checks
+### 🧪 Validation Results — 8 checks
 
 | Component | Validation Scope | Test Cases | Skipped | Coverage / Threshold |
 |:----------|:-----------------|----------:|--------:|:---------------------:|
 | Web Client — Python | Ubuntu Release 2 Python unit suite | 2 Passed ✅ | 0 Skipped | 97.0% / 95% ✅ |
 | Web Client — JavaScript | Ubuntu Release 2 JavaScript unit suite | 3 Passed ✅ | 0 Skipped | 96.0% / 95% ✅ |
 | Console Client — Python | Ubuntu Python unit suite | 2 Passed ✅ | 0 Skipped | 99.0% / 95% ✅ |
+| Performance Client — Python | Ubuntu Python unit suite | 3 Passed ✅ | 0 Skipped | 99.9% / 85% ✅ |
 | Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit suite | 1 Passed ✅ | 1 Skipped | 95.0% / 95% ✅ |
 | C# Client — Unit (xUnit) | Windows C# xUnit unit suite | 1 Passed ✅ | 15 Skipped | 95.0% / 95% ✅ |
 | Test Client — Python (Unit) | Ubuntu Python unit suite | 2 Passed ✅ | 0 Skipped | 98.0% / 95% ✅ |
@@ -41,12 +42,13 @@
 
 <a id="ci-code-quality-checks"></a>
 
-### 🧹 Code Quality Checks — 5 components
+### 🧹 Code Quality Checks — 6 components
 
 | 🚦 | Component | Validation Scope | Lint / Format | Type Check / Build |
 |:--:|:----------|:-----------------|:--------------|:-------------------|
 | ⚠️ | Web Client | Python and JavaScript static quality | ✅ ruff<br>⚠️ eslint (1 warnings) | ✅ mypy |
 | ✅ | Console Client | Python static quality | ✅ ruff | ✅ mypy |
+| ✅ | Performance Client | Python static quality | ✅ ruff | ✅ mypy |
 | ✅ | Node Client — Legacy JavaScript | JavaScript static quality | ✅ eslint | ➖ Not Applicable |
 | ✅ | C# Client | Build and formatting quality | ✅ build<br>✅ format | ➖ Not Applicable |
 | ✅ | Test Client | Python static quality | ✅ ruff | ✅ mypy |

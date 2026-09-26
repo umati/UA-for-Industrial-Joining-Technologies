@@ -25,6 +25,7 @@ CI_ENV = {
     "WEB_PY_RESULT": "success",
     "WEB_JS_RESULT": "success",
     "CONSOLE_RESULT": "success",
+    "PERF_CLIENT_RESULT": "success",
     "NODE_RESULT": "success",
     "DOCKER_RESULT": "success",
     "CS_UNIT_RESULT": "success",
@@ -39,6 +40,8 @@ CI_ENV = {
     "WEB_JS_ESLINT": "success",
     "CONSOLE_RUFF": "success",
     "CONSOLE_MYPY": "success",
+    "PERF_CLIENT_RUFF": "success",
+    "PERF_CLIENT_MYPY": "success",
     "NODE_ESLINT": "success",
     "CS_BUILD": "success",
     "CS_FORMAT": "success",
@@ -147,11 +150,11 @@ def test_ci_outcome_overview_exact_block() -> None:
     expected = (
         f"| {_ICON_SIGNAL}  | Outcome |   Count |\n"
         "| :-: | :------ | ------: |\n"
-        f"| {_ICON_PASSED}  | Passed  |      21 |\n"
+        f"| {_ICON_PASSED}  | Passed  |      24 |\n"
         f"| {_ICON_FAILED}  | Failed  |       0 |\n"
         f"| {_ICON_SKIPPED}  | Skipped |      16 |\n"
-        f"| {_ICON_TOTAL}  | Total   |      37 |\n"
-        f"| {_ICON_JOBS}  | Jobs    | 12 / 12 |\n"
+        f"| {_ICON_TOTAL}  | Total   |      40 |\n"
+        f"| {_ICON_JOBS}  | Jobs    | 13 / 13 |\n"
     )
     assert expected in text, (
         "CI Outcome Overview pin mismatch.\n"

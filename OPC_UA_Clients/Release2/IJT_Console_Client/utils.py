@@ -174,7 +174,9 @@ async def read_tool_identifier(client: Client) -> String | str | None:
         return None
 
 
-async def log_result_event_details(event, _server_url: str, client_received_time: datetime) -> str:
+async def log_result_event_details(
+    event, _server_url: str, client_received_time: datetime, skew_ms: float = 0.0
+) -> str:
     try:
         # Do NOT perform OPC UA reads here — this callback fires concurrently with
         # pending method calls and concurrent OPC UA requests on the same client
@@ -192,7 +194,7 @@ async def log_result_event_details(event, _server_url: str, client_received_time
         if end_time and end_time.tzinfo is None:
             end_time = pytz.utc.localize(end_time)
 
-        latency_ms = (client_received_time - end_time).total_seconds() * 1000 if end_time else None
+        latency_ms = (client_received_time - end_time).total_seconds() * 1000 + skew_ms if end_time else None
 
         label_width = 35
 
@@ -203,12 +205,12 @@ async def log_result_event_details(event, _server_url: str, client_received_time
             label_width,
         )
         log_field(
-            "1. StartTime of Tightening",
+            "1. StartTime of Joining",
             format_local_time(start_time) if start_time else "Unavailable",
             label_width,
         )
         log_field(
-            "2. EndTime of Tightening",
+            "2. EndTime of Joining",
             format_local_time(end_time) if end_time else "Unavailable",
             label_width,
         )
@@ -231,12 +233,12 @@ async def log_result_event_details(event, _server_url: str, client_received_time
 
         if latency_ms is not None:
             log_field(
-                "*** Turn around Time (EndTime -> Client)",
-                f"{abs(latency_ms):.3f} ms",
+                "*** Total Result Transfer Time (EndTime -> Client)",
+                f"{latency_ms:.3f} ms",
                 label_width,
             )
         else:
-            log_field("*** Turn around Time (EndTime -> Client)", "Unavailable", label_width)
+            log_field("*** Total Result Transfer Time (EndTime -> Client)", "Unavailable", label_width)
 
         log_separator(label_width)
         return event_id

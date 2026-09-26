@@ -49,7 +49,9 @@ def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:
     return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
-async def log_result_event_details(event: Any, _server_url: str, client_received_time: datetime) -> str:
+async def log_result_event_details(
+    event: Any, _server_url: str, client_received_time: datetime, skew_ms: float = 0.0
+) -> str:
     """Coroutine. Log timing and metadata for a received ResultReadyEvent.
 
     Computes the turn-around latency between ``Result.ProcessingTimes.EndTime``
@@ -63,6 +65,7 @@ async def log_result_event_details(event: Any, _server_url: str, client_received
         _server_url: Unused (kept for interface uniformity).
         client_received_time: UTC-aware datetime captured immediately when the
             event was received.
+        skew_ms: Optional calibrated relative clock drift in milliseconds.
 
     Returns:
         The event-id string decoded from ``event.EventId`` (UTF-8).
@@ -93,7 +96,7 @@ async def log_result_event_details(event: Any, _server_url: str, client_received
     if end_time and end_time.tzinfo is None:
         end_time = pytz.utc.localize(end_time)
 
-    latency_ms = (client_received_time - end_time).total_seconds() * 1000 if end_time else None
+    latency_ms = (client_received_time - end_time).total_seconds() * 1000 + skew_ms if end_time else None
 
     formatted_event_time = format_local_time(event_time) if event_time else "Unavailable"
     formatted_client_time = format_local_time(client_received_time)
@@ -107,17 +110,17 @@ async def log_result_event_details(event: Any, _server_url: str, client_received
     label_width = 40
     ijt_log.info("-" * 80)
     ijt_log.info(f"{'RESULT EVENT RECEIVED':<{label_width}} : {message}")
-    ijt_log.info(f"{'1. StartTime of Tightening':<{label_width}} : {formatted_start_time}")
-    ijt_log.info(f"{'2. EndTime of Tightening':<{label_width}} : {formatted_end_time}")
+    ijt_log.info(f"{'1. StartTime of Joining':<{label_width}} : {formatted_start_time}")
+    ijt_log.info(f"{'2. EndTime of Joining':<{label_width}} : {formatted_end_time}")
     ijt_log.info(f"{'3. Result Creation Time':<{label_width}} : {formatted_creation_time}")
     ijt_log.info(f"{'4. Result Event Generated Time':<{label_width}} : {formatted_event_time}")
     ijt_log.info(f"{'5. Client Time':<{label_width}} : {formatted_client_time}")
     ijt_log.info(f"{'6. Server Time':<{label_width}} : {formatted_server_time}")
 
     if latency_ms is not None:
-        ijt_log.info(f"{'*** Turn around Time (EndTime → Client)':<{label_width}} : {abs(latency_ms):.3f} ms")
+        ijt_log.info(f"{'*** Total Result Transfer Time (EndTime → Client)':<{label_width}} : {latency_ms:.3f} ms")
     else:
-        ijt_log.info(f"{'*** Turn around Time (EndTime → Client)':<{label_width}} : Unavailable")
+        ijt_log.info(f"{'*** Total Result Transfer Time (EndTime → Client)':<{label_width}} : Unavailable")
     ijt_log.info("-" * 80)
     return event_id
 

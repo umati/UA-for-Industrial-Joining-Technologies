@@ -1,0 +1,24 @@
+# CI Multi-Server Profile
+# Target: 3 local virtual servers for fast, automated GitHub Actions runs
+schema_version: 1
+name: "CI Multi-Server Fleet"
+description: "Concurrent multi-controller event subscription and burst latency validation"
+
+fleet:
+  lifecycle: auto_simulator
+  url_template: "opc.tcp://127.0.0.1:{port}"
+  port_range: [40451, 40453]
+
+execution:
+  mode: both                   # Listen and actively trigger bursts
+  duration_seconds: 20.0
+  target_sample_count: 30
+  burst_trigger_count: 5
+
+engine:
+  max_worker_processes: 2     # Fits standard 2-vCPU CI runners
+  connect_concurrency: 10
+  sub_period_ms: 100
+
+thresholds:
+  warn_p90_ms: 150.0

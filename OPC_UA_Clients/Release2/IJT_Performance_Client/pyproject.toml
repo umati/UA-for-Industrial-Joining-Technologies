@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ijt-performance-client"
+version = "1.0.0"
+description = "OPC UA IJT High-Scale Multi-Controller Performance, Latency & Diagnostic Client"
+readme = "README.md"
+authors = [{ name = "OPC UA IJT Working Group" }]
+license = { text = "MIT" }
+requires-python = ">=3.14"
+dependencies = [
+    "asyncua==2.0.1",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "live: live integration tests requiring a running OPC UA server",
+    "performance: latency and throughput benchmarks",
+]
+
+[project.scripts]
+ijt-perf = "ijt_performance_client.cli:main"
+ijt-performance-client = "ijt_performance_client.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ijt_performance_client*"]
+
+[tool.setuptools.package-data]
+ijt_performance_client = ["profiles/*.yaml"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+cache-dir = "tmp/ruff-cache"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501", "E402", "E731"]

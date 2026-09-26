@@ -14,6 +14,7 @@ Release 2 reference clients for the OPC UA Industrial Joining Technologies (IJT)
 | [IJT Console Client](IJT_Console_Client) | Command-line IJT client | Python |
 | [IJT C# Client](IJT_CSharp_Client) | .NET reference client and type libraries | C#/.NET |
 | [IJT Test Client](IJT_Test_Client) | IJT specification validation | Python, pytest |
+| [IJT Performance Client](IJT_Performance_Client) | High-scale Result Transfer Time & multi-controller latency benchmark | Python, asyncio, multiprocessing |
 
 ## Quick Start
 

@@ -248,7 +248,7 @@ def test_log_result_event_details_has_no_client_parameter():
         "log_result_event_details must not take a 'client' parameter — "
         "OPC UA reads inside event callbacks cause race conditions"
     )
-    assert params == ["event", "_server_url", "client_received_time"]
+    assert params == ["event", "_server_url", "client_received_time", "skew_ms"]
 
 
 @pytest.mark.asyncio

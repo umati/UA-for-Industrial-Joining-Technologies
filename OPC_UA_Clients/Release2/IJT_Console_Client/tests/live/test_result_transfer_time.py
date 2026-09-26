@@ -286,13 +286,13 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
-def _delta_ms(dt_from: datetime | None, dt_to: datetime | None) -> float | None:
-    """(dt_to − dt_from) in milliseconds, or None if either argument is None."""
+def _delta_ms(dt_from: datetime | None, dt_to: datetime | None, skew_ms: float = 0.0) -> float | None:
+    """(dt_to − dt_from) in milliseconds + skew_ms, or None if either argument is None."""
     a = _ensure_utc(dt_from)
     b = _ensure_utc(dt_to)
     if a is None or b is None:
         return None
-    return (b - a).total_seconds() * 1000.0
+    return (b - a).total_seconds() * 1000.0 + skew_ms
 
 
 def _duration_ms(value) -> float | None:
@@ -307,7 +307,7 @@ def _duration_ms(value) -> float | None:
         return None
 
 
-def _extract_sample(event, received_time: datetime, index: int) -> dict:
+def _extract_sample(event, received_time: datetime, index: int, skew_ms: float = 0.0) -> dict:
     """Pull all timestamps + reported durations from a ResultReadyEvent and compute latencies."""
     meta = getattr(getattr(event, "Result", None), "ResultMetaData", None)
     pt = getattr(meta, "ProcessingTimes", None)
@@ -323,13 +323,63 @@ def _extract_sample(event, received_time: datetime, index: int) -> dict:
         "end_time": end,
         "event_time": event_time,
         "client_time": client_time,
+        "skew_ms": skew_ms,
         "joining_ms": _delta_ms(start, end),
+        "joining_duration_ms": _delta_ms(start, end),
         "acquisition_ms": acquisition_ms,
         "processing_ms": processing_ms,
         "time_on_server_ms": _delta_ms(end, event_time),
-        "wire_ms": _delta_ms(event_time, client_time),
-        "total_ms": _delta_ms(end, client_time),
+        "server_processing_time_ms": _delta_ms(end, event_time),
+        "wire_ms": _delta_ms(event_time, client_time, skew_ms),
+        "network_transport_time_ms": _delta_ms(event_time, client_time, skew_ms),
+        "total_ms": _delta_ms(end, client_time, skew_ms),
+        "total_result_transfer_time_ms": _delta_ms(end, client_time, skew_ms),
     }
+
+
+async def calibrate_clock_skew(client: Client, num_probes: int = 3) -> float:
+    """Measures relative clock drift between this client PC and the OPC UA controller.
+
+    Uses multi-sample round-trip time (RTT) probing using Cristian's algorithm.
+    Returns estimated skew in milliseconds.
+    """
+    best_rtt: float = float("inf")
+    best_skew: float = 0.0
+
+    try:
+        server_time_node = client.get_node(ua.NodeId(ua.ObjectIds.Server_ServerStatus_CurrentTime))  # type: ignore[arg-type]
+        for _ in range(max(1, num_probes)):
+            t_before = datetime.now(timezone.utc)
+            server_now = await server_time_node.read_value()
+            t_after = datetime.now(timezone.utc)
+
+            if not isinstance(server_now, datetime):
+                continue
+
+            if server_now.tzinfo is None:
+                server_now = server_now.replace(tzinfo=timezone.utc)
+            else:
+                server_now = server_now.astimezone(timezone.utc)
+
+            rtt_ms = (t_after - t_before).total_seconds() * 1000.0
+            if rtt_ms < best_rtt:
+                best_rtt = rtt_ms
+                client_midpoint = t_before + (t_after - t_before) / 2
+                best_skew = (server_now - client_midpoint).total_seconds() * 1000.0
+
+        if best_rtt != float("inf"):
+            if best_rtt > 50.0:
+                logger.warning(
+                    "Elevated RTT (%.1f ms) during clock calibration with %s. Clock skew uncertainty is ±%.1f ms.",
+                    best_rtt,
+                    getattr(client, "server_url", "server"),
+                    best_rtt / 2.0,
+                )
+            return best_skew
+        return 0.0
+    except Exception as exc:
+        logger.debug("Clock skew calibration failed: %s; proceeding with 0.0 ms skew", exc)
+        return 0.0
 
 
 def _percentile(sorted_values: list, p: float) -> float:
@@ -375,9 +425,9 @@ def _log_report(samples: list) -> None:
         "Joining",
         "Acquisition",
         "Processing",
-        "On-server",
-        "OPC UA+Wire",
-        "TOTAL",
+        "Server Proc",
+        "Net Transport",
+        "Total Transfer",
     )
     logger.info(sep)
 
@@ -413,9 +463,9 @@ def _log_report(samples: list) -> None:
         ("Joining duration", "joining_ms"),
         ("Result acquisition", "acquisition_ms"),
         ("Result processing", "processing_ms"),
-        ("Time on server", "time_on_server_ms"),
-        ("OPC UA + Wire", "wire_ms"),
-        ("TOTAL — Result Transfer", "total_ms"),
+        ("Server processing", "time_on_server_ms"),
+        ("Network transport", "wire_ms"),
+        ("Total result transfer", "total_ms"),
     ]:
         st = _col_stats(samples, key)
         if st:
@@ -510,6 +560,11 @@ async def test_result_transfer_time(
     event_type_node = _sub_client.get_node(ua.NodeId(_RESULT_READY_EVENT_TYPE_ID, ns_ijt))  # type: ignore[arg-type]
     server_node = _sub_client.nodes.server
 
+    # Calibrate relative clock skew via Cristian's algorithm
+    skew_ms = await calibrate_clock_skew(_sub_client)
+    if abs(skew_ms) > 1.0:
+        logger.info("Calibrated relative clock skew: %.2f ms (Cristian's algorithm)", skew_ms)
+
     samples = []
 
     async with _TimedEventCollector(_sub_client) as collector:
@@ -537,11 +592,11 @@ async def test_result_transfer_time(
                 )
 
             event, received_time = item
-            s = _extract_sample(event, received_time, i)
+            s = _extract_sample(event, received_time, i, skew_ms=skew_ms)
             samples.append(s)
 
             logger.info(
-                "Sample %2d/%d:  total=%s  |  joining=%s  on-server=%s  wire=%s",
+                "Sample %2d/%d:  total_transfer=%s  |  joining=%s  server_proc=%s  transport=%s",
                 i,
                 _SAMPLE_COUNT,
                 f"{s['total_ms']:.2f} ms" if s["total_ms"] is not None else "N/A",

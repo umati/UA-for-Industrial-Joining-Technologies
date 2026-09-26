@@ -23,6 +23,7 @@ of OPC UA IJT clients and servers, supporting documents, and specification testi
 | [IJT Console Client](OPC_UA_Clients/Release2/IJT_Console_Client) | Provides a command-line IJT client | Scripting, automation, and direct server interaction |
 | [IJT C# Client](OPC_UA_Clients/Release2/IJT_CSharp_Client) | Provides a C#/.NET client and reusable type libraries | Building .NET applications against IJT |
 | [IJT Test Client](OPC_UA_Clients/Release2/IJT_Test_Client) | Provides a specification test client | Specification testing for OPC UA IJT servers |
+| [IJT Performance Client](OPC_UA_Clients/Release2/IJT_Performance_Client) | Provides a high-scale Result Transfer Time & multi-controller benchmark | Single-server result transfer time, fleet scalability testing, and latency root-cause diagnostics |
 
 ## Contributing & Development
 

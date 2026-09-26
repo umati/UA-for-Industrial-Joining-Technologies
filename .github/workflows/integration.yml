@@ -52,6 +52,8 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
       # Console Client — live/OPC UA security tests run here (not in fast CI)
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
+      # Performance Client — live benchmark runs on port 40485
+      - 'OPC_UA_Clients/Release2/IJT_Performance_Client/**'
       # C# Client — OPC UA security and live tests
       - 'OPC_UA_Clients/Release2/IJT_CSharp_Client/**'
       # Browser CI image inputs — live browser job consumes PR/main SHA image
@@ -85,6 +87,7 @@ on:
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/**'
       - 'OPC_UA_Clients/Release2/IJT_Test_Client/**'
       - 'OPC_UA_Clients/Release2/IJT_Console_Client/**'
+      - 'OPC_UA_Clients/Release2/IJT_Performance_Client/**'
       - 'OPC_UA_Clients/Release2/IJT_CSharp_Client/**'
       # Browser CI image inputs — live browser job consumes PR/main SHA image
       # when these changed, otherwise the reviewed image pin.
@@ -980,6 +983,72 @@ jobs:
         run: python scripts/start_server_on_port.py --port 40461 --stop
 
   # ───────────────────────────────────────────────────────────────────────────
+  # Performance Client - Windows Live Benchmark (port 40485)
+  #   Runs Performance Client live test suite against a dedicated server instance.
+  #   Uses dedicated port 40485 — safe to run in parallel with other live jobs.
+  # ───────────────────────────────────────────────────────────────────────────
+  perf-client-live:
+    name: "Performance Client - Windows Live Benchmark (port 40485)"
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install Performance Client dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install `
+            -c "${{ github.workspace }}/constraints.txt" `
+            -r OPC_UA_Clients/Release2/IJT_Performance_Client/requirements.txt
+
+      - name: Extract server ZIP
+        run: |
+          Expand-Archive `
+            -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+            -DestinationPath "OPC_UA_Servers\Release2\" `
+            -Force
+
+      - name: Start OPC UA server on port 40485
+        working-directory: ${{ github.workspace }}
+        run: |
+          python scripts/start_server_on_port.py `
+            --port 40485 `
+            --diagnostics-dir OPC_UA_Clients/Release2/IJT_Performance_Client/test-results/readiness
+
+      - name: Run Performance Client live benchmark
+        working-directory: OPC_UA_Clients/Release2/IJT_Performance_Client
+        env:
+          OPCUA_SERVER_URL: opc.tcp://localhost:40485
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          python -m pytest tests/live/ `
+            -v --tb=short --timeout=120 `
+            -m "live" `
+            --junitxml=test-results/perf-live.xml
+
+      - name: Upload Performance Client results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        if: always()
+        with:
+          name: results-live-performance
+          path: OPC_UA_Clients/Release2/IJT_Performance_Client/test-results/
+          retention-days: 14
+
+      - name: Stop OPC UA server
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: python scripts/start_server_on_port.py --port 40485 --stop
+
+  # ───────────────────────────────────────────────────────────────────────────
   # C# Client - Live Tests (nightly, port 40464)
   #   Nightly drift detection for live C# behavior outside fast CI.
   #   Non-blocking: failures are visible but do not gate merges.
@@ -1313,7 +1382,7 @@ jobs:
     name: "📋 System Tests Report"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [server-smoke-docker, webclient-docker, int-testclient, live-webclient, resolve-browser-image, live-webclient-browser, live-console, csharp-live, csharp-client-opcua-security, console-client-opcua-security]
+    needs: [server-smoke-docker, webclient-docker, int-testclient, live-webclient, resolve-browser-image, live-webclient-browser, live-console, perf-client-live, csharp-live, csharp-client-opcua-security, console-client-opcua-security]
     if: always()
     permissions:
       actions: read
@@ -1408,6 +1477,18 @@ jobs:
         with:
           name: "Console Client — Live Tests"
           path: all-results/results-live-console/**/pytest-live.xml
+          reporter: java-junit
+          use-actions-summary: false
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: "Report — Performance Client Benchmark"
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
+        if: always()
+        continue-on-error: true  # checks:write unavailable on forked PRs
+        with:
+          name: "Performance Client — Live Benchmark"
+          path: all-results/results-live-performance/**/perf-live.xml
           reporter: java-junit
           use-actions-summary: false
           fail-on-error: false

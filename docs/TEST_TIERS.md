@@ -266,6 +266,7 @@ run their live/integration tests in parallel without port conflicts.
 | IJT_CSharp_Client  | **40464** | N/A (.NET)   | Dedicated port — copy-patch mechanism in `OpcUaServerFixture.cs` |
 | IJT_Console_Client | 40461     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
 | IJT_Test_Client    | 40462     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
+| IJT_Performance_Client | 40485 | `.venv` (root runner) | Dedicated port (`OPCUA_SERVER_PORT_PERFORMANCE_CLIENT`) — live benchmark on simulator |
 | Web Client Python OPC UA | 40463 | `.venv_test` | Direct OPC UA and method tests; no WebSocket backend |
 | Web Client Python backend | OPC UA 40466 / WS 8002 | `.venv_test` | WebSocket backend contract and Python integration tests |
 | Web Client Python lifecycle | OPC UA 40467 / WS 8003 | `.venv_test` | WebSocket connection lifecycle tests isolated from backend contract tests |

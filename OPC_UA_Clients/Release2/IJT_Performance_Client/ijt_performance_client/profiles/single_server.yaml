@@ -1,0 +1,55 @@
+# ==============================================================================
+# Single Server Result Transfer Time & Latency Benchmark Profile
+# ==============================================================================
+# Use this profile to test Result Transfer Time for 1 OPC UA Server.
+# Whether you want to collect 10 results, 50 results, or 100+ results,
+# this profile measures the full result transfer time from joining completion to client.
+# ==============================================================================
+
+schema_version: 1
+name: "Single Server Baseline"
+description: "Measures timing breakdown and result transfer time on a single OPC UA controller"
+
+# 1. Target Controller Endpoint
+# Set this to your controller IP or local simulator (default port: 40451 or 40485)
+fleet:
+  lifecycle: external
+  endpoints:
+    - "opc.tcp://localhost:40451"
+
+# 2. Execution Settings
+execution:
+  # Mode choices:
+  # - 'passive': Simply listen for real joining results from physical tools.
+  # - 'active_burst': Actively trigger the server's SimulateSingleResult method.
+  # - 'both': Listen for results and trigger simulated joining operations simultaneously.
+  mode: both
+
+  # How long to run the test in seconds (stops when duration expires or samples reached)
+  duration_seconds: 15.0
+
+  # How many joining results to collect before finishing the test:
+  # Set to 10 for quick smoke test, 20-50 for standard benchmark, 100+ for stress test
+  target_sample_count: 20
+
+  # Number of simulation trigger calls to invoke in active/both mode:
+  burst_trigger_count: 5
+
+# 3. Connection Engine Tuning
+engine:
+  # Number of background worker processes (1 worker is plenty for 1 server)
+  max_worker_processes: 1
+
+  # Maximum concurrent connection attempts
+  connect_concurrency: 5
+
+  # OPC UA subscription publishing interval in milliseconds
+  sub_period_ms: 100
+
+# 4. Manufacturing Quality & SLA Thresholds
+thresholds:
+  # Warning threshold: Yellow warning if P90 total delivery latency exceeds this
+  warn_p90_ms: 100.0
+
+  # Failure threshold: Uncomment to strictly fail (exit code 1) if SLA is breached
+  # fail_p90_ms: 500.0
