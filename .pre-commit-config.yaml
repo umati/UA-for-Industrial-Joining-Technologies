@@ -73,9 +73,6 @@ repos:
       # Does NOT auto-fix — remove them manually before committing.
       - id: debug-statements
 
-      # Validates Python abstract syntax trees to catch syntax errors instantly.
-      - id: check-ast
-
       # Checks for file name collisions on case-insensitive filesystems (Windows/macOS vs Linux).
       - id: check-case-conflict
 
@@ -139,6 +136,12 @@ repos:
   # pass_filenames: false — the npm scripts handle their own file globs.
   - repo: local
     hooks:
+      - id: check-python-ast
+        name: Check Python syntax
+        language: system
+        entry: python scripts/check_python_ast.py
+        types: [python]
+
       - id: eslint-node-client
         name: ESLint (Node Client)
         language: system

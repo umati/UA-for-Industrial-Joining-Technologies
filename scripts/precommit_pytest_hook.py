@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -47,10 +48,18 @@ def main() -> int:
         )
         return rc
 
-    cmd = [sys.executable, "-m", "pytest", *sys.argv[1:]]
-    return subprocess.run(  # noqa: S603 - fixed internal command list
-        cmd, cwd=str(REPO_ROOT), check=False
-    ).returncode
+    with tempfile.TemporaryDirectory(prefix="ijt-precommit-pytest-") as basetemp:
+        cmd = [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--basetemp",
+            basetemp,
+            *sys.argv[1:],
+        ]
+        return subprocess.run(  # noqa: S603 - fixed internal command list
+            cmd, cwd=str(REPO_ROOT), check=False
+        ).returncode
 
 
 if __name__ == "__main__":
