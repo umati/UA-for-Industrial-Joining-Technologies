@@ -3739,6 +3739,20 @@ def main() -> int:
     if not skip_static:
         results.append(_stage_versions())
         if args.phase1_js:
+            # The private-module lane runs the Envelope module's own pytest
+            # suite via `python -m pytest` (see _stage_optional_private_module_static),
+            # so pytest (and friends from requirements-dev.txt) must be
+            # installed in this venv even though the rest of this lane is
+            # otherwise JS-only. Only install when that pytest invocation will
+            # actually happen — i.e. private modules aren't disabled and the
+            # Envelope submodule's own python/tests directory is checked out —
+            # so the common public-contributor lane (no private submodule)
+            # doesn't pay for an unused pip install.
+            if (
+                args.private_modules.strip().lower() != "skip"
+                and (_OPTIONAL_PRIVATE_ENVELOPE_DIR / "python" / "tests").is_dir()
+            ):
+                results.append(_stage_pip_install(python, required_modules=("pytest",)))
             results.append(_stage_npm_install())
             results.append(_stage_js_lint())
             results.append(_stage_js_unit())

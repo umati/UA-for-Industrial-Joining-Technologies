@@ -1773,7 +1773,7 @@ def test_target_only_dependency_failure_stops_before_live_stage(monkeypatch, tmp
     assert runner.main() == 1
 
 
-def _phase1_lane_runner(monkeypatch, tmp_path, argv):
+def _phase1_lane_runner(monkeypatch, tmp_path, argv, *, envelope_py_tests_present: bool = True):
     runner = _load_runner()
     calls = []
 
@@ -1786,6 +1786,14 @@ def _phase1_lane_runner(monkeypatch, tmp_path, argv):
     monkeypatch.setattr(runner, "_port_open", lambda *args, **kwargs: False)
     monkeypatch.setattr(runner, "_docker_available", lambda: False)
     monkeypatch.setattr(runner, "_write_timing_artifacts", lambda *args, **kwargs: None)
+    # Pin the private Envelope submodule directory to a deterministic tmp_path
+    # location instead of relying on whether the real submodule happens to be
+    # checked out on the machine running these unit tests — the phase1-js lane
+    # decides whether to install pytest based on this path's python/tests dir.
+    envelope_dir = tmp_path / "envelope"
+    if envelope_py_tests_present:
+        (envelope_dir / "python" / "tests").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(runner, "_OPTIONAL_PRIVATE_ENVELOPE_DIR", envelope_dir)
 
     def stage(name):
         return lambda *args, **kwargs: calls.append(name) or runner.StageResult(name, 0)
@@ -1814,6 +1822,43 @@ def test_phase1_python_runs_python_lane_without_js(monkeypatch, tmp_path):
 
 def test_phase1_js_runs_js_lane_without_python(monkeypatch, tmp_path):
     runner, calls = _phase1_lane_runner(monkeypatch, tmp_path, ["--phase1-js"])
+
+    assert runner.main() == 0
+    assert calls == [
+        "versions",
+        "pip-install",
+        "npm-install",
+        "js-lint",
+        "js-unit",
+        "private-module-static",
+        "private-envelope-performance",
+    ]
+
+
+def test_phase1_js_skips_pip_install_when_envelope_python_tests_absent(monkeypatch, tmp_path):
+    """Regression: the phase1-js lane must not pay for a pip install that only
+    exists to provide pytest for the Envelope submodule's own Python suite
+    when that submodule (or its python/tests dir) isn't checked out — the
+    common public-contributor lane in ci.yml, which never initializes the
+    private submodule.
+    """
+    runner, calls = _phase1_lane_runner(monkeypatch, tmp_path, ["--phase1-js"], envelope_py_tests_present=False)
+
+    assert runner.main() == 0
+    assert calls == [
+        "versions",
+        "npm-install",
+        "js-lint",
+        "js-unit",
+        "private-module-static",
+        "private-envelope-performance",
+    ]
+
+
+def test_phase1_js_skips_pip_install_when_private_modules_disabled(monkeypatch, tmp_path):
+    runner, calls = _phase1_lane_runner(
+        monkeypatch, tmp_path, ["--phase1-js", "--private-modules", "skip"], envelope_py_tests_present=True
+    )
 
     assert runner.main() == 0
     assert calls == [
