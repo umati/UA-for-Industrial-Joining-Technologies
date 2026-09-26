@@ -1161,3 +1161,40 @@ async def test_worker_event_loop_teardown_and_burst_failure_coverage():
         assert len(done_msgs) == 1
         assert done_msgs[0]["burst_failures"] == 1
         assert len(done_msgs[0]["teardown_errors"]) > 0
+
+
+def test_verify_coverage_warning_when_partial_coverage_allowed():
+    """Covers line 726: burst failures generate warning when require_full_coverage is False."""
+    pool = OpcUaClientPool(endpoints=["opc.tcp://localhost:40451"], require_full_coverage=False, mode="active_burst")
+    pool.burst_trigger_failures = 2
+    pool.burst_trigger_errors = ["call failed"]
+    pool.connected_endpoints = {"opc.tcp://localhost:40451"}
+    ok, msg = pool.verify_coverage()
+    assert ok is True
+    assert "Warning: 2 active trigger failures" in msg
+
+
+def test_collect_samples_queue_error_raises_runtime_error():
+    """Covers lines 610-611: queue closed during collection raises RuntimeError."""
+    pool = OpcUaClientPool(endpoints=["opc.tcp://localhost:40451"])
+    mock_queue = MagicMock()
+    mock_queue.get.side_effect = EOFError("Queue broken")
+    pool._out_queue = mock_queue
+    pool._stopped = False
+    with pytest.raises(RuntimeError, match="Worker result queue closed during collection"):
+        pool.collect_samples(duration_seconds=5.0)
+
+
+def test_stop_queue_error_handling():
+    """Covers lines 632-634 and 656-658: queue errors during shutdown and final drain."""
+    pool = OpcUaClientPool(endpoints=["opc.tcp://localhost:40451"])
+    mock_queue = MagicMock()
+    mock_queue.get.side_effect = OSError("Queue OS error")
+    mock_queue.get_nowait.side_effect = ValueError("Queue bad value")
+    pool._out_queue = mock_queue
+    pool._stop_event = MagicMock()
+    pool._processes = []
+    pool._stopped = False
+    pool.stop(drain_timeout_s=0.1)
+    assert any("Worker result queue closed during shutdown:" in err for err in pool.worker_errors)
+    assert any("Worker result queue closed during final drain:" in err for err in pool.worker_errors)

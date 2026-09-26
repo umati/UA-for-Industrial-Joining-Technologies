@@ -206,7 +206,7 @@ def _step_unit_tests(junit_xml: str | None = None, verbose: bool = False) -> _St
         "tests/unit/",
         "--cov=ijt_performance_client",
         "--cov-report=xml:test-results/coverage.xml",
-        "--cov-fail-under=85",
+        "--cov-fail-under=95",
     ]
     if junit_xml:
         cmd.append(f"--junitxml={junit_xml}")

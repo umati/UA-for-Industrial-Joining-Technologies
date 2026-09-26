@@ -272,3 +272,50 @@ def test_main_skip_clock_skew_flag(tmp_path):
         assert exit_code == 0
         # Verify the skip_clock_skew flag was forwarded to the pool
         assert mock_pool_cls.call_args[1]["skip_clock_skew"] is True
+
+
+def test_main_allow_partial_coverage_flag(tmp_path):
+    """Exercises the --allow-partial-coverage CLI flag."""
+    mock_sample = LatencySample(
+        sample_id=1,
+        endpoint="opc.tcp://localhost:40451",
+        network_transport_time_ms=5.0,
+        total_result_transfer_time_ms=10.0,
+    )
+
+    with patch("ijt_performance_client.cli.OpcUaClientPool") as mock_pool_cls:
+        mock_pool = MagicMock()
+        mock_pool_cls.return_value = mock_pool
+        mock_pool._num_workers_started = 1
+        mock_pool.collect_samples.return_value = [mock_sample]
+        mock_pool.verify_coverage.return_value = (True, "Coverage OK")
+        mock_pool.connected_endpoints = {"opc.tcp://localhost:40451"}
+        mock_pool.failed_endpoints = {}
+        mock_pool.worker_errors = []
+
+        exit_code = main(
+            [
+                "--endpoints",
+                "opc.tcp://localhost:40451",
+                "--duration",
+                "0.1",
+                "--allow-partial-coverage",
+                "--junit",
+                str(tmp_path / "junit.xml"),
+            ]
+        )
+        assert exit_code == 0
+        assert mock_pool_cls.call_args[1]["require_full_coverage"] is False
+
+
+def test_main_mutually_exclusive_coverage_flags():
+    """Verify specifying both --require-full-coverage and --allow-partial-coverage raises parser error."""
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--endpoints",
+                "opc.tcp://localhost:40451",
+                "--require-full-coverage",
+                "--allow-partial-coverage",
+            ]
+        )

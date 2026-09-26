@@ -271,3 +271,21 @@ engine:
 
     cfg = load_config(cfg_file)
     assert cfg.skip_clock_skew is True
+
+
+def test_load_config_require_full_coverage_in_execution(tmp_path):
+    """Covers config.py line 202: require_full_coverage in execution section."""
+    yaml_content = """\
+meta:
+  name: "Require Full Coverage Test"
+fleet:
+  endpoints:
+    - "opc.tcp://localhost:40451"
+execution:
+  require_full_coverage: false
+"""
+    cfg_file = tmp_path / "coverage_exec.yaml"
+    cfg_file.write_text(yaml_content, encoding="utf-8")
+
+    cfg = load_config(cfg_file)
+    assert cfg.require_full_coverage is False

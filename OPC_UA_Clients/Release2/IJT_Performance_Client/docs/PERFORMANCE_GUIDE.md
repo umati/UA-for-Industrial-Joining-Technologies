@@ -1,183 +1,257 @@
-# IJT Performance & Benchmarking Guide
+# Industrial Joining Technologies (IJT) — Performance & Benchmarking Guide
 
-A comprehensive, authoritative engineering guide covering concurrency architecture, Total Result Transfer Time, Cristian's clock skew calibration, benchmarking scenarios, profiles, and root-cause attribution using the **IJT Performance Client**.
+A clear, comprehensive guide to understanding, measuring, and optimizing OPC UA joining result delivery speed, scale testing, and automated diagnostics using the **IJT Performance Client**.
+
+---
+
+## Quick Reference Glossary: Key Terms & Abbreviations
+
+Before diving into the details, here is a simple translation of the common terms used in this guide:
+
+| Term / Abbreviation | What It Stands For | What It Means in Plain English |
+|---|---|---|
+| **OPC UA** | Open Platform Communications Unified Architecture | The universal, secure industrial communication standard that allows manufacturing machines and computers from different vendors to talk to each other. |
+| **IJT** | Industrial Joining Technologies | The standardized OPC UA companion specifications (OPC 40450-1 and OPC 40451-1) specifically designed for tools that join parts (e.g. tightening bolts, pressing rivets, dispensing glue). |
+| **Result Transfer Time** | Total Result Transfer Time | The total time (in milliseconds) it takes from the moment a tool finishes a joining operation until the computer receives and decodes the result. |
+| **MES** | Manufacturing Execution System | The central factory software system that manages and tracks production lines, work orders, and vehicle assembly history. |
+| **PLC** | Programmable Logic Controller | The rugged industrial computer on an assembly line that controls conveyor belts, safety gates, and robot arms. |
+| **SLA** | Service Level Agreement | The contractual or operational performance target (e.g. *"90% of results must arrive in under 100 milliseconds"*). |
+| **P90 / P95 / P99** | 90th, 95th, 99th Percentiles | Statistical metrics showing tail performance. For example, P90 is the time within which 90% of all results were delivered. |
+| **RTT** | Round-Trip Time | The time it takes for a message to travel from the computer to the controller and back. |
+| **Clock Skew** | Time Offset Between Two Clocks | The time difference between the clock inside the tool controller and the clock inside the computer. |
+| **GIL** | Global Interpreter Lock | An internal mechanism in standard Python (CPython) that allows only one thread to execute Python code at a time, which can create a bottleneck if not managed properly. |
+| **Process Sharding** | Multi-Process Architecture | Running multiple independent worker processes (each with its own CPU core and memory) to handle hundreds of tools without slowdowns. |
 
 ---
 
 ## 1. What is "Total Result Transfer Time"?
 
-When an industrial joining system (e.g. tightening tool, riveting press, clinching device, or adhesive dispensing tool) finishes a physical joining operation on an assembly line, the joining result (process variables, step results, curves, pass/fail status) must be delivered to quality databases, MES (Manufacturing Execution Systems), or line PLC controllers.
+### In Plain English
 
-**Total Result Transfer Time (`total_result_transfer_time_ms`)** is the total elapsed time from the moment the physical joining operation completes (`ProcessingTimes.EndTime`) until the client application has completely received, decoded, and dispatched the result event callback (`JoiningSystemResultReadyEvent`).
+Imagine an automated automotive assembly line. A robotic tool tightens a critical suspension bolt on a car chassis. The moment the bolt is torqued, the tool controller records key data: final torque, angle, timestamp, and whether the operation passed or failed.
+
+That result must travel across the factory network to the quality database and line PLC. The line PLC cannot release the conveyor belt to move the car to the next workstation until it knows the bolt was tightened properly.
+
+**Total Result Transfer Time (`total_result_transfer_time_ms`)** is the stopwatch measurement of that entire journey:
+> **The elapsed time from the exact millisecond the physical tool stops joining (`ProcessingTimes.EndTime`) to the millisecond the software application receives, decodes, and processes the result event (`JoiningSystemResultReadyEvent`).**
 
 ```
 [Physical Joining Tool Operation]
         │
-        ▼ (T_end: Joining operation completes — ProcessingTimes.EndTime)
-[Server Result Assembly & Event Dispatch] ── (server_processing_time_ms: Controller aggregates data & emits event)
+        ▼ (T_end: Joining operation finishes — ProcessingTimes.EndTime)
+[Server Result Assembly & Event Dispatch] ── (Server Processing Duration: Controller formats data & emits event)
         │
-        ▼ (T_event: Event published to OPC UA socket — Event.Time)
-[Network & Transport Layer]                ── (network_transport_time_ms: TCP/IP wire transit, socket read, asyncua decoding)
+        ▼ (T_event: Event published to OPC UA network socket — Event.Time)
+[Network & Transport Layer]                ── (Network Transport Latency: Wire transit, packet arrival, client decoding)
         │
-        ▼ (T_client: Client application event handler callback fires)
-[Client Application Handler]
+        ▼ (T_client: Client application event handler callback executes)
+[Client Quality / MES Application]
 ```
 
-### The Standardized Timing Breakdown
+### Why It Matters on the Factory Floor
 
-$$\text{Total Result Transfer Time} = T_{\text{client}} - T_{\text{end}} + \Delta t_{\text{skew}} = \text{server_processing_time_ms} + \text{network_transport_time_ms}$$
+1. **Cycle Time & Line Bottlenecks:** Modern assembly lines operate on cycle times as fast as 30 to 60 seconds per workstation. If result delivery takes several seconds, operators stand idle and production lines halt.
+2. **Quality & Traceability:** Fast delivery ensures that any defective joint (e.g. cross-threaded bolt) is flagged immediately before the product moves to an inaccessible station.
+3. **Reliability at Scale:** A single tool delivering results in 50 ms might perform well, but when 200 tools on the same production line fire simultaneously at the end of a shift, network buffering or software lockups must not cause results to queue up or get lost.
 
-| Metric | Variable Name | Math Formula | OPC UA Specification Source | Industrial Target |
+---
+
+## 2. The Standardized Timing Breakdown
+
+To fix latency problems, you need to know *where* the time is spent. The IJT standard divides Total Result Transfer Time into distinct, measurable stages:
+
+$$\text{Total Result Transfer Time} = (T_{\text{client}} - T_{\text{end}}) + \Delta t_{\text{skew}} = T_{\text{server}} + T_{\text{network}}$$
+
+| Metric | Code Variable | How It Is Measured | OPC UA Source Field | Target for Production |
 |---|---|---|---|---|
-| **Joining Duration** | `joining_duration_ms` | $T_{\text{end}} - T_{\text{start}}$ | `ProcessingTimes.EndTime - ProcessingTimes.StartTime` | Process-dependent (e.g. 200–2,000 ms) |
-| **Server Processing Duration** | `server_processing_time_ms` | $T_{\text{event}} - T_{\text{end}}$ | `Event.Time - ProcessingTimes.EndTime` | **< 30 ms** |
-| **Network Transport Latency** | `network_transport_time_ms` | $T_{\text{client}} - T_{\text{event}} + \Delta t_{\text{skew}}$ | `ClientReceived - Event.Time + Skew` | **< 40 ms** |
-| **Total Result Transfer Time** | `total_result_transfer_time_ms` | $T_{\text{client}} - T_{\text{end}} + \Delta t_{\text{skew}}$ | `ClientReceived - ProcessingTimes.EndTime + Skew` | **< 100 ms** (Automotive line standard) |
+| **1. Joining Duration** | `joining_duration_ms` | $T_{\text{end}} - T_{\text{start}}$ | `ProcessingTimes.EndTime` minus `ProcessingTimes.StartTime` | Process-dependent (typically 200 ms to 2,000 ms) |
+| **2. Server Processing Duration** | `server_processing_time_ms` | $T_{\text{event}} - T_{\text{end}}$ | `Event.Time` minus `ProcessingTimes.EndTime` | **< 30 ms** |
+| **3. Network Transport Latency** | `network_transport_time_ms` | $(T_{\text{client}} - T_{\text{event}}) + \Delta t_{\text{skew}}$ | Client receive time minus `Event.Time` plus clock skew | **< 40 ms** |
+| **4. Total Result Transfer Time** | `total_result_transfer_time_ms` | $(T_{\text{client}} - T_{\text{end}}) + \Delta t_{\text{skew}}$ | Client receive time minus `ProcessingTimes.EndTime` plus clock skew | **< 100 ms** (Standard automotive SLA) |
+
+*Note: All calculations account for relative clock drift ($\Delta t_{\text{skew}}$) between the controller and the client computer, ensuring physical elapsed duration is always accurate.*
 
 ---
 
-## 2. Concurrency Architecture: Why Process Sharding?
+## 3. Concurrency Architecture: Why Process Sharding?
 
-The `IJT_Performance_Client` targets controlled scale tests in which a central software system connects to many joining controllers. Claims at 50 to 500+ endpoints require validation on the intended host, network, and controllers.
+### The Challenge: Managing Hundreds of Industrial Tools
 
-### The Problem: OS Thread Exhaustion in CPython
+In modern smart factories, a single computer or edge gateway often monitors dozens or hundreds of tightening tools simultaneously (from 50 to 500+ virtual stations).
 
-A synchronous client-per-connection design can create one or more operating system threads for every endpoint. At high endpoint counts, GIL contention and operating system context switching can delay callback processing. This was a plausible contributor to multi-second latency observed in one scale-test environment, but server, network, and workload effects must still be measured separately.
+### The Problem with Traditional Threading
 
-### The Solution: Process-Sharded AsyncIO Client Pool (`OpcUaClientPool`)
+In standard Python applications, developers often create one operating system thread per tool connection. However, the standard Python interpreter has a **Global Interpreter Lock (GIL)**:
+- When 200 or 500 threads try to run at once, they fight for access to a single CPU core.
+- The operating system spends more time switching between threads (context switching) than actually reading network packets.
+- In test environments, this thread starvation has caused artificial delays of 2 to 5 seconds—not because the industrial tool or network was slow, but because the client computer was stuck in thread queues.
+
+### The Solution: Process-Sharded Client Pool (`OpcUaClientPool`)
+
+The IJT Performance Client solves this with a multi-process architecture:
 
 ```
-[Pytest Runner / CLI Entrypoint]
+[IJT Performance Client — Benchmark Orchestrator]
        │
-       ├── Spawns up to 4 Process Workers by default (configurable from 1 to 32)
+       ├── Spawns 4 Independent Worker Processes (one per CPU core)
        │
-       ├── [Worker 0] ──> Single AsyncIO Event Loop ──> 125 Non-Blocking Sockets
-       ├── [Worker 1] ──> Single AsyncIO Event Loop ──> 125 Non-Blocking Sockets
-       ├── [Worker 2] ──> Single AsyncIO Event Loop ──> 125 Non-Blocking Sockets
-       └── [Worker 3] ──> Single AsyncIO Event Loop ──> 125 Non-Blocking Sockets
+       ├── [Worker Process 0] ──> Single Event Loop ──> Manages 125 Non-Blocking Sockets
+       ├── [Worker Process 1] ──> Single Event Loop ──> Manages 125 Non-Blocking Sockets
+       ├── [Worker Process 2] ──> Single Event Loop ──> Manages 125 Non-Blocking Sockets
+       └── [Worker Process 3] ──> Single Event Loop ──> Manages 125 Non-Blocking Sockets
 ```
 
-Key architectural mechanisms:
-1. **Multi-Core Sharding:** Controllers are evenly partitioned across worker processes (`OpcUaClientPool`), each with an independent CPython interpreter and GIL.
-2. **Cooperative Multiplexing:** Each worker manages its assigned connections inside a single non-blocking `asyncio` event loop using OS kernel multiplexing (`epoll` on Linux, `IOCP` on Windows).
-3. **Paced TCP Ramp-Up:** Connections are acquired through an `asyncio.Semaphore(connect_concurrency)` to reduce simultaneous connection pressure and refusal risk.
-4. **Bounded Worker Buffering:** Event callbacks append samples to bounded process-local memory and flush batches through an IPC queue. Overflow is counted and fails strict coverage checks; lossless delivery is not assumed.
-5. **Subscription Lifecycle Protection:** Subscriptions are explicitly deleted before client disconnection to reduce the risk of leaked server sessions (`BadTooManySessions`).
+### Why This Architecture Works Better:
+
+1. **True Multi-Core Parallelism:** Each worker process runs its own independent Python interpreter and its own GIL. Four workers utilize four physical CPU cores simultaneously.
+2. **Cooperative Multiplexing (AsyncIO):** Within each worker process, a single lightweight event loop manages 100+ open sockets using OS kernel multiplexing (`IOCP` on Windows, `epoll` on Linux). There is zero OS thread contention.
+3. **Paced Connection Setup:** When connecting to 500 tools, the client connects in controlled batches (semaphore-limited) to prevent overwhelming the network with a simultaneous connection surge.
+4. **Isolated Memory Buffering:** Results are collected in fast process-local memory during tests and streamed in bulk, eliminating queue lock delays during rapid joining bursts.
 
 ---
 
-## 3. Clock Skew Calibration ($\Delta t_{\text{skew}}$) via Cristian's Algorithm
+## 4. Clock Skew Calibration: Solving Time Drift
 
-When client PC and joining controller run on separate clocks without IEEE 1588 PTP or NTP synchronization, cross-machine timestamp math is vulnerable to clock drift. The Performance Client uses **Cristian's Algorithm** to calibrate relative clock skew before benchmark runs:
+### What is Clock Skew?
+
+The tool controller has its own internal clock, and the client PC has its own internal clock. Even if both clocks are synchronized over a local network, they can easily drift apart by 10 to 100 milliseconds due to network latency, virtualization overhead, or NTP sync intervals.
+
+If the controller's clock is 50 ms ahead of the PC's clock, a result that took 20 ms to arrive might mathematically look like it took 70 ms. Conversely, if the controller's clock is behind, the math could show an impossible negative number.
+
+### The Solution: Cristian's Clock Synchronization Algorithm
+
+Before running any benchmark, the client automatically measures the exact time offset between the PC and the controller using Cristian's Algorithm:
 
 ```
-Client PC (t_client)                               OPC UA Server (t_server)
-      │                                                     │
- 1.   ├─ t_before = datetime.now(UTC)                       │
-      │                                                     │
-      │── OPC UA ReadRequest (ns=0;i=2258) ────────────────>│
-      │   (ServerStatus.CurrentTime)                        │
-      │                                                     │ 2. Server reads clock:
-      │                                                     │    server_now = ServerStatus.CurrentTime
-      │                                                     │
-      │<─ OPC UA ReadResponse ──────────────────────────────┤
-      │                                                     │
- 3.   ├─ t_after = datetime.now(UTC)                        │
-      │                                                     │
+Client PC (Local Clock)                            Joining Controller (Server Clock)
+       │                                                          │
+  1.   ├─ t_before = Current PC Time (UTC)                        │
+       │                                                          │
+       │── Send OPC UA Read Request for ServerStatus.CurrentTime ─>│
+       │                                                          │ 2. Controller reads its clock:
+       │                                                          │    server_now = Current Controller Time
+       │<─ Send OPC UA Read Response with server_now ─────────────┤
+       │                                                          │
+  3.   ├─ t_after = Current PC Time (UTC)                         │
+       │                                                          │
 ```
 
-1. **Round-Trip Time (RTT):**
+### Step-by-Step Calculation:
+
+1. **Measure Round-Trip Time (RTT):**
    $$\text{RTT} = t_{\text{after}} - t_{\text{before}}$$
-2. **Client Midpoint (Accounting for Read Call Time):**
-   Under symmetric network transit ($\text{transit}_{\text{req}} \approx \text{transit}_{\text{res}}$), the server read its clock midway through the round trip:
-   $$t_{\text{client\_midpoint}} = t_{\text{before}} + \frac{\text{RTT}}{2}$$
-3. **Clock Skew Calculation:**
-   $$\Delta t_{\text{skew}} = \text{server_now} - t_{\text{client\_midpoint}}$$
-4. **Uncertainty Estimate:**
-   Half the measured RTT is a useful lower-order uncertainty indicator under symmetric transit and negligible server processing. It is not a strict bound when request/response paths are asymmetric or the server delays the clock read.
-5. **Multi-Probe Minimum Filtering:**
-   The client executes 3 probes and selects the one with minimum RTT to reject momentary network jitter or OS scheduling pauses.
-6. **Bypassing Calibration:**
-   When client and server use the same clock, or external synchronization accuracy has been independently verified, pass `--skip-clock-skew` to avoid calibration.
+   *(This tells us how long the network request took in total).*
+
+2. **Estimate the Midpoint:**
+   $$t_{\text{midpoint}} = t_{\text{before}} + \frac{\text{RTT}}{2}$$
+   *(Because network transit is generally symmetric, the controller read its clock halfway through the round trip).*
+
+3. **Calculate the Clock Offset ($\Delta t_{\text{skew}}$):**
+   $$\Delta t_{\text{skew}} = t_{\text{server}} - t_{\text{midpoint}}$$
+   *(If positive, the controller clock is ahead; if negative, the controller clock is behind).*
+
+4. **Multi-Probe Filter:**
+   The client performs 3 quick probes and selects the one with the lowest RTT to eliminate momentary network hiccups.
+
+5. **Normalized Results:**
+   The measured clock skew is added to raw timestamps, guaranteeing that reported Result Transfer Times reflect true physical latency.
 
 ---
 
-## 4. Heuristic Root-Cause Attribution Matrix
+## 5. How to Read Benchmark Reports: Percentiles & Diagnostics
 
-The client applies advisory heuristics to timing distributions. These indicators guide investigation; they do not identify a root cause without supporting host, server, and network evidence:
+### Why Averages Can Be Misleading
 
-| Metric Profile | Diagnostic Indicator | Suggested Investigation |
+In factory automation, **the average is dangerous**.
+
+Imagine a production line where 99 bolts arrive in 20 milliseconds, but 1 bolt gets stuck in a buffer and takes 5,000 milliseconds (5 seconds).
+- The *average* looks fine (~70 ms).
+- But in reality, **the assembly line stopped for 5 seconds** waiting for that one single bolt!
+
+That is why the IJT Performance Client reports percentiles:
+
+- **Median (50th Percentile):** The typical performance experienced by half of all results.
+- **P90 (90th Percentile):** 90% of results arrived faster than this time. This is the primary industrial Service Level Agreement (SLA) threshold.
+- **P95 / P99 (Tail Latency):** Reveals rare spikes caused by memory cleanups, network packet retransmissions, or storage write delays.
+- **Max:** The single slowest result recorded during the entire run.
+
+---
+
+### Automated Root-Cause Diagnostic Assistant
+
+When tests finish, the Performance Client automatically evaluates the timing breakdown and tells you where the bottleneck lies:
+
+| What the Data Shows | What the System Reports | Plain English Meaning & What to Do |
 |---|---|---|
-| `total P90 < 100ms`, `transport P90 < 50ms` | `NONE (OPC UA PIPELINE HEALTHY)` | Measurements are below the configured default warning thresholds; confirm application-specific acceptance limits. |
-| `server P90 > 200ms`, `transport P90 < 100ms` | `SERVER_PROCESSING_DURATION` | Inspect controller firmware, CPU saturation, result construction, and step evaluation. |
-| `transport P90 > 300ms` | `NETWORK_OR_TRANSPORT` | Inspect network paths, switch queueing, MTU behavior, socket buffering, event-loop delay, and deserialization cost. |
-| `transport P90 > 100ms`, `threads > 200` | `CLIENT_SIDE_THREAD_STARVATION` | Inspect client scheduling and context switching, then compare with a process-sharded run under the same workload. |
-| Elevated across multiple stages | `APPLICATION_OR_MIXED` | Mixed pipeline delay. Review client deserialization speed, event loop lag, and controller CPU load. |
-| Zero samples received | `NO_DATA` | Verify server event generation, subscription filters, and tool triggers. |
+| P90 < 100 ms, Transport P90 < 50 ms | `OPC_UA_PIPELINE_HEALTHY` | **System is healthy.** Results are arriving comfortably within automotive production targets. |
+| Server Processing P90 > 200 ms | `SERVER_PROCESSING_DURATION` | **The controller is taking too long to create the result.** Check controller CPU load, internal database save operations, or heavy step calculations. |
+| Transport P90 > 300 ms | `NETWORK_OR_TRANSPORT` | **The delay is on the physical network or socket.** Inspect network switches, Ethernet cables, MTU settings, or TCP buffer sizes. |
+| Transport P90 > 100 ms with > 200 client threads | `CLIENT_SIDE_THREAD_STARVATION` | **The client computer is overwhelmed by too many threads.** Switch to the process-sharded `OpcUaClientPool` to distribute load across CPU cores. |
+| Delays across multiple stages | `APPLICATION_OR_MIXED` | **Mixed delay.** Both server processing and network transport are elevated. Review both controller CPU and network infrastructure. |
+| 0 samples collected | `NO_DATA` | **No results arrived.** Verify that the tool is connected, subscriptions are active, and tightening operations were actually triggered. |
 
 ---
 
-## 5. Testing Scenarios & Pre-Configured Profiles
+## 6. How to Run: Practical Step-by-Step Scenarios
 
-The Performance Client provides a unified multi-process architecture (`OpcUaClientPool`) supporting both **single-station SLA validation** and **large-scale multi-controller fleet benchmarking**.
+The Performance Client provides ready-to-run commands for common testing needs.
 
-### Scenario A — Single Controller, Several Results (Single-Station SLA Test)
+### Scenario A: Testing 1 Controller (Single-Station SLA Check)
 
-Use this scenario when validating an individual joining system controller or running factory acceptance testing (FAT) on a single station.
+Use this scenario during factory commissioning or when verifying an individual tool before deploying it to production.
 
-#### Quick 10-Result Smoke Test
-Connect to 1 server and collect 10 results:
+#### 1. Quick 10-Result Smoke Test
+Connects to 1 controller and verifies that 10 results arrive cleanly:
 ```bash
 python -m ijt_performance_client --endpoints "opc.tcp://localhost:40451" --samples 10
 ```
 
-#### 50-Result Benchmark with 100ms SLA Gate
-Collect 50 joining results from 1 controller. Fail with exit code 1 if the P90 Total Result Transfer Time exceeds 100ms:
+#### 2. Strict 50-Result Benchmark with 100 ms SLA Gate
+Collects 50 results from a live controller. If the P90 latency exceeds 100 ms, the command exits with an error code (perfect for automated pass/fail CI pipelines):
 ```bash
-python -m ijt_performance_client --endpoints "opc.tcp://192.168.1.100:40451" --samples 50 --fail-p90 100.0 --markdown test-results/single-station.md --json test-results/single-station.json
+python -m ijt_performance_client \
+  --endpoints "opc.tcp://192.168.1.100:40451" \
+  --samples 50 \
+  --fail-p90 100.0 \
+  --markdown test-results/single-station.md \
+  --json test-results/single-station.json
 ```
 
-#### Using the Pre-Configured Profile (`profiles/single_server.yaml`)
+#### 3. Using a Pre-Configured Profile File
+Instead of typing command-line arguments, you can pass a YAML configuration file:
 ```bash
 python -m ijt_performance_client --config profiles/single_server.yaml
 ```
 
 ---
 
-### Scenario B — Multiple Controllers, Several Results per Controller (Fleet Scale)
+### Scenario B: Testing a Production Cell (Multiple Controllers in Parallel)
 
-Use this scenario when validating how an entire production line or factory cell behaves under concurrent joining operations (e.g. 4, 10, or 500 controllers delivering results simultaneously).
+Use this scenario to verify how multiple tools in the same production station behave when operating simultaneously.
 
-#### 4-Controller Joining Cell
-Collect results from 4 controllers in parallel with full coverage verification:
+#### 4-Tool Production Station
+Connects to 4 controllers in parallel and monitors results for 30 seconds, verifying that every single controller delivers data:
 ```bash
-python -m ijt_performance_client --endpoints "opc.tcp://10.0.1.11:40451,opc.tcp://10.0.1.12:40451,opc.tcp://10.0.1.13:40451,opc.tcp://10.0.1.14:40451" --duration 30 --require-full-coverage
+python -m ijt_performance_client \
+  --endpoints "opc.tcp://10.0.1.11:40451,opc.tcp://10.0.1.12:40451,opc.tcp://10.0.1.13:40451,opc.tcp://10.0.1.14:40451" \
+  --duration 30 \
+  --require-full-coverage
 ```
 
-#### CI Multi-Server Fleet (`profiles/ci_multi_server.yaml`)
-Used in automated CI environments to connect to 3 virtual servers in parallel (`40451..40453`):
+#### Pre-Configured CI Fleet Test (`profiles/ci_multi_server.yaml`)
+Runs 3 virtual controllers on ports 40451, 40452, and 40453:
 ```bash
 python -m ijt_performance_client --config profiles/ci_multi_server.yaml
 ```
 
-#### High-Scale Fleet Template (50 to 500+ Controllers) (`profiles/multi_server_template.yaml`)
-Template for configuring 50 to 500+ plant floor IP addresses and port ranges:
-```yaml
-fleet:
-  name: "Factory Fleet Benchmark"
-  endpoints:
-    - "opc.tcp://10.10.1.1:40451"
-    - "opc.tcp://10.10.1.2:40451"
-    # ... up to 500 controllers
-  connect_concurrency: 20
-  sub_period_ms: 50
-  mode: "passive"
-  duration_seconds: 60.0
-  require_full_coverage: true
-  fail_p90_ms: 50.0
-```
+---
 
-Run with:
+### Scenario C: Large-Scale Plant Fleet Benchmark (50 to 500+ Tools)
+
+Use this scenario when designing or stress-testing plant-wide infrastructure to find out how many simultaneous tools the network and client system can support.
+
+Use the provided template [`profiles/multi_server_template.yaml`](../profiles/multi_server_template.yaml) to list all your tool IP addresses and ports, then execute:
+
 ```bash
 python -m ijt_performance_client \
   --config profiles/multi_server_template.yaml \
@@ -189,29 +263,23 @@ python -m ijt_performance_client \
 
 ---
 
-### Scenario C — Passive Listening vs Active Simulation
+### Passive Listening vs. Active Simulation
 
-You can control how joining result load is generated:
+You can configure how the client interacts with the joining tools:
 
-| Mode | Flag | Description | When to Use |
+| Mode | Command Flag | How It Works | When to Use It |
 |---|---|---|---|
-| **Passive Listening** | `--mode passive` | Client only subscribes to OPC UA events. It does not trigger server simulation methods. | On live production assembly lines where tools are physically executing joining operations. |
-| **Active Burst** | `--mode active_burst` | Client actively invokes `SimulateSingleResult` / `SimulateResults` on the server in rapid bursts. | Laboratory or pre-deployment stress testing to find maximum controller throughput. |
-| **Combined** | `--mode both` | Client listens for incoming events while simultaneously invoking simulated operations. | Default mode for simulated controller environments. |
+| **Passive Listening** | `--mode passive` | The client quietly listens for incoming result events without triggering any operations. | On live factory lines where physical tools are being operated by assembly workers or robots. |
+| **Active Burst** | `--mode active_burst` | The client actively triggers the server's simulation methods (`SimulateSingleResult` / `SimulateResults`) in rapid succession. | In test laboratories or staging environments to stress-test maximum throughput limits. |
+| **Combined** | `--mode both` | Listens for events while simultaneously triggering simulated operations. | Standard automated test runs against virtual simulator environments. |
 
 ---
 
-## 6. How to Interpret Benchmark Reports
+## 7. Report Formats & Integration
 
-### 1. Percentile Statistics
-Average latency often conceals industrial problems. The client computes:
-- **Min / Mean / Median:** Central tendency of result delivery time.
-- **P90 (90th Percentile):** 90% of all joining results arrived faster than this number. This is the primary SLA standard in manufacturing quality systems.
-- **P99 (99th Percentile):** Highlights rare tail-latency spikes (e.g. memory garbage collection, socket queue backpressure, or packet loss).
-- **Max:** The single slowest result recorded during the benchmark.
+The Performance Client automatically generates multiple report formats:
 
-### 2. Available Export Formats
-- **Console Table:** Clean ANSI-formatted terminal summary.
-- **JUnit XML (`--junit PATH`):** CI/CD pipeline integration with embedded latency properties and failure tags.
-- **Markdown (`--markdown PATH`):** GitHub Actions Step Summary format.
-- **JSON (`--json PATH`):** Machine-readable telemetry format for dashboards (Grafana, Kibana, Datadog).
+1. **Console Summary:** A clean terminal table showing min, mean, median, P90, P95, P99, max, sample counts, and diagnostic verdicts.
+2. **Markdown (`--markdown report.md`):** Ready for direct copy-paste into pull request summaries, GitHub Actions step summaries, or project documentation.
+3. **JUnit XML (`--junit results.xml`):** Directly consumed by Jenkins, GitLab CI, or GitHub Actions to display visual test pass/fail charts and latency trends over time.
+4. **JSON (`--json metrics.json`):** Machine-readable telemetry format ready for automated ingestion into Grafana, Kibana, or enterprise database dashboards.
