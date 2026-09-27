@@ -2,7 +2,7 @@
 Unit tests for root-cause attribution diagnostics.
 """
 
-from ijt_performance_client.attribution import evaluate_diagnostics
+from src.diagnostics import evaluate_diagnostics
 
 
 def test_attribution_healthy():

@@ -9,7 +9,7 @@ import pytest
 from asyncua import ua
 from asyncua.ua import uatypes
 
-from ijt_performance_client.session_policy import (
+from src.engine.session_policy import (
     _is_subtyped_number,
     _serialize_subtyped_number,
     apply_asyncua_generated_type_compatibility_patch,
@@ -229,7 +229,7 @@ def test_patched_type_serializers_and_branches():
 def test_verify_asyncua_version_compatibility_rejects_unknown_version(monkeypatch):
     import asyncua
 
-    from ijt_performance_client.session_policy import verify_asyncua_version_compatibility
+    from src.engine.session_policy import verify_asyncua_version_compatibility
 
     monkeypatch.setattr(asyncua, "__version__", "3.0.0")
     with pytest.raises(RuntimeError, match="validated only with asyncua 2.0.1"):

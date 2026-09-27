@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ijt_performance_client.namespaces import (
+from src.namespaces import (
     JOINING_SYSTEM_RESULT_READY_EVENT_TYPE_ID,
     NS_APP,
     NS_DI,

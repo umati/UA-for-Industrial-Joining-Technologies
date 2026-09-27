@@ -30,7 +30,7 @@ from typing import Any
 
 from asyncua import Client, ua
 
-from .namespaces import (
+from ..namespaces import (
     BN_SIMULATE_RESULTS,
     BN_SIMULATE_SINGLE_RESULT,
     JOINING_SYSTEM_RESULT_READY_EVENT_TYPE_ID,
@@ -38,7 +38,7 @@ from .namespaces import (
     NS_IJT_BASE,
     resolve_namespace_index,
 )
-from .result_transfer_latency import LatencySample, calibrate_clock_skew, extract_sample_from_event
+from ..results import LatencySample, calibrate_clock_skew, extract_sample_from_event
 from .session_policy import (
     apply_session_policy,
     disconnect_client,
@@ -362,26 +362,36 @@ async def _worker_event_loop(
             }
         )
 
-    # Clean teardown: delete subscriptions explicitly, then disconnect clients
-    for _, m_cli, _, _ in method_clients:
+    # Clean teardown: delete subscriptions explicitly, then disconnect clients in parallel
+    async def _teardown_method_client(m_cli: Any) -> None:
         try:
             await disconnect_client(m_cli, settle_delay=0.01)
         except Exception as exc:
             teardown_errors.append(f"Method client disconnect: {exc}")
 
-    for url, client, sub in clients:
-        try:
-            await sub.delete()
-        except Exception as exc:
-            err_msg = f"Subscription deletion on {url} error: {exc}"
-            logger.warning(f"[Worker {worker_id}] {err_msg}")
-            teardown_errors.append(err_msg)
+    async def _teardown_subscription_client(url: str, client: Any, sub: Any) -> None:
+        if sub is not None:
+            try:
+                await sub.delete()
+            except Exception as exc:
+                err_msg = f"Subscription deletion on {url} error: {exc}"
+                logger.warning(f"[Worker {worker_id}] {err_msg}")
+                teardown_errors.append(err_msg)
         try:
             await disconnect_client(client, settle_delay=0.01)
         except Exception as exc:
             err_msg = f"Client disconnect on {url} error: {exc}"
             logger.warning(f"[Worker {worker_id}] {err_msg}")
             teardown_errors.append(err_msg)
+
+    teardown_tasks = [_teardown_method_client(m_cli) for _, m_cli, _, _ in method_clients] + [
+        _teardown_subscription_client(url, client, sub) for url, client, sub in clients
+    ]
+    if teardown_tasks:
+        try:
+            await asyncio.wait_for(asyncio.gather(*teardown_tasks, return_exceptions=True), timeout=5.0)
+        except TimeoutError:
+            teardown_errors.append(f"[Worker {worker_id}] Parallel teardown timed out after 5.0s")
 
     # Signal completion to master process
     total_dropped = sum(h.dropped_samples for h in handlers)

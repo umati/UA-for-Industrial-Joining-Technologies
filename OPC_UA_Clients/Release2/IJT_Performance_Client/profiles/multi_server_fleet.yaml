@@ -1,0 +1,38 @@
+# Multi-Server Fleet Benchmark Profile
+# Scalable profile for multi-server fleets (25 to 500+ OPC UA servers / machines)
+schema_version: 1
+name: "Multi-Server Fleet Benchmark"
+description: "Concurrent latency and throughput benchmarking across multi-server OPC UA fleets"
+
+fleet:
+  lifecycle: external
+  # Range-based port mapping (supports local simulators, port-forwarded clusters, or VM fleets):
+  url_template: "opc.tcp://127.0.0.1:{port}"
+
+  # Select your fleet scale:
+  # port_range: [40001, 40025]    # 25 servers (small plant cell)
+  # port_range: [40001, 40050]    # 50 servers (medium plant station)
+  # port_range: [40001, 40100]    # 100 servers (assembly line)
+  # port_range: [40001, 40500]    # 500 servers (plant-wide fleet)
+  port_range: [40001, 40050]      # Default: 50 servers
+
+  # Or explicit endpoints if servers have different IP addresses:
+  # endpoints:
+  #   - "opc.tcp://192.168.1.101:40451"
+  #   - "opc.tcp://192.168.1.102:40451"
+
+execution:
+  mode: both                   # 'both' to listen to subscriptions and trigger simulator bursts
+  duration_seconds: 60.0       # 1-minute benchmark window
+  target_sample_count: 500     # 10 results per server across 50 servers (500 results total)
+  burst_trigger_count: 10      # 10 burst rounds per server
+  require_full_coverage: true  # 100% coverage (all 50 servers must produce results)
+
+engine:
+  max_worker_processes: 4      # Distributed across 4 CPU worker processes (~12-13 sockets each)
+  connect_concurrency: 10      # Max 10 simultaneous TCP handshakes to prevent socket refusal
+  sub_period_ms: 100           # 100 ms subscription publishing interval
+
+thresholds:
+  warn_p90_ms: 200.0           # Warn if P90 total delivery time exceeds 200 ms
+  fail_p90_ms: 1000.0          # Fail SLA if P90 total delivery time exceeds 1000 ms

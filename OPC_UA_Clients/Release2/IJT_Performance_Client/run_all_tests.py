@@ -22,6 +22,7 @@ Environment variables:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
@@ -85,23 +86,26 @@ def _parse_endpoint_host_port(url: str, default_port: int = _OPCUA_SERVER_PORT) 
     return host, port
 
 
-def _launch_simulator_on_port(port: int, exe: Path) -> tuple[subprocess.Popen | None, Path | None]:
+def _launch_simulator_on_port(port: int, exe: Path, quiet: bool = False) -> tuple[subprocess.Popen | None, Path | None]:
     """Copy the binary dir to a temp location, patch the port config, and launch."""
     exe_path = Path(exe)
     if not exe_path.exists():
-        print(f"  [server] Binary not found: {exe}")
+        if not quiet:
+            print(f"  [server] Binary not found: {exe}")
         return None, None
 
     src_dir = exe_path.parent
     tmp_base = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()) / "ijt-sim"
     tmp_dir = tmp_base / f"server_instance_{port}_{int(time.time())}"
-    print(f"  [server] Launching simulator on port {port} (copied to {tmp_dir})")
+    if not quiet:
+        print(f"  [server] Launching simulator on port {port} (copied to {tmp_dir})")
     try:
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir, ignore_errors=True)
         shutil.copytree(src_dir, tmp_dir)
     except OSError as exc:
-        print(f"  [server] Failed to copy binary dir: {exc}")
+        if not quiet:
+            print(f"  [server] Failed to copy binary dir: {exc}")
         return None, None
 
     cfg_path = tmp_dir / "server_configuration.json"
@@ -113,7 +117,8 @@ def _launch_simulator_on_port(port: int, exe: Path) -> tuple[subprocess.Popen | 
             with cfg_path.open("w", encoding="utf-8") as fh:
                 json.dump(cfg, fh, indent=2)
         except (OSError, ValueError) as exc:
-            print(f"  [server] Failed to patch server_configuration.json: {exc}")
+            if not quiet:
+                print(f"  [server] Failed to patch server_configuration.json: {exc}")
             shutil.rmtree(tmp_dir, ignore_errors=True)
             return None, None
 
@@ -125,17 +130,20 @@ def _launch_simulator_on_port(port: int, exe: Path) -> tuple[subprocess.Popen | 
             cwd=str(tmp_dir),
         )
     except OSError as exc:
-        print(f"  [server] Failed to launch binary: {exc}")
+        if not quiet:
+            print(f"  [server] Failed to launch binary: {exc}")
         shutil.rmtree(tmp_dir, ignore_errors=True)
         return None, None
 
     for _ in range(30):
         if _is_port_reachable("localhost", port):
-            print(f"  [server] Ready on port {port}")
+            if not quiet:
+                print(f"  [server] Ready on port {port}")
             return proc, tmp_dir
         time.sleep(1)
 
-    print("  [server] Timed out waiting for simulator — terminating")
+    if not quiet:
+        print("  [server] Timed out waiting for simulator — terminating")
     proc.terminate()
     try:
         proc.wait(timeout=5)
@@ -143,6 +151,48 @@ def _launch_simulator_on_port(port: int, exe: Path) -> tuple[subprocess.Popen | 
         proc.kill()
     shutil.rmtree(tmp_dir, ignore_errors=True)
     return None, None
+
+
+def _launch_simulator_fleet(count: int, start_port: int, exe: Path) -> list[tuple[subprocess.Popen, Path]]:
+    """Concurrently launch a fleet of N simulator instances."""
+    print(
+        f"  [fleet] Launching {count} simulator instances concurrently (ports {start_port}..{start_port + count - 1})..."
+    )
+    ports = list(range(start_port, start_port + count))
+    instances: list[tuple[subprocess.Popen, Path]] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(16, count)) as executor:
+        futures = {executor.submit(_launch_simulator_on_port, port, exe, True): port for port in ports}
+        for future in concurrent.futures.as_completed(futures):
+            proc, tmp_dir = future.result()
+            if proc is not None and tmp_dir is not None:
+                instances.append((proc, tmp_dir))
+            else:
+                port = futures[future]
+                print(f"  [fleet] Failed to launch simulator on port {port}")
+    print(f"  [fleet] Successfully started {len(instances)}/{count} simulator instances.")
+    return instances
+
+
+def _stop_simulators(instances: list[tuple[subprocess.Popen, Path]]) -> None:
+    """Terminate all simulator processes and remove their temporary directories."""
+    if not instances:
+        return
+    print(f"  [server] Stopping {len(instances)} simulator instances...")
+    for proc, _ in instances:
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+    for proc, _ in instances:
+        try:
+            proc.wait(timeout=3)
+        except (subprocess.TimeoutExpired, OSError):
+            try:
+                proc.kill()
+            except OSError:
+                pass
+    for _, tmp_dir in instances:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def _step_ruff_lint() -> _StepResult:
@@ -164,7 +214,7 @@ def _step_ruff_format() -> _StepResult:
 def _step_mypy() -> _StepResult:
     """Run mypy static type checking."""
     res = subprocess.run(
-        [sys.executable, "-m", "mypy", "ijt_performance_client", "--ignore-missing-imports", "--no-error-summary"],
+        [sys.executable, "-m", "mypy", "src", "--ignore-missing-imports", "--no-error-summary"],
         cwd=_HERE,
         capture_output=True,
         text=True,
@@ -204,7 +254,7 @@ def _step_unit_tests(junit_xml: str | None = None, verbose: bool = False) -> _St
         "-m",
         "pytest",
         "tests/unit/",
-        "--cov=ijt_performance_client",
+        "--cov=src",
         "--cov-report=xml:test-results/coverage.xml",
         "--cov-fail-under=95",
     ]
@@ -222,8 +272,12 @@ def _step_unit_tests(junit_xml: str | None = None, verbose: bool = False) -> _St
     )
 
 
-def _step_live_tests(server_url: str = _DEFAULT_SERVER_URL, verbose: bool = False) -> _StepResult:
-    """Run live performance benchmark against live target server."""
+def _step_live_tests(
+    server_url: str = _DEFAULT_SERVER_URL,
+    fleet_endpoints: str | None = None,
+    verbose: bool = False,
+) -> _StepResult:
+    """Run live performance benchmark against live target server(s)."""
     cmd = [
         sys.executable,
         "-m",
@@ -238,12 +292,17 @@ def _step_live_tests(server_url: str = _DEFAULT_SERVER_URL, verbose: bool = Fals
 
     env = os.environ.copy()
     env["OPCUA_SERVER_URL"] = server_url
+    if fleet_endpoints:
+        env["OPCUA_FLEET_ENDPOINTS"] = fleet_endpoints
 
     res = subprocess.run(cmd, cwd=_HERE, env=env, capture_output=True, text=True)
     required_names = {
         "test_live_single_server_result_transfer_time",
         "test_live_single_server_burst_transfer_time",
     }
+    if fleet_endpoints:
+        required_names.add("test_live_multi_server_fleet_transfer_time")
+
     required_ran = False
     if res.returncode == 0:
         try:
@@ -278,6 +337,20 @@ def _build_parser() -> argparse.ArgumentParser:
     group = p.add_mutually_exclusive_group()
     group.add_argument("--phase1", action="store_true", help="Unit / static tests only (no server)")
     group.add_argument("--phase2", action="store_true", help="Live tests only (server must be up)")
+    p.add_argument(
+        "--fleet",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Launch N local server simulator instances and execute live fleet test (e.g. --fleet 50)",
+    )
+    p.add_argument(
+        "--fleet-start-port",
+        type=int,
+        default=40001,
+        metavar="PORT",
+        help="Starting TCP port for local fleet simulator instances (default: 40001)",
+    )
     p.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p.add_argument(
         "--junit-xml",
@@ -301,8 +374,8 @@ def main() -> int:
 
     results: list[_StepResult] = []
     t_start = time.monotonic()
-    server_proc: subprocess.Popen | None = None
-    server_tmp_dir: Path | None = None
+    server_instances: list[tuple[subprocess.Popen, Path]] = []
+    fleet_endpoints: str | None = None
 
     try:
         if run_phase1:
@@ -320,28 +393,37 @@ def main() -> int:
             server_url = os.environ.get("OPCUA_SERVER_URL", _DEFAULT_SERVER_URL)
             host, port = _parse_endpoint_host_port(server_url, default_port=_OPCUA_SERVER_PORT)
 
-            # Auto-start simulator if not running
+            exe = _find_simulator_exe()
+
+            # Auto-start single-server simulator if not running
             if not _is_port_reachable(host, port):
-                exe = _find_simulator_exe()
                 if exe:
-                    server_proc, server_tmp_dir = _launch_simulator_on_port(port, exe)
-                    if server_proc is None:
+                    proc, tmp_dir = _launch_simulator_on_port(port, exe)
+                    if proc is not None and tmp_dir is not None:
+                        server_instances.append((proc, tmp_dir))
+                    else:
                         print(f"  [server] Failed to start simulator on port {port}.")
                 else:
                     print("  [server] Simulator executable not found; skipping auto-launch.")
 
-            results.append(_step_live_tests(server_url=server_url, verbose=args.verbose))
+            # Auto-start fleet simulators if requested
+            if args.fleet > 0:
+                if exe:
+                    fleet_inst = _launch_simulator_fleet(args.fleet, start_port=args.fleet_start_port, exe=exe)
+                    server_instances.extend(fleet_inst)
+                    fleet_endpoints = ",".join(
+                        f"opc.tcp://127.0.0.1:{p}"
+                        for p in range(args.fleet_start_port, args.fleet_start_port + args.fleet)
+                    )
+                else:
+                    print("  [server] Simulator executable not found; skipping fleet auto-launch.")
+
+            results.append(
+                _step_live_tests(server_url=server_url, fleet_endpoints=fleet_endpoints, verbose=args.verbose)
+            )
 
     finally:
-        if server_proc is not None:
-            print("  [server] Stopping simulator process...")
-            server_proc.terminate()
-            try:
-                server_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                server_proc.kill()
-        if server_tmp_dir is not None and server_tmp_dir.exists():
-            shutil.rmtree(server_tmp_dir, ignore_errors=True)
+        _stop_simulators(server_instances)
 
     # Print summary
     elapsed = time.monotonic() - t_start

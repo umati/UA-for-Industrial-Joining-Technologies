@@ -856,7 +856,7 @@ jobs:
           set -o pipefail
           python -m pytest tests/unit/ -v \
             --junitxml=test-results/pytest.xml \
-            --cov=ijt_performance_client \
+            --cov=src \
             --cov-report=xml:test-results/coverage.xml \
             --cov-fail-under=95 \
             2>&1 | tee test-results/pytest-output.txt
@@ -879,7 +879,7 @@ jobs:
       - name: mypy (Type Checking)
         id: mypy
         continue-on-error: true
-        run: python -m mypy ijt_performance_client --ignore-missing-imports --no-error-summary
+        run: python -m mypy src --ignore-missing-imports --no-error-summary
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

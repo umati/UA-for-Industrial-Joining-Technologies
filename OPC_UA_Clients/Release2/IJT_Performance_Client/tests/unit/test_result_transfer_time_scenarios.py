@@ -14,10 +14,10 @@ Covers:
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from ijt_performance_client.attribution import evaluate_diagnostics
-from ijt_performance_client.cli import main
-from ijt_performance_client.opcua_client_pool import OpcUaClientPool
-from ijt_performance_client.result_transfer_latency import LatencySample, compute_statistics
+from src.cli import main
+from src.diagnostics import evaluate_diagnostics
+from src.engine import OpcUaClientPool
+from src.results import LatencySample, compute_statistics
 
 
 def test_scenario_single_server_several_results(tmp_path):
@@ -81,7 +81,7 @@ def test_scenario_single_server_several_results(tmp_path):
     junit_path = str(tmp_path / "junit-single.xml")
     json_path = str(tmp_path / "metrics-single.json")
 
-    with patch("ijt_performance_client.cli.OpcUaClientPool") as mock_pool_cls:
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
         mock_pool = MagicMock()
         mock_pool_cls.return_value = mock_pool
         mock_pool._num_workers_started = 1
@@ -167,7 +167,7 @@ def test_scenario_multiple_servers_several_results_per_server(tmp_path):
     junit_path = str(tmp_path / "junit-multi.xml")
     json_path = str(tmp_path / "metrics-multi.json")
 
-    with patch("ijt_performance_client.cli.OpcUaClientPool") as mock_pool_cls:
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
         mock_pool = MagicMock()
         mock_pool_cls.return_value = mock_pool
         mock_pool._num_workers_started = 4

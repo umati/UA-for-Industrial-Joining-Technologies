@@ -59,19 +59,32 @@ Before running tests, `calibrate_clock_skew(client)`:
 
 ### Running via CLI
 ```bash
-# 1 server baseline
-python -m ijt_performance_client --config profiles/single_server.yaml
+# 1 server baseline (direct source execution)
+python main.py --endpoints "opc.tcp://localhost:40451" --samples 10
 
-# Multi-server CI run
-python -m ijt_performance_client --config profiles/ci_multi_server.yaml
+# Scalable multi-server fleet run (against existing plant servers)
+python main.py --config profiles/multi_server_fleet.yaml
+
+# Standalone automated fleet launcher (spawns 50 local servers, tests, and tears down)
+python run_fleet.py
+
+# Test suite runner with automated fleet orchestration
+python run_all_tests.py --phase2 --fleet 50
 
 # Custom endpoints
-python -m ijt_performance_client -e "opc.tcp://10.0.0.1:40451,opc.tcp://10.0.0.2:40451" -d 30 -s 100
+python main.py -e "opc.tcp://10.0.1.11:40451,opc.tcp://10.0.1.12:40451" -d 30 -s 100
+
+# When installed as a package
+ijt-perf --config profiles/multi_server_fleet.yaml
 ```
 
 ### Importing as Python SDK
 ```python
-from ijt_performance_client import OpcUaClientPool, evaluate_diagnostics
+from src.engine import OpcUaClientPool
+from src.diagnostics import evaluate_diagnostics
+
+# Or when installed via pip:
+# from ijt_performance_client import OpcUaClientPool, evaluate_diagnostics
 
 pool = OpcUaClientPool(endpoints=["opc.tcp://10.0.0.1:40451"], max_workers=2)
 pool.start()

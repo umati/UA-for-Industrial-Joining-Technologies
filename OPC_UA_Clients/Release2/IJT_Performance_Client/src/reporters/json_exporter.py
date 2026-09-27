@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..attribution import DiagnosticVerdict
-from ..result_transfer_latency import LatencySample, compute_statistics
+from ..diagnostics import DiagnosticVerdict
+from ..results import LatencySample, compute_statistics
 
 
 def export_json_report(
@@ -25,9 +25,31 @@ def export_json_report(
     servers = [s.server_processing_time_ms for s in samples if s.server_processing_time_ms is not None]
     joinings = [s.joining_duration_ms for s in samples if s.joining_duration_ms is not None]
 
+    from collections import defaultdict
+
+    by_endpoint: dict[str, list[LatencySample]] = defaultdict(list)
+    for s in samples:
+        by_endpoint[s.endpoint].append(s)
+
+    per_server = {}
+    for ep, ep_samples in sorted(by_endpoint.items()):
+        ep_totals = [s.total_result_transfer_time_ms for s in ep_samples if s.total_result_transfer_time_ms is not None]
+        ep_transports = [s.network_transport_time_ms for s in ep_samples if s.network_transport_time_ms is not None]
+        ep_servers = [s.server_processing_time_ms for s in ep_samples if s.server_processing_time_ms is not None]
+        skews = [s.clock_skew_ms for s in ep_samples if s.clock_skew_ms is not None]
+        per_server[ep] = {
+            "sample_count": len(ep_samples),
+            "clock_skew_ms": skews[0] if skews else 0.0,
+            "total_result_transfer_time_ms": compute_statistics(ep_totals),
+            "network_transport_time_ms": compute_statistics(ep_transports),
+            "server_processing_time_ms": compute_statistics(ep_servers),
+        }
+
     report = {
         "pool_name": pool_name,
         "sample_count": len(samples),
+        "distinct_servers": len(by_endpoint),
+        "per_server_statistics": per_server,
         "statistics": {
             "total_result_transfer_time_ms": compute_statistics(totals),
             "network_transport_time_ms": compute_statistics(transports),

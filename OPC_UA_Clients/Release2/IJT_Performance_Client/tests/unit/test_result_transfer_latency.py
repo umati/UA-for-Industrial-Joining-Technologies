@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ijt_performance_client.result_transfer_latency import (
+from src.results import (
     LatencySample,
     calibrate_clock_skew,
     compute_statistics,

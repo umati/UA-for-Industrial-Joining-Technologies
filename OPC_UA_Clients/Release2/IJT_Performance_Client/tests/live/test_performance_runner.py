@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from ijt_performance_client.cli import main
+from src.cli import main
 
 
 def _is_port_open(host: str, port: int, timeout_s: float = 1.0) -> bool:
@@ -156,6 +156,7 @@ def test_live_multi_server_fleet_transfer_time(tmp_path: Path) -> None:
 
     Activated when multiple endpoints are provided via OPCUA_FLEET_ENDPOINTS
     (e.g., 'opc.tcp://10.0.0.1:40451,opc.tcp://10.0.0.2:40451').
+    Requires 10 joining results per server across all endpoints with 100% coverage.
     """
     fleet_eps = os.environ.get("OPCUA_FLEET_ENDPOINTS")
     if not fleet_eps:
@@ -168,25 +169,56 @@ def test_live_multi_server_fleet_transfer_time(tmp_path: Path) -> None:
     for endpoint in endpoints:
         _require_server(endpoint)
 
+    expected_samples = len(endpoints) * 10
     junit_out = str(tmp_path / "junit-fleet.xml")
     json_out = str(tmp_path / "perf-fleet.json")
+    md_out = str(tmp_path / "perf-fleet.md")
 
     exit_code = main(
         [
             "-e",
             fleet_eps,
             "-d",
-            "10.0",
+            "30.0",
+            "-b",
+            "10",
+            "-s",
+            str(expected_samples),
             "--mode",
             "both",
+            "--require-full-coverage",
             "--junit",
             junit_out,
             "--json",
             json_out,
+            "--markdown",
+            md_out,
         ]
     )
 
     assert exit_code == 0
     assert Path(junit_out).is_file()
     assert Path(json_out).is_file()
-    _read_total_stats(json_out)
+    assert Path(md_out).is_file()
+
+    # Also persist to project test-results/ so developer can inspect reports
+    results_dir = Path(__file__).resolve().parents[2] / "test-results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    import shutil
+
+    shutil.copy2(json_out, results_dir / "perf-fleet.json")
+    shutil.copy2(md_out, results_dir / "perf-fleet.md")
+
+    metrics = _read_total_stats(json_out)
+    tot = metrics["statistics"]["total_result_transfer_time_ms"]
+    assert tot["count"] >= expected_samples, (
+        f"Expected at least {expected_samples} samples across {len(endpoints)} servers, got {tot['count']}"
+    )
+    covered_endpoints = {s["endpoint"] for s in metrics.get("samples", [])}
+    assert len(covered_endpoints) == len(endpoints), (
+        f"Expected {len(endpoints)} covered endpoints, got {len(covered_endpoints)}"
+    )
+    from collections import Counter
+
+    counts = Counter(s["endpoint"] for s in metrics.get("samples", []))
+    assert all(c >= 10 for c in counts.values()), "Expected at least 10 samples per endpoint"

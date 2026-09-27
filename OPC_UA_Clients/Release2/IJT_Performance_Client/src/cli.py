@@ -1,19 +1,21 @@
 """
 CLI Entrypoint for IJT Performance Client.
-Run via: python -m ijt_performance_client --config profiles/ci_multi_server.yaml
+Run via: python -m ijt_performance_client --config profiles/multi_server_fleet.yaml
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import threading
 from pathlib import Path
 
-from .attribution import evaluate_diagnostics
+from . import __version__
 from .config import OpcUaPoolConfig, load_config
-from .opcua_client_pool import OpcUaClientPool
+from .diagnostics import evaluate_diagnostics
+from .engine import OpcUaClientPool
 from .reporters import (
     export_json_report,
     generate_markdown_report,
@@ -26,6 +28,11 @@ logger = logging.getLogger("ijt_performance_client")
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="OPC UA IJT High-Scale Performance & Latency Benchmark Client")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
     parser.add_argument(
         "-c",
         "--config",
@@ -79,8 +86,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--junit",
         type=str,
-        default="junit-perf.xml",
-        help="Path to export JUnit XML report (default: junit-perf.xml)",
+        default="test-results/junit-perf.xml",
+        help="Path to export JUnit XML report (default: test-results/junit-perf.xml)",
     )
     parser.add_argument(
         "--markdown",
@@ -128,6 +135,13 @@ def main(argv: list[str] | None = None) -> int:
     # 2. Apply CLI overrides
     if args.endpoints:
         cfg.endpoints = [ep.strip() for ep in args.endpoints.split(",") if ep.strip()]
+    elif not args.config:
+        env_fleet = os.environ.get("OPCUA_FLEET_ENDPOINTS")
+        env_single = os.environ.get("OPCUA_SERVER_URL")
+        if env_fleet:
+            cfg.endpoints = [ep.strip() for ep in env_fleet.split(",") if ep.strip()]
+        elif env_single:
+            cfg.endpoints = [env_single.strip()]
     if args.duration is not None:
         cfg.duration_seconds = args.duration
     if args.samples is not None:

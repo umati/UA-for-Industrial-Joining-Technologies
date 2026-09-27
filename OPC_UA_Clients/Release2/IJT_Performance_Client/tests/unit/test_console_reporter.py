@@ -2,9 +2,9 @@
 Unit tests for console table reporter.
 """
 
-from ijt_performance_client.attribution import DiagnosticVerdict
-from ijt_performance_client.reporters.console import print_console_report
-from ijt_performance_client.result_transfer_latency import LatencySample
+from src.diagnostics import DiagnosticVerdict
+from src.reporters import print_console_report
+from src.results import LatencySample
 
 
 def test_print_console_report_empty(capsys):
@@ -46,3 +46,39 @@ def test_print_console_report_with_samples(capsys):
     assert "Total Samples Received: 1" in captured.out
     assert "HEALTHY" in captured.out
     assert "22.0ms" in captured.out
+
+
+def test_print_console_report_per_server(capsys):
+    verdict = DiagnosticVerdict(
+        primary_bottleneck="NONE (OPC UA PIPELINE HEALTHY)",
+        headline="Healthy",
+        explanation="Multi-server fleet",
+        recommendation="None",
+        metrics_summary={},
+        warnings=[],
+    )
+    samples = [
+        LatencySample(
+            sample_id=1,
+            endpoint="opc.tcp://localhost:40001",
+            network_transport_time_ms=10.0,
+            server_processing_time_ms=12.0,
+            total_result_transfer_time_ms=22.0,
+            clock_skew_ms=1.5,
+        ),
+        LatencySample(
+            sample_id=2,
+            endpoint="opc.tcp://localhost:40002",
+            network_transport_time_ms=None,
+            server_processing_time_ms=None,
+            total_result_transfer_time_ms=None,
+        ),
+    ]
+    print_console_report(samples, verdict, "MultiServerFleet")
+    captured = capsys.readouterr()
+    assert "PER-SERVER BREAKDOWN (2 Servers)" in captured.out
+    assert "opc.tcp://localhost:40001" in captured.out
+    assert "opc.tcp://localhost:40002" in captured.out
+    assert "+1.5ms" in captured.out
+    assert "N/A" in captured.out
+    assert "FLEET AGGREGATE SUMMARY (All Servers):" in captured.out

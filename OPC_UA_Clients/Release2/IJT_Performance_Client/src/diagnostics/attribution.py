@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .result_transfer_latency import compute_statistics
+from ..results import compute_statistics
 
 
 @dataclass

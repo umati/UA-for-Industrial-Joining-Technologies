@@ -6,15 +6,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ijt_performance_client.cli import build_parser, main
-from ijt_performance_client.result_transfer_latency import LatencySample
+from src.cli import build_parser, main
+from src.results import LatencySample
 
 
 def test_build_parser_defaults():
     parser = build_parser()
     args = parser.parse_args(["--config", "profiles/single_server.yaml"])
     assert args.config == "profiles/single_server.yaml"
-    assert args.junit == "junit-perf.xml"
+    assert args.junit == "test-results/junit-perf.xml"
     assert args.verbose is False
 
 
@@ -67,7 +67,7 @@ def test_main_successful_execution(tmp_path):
         total_result_transfer_time_ms=25.0,
     )
 
-    with patch("ijt_performance_client.cli.OpcUaClientPool") as mock_pool_cls:
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
         mock_pool = MagicMock()
         mock_pool_cls.return_value = mock_pool
         mock_pool._num_workers_started = 1
@@ -108,7 +108,7 @@ def test_main_sla_breach_returns_nonzero(tmp_path):
         total_result_transfer_time_ms=120.0,
     )
 
-    with patch("ijt_performance_client.cli.OpcUaClientPool") as mock_pool_cls:
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
         mock_pool = MagicMock()
         mock_pool_cls.return_value = mock_pool
         mock_pool._num_workers_started = 1
@@ -136,8 +136,8 @@ def test_main_sla_breach_returns_nonzero(tmp_path):
 
 
 def test_main_module_execution():
-    from ijt_performance_client import __main__ as perf_main
-    from ijt_performance_client import cli
+    from src import __main__ as perf_main
+    from src import cli
 
     with patch.object(perf_main, "main", return_value=0), pytest.raises(SystemExit) as exc:
         perf_main.sys.exit(perf_main.main())
@@ -154,10 +154,10 @@ def test_package_dunder_main():
 
     with (
         patch("sys.argv", ["perf-client", "--duration", "0.01"]),
-        patch("ijt_performance_client.cli.main", return_value=0),
+        patch("src.cli.main", return_value=0),
         pytest.raises(SystemExit) as exc,
     ):
-        runpy.run_module("ijt_performance_client", run_name="__main__")
+        runpy.run_module("src", run_name="__main__")
     assert exc.value.code == 0
 
 
@@ -178,7 +178,7 @@ execution:
         encoding="utf-8",
     )
 
-    with patch("ijt_performance_client.cli.OpcUaClientPool") as mock_pool_cls:
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
         mock_pool = MagicMock()
         mock_pool_cls.return_value = mock_pool
         mock_pool._num_workers_started = 1
@@ -210,7 +210,7 @@ execution:
 
 def test_main_default_endpoint_fallback(tmp_path):
     # Test main() with no config and no endpoints provided (falls back to default localhost)
-    with patch("ijt_performance_client.cli.OpcUaClientPool") as mock_pool_cls:
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
         mock_pool = MagicMock()
         mock_pool_cls.return_value = mock_pool
         mock_pool._num_workers_started = 1
@@ -235,7 +235,7 @@ def test_cli_module_entrypoint():
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         with patch("sys.argv", ["ijt-perf", "--help"]), pytest.raises(SystemExit) as exc:
-            runpy.run_module("ijt_performance_client.cli", run_name="__main__", alter_sys=False)
+            runpy.run_module("src.cli", run_name="__main__", alter_sys=False)
     assert exc.value.code == 0
 
 
@@ -248,7 +248,7 @@ def test_main_skip_clock_skew_flag(tmp_path):
         total_result_transfer_time_ms=10.0,
     )
 
-    with patch("ijt_performance_client.cli.OpcUaClientPool") as mock_pool_cls:
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
         mock_pool = MagicMock()
         mock_pool_cls.return_value = mock_pool
         mock_pool._num_workers_started = 1
@@ -283,7 +283,7 @@ def test_main_allow_partial_coverage_flag(tmp_path):
         total_result_transfer_time_ms=10.0,
     )
 
-    with patch("ijt_performance_client.cli.OpcUaClientPool") as mock_pool_cls:
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
         mock_pool = MagicMock()
         mock_pool_cls.return_value = mock_pool
         mock_pool._num_workers_started = 1
@@ -319,3 +319,68 @@ def test_main_mutually_exclusive_coverage_flags():
                 "--allow-partial-coverage",
             ]
         )
+
+
+def test_cli_version_flag(capsys):
+    """Verify --version prints package version and exits."""
+    parser = build_parser()
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["--version"])
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert "1.0.0" in captured.out or "1.0.0" in captured.err
+
+
+def test_main_env_var_fallback(monkeypatch, tmp_path):
+    """Verify environment variables are used when --endpoints and --config are omitted."""
+    monkeypatch.setenv("OPCUA_FLEET_ENDPOINTS", "opc.tcp://fleet1:40451,opc.tcp://fleet2:40451")
+
+    mock_sample = LatencySample(
+        sample_id=1,
+        endpoint="opc.tcp://fleet1:40451",
+        network_transport_time_ms=5.0,
+        total_result_transfer_time_ms=10.0,
+    )
+
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
+        mock_pool = MagicMock()
+        mock_pool_cls.return_value = mock_pool
+        mock_pool._num_workers_started = 1
+        mock_pool.collect_samples.return_value = [mock_sample]
+        mock_pool.verify_coverage.return_value = (True, "Coverage OK")
+        mock_pool.connected_endpoints = {"opc.tcp://fleet1:40451", "opc.tcp://fleet2:40451"}
+        mock_pool.failed_endpoints = {}
+        mock_pool.worker_errors = []
+
+        exit_code = main(["--duration", "0.1", "--junit", str(tmp_path / "junit.xml")])
+        assert exit_code == 0
+        endpoints_passed = mock_pool_cls.call_args[1]["endpoints"]
+        assert endpoints_passed == ["opc.tcp://fleet1:40451", "opc.tcp://fleet2:40451"]
+
+
+def test_main_env_var_single_fallback(monkeypatch, tmp_path):
+    """Verify single OPCUA_SERVER_URL is used when OPCUA_FLEET_ENDPOINTS is not set."""
+    monkeypatch.delenv("OPCUA_FLEET_ENDPOINTS", raising=False)
+    monkeypatch.setenv("OPCUA_SERVER_URL", "opc.tcp://single:40451")
+
+    mock_sample = LatencySample(
+        sample_id=1,
+        endpoint="opc.tcp://single:40451",
+        network_transport_time_ms=5.0,
+        total_result_transfer_time_ms=10.0,
+    )
+
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
+        mock_pool = MagicMock()
+        mock_pool_cls.return_value = mock_pool
+        mock_pool._num_workers_started = 1
+        mock_pool.collect_samples.return_value = [mock_sample]
+        mock_pool.verify_coverage.return_value = (True, "Coverage OK")
+        mock_pool.connected_endpoints = {"opc.tcp://single:40451"}
+        mock_pool.failed_endpoints = {}
+        mock_pool.worker_errors = []
+
+        exit_code = main(["--duration", "0.1", "--junit", str(tmp_path / "junit.xml")])
+        assert exit_code == 0
+        endpoints_passed = mock_pool_cls.call_args[1]["endpoints"]
+        assert endpoints_passed == ["opc.tcp://single:40451"]

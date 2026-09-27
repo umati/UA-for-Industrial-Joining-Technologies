@@ -11,14 +11,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ijt_performance_client.opcua_client_pool import (
+from src.engine.client_pool import (
     OpcUaClientPool,
     _DurableWorkerSubHandler,
     _find_child,
     _locate_simulate_method,
     _worker_process_entry,
 )
-from ijt_performance_client.result_transfer_latency import LatencySample
+from src.results import LatencySample
 
 
 @pytest.mark.asyncio
@@ -56,7 +56,7 @@ async def test_locate_simulate_method():
     mock_objects = MagicMock()
     mock_client.nodes.objects = mock_objects
 
-    with patch("ijt_performance_client.opcua_client_pool._find_child") as mock_find:
+    with patch("src.engine.client_pool._find_child") as mock_find:
         # 1. Finds TighteningSystem -> Simulations -> SimulateResults -> SimulateSingleResult
         mock_ts = MagicMock()
         mock_sim = MagicMock()
@@ -213,7 +213,7 @@ def test_fleet_client_pool_stop():
 
 @pytest.mark.asyncio
 async def test_worker_event_loop_mocked():
-    from ijt_performance_client.opcua_client_pool import _worker_event_loop
+    from src.engine.client_pool import _worker_event_loop
 
     out_q = MagicMock()
     stop_event = MagicMock()
@@ -221,10 +221,10 @@ async def test_worker_event_loop_mocked():
     stop_event.is_set.side_effect = [False, True, True, True, True]
 
     with (
-        patch("ijt_performance_client.opcua_client_pool.Client") as mock_client_cls,
-        patch("ijt_performance_client.opcua_client_pool.load_ijt_type_definitions"),
-        patch("ijt_performance_client.opcua_client_pool.calibrate_clock_skew", return_value=0.0),
-        patch("ijt_performance_client.opcua_client_pool.resolve_namespace_index", return_value=3),
+        patch("src.engine.client_pool.Client") as mock_client_cls,
+        patch("src.engine.client_pool.load_ijt_type_definitions"),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.resolve_namespace_index", return_value=3),
     ):
         mock_cli = MagicMock()
         mock_cli.connect = AsyncMock()
@@ -254,7 +254,7 @@ async def test_worker_event_loop_mocked():
 
 @pytest.mark.asyncio
 async def test_worker_event_loop_active_burst():
-    from ijt_performance_client.opcua_client_pool import _worker_event_loop
+    from src.engine.client_pool import _worker_event_loop
 
     out_q = MagicMock()
     stop_event = MagicMock()
@@ -262,11 +262,11 @@ async def test_worker_event_loop_active_burst():
     stop_event.is_set.side_effect = [False, False, False, True, True, True]
 
     with (
-        patch("ijt_performance_client.opcua_client_pool.Client") as mock_client_cls,
-        patch("ijt_performance_client.opcua_client_pool.load_ijt_type_definitions"),
-        patch("ijt_performance_client.opcua_client_pool.calibrate_clock_skew", return_value=0.0),
-        patch("ijt_performance_client.opcua_client_pool.resolve_namespace_index", return_value=3),
-        patch("ijt_performance_client.opcua_client_pool._locate_simulate_method") as mock_locate,
+        patch("src.engine.client_pool.Client") as mock_client_cls,
+        patch("src.engine.client_pool.load_ijt_type_definitions"),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.resolve_namespace_index", return_value=3),
+        patch("src.engine.client_pool._locate_simulate_method") as mock_locate,
     ):
         mock_cli = MagicMock()
         mock_cli.connect = AsyncMock()
@@ -299,13 +299,13 @@ async def test_worker_event_loop_active_burst():
 
 @pytest.mark.asyncio
 async def test_worker_event_loop_connection_exhaustion():
-    from ijt_performance_client.opcua_client_pool import _worker_event_loop
+    from src.engine.client_pool import _worker_event_loop
 
     out_q = MagicMock()
     stop_event = MagicMock()
     stop_event.is_set.return_value = False
 
-    with patch("ijt_performance_client.opcua_client_pool.Client") as mock_client_cls:
+    with patch("src.engine.client_pool.Client") as mock_client_cls:
         mock_cli = MagicMock()
         mock_cli.connect = AsyncMock(side_effect=ConnectionRefusedError("Offline"))
         mock_client_cls.return_value = mock_cli
@@ -330,12 +330,12 @@ async def test_worker_event_loop_connection_exhaustion():
 
 
 def test_worker_process_entry_calls_event_loop():
-    from ijt_performance_client.opcua_client_pool import _worker_process_entry
+    from src.engine.client_pool import _worker_process_entry
 
     out_q = MagicMock()
     stop_event = MagicMock()
 
-    with patch("ijt_performance_client.opcua_client_pool._worker_event_loop", new_callable=AsyncMock) as mock_loop:
+    with patch("src.engine.client_pool._worker_event_loop", new_callable=AsyncMock) as mock_loop:
         _worker_process_entry(
             worker_id=3,
             endpoints=["opc.tcp://test:4840"],
@@ -350,7 +350,7 @@ def test_worker_process_entry_calls_event_loop():
 
 
 def test_worker_process_entry_handles_exception():
-    from ijt_performance_client.opcua_client_pool import _worker_process_entry
+    from src.engine.client_pool import _worker_process_entry
 
     out_q = MagicMock()
     stop_event = MagicMock()
@@ -358,8 +358,8 @@ def test_worker_process_entry_handles_exception():
     proc_err = RuntimeError("Process failure")
     # Patch _worker_event_loop with a sync MagicMock to avoid creating an unawaited coroutine
     with (
-        patch("ijt_performance_client.opcua_client_pool._worker_event_loop", new_callable=MagicMock, return_value=None),
-        patch("ijt_performance_client.opcua_client_pool.asyncio.run", side_effect=proc_err),
+        patch("src.engine.client_pool._worker_event_loop", new_callable=MagicMock, return_value=None),
+        patch("src.engine.client_pool.asyncio.run", side_effect=proc_err),
     ):
         _worker_process_entry(
             worker_id=4,
@@ -488,17 +488,17 @@ def test_verify_coverage_detects_forced_termination():
 
 @pytest.mark.asyncio
 async def test_partial_subscription_cleanup_on_connect_failure():
-    from ijt_performance_client.opcua_client_pool import _worker_event_loop
+    from src.engine.client_pool import _worker_event_loop
 
     out_q = MagicMock()
     stop_event = MagicMock()
     stop_event.is_set.return_value = False
 
     with (
-        patch("ijt_performance_client.opcua_client_pool.Client") as mock_client_cls,
-        patch("ijt_performance_client.opcua_client_pool.load_ijt_type_definitions"),
-        patch("ijt_performance_client.opcua_client_pool.calibrate_clock_skew", return_value=0.0),
-        patch("ijt_performance_client.opcua_client_pool.resolve_namespace_index", return_value=3),
+        patch("src.engine.client_pool.Client") as mock_client_cls,
+        patch("src.engine.client_pool.load_ijt_type_definitions"),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.resolve_namespace_index", return_value=3),
     ):
         mock_cli = MagicMock()
         mock_cli.connect = AsyncMock()
@@ -602,7 +602,7 @@ async def test_locate_simulate_method_none_branches():
     mock_client = MagicMock()
     mock_client.nodes.objects = MagicMock()
 
-    with patch("ijt_performance_client.opcua_client_pool._find_child") as mock_find:
+    with patch("src.engine.client_pool._find_child") as mock_find:
         # 1. TighteningSystem None, JoiningSystem None -> (None, None)
         mock_find.side_effect = [None, None]
         p, m = await _locate_simulate_method(mock_client, ns_app=2)
@@ -669,7 +669,7 @@ def test_fleet_client_pool_edge_cases():
 
 @pytest.mark.asyncio
 async def test_worker_event_loop_retries_and_burst():
-    from ijt_performance_client.opcua_client_pool import _worker_event_loop
+    from src.engine.client_pool import _worker_event_loop
 
     out_q = MagicMock()
     stop_event = MagicMock()
@@ -677,11 +677,11 @@ async def test_worker_event_loop_retries_and_burst():
     stop_event.is_set.side_effect = [False, False, False, False, True, True, True, True, True]
 
     with (
-        patch("ijt_performance_client.opcua_client_pool.Client") as mock_client_cls,
-        patch("ijt_performance_client.opcua_client_pool.load_ijt_type_definitions"),
-        patch("ijt_performance_client.opcua_client_pool.calibrate_clock_skew", return_value=0.0),
-        patch("ijt_performance_client.opcua_client_pool.resolve_namespace_index", return_value=2),
-        patch("ijt_performance_client.opcua_client_pool._locate_simulate_method") as mock_loc_sim,
+        patch("src.engine.client_pool.Client") as mock_client_cls,
+        patch("src.engine.client_pool.load_ijt_type_definitions"),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.resolve_namespace_index", return_value=2),
+        patch("src.engine.client_pool._locate_simulate_method") as mock_loc_sim,
     ):
         mock_cli = MagicMock()
         mock_cli.connect = AsyncMock()
@@ -716,17 +716,17 @@ async def test_worker_event_loop_retries_and_burst():
 
 @pytest.mark.asyncio
 async def test_worker_event_loop_ns_missing_and_retry_backoff():
-    from ijt_performance_client.opcua_client_pool import _worker_event_loop
+    from src.engine.client_pool import _worker_event_loop
 
     out_q = MagicMock()
     stop_event = MagicMock()
     stop_event.is_set.return_value = False
 
     with (
-        patch("ijt_performance_client.opcua_client_pool.Client") as mock_client_cls,
-        patch("ijt_performance_client.opcua_client_pool.load_ijt_type_definitions"),
-        patch("ijt_performance_client.opcua_client_pool.calibrate_clock_skew", return_value=0.0),
-        patch("ijt_performance_client.opcua_client_pool.resolve_namespace_index", return_value=None),  # Missing NS
+        patch("src.engine.client_pool.Client") as mock_client_cls,
+        patch("src.engine.client_pool.load_ijt_type_definitions"),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.resolve_namespace_index", return_value=None),  # Missing NS
         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
     ):
         mock_cli = MagicMock()
@@ -754,7 +754,7 @@ async def test_worker_event_loop_ns_missing_and_retry_backoff():
 
 @pytest.mark.asyncio
 async def test_worker_event_loop_stop_before_connect_and_sub_delete_error():
-    from ijt_performance_client.opcua_client_pool import _worker_event_loop
+    from src.engine.client_pool import _worker_event_loop
 
     out_q = MagicMock()
     # 1. Stop event already set before connect -> line 184
@@ -778,10 +778,10 @@ async def test_worker_event_loop_stop_before_connect_and_sub_delete_error():
     stop_event_retry.is_set.side_effect = [False, False, True, True, True]
 
     with (
-        patch("ijt_performance_client.opcua_client_pool.Client") as mock_client_cls,
-        patch("ijt_performance_client.opcua_client_pool.load_ijt_type_definitions"),
-        patch("ijt_performance_client.opcua_client_pool.calibrate_clock_skew", return_value=0.0),
-        patch("ijt_performance_client.opcua_client_pool.resolve_namespace_index", return_value=2),
+        patch("src.engine.client_pool.Client") as mock_client_cls,
+        patch("src.engine.client_pool.load_ijt_type_definitions"),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.resolve_namespace_index", return_value=2),
     ):
         mock_cli = MagicMock()
         mock_cli.connect = AsyncMock()
@@ -807,14 +807,14 @@ async def test_worker_event_loop_stop_before_connect_and_sub_delete_error():
 
 
 def test_worker_process_entry_crash_reporting():
-    from ijt_performance_client.opcua_client_pool import _worker_process_entry
+    from src.engine.client_pool import _worker_process_entry
 
     # Broken out_queue whose put raises
     bad_q = MagicMock()
     bad_q.put.side_effect = RuntimeError("Broken pipe")
 
     with patch(
-        "ijt_performance_client.opcua_client_pool._worker_event_loop",
+        "src.engine.client_pool._worker_event_loop",
         side_effect=RuntimeError("Loop startup fatal crash"),
     ):
         # Should catch error, attempt put, swallow broken pipe without unhandled crash
@@ -845,7 +845,7 @@ def test_pool_stop_sets_stop_event():
 
 @pytest.mark.asyncio
 async def test_worker_event_loop_method_connect_fail_and_buffer_flush():
-    from ijt_performance_client.opcua_client_pool import _worker_event_loop
+    from src.engine.client_pool import _worker_event_loop
 
     out_q = MagicMock()
     stop_event = MagicMock()
@@ -853,10 +853,10 @@ async def test_worker_event_loop_method_connect_fail_and_buffer_flush():
     stop_event.is_set.side_effect = [False, False, False, True, True, True, True, True]
 
     with (
-        patch("ijt_performance_client.opcua_client_pool.Client") as mock_client_cls,
-        patch("ijt_performance_client.opcua_client_pool.load_ijt_type_definitions"),
-        patch("ijt_performance_client.opcua_client_pool.calibrate_clock_skew", return_value=0.0),
-        patch("ijt_performance_client.opcua_client_pool.resolve_namespace_index", return_value=2),
+        patch("src.engine.client_pool.Client") as mock_client_cls,
+        patch("src.engine.client_pool.load_ijt_type_definitions"),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.resolve_namespace_index", return_value=2),
     ):
         mock_cli_sub = MagicMock()
         mock_cli_sub.connect = AsyncMock()
@@ -924,7 +924,7 @@ def test_fleet_client_pool_start_with_empty_shard():
             return orig_enum([["opc.tcp://localhost:40451"], []])
         return orig_enum(seq)
 
-    with patch("ijt_performance_client.opcua_client_pool.enumerate", side_effect=fake_enum):
+    with patch("src.engine.client_pool.enumerate", side_effect=fake_enum):
         pool.start()
 
     # 1 process started, empty shard skipped via continue
@@ -937,16 +937,16 @@ async def test_worker_event_loop_periodic_flush_triggered():
     import asyncio
     import threading
 
-    from ijt_performance_client.opcua_client_pool import _worker_event_loop
+    from src.engine.client_pool import _worker_event_loop
 
     out_q = MagicMock()
     stop_event = threading.Event()
 
     with (
-        patch("ijt_performance_client.opcua_client_pool.Client") as mock_client_cls,
-        patch("ijt_performance_client.opcua_client_pool.load_ijt_type_definitions"),
-        patch("ijt_performance_client.opcua_client_pool.calibrate_clock_skew", return_value=0.0),
-        patch("ijt_performance_client.opcua_client_pool.resolve_namespace_index", return_value=2),
+        patch("src.engine.client_pool.Client") as mock_client_cls,
+        patch("src.engine.client_pool.load_ijt_type_definitions"),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.resolve_namespace_index", return_value=2),
     ):
         mock_cli_sub = MagicMock()
         mock_cli_sub.connect = AsyncMock()
@@ -979,7 +979,7 @@ async def test_worker_event_loop_periodic_flush_triggered():
                 return
             await orig_sleep(0.005)
 
-        with patch("ijt_performance_client.opcua_client_pool.asyncio.sleep", side_effect=fast_sleep):
+        with patch("src.engine.client_pool.asyncio.sleep", side_effect=fast_sleep):
             await _worker_event_loop(
                 worker_id=0,
                 endpoints=["opc.tcp://test:40451"],
@@ -1099,7 +1099,7 @@ def test_dropped_sample_totals_are_cumulative_not_additive():
 async def test_worker_event_loop_teardown_and_burst_failure_coverage():
     import threading
 
-    from ijt_performance_client.opcua_client_pool import _worker_event_loop
+    from src.engine.client_pool import _worker_event_loop
 
     out_q = MagicMock()
     stop_event = threading.Event()
@@ -1109,11 +1109,11 @@ async def test_worker_event_loop_teardown_and_burst_failure_coverage():
         raise RuntimeError("Method call failed")
 
     with (
-        patch("ijt_performance_client.opcua_client_pool.resolve_namespace_index", AsyncMock(return_value=2)),
-        patch("ijt_performance_client.opcua_client_pool.load_ijt_type_definitions", AsyncMock()),
-        patch("ijt_performance_client.opcua_client_pool.calibrate_clock_skew", AsyncMock(return_value=0.0)),
-        patch("ijt_performance_client.opcua_client_pool.Client") as mock_client_cls,
-        patch("ijt_performance_client.opcua_client_pool._locate_simulate_method") as mock_loc_sim,
+        patch("src.engine.client_pool.resolve_namespace_index", AsyncMock(return_value=2)),
+        patch("src.engine.client_pool.load_ijt_type_definitions", AsyncMock()),
+        patch("src.engine.client_pool.calibrate_clock_skew", AsyncMock(return_value=0.0)),
+        patch("src.engine.client_pool.Client") as mock_client_cls,
+        patch("src.engine.client_pool._locate_simulate_method") as mock_loc_sim,
     ):
         mock_cli = MagicMock()
         mock_cli.connect = AsyncMock()
@@ -1139,10 +1139,10 @@ async def test_worker_event_loop_teardown_and_burst_failure_coverage():
 
         with (
             patch(
-                "ijt_performance_client.opcua_client_pool.disconnect_client",
+                "src.engine.client_pool.disconnect_client",
                 AsyncMock(side_effect=RuntimeError("Disconnect failed")),
             ),
-            patch("ijt_performance_client.opcua_client_pool.asyncio.sleep", side_effect=fast_sleep),
+            patch("src.engine.client_pool.asyncio.sleep", side_effect=fast_sleep),
         ):
             await _worker_event_loop(
                 worker_id=0,

@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from importlib.resources import files
+from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Any
 
@@ -123,17 +124,50 @@ def _validate_section_keys(section_dict: dict[str, Any], allowed_keys: set[str],
             raise ValueError(f"Unknown key in '{section_name}' section: '{key}'. Allowed: {sorted(allowed_keys)}")
 
 
+_ROOT_PROFILES_DIR = Path(__file__).resolve().parents[1] / "profiles"
+
+
 def load_config(file_path: str | Path) -> OpcUaPoolConfig:
-    """Load and strictly validate a YAML performance configuration profile."""
+    """Load and strictly validate a YAML performance configuration profile.
+
+    Supports:
+    1. Direct file path on disk (relative or absolute)
+    2. Bare filename or relative name inside root profiles/ directory (e.g. 'multi_server_fleet.yaml')
+    3. Package-bundled profiles when installed via wheel/pip
+    """
     path = Path(file_path)
-    if not path.is_file():
-        # Installed wheels can provide bundled profiles without a source checkout.
-        bundled = files("ijt_performance_client").joinpath(str(file_path).replace("\\", "/"))
-        if path.is_absolute() or not bundled.is_file():
-            raise FileNotFoundError(f"Configuration file not found: {file_path}")
-        source = bundled
-    else:
+    source: Path | Traversable
+
+    # 1. Direct path check
+    if path.is_file():
         source = path
+    # 2. Check root profiles/ directory (direct or by filename)
+    elif (_ROOT_PROFILES_DIR / path).is_file():
+        source = _ROOT_PROFILES_DIR / path
+    elif (_ROOT_PROFILES_DIR / path.name).is_file():
+        source = _ROOT_PROFILES_DIR / path.name
+    else:
+        # 3. Check installed package resources
+        bundled = None
+        for pkg in ("profiles", "ijt_performance_client.profiles", "ijt_performance_client"):
+            try:
+                candidate = files(pkg).joinpath(path.name)
+                if candidate.is_file():
+                    bundled = candidate
+                    break
+                candidate = files(pkg).joinpath(str(file_path).replace("\\", "/"))
+                if candidate.is_file():
+                    bundled = candidate
+                    break
+            except Exception:
+                continue
+
+        if bundled is None or not bundled.is_file():
+            raise FileNotFoundError(
+                f"Configuration profile not found: '{file_path}'. "
+                f"Checked disk, '{_ROOT_PROFILES_DIR}', and packaged resources."
+            )
+        source = bundled
 
     with source.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from ijt_performance_client.config import OpcUaPoolConfig, load_config
+from src.config import OpcUaPoolConfig, load_config
 
 
 def test_load_single_server_profile():
@@ -19,14 +19,13 @@ def test_load_single_server_profile():
     assert cfg.target_sample_count == 20
 
 
-def test_load_ci_multi_server_profile():
-    profile_path = Path(__file__).resolve().parents[2] / "profiles" / "ci_multi_server.yaml"
+def test_load_multi_server_fleet_profile():
+    profile_path = Path(__file__).resolve().parents[2] / "profiles" / "multi_server_fleet.yaml"
     cfg = load_config(profile_path)
-    assert cfg.name == "CI Multi-Server Fleet"
-    assert len(cfg.endpoints) == 3
-    assert "opc.tcp://127.0.0.1:40451" in cfg.endpoints
-    assert "opc.tcp://127.0.0.1:40452" in cfg.endpoints
-    assert "opc.tcp://127.0.0.1:40453" in cfg.endpoints
+    assert cfg.name == "Multi-Server Fleet Benchmark"
+    assert len(cfg.endpoints) == 50
+    assert "opc.tcp://127.0.0.1:40001" in cfg.endpoints
+    assert "opc.tcp://127.0.0.1:40050" in cfg.endpoints
 
 
 def test_config_rejects_duplicate_endpoints():
@@ -223,18 +222,30 @@ def test_load_config_package_bundled_fallback(tmp_path, monkeypatch):
     assert len(cfg.endpoints) >= 1
 
 
-def test_source_profiles_match_packaged_profiles():
-    """Keep source-tree convenience profiles identical to wheel resources."""
-    client_root = Path(__file__).resolve().parents[2]
-    source_profiles = client_root / "profiles"
-    packaged_profiles = client_root / "ijt_performance_client" / "profiles"
+def test_load_config_smart_resolution(tmp_path, monkeypatch):
+    """Verify smart resolution by bare name, relative path, and from arbitrary CWD."""
+    # 1. Bare name
+    cfg1 = load_config("single_server.yaml")
+    assert cfg1.name == "Single Server Baseline"
+    assert len(cfg1.endpoints) == 1
 
-    source_names = {path.name for path in source_profiles.glob("*.yaml")}
-    packaged_names = {path.name for path in packaged_profiles.glob("*.yaml")}
-    assert source_names == packaged_names
+    # 2. Relative path
+    cfg2 = load_config("profiles/single_server.yaml")
+    assert cfg2.name == "Single Server Baseline"
 
-    for name in source_names:
-        assert (source_profiles / name).read_bytes() == (packaged_profiles / name).read_bytes()
+    # 3. Fleet profile bare name
+    cfg3 = load_config("multi_server_fleet.yaml")
+    assert cfg3.name == "Multi-Server Fleet Benchmark"
+    assert len(cfg3.endpoints) == 50
+
+    # 4. From completely different CWD (e.g. temporary directory)
+    monkeypatch.chdir(tmp_path)
+    cfg4 = load_config("single_server.yaml")
+    assert cfg4.name == "Single Server Baseline"
+
+    # 5. Nonexistent profile raises FileNotFoundError
+    with pytest.raises(FileNotFoundError, match="Configuration profile not found"):
+        load_config("completely_nonexistent_profile.yaml")
 
 
 def test_load_config_skip_clock_skew_in_execution(tmp_path):
@@ -289,3 +300,25 @@ execution:
 
     cfg = load_config(cfg_file)
     assert cfg.require_full_coverage is False
+
+
+def test_load_config_from_packaged_resources(monkeypatch, tmp_path):
+    """Covers config.py lines 156-157, 170: packaged resource profile lookup."""
+    import io
+    from unittest.mock import MagicMock
+
+    mock_file = MagicMock()
+    mock_file.is_file.return_value = True
+    mock_file.open.return_value.__enter__.return_value = io.StringIO(
+        "meta:\n  name: Packaged Profile\nfleet:\n  endpoints:\n    - opc.tcp://localhost:40451\n"
+    )
+
+    def mock_files(pkg):
+        res = MagicMock()
+        res.joinpath.return_value = mock_file
+        return res
+
+    monkeypatch.setattr("src.config.files", mock_files)
+    # Give a non-existent path so disk checks fail and it falls through to package resources
+    cfg = load_config(Path("non_existent_packaged_profile.yaml"))
+    assert cfg.name == "Packaged Profile"

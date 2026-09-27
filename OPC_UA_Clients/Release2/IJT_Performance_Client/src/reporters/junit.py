@@ -8,8 +8,8 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from ..attribution import DiagnosticVerdict
-from ..result_transfer_latency import LatencySample, compute_statistics
+from ..diagnostics import DiagnosticVerdict
+from ..results import LatencySample, compute_statistics
 
 
 def write_junit_xml(
