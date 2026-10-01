@@ -627,6 +627,32 @@ def _parse_suite_counts(text: str) -> str:
     return ""
 
 
+def _parse_suite_coverage(text: str) -> str | None:
+    """Extract code coverage percentage from sub-runner output if present.
+
+    Handles:
+      - pytest-cov: "TOTAL   1457      0   100%" -> "100%"
+      - C# coverlet: "Coverage (IJT_CSharp_Client.*) .... PASS (98.6% (threshold: 95%))" -> "98.6%"
+      - Vitest: "All files |   99.4 |" -> "99.4%"
+    """
+    clean_text = _strip_ansi(text).replace("\r", "\n")
+    # 1. pytest-cov summary row
+    m = re.search(r"^\s*TOTAL\s+\d+\s+\d+\s+(\d+(?:\.\d+)?%)", clean_text, re.MULTILINE)
+    if m:
+        return m.group(1)
+    # 2. C# sub-runner step result
+    m = re.search(
+        r"Coverage\s*\([^)]*\)\s*\.+(?:[^\n]*?\b(?:PASS|WARN)\s*\()?\s*([\d.]+)%", clean_text
+    )
+    if m:
+        return f"{m.group(1)}%"
+    # 3. Vitest summary table
+    m = re.search(r"All files\s*\|\s*([\d.]+)\s*\|", clean_text)
+    if m:
+        return f"{m.group(1)}%"
+    return None
+
+
 def _clarify_suite_counts(name: str, counts: str) -> str:
     """Describe intentional selection and optional checks without implying failures."""
     if name == "server-static":
@@ -732,7 +758,11 @@ def _delegate_to_runner(
         env=env,
         timeout=run_timeout,
     )
-    counts = _clarify_suite_counts(name, _parse_suite_counts(out))
+    raw_counts = _parse_suite_counts(out)
+    cov = _parse_suite_coverage(out)
+    if cov and raw_counts and "cov" not in raw_counts:
+        raw_counts = f"{raw_counts} ({cov} cov)"
+    counts = _clarify_suite_counts(name, raw_counts)
     skipped = rc == 0 and _counts_are_only_skipped(counts)
     return SuiteResult(
         name=name,

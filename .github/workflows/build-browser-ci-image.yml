@@ -36,6 +36,7 @@ on:
       - '.github/workflows/build-browser-ci-image.yml'
       - '.dockerignore'
       - 'constraints.txt'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements.lock'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package.json'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt'
@@ -302,7 +303,7 @@ jobs:
               asyncua_version="${asyncua_version%%-*}"
               awk -v version="$asyncua_version" \
                 '\''BEGIN { replaced=0 } tolower($0) ~ /^asyncua([[:space:]]|[=<>!~@]|$)/ { print "asyncua==" version; replaced=1; next } { print } END { if (replaced == 0) print "asyncua==" version }'\'' \
-                constraints.txt > "$HOME/runtime-constraints.txt"
+                OPC_UA_Clients/Release2/IJT_Web_Client/requirements.lock > "$HOME/runtime-constraints.txt"
               python -m venv "$HOME/ijt-browser-probe"
               "$HOME/ijt-browser-probe/bin/python" -m pip install --pre --no-index \
                 --find-links /opt/ijt-browser-ci/pip-wheelhouse \

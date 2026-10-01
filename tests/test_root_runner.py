@@ -51,6 +51,8 @@ def test_python_dependency_security_floors_are_centralized() -> None:
         _runner.TEST_CLIENT_DIR / "requirements-dev.txt",
         _runner.WEB_CLIENT_DIR / "requirements.txt",
         _runner.WEB_CLIENT_DIR / "requirements-dev.txt",
+        _runner.PERFORMANCE_DIR / "requirements.txt",
+        _runner.PERFORMANCE_DIR / "requirements-dev.txt",
         _runner.SERVER_DIR / "tests" / "requirements.txt",
     ]
     for req_file in requirement_files:
@@ -68,6 +70,7 @@ def test_python_requirement_installs_use_constraints_file() -> None:
         _runner.CONSOLE_DIR / "run_all_tests.py",
         _runner.CONSOLE_DIR / "setup_client.py",
         _runner.TEST_CLIENT_DIR / "run_all_tests.py",
+        _runner.PERFORMANCE_DIR / "run_all_tests.py",
         _runner.WEB_CLIENT_DIR / "run_all_tests.py",
         _runner.WEB_CLIENT_DIR / "setup_project.py",
         _runner.WEB_CLIENT_DIR / "scripts" / "venv_bootstrap.py",
@@ -147,8 +150,10 @@ def test_python_requirement_installs_use_constraints_file() -> None:
             if (
                 installs_dependencies
                 and "constraints.txt" not in block
+                and "requirements.lock" not in block
                 and "PYTHON_CONSTRAINTS" not in block
                 and "_pip_constraint_args" not in block
+                and "_pip_floor_args" not in block
             ):
                 rel_path = path.relative_to(_runner.REPO_ROOT)
                 missing.append(f"{rel_path}:{index + 1}")
@@ -157,6 +162,94 @@ def test_python_requirement_installs_use_constraints_file() -> None:
         "Python dependency install surfaces must use repo-wide constraints.txt. "
         "Add -c <repo>/constraints.txt or _pip_constraint_args() at: " + ", ".join(missing)
     )
+
+
+def _load_lock_script():
+    path = _runner.REPO_ROOT / "scripts" / "update_python_locks.py"
+    spec = importlib.util.spec_from_file_location("update_python_locks", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_PYTHON_CLIENT_DIRS = ("CONSOLE_DIR", "TEST_CLIENT_DIR", "WEB_CLIENT_DIR", "PERFORMANCE_DIR")
+
+
+def test_every_python_client_has_a_current_lock() -> None:
+    """Each Python client gets a generated requirements.lock that matches its inputs."""
+    locks = _load_lock_script()
+    projects = locks.lock_projects()
+    expected = {getattr(_runner, name).resolve() for name in _PYTHON_CLIENT_DIRS}
+    assert expected <= {p.resolve() for p in projects}
+    release2 = _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2"
+    for client in release2.iterdir():
+        if (client / "run_all_tests.py").is_file() and (client / "pyproject.toml").is_file():
+            assert (client / "requirements.txt").is_file(), f"{client.name}: add requirements.txt"
+            assert (client / "requirements-dev.txt").is_file(), (
+                f"{client.name}: add requirements-dev.txt"
+            )
+    stale = [p.name for p in locks.stale_locks(projects)]
+    assert not stale, (
+        f"Out-of-date requirements.lock in {stale}; run: python scripts/update_python_locks.py"
+    )
+
+
+def test_every_python_client_installs_from_its_lock_in_its_own_venv() -> None:
+    """Every client: own .venv_test, lock-pinned installs, lock in the reinstall hash."""
+    for name in _PYTHON_CLIENT_DIRS:
+        runner = (getattr(_runner, name) / "run_all_tests.py").read_text(encoding="utf-8")
+        assert '"requirements.lock"' in runner, f"{name}: runner must define _PYTHON_LOCK"
+        assert re.search(r"for path in \(_PYTHON_LOCK, _PYTHON_CONSTRAINTS\)", runner), name
+        assert re.search(r"for req in \(_PYTHON_CONSTRAINTS, _PYTHON_LOCK,", runner), (
+            f"{name}: lock must be part of the venv reinstall hash"
+        )
+        assert '".venv_test"' in runner and '".venv_ci"' in runner, (
+            f"{name}: use .venv_test/.venv_ci"
+        )
+    for setup in (
+        _runner.CONSOLE_DIR / "setup_client.py",
+        _runner.WEB_CLIENT_DIR / "setup_project.py",
+    ):
+        text = setup.read_text(encoding="utf-8")
+        assert "for path in (PYTHON_LOCK, PYTHON_CONSTRAINTS)" in text, setup.name
+
+
+def test_python_constraints_have_one_source_and_locks_are_audited() -> None:
+    release2 = _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2"
+    copies = sorted(p.parent.name for p in release2.glob("*/constraints.txt"))
+    assert not copies, f"Duplicate constraints.txt in {copies}; use repo-root constraints.txt only"
+    precommit_all = (_runner.REPO_ROOT / "run_precommit_all.py").read_text(encoding="utf-8")
+    assert "_run_python_lock_audit" in precommit_all
+    assert (
+        '"Release2" / "IJT_'
+        not in precommit_all.split("PYTHON_AUDIT_REQUIREMENTS", 1)[1].split(")", 1)[0]
+    ), "Client requirement files are audited through their locks, not re-resolved"
+    hooks = (_runner.REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    assert "scripts/update_python_locks.py --check" in hooks
+
+
+def test_python_lock_fix_raises_floors_in_constraints() -> None:
+    locks = _load_lock_script()
+    report = {
+        "dependencies": [
+            {
+                "name": "anyio",
+                "version": "4.0",
+                "vulns": [{"id": "X", "fix_versions": ["4.1", "5.0"]}],
+            },
+            {"name": "newpkg", "version": "1.0", "vulns": [{"id": "Y", "fix_versions": ["1.2"]}]},
+            {"name": "pyjwt", "version": "2.0", "vulns": [{"id": "Z", "fix_versions": []}]},
+        ]
+    }
+    plan = locks.plan_floors([report])
+    assert plan.floors == {"anyio": "4.1", "newpkg": "1.2"}
+    assert plan.advisory_only == ["pyjwt 2.0 Z"]
+    text = "asyncua==2.0.1\n\n" + locks.MANAGED_MARKER + " (x).\n# note\nanyio>=4.0\nzzz>=1\n"
+    result = locks.apply_floors(text, plan)
+    assert "anyio>=4.1\nnewpkg>=1.2\nzzz>=1\n" in result.text
+    assert not result.manual
 
 
 def test_test_client_pyright_resolves_reporting_scripts() -> None:
@@ -489,10 +582,37 @@ def test_parse_suite_counts_handles_mixed_child_runner_checks() -> None:
     assert _runner._parse_suite_counts(output) == "2 checks passed, 1 check failed"
 
 
+def test_parse_suite_coverage_extracts_pytest_csharp_and_vitest() -> None:
+    pytest_out = """
+    src/results/latency.py             225      0   100%
+    --------------------------------------------------------------
+    TOTAL                             1457      0   100%
+    """
+    assert _runner._parse_suite_coverage(pytest_out) == "100%"
+
+    cs_out = """
+    Coverage (IJT_CSharp_Client.*) ................... PASS (98.6% (threshold: 95%))
+    """
+    assert _runner._parse_suite_coverage(cs_out) == "98.6%"
+
+    vitest_out = """
+    ------------------|---------|----------|---------|---------|-------------------
+    File              | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+    ------------------|---------|----------|---------|---------|-------------------
+    All files         |    99.4 |     98.2 |    99.0 |    99.4 |
+    """
+    assert _runner._parse_suite_coverage(vitest_out) == "99.4%"
+
+    no_cov_out = "Ran 5 tests in 0.12s\nOK"
+    assert _runner._parse_suite_coverage(no_cov_out) is None
+
+
 def test_count_tests_from_detail_sums_only_test_outcomes() -> None:
     detail = "707 passed (py), 634 passed (js), 2 warnings, 1 deselected"
 
     assert _runner._count_tests_from_detail(detail) == 1341
+    assert _runner._count_tests_from_detail("151 passed (100% cov)") == 151
+    assert _runner._count_tests_from_detail("945 passed (98.6% cov)") == 945
 
 
 def test_clarify_suite_counts_explains_optional_and_excluded_cases() -> None:

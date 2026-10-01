@@ -44,16 +44,14 @@ NODE_CLIENT_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release1" / "IJT_Node_Client"
 CSHARP_DIR = REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client"
 CSHARP_SLN = CSHARP_DIR / "IJT_CSharp_Client.sln"
 ENVELOPE_DIR = WEB_CLIENT_DIR / "src" / "javascripts" / "views" / "envelope"
+# Python clients are audited through their generated requirements.lock files
+# (scripts/update_python_locks.py --audit). This list covers the remaining
+# non-client requirement files, which pip-audit resolves to current releases.
+PYTHON_LOCK_SCRIPT = REPO_ROOT / "scripts" / "update_python_locks.py"
 PYTHON_AUDIT_REQUIREMENTS: tuple[Path, ...] = (
     REPO_ROOT / "tests" / "requirements.txt",
     REPO_ROOT / "reporting" / "requirements.txt",
     REPO_ROOT / "OPC_UA_Servers" / "Release2" / "tests" / "requirements.txt",
-    REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Console_Client" / "requirements.txt",
-    REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Console_Client" / "requirements-dev.txt",
-    REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Test_Client" / "requirements.txt",
-    REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Test_Client" / "requirements-dev.txt",
-    REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "requirements.txt",
-    REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "requirements-dev.txt",
     REPO_ROOT
     / "OPC_UA_Clients"
     / "Release2"
@@ -417,6 +415,29 @@ def _run_python_requirements_audit(retries: int = 2, timeout_seconds: float = 60
     return 1
 
 
+def _run_python_lock_audit(timeout_seconds: float = 180.0) -> int:
+    """Check every client requirements.lock is current, then pip-audit its exact pins."""
+    if not ensure_python_package("pip-audit", import_name="pip_audit"):
+        log.warning("[security] Python lock audit skipped: pip-audit could not be installed")
+        return 0
+    log.info("[security] Python client locks: update_python_locks.py --audit")
+    try:
+        completed = _safe_subprocess_run(
+            [sys.executable, str(PYTHON_LOCK_SCRIPT), "--audit"],
+            cwd=REPO_ROOT,
+            timeout=timeout_seconds,
+            capture_output=True,
+        )
+    except subprocess.TimeoutExpired:
+        log.warning("[security] Python lock audit timed out")
+        return 1
+    for stream, text in ((sys.stdout, completed.stdout), (sys.stderr, completed.stderr)):
+        if text:
+            stream.write(text)
+            stream.flush()
+    return completed.returncode
+
+
 def _run_csharp_nuget_audit(timeout_seconds: float = 120.0) -> int:
     """Run dotnet list package --vulnerable on C# solution. Auto-skipped if dotnet is missing."""
     csharp_sln = (
@@ -519,6 +540,7 @@ def main(argv: list[str] | None = None) -> int:
         for label, fn in [
             ("C# Client", _run_csharp_nuget_audit),
             ("npm audits", _run_all_npm_lock_audits),
+            ("Python client locks", _run_python_lock_audit),
             ("Python requirements", _run_python_requirements_audit),
         ]:
             code = fn()

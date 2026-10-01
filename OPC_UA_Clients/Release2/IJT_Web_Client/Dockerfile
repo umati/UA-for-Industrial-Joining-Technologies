@@ -10,14 +10,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY constraints.txt /tmp/constraints.txt
 COPY constraints.txt ./constraints.txt
+COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.lock /tmp/requirements.lock
 COPY scripts/opcua_session_policy.py \
      scripts/opcua_session_policy_loader.py /app/scripts/
 
 # Upgrade pip and install Python bootstrap deps.
-# asyncua is pinned in repo-root constraints.txt to the shared released version
-# so Docker builds match local and CI installs across IJT clients.
+# requirements.lock (generated from requirements*.txt + repo-root constraints.txt)
+# pins exact versions so Docker builds match local and CI installs.
 RUN pip install --upgrade pip --no-cache-dir && \
-    pip install --no-cache-dir -c /tmp/constraints.txt \
+    pip install --no-cache-dir -c /tmp/requirements.lock \
         asyncua \
         python-dotenv \
         websockets \
@@ -34,7 +35,7 @@ ENV IS_DOCKER=true \
 # shared by local runners, CI, and images.
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt \
      OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt* ./
-RUN pip install --no-cache-dir -c /tmp/constraints.txt -r requirements.txt
+RUN pip install --no-cache-dir -c /tmp/requirements.lock -r requirements.txt
 
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/package.json \
      OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json* ./
@@ -44,7 +45,7 @@ FROM base AS test
 
 ENV NODE_ENV=development
 
-RUN pip install --no-cache-dir -c /tmp/constraints.txt -r requirements-dev.txt && \
+RUN pip install --no-cache-dir -c /tmp/requirements.lock -r requirements-dev.txt && \
     (npm ci --ignore-scripts --no-audit --no-fund || npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund)
 
 # Vendor the shared readiness module so tests/python/_live_server_readiness.py

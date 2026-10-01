@@ -6,6 +6,7 @@ Run via: python -m ijt_performance_client --config profiles/multi_server_fleet.y
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import logging
 import os
 import sys
@@ -13,15 +14,17 @@ import threading
 from pathlib import Path
 
 from . import __version__
-from .config import OpcUaPoolConfig, load_config
+from .config import OpcUaPoolConfig, is_loopback_endpoint, load_config
 from .diagnostics import evaluate_diagnostics
-from .engine import OpcUaClientPool
+from .engine import FleetIntegritySummary, OpcUaClientPool
 from .reporters import (
+    export_csv_report,
     export_json_report,
     generate_markdown_report,
     print_console_report,
     write_junit_xml,
 )
+from .results import INTEGRITY_VALID
 
 logger = logging.getLogger("ijt_performance_client")
 
@@ -58,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target sample count across the fleet",
     )
     parser.add_argument(
+        "--samples-per-endpoint",
+        type=int,
+        help="Number of VALID results required from each server (per-server target)",
+    )
+    parser.add_argument(
         "-b",
         "--burst",
         type=int,
@@ -79,9 +87,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allow endpoints without samples and dropped samples (explicit fleet override)",
     )
     parser.add_argument(
+        "--allow-partial-samples",
+        action="store_true",
+        help="Allow benchmark run to succeed even if collected samples are fewer than target count",
+    )
+    parser.add_argument(
         "--skip-clock-skew",
         action="store_true",
-        help="Skip clock skew calibration (use when on localhost or PTP/NTP synchronized network)",
+        help="Skip clock offset (skew) calibration (use on localhost or a PTP/NTP synchronized network)",
+    )
+    parser.add_argument(
+        "--clock-tolerance-ms",
+        type=float,
+        help=(
+            "Clock-health tolerance in ms (default: 1000). Events that appear older than collection start "
+            "by more than this plus half the round-trip time are counted as clock warnings; warnings never fail the run"
+        ),
+    )
+    parser.add_argument(
+        "--settle-timeout",
+        type=float,
+        help=(
+            "Seconds to wait after the last trigger round for results of successful calls to arrive "
+            "before correlation (default: 5)"
+        ),
     )
     parser.add_argument(
         "--junit",
@@ -102,7 +131,34 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--fail-p90",
         type=float,
-        help="Fail with non-zero exit code if P90 total latency exceeds this SLA (ms)",
+        help=(
+            "Fail with non-zero exit code if the 90%%-under (P90) delivery time (operation end to result bytes on the client) "
+            "of VALID results exceeds this SLA (ms)"
+        ),
+    )
+    parser.add_argument(
+        "--fail-p90-client-ready",
+        type=float,
+        help=(
+            "Fail with non-zero exit code if the 90%%-under (P90) client-ready time (operation end to result decoded) "
+            "of VALID results exceeds this SLA (ms)"
+        ),
+    )
+    parser.add_argument(
+        "-w",
+        "--workers",
+        type=int,
+        help="Number of background worker processes for the client pool",
+    )
+    parser.add_argument(
+        "--burst-delay",
+        type=float,
+        help="Delay in seconds between burst stimulation rounds (default: 1.0)",
+    )
+    parser.add_argument(
+        "--csv",
+        type=str,
+        help="Path to export detailed sample-by-sample metrics CSV (without heavy trace curves)",
     )
     parser.add_argument(
         "-v",
@@ -111,6 +167,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable debug logging",
     )
     return parser
+
+
+def _integrity_summary_json(fi: object) -> dict[str, object]:
+    """Serialize the Benchmark Integrity Gate summary without optimistic defaults.
+
+    When no summary was produced (for example the run aborted before verification),
+    the gate is reported as not evaluated and not passed.
+    """
+    if not isinstance(fi, FleetIntegritySummary):
+        return {"evaluated": False, "passed": False, "failure_reasons": ["Integrity gate was not evaluated"]}
+    data = dataclasses.asdict(fi)
+    data["endpoints"] = list(data["endpoints"].values())
+    return {"evaluated": True, **data}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -124,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Filter verbose asyncua library logs unless verbose is requested
     if not args.verbose:
-        logging.getLogger("asyncua").setLevel(logging.ERROR)
+        logging.getLogger("asyncua").setLevel(logging.CRITICAL)
 
     # 1. Load base configuration
     if args.config:
@@ -158,14 +227,39 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--require-full-coverage and --allow-partial-coverage are mutually exclusive")
     if args.fail_p90 is not None:
         cfg.fail_p90_ms = args.fail_p90
+    if args.fail_p90_client_ready is not None:
+        cfg.fail_p90_client_ready_ms = args.fail_p90_client_ready
+    if args.workers is not None:
+        cfg.max_worker_processes = args.workers
+    elif cfg.max_worker_processes is None:
+        env_workers = os.environ.get("OPCUA_WORKERS")
+        if env_workers:
+            try:
+                cfg.max_worker_processes = int(env_workers)
+            except ValueError:
+                pass
+    if args.burst_delay is not None:
+        cfg.burst_delay_seconds = args.burst_delay
+    elif os.environ.get("OPCUA_BURST_DELAY"):
+        try:
+            cfg.burst_delay_seconds = float(os.environ["OPCUA_BURST_DELAY"])
+        except ValueError:
+            pass
     if args.skip_clock_skew:
         cfg.skip_clock_skew = True
+    if args.clock_tolerance_ms is not None:
+        cfg.clock_tolerance_ms = args.clock_tolerance_ms
+    if args.settle_timeout is not None:
+        cfg.settle_timeout_seconds = args.settle_timeout
 
     if not cfg.endpoints:
         cfg.endpoints = ["opc.tcp://localhost:40451"]
 
-    # Re-validate after overrides
-    cfg.validate()
+    # Re-validate after overrides; report invalid values as usage errors (exit 2), not tracebacks.
+    try:
+        cfg.validate()
+    except ValueError as exc:
+        parser.error(str(exc))
     if cfg.require_full_coverage is None:
         cfg.require_full_coverage = len(cfg.endpoints) > 1
 
@@ -180,6 +274,10 @@ def main(argv: list[str] | None = None) -> int:
         mode=cfg.mode,
         require_full_coverage=cfg.require_full_coverage,
         skip_clock_skew=cfg.skip_clock_skew,
+        burst_delay=cfg.burst_delay_seconds,
+        verbose=bool(args.verbose),
+        clock_tolerance_ms=cfg.clock_tolerance_ms,
+        settle_timeout_s=cfg.settle_timeout_seconds,
     )
 
     samples = []
@@ -199,38 +297,59 @@ def main(argv: list[str] | None = None) -> int:
     real_thread_count = threading.active_count()
     real_process_count = pool._num_workers_started
 
-    coverage_valid, coverage_msg = pool.verify_coverage(samples)
+    coverage_valid, coverage_msg = pool.verify_coverage(
+        samples,
+        target_sample_count=cfg.target_sample_count,
+        target_samples_per_endpoint=args.samples_per_endpoint,
+        allow_partial_samples=bool(args.allow_partial_samples),
+    )
     logger.info(coverage_msg)
 
-    # 5. Run heuristic attribution diagnostics
-    totals = [s.total_result_transfer_time_ms for s in samples if s.total_result_transfer_time_ms is not None]
-    transports = [s.network_transport_time_ms for s in samples if s.network_transport_time_ms is not None]
-    servers = [s.server_processing_time_ms for s in samples if s.server_processing_time_ms is not None]
-    skews = [s.clock_skew_ms for s in samples]
+    # 5. Run heuristic attribution diagnostics on VALID results only; invalid results carry no timing proof.
+    valid = [s for s in samples if s.integrity_status == INTEGRITY_VALID]
 
+    def _metric(name: str) -> list[float]:
+        return [v for s in valid if (v := getattr(s, name)) is not None]
+
+    timing_fn = getattr(pool, "timing_summary", None)
+    timing_summary = timing_fn() if callable(timing_fn) else {}
+    if not isinstance(timing_summary, dict):
+        timing_summary = {}
+
+    all_endpoints_local = bool(cfg.endpoints) and all(is_loopback_endpoint(url) for url in cfg.endpoints)
     verdict = evaluate_diagnostics(
-        network_transport_latencies=transports,
-        server_processing_latencies=servers,
-        total_latencies=totals,
-        clock_skews=skews,
+        network_transport_latencies=_metric("network_transport_time_ms"),
+        server_processing_latencies=_metric("server_processing_time_ms"),
+        total_latencies=_metric("total_result_transfer_time_ms"),
+        clock_skews=[s.clock_skew_ms for s in valid],
         measured_thread_count=real_thread_count,
         measured_process_count=real_process_count,
+        delivery_latencies=_metric("delivery_time_ms"),
+        client_ready_latencies=_metric("client_ready_time_ms"),
+        client_decode_latencies=_metric("client_decode_time_ms"),
+        dispatch_delays=_metric("dispatch_delay_ms"),
+        loop_lag_max_ms=timing_summary.get("loop_lag_max_ms"),
+        all_endpoints_local=all_endpoints_local,
     )
 
     # 6. Output reporting
-    print_console_report(samples, verdict, cfg.name)
+    print_console_report(samples, verdict, cfg.name, timing=timing_summary)
 
     if args.markdown:
-        md_text = generate_markdown_report(samples, verdict, cfg.name)
+        md_text = generate_markdown_report(samples, verdict, cfg.name, timing=timing_summary)
         Path(args.markdown).write_text(md_text, encoding="utf-8")
         logger.info(f"Wrote Markdown summary to {args.markdown}")
 
-    fail_msg = None
-    if cfg.fail_p90_ms is not None and totals and verdict.metrics_summary["total_p90_ms"] > cfg.fail_p90_ms:
-        fail_msg = (
-            f"P90 latency ({verdict.metrics_summary['total_p90_ms']:.1f}ms) "
-            f"exceeded SLA threshold ({cfg.fail_p90_ms:.1f}ms)"
-        )
+    sla_breaches: list[str] = []
+    for label, key, limit in (
+        ("90%-under delivery time (P90)", "delivery_p90_ms", cfg.fail_p90_ms),
+        ("90%-under client-ready time (P90)", "client_ready_p90_ms", cfg.fail_p90_client_ready_ms),
+    ):
+        if limit is not None and valid and verdict.metrics_summary[key] > limit:
+            sla_breaches.append(
+                f"{label} ({verdict.metrics_summary[key]:.1f}ms) exceeded SLA threshold ({limit:.1f}ms)"
+            )
+    fail_msg = "; ".join(sla_breaches) or None
 
     if args.junit:
         write_junit_xml(
@@ -251,6 +370,8 @@ def main(argv: list[str] | None = None) -> int:
         total_dropped = getattr(pool, "total_dropped_samples", 0)
         burst_fails = getattr(pool, "burst_trigger_failures", 0)
         teardown_errs = getattr(pool, "teardown_errors", [])
+        integrity_summary = _integrity_summary_json(getattr(pool, "fleet_integrity", None))
+
         export_json_report(
             args.json,
             samples,
@@ -266,13 +387,25 @@ def main(argv: list[str] | None = None) -> int:
                 "burst_trigger_failures": burst_fails if isinstance(burst_fails, int) else 0,
                 "burst_trigger_errors": list(pool.burst_trigger_errors),
                 "teardown_errors": list(teardown_errs) if isinstance(teardown_errs, (list, tuple, set)) else [],
+                "integrity_summary": integrity_summary,
+                "timing": timing_summary,
             },
         )
         logger.info(f"Wrote JSON metrics to {args.json}")
 
+    if args.csv:
+        export_csv_report(args.csv, samples)
+        logger.info(f"Wrote detailed metrics CSV to {args.csv}")
+
     if fail_msg or not coverage_valid or not samples:
         if fail_msg:
             logger.error(f"SLA BREACH: {fail_msg}")
+            if all_endpoints_local:
+                logger.warning(
+                    "SLA HINT: every server runs on this machine, so these times include CPU sharing between "
+                    "the servers and the client. Use a single-machine limit (see 'Choosing a time limit' in "
+                    "docs/PERFORMANCE_GUIDE.md) or move the servers to another host."
+                )
         if not coverage_valid:
             logger.error(f"COVERAGE FAILURE: {coverage_msg}")
         return 1

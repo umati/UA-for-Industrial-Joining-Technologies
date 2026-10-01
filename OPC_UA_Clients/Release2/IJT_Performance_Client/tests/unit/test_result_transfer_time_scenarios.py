@@ -4,7 +4,7 @@ Unit tests for Result Transfer Time benchmarking scenarios.
 Covers:
 1. Scenario 1 — Single OPC UA Server with several joining results (single-station latency & SLA check).
 2. Scenario 2 — Multiple OPC UA Servers with several results per server (multi-controller scaling).
-3. Scenario 3 — Forensic attribution decomposition across all timing stages:
+3. Scenario 3 — Diagnostic attribution decomposition across all timing stages:
    - Tool execution (T_joining)
    - Server Processing Duration (server_processing_time_ms)
    - Network Transport Latency (network_transport_time_ms)
@@ -197,7 +197,7 @@ def test_scenario_multiple_servers_several_results_per_server(tmp_path):
 
 
 def test_scenario_forensic_latency_aspects_decomposition():
-    """Scenario 3: Different aspects of Result Transfer Time forensics.
+    """Scenario 3: Different aspects of Result Transfer Time analysis.
 
     Validates that the client correctly isolates:
     1. Physical joining duration (joining_duration_ms)
@@ -235,7 +235,7 @@ def test_scenario_forensic_latency_aspects_decomposition():
     # 4. Aspect: Total result transfer time
     assert sample.total_result_transfer_time_ms == 385.0  # 360 + 25
 
-    # 5. Aspect: Forensic Attribution pinpointing server processing delay
+    # 5. Aspect: Diagnostic Attribution pinpointing server processing delay
     verdict = evaluate_diagnostics(
         network_transport_latencies=[sample.network_transport_time_ms],
         server_processing_latencies=[sample.server_processing_time_ms],

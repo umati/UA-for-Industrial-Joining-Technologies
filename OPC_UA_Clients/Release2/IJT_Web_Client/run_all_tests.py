@@ -138,6 +138,7 @@ _TIMING_HISTORY = _STATE_DIR / "timing-history.jsonl"
 _REQUIREMENTS = ROOT / "requirements.txt"
 _REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
 _PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
+_PYTHON_LOCK = ROOT / "requirements.lock"
 _NPM_INSTALL_FLAGS = ["--legacy-peer-deps", "--no-audit", "--no-fund"]
 _NPM_AUDIT_TIMEOUT_SECONDS = 15
 _NPM_AUDIT_MODE_ENV = "IJT_NPM_AUDIT_MODE"
@@ -717,14 +718,18 @@ def _requirements_hash() -> str:
     import hashlib
 
     h = hashlib.sha256()
-    for req in (_PYTHON_CONSTRAINTS, _REQUIREMENTS, _REQUIREMENTS_DEV):
+    for req in (_PYTHON_CONSTRAINTS, _PYTHON_LOCK, _REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
             h.update(req.read_bytes())
     return h.hexdigest()[:16]
 
 
 def _pip_constraint_args() -> list[str]:
-    return ["-c", str(_PYTHON_CONSTRAINTS)] if _PYTHON_CONSTRAINTS.exists() else []
+    """Pin installs to this client's generated lock (falls back to the shared floors)."""
+    for path in (_PYTHON_LOCK, _PYTHON_CONSTRAINTS):
+        if path.exists():
+            return ["-c", str(path)]
+    return []
 
 
 def _ensure_precommit_hooks() -> None:

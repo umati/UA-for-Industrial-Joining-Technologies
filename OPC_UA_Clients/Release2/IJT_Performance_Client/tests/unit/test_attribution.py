@@ -2,6 +2,8 @@
 Unit tests for root-cause attribution diagnostics.
 """
 
+import pytest
+
 from src.diagnostics import evaluate_diagnostics
 
 
@@ -73,7 +75,7 @@ def test_attribution_clock_drift_and_high_thread_count():
         clock_skews=[150.0],
         measured_thread_count=250,
     )
-    assert any("Clock drift" in w for w in verdict.warnings)
+    assert any("Clock offset between a server" in w for w in verdict.warnings)
     assert any("High measured client thread count" in w for w in verdict.warnings)
 
 
@@ -90,3 +92,71 @@ def test_attribution_mixed_delay():
     )
     assert verdict.primary_bottleneck == "APPLICATION_OR_MIXED"
     assert "Mixed Pipeline" in verdict.headline
+
+
+def test_client_processing_rule_needs_wire_timing():
+    from src.diagnostics import evaluate_diagnostics
+
+    common = dict(
+        network_transport_latencies=[300.0] * 10,
+        server_processing_latencies=[5.0] * 10,
+        total_latencies=[305.0] * 10,
+        clock_skews=[0.0],
+    )
+    verdict = evaluate_diagnostics(**common, client_decode_latencies=[150.0] * 10, dispatch_delays=[100.0] * 10)
+    assert verdict.primary_bottleneck == "CLIENT_PROCESSING"
+    assert verdict.metrics_summary["client_decode_p90_ms"] == pytest.approx(150.0)
+
+    # Without wire timing the client-side rule cannot fire
+    assert evaluate_diagnostics(**common).primary_bottleneck != "CLIENT_PROCESSING"
+
+
+# Numbers from a real 500-server single-machine run that was wrongly blamed on the network.
+_LOCAL_FLEET = dict(
+    network_transport_latencies=[328.3] * 10,
+    server_processing_latencies=[0.0] * 10,
+    total_latencies=[328.3] * 10,
+    clock_skews=[0.0],
+    delivery_latencies=[225.7] * 10,
+    client_decode_latencies=[74.0] * 10,
+    dispatch_delays=[66.9] * 10,
+)
+
+
+def test_busy_client_on_one_machine_is_not_blamed_on_the_network():
+    verdict = evaluate_diagnostics(**_LOCAL_FLEET, loop_lag_max_ms=369.1, all_endpoints_local=True)
+    assert verdict.primary_bottleneck == "CLIENT_PROCESSING"
+    assert "this machine" in verdict.explanation
+    assert "another host" in verdict.recommendation
+    assert verdict.metrics_summary["loop_lag_max_ms"] == pytest.approx(369.1)
+
+
+def test_loop_lag_alone_marks_the_client_as_busy():
+    common = dict(_LOCAL_FLEET, network_transport_latencies=[600.0] * 10, total_latencies=[600.0] * 10)
+    assert evaluate_diagnostics(**common).primary_bottleneck == "APPLICATION_OR_MIXED"
+    assert evaluate_diagnostics(**common, loop_lag_max_ms=200.0).primary_bottleneck == "CLIENT_PROCESSING"
+
+
+def test_local_run_never_reports_network_delay():
+    verdict = evaluate_diagnostics(
+        network_transport_latencies=[400.0] * 10,
+        server_processing_latencies=[0.0] * 10,
+        total_latencies=[400.0] * 10,
+        clock_skews=[0.0],
+        all_endpoints_local=True,
+    )
+    assert verdict.primary_bottleneck == "LOCAL_HOST_CPU"
+    assert "not from a network" in verdict.explanation
+
+
+def test_network_rule_uses_delivery_time_when_wire_timing_exists():
+    verdict = evaluate_diagnostics(
+        network_transport_latencies=[400.0] * 10,
+        server_processing_latencies=[0.0] * 10,
+        total_latencies=[400.0] * 10,
+        clock_skews=[0.0],
+        delivery_latencies=[120.0] * 10,
+        client_decode_latencies=[20.0] * 10,
+        dispatch_delays=[20.0] * 10,
+    )
+    assert verdict.primary_bottleneck == "APPLICATION_OR_MIXED"

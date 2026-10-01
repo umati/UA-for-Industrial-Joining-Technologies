@@ -111,11 +111,11 @@ RUN mkdir -p /opt/ijt-browser-ci/home \
 # 5. Bake Python wheelhouse (complete closure, wheels only) from IJT Web
 #    Client requirements. PIP_FIND_LINKS at runtime points here, plus
 #    PIP_NO_INDEX=1, so the runtime venv-create + pip install is offline.
-#    asyncua is resolved from the repo-root constraints.txt pin at image build
+#    Versions come from the Web Client requirements.lock (exact pins) at image build
 #    time, then the no-index verification install constrains it by the version
 #    in the built wheel so pip cannot follow a direct archive URL at runtime.
 # ---------------------------------------------------------------------------
-COPY constraints.txt /tmp/constraints.txt
+COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.lock /tmp/constraints.txt
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt /tmp/requirements.txt
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt /tmp/requirements-dev.txt
 RUN python -m pip install --upgrade pip \

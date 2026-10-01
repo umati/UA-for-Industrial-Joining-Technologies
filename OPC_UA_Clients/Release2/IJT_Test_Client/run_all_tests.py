@@ -120,6 +120,7 @@ VENV = _target_venv_dir()
 REQUIREMENTS = _HERE / "requirements.txt"
 _REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
 _PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
+_PYTHON_LOCK = _HERE / "requirements.lock"
 _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-live.xml"
 _DEFAULT_EXCEL_OUT = _RESULTS_DIR / "report.xlsx"
@@ -180,6 +181,15 @@ def _venv_pip(venv_dir: Path) -> Path:
 
 
 def _pip_constraint_args() -> list[str]:
+    """Pin installs to this client's generated lock (falls back to the shared floors)."""
+    for path in (_PYTHON_LOCK, _PYTHON_CONSTRAINTS):
+        if path.exists():
+            return ["-c", str(path)]
+    return []
+
+
+def _pip_floor_args() -> list[str]:
+    """Shared security floors only, for on-demand tools that may not be in the lock (e.g. semgrep)."""
     return ["-c", str(_PYTHON_CONSTRAINTS)] if _PYTHON_CONSTRAINTS.exists() else []
 
 
@@ -459,7 +469,7 @@ def _ensure_python_tool(*, module_name: str, pip_package: str, label: str) -> tu
             "pip",
             "install",
             "--disable-pip-version-check",
-            *_pip_constraint_args(),
+            *_pip_floor_args(),
             pip_package,
         ],
         timeout=300,
@@ -499,7 +509,7 @@ def _ensure_cli_tool(
             "pip",
             "install",
             "--disable-pip-version-check",
-            *_pip_constraint_args(),
+            *_pip_floor_args(),
             pip_package,
         ],
         timeout=300,
@@ -587,7 +597,7 @@ def _requirements_hash() -> str:
     import hashlib
 
     h = hashlib.sha256()
-    for req in (_PYTHON_CONSTRAINTS, REQUIREMENTS, _REQUIREMENTS_DEV):
+    for req in (_PYTHON_CONSTRAINTS, _PYTHON_LOCK, REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
             h.update(req.read_bytes())
     return h.hexdigest()[:16]

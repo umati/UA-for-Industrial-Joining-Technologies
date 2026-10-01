@@ -15,6 +15,7 @@ Usage:
   python run_all_tests.py --help
 
 Environment variables:
+  SKIP_VENV_INSTALL     Set to "1" to skip pip install (deps already installed)
   OPCUA_SERVER_URL      Override server URL (default: opc.tcp://localhost:40485)
   OPCUA_SIMULATOR_EXE   Path to opcua_ijt_demo_application(.exe)
 """
@@ -24,6 +25,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import math
 import os
 import re
 import shutil
@@ -35,7 +37,9 @@ import time
 import urllib.parse
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from typing import TextIO
 
 # Key directory paths
 _HERE = Path(__file__).resolve().parent
@@ -44,6 +48,105 @@ _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest.xml"
 _OPCUA_SERVER_PORT = 40485
 _DEFAULT_SERVER_URL = f"opc.tcp://localhost:{_OPCUA_SERVER_PORT}"
+_REQUIREMENTS = _HERE / "requirements.txt"
+_REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
+
+
+def _print_status(message: str, *, file: TextIO | None = None) -> None:
+    """Print a [fleet]/[server] status line with the same timestamp format as the client log."""
+    body = message.lstrip()
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+    print(f"{message[: len(message) - len(body)]}{stamp} {body}", file=file or sys.stdout, flush=True)
+
+
+_PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
+_PYTHON_LOCK = _HERE / "requirements.lock"
+_ENV_IS_PRE_ISOLATED = os.getenv("IS_DOCKER") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+
+def _target_venv_dir() -> Path:
+    """Same convention as the other clients: .venv_test (tests), .venv_ci (local CI mode)."""
+    if os.getenv("CI") and not _ENV_IS_PRE_ISOLATED:
+        return _HERE / ".venv_ci"
+    return _HERE / ".venv_test"
+
+
+_VENV = _target_venv_dir()
+
+
+def _venv_python(venv: Path) -> Path:
+    return venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+
+
+def _pip_constraint_args() -> list[str]:
+    """Pin installs to this client's generated lock (falls back to the shared floors)."""
+    for path in (_PYTHON_LOCK, _PYTHON_CONSTRAINTS):
+        if path.exists():
+            return ["-c", str(path)]
+    return []
+
+
+_TEST_REQUIREMENTS = (_REQUIREMENTS, _REQUIREMENTS_DEV)
+
+
+def _requirements_hash(requirements: tuple[Path, ...] = _TEST_REQUIREMENTS) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    for req in (_PYTHON_CONSTRAINTS, _PYTHON_LOCK, *requirements):
+        if req.exists():
+            h.update(req.read_bytes())
+    return h.hexdigest()[:16]
+
+
+def _inside_venv(venv: Path = _VENV) -> bool:
+    # sys.prefix (not sys.executable) so Linux venv symlinks cannot cause a relaunch loop.
+    try:
+        return Path(sys.prefix).resolve() == venv.resolve()
+    except (OSError, RuntimeError):
+        return False
+
+
+def _install_requirements(venv: Path = _VENV, requirements: tuple[Path, ...] = _TEST_REQUIREMENTS) -> None:
+    """Install packages; reinstall automatically when requirements or the lock change."""
+    if os.getenv("SKIP_VENV_INSTALL") == "1":
+        print("  Skipping pip install (SKIP_VENV_INSTALL=1)")
+        return
+    env = os.environ.copy()
+    if "PIP_CACHE_DIR" not in env:
+        cache = _HERE / "tmp" / "pip-cache"
+        cache.mkdir(parents=True, exist_ok=True)
+        env["PIP_CACHE_DIR"] = str(cache)
+    python = str(_venv_python(venv))
+    subprocess.check_call([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"], env=env)  # nosec B603
+    hash_file = venv / ".req-hash"
+    current = _requirements_hash(requirements)
+    if hash_file.exists() and hash_file.read_text().strip() == current:
+        print("  Requirements unchanged - skipping pip install")
+        return
+    reqs = [arg for req in requirements if req.exists() for arg in ("-r", str(req))]
+    print(f"  Installing {' + '.join(req.name for req in requirements)} ...")
+    subprocess.check_call([python, "-m", "pip", "install", "--quiet", *_pip_constraint_args(), *reqs], env=env)  # nosec B603
+    hash_file.write_text(current)
+
+
+def _relaunch_under_venv(
+    venv: Path = _VENV,
+    requirements: tuple[Path, ...] = _TEST_REQUIREMENTS,
+    script: Path | None = None,
+) -> int:
+    """Run a script (default: this runner) again under the given client venv."""
+    if not venv.exists():
+        print(f"  Creating venv: {venv}")
+        subprocess.check_call([sys.executable, "-m", "venv", str(venv)])  # nosec B603
+    _install_requirements(venv, requirements)
+    venv_py = str(_venv_python(venv))
+    print(f"  Re-launching under venv Python: {venv_py}")
+    # subprocess.run instead of os.execv: on Windows execv leaves pipe handles open for callers.
+    result = subprocess.run(
+        [venv_py, str(script or Path(__file__).resolve()), *sys.argv[1:]], check=False, cwd=str(_HERE)
+    )  # nosec B603
+    return result.returncode
 
 
 @dataclass
@@ -91,21 +194,21 @@ def _launch_simulator_on_port(port: int, exe: Path, quiet: bool = False) -> tupl
     exe_path = Path(exe)
     if not exe_path.exists():
         if not quiet:
-            print(f"  [server] Binary not found: {exe}")
+            _print_status(f"  [server] Binary not found: {exe}")
         return None, None
 
     src_dir = exe_path.parent
     tmp_base = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()) / "ijt-sim"
     tmp_dir = tmp_base / f"server_instance_{port}_{int(time.time())}"
     if not quiet:
-        print(f"  [server] Launching simulator on port {port} (copied to {tmp_dir})")
+        _print_status(f"  [server] Launching simulator on port {port} (copied to {tmp_dir})")
     try:
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir, ignore_errors=True)
         shutil.copytree(src_dir, tmp_dir)
     except OSError as exc:
         if not quiet:
-            print(f"  [server] Failed to copy binary dir: {exc}")
+            _print_status(f"  [server] Failed to copy binary dir: {exc}")
         return None, None
 
     cfg_path = tmp_dir / "server_configuration.json"
@@ -118,7 +221,7 @@ def _launch_simulator_on_port(port: int, exe: Path, quiet: bool = False) -> tupl
                 json.dump(cfg, fh, indent=2)
         except (OSError, ValueError) as exc:
             if not quiet:
-                print(f"  [server] Failed to patch server_configuration.json: {exc}")
+                _print_status(f"  [server] Failed to patch server_configuration.json: {exc}")
             shutil.rmtree(tmp_dir, ignore_errors=True)
             return None, None
 
@@ -131,19 +234,19 @@ def _launch_simulator_on_port(port: int, exe: Path, quiet: bool = False) -> tupl
         )
     except OSError as exc:
         if not quiet:
-            print(f"  [server] Failed to launch binary: {exc}")
+            _print_status(f"  [server] Failed to launch binary: {exc}")
         shutil.rmtree(tmp_dir, ignore_errors=True)
         return None, None
 
     for _ in range(30):
         if _is_port_reachable("localhost", port):
             if not quiet:
-                print(f"  [server] Ready on port {port}")
+                _print_status(f"  [server] Ready on port {port}")
             return proc, tmp_dir
         time.sleep(1)
 
     if not quiet:
-        print("  [server] Timed out waiting for simulator — terminating")
+        _print_status("  [server] Timed out waiting for simulator — terminating")
     proc.terminate()
     try:
         proc.wait(timeout=5)
@@ -155,7 +258,7 @@ def _launch_simulator_on_port(port: int, exe: Path, quiet: bool = False) -> tupl
 
 def _launch_simulator_fleet(count: int, start_port: int, exe: Path) -> list[tuple[subprocess.Popen, Path]]:
     """Concurrently launch a fleet of N simulator instances."""
-    print(
+    _print_status(
         f"  [fleet] Launching {count} simulator instances concurrently (ports {start_port}..{start_port + count - 1})..."
     )
     ports = list(range(start_port, start_port + count))
@@ -168,8 +271,8 @@ def _launch_simulator_fleet(count: int, start_port: int, exe: Path) -> list[tupl
                 instances.append((proc, tmp_dir))
             else:
                 port = futures[future]
-                print(f"  [fleet] Failed to launch simulator on port {port}")
-    print(f"  [fleet] Successfully started {len(instances)}/{count} simulator instances.")
+                _print_status(f"  [fleet] Failed to launch simulator on port {port}")
+    _print_status(f"  [fleet] Successfully started {len(instances)}/{count} simulator instances.")
     return instances
 
 
@@ -177,7 +280,7 @@ def _stop_simulators(instances: list[tuple[subprocess.Popen, Path]]) -> None:
     """Terminate all simulator processes and remove their temporary directories."""
     if not instances:
         return
-    print(f"  [server] Stopping {len(instances)} simulator instances...")
+    _print_status(f"  [server] Stopping {len(instances)} simulator instances...")
     for proc, _ in instances:
         try:
             proc.terminate()
@@ -227,7 +330,7 @@ def _step_mypy() -> _StepResult:
 def _step_bandit() -> _StepResult:
     """Run Bandit security scan against medium+ severity."""
     root_cfg = _REPO_ROOT / "pyproject.toml"
-    cmd = [sys.executable, "-m", "bandit", "-r", "."]
+    cmd = [sys.executable, "-m", "bandit", "-r", ".", "-x", "./.venv,./.venv_test,./.venv_ci,./tmp"]
     if root_cfg.is_file():
         cmd.extend(["-c", str(root_cfg)])
     cmd.extend(["--severity-level", "medium"])
@@ -275,6 +378,8 @@ def _step_unit_tests(junit_xml: str | None = None, verbose: bool = False) -> _St
 def _step_live_tests(
     server_url: str = _DEFAULT_SERVER_URL,
     fleet_endpoints: str | None = None,
+    workers: int = 0,
+    burst_delay: float | None = None,
     verbose: bool = False,
 ) -> _StepResult:
     """Run live performance benchmark against live target server(s)."""
@@ -294,6 +399,10 @@ def _step_live_tests(
     env["OPCUA_SERVER_URL"] = server_url
     if fleet_endpoints:
         env["OPCUA_FLEET_ENDPOINTS"] = fleet_endpoints
+    if workers > 0:
+        env["OPCUA_WORKERS"] = str(workers)
+    if burst_delay is not None:
+        env["OPCUA_BURST_DELAY"] = str(burst_delay)
 
     res = subprocess.run(cmd, cwd=_HERE, env=env, capture_output=True, text=True)
     required_names = {
@@ -351,6 +460,21 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="PORT",
         help="Starting TCP port for local fleet simulator instances (default: 40001)",
     )
+    p.add_argument(
+        "--workers",
+        "-w",
+        type=int,
+        default=0,
+        metavar="COUNT",
+        help="Number of background worker processes for fleet live tests (default: auto-scale)",
+    )
+    p.add_argument(
+        "--burst-delay",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help="Delay in seconds between burst stimulation rounds (default: 1.0)",
+    )
     p.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p.add_argument(
         "--junit-xml",
@@ -361,12 +485,41 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _validate_phase2_args(args: argparse.Namespace) -> str | None:
+    """Return an error message for invalid Phase 2 arguments, or None when valid.
+
+    Runs before any test step or simulator launch so bad input never starts processes.
+    """
+    if args.fleet < 0:
+        return f"Invalid --fleet: must be >= 0 (got {args.fleet})"
+    if args.fleet > 0:
+        end_port = args.fleet_start_port + args.fleet - 1
+        if args.fleet_start_port < 1024 or end_port > 65535:
+            return f"Invalid fleet port range: {args.fleet_start_port}..{end_port} must be within 1024..65535"
+    if args.workers < 0 or args.workers > 32:
+        return f"Invalid --workers: must be between 0 (auto) and 32 (got {args.workers})"
+    if args.burst_delay is not None and (not math.isfinite(args.burst_delay) or args.burst_delay < 0.0):
+        return f"Invalid --burst-delay: must be finite and >= 0.0 (got {args.burst_delay})"
+    return None
+
+
 def main() -> int:
     args = _build_parser().parse_args()
-    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     run_phase1 = not args.phase2
     run_phase2 = not args.phase1
+
+    # Validate before the venv relaunch so bad arguments fail fast without any install.
+    if run_phase2:
+        arg_error = _validate_phase2_args(args)
+        if arg_error:
+            print(f"  [error] {arg_error}")
+            return 1
+
+    if not _ENV_IS_PRE_ISOLATED and not _inside_venv():
+        return _relaunch_under_venv()
+
+    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     print("\n" + "=" * 70)
     print("  IJT Performance Client — Test Suite Runner")
@@ -402,9 +555,9 @@ def main() -> int:
                     if proc is not None and tmp_dir is not None:
                         server_instances.append((proc, tmp_dir))
                     else:
-                        print(f"  [server] Failed to start simulator on port {port}.")
+                        _print_status(f"  [server] Failed to start simulator on port {port}.")
                 else:
-                    print("  [server] Simulator executable not found; skipping auto-launch.")
+                    _print_status("  [server] Simulator executable not found; skipping auto-launch.")
 
             # Auto-start fleet simulators if requested
             if args.fleet > 0:
@@ -416,10 +569,16 @@ def main() -> int:
                         for p in range(args.fleet_start_port, args.fleet_start_port + args.fleet)
                     )
                 else:
-                    print("  [server] Simulator executable not found; skipping fleet auto-launch.")
+                    _print_status("  [server] Simulator executable not found; skipping fleet auto-launch.")
 
             results.append(
-                _step_live_tests(server_url=server_url, fleet_endpoints=fleet_endpoints, verbose=args.verbose)
+                _step_live_tests(
+                    server_url=server_url,
+                    fleet_endpoints=fleet_endpoints,
+                    workers=args.workers,
+                    burst_delay=args.burst_delay,
+                    verbose=args.verbose,
+                )
             )
 
     finally:

@@ -1,5 +1,5 @@
-# Install with: pip install -c <repo>/constraints.txt -r requirements-dev.txt
-# constraints.txt enforces repo-wide transitive dependency security floors.
+# Install with: pip install -c requirements.lock -r requirements-dev.txt
+# requirements.lock is generated from this file + repo-root constraints.txt (scripts/update_python_locks.py).
 pytest~=9.0,>=9.0.3
 pytest-asyncio~=1.3
 pytest-timeout~=2.4
@@ -20,13 +20,13 @@ pyright~=1.1
 detect-secrets~=1.5
 # Security floors for packages already present in the dev/runtime resolution.
 # These raise the minimum allowed version for pip-audit's fixable CVE gate.
-urllib3>=2.7.0
+urllib3>=2.8.0
 cryptography>=46.0.7
 lxml>=6.1.0
-pillow>=12.2.0
+pillow>=12.3.0
 pygments>=2.20.0
-pypdf>=6.10.2
-python-multipart>=0.0.27
+pypdf>=6.19.0
+python-multipart>=0.0.31
 requests>=2.33.0
 # Optional tools (auto-detected by runner, install separately if desired):
 #   semgrep    — pip install semgrep  (requires Python <3.14 or pre-built wheel)

@@ -10,6 +10,7 @@ from typing import Any
 
 from ..diagnostics import DiagnosticVerdict
 from ..results import LatencySample, compute_statistics
+from ._metrics import METRIC_ROWS, integrity_counts, metric_values, valid_samples, wire_timing_count
 
 
 def export_json_report(
@@ -19,11 +20,12 @@ def export_json_report(
     pool_name: str,
     extra_metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Export benchmark telemetry as structured JSON."""
-    totals = [s.total_result_transfer_time_ms for s in samples if s.total_result_transfer_time_ms is not None]
-    transports = [s.network_transport_time_ms for s in samples if s.network_transport_time_ms is not None]
-    servers = [s.server_processing_time_ms for s in samples if s.server_processing_time_ms is not None]
-    joinings = [s.joining_duration_ms for s in samples if s.joining_duration_ms is not None]
+    """Export benchmark telemetry as structured JSON.
+
+    ``statistics`` and ``per_server_statistics`` use VALID samples only; ``samples`` lists every
+    received result with its integrity status.
+    """
+    valid = valid_samples(samples)
 
     from collections import defaultdict
 
@@ -33,29 +35,26 @@ def export_json_report(
 
     per_server = {}
     for ep, ep_samples in sorted(by_endpoint.items()):
-        ep_totals = [s.total_result_transfer_time_ms for s in ep_samples if s.total_result_transfer_time_ms is not None]
-        ep_transports = [s.network_transport_time_ms for s in ep_samples if s.network_transport_time_ms is not None]
-        ep_servers = [s.server_processing_time_ms for s in ep_samples if s.server_processing_time_ms is not None]
+        ep_valid = valid_samples(ep_samples)
         skews = [s.clock_skew_ms for s in ep_samples if s.clock_skew_ms is not None]
         per_server[ep] = {
             "sample_count": len(ep_samples),
+            "valid_count": len(ep_valid),
             "clock_skew_ms": skews[0] if skews else 0.0,
-            "total_result_transfer_time_ms": compute_statistics(ep_totals),
-            "network_transport_time_ms": compute_statistics(ep_transports),
-            "server_processing_time_ms": compute_statistics(ep_servers),
+            **{attr: compute_statistics(metric_values(ep_valid, attr)) for attr, _, _ in METRIC_ROWS},
         }
 
     report = {
         "pool_name": pool_name,
         "sample_count": len(samples),
+        "valid_sample_count": len(valid),
+        "integrity_counts": dict(integrity_counts(samples)),
+        "wire_timing_sample_count": wire_timing_count(valid),
+        "statistics_basis": "VALID samples only",
+        "headline_metric": "delivery_time_ms",
         "distinct_servers": len(by_endpoint),
         "per_server_statistics": per_server,
-        "statistics": {
-            "total_result_transfer_time_ms": compute_statistics(totals),
-            "network_transport_time_ms": compute_statistics(transports),
-            "server_processing_time_ms": compute_statistics(servers),
-            "joining_duration_ms": compute_statistics(joinings),
-        },
+        "statistics": {attr: compute_statistics(metric_values(valid, attr)) for attr, _, _ in METRIC_ROWS},
         "verdict": {
             "primary_bottleneck": verdict.primary_bottleneck,
             "headline": verdict.headline,
@@ -63,18 +62,7 @@ def export_json_report(
             "recommendation": verdict.recommendation,
             "warnings": verdict.warnings,
         },
-        "samples": [
-            {
-                "sample_id": s.sample_id,
-                "endpoint": s.endpoint,
-                "total_result_transfer_time_ms": s.total_result_transfer_time_ms,
-                "server_processing_time_ms": s.server_processing_time_ms,
-                "network_transport_time_ms": s.network_transport_time_ms,
-                "joining_duration_ms": s.joining_duration_ms,
-                "clock_skew_ms": s.clock_skew_ms,
-            }
-            for s in samples
-        ],
+        "samples": [s.to_dict() for s in samples],
         "metadata": extra_metadata or {},
     }
 

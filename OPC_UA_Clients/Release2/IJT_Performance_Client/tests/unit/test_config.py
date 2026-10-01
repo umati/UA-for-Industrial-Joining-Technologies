@@ -48,7 +48,7 @@ def test_config_rejects_zero_duration():
         endpoints=["opc.tcp://10.0.0.1:40451"],
         duration_seconds=0.0,
     )
-    with pytest.raises(ValueError, match="duration_seconds must be positive"):
+    with pytest.raises(ValueError, match="duration_seconds must be a finite positive number"):
         cfg.validate()
 
 
@@ -182,11 +182,11 @@ fleet:
 
 def test_config_strict_validation_coverage(tmp_path):
     # Non-positive warn_p90_ms
-    with pytest.raises(ValueError, match="warn_p90_ms must be positive"):
+    with pytest.raises(ValueError, match="warn_p90_ms must be a finite positive number"):
         OpcUaPoolConfig(endpoints=["opc.tcp://s1:4840"], warn_p90_ms=0).validate()
 
     # Non-positive fail_p90_ms
-    with pytest.raises(ValueError, match="fail_p90_ms must be positive"):
+    with pytest.raises(ValueError, match="fail_p90_ms must be a finite positive number"):
         OpcUaPoolConfig(endpoints=["opc.tcp://s1:4840"], fail_p90_ms=0).validate()
 
     # Invalid port in endpoint string
@@ -322,3 +322,163 @@ def test_load_config_from_packaged_resources(monkeypatch, tmp_path):
     # Give a non-existent path so disk checks fail and it falls through to package resources
     cfg = load_config(Path("non_existent_packaged_profile.yaml"))
     assert cfg.name == "Packaged Profile"
+
+
+def test_config_rejects_negative_burst_delay():
+    """Verify negative or non-finite burst_delay_seconds raises ValueError."""
+    cfg = OpcUaPoolConfig(
+        endpoints=["opc.tcp://10.0.0.1:40451"],
+        burst_delay_seconds=-0.5,
+    )
+    with pytest.raises(ValueError, match="burst_delay_seconds must be a finite non-negative number"):
+        cfg.validate()
+
+    cfg_nan = OpcUaPoolConfig(
+        endpoints=["opc.tcp://10.0.0.1:40451"],
+        burst_delay_seconds=float("nan"),
+    )
+    with pytest.raises(ValueError, match="burst_delay_seconds must be a finite non-negative number"):
+        cfg_nan.validate()
+
+    cfg_inf = OpcUaPoolConfig(
+        endpoints=["opc.tcp://10.0.0.1:40451"],
+        duration_seconds=float("inf"),
+    )
+    with pytest.raises(ValueError, match="duration_seconds must be a finite positive number"):
+        cfg_inf.validate()
+
+
+def test_load_config_burst_delay_seconds(tmp_path):
+    """Verify burst_delay_seconds is loaded from YAML execution and engine sections."""
+    yaml_exec = """\
+meta:
+  name: "Burst Delay Exec Test"
+fleet:
+  endpoints:
+    - "opc.tcp://localhost:40451"
+execution:
+  burst_delay_seconds: 0.25
+"""
+    cfg_file = tmp_path / "burst_delay_exec.yaml"
+    cfg_file.write_text(yaml_exec, encoding="utf-8")
+    cfg = load_config(cfg_file)
+    assert cfg.burst_delay_seconds == 0.25
+
+    yaml_eng = """\
+meta:
+  name: "Burst Delay Engine Test"
+fleet:
+  endpoints:
+    - "opc.tcp://localhost:40451"
+engine:
+  burst_delay_seconds: 2.5
+"""
+    cfg_file2 = tmp_path / "burst_delay_eng.yaml"
+    cfg_file2.write_text(yaml_eng, encoding="utf-8")
+    cfg2 = load_config(cfg_file2)
+    assert cfg2.burst_delay_seconds == 2.5
+
+
+def test_load_config_packaged_resources_nested_fallback(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    class FakeTraversable:
+        def __init__(self, is_nested=False):
+            self._is_nested = is_nested
+
+        def joinpath(self, part):
+            if part == "custom_nested/virtual_fleet.yaml":
+                return FakeTraversable(is_nested=True)
+            return FakeTraversable(is_nested=False)
+
+        def is_file(self):
+            return self._is_nested
+
+        def open(self, mode="r", encoding="utf-8"):
+            import io
+
+            return io.StringIO("meta:\n  name: Nested\nfleet:\n  endpoints:\n    - opc.tcp://localhost:40451\n")
+
+    monkeypatch.setattr("src.config.files", lambda pkg: FakeTraversable())
+    cfg = load_config("custom_nested/virtual_fleet.yaml")
+    assert cfg.name == "Nested"
+
+
+@pytest.mark.parametrize("bad", [-1.0, float("nan"), float("inf")])
+def test_config_rejects_invalid_clock_tolerance(bad):
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://10.0.0.1:40451"], clock_tolerance_ms=bad)
+    with pytest.raises(ValueError, match="clock_tolerance_ms must be a finite non-negative number"):
+        cfg.validate()
+
+
+def test_load_config_clock_tolerance_from_engine_section(tmp_path):
+    cfg_file = tmp_path / "clock.yaml"
+    cfg_file.write_text(
+        """\
+meta:
+  name: "Clock Tolerance"
+fleet:
+  endpoints:
+    - "opc.tcp://localhost:40451"
+engine:
+  clock_tolerance_ms: 250
+""",
+        encoding="utf-8",
+    )
+    assert load_config(cfg_file).clock_tolerance_ms == 250.0
+    assert OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"]).clock_tolerance_ms == 1000.0
+
+
+@pytest.mark.parametrize("key", ["fail_p90_ms", "fail_p90_client_ready_ms"])
+@pytest.mark.parametrize("value", [0.0, -1.0, float("nan"), float("inf")])
+def test_config_rejects_invalid_fail_thresholds(key, value):
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"])
+    setattr(cfg, key, value)
+    with pytest.raises(ValueError, match=f"{key} must be a finite positive number"):
+        cfg.validate()
+
+
+def test_config_loads_client_ready_threshold_from_yaml(tmp_path):
+    path = tmp_path / "pool.yaml"
+    path.write_text(
+        'fleet:\n  endpoints:\n    - "opc.tcp://localhost:40451"\n'
+        "thresholds:\n  fail_p90_ms: 80\n  fail_p90_client_ready_ms: 120\n",
+        encoding="utf-8",
+    )
+    cfg = load_config(path)
+    assert cfg.fail_p90_ms == 80.0
+    assert cfg.fail_p90_client_ready_ms == 120.0
+
+
+@pytest.mark.parametrize("value", [-1.0, float("nan"), float("inf")])
+def test_config_rejects_invalid_settle_timeout(value):
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"], settle_timeout_seconds=value)
+    with pytest.raises(ValueError, match="settle_timeout_seconds must be a finite non-negative number"):
+        cfg.validate()
+
+
+def test_load_config_settle_timeout_seconds(tmp_path):
+    path = tmp_path / "c.yaml"
+    path.write_text(
+        "fleet:\n  endpoints:\n    - opc.tcp://localhost:40451\nengine:\n  settle_timeout_seconds: 2.5\n",
+        encoding="utf-8",
+    )
+    assert load_config(str(path)).settle_timeout_seconds == 2.5
+
+
+@pytest.mark.parametrize(
+    ("url", "local"),
+    [
+        ("opc.tcp://localhost:40001", True),
+        ("opc.tcp://LOCALHOST:40001", True),
+        ("opc.tcp://127.0.0.1:40001", True),
+        ("opc.tcp://127.10.0.5:40001", True),
+        ("opc.tcp://[::1]:40001", True),
+        ("opc.tcp://192.168.1.20:40001", False),
+        ("opc.tcp://controller-01:4840", False),
+    ],
+)
+def test_is_loopback_endpoint(url, local):
+    from src.config import is_loopback_endpoint
+
+    assert is_loopback_endpoint(url) is local

@@ -45,6 +45,9 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
   `pip-audit` (Python dependencies), `npm audit` (Node.js dependencies), the C# NuGet
   vulnerability scan, `bandit` (Python SAST), and CodeQL static analysis (C#, Python,
   JavaScript) using the `security-extended` query suite (`.github/workflows/codeql.yml`).
+  Python clients install exact versions from generated `requirements.lock` files; when
+  pip-audit reports a fixable CVE, `python scripts/update_python_locks.py --fix` raises the
+  floor in `constraints.txt` and regenerates the locks.
   Local `run_precommit_all.py` and the Node/Web Client test runners enforce npm audit in
   strict mode by default (`IJT_NPM_AUDIT_MODE=strict`), so npm registry
   timeout/connectivity failures fail because vulnerability status is unknown. Audit

@@ -8,7 +8,7 @@
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_Console_Client/` |
 | **Purpose** | Minimal reference OPC UA IJT console client — events, methods, results |
-| **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt (shared released version across Web/Test/Console), asyncio |
+| **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt (exact versions in generated requirements.lock) (shared released version across Web/Test/Console), asyncio |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
 | **Server default** | `opc.tcp://localhost:40451` |
 

@@ -452,7 +452,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install `
-            -c "${{ github.workspace }}/constraints.txt" `
+            -c OPC_UA_Clients/Release2/IJT_Test_Client/requirements.lock `
             -r OPC_UA_Servers/Release2/tests/requirements.txt `
             -r OPC_UA_Clients/Release2/IJT_Test_Client/requirements.txt `
             -r OPC_UA_Clients/Release2/IJT_Test_Client/requirements-dev.txt
@@ -940,7 +940,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install `
-            -c "${{ github.workspace }}/constraints.txt" `
+            -c OPC_UA_Clients/Release2/IJT_Console_Client/requirements.lock `
             -r OPC_UA_Clients/Release2/IJT_Console_Client/requirements.txt `
             -r OPC_UA_Clients/Release2/IJT_Console_Client/requirements-dev.txt
 
@@ -1007,8 +1007,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install `
-            -c "${{ github.workspace }}/constraints.txt" `
-            -r OPC_UA_Clients/Release2/IJT_Performance_Client/requirements.txt
+            -c OPC_UA_Clients/Release2/IJT_Performance_Client/requirements.lock `
+            -r OPC_UA_Clients/Release2/IJT_Performance_Client/requirements.txt `
+            -r OPC_UA_Clients/Release2/IJT_Performance_Client/requirements-dev.txt
 
       - name: Extract server ZIP
         run: |

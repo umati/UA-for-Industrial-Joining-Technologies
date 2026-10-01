@@ -44,6 +44,7 @@ IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 PROJECT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = _detect_repo_root(PROJECT_DIR)
 PYTHON_CONSTRAINTS = REPO_ROOT / "constraints.txt"
+PYTHON_LOCK = PROJECT_DIR / "requirements.lock"
 SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
 SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
@@ -55,7 +56,11 @@ _STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_
 
 
 def _pip_constraint_args() -> list[str]:
-    return ["-c", str(PYTHON_CONSTRAINTS)] if PYTHON_CONSTRAINTS.exists() else []
+    """Pin installs to this client's generated lock (falls back to the shared floors)."""
+    for path in (PYTHON_LOCK, PYTHON_CONSTRAINTS):
+        if path.exists():
+            return ["-c", str(path)]
+    return []
 
 
 def _remove_stale_venvs(project_dir: Path) -> None:

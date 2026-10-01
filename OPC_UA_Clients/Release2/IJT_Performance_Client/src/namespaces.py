@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from asyncua import Client
+from asyncua import Client, ua
 
 logger = logging.getLogger(__name__)
 
@@ -42,3 +42,34 @@ async def resolve_namespace_index(client: Client, uri: str) -> int | None:
     except Exception as exc:
         logger.debug(f"Namespace {uri} not found on server {client.server_url}: {exc}")
         return None
+
+
+async def read_namespace_metadata(client: Client, uri: str) -> dict[str, str | None]:
+    """Read NamespaceVersion and NamespacePublicationDate for ``uri`` from Server/Namespaces.
+
+    Both values are optional in OPC UA; a value the server does not expose is returned as None so
+    callers can report it as unverified instead of guessing.
+    """
+    result: dict[str, str | None] = {"version": None, "publication_date": None}
+    try:
+        namespaces = client.get_node(ua.NodeId(ua.Int32(ua.ObjectIds.Server_Namespaces)))
+        for child in await namespaces.get_children():
+            try:
+                if await (await child.get_child("0:NamespaceUri")).read_value() != uri:
+                    continue
+            except Exception:
+                continue
+            for key, browse_name in (
+                ("version", "0:NamespaceVersion"),
+                ("publication_date", "0:NamespacePublicationDate"),
+            ):
+                try:
+                    value = await (await child.get_child(browse_name)).read_value()
+                except Exception:
+                    continue
+                if value is not None and value != "":
+                    result[key] = value.isoformat() if hasattr(value, "isoformat") else str(value)
+            break
+    except Exception as exc:
+        logger.debug(f"Namespace metadata for {uri} not readable on {client.server_url}: {exc}")
+    return result

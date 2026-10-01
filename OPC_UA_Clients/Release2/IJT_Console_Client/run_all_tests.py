@@ -105,6 +105,7 @@ _VENV = _target_venv_dir()
 _REQUIREMENTS = _HERE / "requirements.txt"
 _REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
 _PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
+_PYTHON_LOCK = _HERE / "requirements.lock"
 _PYPROJECT = _HERE / "pyproject.toml"
 _BANDIT_CONFIG = _REPO_ROOT / "pyproject.toml"
 _TESTS_DIR = _HERE / "tests"
@@ -284,7 +285,11 @@ def _inside_venv() -> bool:
 
 
 def _pip_constraint_args() -> list[str]:
-    return ["-c", str(_PYTHON_CONSTRAINTS)] if _PYTHON_CONSTRAINTS.exists() else []
+    """Pin installs to this client's generated lock (falls back to the shared floors)."""
+    for path in (_PYTHON_LOCK, _PYTHON_CONSTRAINTS):
+        if path.exists():
+            return ["-c", str(path)]
+    return []
 
 
 # Legacy venv directory names predating the .venv / .venv_test / .venv_ci convention.
@@ -324,7 +329,7 @@ def _requirements_hash() -> str:
     import hashlib
 
     h = hashlib.sha256()
-    for req in (_PYTHON_CONSTRAINTS, _REQUIREMENTS, _REQUIREMENTS_DEV):
+    for req in (_PYTHON_CONSTRAINTS, _PYTHON_LOCK, _REQUIREMENTS, _REQUIREMENTS_DEV):
         if req.exists():
             h.update(req.read_bytes())
     return h.hexdigest()[:16]

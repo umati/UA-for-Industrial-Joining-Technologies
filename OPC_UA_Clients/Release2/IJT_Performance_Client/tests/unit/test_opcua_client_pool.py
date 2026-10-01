@@ -6,10 +6,12 @@ message parsing, and coverage verification.
 import asyncio
 import multiprocessing as mp
 import queue
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from asyncua import ua
 
 from src.engine.client_pool import (
     OpcUaClientPool,
@@ -18,7 +20,17 @@ from src.engine.client_pool import (
     _locate_simulate_method,
     _worker_process_entry,
 )
-from src.results import LatencySample
+from src.results import ClockCalibration, LatencySample
+
+
+@pytest.fixture(autouse=True)
+def _no_namespace_metadata_reads():
+    """Worker tests use scripted get_node mocks; namespace metadata reading is tested separately."""
+    with patch(
+        "src.engine.client_pool.read_namespace_metadata",
+        new=AsyncMock(return_value={"version": None, "publication_date": None}),
+    ):
+        yield
 
 
 @pytest.mark.asyncio
@@ -120,6 +132,7 @@ def test_fleet_client_pool_collect_samples_and_coverage():
             "samples": [
                 {
                     "sample_id": 1,
+                    "integrity_status": "VALID",
                     "endpoint": "opc.tcp://server1:4840",
                     "start_time": now_iso,
                     "end_time": now_iso,
@@ -134,6 +147,7 @@ def test_fleet_client_pool_collect_samples_and_coverage():
                 },
                 {
                     "sample_id": 2,
+                    "integrity_status": "VALID",
                     "endpoint": "opc.tcp://server2:4840",
                     "start_time": now_iso,
                     "end_time": now_iso,
@@ -223,7 +237,7 @@ async def test_worker_event_loop_mocked():
     with (
         patch("src.engine.client_pool.Client") as mock_client_cls,
         patch("src.engine.client_pool.load_ijt_type_definitions"),
-        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=ClockCalibration()),
         patch("src.engine.client_pool.resolve_namespace_index", return_value=3),
     ):
         mock_cli = MagicMock()
@@ -264,7 +278,7 @@ async def test_worker_event_loop_active_burst():
     with (
         patch("src.engine.client_pool.Client") as mock_client_cls,
         patch("src.engine.client_pool.load_ijt_type_definitions"),
-        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=ClockCalibration()),
         patch("src.engine.client_pool.resolve_namespace_index", return_value=3),
         patch("src.engine.client_pool._locate_simulate_method") as mock_locate,
     ):
@@ -290,11 +304,18 @@ async def test_worker_event_loop_active_burst():
             connect_concurrency=5,
             sub_period_ms=50,
             mode="active_burst",
+            settle_timeout_s=0.0,
             burst_trigger_count=1,
             max_retries=1,
         )
 
         mock_sim_res.call_method.assert_awaited_once()
+        done = next(c.args[0] for c in out_q.put.call_args_list if c.args[0]["type"] == "DONE")
+        stats = done["endpoint_stats"]["opc.tcp://mock-server:40451"]
+        assert stats["calls_attempted"] == 1
+        assert stats["calls_succeeded"] == 1
+        assert stats["calls_failed"] == 0
+        assert isinstance(stats["first_success_send_us"], int)
 
 
 @pytest.mark.asyncio
@@ -396,6 +417,7 @@ def test_stop_preserves_final_batch_samples():
             "samples": [
                 {
                     "sample_id": 99,
+                    "integrity_status": "VALID",
                     "endpoint": "opc.tcp://localhost:4840",
                     "start_time": now_iso,
                     "end_time": now_iso,
@@ -497,7 +519,7 @@ async def test_partial_subscription_cleanup_on_connect_failure():
     with (
         patch("src.engine.client_pool.Client") as mock_client_cls,
         patch("src.engine.client_pool.load_ijt_type_definitions"),
-        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=ClockCalibration()),
         patch("src.engine.client_pool.resolve_namespace_index", return_value=3),
     ):
         mock_cli = MagicMock()
@@ -647,6 +669,7 @@ def test_fleet_client_pool_edge_cases():
             "samples": [
                 {
                     "sample_id": 1,
+                    "integrity_status": "VALID",
                     "endpoint": "opc.tcp://localhost:40451",
                     "network_transport_time_ms": 12.0,
                     "server_processing_time_ms": 5.0,
@@ -679,7 +702,7 @@ async def test_worker_event_loop_retries_and_burst():
     with (
         patch("src.engine.client_pool.Client") as mock_client_cls,
         patch("src.engine.client_pool.load_ijt_type_definitions"),
-        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=ClockCalibration()),
         patch("src.engine.client_pool.resolve_namespace_index", return_value=2),
         patch("src.engine.client_pool._locate_simulate_method") as mock_loc_sim,
     ):
@@ -707,6 +730,7 @@ async def test_worker_event_loop_retries_and_burst():
             connect_concurrency=1,
             sub_period_ms=50,
             mode="active_burst",
+            settle_timeout_s=0.0,
             burst_trigger_count=1,
             max_retries=1,
         )
@@ -725,7 +749,7 @@ async def test_worker_event_loop_ns_missing_and_retry_backoff():
     with (
         patch("src.engine.client_pool.Client") as mock_client_cls,
         patch("src.engine.client_pool.load_ijt_type_definitions"),
-        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=ClockCalibration()),
         patch("src.engine.client_pool.resolve_namespace_index", return_value=None),  # Missing NS
         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
     ):
@@ -780,7 +804,7 @@ async def test_worker_event_loop_stop_before_connect_and_sub_delete_error():
     with (
         patch("src.engine.client_pool.Client") as mock_client_cls,
         patch("src.engine.client_pool.load_ijt_type_definitions"),
-        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=ClockCalibration()),
         patch("src.engine.client_pool.resolve_namespace_index", return_value=2),
     ):
         mock_cli = MagicMock()
@@ -827,6 +851,7 @@ def test_worker_process_entry_crash_reporting():
             sub_period_ms=100,
             mode="passive",
             burst_trigger_count=0,
+            verbose=True,
         )
         bad_q.put.assert_called()
 
@@ -855,7 +880,7 @@ async def test_worker_event_loop_method_connect_fail_and_buffer_flush():
     with (
         patch("src.engine.client_pool.Client") as mock_client_cls,
         patch("src.engine.client_pool.load_ijt_type_definitions"),
-        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=ClockCalibration()),
         patch("src.engine.client_pool.resolve_namespace_index", return_value=2),
     ):
         mock_cli_sub = MagicMock()
@@ -890,6 +915,7 @@ async def test_worker_event_loop_method_connect_fail_and_buffer_flush():
                     connect_concurrency=1,
                     sub_period_ms=50,
                     mode="active_burst",
+                    settle_timeout_s=0.0,
                     burst_trigger_count=2,
                     max_retries=1,
                 )
@@ -945,7 +971,7 @@ async def test_worker_event_loop_periodic_flush_triggered():
     with (
         patch("src.engine.client_pool.Client") as mock_client_cls,
         patch("src.engine.client_pool.load_ijt_type_definitions"),
-        patch("src.engine.client_pool.calibrate_clock_skew", return_value=0.0),
+        patch("src.engine.client_pool.calibrate_clock_skew", return_value=ClockCalibration()),
         patch("src.engine.client_pool.resolve_namespace_index", return_value=2),
     ):
         mock_cli_sub = MagicMock()
@@ -1032,6 +1058,27 @@ def test_pool_max_workers_validation():
         OpcUaClientPool(endpoints=["opc.tcp://s1:4840"], max_workers="bad")  # type: ignore[arg-type]
 
 
+def test_pool_max_workers_autoscaling():
+    # 1. Single endpoint defaults to 1 worker
+    pool_1 = OpcUaClientPool(endpoints=["opc.tcp://s1:4840"])
+    assert pool_1.max_workers == 1
+
+    # 2. 2 endpoints defaults to 2 workers
+    pool_2 = OpcUaClientPool(endpoints=["opc.tcp://s1:4840", "opc.tcp://s2:4840"])
+    assert pool_2.max_workers == 2
+
+    # 3. 150 endpoints auto-scales with CPU count
+    eps_150 = [f"opc.tcp://s{i}:4840" for i in range(150)]
+    with patch("os.cpu_count", return_value=16):
+        pool_150 = OpcUaClientPool(endpoints=eps_150)
+        assert pool_150.max_workers == 8  # (150 + 19) // 20 = 8
+
+    # 4. Large fleet capped by cpu_count
+    with patch("os.cpu_count", return_value=4):
+        pool_capped = OpcUaClientPool(endpoints=eps_150)
+        assert pool_capped.max_workers == 4
+
+
 def test_pool_stop_idempotent_and_queue_cleanup():
     pool = OpcUaClientPool(endpoints=["opc.tcp://s1:4840"])
     pool._stopped = True
@@ -1043,6 +1090,8 @@ def test_pool_stop_idempotent_and_queue_cleanup():
     mock_queue = MagicMock()
     mock_queue.close.side_effect = RuntimeError("Queue closed")
     mock_queue.join_thread.side_effect = RuntimeError("Thread joined")
+    mock_queue.get.side_effect = queue.Empty
+    mock_queue.get_nowait.side_effect = queue.Empty
     pool._out_queue = mock_queue
     pool._processes = []
     pool.stop()
@@ -1060,13 +1109,13 @@ def test_verify_coverage_dropped_samples_and_burst_failures():
     pool.total_dropped_samples = 3
     valid, msg = pool.verify_coverage([sample])
     assert valid is True
-    assert "dropped due to buffer backpressure" in msg
+    assert "dropped because the client buffer was full" in msg
 
     # Dropped samples with require_full_coverage=True (failure)
     pool.require_full_coverage = True
     valid, msg = pool.verify_coverage([sample])
     assert valid is False
-    assert "Buffer overflow backpressure" in msg
+    assert "Client buffer full" in msg
 
     # Burst trigger failures with 0 samples and require_full_coverage=True
     pool.total_dropped_samples = 0
@@ -1095,6 +1144,43 @@ def test_dropped_sample_totals_are_cumulative_not_additive():
     assert pool.total_dropped_samples == 7
 
 
+def test_process_queue_msg_restores_audit_and_clamping_fields():
+    pool = OpcUaClientPool(endpoints=["opc.tcp://s1:4840"])
+    raw_sample = {
+        "sample_id": 1,
+        "endpoint": "opc.tcp://s1:4840",
+        "clock_skew_ms": -1.5,
+        "joining_duration_ms": 1200.0,
+        "server_processing_time_ms": 15.0,
+        "network_transport_time_ms": 25.0,
+        "total_result_transfer_time_ms": 40.0,
+        "raw_network_transport_time_ms": 25.0,
+        "raw_total_result_transfer_time_ms": 40.0,
+        "is_clamped_to_zero": False,
+        "result_id": "RES-001",
+        "result_evaluation": "OK",
+        "trace_curves_count": 3,
+        "trace_total_points": 750,
+        "trace_declared_points": 750,
+        "trace_decoded_points": 750,
+        "trace_is_incomplete": False,
+        "start_time": "2026-10-01T12:00:00+00:00",
+        "end_time": "2026-10-01T12:00:01.200000+00:00",
+        "creation_time": "2026-10-01T12:00:01.205000+00:00",
+        "event_time": "2026-10-01T12:00:01.215000+00:00",
+        "client_received_time": "2026-10-01T12:00:01.240000+00:00",
+    }
+    pool._process_queue_msg({"type": "BATCH", "worker_id": 0, "samples": [raw_sample], "dropped_samples": 0})
+    assert len(pool.collected_samples) == 1
+    s = pool.collected_samples[0]
+    assert s.trace_declared_points == 750
+    assert s.trace_decoded_points == 750
+    assert s.trace_is_incomplete is False
+    assert s.raw_network_transport_time_ms == 25.0
+    assert s.raw_total_result_transfer_time_ms == 40.0
+    assert s.is_clamped_to_zero is False
+
+
 @pytest.mark.asyncio
 async def test_worker_event_loop_teardown_and_burst_failure_coverage():
     import threading
@@ -1111,7 +1197,7 @@ async def test_worker_event_loop_teardown_and_burst_failure_coverage():
     with (
         patch("src.engine.client_pool.resolve_namespace_index", AsyncMock(return_value=2)),
         patch("src.engine.client_pool.load_ijt_type_definitions", AsyncMock()),
-        patch("src.engine.client_pool.calibrate_clock_skew", AsyncMock(return_value=0.0)),
+        patch("src.engine.client_pool.calibrate_clock_skew", AsyncMock(return_value=ClockCalibration())),
         patch("src.engine.client_pool.Client") as mock_client_cls,
         patch("src.engine.client_pool._locate_simulate_method") as mock_loc_sim,
     ):
@@ -1152,6 +1238,7 @@ async def test_worker_event_loop_teardown_and_burst_failure_coverage():
                 connect_concurrency=1,
                 sub_period_ms=50,
                 mode="active_burst",
+                settle_timeout_s=0.0,
                 burst_trigger_count=1,
                 max_retries=1,
             )
@@ -1198,3 +1285,968 @@ def test_stop_queue_error_handling():
     pool.stop(drain_timeout_s=0.1)
     assert any("Worker result queue closed during shutdown:" in err for err in pool.worker_errors)
     assert any("Worker result queue closed during final drain:" in err for err in pool.worker_errors)
+
+
+def test_pool_burst_delay_validation():
+    """Verify burst_delay validation and storage in OpcUaClientPool."""
+    with pytest.raises(ValueError, match="burst_delay must be a finite non-negative number"):
+        OpcUaClientPool(endpoints=["opc.tcp://localhost:40451"], burst_delay=-0.5)
+
+    pool = OpcUaClientPool(endpoints=["opc.tcp://localhost:40451"], burst_delay=0.25)
+    assert pool.burst_delay == 0.25
+
+
+@pytest.mark.asyncio
+async def test_worker_event_loop_connection_exception_and_method_cache_hit():
+    import threading
+
+    from src.engine.client_pool import _worker_event_loop
+
+    out_q = MagicMock()
+    stop_event = threading.Event()
+
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock()
+    mock_client.create_subscription = AsyncMock()
+    mock_sim = MagicMock()
+    mock_sim.nodeid = 12345
+    mock_sim.read_node_class = AsyncMock(return_value=ua.NodeClass.Object)
+    mock_sim_bn = MagicMock()
+    mock_sim_bn.Name = "SimulateResults"
+    mock_sim.read_browse_name = AsyncMock(return_value=mock_sim_bn)
+    mock_sim.call_method = AsyncMock()
+
+    mock_meth = MagicMock()
+    mock_meth.nodeid = 67890
+    mock_meth.read_node_class = AsyncMock(return_value=ua.NodeClass.Method)
+    mock_meth_bn = MagicMock()
+    mock_meth_bn.Name = "SimulateSingleResult"
+    mock_meth.read_browse_name = AsyncMock(return_value=mock_meth_bn)
+
+    mock_sim.get_child = AsyncMock(return_value=mock_meth)
+    mock_client.get_node = MagicMock(side_effect=[mock_sim, mock_meth])
+
+    # First two connections succeed (ep1 populates method cache, ep2 hits cache), third raises BaseException
+    call_count = 0
+    captured_handlers = []
+
+    class CustomBaseError(BaseException):
+        pass
+
+    def fake_create_sub(period, handler):
+        captured_handlers.append(handler)
+        mock_sub = MagicMock()
+        mock_sub.subscribe_events = AsyncMock()
+        mock_sub.delete = AsyncMock()
+        return mock_sub
+
+    def fake_client(url):
+        nonlocal call_count
+        call_count += 1
+        cli = MagicMock()
+        cli.connect = AsyncMock()
+        cli.get_server_time = AsyncMock(return_value=datetime.now(UTC))
+        if "fail" in url:
+            cli.connect.side_effect = CustomBaseError("Fatal task error")
+        cli.create_subscription = AsyncMock(side_effect=fake_create_sub)
+        cli.get_node = MagicMock(side_effect=[mock_sim, mock_meth, mock_sim, mock_meth])
+        return cli
+
+    locate_mock = AsyncMock(return_value=(mock_sim, mock_meth))
+
+    with (
+        patch("src.engine.client_pool.Client", side_effect=fake_client),
+        patch("src.engine.client_pool.load_ijt_type_definitions", new_callable=AsyncMock),
+        patch("src.engine.client_pool.resolve_namespace_index", new_callable=AsyncMock, return_value=2),
+        patch("src.engine.client_pool._locate_simulate_method", locate_mock),
+    ):
+
+        async def run_loop():
+            task = asyncio.create_task(
+                _worker_event_loop(
+                    worker_id=0,
+                    endpoints=["opc.tcp://ep1:40001", "opc.tcp://ep2:40002", "opc.tcp://fail:40003"],
+                    out_queue=out_q,
+                    stop_event=stop_event,
+                    mode="both",
+                    settle_timeout_s=0.0,
+                    burst_trigger_count=1,
+                    burst_delay=0.0,
+                )
+            )
+            await asyncio.sleep(0.05)
+            if captured_handlers:
+                ev = MagicMock()
+                ev.Time = datetime.now(UTC)
+                ev.Result = None
+                captured_handlers[0].event_notification(ev)
+            stop_event.set()
+            await task
+
+        await run_loop()
+
+    # Verify locate was called only once (ep1); ep2 safely reused cached candidate
+    assert locate_mock.await_count == 1
+    assert mock_sim.read_node_class.await_count >= 1
+    assert mock_meth.read_node_class.await_count >= 1
+
+    # Check that failed_endpoints captured the task error
+    status_calls = [c[0][0] for c in out_q.put.call_args_list if c[0][0].get("type") == "FLEET_STATUS"]
+    assert len(status_calls) >= 1
+    assert any("opc.tcp://fail:40003" in sc.get("failed", {}) for sc in status_calls)
+
+
+@pytest.mark.asyncio
+async def test_worker_event_loop_method_not_found_and_burst_task_error():
+    import threading
+
+    from src.engine.client_pool import _worker_event_loop
+
+    out_q = MagicMock()
+    stop_event = threading.Event()
+
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock()
+    mock_client.create_subscription = AsyncMock()
+
+    with (
+        patch("src.engine.client_pool.Client", return_value=mock_client),
+        patch("src.engine.client_pool.load_ijt_type_definitions", new_callable=AsyncMock),
+        patch("src.engine.client_pool.resolve_namespace_index", new_callable=AsyncMock, return_value=2),
+        patch("src.engine.client_pool._locate_simulate_method", new_callable=AsyncMock, return_value=(None, None)),
+        patch(
+            "src.engine.client_pool.disconnect_client",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("Disconnect fail"),
+        ),
+    ):
+
+        async def run_loop():
+            task = asyncio.create_task(
+                _worker_event_loop(
+                    worker_id=0,
+                    endpoints=["opc.tcp://ep1:40001"],
+                    out_queue=out_q,
+                    stop_event=stop_event,
+                    mode="active_burst",
+                    settle_timeout_s=0.0,
+                    burst_trigger_count=1,
+                )
+            )
+            await asyncio.sleep(0.1)
+            stop_event.set()
+            await task
+
+        await run_loop()
+
+    # Verify teardown_errors recorded disconnect failure and burst_failures > 0
+    done_calls = [c[0][0] for c in out_q.put.call_args_list if c[0][0].get("type") == "DONE"]
+    assert len(done_calls) >= 1
+    assert done_calls[0]["burst_failures"] >= 1
+    assert any("Disconnect fail" in err for err in done_calls[0]["teardown_errors"])
+
+
+@pytest.mark.asyncio
+async def test_worker_event_loop_burst_task_exception_and_teardown_timeout():
+    import threading
+
+    from src.engine.client_pool import _worker_event_loop
+
+    out_q = MagicMock()
+    stop_event = threading.Event()
+
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock()
+    mock_client.create_subscription = AsyncMock()
+
+    mock_sim = MagicMock()
+    mock_sim.nodeid = 111
+    mock_meth = MagicMock()
+    mock_meth.nodeid = 222
+    # call_method raises BaseException
+    mock_sim.call_method = AsyncMock(side_effect=BaseException("Base burst crash"))
+
+    with (
+        patch("src.engine.client_pool.Client", return_value=mock_client),
+        patch("src.engine.client_pool.load_ijt_type_definitions", new_callable=AsyncMock),
+        patch("src.engine.client_pool.resolve_namespace_index", new_callable=AsyncMock, return_value=2),
+        patch(
+            "src.engine.client_pool._locate_simulate_method", new_callable=AsyncMock, return_value=(mock_sim, mock_meth)
+        ),
+        patch("asyncio.wait_for", side_effect=TimeoutError("Teardown timeout")),
+    ):
+
+        async def run_loop():
+            task = asyncio.create_task(
+                _worker_event_loop(
+                    worker_id=0,
+                    endpoints=["opc.tcp://ep1:40001"],
+                    out_queue=out_q,
+                    stop_event=stop_event,
+                    mode="active_burst",
+                    settle_timeout_s=0.0,
+                    burst_trigger_count=1,
+                    burst_delay=0.01,
+                )
+            )
+            await asyncio.sleep(0.1)
+            stop_event.set()
+            await task
+
+        await run_loop()
+
+    done_calls = [c[0][0] for c in out_q.put.call_args_list if c[0][0].get("type") == "DONE"]
+    assert len(done_calls) >= 1
+    assert any("Parallel teardown timed out" in err for err in done_calls[0]["teardown_errors"])
+    assert any("unhandled burst task error" in err for err in done_calls[0]["burst_errors"])
+
+
+def test_verify_coverage_target_sample_count_shortfall_strict():
+    """Verify target sample count shortfall triggers failure in strict mode."""
+    pool = OpcUaClientPool(endpoints=["opc.tcp://localhost:40451"], require_full_coverage=True)
+    pool.connected_endpoints = {"opc.tcp://localhost:40451"}
+    sample = LatencySample(sample_id=1, endpoint="opc.tcp://localhost:40451")
+    valid, msg = pool.verify_coverage([sample], target_sample_count=5)
+    assert valid is False
+    assert "Sample target shortfall: collected 1/5 samples (20.0%). 4 samples short of target." in msg
+
+
+def test_verify_coverage_target_sample_count_shortfall_warning():
+    """Verify target sample count shortfall produces warning when allow_partial_samples is True."""
+    pool = OpcUaClientPool(endpoints=["opc.tcp://localhost:40451"], require_full_coverage=False)
+    pool.connected_endpoints = {"opc.tcp://localhost:40451"}
+    sample = LatencySample(sample_id=1, endpoint="opc.tcp://localhost:40451")
+    valid, msg = pool.verify_coverage([sample], target_sample_count=5, allow_partial_samples=True)
+    assert valid is True
+    assert "Warning: sample target shortfall: 1/5, 20.0%" in msg
+
+
+def test_verify_coverage_target_sample_count_shortfall_single_server_fails_by_default():
+    """Verify single-server run (require_full_coverage=False) still fails on sample shortfall by default."""
+    pool = OpcUaClientPool(endpoints=["opc.tcp://localhost:40451"], require_full_coverage=False)
+    pool.connected_endpoints = {"opc.tcp://localhost:40451"}
+    sample = LatencySample(sample_id=1, endpoint="opc.tcp://localhost:40451")
+    valid, msg = pool.verify_coverage([sample], target_sample_count=5)
+    assert valid is False
+    assert "Sample target shortfall: collected 1/5 samples (20.0%). 4 samples short of target." in msg
+
+
+def test_verify_coverage_target_sample_count_satisfied():
+    """Verify target sample count satisfied passes without warning or failure."""
+    pool = OpcUaClientPool(endpoints=["opc.tcp://localhost:40451"], require_full_coverage=True)
+    pool.connected_endpoints = {"opc.tcp://localhost:40451"}
+    samples = [LatencySample(sample_id=i, endpoint="opc.tcp://localhost:40451") for i in range(5)]
+    valid, msg = pool.verify_coverage(samples, target_sample_count=5)
+    assert valid is True
+    assert "shortfall" not in msg
+
+
+@pytest.mark.asyncio
+async def test_worker_event_loop_candidate_verification_failure_fallback():
+    """Verify candidate method node verification failure falls back cleanly to _locate_simulate_method."""
+    import threading
+
+    from src.engine.client_pool import _worker_event_loop
+
+    out_q = MagicMock()
+    stop_event = threading.Event()
+
+    mock_sim1 = MagicMock()
+    mock_sim1.nodeid = 11111
+    mock_sim1.call_method = AsyncMock()
+    mock_meth1 = MagicMock()
+    mock_meth1.nodeid = 22222
+
+    # Candidate node for ep2 fails verification
+    mock_sim2_cand = MagicMock()
+    mock_sim2_cand.read_node_class = AsyncMock(side_effect=RuntimeError("Corrupt candidate node"))
+    mock_meth2_cand = MagicMock()
+
+    mock_sim2_located = MagicMock()
+    mock_sim2_located.nodeid = 33333
+    mock_sim2_located.call_method = AsyncMock()
+    mock_meth2_located = MagicMock()
+    mock_meth2_located.nodeid = 44444
+
+    def fake_create_sub(period, handler):
+        mock_sub = MagicMock()
+        mock_sub.subscribe_events = AsyncMock()
+        mock_sub.delete = AsyncMock()
+        return mock_sub
+
+    def fake_client(url):
+        cli = MagicMock()
+        cli.connect = AsyncMock()
+        cli.get_server_time = AsyncMock(return_value=datetime.now(UTC))
+        cli.create_subscription = AsyncMock(side_effect=fake_create_sub)
+        if "ep1" in url:
+            cli.get_node = MagicMock(side_effect=[mock_sim1, mock_meth1])
+        else:
+            cli.get_node = MagicMock(side_effect=[mock_sim2_cand, mock_meth2_cand])
+        return cli
+
+    locate_mock = AsyncMock(side_effect=[(mock_sim1, mock_meth1), (mock_sim2_located, mock_meth2_located)])
+
+    with (
+        patch("src.engine.client_pool.Client", side_effect=fake_client),
+        patch("src.engine.client_pool.load_ijt_type_definitions", new_callable=AsyncMock),
+        patch("src.engine.client_pool.resolve_namespace_index", new_callable=AsyncMock, return_value=2),
+        patch("src.engine.client_pool._locate_simulate_method", locate_mock),
+    ):
+
+        async def run_loop():
+            task = asyncio.create_task(
+                _worker_event_loop(
+                    worker_id=0,
+                    endpoints=["opc.tcp://ep1:40001", "opc.tcp://ep2:40002"],
+                    out_queue=out_q,
+                    stop_event=stop_event,
+                    mode="active_burst",
+                    settle_timeout_s=0.0,
+                    burst_trigger_count=1,
+                    burst_delay=0.0,
+                )
+            )
+            await asyncio.sleep(0.05)
+            stop_event.set()
+            await task
+
+        await run_loop()
+
+    # Verify ep2 actually attempted candidate node verification before falling back
+    assert mock_sim2_cand.read_node_class.await_count >= 1
+
+    # Both endpoints called _locate_simulate_method: ep1 initially, and ep2 after candidate verification failed
+    assert locate_mock.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_worker_event_loop_method_setup_ns_missing_error():
+    import threading
+
+    from src.engine.client_pool import _worker_event_loop
+
+    out_q = MagicMock()
+    stop_event = threading.Event()
+
+    def fake_create_sub(period, handler):
+        mock_sub = MagicMock()
+        mock_sub.subscribe_events = AsyncMock()
+        mock_sub.delete = AsyncMock()
+        return mock_sub
+
+    cli = MagicMock()
+    cli.connect = AsyncMock()
+    cli.get_server_time = AsyncMock(return_value=datetime.now(UTC))
+    cli.create_subscription = AsyncMock(side_effect=fake_create_sub)
+
+    # First call to resolve_namespace_index is for subscription client (returns 2),
+    # second call is for method client in setup_method_client (returns None, triggering RuntimeError).
+    with (
+        patch("src.engine.client_pool.Client", return_value=cli),
+        patch("src.engine.client_pool.load_ijt_type_definitions", new_callable=AsyncMock),
+        patch("src.engine.client_pool.resolve_namespace_index", new_callable=AsyncMock, side_effect=[2, None]),
+    ):
+
+        async def run_loop():
+            task = asyncio.create_task(
+                _worker_event_loop(
+                    worker_id=0,
+                    endpoints=["opc.tcp://ep1:40001"],
+                    out_queue=out_q,
+                    stop_event=stop_event,
+                    mode="active_burst",
+                    settle_timeout_s=0.0,
+                    burst_trigger_count=1,
+                    burst_delay=0.0,
+                )
+            )
+            await asyncio.sleep(0.05)
+            stop_event.set()
+            await task
+
+        await run_loop()
+
+    done_calls = [c for c in out_q.put.call_args_list if c[0][0].get("type") == "DONE"]
+    assert len(done_calls) == 1
+    assert done_calls[0][0][0]["burst_failures"] == 1
+
+
+def test_verify_coverage_per_endpoint_sample_shortfall():
+    pool = OpcUaClientPool(
+        endpoints=["opc.tcp://ep1:40001", "opc.tcp://ep2:40002"],
+        require_full_coverage=True,
+    )
+    pool._num_workers_started = 1
+    pool.completed_worker_ids = {0}
+    pool.connected_endpoints = {"opc.tcp://ep1:40001", "opc.tcp://ep2:40002"}
+
+    # 9 samples from ep1, 1 sample from ep2 = 10 total, but each needs 5
+    now = datetime.now(UTC)
+    samples = [
+        LatencySample(sample_id=i, endpoint="opc.tcp://ep1:40001", client_received_time=now) for i in range(9)
+    ] + [LatencySample(sample_id=10, endpoint="opc.tcp://ep2:40002", client_received_time=now)]
+
+    # Strict mode: must fail due to uneven distribution / under-sampled ep2
+    ok, msg = pool.verify_coverage(samples, target_sample_count=10)
+    assert ok is False
+    assert "Per-endpoint sample shortfall" in msg
+
+    # Explicit target_samples_per_endpoint=5
+    ok, msg = pool.verify_coverage(samples, target_samples_per_endpoint=5)
+    assert ok is False
+    assert "Per-endpoint sample shortfall" in msg
+
+    # Partial allowed: warning emitted, result True
+    ok, msg = pool.verify_coverage(samples, target_sample_count=10, allow_partial_samples=True)
+    assert ok is True
+    assert "Warning: per-endpoint sample shortfall" in msg
+
+
+def test_collect_samples_non_finite_timing_validation():
+    pool = OpcUaClientPool(endpoints=["opc.tcp://ep1:40001"])
+
+    with pytest.raises(ValueError, match="duration_seconds must be a finite positive number"):
+        pool.collect_samples(duration_seconds=float("nan"))
+
+    with pytest.raises(ValueError, match="duration_seconds must be a finite positive number"):
+        pool.collect_samples(duration_seconds=float("-inf"))
+
+    with pytest.raises(ValueError, match="burst_delay must be a finite non-negative number"):
+        OpcUaClientPool(endpoints=["opc.tcp://ep1:40001"], burst_delay=float("inf"))
+
+    with pytest.raises(ValueError, match="burst_delay must be a finite non-negative number"):
+        OpcUaClientPool(endpoints=["opc.tcp://ep1:40001"], burst_delay=float("nan"))
+
+
+@pytest.mark.asyncio
+async def test_worker_event_loop_mixed_namespace_collision():
+    import threading
+
+    from src.engine.client_pool import _worker_event_loop
+
+    out_q = MagicMock()
+    stop_event = threading.Event()
+
+    cli1 = MagicMock()
+    cli1.connect = AsyncMock()
+    cli1.get_server_time = AsyncMock(return_value=datetime.now(UTC))
+    cli1.create_subscription = AsyncMock(return_value=MagicMock())
+
+    cli2 = MagicMock()
+    cli2.connect = AsyncMock()
+    cli2.get_server_time = AsyncMock(return_value=datetime.now(UTC))
+    cli2.create_subscription = AsyncMock(return_value=MagicMock())
+
+    # Return cli1 for ep1 and cli2 for ep2
+    cli_instances = [cli1, cli2]
+
+    def make_client(*args, **kwargs):
+        return cli_instances.pop(0) if cli_instances else MagicMock()
+
+    # resolve_namespace_index returns 2 for ep1, but 3 for ep2
+    ns_returns = [2, 3]
+
+    async def fake_resolve(cli, ns_uri):
+        return ns_returns.pop(0) if ns_returns else 2
+
+    with (
+        patch("src.engine.client_pool.Client", side_effect=make_client),
+        patch("src.engine.client_pool.load_ijt_type_definitions", new_callable=AsyncMock),
+        patch("src.engine.client_pool.resolve_namespace_index", side_effect=fake_resolve),
+    ):
+        task = asyncio.create_task(
+            _worker_event_loop(
+                worker_id=0,
+                endpoints=["opc.tcp://ep1:40001", "opc.tcp://ep2:40002"],
+                out_queue=out_q,
+                stop_event=stop_event,
+                mode="passive",
+                max_retries=1,
+            )
+        )
+        await asyncio.sleep(0.1)
+        stop_event.set()
+        await task
+
+    # Verify worker reported failure on ep2 due to mixed namespace collision
+    fleet_status_calls = [c for c in out_q.put.call_args_list if c[0][0].get("type") == "FLEET_STATUS"]
+    assert len(fleet_status_calls) >= 1
+    last_status = fleet_status_calls[-1][0][0]
+    assert "opc.tcp://ep2:40002" in last_status["failed"]
+    assert "Mixed namespace indexes" in last_status["failed"]["opc.tcp://ep2:40002"]
+
+
+def test_client_pool_connect_concurrency_partitioning():
+    eps = [f"opc.tcp://10.0.0.{i}:4840" for i in range(1, 13)]
+    pool = OpcUaClientPool(endpoints=eps, max_workers=4, connect_concurrency=20)
+    # verify connect_concurrency is partitioned across workers
+    assert pool.connect_concurrency == 20
+    assert pool.max_workers == 4
+
+
+def test_durable_worker_handler_deduplicates_result_ids():
+    from types import SimpleNamespace
+    from typing import Any
+
+    from src.engine.client_pool import _DurableWorkerSubHandler
+    from src.results import INTEGRITY_DUPLICATE, INTEGRITY_VALID
+
+    buf: list[dict[str, Any]] = []
+    handler = _DurableWorkerSubHandler(endpoint="opc.tcp://ep1:40001", local_buffer=buf)
+
+    def spec_event():
+        now = datetime.now(UTC)
+        meta = SimpleNamespace(
+            ResultId="RES-DUP-1",
+            ResultEvaluation=1,
+            ProcessingTimes=SimpleNamespace(StartTime=now, EndTime=now),
+        )
+        return SimpleNamespace(Time=now, Result=SimpleNamespace(ResultMetaData=meta))
+
+    ev1 = spec_event()
+    handler.event_notification(ev1)
+    assert len(buf) == 1
+    assert buf[0]["integrity_status"] == INTEGRITY_VALID
+    assert "RES-DUP-1" in handler.seen_result_ids
+
+    # Second event with exact same ResultId -> DUPLICATE
+    ev2 = spec_event()
+    handler.event_notification(ev2)
+    assert len(buf) == 2
+    assert buf[1]["integrity_status"] == INTEGRITY_DUPLICATE
+    assert "Duplicate ResultId 'RES-DUP-1'" in buf[1]["integrity_reason"]
+
+
+def test_evaluate_fleet_integrity_and_verify_coverage_gate():
+    from src.engine import evaluate_fleet_integrity
+    from src.results import (
+        INTEGRITY_DUPLICATE,
+        INTEGRITY_INCOMPLETE,
+        INTEGRITY_UNMATCHED,
+        INTEGRITY_VALID,
+    )
+
+    eps = ["opc.tcp://s1:4840", "opc.tcp://s2:4840"]
+    s_valid1 = LatencySample(sample_id=1, endpoint=eps[0], result_id="R1", integrity_status=INTEGRITY_VALID)
+    s_incomp = LatencySample(sample_id=2, endpoint=eps[0], result_id="R2", integrity_status=INTEGRITY_INCOMPLETE)
+    s_dup = LatencySample(sample_id=3, endpoint=eps[1], result_id="R3", integrity_status=INTEGRITY_DUPLICATE)
+    s_unmatch = LatencySample(sample_id=4, endpoint=eps[1], result_id="R4", integrity_status=INTEGRITY_UNMATCHED)
+
+    # 1. Summary collects all categories
+    summary = evaluate_fleet_integrity(
+        samples=[s_valid1, s_incomp, s_dup, s_unmatch],
+        endpoints=eps,
+        min_valid_per_endpoint=2,
+        dropped_samples=2,
+        dropped_by_endpoint={eps[0]: 2},
+    )
+    assert summary.passed is False
+    assert summary.total_valid == 1
+    assert summary.total_incomplete == 1
+    assert summary.total_duplicate == 1
+    assert summary.total_unmatched == 1
+    assert summary.total_dropped == 2
+    assert summary.endpoints[eps[0]].dropped_count == 2
+    assert summary.endpoints[eps[1]].dropped_count == 0
+    # incomplete, duplicate, unmatched, quota; drops are counters only (run policy decides)
+    assert len(summary.failure_reasons) == 4
+    assert not any("dropped" in r for r in summary.failure_reasons)
+
+    # 2. verify_coverage gate failure under strict mode
+    pool = OpcUaClientPool(endpoints=eps, require_full_coverage=True)
+    pool.connected_endpoints = set(eps)
+    pool.completed_worker_ids = {0, 1}
+    pool._num_workers_started = 2
+
+    # Incomplete result fails strict verification (both endpoints covered, one incomplete)
+    s_ep1_incomp = LatencySample(sample_id=5, endpoint=eps[1], integrity_status=INTEGRITY_INCOMPLETE)
+    valid, msg = pool.verify_coverage([s_valid1, s_ep1_incomp], allow_partial_samples=False)
+    assert valid is False
+    assert "Benchmark Integrity Gate failed" in msg
+    assert pool.fleet_integrity is not None
+    assert pool.fleet_integrity.passed is False
+
+    # allow_partial_samples relaxes only counts: invalid results still fail the gate
+    valid, msg = pool.verify_coverage([s_valid1, s_ep1_incomp], allow_partial_samples=True)
+    assert valid is False
+    assert "Benchmark Integrity Gate failed" in msg
+    assert pool.fleet_integrity.passed is False
+
+
+def test_verify_coverage_allow_partial_relaxes_only_counts():
+    eps = ["opc.tcp://s1:4840", "opc.tcp://s2:4840"]
+    pool = OpcUaClientPool(endpoints=eps, require_full_coverage=True)
+    pool.connected_endpoints = set(eps)
+    pool.completed_worker_ids = {0}
+    pool._num_workers_started = 1
+    samples = [LatencySample(sample_id=i, endpoint=eps[i % 2], result_id=f"R{i}") for i in range(4)]
+
+    valid, msg = pool.verify_coverage(samples, target_sample_count=10, target_samples_per_endpoint=5)
+    assert valid is False
+    assert pool.fleet_integrity is not None and pool.fleet_integrity.passed is False
+    assert any("Sample target shortfall" in r for r in pool.fleet_integrity.failure_reasons)
+    assert any("Per-endpoint sample shortfall" in r for r in pool.fleet_integrity.failure_reasons)
+    assert "more failure(s)" in msg
+
+    valid, msg = pool.verify_coverage(
+        samples, target_sample_count=10, target_samples_per_endpoint=5, allow_partial_samples=True
+    )
+    assert valid is True
+    assert pool.fleet_integrity.passed is True
+    assert "Warning: sample target shortfall" in msg
+    assert "Warning: per-endpoint sample shortfall" in msg
+
+
+def test_verify_coverage_records_run_failures_in_integrity_summary():
+    eps = ["opc.tcp://s1:4840"]
+    pool = OpcUaClientPool(endpoints=eps, require_full_coverage=True)
+    pool.connected_endpoints = set(eps)
+    pool._num_workers_started = 1  # worker 0 never sent DONE
+    pool.endpoint_stats = {eps[0]: {"dropped": 3}}
+    pool.total_dropped_samples = 3
+
+    valid, msg = pool.verify_coverage([LatencySample(sample_id=1, endpoint=eps[0], result_id="R1")])
+    assert valid is False
+    assert msg.startswith("Worker completion failure")
+    fi = pool.fleet_integrity
+    assert fi is not None
+    assert fi.passed is False
+    assert fi.total_valid == 1
+    assert fi.endpoints[eps[0]].dropped_count == 3
+    assert any("Worker completion failure" in r for r in fi.failure_reasons)
+    assert any("Client buffer full" in r for r in fi.failure_reasons)
+
+
+def test_process_queue_msg_merges_cumulative_endpoint_stats():
+    eps = ["opc.tcp://s1:4840", "opc.tcp://s2:4840"]
+    pool = OpcUaClientPool(endpoints=eps)
+    pool._process_queue_msg(
+        {"type": "BATCH", "worker_id": 0, "samples": [], "endpoint_stats": {eps[0]: {"dropped": 2}}}
+    )
+    pool._process_queue_msg(
+        {"type": "BATCH", "worker_id": 0, "samples": [], "endpoint_stats": {eps[0]: {"dropped": 5}}}
+    )
+    # A stale, smaller cumulative value must not lower the counter
+    pool._process_queue_msg({"type": "DONE", "worker_id": 0, "endpoint_stats": {eps[0]: {"dropped": 4}}})
+    pool._process_queue_msg({"type": "DONE", "worker_id": 1, "endpoint_stats": {eps[1]: {"dropped": 1}}})
+    assert pool.endpoint_stats == {eps[0]: {"dropped": 5}, eps[1]: {"dropped": 1}}
+
+
+@pytest.mark.parametrize("bad", [-1.0, float("nan"), float("inf")])
+def test_pool_rejects_invalid_clock_tolerance(bad):
+    with pytest.raises(ValueError, match="clock_tolerance_ms must be a finite non-negative number"):
+        OpcUaClientPool(endpoints=["opc.tcp://s1:4840"], clock_tolerance_ms=bad)
+
+
+def test_clock_warnings_are_counted_but_never_fail_the_gate():
+    from src.engine import evaluate_fleet_integrity
+    from src.results import INTEGRITY_VALID
+
+    ep = "opc.tcp://s1:4840"
+    samples = [
+        LatencySample(sample_id=1, endpoint=ep, result_id="R1", integrity_status=INTEGRITY_VALID, clock_warning=True),
+        LatencySample(sample_id=2, endpoint=ep, result_id="R2", integrity_status=INTEGRITY_VALID),
+    ]
+    fi = evaluate_fleet_integrity(samples, [ep])
+    assert fi.passed is True
+    assert fi.total_clock_warnings == 1
+    assert fi.endpoints[ep].clock_warning_count == 1
+
+    pool = OpcUaClientPool(endpoints=[ep])
+    pool.connected_endpoints = {ep}
+    pool.completed_worker_ids = {0}
+    pool._num_workers_started = 1
+    valid, _msg = pool.verify_coverage(samples)
+    assert valid is True
+    assert pool.fleet_integrity is not None and pool.fleet_integrity.passed is True
+
+
+def test_durable_worker_handler_forwards_clock_tolerance_and_rtt():
+    from typing import Any
+
+    from src.engine.client_pool import _DurableWorkerSubHandler
+
+    buf: list[dict[str, Any]] = []
+    start = datetime.now(UTC)
+    handler = _DurableWorkerSubHandler(
+        endpoint="opc.tcp://ep1:40001",
+        local_buffer=buf,
+        collection_start=start,
+        clock_tolerance_ms=0.0,
+        clock_rtt_ms=0.0,
+    )
+    old = start - timedelta(seconds=5)
+    meta = SimpleNamespace(ResultId="R-OLD", ProcessingTimes=SimpleNamespace(StartTime=old, EndTime=old))
+    handler.event_notification(SimpleNamespace(Time=old, Result=SimpleNamespace(ResultMetaData=meta)))
+    assert buf[0]["clock_warning"] is True
+    assert buf[0]["integrity_status"] == "VALID"
+
+
+def test_durable_worker_handler_uses_wire_timing_from_publish_hooks():
+    from typing import Any
+
+    from src.engine.client_pool import _DurableWorkerSubHandler
+
+    buf: list[dict[str, Any]] = []
+    end = datetime.now(UTC) - timedelta(milliseconds=50)
+    arrived, decoded = end + timedelta(milliseconds=20), end + timedelta(milliseconds=23)
+    handler = _DurableWorkerSubHandler(endpoint="opc.tcp://ep1:40001", local_buffer=buf)
+    meta = SimpleNamespace(ResultId="R1", ProcessingTimes=SimpleNamespace(StartTime=end, EndTime=end))
+    with patch("src.engine.client_pool.current_publish_timing", return_value=(arrived, decoded)):
+        handler.event_notification(SimpleNamespace(Time=end, Result=SimpleNamespace(ResultMetaData=meta)))
+    sample = LatencySample.from_dict(buf[0])
+    assert sample.timing_source == "wire"
+    assert sample.delivery_time_ms == pytest.approx(20.0)
+    assert sample.client_decode_time_ms == pytest.approx(3.0)
+    assert sample.client_ready_time_ms == pytest.approx(23.0)
+    assert sample.dispatch_delay_ms is not None and sample.dispatch_delay_ms >= 0.0
+
+
+def test_pool_timing_summary_and_missing_hook_warning():
+    ep = "opc.tcp://s1:4840"
+    pool = OpcUaClientPool(endpoints=[ep])
+    assert pool.timing_summary()["workers_reported"] == 0
+    pool._process_queue_msg(
+        {
+            "type": "DONE",
+            "worker_id": 0,
+            "timing": {"hooks_installed": True, "hooks_reason": "", "loop_lag": {"max_ms": 12.5, "mean_ms": 1.0}},
+        }
+    )
+    pool._process_queue_msg(
+        {
+            "type": "DONE",
+            "worker_id": 1,
+            "timing": {
+                "hooks_installed": False,
+                "hooks_reason": "internals changed",
+                "loop_lag": {"max_ms": 3.0, "mean_ms": 2.0},
+            },
+        }
+    )
+    pool._process_queue_msg({"type": "DONE", "worker_id": 2, "timing": "not-a-dict"})
+    summary = pool.timing_summary()
+    assert summary == {
+        "workers_reported": 2,
+        "workers_without_hooks": 1,
+        "hook_failure_reasons": ["internals changed"],
+        "loop_lag_max_ms": 12.5,
+        "loop_lag_worst_mean_ms": 2.0,
+    }
+
+    pool.connected_endpoints = {ep}
+    pool.completed_worker_ids = {0, 1}
+    pool._num_workers_started = 2
+    samples = [LatencySample(sample_id=1, endpoint=ep, result_id="R1", integrity_status="VALID")]
+    valid, msg = pool.verify_coverage(samples)
+    assert valid is True  # a timing fallback is a warning, never a failure
+    assert "Wire timing unavailable in 1 worker(s) (internals changed)" in msg
+
+
+@pytest.mark.asyncio
+async def test_worker_settles_until_timeout_when_results_are_missing():
+    import time as _time
+
+    from src.engine.client_pool import _worker_event_loop
+
+    out_q = MagicMock()
+    stop_event = MagicMock()
+
+    with (
+        patch("src.engine.client_pool.Client") as mock_client_cls,
+        patch("src.engine.client_pool.load_ijt_type_definitions"),
+        patch("src.engine.client_pool.resolve_namespace_index", return_value=3),
+        patch("src.engine.client_pool._locate_simulate_method") as mock_locate,
+    ):
+        mock_cli = MagicMock()
+        mock_cli.connect = AsyncMock()
+        mock_sub = MagicMock(subscribe_events=AsyncMock(), delete=AsyncMock())
+        mock_cli.create_subscription = AsyncMock(return_value=mock_sub)
+        mock_client_cls.return_value = mock_cli
+        sim = MagicMock(call_method=AsyncMock(side_effect=[None, RuntimeError("boom")]))
+        mock_locate.return_value = (sim, MagicMock(nodeid=1))
+        stop_event.is_set.side_effect = lambda: sim.call_method.await_count >= 2
+
+        t0 = _time.monotonic()
+        await _worker_event_loop(
+            worker_id=0,
+            endpoints=["opc.tcp://127.0.0.1:40451"],
+            out_queue=out_q,
+            stop_event=stop_event,
+            mode="both",
+            burst_trigger_count=2,
+            burst_delay=0.0,
+            max_retries=1,
+            skip_clock_skew=True,
+            settle_timeout_s=0.3,
+        )
+        assert _time.monotonic() - t0 >= 0.3  # no result arrived, so the full settle window was used
+
+    done = next(c.args[0] for c in out_q.put.call_args_list if c.args[0]["type"] == "DONE")
+    stats = done["endpoint_stats"]["opc.tcp://127.0.0.1:40451"]
+    assert (stats["calls_attempted"], stats["calls_succeeded"], stats["calls_failed"]) == (2, 1, 1)
+
+
+def _correlation_pool(mode, stats):
+    ep = "opc.tcp://s1:4840"
+    pool = OpcUaClientPool(endpoints=[ep], mode=mode, require_full_coverage=False)
+    pool.connected_endpoints = {ep}
+    pool.endpoint_stats = {ep: stats}
+    return pool, ep
+
+
+def _valid(ep, rid, received):
+    return LatencySample(sample_id=1, endpoint=ep, result_id=rid, client_received_time=received)
+
+
+def test_active_burst_marks_results_before_first_successful_call_unmatched():
+    first = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+    stats = {"calls_attempted": 1, "calls_succeeded": 1, "calls_failed": 0}
+    stats["first_success_send_us"] = int(first.timestamp() * 1_000_000)
+    pool, ep = _correlation_pool("active_burst", stats)
+    early = _valid(ep, "R0", first - timedelta(milliseconds=1))
+    on_time = _valid(ep, "R1", first + timedelta(milliseconds=5))
+    valid, msg = pool.verify_coverage([early, on_time])
+    assert early.integrity_status == "UNMATCHED"
+    assert "before the first successful trigger call" in early.integrity_reason
+    assert on_time.integrity_status == "VALID"
+    assert valid is False  # UNMATCHED always fails the gate
+    entry = pool.fleet_integrity.endpoints[ep]
+    assert (entry.calls_attempted, entry.calls_succeeded, entry.valid_count) == (1, 1, 1)
+
+
+def test_active_burst_without_successful_call_marks_all_unmatched():
+    pool, ep = _correlation_pool("active_burst", {"calls_attempted": 1, "calls_succeeded": 0, "calls_failed": 1})
+    sample = _valid(ep, "R1", datetime.now(UTC))
+    pool.verify_coverage([sample])
+    assert sample.integrity_status == "UNMATCHED"
+    assert "no trigger call succeeded" in sample.integrity_reason
+
+
+@pytest.mark.parametrize(
+    ("mode", "valid_results", "succeeded", "ok", "text"),
+    [
+        ("active_burst", 2, 2, True, ""),
+        ("active_burst", 1, 2, False, "fewer VALID results than successful trigger calls"),
+        ("active_burst", 3, 2, False, "more VALID results than successful trigger calls"),
+        ("both", 1, 2, False, "fewer VALID results than successful trigger calls"),
+        ("both", 3, 2, True, "1 external event(s)"),
+        ("passive", 0, 5, True, ""),
+    ],
+)
+def test_call_result_correlation(mode, valid_results, succeeded, ok, text):
+    first = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+    stats = {"calls_attempted": succeeded, "calls_succeeded": succeeded, "calls_failed": 0}
+    stats["first_success_send_us"] = int(first.timestamp() * 1_000_000)
+    pool, ep = _correlation_pool(mode, stats)
+    samples = [_valid(ep, f"R{i}", first + timedelta(seconds=1)) for i in range(valid_results)]
+    valid, msg = pool.verify_coverage(samples, allow_partial_samples=True)
+    assert valid is ok, msg
+    assert text in msg
+    if mode == "both" and valid_results > succeeded:
+        assert pool.fleet_integrity.total_external_events == valid_results - succeeded
+        assert pool.fleet_integrity.endpoints[ep].external_event_count == valid_results - succeeded
+
+
+def test_pool_settle_timeout_validation_and_stop_drain_default():
+    with pytest.raises(ValueError, match="settle_timeout_s"):
+        OpcUaClientPool(endpoints=["opc.tcp://s:4840"], settle_timeout_s=-1.0)
+    with pytest.raises(ValueError, match="settle_timeout_s"):
+        OpcUaClientPool(endpoints=["opc.tcp://s:4840"], settle_timeout_s=float("nan"))
+    assert OpcUaClientPool(endpoints=["opc.tcp://s:4840"], settle_timeout_s=0.0).settle_timeout_s == 0.0
+
+
+def _ns_pool(meta):
+    pool = OpcUaClientPool(endpoints=list(meta), require_full_coverage=False)
+    pool.connected_endpoints = set(meta)
+    pool._process_queue_msg({"type": "FLEET_STATUS", "connected": list(meta), "failed": {}, "namespace_metadata": meta})
+    return pool
+
+
+def test_namespace_metadata_consistent_passes_and_is_reported():
+    meta = {
+        ep: {"version": "1.01.0", "publication_date": "2024-06-01T00:00:00"}
+        for ep in ("opc.tcp://a:1", "opc.tcp://b:2")
+    }
+    pool = _ns_pool(meta)
+    valid, msg = pool.verify_coverage([])
+    assert valid is True, msg
+    assert "unverified" not in msg
+    assert pool.fleet_integrity.endpoints["opc.tcp://a:1"].ijt_namespace_version == "1.01.0"
+
+
+def test_namespace_version_mismatch_fails_even_with_partial_samples():
+    pool = _ns_pool(
+        {
+            "opc.tcp://a:1": {"version": "1.01.0", "publication_date": None},
+            "opc.tcp://b:2": {"version": "1.00.0", "publication_date": None},
+        }
+    )
+    valid, msg = pool.verify_coverage([], allow_partial_samples=True)
+    assert valid is False
+    assert "IJT namespace model mismatch across endpoints (version: 1.01.0" in msg
+
+
+def test_namespace_metadata_absent_is_unverified_warning_only():
+    pool = _ns_pool(
+        {
+            "opc.tcp://a:1": {"version": None, "publication_date": None},
+            "opc.tcp://b:2": {"version": "1.01.0", "publication_date": None, "ignored": "x"},
+        }
+    )
+    valid, msg = pool.verify_coverage([])
+    assert valid is True, msg
+    assert "IJT namespace version unverified on 1 endpoint(s)" in msg
+    assert pool.namespace_metadata["opc.tcp://b:2"] == {"version": "1.01.0", "publication_date": None}
+
+
+@pytest.mark.asyncio
+async def test_worker_rejects_second_endpoint_with_different_ijt_namespace_index():
+    """Both endpoints connect concurrently; the one waiting on the type-load lock must still compare."""
+    from src.engine.client_pool import _worker_event_loop
+
+    out_q = MagicMock()
+    stop_event = MagicMock()
+    stop_event.is_set.return_value = False
+
+    async def slow_load(_client):
+        await asyncio.sleep(0.05)
+
+    indexes = {"opc.tcp://a:1": 3, "opc.tcp://b:2": 4}
+
+    def fake_client(url):
+        cli = MagicMock(connect=AsyncMock())
+        cli.url = url
+        cli.create_subscription = AsyncMock(return_value=MagicMock(subscribe_events=AsyncMock(), delete=AsyncMock()))
+        return cli
+
+    async def resolve(cli, _uri):
+        return indexes[cli.url]
+
+    async def run():
+        task = asyncio.create_task(
+            _worker_event_loop(
+                worker_id=0,
+                endpoints=list(indexes),
+                out_queue=out_q,
+                stop_event=stop_event,
+                max_retries=1,
+                skip_clock_skew=True,
+            )
+        )
+        while not any(c.args[0]["type"] == "FLEET_STATUS" for c in out_q.put.call_args_list):
+            await asyncio.sleep(0.01)
+        stop_event.is_set.return_value = True
+        await task
+
+    with (
+        patch("src.engine.client_pool.Client", side_effect=lambda url: fake_client(url)),
+        patch("src.engine.client_pool.load_ijt_type_definitions", side_effect=slow_load),
+        patch("src.engine.client_pool.resolve_namespace_index", side_effect=resolve),
+    ):
+        await asyncio.wait_for(run(), timeout=10)
+
+    status = next(c.args[0] for c in out_q.put.call_args_list if c.args[0]["type"] == "FLEET_STATUS")
+    assert status["connected"] == ["opc.tcp://a:1"]
+    assert "Mixed namespace indexes" in status["failed"]["opc.tcp://b:2"]

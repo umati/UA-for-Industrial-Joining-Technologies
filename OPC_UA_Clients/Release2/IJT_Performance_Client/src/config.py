@@ -5,12 +5,15 @@ Supports explicit endpoint lists, port ranges, and strict configuration validati
 
 from __future__ import annotations
 
+import ipaddress
+import math
 import re
 from dataclasses import dataclass, field
 from importlib.resources import files
 from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 
@@ -24,14 +27,34 @@ ALLOWED_EXECUTION_KEYS = {
     "duration_seconds",
     "target_sample_count",
     "burst_trigger_count",
+    "burst_delay_seconds",
     "require_full_coverage",
     "skip_clock_skew",
 }
-ALLOWED_ENGINE_KEYS = {"max_worker_processes", "connect_concurrency", "sub_period_ms", "skip_clock_skew"}
-ALLOWED_THRESHOLDS_KEYS = {"warn_p90_ms", "fail_p90_ms"}
+ALLOWED_ENGINE_KEYS = {
+    "max_worker_processes",
+    "connect_concurrency",
+    "sub_period_ms",
+    "skip_clock_skew",
+    "burst_delay_seconds",
+    "clock_tolerance_ms",
+    "settle_timeout_seconds",
+}
+ALLOWED_THRESHOLDS_KEYS = {"warn_p90_ms", "fail_p90_ms", "fail_p90_client_ready_ms"}
 ALLOWED_META_KEYS = {"name", "description", "lifecycle"}
 
 ENDPOINT_RE = re.compile(r"^opc\.tcp://(?P<host>[a-zA-Z0-9_\-\.]+):(?P<port>[0-9]{1,5})(?P<path>/.*)?$")
+
+
+def is_loopback_endpoint(url: str) -> bool:
+    """True when the endpoint is on this machine (localhost, 127.0.0.0/8 or ::1)."""
+    host = (urlparse(url).hostname or "").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 @dataclass
@@ -46,13 +69,17 @@ class OpcUaPoolConfig:
     duration_seconds: float = 15.0
     target_sample_count: int | None = 20
     burst_trigger_count: int = 5
+    burst_delay_seconds: float = 1.0
     max_worker_processes: int | None = None
     connect_concurrency: int = 20
     sub_period_ms: int = 100
     warn_p90_ms: float = 100.0
-    fail_p90_ms: float | None = None
+    fail_p90_ms: float | None = None  # SLA on P90 delivery time (result bytes on the client)
+    fail_p90_client_ready_ms: float | None = None  # SLA on P90 client-ready time (result decoded)
     require_full_coverage: bool | None = None  # None defaults to strict coverage for fleets
     skip_clock_skew: bool = False  # If True, bypasses Cristian's RTT clock skew probes (e.g. on localhost)
+    clock_tolerance_ms: float = 1000.0  # Clock-health warning tolerance (plus RTT/2); never fails the gate
+    settle_timeout_seconds: float = 5.0  # Max wait after the last trigger round for results to arrive
 
     def validate(self) -> None:
         """Strict validation of all configuration parameters before execution."""
@@ -65,14 +92,27 @@ class OpcUaPoolConfig:
         if self.mode not in VALID_MODES:
             raise ValueError(f"Invalid execution mode '{self.mode}'. Must be one of: {sorted(VALID_MODES)}")
 
-        if self.duration_seconds <= 0:
-            raise ValueError(f"duration_seconds must be positive, got {self.duration_seconds}")
+        if not math.isfinite(self.duration_seconds) or self.duration_seconds <= 0:
+            raise ValueError(f"duration_seconds must be a finite positive number, got {self.duration_seconds}")
 
         if self.target_sample_count is not None and self.target_sample_count <= 0:
             raise ValueError(f"target_sample_count must be positive or None, got {self.target_sample_count}")
 
         if self.burst_trigger_count < 0:
             raise ValueError(f"burst_trigger_count cannot be negative, got {self.burst_trigger_count}")
+
+        if not math.isfinite(self.burst_delay_seconds) or self.burst_delay_seconds < 0:
+            raise ValueError(
+                f"burst_delay_seconds must be a finite non-negative number, got {self.burst_delay_seconds}"
+            )
+
+        if not math.isfinite(self.clock_tolerance_ms) or self.clock_tolerance_ms < 0:
+            raise ValueError(f"clock_tolerance_ms must be a finite non-negative number, got {self.clock_tolerance_ms}")
+
+        if not math.isfinite(self.settle_timeout_seconds) or self.settle_timeout_seconds < 0:
+            raise ValueError(
+                f"settle_timeout_seconds must be a finite non-negative number, got {self.settle_timeout_seconds}"
+            )
 
         if self.max_worker_processes is not None and (self.max_worker_processes < 1 or self.max_worker_processes > 32):
             raise ValueError(
@@ -85,11 +125,13 @@ class OpcUaPoolConfig:
         if self.sub_period_ms <= 0:
             raise ValueError(f"sub_period_ms must be positive, got {self.sub_period_ms}")
 
-        if self.warn_p90_ms <= 0:
-            raise ValueError(f"warn_p90_ms must be positive, got {self.warn_p90_ms}")
+        if not math.isfinite(self.warn_p90_ms) or self.warn_p90_ms <= 0:
+            raise ValueError(f"warn_p90_ms must be a finite positive number, got {self.warn_p90_ms}")
 
-        if self.fail_p90_ms is not None and self.fail_p90_ms <= 0:
-            raise ValueError(f"fail_p90_ms must be positive, got {self.fail_p90_ms}")
+        for key in ("fail_p90_ms", "fail_p90_client_ready_ms"):
+            value = getattr(self, key)
+            if value is not None and (not math.isfinite(value) or value <= 0):
+                raise ValueError(f"{key} must be a finite positive number, got {value}")
 
         # Validate endpoints
         if not self.endpoints:
@@ -232,6 +274,8 @@ def load_config(file_path: str | Path) -> OpcUaPoolConfig:
                 config.target_sample_count = int(exec_sec["target_sample_count"])
             if "burst_trigger_count" in exec_sec:
                 config.burst_trigger_count = int(exec_sec["burst_trigger_count"])
+            if "burst_delay_seconds" in exec_sec:
+                config.burst_delay_seconds = float(exec_sec["burst_delay_seconds"])
             if "require_full_coverage" in exec_sec:
                 config.require_full_coverage = bool(exec_sec["require_full_coverage"])
             if "skip_clock_skew" in exec_sec:
@@ -244,12 +288,18 @@ def load_config(file_path: str | Path) -> OpcUaPoolConfig:
             _validate_section_keys(eng_sec, ALLOWED_ENGINE_KEYS, "engine")
             if "max_worker_processes" in eng_sec:
                 config.max_worker_processes = int(eng_sec["max_worker_processes"])
+            if "burst_delay_seconds" in eng_sec:
+                config.burst_delay_seconds = float(eng_sec["burst_delay_seconds"])
             if "connect_concurrency" in eng_sec:
                 config.connect_concurrency = int(eng_sec["connect_concurrency"])
             if "sub_period_ms" in eng_sec:
                 config.sub_period_ms = int(eng_sec["sub_period_ms"])
             if "skip_clock_skew" in eng_sec:
                 config.skip_clock_skew = bool(eng_sec["skip_clock_skew"])
+            if "clock_tolerance_ms" in eng_sec:
+                config.clock_tolerance_ms = float(eng_sec["clock_tolerance_ms"])
+            if "settle_timeout_seconds" in eng_sec:
+                config.settle_timeout_seconds = float(eng_sec["settle_timeout_seconds"])
 
     # Thresholds section
     if "thresholds" in data:
@@ -260,6 +310,8 @@ def load_config(file_path: str | Path) -> OpcUaPoolConfig:
                 config.warn_p90_ms = float(thresh_sec["warn_p90_ms"])
             if "fail_p90_ms" in thresh_sec:
                 config.fail_p90_ms = float(thresh_sec["fail_p90_ms"])
+            if "fail_p90_client_ready_ms" in thresh_sec:
+                config.fail_p90_client_ready_ms = float(thresh_sec["fail_p90_client_ready_ms"])
 
     # Perform strict validation
     config.validate()

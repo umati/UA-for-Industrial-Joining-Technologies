@@ -50,3 +50,55 @@ async def test_resolve_namespace_index_not_found():
 
     idx = await resolve_namespace_index(mock_client, "http://unknown.com")
     assert idx is None
+
+
+def _ns_child(uri, version=None, date=None, version_error=False):
+    props = {"0:NamespaceUri": uri}
+    if version is not None:
+        props["0:NamespaceVersion"] = version
+    if date is not None:
+        props["0:NamespacePublicationDate"] = date
+
+    async def get_child(name):
+        if name == "0:NamespaceVersion" and version_error:
+            raise RuntimeError("BadNodeIdUnknown")
+        if name not in props:
+            raise RuntimeError("BadNoMatch")
+        return MagicMock(read_value=AsyncMock(return_value=props[name]))
+
+    return MagicMock(get_child=AsyncMock(side_effect=get_child))
+
+
+@pytest.mark.asyncio
+async def test_read_namespace_metadata_finds_matching_namespace():
+    from datetime import datetime
+
+    from src.namespaces import NS_IJT_BASE, read_namespace_metadata
+
+    client = MagicMock()
+    client.get_node.return_value = MagicMock(
+        get_children=AsyncMock(
+            return_value=[
+                _ns_child("http://opcfoundation.org/UA/DI/", version="1.04"),
+                _ns_child(NS_IJT_BASE, version="1.01.0", date=datetime(2024, 6, 1)),
+            ]
+        )
+    )
+    assert await read_namespace_metadata(client, NS_IJT_BASE) == {
+        "version": "1.01.0",
+        "publication_date": "2024-06-01T00:00:00",
+    }
+
+
+@pytest.mark.asyncio
+async def test_read_namespace_metadata_missing_values_are_none():
+    from src.namespaces import NS_IJT_BASE, read_namespace_metadata
+
+    client = MagicMock()
+    client.get_node.return_value = MagicMock(
+        get_children=AsyncMock(return_value=[_ns_child(NS_IJT_BASE, version_error=True)])
+    )
+    assert await read_namespace_metadata(client, NS_IJT_BASE) == {"version": None, "publication_date": None}
+
+    client.get_node.return_value = MagicMock(get_children=AsyncMock(side_effect=RuntimeError("BadNodeIdUnknown")))
+    assert await read_namespace_metadata(client, NS_IJT_BASE) == {"version": None, "publication_date": None}

@@ -1,5 +1,9 @@
-# Repo-wide Python dependency security floors.
-# Install Python requirements with: pip install -c <repo>/constraints.txt -r requirements.txt
+# Repo-wide Python intent: the asyncua pin plus security floors (>=). Hand-edited.
+# Python clients install from their generated requirements.lock, which is built
+# from their requirements*.txt plus this file. After editing, run:
+#   python scripts/update_python_locks.py
+# (pre-commit fails until the locks match). For a pip-audit failure run:
+#   python scripts/update_python_locks.py --fix
 
 # asyncua is pinned to the latest released PyPI build across IJT Python clients.
 # Current target:
@@ -21,5 +25,20 @@ pyOpenSSL>=26.4.0
 # CVE-2026-45409 / GHSA-65pc-fj4g-8rjx
 idna>=3.15
 
-# PYSEC-2026-161 — starlette < 1.0.1 vulnerable; pulled transitively by mcp / sse-starlette.
-starlette>=1.0.1
+# PYSEC-2026-161/248/249/2280/2281 — starlette; pulled transitively by mcp / sse-starlette.
+starlette>=1.3.1
+
+# Security floors for transitive packages flagged by pip-audit (fixable advisories).
+# Raise a floor only to the lowest release that fixes every listed advisory.
+anyio>=4.14.2
+click>=8.3.3
+mcp>=1.28.1
+msgpack>=1.2.1
+pillow>=12.3.0
+pydantic-settings>=2.14.2
+pyjwt>=2.15.0
+pypdf>=6.19.0
+python-multipart>=0.0.31
+soupsieve>=2.9.0
+urllib3>=2.8.0
+virtualenv>=21.7.13

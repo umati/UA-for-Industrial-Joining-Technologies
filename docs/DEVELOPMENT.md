@@ -154,7 +154,18 @@ npm install
 
 **Manifest files:**
 - `pyproject.toml` – Main Python project configuration
-- `constraints.txt` – Transitive dependency pinning for reproducibility
+- `constraints.txt` (repo root) – the only hand-edited dependency rules: the asyncua pin and minimum safe versions (security floors)
+- `OPC_UA_Clients/Release2/<client>/requirements.lock` – generated exact versions per Python client; never edit by hand
+
+**Python client dependency workflow (one command each):**
+```bash
+python scripts/update_python_locks.py            # after editing requirements*.txt or constraints.txt
+python scripts/update_python_locks.py --fix      # pip-audit failed: raise floors, regenerate locks
+python scripts/update_python_locks.py --upgrade  # move every package to the newest allowed version
+```
+Client runners and setup scripts install with `-c requirements.lock` and reinstall their venv
+automatically when the lock changes. The `python-locks-current` pre-commit hook blocks a stale
+lock, and `run_precommit_all.py` audits every lock.
 
 **Enforcement:** `requires-python` field enforces minimum Python version
 ```toml
