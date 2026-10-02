@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+for _parent in Path(__file__).resolve().parents:
+    if (_parent / "scripts" / "tool_bootstrap.py").is_file():
+        sys.path.insert(0, str(_parent / "scripts"))
+        break
+from tool_bootstrap import ensure_uv
+
 
 def _detect_repo_root(start_dir: Path) -> Path:
     """
@@ -43,24 +49,23 @@ IS_WINDOWS = os.name == "nt"
 IS_DOCKER = os.getenv("IS_DOCKER") == "true"
 PROJECT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = _detect_repo_root(PROJECT_DIR)
-PYTHON_CONSTRAINTS = REPO_ROOT / "constraints.txt"
-PYTHON_LOCK = PROJECT_DIR / "requirements.lock"
 SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
 SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
-
-# Legacy venv directory names that pre-date the .venv / .venv_test convention.
-# Detected and removed automatically so users who pull fresh code do not keep
-# orphaned, potentially-conflicting environments on disk.
 _STALE_VENV_NAMES: tuple[str, ...] = ("venv", "venv_test", "env", "ENV", ".venv_backup")
 
 
-def _pip_constraint_args() -> list[str]:
-    """Pin installs to this client's generated lock (falls back to the shared floors)."""
-    for path in (PYTHON_LOCK, PYTHON_CONSTRAINTS):
-        if path.exists():
-            return ["-c", str(path)]
-    return []
+def _sync_environment(venv_dir: Path) -> None:
+    """Synchronize virtual environment dependencies using uv."""
+    uv = ensure_uv(PROJECT_DIR)
+    env = os.environ.copy()
+    env["UV_PROJECT_ENVIRONMENT"] = str((PROJECT_DIR / venv_dir).resolve())
+    log.info("Synchronizing %s with uv (--no-dev)...", venv_dir)
+    subprocess.check_call(
+        [uv, "sync", "--locked", "--no-dev"],
+        cwd=str(PROJECT_DIR),
+        env=env,
+    )
 
 
 def _remove_stale_venvs(project_dir: Path) -> None:
@@ -519,70 +524,11 @@ def _create_virtualenv(latest_cmd: list[str]) -> None:
 
 
 def _install_python_packages() -> None:
+    _sync_environment(VENV_DIR)
     python = _python_in_venv()
-    req_file = Path("requirements.txt")
-
-    if not req_file.exists():
-        log.error("requirements.txt not found. Cannot continue.")
-        sys.exit(1)
-
-    log.info("Using Python executable: %s", python)
-    # safe: fixed pip command using this project's virtual environment.
-    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip"])  # nosec B603
-    # safe: requirements.txt path is fixed to this project directory.
-    subprocess.check_call(  # nosec B603
-        [
-            str(python),
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            *_pip_constraint_args(),
-            "-r",
-            str(req_file),
-        ]
-    )
-
-    try:
-        # safe: fixed optional crypto package upgrade command.
-        subprocess.check_call(  # nosec B603
-            [
-                str(python),
-                "-m",
-                "pip",
-                "install",
-                "--upgrade",
-                *_pip_constraint_args(),
-                "cryptography",
-                "pyOpenSSL",
-            ]
-        )
-    except Exception as exc:
-        log.debug("Optional crypto stack upgrade skipped: %s", exc)
-
-    # asyncua is pinned in repo-root constraints.txt to the shared released version.
-    # ASYNCUA_VERSION_SPEC is a deliberate operator
-    # escape hatch for testing a future tagged release; when set, this final
-    # asyncua install intentionally bypasses constraints so the override wins.
-    asyncua_override = os.getenv("ASYNCUA_VERSION_SPEC")
-    asyncua_spec = (asyncua_override or "asyncua").strip() or "asyncua"
-    log.info("Installing asyncua (constraints pin or explicit ASYNCUA_VERSION_SPEC): %s", asyncua_spec)
-    # safe: asyncua version spec comes from a dedicated package-spec env var, not a shell string.
-    subprocess.check_call(  # nosec B603
-        [
-            str(python),
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            *([] if asyncua_override and asyncua_override.strip() else _pip_constraint_args()),
-            asyncua_spec,
-        ]
-    )
 
     # Verify the installed asyncua satisfies the minimum version.
     try:
-        # safe: fixed Python one-liner running inside this project's virtual environment.
         installed = subprocess.check_output(  # nosec B603
             [str(python), "-c", "import asyncua; print(asyncua.__version__)"],
             text=True,

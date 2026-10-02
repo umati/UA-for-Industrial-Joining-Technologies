@@ -2,6 +2,9 @@
 
 This document details the engineering architecture, design rationale, concurrency model, and testing patterns for `IJT_Performance_Client`.
 
+User setup and commands are in the [README](../README.md). Pip deployment and
+source reuse are in the [shared integration guide](../../../../docs/PYTHON_CLIENT_INTEGRATION.md).
+
 ---
 
 ## 1. Concurrency Architecture: Why Process Sharding?
@@ -84,6 +87,11 @@ The RTT feeds a clock-health check: an event whose skew-corrected `Time` is earl
 ## 4. Reusability Guide
 
 ### Running via CLI
+
+`run_fleet.py` prepares its runtime automatically. For direct `main.py` examples,
+first prepare and activate a runtime environment as described in the integration
+guide; a bare system Python does not inherit the launcher's environment.
+
 ```bash
 # 1 server baseline (direct source execution)
 python main.py --endpoints "opc.tcp://localhost:40451" --samples 10
@@ -115,12 +123,18 @@ ijt-perf --config profiles/multi_server_fleet.yaml
 ```
 
 ### Importing as Python SDK
+
+Use Python 3.14+. Setup/test entry points prepare uv automatically in isolated
+tooling environments. For direct advanced uv commands, use an installed uv or
+the managed executable. From the client directory, install runtime
+dependencies with `uv sync --locked --no-dev`; use `uv run --no-sync python`
+for direct CLI or SDK commands. `run_fleet.py` manages `.venv` automatically.
+`run_all_tests.py` uses `.venv_test` (local CI mode: `.venv_ci`) and installs the
+development group. Update `pyproject.toml`, then run `uv lock`; do not edit the
+lock by hand.
 ```python
 from src.engine import OpcUaClientPool
 from src.diagnostics import evaluate_diagnostics
-
-# Or when installed via pip:
-# from ijt_performance_client import OpcUaClientPool, evaluate_diagnostics
 
 pool = OpcUaClientPool(endpoints=["opc.tcp://10.0.0.1:40451"], max_workers=2)
 pool.start()

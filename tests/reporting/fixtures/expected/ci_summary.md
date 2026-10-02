@@ -32,7 +32,7 @@
 | Web Client — Python | Ubuntu Release 2 Python unit suite | 2 Passed ✅ | 0 Skipped | 97.0% / 95% ✅ |
 | Web Client — JavaScript | Ubuntu Release 2 JavaScript unit suite | 3 Passed ✅ | 0 Skipped | 96.0% / 95% ✅ |
 | Console Client — Python | Ubuntu Python unit suite | 2 Passed ✅ | 0 Skipped | 99.0% / 95% ✅ |
-| Performance Client — Python | Ubuntu Python unit suite | 3 Passed ✅ | 0 Skipped | 99.9% / 85% ✅ |
+| Performance Client — Python | Ubuntu Python unit suite | 3 Passed ✅ | 0 Skipped | 99.9% / 95% ✅ |
 | Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit suite | 1 Passed ✅ | 1 Skipped | 95.0% / 95% ✅ |
 | C# Client — Unit (xUnit) | Windows C# xUnit unit suite | 1 Passed ✅ | 15 Skipped | 95.0% / 95% ✅ |
 | Test Client — Python (Unit) | Ubuntu Python unit suite | 2 Passed ✅ | 0 Skipped | 98.0% / 95% ✅ |

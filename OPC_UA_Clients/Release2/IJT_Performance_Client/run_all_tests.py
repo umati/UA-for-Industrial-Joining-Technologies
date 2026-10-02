@@ -39,7 +39,13 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
+
+for _parent in Path(__file__).resolve().parents:
+    if (_parent / "scripts" / "tool_bootstrap.py").is_file():
+        sys.path.insert(0, str(_parent / "scripts"))
+        break
+from tool_bootstrap import ensure_uv
 
 # Key directory paths
 _HERE = Path(__file__).resolve().parent
@@ -48,8 +54,6 @@ _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest.xml"
 _OPCUA_SERVER_PORT = 40485
 _DEFAULT_SERVER_URL = f"opc.tcp://localhost:{_OPCUA_SERVER_PORT}"
-_REQUIREMENTS = _HERE / "requirements.txt"
-_REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
 
 
 def _print_status(message: str, *, file: TextIO | None = None) -> None:
@@ -59,8 +63,9 @@ def _print_status(message: str, *, file: TextIO | None = None) -> None:
     print(f"{message[: len(message) - len(body)]}{stamp} {body}", file=file or sys.stdout, flush=True)
 
 
-_PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
-_PYTHON_LOCK = _HERE / "requirements.lock"
+_PYPROJECT = _HERE / "pyproject.toml"
+_UV_LOCK = _HERE / "uv.lock"
+_REQUIREMENTS = _PYPROJECT  # backwards-compat alias
 _ENV_IS_PRE_ISOLATED = os.getenv("IS_DOCKER") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 
 
@@ -78,27 +83,6 @@ def _venv_python(venv: Path) -> Path:
     return venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
 
-def _pip_constraint_args() -> list[str]:
-    """Pin installs to this client's generated lock (falls back to the shared floors)."""
-    for path in (_PYTHON_LOCK, _PYTHON_CONSTRAINTS):
-        if path.exists():
-            return ["-c", str(path)]
-    return []
-
-
-_TEST_REQUIREMENTS = (_REQUIREMENTS, _REQUIREMENTS_DEV)
-
-
-def _requirements_hash(requirements: tuple[Path, ...] = _TEST_REQUIREMENTS) -> str:
-    import hashlib
-
-    h = hashlib.sha256()
-    for req in (_PYTHON_CONSTRAINTS, _PYTHON_LOCK, *requirements):
-        if req.exists():
-            h.update(req.read_bytes())
-    return h.hexdigest()[:16]
-
-
 def _inside_venv(venv: Path = _VENV) -> bool:
     # sys.prefix (not sys.executable) so Linux venv symlinks cannot cause a relaunch loop.
     try:
@@ -107,39 +91,31 @@ def _inside_venv(venv: Path = _VENV) -> bool:
         return False
 
 
-def _install_requirements(venv: Path = _VENV, requirements: tuple[Path, ...] = _TEST_REQUIREMENTS) -> None:
-    """Install packages; reinstall automatically when requirements or the lock change."""
+def _sync_environment(venv: Path = _VENV, dev: bool = True) -> None:
+    """Synchronize virtual environment dependencies using uv."""
     if os.getenv("SKIP_VENV_INSTALL") == "1":
-        print("  Skipping pip install (SKIP_VENV_INSTALL=1)")
+        print("  Skipping uv sync (SKIP_VENV_INSTALL=1)")
         return
+    uv = ensure_uv(_HERE)
     env = os.environ.copy()
-    if "PIP_CACHE_DIR" not in env:
-        cache = _HERE / "tmp" / "pip-cache"
-        cache.mkdir(parents=True, exist_ok=True)
-        env["PIP_CACHE_DIR"] = str(cache)
-    python = str(_venv_python(venv))
-    subprocess.check_call([python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"], env=env)  # nosec B603
-    hash_file = venv / ".req-hash"
-    current = _requirements_hash(requirements)
-    if hash_file.exists() and hash_file.read_text().strip() == current:
-        print("  Requirements unchanged - skipping pip install")
-        return
-    reqs = [arg for req in requirements if req.exists() for arg in ("-r", str(req))]
-    print(f"  Installing {' + '.join(req.name for req in requirements)} ...")
-    subprocess.check_call([python, "-m", "pip", "install", "--quiet", *_pip_constraint_args(), *reqs], env=env)  # nosec B603
-    hash_file.write_text(current)
+    env["UV_PROJECT_ENVIRONMENT"] = str(venv.resolve())
+    cmd = [uv, "sync", "--locked"]
+    if dev:
+        cmd.extend(["--group", "dev"])
+    else:
+        cmd.append("--no-dev")
+    print(f"  Synchronizing {venv.name} with uv (dev={dev})...")
+    subprocess.check_call(cmd, cwd=str(_HERE), env=env)
 
 
 def _relaunch_under_venv(
     venv: Path = _VENV,
-    requirements: tuple[Path, ...] = _TEST_REQUIREMENTS,
+    dev_or_reqs: Any = True,
     script: Path | None = None,
 ) -> int:
     """Run a script (default: this runner) again under the given client venv."""
-    if not venv.exists():
-        print(f"  Creating venv: {venv}")
-        subprocess.check_call([sys.executable, "-m", "venv", str(venv)])  # nosec B603
-    _install_requirements(venv, requirements)
+    dev = dev_or_reqs if isinstance(dev_or_reqs, bool) else True
+    _sync_environment(venv=venv, dev=dev)
     venv_py = str(_venv_python(venv))
     print(f"  Re-launching under venv Python: {venv_py}")
     # subprocess.run instead of os.execv: on Windows execv leaves pipe handles open for callers.
@@ -350,6 +326,12 @@ def _extract_pytest_summary(output: str) -> str:
     return "Passed"
 
 
+def _pytest_total_coverage(output: str) -> str:
+    """Return "; coverage N%" from pytest-cov's fail-under line, or "" when absent."""
+    matches = re.findall(r"\bTotal coverage:\s*(\d+(?:\.\d+)?)%", output)
+    return f"; coverage {float(matches[-1]):.1f}%" if matches else ""
+
+
 def _step_unit_tests(junit_xml: str | None = None, verbose: bool = False) -> _StepResult:
     """Run pytest unit tests with coverage."""
     cmd = [
@@ -367,7 +349,9 @@ def _step_unit_tests(junit_xml: str | None = None, verbose: bool = False) -> _St
         cmd.append("-v")
 
     res = subprocess.run(cmd, cwd=_HERE, capture_output=True, text=True)
-    summary = _extract_pytest_summary(res.stdout) if res.returncode == 0 else "Failed"
+    summary = (
+        _extract_pytest_summary(res.stdout) + _pytest_total_coverage(res.stdout) if res.returncode == 0 else "Failed"
+    )
     return _StepResult(
         "Unit Tests",
         ok=res.returncode == 0,

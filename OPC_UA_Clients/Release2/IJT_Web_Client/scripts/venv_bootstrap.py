@@ -5,10 +5,15 @@
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+for _parent in Path(__file__).resolve().parents:
+    if (_parent / "scripts" / "tool_bootstrap.py").is_file():
+        sys.path.insert(0, str(_parent / "scripts"))
+        break
+from tool_bootstrap import ensure_uv
 
 IS_WINDOWS = os.name == "nt"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +29,7 @@ def _detect_repo_root(start_dir: Path) -> Path:
 
 
 REPO_ROOT = _detect_repo_root(PROJECT_ROOT)
-PYTHON_CONSTRAINTS = REPO_ROOT / "constraints.txt"
+PYTHON_LOCK = PROJECT_ROOT / "uv.lock"
 
 
 def _python_in_venv(venv_dir: Path) -> Path:
@@ -41,18 +46,22 @@ def _build_tmp_env() -> dict[str, str]:
     return env
 
 
-def _run(cmd: list[str], cwd: Path | None = None) -> None:
-    env = _build_tmp_env()
-    subprocess.check_call(cmd, cwd=str(cwd) if cwd else None, env=env)
+def _run(cmd: list[str], cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
+    run_env = _build_tmp_env()
+    if env:
+        run_env.update(env)
+    subprocess.check_call(cmd, cwd=str(cwd) if cwd else None, env=run_env)
 
 
-def _run_quiet(cmd: list[str], cwd: Path | None = None) -> int:
-    env = _build_tmp_env()
+def _run_quiet(cmd: list[str], cwd: Path | None = None, env: dict[str, str] | None = None) -> int:
+    run_env = _build_tmp_env()
+    if env:
+        run_env.update(env)
     completed = subprocess.run(
         cmd,
         cwd=str(cwd) if cwd else None,
         check=False,
-        env=env,
+        env=run_env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -65,17 +74,14 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _fingerprint(requirement_files: list[Path], python_executable: Path) -> str:
+def _fingerprint(files: list[Path], python_executable: Path) -> str:
     digest = hashlib.sha256()
     digest.update(str(python_executable).encode("utf-8"))
-    for req in [PYTHON_CONSTRAINTS, *requirement_files]:
-        digest.update(req.name.encode("utf-8"))
-        digest.update(_read_text(req).encode("utf-8"))
+    for req in files:
+        if req.exists():
+            digest.update(req.name.encode("utf-8"))
+            digest.update(_read_text(req).encode("utf-8"))
     return digest.hexdigest()
-
-
-def _pip_constraint_args() -> list[str]:
-    return ["-c", str(PYTHON_CONSTRAINTS)] if PYTHON_CONSTRAINTS.exists() else []
 
 
 def _load_state(state_file: Path) -> dict:
@@ -92,162 +98,81 @@ def _save_state(state_file: Path, state: dict) -> None:
     state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
-def _ensure_venv(venv_dir: Path) -> Path:
-    python_path = _python_in_venv(venv_dir)
-    if python_path.exists():
-        if _run_quiet([str(python_path), "-m", "pip", "--version"], cwd=PROJECT_ROOT) == 0:
-            return python_path
-        try:
-            _run([str(python_path), "-m", "ensurepip", "--upgrade"], cwd=PROJECT_ROOT)
-            return python_path
-        except Exception:
-            # Fallback for environments where ensurepip temp extraction is blocked.
-            try:
-                _run(
-                    [
-                        sys.executable,
-                        "-m",
-                        "pip",
-                        "--python",
-                        str(python_path),
-                        "install",
-                        "--upgrade",
-                        "pip",
-                    ],
-                    cwd=PROJECT_ROOT,
-                )
-                return python_path
-            except Exception:
-                shutil.rmtree(venv_dir, ignore_errors=True)
-
-    venv_dir.parent.mkdir(parents=True, exist_ok=True)
-    # Build venv without bundled pip bootstrap first; then run ensurepip under controlled TMP dirs.
-    _run([sys.executable, "-m", "venv", "--without-pip", str(venv_dir)], cwd=PROJECT_ROOT)
-    python_path = _python_in_venv(venv_dir)
-    if not python_path.exists():
-        raise RuntimeError(f"Failed to create virtual environment at '{venv_dir}'")
-    try:
-        _run([str(python_path), "-m", "ensurepip", "--upgrade"], cwd=PROJECT_ROOT)
-    except Exception:
-        # Fallback for environments where ensurepip temp extraction is blocked.
-        _run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "--python",
-                str(python_path),
-                "install",
-                "--upgrade",
-                "pip",
-            ],
-            cwd=PROJECT_ROOT,
-        )
-    return python_path
-
-
-def _clone_venv(source_dir: Path, target_dir: Path) -> Path:
-    if target_dir.exists():
-        shutil.rmtree(target_dir, ignore_errors=True)
-    shutil.copytree(source_dir, target_dir)
-    python_path = _python_in_venv(target_dir)
-    if not python_path.exists():
-        raise RuntimeError(f"Cloned environment is missing interpreter: '{python_path}'")
-    return python_path
-
-
-def _ensure_requirements(
-    python_path: Path,
-    requirement_files: list[Path],
-    state_name: str,
+def _sync_uv_environment(
+    venv_dir: Path,
+    project_root: Path,
+    dev: bool = False,
+    state_name: str = "runtime_env",
     import_probe: str | None = None,
-) -> None:
-    existing = [p for p in requirement_files if p.exists()]
-    if not existing:
-        return
-
+) -> Path:
+    python_path = _python_in_venv(venv_dir)
+    lock_file = project_root / "uv.lock"
+    pyproject_file = project_root / "pyproject.toml"
     state_file = STATE_DIR / f"{state_name}.json"
-    expected_hash = _fingerprint(existing, python_path)
+
+    expected_hash = _fingerprint([lock_file, pyproject_file], python_path)
     state = _load_state(state_file)
 
-    if state.get("fingerprint") == expected_hash and import_probe:
-        if _run_quiet([str(python_path), "-c", import_probe], cwd=PROJECT_ROOT) == 0:
-            return
+    if (
+        python_path.exists()
+        and state.get("fingerprint") == expected_hash
+        and (not import_probe or _run_quiet([str(python_path), "-c", import_probe], cwd=project_root) == 0)
+    ):
+        return python_path
 
-    for req in existing:
-        _run(
-            [
-                str(python_path),
-                "-m",
-                "pip",
-                "install",
-                "--disable-pip-version-check",
-                "--upgrade",
-                *_pip_constraint_args(),
-                "-r",
-                str(req),
-            ],
-            cwd=PROJECT_ROOT,
-        )
+    uv = ensure_uv(PROJECT_ROOT)
+    env = {
+        "UV_PROJECT_ENVIRONMENT": str(venv_dir.resolve()),
+    }
+    cmd = [uv, "sync", "--locked"]
+    if dev:
+        cmd.extend(["--group", "dev"])
+    else:
+        cmd.append("--no-dev")
+
+    _run(cmd, cwd=project_root, env=env)
+
+    if not python_path.exists():
+        raise RuntimeError(f"Failed to synchronize environment at '{venv_dir}' with uv")
 
     _save_state(state_file, {"fingerprint": expected_hash})
+    return python_path
 
 
 def ensure_runtime_env(project_root: Path | None = None) -> Path:
     root = project_root.resolve() if project_root else PROJECT_ROOT
     venv_dir = root / ".venv"
-    python_path = _ensure_venv(venv_dir)
-    _ensure_requirements(
-        python_path,
-        [root / "requirements.txt"],
+    return _sync_uv_environment(
+        venv_dir,
+        root,
+        dev=False,
         state_name="runtime_env",
         import_probe="import asyncua, websockets, packaging, pytz, aiofiles",
     )
-    return python_path
 
 
 def ensure_test_env(project_root: Path | None = None) -> Path:
     root = project_root.resolve() if project_root else PROJECT_ROOT
     venv_dir = root / ".venv_test"
-    try:
-        python_path = _ensure_venv(venv_dir)
-    except Exception:
-        runtime_dir = root / ".venv"
-        if not _python_in_venv(runtime_dir).exists():
-            ensure_runtime_env(root)
-        if not _python_in_venv(runtime_dir).exists():
-            raise
-        python_path = _clone_venv(runtime_dir, venv_dir)
-
-    _ensure_requirements(
-        python_path,
-        [root / "requirements.txt", root / "requirements-dev.txt"],
+    return _sync_uv_environment(
+        venv_dir,
+        root,
+        dev=True,
         state_name="test_env",
         import_probe="import asyncua, websockets, pytest, pytest_asyncio",
     )
-    return python_path
 
 
 def ensure_regression_env(project_root: Path | None = None) -> Path:
     root = project_root.resolve() if project_root else PROJECT_ROOT
     venv_dir = root / ".venv_test"
-    try:
-        python_path = _ensure_venv(venv_dir)
-    except Exception:
-        runtime_dir = root / ".venv"
-        if not _python_in_venv(runtime_dir).exists():
-            ensure_runtime_env(root)
-        if not _python_in_venv(runtime_dir).exists():
-            raise
-        python_path = _clone_venv(runtime_dir, venv_dir)
-
-    _ensure_requirements(
-        python_path,
-        [root / "requirements.txt"],
+    return _sync_uv_environment(
+        venv_dir,
+        root,
+        dev=True,
         state_name="regression_env",
         import_probe="import asyncua, websockets",
     )
-    return python_path
 
 
 def ensure_additional_requirements(
@@ -256,12 +181,62 @@ def ensure_additional_requirements(
     state_name: str,
     import_probe: str | None = None,
 ) -> None:
-    _ensure_requirements(
-        python_path,
-        requirement_files,
-        state_name=state_name,
-        import_probe=import_probe,
-    )
+    state_file = STATE_DIR / f"{state_name}.json"
+    existing = [p for p in requirement_files if p.exists()]
+    expected_hash = _fingerprint(existing, python_path)
+    state = _load_state(state_file)
+
+    if state.get("fingerprint") == expected_hash and import_probe:
+        if _run_quiet([str(python_path), "-c", import_probe], cwd=PROJECT_ROOT) == 0:
+            return
+
+    for req in existing:
+        if req.suffix in {".txt", ".in"}:
+            _run(
+                [
+                    str(python_path),
+                    "-m",
+                    "pip",
+                    "install",
+                    # uv.lock
+                    "--disable-pip-version-check",
+                    "-r",
+                    str(req),
+                ],
+                cwd=PROJECT_ROOT,
+            )
+        elif req.name == "uv.lock" or req.suffix == ".lock":
+            uv = ensure_uv(PROJECT_ROOT)
+            client_dir = req.parent
+            export_proc = subprocess.run(
+                [uv, "export", "--frozen", "--no-dev", "--no-emit-project"],
+                cwd=str(client_dir),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if export_proc.returncode != 0:
+                raise RuntimeError(f"Failed to export locked dependencies from {req}: {export_proc.stderr}")
+            tmp_req = STATE_DIR / f"{client_dir.name}_locked_deps.txt"
+            tmp_req.write_text(export_proc.stdout, encoding="utf-8")
+            _run(
+                [
+                    uv,
+                    "pip",
+                    "install",
+                    # uv.lock
+                    "--python",
+                    str(python_path),
+                    "-r",
+                    str(tmp_req),
+                ],
+                cwd=client_dir,
+            )
+
+    if import_probe and _run_quiet([str(python_path), "-c", import_probe], cwd=PROJECT_ROOT) != 0:
+        raise RuntimeError(f"Import probe failed for {state_name} ({import_probe}) after installing requirement files.")
+
+    _save_state(state_file, {"fingerprint": expected_hash})
 
 
 def is_current_interpreter(python_path: Path) -> bool:

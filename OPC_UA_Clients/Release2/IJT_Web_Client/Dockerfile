@@ -1,6 +1,9 @@
 # ── base: shared system + Python deps ────────────────────────────────────────
 FROM nikolaik/python-nodejs:python3.14-nodejs24 AS base
 
+# Install uv pinned by image digest
+COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 /uv /uvx /bin/
+
 WORKDIR /app
 
 # Install system dependencies
@@ -8,34 +11,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential git curl ca-certificates && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY constraints.txt /tmp/constraints.txt
-COPY constraints.txt ./constraints.txt
-COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.lock /tmp/requirements.lock
 COPY scripts/opcua_session_policy.py \
-     scripts/opcua_session_policy_loader.py /app/scripts/
-
-# Upgrade pip and install Python bootstrap deps.
-# requirements.lock (generated from requirements*.txt + repo-root constraints.txt)
-# pins exact versions so Docker builds match local and CI installs.
-RUN pip install --upgrade pip --no-cache-dir && \
-    pip install --no-cache-dir -c /tmp/requirements.lock \
-        asyncua \
-        python-dotenv \
-        websockets \
-        packaging
+     scripts/opcua_session_policy_loader.py \
+     scripts/tool_bootstrap.py /app/scripts/
 
 ENV IS_DOCKER=true \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/src \
-    npm_config_update_notifier=false
+    npm_config_update_notifier=false \
+    UV_PROJECT_ENVIRONMENT=/opt/ijt_venv \
+    PATH="/opt/ijt_venv/bin:$PATH"
 
 # Copy dependency manifests first for better layer caching.
-# Docker builds use the repo root as context so the same constraints.txt is
-# shared by local runners, CI, and images.
-COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt \
-     OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt* ./
-RUN pip install --no-cache-dir -c /tmp/requirements.lock -r requirements.txt
+COPY OPC_UA_Clients/Release2/IJT_Web_Client/pyproject.toml \
+     OPC_UA_Clients/Release2/IJT_Web_Client/uv.lock ./
+
+RUN uv sync --locked --no-dev
 
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/package.json \
      OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json* ./
@@ -45,7 +37,7 @@ FROM base AS test
 
 ENV NODE_ENV=development
 
-RUN pip install --no-cache-dir -c /tmp/requirements.lock -r requirements-dev.txt && \
+RUN uv sync --locked && \
     (npm ci --ignore-scripts --no-audit --no-fund || npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund)
 
 # Vendor the shared readiness module so tests/python/_live_server_readiness.py
@@ -58,6 +50,7 @@ COPY scripts/ijt_live_readiness.py /app/scripts/ijt_live_readiness.py
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/. .
 
 CMD ["python", "-m", "pytest", "tests/python/unit/", "-v", "--tb=short", "--no-header"]
+
 
 # ── production: lean image, no dev tools ─────────────────────────────────────
 FROM base AS production
@@ -72,7 +65,7 @@ COPY OPC_UA_Clients/Release2/IJT_Web_Client/. .
 # Create a non-root user and transfer ownership
 RUN groupadd --gid 1001 appgroup && \
     useradd  --uid 1001 --gid appgroup --shell /bin/bash --create-home appuser && \
-    chown -R appuser:appgroup /app
+    chown -R appuser:appgroup /app /opt/ijt_venv
 
 USER appuser
 

@@ -44,6 +44,12 @@ The workflow has three permission-separated jobs:
 
 ## Runtime contract
 
+The image includes the reviewed uv executable. Its Python wheelhouse is generated
+from the Web Client's `pyproject.toml` and `uv.lock`, including development
+dependencies needed for browser tests. Both files are fingerprint inputs.
+CI/Docker bootstrap downloads are disabled; offline runtime installs use the
+baked wheelhouse rather than resolving new package versions.
+
 The image is consumed at runtime via a step-level `docker run` (NOT
 `jobs.<job>.container:`) in the `live-webclient-browser` matrix job. The
 container is invoked with:

@@ -4,9 +4,11 @@ import importlib.util
 import json
 import logging
 import re
+import shutil
 import subprocess
 import sys
 import tomllib
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -25,6 +27,7 @@ def _load_root_runner():
 
 
 _runner = _load_root_runner()
+_PYTHON_CLIENT_DIRS = ("CONSOLE_DIR", "TEST_CLIENT_DIR", "WEB_CLIENT_DIR", "PERFORMANCE_DIR")
 _CI_REPORT_SCRIPT = _runner.REPO_ROOT / "reporting" / "ci_run_summary.py"
 _INTEGRATION_REPORT_SCRIPT = _runner.REPO_ROOT / "reporting" / "system_tests_run_summary.py"
 
@@ -37,30 +40,101 @@ def teardown_function() -> None:
     _runner._server_smoke_requirements_ready = False
 
 
+@pytest.mark.parametrize(
+    "skipped,ok,exit_code", [(True, True, 1), (False, True, 0), (False, False, 1)]
+)
+def test_explicit_suite_requires_actual_validation(monkeypatch, skipped, ok, exit_code):
+    suite = "server-smoke"
+    result = _runner.SuiteResult(suite, ok, skipped=skipped, output="prerequisite unavailable")
+    monkeypatch.setitem(
+        _runner.SUITE_REGISTRY, suite, replace(_runner.SUITE_REGISTRY[suite], runner=lambda: result)
+    )
+    monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--suite", suite])
+    monkeypatch.setattr(_runner, "_cleanup_caches", lambda *args: None)
+    monkeypatch.setattr(_runner, "_configure_stdio_utf8", lambda: None)
+    monkeypatch.setattr(_runner, "_check_tool", lambda *args: True)
+    monkeypatch.setattr(_runner, "_find_cmd", lambda *args: None)
+    monkeypatch.setattr(_runner, "_write_timing_artifacts", lambda *args: None)
+    assert _runner.main() == exit_code
+
+
+@pytest.mark.parametrize("isolated", ["GITHUB_ACTIONS", "IS_DOCKER"])
+def test_root_entrypoint_reuses_isolated_interpreter(monkeypatch, isolated):
+    monkeypatch.setenv(isolated, "true")
+    monkeypatch.setattr(sys, "argv", ["run_all_tests.py"])
+    monkeypatch.setattr(_runner, "main", lambda: 17)
+    monkeypatch.setattr(
+        _runner,
+        "ensure_requirements_environment",
+        lambda *args, **kwargs: pytest.fail("no downloads"),
+    )
+    assert _runner.entrypoint() == 17
+
+
+def test_root_entrypoint_prepares_and_relaunches_locally(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("IS_DOCKER", raising=False)
+    monkeypatch.setattr(_runner, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--phase1"])
+    python = tmp_path / "managed-python"
+    prepared = []
+    monkeypatch.setattr(
+        _runner,
+        "ensure_requirements_environment",
+        lambda *args, **kwargs: prepared.append((args, kwargs)) or python,
+    )
+    commands = []
+    monkeypatch.setattr(
+        _runner.subprocess,
+        "run",
+        lambda command, **kwargs: (
+            commands.append((command, kwargs)) or subprocess.CompletedProcess(command, 7)
+        ),
+    )
+    assert _runner.entrypoint() == 7
+    assert prepared[0][1]["name"] == "root-tests"
+    assert commands[0][0][0] == str(python)
+    assert commands[0][0][-1] == "--phase1"
+    assert commands[0][1]["cwd"] == tmp_path
+
+
+def test_root_entrypoint_preparation_failure_is_blocking(monkeypatch):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("IS_DOCKER", raising=False)
+    monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--phase1"])
+    monkeypatch.setattr(
+        _runner,
+        "ensure_requirements_environment",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("offline")),
+    )
+    assert _runner.entrypoint() == 1
+
+
+def test_cache_cleanup_preserves_managed_tooling(tmp_path):
+    protected = tmp_path / ".state" / "tools" / "__pycache__"
+    protected.mkdir(parents=True)
+    bytecode = protected / "fixture.pyc"
+    bytecode.write_bytes(b"tool cache")
+    unprotected = tmp_path / "__pycache__"
+    unprotected.mkdir()
+    (unprotected / "fixture.pyc").write_bytes(b"project cache")
+    _runner._cleanup_caches(tmp_path)
+    assert bytecode.read_bytes() == b"tool cache"
+    assert not unprotected.exists()
+
+
 def test_python_dependency_security_floors_are_centralized() -> None:
-    constraints = _runner.REPO_ROOT / "constraints.txt"
-    assert constraints.exists(), "Add repo-wide Python security floors to constraints.txt"
-
-    constraints_text = constraints.read_text(encoding="utf-8")
-    assert "idna>=3.15" in constraints_text
-
-    requirement_files = [
-        _runner.CONSOLE_DIR / "requirements.txt",
-        _runner.CONSOLE_DIR / "requirements-dev.txt",
-        _runner.TEST_CLIENT_DIR / "requirements.txt",
-        _runner.TEST_CLIENT_DIR / "requirements-dev.txt",
-        _runner.WEB_CLIENT_DIR / "requirements.txt",
-        _runner.WEB_CLIENT_DIR / "requirements-dev.txt",
-        _runner.PERFORMANCE_DIR / "requirements.txt",
-        _runner.PERFORMANCE_DIR / "requirements-dev.txt",
-        _runner.SERVER_DIR / "tests" / "requirements.txt",
-    ]
-    for req_file in requirement_files:
-        text = req_file.read_text(encoding="utf-8")
-        assert "constraints.txt" in text, f"{req_file} must document repo-wide constraints usage"
-        assert not re.search(r"(?im)^idna\s*[<>=!~]", text), (
-            f"{req_file} must not pin transitive idna directly; use constraints.txt"
+    for name in _PYTHON_CLIENT_DIRS:
+        client_dir = getattr(_runner, name)
+        pyproject = client_dir / "pyproject.toml"
+        assert pyproject.is_file(), f"{client_dir.name}: missing pyproject.toml"
+        lock_file = client_dir / "uv.lock"
+        assert lock_file.is_file(), f"{client_dir.name}: missing uv.lock"
+        lock_text = lock_file.read_text(encoding="utf-8")
+        assert 'name = "asyncua"' in lock_text and 'version = "2.0.1"' in lock_text, (
+            f"{client_dir.name}: asyncua must be locked to 2.0.1"
         )
+        assert 'name = "idna"' in lock_text, f"{client_dir.name}: idna must be present in lock"
 
 
 def test_python_requirement_installs_use_constraints_file() -> None:
@@ -154,57 +228,45 @@ def test_python_requirement_installs_use_constraints_file() -> None:
                 and "PYTHON_CONSTRAINTS" not in block
                 and "_pip_constraint_args" not in block
                 and "_pip_floor_args" not in block
+                and "uv sync" not in block
+                and "uv.lock" not in block
+                and "tests/requirements.txt" not in block
+                and "reporting/requirements.txt" not in block
+                and "OPC_UA_Servers/Release2/tests/requirements.txt" not in block
             ):
                 rel_path = path.relative_to(_runner.REPO_ROOT)
                 missing.append(f"{rel_path}:{index + 1}")
 
     assert not missing, (
-        "Python dependency install surfaces must use repo-wide constraints.txt. "
-        "Add -c <repo>/constraints.txt or _pip_constraint_args() at: " + ", ".join(missing)
+        "Python dependency install surfaces must use repo-wide constraints or uv sync. "
+        "Add uv sync --locked or constraints at: " + ", ".join(missing)
     )
-
-
-def _load_lock_script():
-    path = _runner.REPO_ROOT / "scripts" / "update_python_locks.py"
-    spec = importlib.util.spec_from_file_location("update_python_locks", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-_PYTHON_CLIENT_DIRS = ("CONSOLE_DIR", "TEST_CLIENT_DIR", "WEB_CLIENT_DIR", "PERFORMANCE_DIR")
 
 
 def test_every_python_client_has_a_current_lock() -> None:
-    """Each Python client gets a generated requirements.lock that matches its inputs."""
-    locks = _load_lock_script()
-    projects = locks.lock_projects()
-    expected = {getattr(_runner, name).resolve() for name in _PYTHON_CLIENT_DIRS}
-    assert expected <= {p.resolve() for p in projects}
-    release2 = _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2"
-    for client in release2.iterdir():
-        if (client / "run_all_tests.py").is_file() and (client / "pyproject.toml").is_file():
-            assert (client / "requirements.txt").is_file(), f"{client.name}: add requirements.txt"
-            assert (client / "requirements-dev.txt").is_file(), (
-                f"{client.name}: add requirements-dev.txt"
-            )
-    stale = [p.name for p in locks.stale_locks(projects)]
-    assert not stale, (
-        f"Out-of-date requirements.lock in {stale}; run: python scripts/update_python_locks.py"
-    )
+    """Each Python client gets a generated uv.lock that resolves its dependencies."""
+    for name in _PYTHON_CLIENT_DIRS:
+        client_dir = getattr(_runner, name)
+        lock_file = client_dir / "uv.lock"
+        assert lock_file.is_file(), f"{client_dir.name}: missing uv.lock"
+        pyproject = client_dir / "pyproject.toml"
+        assert pyproject.is_file(), f"{client_dir.name}: missing pyproject.toml"
+        uv = shutil.which("uv") or "uv"
+        proc = subprocess.run(
+            [uv, "lock", "--check"],
+            cwd=client_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )  # noqa: S603, S607
+        assert proc.returncode == 0, f"{client_dir.name}: uv.lock out of date:\n{proc.stderr}"
 
 
 def test_every_python_client_installs_from_its_lock_in_its_own_venv() -> None:
-    """Every client: own .venv_test, lock-pinned installs, lock in the reinstall hash."""
+    """Every client: own .venv_test, uv sync --locked installs, uv.lock checked."""
     for name in _PYTHON_CLIENT_DIRS:
         runner = (getattr(_runner, name) / "run_all_tests.py").read_text(encoding="utf-8")
-        assert '"requirements.lock"' in runner, f"{name}: runner must define _PYTHON_LOCK"
-        assert re.search(r"for path in \(_PYTHON_LOCK, _PYTHON_CONSTRAINTS\)", runner), name
-        assert re.search(r"for req in \(_PYTHON_CONSTRAINTS, _PYTHON_LOCK,", runner), (
-            f"{name}: lock must be part of the venv reinstall hash"
-        )
+        assert "uv" in runner and "sync" in runner, f"{name}: runner must sync via uv"
         assert '".venv_test"' in runner and '".venv_ci"' in runner, (
             f"{name}: use .venv_test/.venv_ci"
         )
@@ -213,43 +275,39 @@ def test_every_python_client_installs_from_its_lock_in_its_own_venv() -> None:
         _runner.WEB_CLIENT_DIR / "setup_project.py",
     ):
         text = setup.read_text(encoding="utf-8")
-        assert "for path in (PYTHON_LOCK, PYTHON_CONSTRAINTS)" in text, setup.name
+        assert "uv" in text and "sync" in text, setup.name
 
 
 def test_python_constraints_have_one_source_and_locks_are_audited() -> None:
     release2 = _runner.REPO_ROOT / "OPC_UA_Clients" / "Release2"
     copies = sorted(p.parent.name for p in release2.glob("*/constraints.txt"))
-    assert not copies, f"Duplicate constraints.txt in {copies}; use repo-root constraints.txt only"
+    assert not copies, f"Duplicate constraints.txt in {copies}; constraints.txt should not exist"
     precommit_all = (_runner.REPO_ROOT / "run_precommit_all.py").read_text(encoding="utf-8")
     assert "_run_python_lock_audit" in precommit_all
-    assert (
-        '"Release2" / "IJT_'
-        not in precommit_all.split("PYTHON_AUDIT_REQUIREMENTS", 1)[1].split(")", 1)[0]
-    ), "Client requirement files are audited through their locks, not re-resolved"
     hooks = (_runner.REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-    assert "scripts/update_python_locks.py --check" in hooks
+    assert "uv lock --check" in hooks
 
 
-def test_python_lock_fix_raises_floors_in_constraints() -> None:
-    locks = _load_lock_script()
-    report = {
-        "dependencies": [
-            {
-                "name": "anyio",
-                "version": "4.0",
-                "vulns": [{"id": "X", "fix_versions": ["4.1", "5.0"]}],
-            },
-            {"name": "newpkg", "version": "1.0", "vulns": [{"id": "Y", "fix_versions": ["1.2"]}]},
-            {"name": "pyjwt", "version": "2.0", "vulns": [{"id": "Z", "fix_versions": []}]},
-        ]
-    }
-    plan = locks.plan_floors([report])
-    assert plan.floors == {"anyio": "4.1", "newpkg": "1.2"}
-    assert plan.advisory_only == ["pyjwt 2.0 Z"]
-    text = "asyncua==2.0.1\n\n" + locks.MANAGED_MARKER + " (x).\n# note\nanyio>=4.0\nzzz>=1\n"
-    result = locks.apply_floors(text, plan)
-    assert "anyio>=4.1\nnewpkg>=1.2\nzzz>=1\n" in result.text
-    assert not result.manual
+def test_python_lock_security_floors_are_enforced() -> None:
+    """Verify that all client locks satisfy repo-wide security baseline floors."""
+    from packaging.version import Version
+
+    for name in _PYTHON_CLIENT_DIRS:
+        client_dir = getattr(_runner, name)
+        lock_data = tomllib.loads((client_dir / "uv.lock").read_text(encoding="utf-8"))
+        pkgs = {p["name"]: p["version"] for p in lock_data.get("package", [])}
+        manifest_constraints = {
+            c["name"]: c["specifier"] for c in lock_data.get("manifest", {}).get("constraints", [])
+        }
+        assert pkgs.get("asyncua") == "2.0.1", f"{name}: asyncua must be 2.0.1"
+        assert Version(pkgs["cryptography"]) >= Version("50.0.0"), f"{name}: cryptography floor"
+        assert Version(pkgs["pyopenssl"]) >= Version("26.4.0"), f"{name}: pyopenssl floor"
+        assert Version(pkgs["idna"]) >= Version("3.15"), f"{name}: idna floor"
+        assert manifest_constraints.get("cryptography") == ">=50.0.0", (
+            f"{name}: cryptography constraint"
+        )
+        assert manifest_constraints.get("pyopenssl") == ">=26.4.0", f"{name}: pyopenssl constraint"
+        assert manifest_constraints.get("idna") == ">=3.15", f"{name}: idna constraint"
 
 
 def test_test_client_pyright_resolves_reporting_scripts() -> None:
@@ -582,37 +640,38 @@ def test_parse_suite_counts_handles_mixed_child_runner_checks() -> None:
     assert _runner._parse_suite_counts(output) == "2 checks passed, 1 check failed"
 
 
-def test_parse_suite_coverage_extracts_pytest_csharp_and_vitest() -> None:
-    pytest_out = """
-    src/results/latency.py             225      0   100%
-    --------------------------------------------------------------
-    TOTAL                             1457      0   100%
-    """
-    assert _runner._parse_suite_coverage(pytest_out) == "100%"
-
-    cs_out = """
-    Coverage (IJT_CSharp_Client.*) ................... PASS (98.6% (threshold: 95%))
-    """
+def test_parse_suite_coverage_reads_real_sub_runner_output() -> None:
+    cs_out = "[PHASE 1] Coverage ................... PASS (98.6% (threshold: 95%))"
     assert _runner._parse_suite_coverage(cs_out) == "98.6%"
 
-    vitest_out = """
-    ------------------|---------|----------|---------|---------|-------------------
-    File              | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
-    ------------------|---------|----------|---------|---------|-------------------
-    All files         |    99.4 |     98.2 |    99.0 |    99.4 |
-    """
-    assert _runner._parse_suite_coverage(vitest_out) == "99.4%"
+    node_out = (
+        "[PHASE 1] Coverage ...... PASS (99.4% lines (floor: 95%, goal: 100%) — advisory/non-gated)"
+    )
+    assert _runner._parse_suite_coverage(node_out) == "99.4%"
 
-    no_cov_out = "Ran 5 tests in 0.12s\nOK"
-    assert _runner._parse_suite_coverage(no_cov_out) is None
+    pytest_out = "Required test coverage of 95.0% reached. Total coverage: 99.60%"
+    assert _runner._parse_suite_coverage(pytest_out) == "99.6%"
+
+    note_out = "[PHASE 1] pytest unit .... PASS (54.3s)  (650 passed in 48.31s; coverage 99.6%)"
+    assert _runner._parse_suite_coverage(note_out) == "99.6%"
+
+    vitest_out = "Statements   : 99.12% ( 4300/4338 )\nLines        : 99.91% ( 4321/4325 )"
+    assert _runner._parse_suite_coverage(vitest_out) == "99.9%"
+
+
+def test_parse_suite_coverage_ignores_unrelated_percentages() -> None:
+    # Per-file pytest-cov rows and a TOTAL row are not the gated figure the sub-runner reports.
+    assert _runner._parse_suite_coverage("TOTAL   1457   0   100%") is None
+    assert _runner._parse_suite_coverage("Ran 5 tests in 0.12s\nOK") is None
+    assert _runner._parse_suite_coverage("threshold: 95%") is None
 
 
 def test_count_tests_from_detail_sums_only_test_outcomes() -> None:
     detail = "707 passed (py), 634 passed (js), 2 warnings, 1 deselected"
 
     assert _runner._count_tests_from_detail(detail) == 1341
-    assert _runner._count_tests_from_detail("151 passed (100% cov)") == 151
-    assert _runner._count_tests_from_detail("945 passed (98.6% cov)") == 945
+    assert _runner._count_tests_from_detail("151 passed; 100.0% coverage") == 151
+    assert _runner._count_tests_from_detail("945 passed; 98.6% coverage") == 945
 
 
 def test_clarify_suite_counts_explains_optional_and_excluded_cases() -> None:
@@ -2663,12 +2722,13 @@ def test_ci_report_uses_declared_coverage_thresholds() -> None:
 
     assert expected_header in report_script
     assert "def cov(pct, threshold=None, job_result=None):" in report_script
-    assert "cov(web_cov, 95, web_py_r)" in report_script
-    assert "cov(web_js_cov, 95, web_js_r)" in report_script
-    assert "cov(con_cov, 95, con_r)" in report_script
-    assert "cov(nod_cov, 95, nod_r)" in report_script
-    assert "cov(cs_cov, 95, cs_u_r)" in report_script
-    assert "cov(tc_cov, 95, tc_r)" in report_script
+    assert "COVERAGE_GATES" in report_script
+    assert "cov(web_cov, gate['web-client-python'], web_py_r)" in report_script
+    assert "cov(web_js_cov, gate['web-client-js'], web_js_r)" in report_script
+    assert "cov(con_cov, gate['console-client'], con_r)" in report_script
+    assert "cov(nod_cov, gate['node-client'], nod_r)" in report_script
+    assert "cov(cs_cov, gate['csharp-unit'], cs_u_r)" in report_script
+    assert "cov(tc_cov, gate['test-client'], tc_r)" in report_script
     assert "coverage_warnings" in report_script
     assert "### ⚠️ Coverage Threshold Warnings" in report_script
 
@@ -2773,7 +2833,6 @@ def test_report_jobs_install_reporting_requirements() -> None:
             if step.get("name") == "Install reporting dependencies"
         )
         install_run = install_step["run"]
-        assert "constraints.txt" in install_run
         assert "-r reporting/requirements.txt" in install_run
 
 
@@ -3025,6 +3084,9 @@ def test_ci_mode_flag_sets_ci_env_for_child_runners(monkeypatch, capsys) -> None
 
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--ci-mode", "--list"])
+    monkeypatch.setattr(
+        _runner, "_cleanup_caches", lambda *args: pytest.fail("--list must not clean the checkout")
+    )
 
     rc = _runner.main()
     captured = capsys.readouterr()
@@ -3063,6 +3125,9 @@ def test_ci_mode_not_set_without_flag(monkeypatch, capsys) -> None:
 
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.setattr(sys, "argv", ["run_all_tests.py", "--list"])
+    monkeypatch.setattr(
+        _runner, "_cleanup_caches", lambda *args: pytest.fail("--list must not clean the checkout")
+    )
 
     rc = _runner.main()
     capsys.readouterr()

@@ -1,6 +1,8 @@
 # UA-for-Industrial-Joining-Technologies — Developer Reference
 
 > For project-specific detail, read the SKILLS.md in each sub-project.
+> For user setup, read the client README. For pip deployment and source reuse,
+> read the [Python Client Integration Guide](PYTHON_CLIENT_INTEGRATION.md).
 
 ---
 
@@ -23,20 +25,27 @@ This repo uses [pre-commit](https://pre-commit.com/) to automatically fix format
 
 > **Detector hooks that block by design**: `check-json`, `check-yaml`, `check-toml` (config syntax errors), `check-merge-conflict` (stray `<<<<<<<`), `debug-statements` (stray `breakpoint()`). These require manual fixes before committing.
 
-**First-time setup** (once per machine, per clone):
-```sh
-pip install pre-commit          # or: pip install -r requirements-dev.txt
-pre-commit install              # installs hooks into .git/hooks/
+**First-time setup** (once per clone): the root launcher prepares its own Python
+tooling environment. There is no global pip installation.
+```powershell
+python .\run_precommit_all.py
+.\.state\tools\precommit-py314\Scripts\python.exe -m pre_commit install
 ```
+The example uses Python 3.14; the directory suffix follows the Python major/minor
+version. On POSIX use `.state/tools/precommit-py314/bin/python` instead.
 The three Python runners (Console, Web, Test) call `pre-commit install` automatically on first local, non-CI run. For CSharp, Node, and Server runners — or direct git use — run it manually once after cloning.
-For the simplest all-in-one pre-commit check before committing, run `python run_precommit_all.py` from the IJT repo root. It runs the root hooks and Envelope hooks (when present), then runs dependency vulnerability gates: `npm audit --package-lock-only --audit-level=high` for Node Client, Web Client, and Envelope lockfiles, `pip-audit` across IJT + Envelope Python requirement files and every Python client `requirements.lock`, plus NuGet vulnerability audit for the C# Client (`dotnet list package --vulnerable --include-transitive`).
+For the simplest all-in-one pre-commit check before committing, run `python run_precommit_all.py` from the IJT repo root. It runs the root hooks and Envelope hooks (when present), then runs dependency vulnerability gates: `npm audit --package-lock-only --audit-level=high` for Node Client, Web Client, and Envelope lockfiles, `pip-audit` across IJT + Envelope Python requirement files and every Python client `uv.lock`, plus NuGet vulnerability audit for the C# Client (`dotnet list package --vulnerable --include-transitive`).
 `run_precommit_all.py` and the Node/Web Client `run_all_tests.py` runners enforce npm audit in **strict mode by default** (`IJT_NPM_AUDIT_MODE=strict`): registry timeout/connectivity errors fail the run, because vulnerability status is unknown. Their npm audit calls use a 15-second process limit plus bounded npm fetch settings, preventing an advisory-service outage from hanging a suite for 5–10 minutes. For explicitly offline local runs, set `IJT_NPM_AUDIT_MODE=offline` to allow continuing only on recognized npm registry connectivity failures. GitHub application/static lanes use the same availability policy so an external advisory-service outage is reported as infrastructure rather than a product defect; real high/critical findings and non-network tool errors still fail. The dependency-security workflow reviews pull-request dependency changes, monitors all ecosystems daily in offline mode, and provides manual strict release qualification.
 
 ---
 
 ### Graceful Handling of Missing Optional Tools
 
-All IJT test runners (`run_all_tests.py`, `run_precommit_all.py`) use `scripts/dependency_helpers.py` to gracefully handle missing optional dependencies. This enables running tests on fresh VMs with only Python 3.14 and Node.js 24 as prerequisites.
+Project test runners use `scripts/dependency_helpers.py` to handle missing optional
+tools. The comprehensive `run_precommit_all.py` gate has a different contract:
+required package tooling and public-project inputs must be available, or it fails.
+It prepares pip-audit before starting workers and never installs it inside a worker.
+Envelope remains optional: an absent or uninitialized private checkout is ignored.
 
 **Behavior:**
 - Missing Docker? → Skip Docker-dependent test suites; continue with available tests.
@@ -44,9 +53,16 @@ All IJT test runners (`run_all_tests.py`, `run_precommit_all.py`) use `scripts/d
 - Missing npm? → Skip npm-dependent tests; continue with available tests.
 - Missing Python packages? → Auto-install on first run (no manual pip install needed).
 
-**Exit code `0`** means all available tests passed (some may have been skipped). This prevents fresh VM setups from requiring all optional tools, keeping developers productive even in limited environments.
+For project test runners, exit code `0` means all available checks passed; inspect
+skip messages for unavailable optional tools. An explicitly requested root
+`--suite` must run; a skipped selected suite returns a failure exit code.
+The root audit gate reports missing
+.NET/npm system prerequisites as incomplete validation by default; `--strict`
+requires them. Package preparation failures remain blocking. The explicitly selected
+npm offline policy remains as documented above.
 
-Each test runner returns tri-state values (True/False/None) to allow flexible handling: `True` = tool available, `False` = already running (no duplicate), `None` = unavailable (graceful skip). No hard `sys.exit(1)` errors on missing dependencies.
+Check each runner's documented result contract rather than treating a successful
+skip as evidence that the skipped checks ran.
 
 **For CI**, environment variables enable strict mode:
 - `IJT_CSHARP_STRICT_DOTNET_PREREQS=1` → Fail if .NET SDK missing (used by GitHub Actions)
@@ -75,7 +91,9 @@ Multi-exception style rule: always write `except (A, B):`, never `except A, B:`.
 by the unit-level guard test (`test_ruff_format_guard.py`) which verifies ruff does not corrupt
 parenthesized except clauses — see **Key Technical Decisions** below.
 
-If any hook modifies files, the commit is aborted. **Run `git add -u && git commit` again** — fixed files are already staged.
+If a hook modifies files, the commit is aborted. Review the fixes, stage the
+intended changes again, then retry the commit; modified files are not automatically
+restaged.
 
 **Auto-generated files excluded**: `OPC_UA_Clients/Release2/IJT_CSharp_Client/Types/` is excluded from all hooks (set in `.pre-commit-config.yaml` and root `pyproject.toml`). Never edit those files manually.
 
@@ -87,16 +105,36 @@ Each Python project uses separate environments for runtime, tests, and container
 
 | Directory | Created by | Contents | Typical use |
 |-----------|-----------|----------|-------------|
-| `.venv` | `setup_client.py` / `setup_project.py` / Performance `run_fleet.py` | `requirements.txt` only | `python main.py` / standalone launch (Windows, Linux, macOS, WSL) |
-| `.venv_test` | `run_all_tests.py` (all Release2 Python clients, including Performance) | `requirements.txt` + `requirements-dev.txt` | Normal local test runs |
-| `.venv_ci` | `run_all_tests.py --ci-mode` (local only) | `requirements.txt` + `requirements-dev.txt` | Local CI-mode mirror without using system Python |
-| `/opt/ijt_venv` | Docker `ENTRYPOINT` | `requirements.txt` | Docker container runtime |
+| `.venv` | `setup_client.py` / `setup_project.py` / Performance `run_fleet.py` | Runtime dependencies (`uv sync --locked --no-dev`) | Application runtime using the environment's Python |
+| `.venv_test` | `run_all_tests.py` (all Release2 Python clients, including Performance) | Runtime + dev dependencies (`uv sync --locked`) | Normal local test runs |
+| `.venv_ci` | `run_all_tests.py --ci-mode` (local only) | Runtime + dev dependencies (`uv sync --locked`) | Local CI-mode mirror without using system Python |
+| `/opt/ijt_venv` | Web Docker image build; setup reuses it | Locked runtime dependencies | Docker container runtime |
 
 > **WSL**: `bootstrap_wsl.sh` calls `setup_project.py` after OS provisioning — uses `.venv` like every other host.
 
 Use `.venv` for running the application, `.venv_test` for normal local tests, and `.venv_ci` for local `--ci-mode` runs. Do not mix them.
 
-Every venv installs with `-c requirements.lock` (exact versions generated by `scripts/update_python_locks.py` from the client requirements + repo-root `constraints.txt`). The lock is part of the reinstall hash, so a regenerated lock refreshes all venvs on the next run. Never edit a lock by hand; for a pip-audit failure run `python scripts/update_python_locks.py --fix`.
+Every Python client installs from its own `uv.lock`, using locked sync or a frozen
+export. Environment markers select dependencies for the current platform; verify
+supported platforms separately. Never edit a lock by hand; update dependencies in
+`pyproject.toml` and run `uv lock` in that client directory. There is no root uv
+workspace. Plain `uv sync` uses `.venv`; test runners explicitly target their test
+environments. Setup and test scripts prepare uv automatically when needed, under
+`.state/tools/`; no global Python changes or shell activation are required.
+Initial preparation needs package-index access or a supplied offline cache.
+CI/Docker must supply the reviewed version; bootstrap downloads are disabled there.
+
+Root audit tasks have a global two-worker limit. npm projects run sequentially
+within one task, continuing after failures. All four client locks include runtime
+and development groups in their frozen audit exports. Exact pins use pip-audit's
+no-resolution path; unsupported flags produce an explicit full-resolution
+fallback. Remaining requirements still use resolution. Task output is buffered
+and results are printed in stable order with timings; required failures aggregate
+to a nonzero exit.
+
+The local root test runner uses `.state/tools/root-tests-py<major><minor>/`
+for root tooling and smoke-test packages. Root pre-commit uses its separate
+`precommit-py<major><minor>/` environment. CI/Docker use their supplied interpreter.
 
 Both `setup_*.py` and `run_all_tests.py` remove stale legacy directories (`venv/`, `venv_test/`, `env/`, `ENV/`, `.venv_backup/`) on startup. A fresh clone always starts clean automatically.
 
@@ -169,7 +207,7 @@ def test_finds_direct_exe(self, fs, monkeypatch):
     exe.write_bytes(b"fake exe")
 ```
 
-`pyfakefs~=6.1` is in `requirements-dev.txt` for both Console and Web clients. Works identically on Windows, Linux, and macOS.
+`pyfakefs~=6.1` is in `[dependency-groups] dev` for both Console and Web clients. Works identically on Windows, Linux, and macOS.
 
 The `tests/fixtures/` directory is created at runtime by `conftest.py` (`pytest_configure`) — no `.gitkeep` needed.
 
@@ -330,21 +368,21 @@ UA-for-Industrial-Joining-Technologies/
 ## Sub-Project Summary
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
-- **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt, Node.js 24.15+, Vitest, ESLint, Docker
+- **Stack**: Python 3.14+, asyncua pinned via pyproject.toml / uv.lock, Node.js 24.15+, Vitest, ESLint, Docker
 - **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), and split live suites for Python OPC UA, Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and Playwright regression. Each live/browser suite owns its own OPC UA/WS/UI ports; root Phase 2 runs Docker as a separate `web-client-docker-smoke` suite.
 - **One test command**: `python run_all_tests.py`
 - **Docker**: standalone smoke is healthy on HTTP:3000 + WS:8001; root Phase 2 isolates Docker smoke on HTTP:3008 + WS:8011
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md`
 
 ### IJT Console Client (`OPC_UA_Clients/Release2/IJT_Console_Client/`)
-- **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt
+- **Stack**: Python 3.14+, asyncua pinned via pyproject.toml / uv.lock
 - **Tests**: unit (`tests/unit/` — no server needed); live (`tests/live/` — calls `pytest.fail()` if server unreachable, no silent skips)
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
 - **Entry point**: `python setup_client.py --url="opc.tcp://..."`
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md`
 
 ### IJT Test Client (`OPC_UA_Clients/Release2/IJT_Test_Client/`)
-- **Stack**: Python 3.14+, asyncua pinned via repo-root constraints.txt, pytest
+- **Stack**: Python 3.14+, asyncua pinned via pyproject.toml / uv.lock, pytest
 - **Purpose**: OPC UA IJT specification test suite — validates server behavior against OPC 40450-1 / 40451-1 without implying formal certification
 - **Tests**: specification tests (`specification_tests/` — require running OPC UA server); unit (`tests/unit/` — pure-logic helper coverage, no server needed)
 - **One test command**: `python run_all_tests.py` (auto-launches server if needed)
@@ -563,7 +601,7 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 
 | Decision | Reason |
 |----------|--------|
-| asyncua pinned in `constraints.txt` | Keep all IJT Python clients on the same released asyncua version (`2.0.1` currently) and revalidate method calls, structures, subscriptions, and type loading on each bump |
+| asyncua pinned in client `pyproject.toml` / `uv.lock` | Keep all IJT Python clients on the same released asyncua version (`2.0.1` currently) and revalidate method calls, structures, subscriptions, and type loading on each bump |
 | Modern DataTypeDefinition loading only | Web, Console, Test, and Web live clients all use the shared `load_ijt_type_definitions()` policy; do not restore deprecated OPC Binary dictionary loading |
 | Shared generated-type compatibility adapter | asyncua 2.0.1 and current upstream master drop `Annotated[..., "AllowSubtypes"]` metadata and use the wrong codec for abstract numeric subtype fields; the root policy preserves metadata and uses Variant encoding for `ua.Number` while retaining ExtensionObject encoding for structured subtypes |
 | Shared enum-aware connection-state policy | asyncua 2.x exposes enum-backed client/socket states; all clients use `is_client_connected()` with `has_session` and `UaClientState.CONNECTED`, never local string comparisons against `protocol.state` |

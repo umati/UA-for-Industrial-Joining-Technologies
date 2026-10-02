@@ -79,3 +79,51 @@ def test_renovate_batches_playwright_updates_weekly() -> None:
     assert rule["schedule"] == ["before 7am on monday"]
     assert rule["minimumReleaseAge"] == "3 days"
     assert rule["automerge"] is False
+
+
+def test_renovate_keeps_python_package_updates_enabled() -> None:
+    """Python lock updates, including security updates, must remain available to Renovate."""
+    python_disabled = [
+        rule
+        for rule in _rules()
+        if rule.get("enabled") is False and "python" in rule.get("matchCategories", [])
+    ]
+    assert not python_disabled, (
+        "Do not disable Python updates globally; this also blocks security fixes."
+    )
+    release2 = _REPO_ROOT / "OPC_UA_Clients" / "Release2"
+    for client_name in (
+        "IJT_Console_Client",
+        "IJT_Performance_Client",
+        "IJT_Test_Client",
+        "IJT_Web_Client",
+    ):
+        assert (release2 / client_name / "uv.lock").is_file(), (
+            f"{client_name} must have its own uv.lock"
+        )
+
+
+def test_renovate_batches_python_dev_tools_weekly() -> None:
+    """Python dev tools should be batched weekly into one reviewed PR."""
+    dev_rules = [rule for rule in _rules() if rule.get("groupSlug") == "python-dev-tools"]
+    assert dev_rules, "renovate.json must define a Python dev tools batching rule"
+    for rule in dev_rules:
+        assert rule["schedule"] == ["before 7am on monday"]
+        assert rule["minimumReleaseAge"] == "3 days"
+        assert rule["automerge"] is False
+    package_names = set().union(*(r.get("matchPackageNames", []) for r in dev_rules))
+    package_patterns = set().union(*(r.get("matchPackagePatterns", []) for r in dev_rules))
+    assert package_names >= {"mypy", "ruff", "bandit", "pip-audit"}
+    assert "^pytest" in package_patterns
+
+
+def test_no_legacy_requirements_in_release2_python_clients() -> None:
+    """Release 2 Python clients must use pyproject.toml + uv.lock without legacy requirements."""
+    release2 = _REPO_ROOT / "OPC_UA_Clients" / "Release2"
+    legacy_files = []
+    for client in release2.iterdir():
+        if client.is_dir():
+            for pattern in ("requirements.txt", "requirements-dev.txt", "requirements.lock"):
+                if (client / pattern).is_file():
+                    legacy_files.append(str((client / pattern).relative_to(_REPO_ROOT)))
+    assert not legacy_files, f"Legacy requirements files found: {legacy_files}"

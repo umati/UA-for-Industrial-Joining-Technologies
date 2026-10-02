@@ -1974,41 +1974,54 @@ class TestCreateVirtualenv:
 
 
 class TestInstallPythonPackages:
-    """_install_python_packages: missing requirements, success, crypto-upgrade exception."""
+    """_install_python_packages: missing pyproject, success, sync failure."""
 
-    def test_missing_requirements_exits(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(sp, "_get_python_path", lambda: Path("/usr/bin/python3.14"))
-        monkeypatch.setattr(subprocess, "check_call", lambda *a, **kw: None)
-        with pytest.raises(SystemExit):
-            sp._install_python_packages()
-
-    def test_success_path(self, tmp_path, monkeypatch):
-        (tmp_path / "requirements.txt").write_text("asyncua>=2.0.1\n")
-        monkeypatch.chdir(tmp_path)
+    def test_missing_pyproject_exits(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sp, "PROJECT_DIR", tmp_path)
         monkeypatch.setattr(sp, "_get_python_path", lambda: Path("/usr/bin/python3.14"))
         calls = []
-        monkeypatch.setattr(subprocess, "check_call", lambda *a, **kw: calls.append(list(a[0])))
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "2.0.1\n")
-        sp._install_python_packages()
-        assert any("pip" in " ".join(cmd) for cmd in calls)
-
-    def test_crypto_upgrade_exception_is_debug_only(self, tmp_path, monkeypatch, caplog):
-        import logging
-
-        (tmp_path / "requirements.txt").write_text("asyncua>=2.0.1\n")
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(sp, "_get_python_path", lambda: Path("/usr/bin/python3.14"))
-
-        def _fail_crypto(cmd, **kw):
-            if "cryptography" in cmd:
-                raise RuntimeError("crypto failed")
-
-        monkeypatch.setattr(subprocess, "check_call", _fail_crypto)
-        monkeypatch.setattr(subprocess, "check_output", lambda *a, **kw: "2.0.1\n")
-        with caplog.at_level(logging.DEBUG, logger="setup_project"):
+        monkeypatch.setattr(subprocess, "check_call", lambda *a, **kw: calls.append(a))
+        with pytest.raises(SystemExit) as exc_info:
             sp._install_python_packages()
-        # No sys.exit; debug log only
+        assert exc_info.value.code == 1
+        assert len(calls) == 0, "No subprocess must be called when pyproject.toml is missing"
+
+    def test_success_path(self, tmp_path, monkeypatch):
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n", encoding="utf-8")
+        venv_path = tmp_path / ".venv"
+        monkeypatch.setattr(sp, "PROJECT_DIR", tmp_path)
+        monkeypatch.setattr(sp, "VENV_DIR", venv_path)
+        monkeypatch.setattr(sp, "_get_python_path", lambda: Path("/usr/bin/python3.14"))
+        monkeypatch.setattr(sp, "ensure_uv", lambda project: "managed-uv")
+        calls = []
+
+        def _record_call(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            return 0
+
+        monkeypatch.setattr(subprocess, "check_call", _record_call)
+        sp._install_python_packages()
+
+        assert len(calls) == 1
+        cmd, kwargs = calls[0]
+        uv = "managed-uv"
+        assert cmd == [uv, "sync", "--locked", "--no-dev"]
+        assert kwargs.get("cwd") == str(tmp_path)
+        assert kwargs.get("env", {}).get("UV_PROJECT_ENVIRONMENT") == str(venv_path.resolve())
+
+    def test_sync_failure_propagates(self, tmp_path, monkeypatch):
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n", encoding="utf-8")
+        monkeypatch.setattr(sp, "PROJECT_DIR", tmp_path)
+        monkeypatch.setattr(sp, "VENV_DIR", tmp_path / ".venv")
+        monkeypatch.setattr(sp, "_get_python_path", lambda: Path("/usr/bin/python3.14"))
+        monkeypatch.setattr(sp, "ensure_uv", lambda project: "managed-uv")
+
+        def _fail_sync(cmd, **kw):
+            raise subprocess.CalledProcessError(1, cmd)
+
+        monkeypatch.setattr(subprocess, "check_call", _fail_sync)
+        with pytest.raises(subprocess.CalledProcessError):
+            sp._install_python_packages()
 
 
 # =============================================================================

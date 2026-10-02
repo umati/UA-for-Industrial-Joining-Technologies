@@ -7,7 +7,7 @@ Thank you for your interest in contributing to the VDMA OPC UA Industrial Joinin
 ### Runtime Requirements
 
 - **Python 3.14** or newer (with `pip` and `venv`)
-- **Node.js 24** or newer (with `npm`)
+- **Node.js 24.15** or newer (with `npm`)
 - **Git** (available on system PATH)
 
 Central version files:
@@ -20,12 +20,18 @@ Central version files:
 - **.NET SDK 10+** for the C# client
 - **Docker** for containerized server testing
 
+Setup/test launchers prepare Python tooling in isolated environments; no manual
+uv or global pip installation is required. First preparation needs package-index
+access or a supplied offline cache. CI/Docker use provisioned tools.
+For pip deployment and source reuse, see the
+[Python Client Integration Guide](PYTHON_CLIENT_INTEGRATION.md).
+
 ## Testing and Validation
 
 ### Before Committing
 
 ```bash
-python run_precommit_all.py
+python run_precommit_all.py --strict
 ```
 
 `run_precommit_all.py` and the Node/Web Client test runners enforce dependency audits
@@ -40,11 +46,20 @@ still fail in both modes. The dependency-security workflow reviews pull-request
 dependency changes, runs daily monitoring, and provides manual strict release
 qualification.
 
+For available-only local checks, omit `--strict`: missing .NET/npm system audit
+tools are reported as incomplete validation. Package preparation failures and
+available check failures remain blocking. System-tool strictness is separate
+from npm registry connectivity mode.
+
 ### Full Test Suite
 
 ```bash
 python run_all_tests.py
 ```
+
+The local root runner prepares its own `.state/tools/` Python environment.
+Inspect skipped/incomplete results before treating the run as complete
+qualification. An explicitly requested `--suite` fails if it cannot run.
 
 ## Development Guidelines
 

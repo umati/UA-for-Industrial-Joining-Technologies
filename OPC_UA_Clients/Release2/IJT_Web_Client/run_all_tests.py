@@ -87,7 +87,7 @@ ROOT = Path(__file__).resolve().parent
 # Repo root is normally 3 levels above this runner (…/OPC_UA_Clients/Release2/
 # IJT_Web_Client/run_all_tests.py → repo). Inside the Web Client Docker image
 # the script lives at /app/run_all_tests.py with only 1 parent, so fall back
-# to ROOT (the project dir); the Dockerfile already places constraints.txt
+# to ROOT (the project dir); the Dockerfile already places pyproject.toml and uv.lock
 # alongside the runner there.
 _runner_parents = Path(__file__).resolve().parents
 _REPO_ROOT = _runner_parents[3] if len(_runner_parents) > 3 else ROOT
@@ -101,6 +101,7 @@ if str(_SHARED_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SHARED_SCRIPTS_DIR))
 
 from ijt_live_readiness import COMPOSE_WAIT_TIMEOUT_WARM_SECONDS  # noqa: E402
+from tool_bootstrap import ensure_uv  # noqa: E402
 
 from tests.python._live_server_readiness import (  # noqa: E402
     MAX_SIMULATOR_LAUNCH_ATTEMPTS,
@@ -135,10 +136,13 @@ _NPM_CACHE = _TMP_DIR / "npm-cache"
 _PIP_CACHE = _TMP_DIR / "pip-cache"
 _STATE_DIR = ROOT / ".state"
 _TIMING_HISTORY = _STATE_DIR / "timing-history.jsonl"
-_REQUIREMENTS = ROOT / "requirements.txt"
-_REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
-_PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
-_PYTHON_LOCK = ROOT / "requirements.lock"
+_PYPROJECT = ROOT / "pyproject.toml"
+_UV_LOCK = ROOT / "uv.lock"
+_REQUIREMENTS = _PYPROJECT
+_REQUIREMENTS_DEV = _PYPROJECT
+_PYTHON_CONSTRAINTS = _PYPROJECT
+_PYTHON_LOCK = _UV_LOCK
+
 _NPM_INSTALL_FLAGS = ["--legacy-peer-deps", "--no-audit", "--no-fund"]
 _NPM_AUDIT_TIMEOUT_SECONDS = 15
 _NPM_AUDIT_MODE_ENV = "IJT_NPM_AUDIT_MODE"
@@ -224,17 +228,28 @@ def _remove_stale_venvs() -> None:
 def _inside_venv() -> bool:
     """Return True if the current interpreter lives inside _VENV."""
     try:
-        return Path(sys.executable).resolve().is_relative_to(_VENV.resolve())
-    except AttributeError:
-        return str(sys.executable).startswith(str(_VENV))
+        return Path(sys.prefix).resolve() == _VENV.resolve()
+    except (OSError, RuntimeError):
+        return str(Path(sys.prefix)) == str(_VENV)
+
+
+def _sync_environment(venv_dir: Path = _VENV) -> None:
+    """Synchronize virtual environment dependencies using uv."""
+    uv = ensure_uv(ROOT)
+    env = os.environ.copy()
+    env["UV_PROJECT_ENVIRONMENT"] = str(venv_dir.resolve())
+    _info(f"Synchronizing {venv_dir.name} with uv (group dev)...")
+    subprocess.check_call(
+        [uv, "sync", "--locked", "--group", "dev"],
+        cwd=str(ROOT),
+        env=env,
+    )
 
 
 def _relaunch_under_venv() -> None:
-    """Create the selected test venv if needed, then re-exec this script inside it."""
+    """Create or sync the selected test venv if needed, then re-exec this script inside it."""
     _remove_stale_venvs()
-    if not _VENV.exists():
-        print(f"[bootstrap] Creating venv: {_VENV}")
-        subprocess.check_call([sys.executable, "-m", "venv", str(_VENV)])
+    _sync_environment(_VENV)
     venv_py_rel = Path("Scripts" if IS_WINDOWS else "bin") / ("python.exe" if IS_WINDOWS else "python")
     venv_py = str(_VENV / venv_py_rel)
     print(f"[bootstrap] Re-launching under venv Python: {venv_py}")
@@ -249,7 +264,7 @@ def _relaunch_under_venv() -> None:
     result = subprocess.run(
         [venv_py, str(Path(__file__).resolve()), *sys.argv[1:]],
         check=False,
-        env={**os.environ, "_IJT_RELAUNCHED": "1"},
+        env={**os.environ, "_IJT_RELAUNCHED": "1", "SKIP_VENV_INSTALL": "1"},
         cwd=str(ROOT),
     )
     sys.exit(result.returncode)
@@ -1132,9 +1147,10 @@ def _stage_pip_install(python: Path, *, required_modules: tuple[str, ...] = ()) 
         pip_env["PIP_CACHE_DIR"] = str(_PIP_CACHE)
     # Keep bootstrap tooling current even when dependency files are unchanged.
     # pip-audit scans the active environment, so stale pip can fail a clean run.
+    # Dependencies governed by uv.lock
     _run(
         [python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
-        label="pip self-upgrade",
+        label="pip self-upgrade (uv.lock governed)",
         env=pip_env,
     )
     hash_file = _VENV / ".req-hash"
@@ -1147,26 +1163,44 @@ def _stage_pip_install(python: Path, *, required_modules: tuple[str, ...] = ()) 
             return StageResult("pip-install", 0, duration=time.monotonic() - t0, notes=["requirements unchanged"])
         _info("Requirements hash unchanged but required modules are missing: " + ", ".join(missing))
     overall_rc = 0
-    for req in (_REQUIREMENTS, _REQUIREMENTS_DEV):
-        if req.exists():
-            rc = _run(
-                [
-                    python,
-                    "-m",
-                    "pip",
-                    "install",
-                    "--quiet",
-                    "--disable-pip-version-check",
-                    "--pre",
-                    *_pip_constraint_args(),
-                    "-r",
-                    str(req),
-                ],
-                label=f"pip install {req.name}",
-                env=pip_env,
-            )
-            if rc != 0:
-                overall_rc = rc
+    uv = ensure_uv(ROOT)
+    req_file = _TMP_DIR / "locked-dev-requirements.txt"
+    _TMP_DIR.mkdir(parents=True, exist_ok=True)
+    export_rc = _run(
+        [
+            uv,
+            "export",
+            "--frozen",
+            "--group",
+            "dev",
+            "--no-emit-project",
+            "-o",
+            str(req_file),
+        ],
+        label="uv export locked dev requirements",
+        cwd=ROOT,
+        env=pip_env,
+    )
+    if export_rc != 0:
+        overall_rc = export_rc
+    else:
+        rc = _run(
+            [
+                uv,
+                "pip",
+                "install",
+                # Governed by uv.lock
+                "--python",
+                str(python),
+                "-r",
+                str(req_file),
+            ],
+            label="uv pip install locked requirements from uv.lock",
+            cwd=ROOT,
+            env=pip_env,
+        )
+        if rc != 0:
+            overall_rc = rc
     if overall_rc == 0:
         missing = _missing_py_modules(python, required_modules)
         if missing:
@@ -1648,6 +1682,8 @@ def _stage_js_unit() -> StageResult:
                 "--coverage.reporter=lcov",
                 "--coverage.reporter=json",
                 "--coverage.reporter=cobertura",
+                # "Lines : N%" — the gated metric; the root runner shows it in its summary
+                "--coverage.reporter=text-summary",
             ],
             label="vitest --coverage",
         )
@@ -3902,7 +3938,7 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results", "tmp"}  # tmp workspace is handled by _prepare_tmp_dir()
+    _SKIP = {"node_modules", ".git", ".state", "test-results", "tmp"}  # tmp is handled by _prepare_tmp_dir()
     _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "htmlcov"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")]

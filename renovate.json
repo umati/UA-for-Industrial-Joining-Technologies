@@ -7,6 +7,13 @@
   "timezone": "Europe/Stockholm",
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^scripts/tool_bootstrap\\.py$/"],
+      "matchStrings": ["# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+UV_VERSION = \"(?<currentValue>[^\"]+)\""]
+    }
+  ],
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 7am on monday"],
@@ -23,6 +30,26 @@
       "minimumReleaseAge": "7 days",
       "automerge": false,
       "addLabels": ["dependencies", "needs-manual-review"]
+    },
+    {
+      "description": "Group Python dev tool updates (mypy, ruff, bandit, pip-audit) into a single weekly reviewed PR with a 3-day minimum release age.",
+      "matchPackageNames": ["mypy", "ruff", "bandit", "pip-audit"],
+      "groupName": "Python development tools",
+      "groupSlug": "python-dev-tools",
+      "schedule": ["before 7am on monday"],
+      "minimumReleaseAge": "3 days",
+      "automerge": false,
+      "addLabels": ["dependencies", "python", "needs-manual-review"]
+    },
+    {
+      "description": "Group pytest ecosystem updates into Python development tools weekly reviewed PR.",
+      "matchPackagePatterns": ["^pytest"],
+      "groupName": "Python development tools",
+      "groupSlug": "python-dev-tools",
+      "schedule": ["before 7am on monday"],
+      "minimumReleaseAge": "3 days",
+      "automerge": false,
+      "addLabels": ["dependencies", "python", "needs-manual-review"]
     },
     {
       "matchManagers": ["github-actions"],

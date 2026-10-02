@@ -81,6 +81,12 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+for _parent in Path(__file__).resolve().parents:
+    if (_parent / "scripts" / "tool_bootstrap.py").is_file():
+        sys.path.insert(0, str(_parent / "scripts"))
+        break
+from tool_bootstrap import ensure_uv
+
 if TYPE_CHECKING:
     from helpers.runner_plan import RunPlan
 
@@ -112,15 +118,15 @@ def _target_venv_dir() -> Path:
     return _HERE / ".venv_test"
 
 
-# .venv_test is the normal test-runner venv (requirements.txt + requirements-dev.txt).
+# .venv_test is the normal test-runner venv.
 # .venv_ci mirrors CI locally when the root runner passes CI=1 via --ci-mode.
 # .venv is the runtime-only venv — kept separate so tests never alter the
 # launch environment and vice versa.
 VENV = _target_venv_dir()
-REQUIREMENTS = _HERE / "requirements.txt"
-_REQUIREMENTS_DEV = _HERE / "requirements-dev.txt"
-_PYTHON_CONSTRAINTS = _REPO_ROOT / "constraints.txt"
-_PYTHON_LOCK = _HERE / "requirements.lock"
+_PYPROJECT = _HERE / "pyproject.toml"
+_UV_LOCK = _HERE / "uv.lock"
+REQUIREMENTS = _PYPROJECT  # backwards-compat alias
+
 _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest-live.xml"
 _DEFAULT_EXCEL_OUT = _RESULTS_DIR / "report.xlsx"
@@ -181,16 +187,11 @@ def _venv_pip(venv_dir: Path) -> Path:
 
 
 def _pip_constraint_args() -> list[str]:
-    """Pin installs to this client's generated lock (falls back to the shared floors)."""
-    for path in (_PYTHON_LOCK, _PYTHON_CONSTRAINTS):
-        if path.exists():
-            return ["-c", str(path)]
     return []
 
 
 def _pip_floor_args() -> list[str]:
-    """Shared security floors only, for on-demand tools that may not be in the lock (e.g. semgrep)."""
-    return ["-c", str(_PYTHON_CONSTRAINTS)] if _PYTHON_CONSTRAINTS.exists() else []
+    return []
 
 
 def _is_port_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
@@ -582,61 +583,31 @@ def _remove_stale_venvs() -> None:
             _safe_rmtree(stale)
 
 
+def _sync_environment(venv_dir: Path = VENV) -> None:
+    """Synchronize virtual environment dependencies using uv."""
+    if os.environ.get("SKIP_VENV_INSTALL") == "1":
+        logger.info("Skipping uv sync (SKIP_VENV_INSTALL=1)")
+        return
+    uv = ensure_uv(_HERE)
+    env = os.environ.copy()
+    env["UV_PROJECT_ENVIRONMENT"] = str(venv_dir.resolve())
+    logger.info("Synchronizing %s with uv (group dev)...", venv_dir.name)
+    subprocess.check_call(
+        [uv, "sync", "--locked", "--group", "dev"],
+        cwd=str(_HERE),
+        env=env,
+    )
+
+
 def ensure_venv() -> None:
-    """Create the virtual environment if it does not already exist."""
+    """Ensure the virtual environment is prepared and up-to-date."""
     _remove_stale_venvs()
-    if not VENV.exists():
-        logger.info("Creating virtual environment: %s", VENV)
-        subprocess.run([sys.executable, "-m", "venv", str(VENV)], check=False)
-    else:
-        logger.info("Using existing virtual environment: %s", VENV)
-
-
-def _requirements_hash() -> str:
-    """Return a short hash of all requirements files combined."""
-    import hashlib
-
-    h = hashlib.sha256()
-    for req in (_PYTHON_CONSTRAINTS, _PYTHON_LOCK, REQUIREMENTS, _REQUIREMENTS_DEV):
-        if req.exists():
-            h.update(req.read_bytes())
-    return h.hexdigest()[:16]
+    _sync_environment(VENV)
 
 
 def install_requirements() -> None:
-    """Install packages; reinstall automatically when requirements files change."""
-    if os.environ.get("SKIP_VENV_INSTALL") == "1":
-        logger.info("Skipping pip install (SKIP_VENV_INSTALL=1)")
-        return
-    pip = str(_venv_pip(VENV))
-    python = str(_venv_python(VENV))
-    pip_cache = _TMP_DIR / "pip-cache"
-    pip_env = os.environ.copy()
-    if "PIP_CACHE_DIR" not in pip_env:
-        pip_cache.mkdir(parents=True, exist_ok=True)
-        pip_env["PIP_CACHE_DIR"] = str(pip_cache)
-    # Keep the bootstrap installer current even when dependency files are unchanged.
-    # pip-audit scans the active environment, so stale pip can fail an otherwise clean run.
-    subprocess.run(
-        [python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
-        check=False,
-        env=pip_env,
-    )
-    hash_file = VENV / ".req-hash"
-    current_hash = _requirements_hash()
-    if hash_file.exists() and hash_file.read_text().strip() == current_hash:
-        logger.info("Requirements unchanged — skipping pip install")
-        return
-    for req_file in (REQUIREMENTS, _REQUIREMENTS_DEV):
-        if req_file.exists():
-            logger.info("Installing requirements from %s...", req_file.name)
-            subprocess.check_call(
-                [pip, "install", "--quiet", *_pip_constraint_args(), "-r", str(req_file)],
-                env=pip_env,
-            )
-        else:
-            logger.info("No %s found — skipping", req_file.name)
-    hash_file.write_text(current_hash)
+    """Synchronize dependencies using uv."""
+    _sync_environment(VENV)
 
 
 def _relaunch_if_needed() -> None:
@@ -645,8 +616,8 @@ def _relaunch_if_needed() -> None:
     if not venv_py.exists():
         return
     try:
-        current = Path(sys.executable).resolve()
-        target = venv_py.resolve()
+        current = Path(sys.prefix).resolve()
+        target = VENV.resolve()
         if current == target:
             return
     except Exception:
@@ -916,9 +887,9 @@ def _sanity_checks() -> list[_StepResult]:
     r.duration = time.monotonic() - t0
     results.append(r)
 
-    r2 = _StepResult("[SANITY] requirements.txt")
+    r2 = _StepResult("[SANITY] uv.lock")
     t0 = time.monotonic()
-    r2.ok = REQUIREMENTS.exists()
+    r2.ok = _UV_LOCK.exists()
     r2.note = "" if r2.ok else "file not found"
     r2.duration = time.monotonic() - t0
     results.append(r2)
@@ -1244,11 +1215,17 @@ def _step_unit_tests() -> _StepResult:
     for line in reversed(output.splitlines()):
         stripped = line.strip()
         if "passed" in stripped or "failed" in stripped or "error" in stripped:
-            result.note = stripped.strip("= ").strip()
+            result.note = stripped.strip("= ").strip() + _pytest_total_coverage(output)
             break
     if not result.ok:
         _log(output)
     return result
+
+
+def _pytest_total_coverage(output: str) -> str:
+    """Return "; coverage N%" from pytest-cov's fail-under line, or "" when absent."""
+    matches = re.findall(r"\bTotal coverage:\s*(\d+(?:\.\d+)?)%", output)
+    return f"; coverage {float(matches[-1]):.1f}%" if matches else ""
 
 
 def _step_semgrep() -> _StepResult:
@@ -2448,7 +2425,7 @@ def _cleanup_caches(root: Path) -> None:
     if _deletes_disabled():
         logger.info("[cleanup] Preserving caches because IJT_RUNNER_NO_DELETE=1")
         return
-    _SKIP = {"node_modules", ".git", "test-results", "tmp"}  # tmp workspace is handled by _prepare_tmp_dir()
+    _SKIP = {"node_modules", ".git", ".state", "test-results", "tmp"}  # tmp is handled by _prepare_tmp_dir()
     _CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "htmlcov"}
     for dirpath, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".venv") and not d.startswith("venv")]

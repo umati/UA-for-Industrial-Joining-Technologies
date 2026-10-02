@@ -2250,3 +2250,200 @@ async def test_worker_rejects_second_endpoint_with_different_ijt_namespace_index
     status = next(c.args[0] for c in out_q.put.call_args_list if c.args[0]["type"] == "FLEET_STATUS")
     assert status["connected"] == ["opc.tcp://a:1"]
     assert "Mixed namespace indexes" in status["failed"]["opc.tcp://b:2"]
+
+
+# --- Trigger-round completion: duration must never silently cut off requested rounds ---
+
+
+class _FakeProc:
+    def __init__(self, alive: bool = True) -> None:
+        self.alive = alive
+
+    def is_alive(self) -> bool:
+        return self.alive
+
+
+def _trigger_pool(mode: str = "both", rounds: int = 5, workers: int = 1) -> OpcUaClientPool:
+    pool = OpcUaClientPool(endpoints=[f"opc.tcp://ep{i}:4000{i}" for i in range(workers)], mode=mode)
+    pool._burst_trigger_count = rounds
+    pool._worker_procs = {w: _FakeProc() for w in range(workers)}
+    pool._out_queue = queue.Queue()
+    return pool
+
+
+def test_triggers_pending_until_every_live_worker_reports():
+    pool = _trigger_pool(workers=3)
+    assert pool._triggers_pending()
+    pool._process_queue_msg({"type": "TRIGGERS_DONE", "worker_id": 0, "rounds_fired": 5, "endpoint_stats": {}})
+    pool._process_queue_msg({"type": "ERROR", "worker_id": 1, "error": "boom"})
+    assert pool._triggers_pending()
+    pool._worker_procs[2].alive = False
+    assert not pool._triggers_pending()
+    assert pool.trigger_rounds_fired == {0: 5}
+
+
+def test_triggers_not_pending_in_passive_mode_or_without_rounds():
+    assert not _trigger_pool(mode="passive")._triggers_pending()
+    assert not _trigger_pool(rounds=0)._triggers_pending()
+
+
+def test_triggers_done_merges_call_stats():
+    pool = _trigger_pool()
+    stats = {"opc.tcp://ep0:40000": {"calls_attempted": 5, "calls_succeeded": 5}}
+    pool._process_queue_msg({"type": "TRIGGERS_DONE", "worker_id": 0, "rounds_fired": 5, "endpoint_stats": stats})
+    assert pool.endpoint_stats["opc.tcp://ep0:40000"]["calls_succeeded"] == 5
+
+
+def test_done_records_rounds_without_overriding_triggers_done():
+    pool = _trigger_pool(workers=2)
+    pool._process_queue_msg({"type": "TRIGGERS_DONE", "worker_id": 0, "rounds_fired": 5})
+    pool._process_queue_msg({"type": "DONE", "worker_id": 0, "trigger_rounds_fired": 5})
+    pool._process_queue_msg({"type": "DONE", "worker_id": 1, "trigger_rounds_fired": 2})
+    assert pool.trigger_rounds_fired == {0: 5, 1: 2}
+
+
+def test_collect_samples_waits_past_duration_for_pending_triggers():
+    import threading
+
+    pool = _trigger_pool()
+    # TRIGGERS_DONE arrives only after the 0.05 s duration has elapsed; collection must wait for it.
+    timer = threading.Timer(
+        0.3, pool._out_queue.put, args=({"type": "TRIGGERS_DONE", "worker_id": 0, "rounds_fired": 5},)
+    )
+    timer.start()
+    try:
+        pool.collect_samples(duration_seconds=0.05)
+    finally:
+        timer.cancel()
+    assert pool.trigger_rounds_fired == {0: 5}
+    assert not pool._triggers_pending()
+
+
+def test_collect_samples_target_reached_still_waits_for_triggers():
+    pool = _trigger_pool()
+    pool.collected_samples.append(MagicMock())
+    pool._out_queue.put({"type": "TRIGGERS_DONE", "worker_id": 0, "rounds_fired": 5})
+    pool.collect_samples(duration_seconds=10.0, target_sample_count=1)
+    assert pool.trigger_rounds_fired == {0: 5}
+
+
+def test_collect_samples_extension_is_bounded():
+    pool = _trigger_pool(rounds=1)
+    pool.burst_delay = 0.0
+    with patch("src.engine.client_pool._TRIGGER_COMPLETION_GRACE_S", 0.2):
+        import time as _t
+
+        t0 = _t.monotonic()
+        pool.collect_samples(duration_seconds=0.05)
+        assert _t.monotonic() - t0 < 2.0
+    assert pool._triggers_pending()
+
+
+def test_verify_coverage_reports_incomplete_trigger_rounds_first():
+    pool = _trigger_pool()
+    pool._num_workers_started = 1
+    pool.completed_worker_ids = {0}
+    pool.connected_endpoints = {"opc.tcp://ep0:40000"}
+    pool._process_queue_msg({"type": "DONE", "worker_id": 0, "trigger_rounds_fired": 4})
+    ok, msg = pool.verify_coverage([], target_sample_count=5)
+    assert not ok
+    assert msg.startswith("Trigger rounds incomplete: 1 worker(s)")
+    assert "worker 0: 4/5" in msg
+    assert "Sample target shortfall" in msg
+
+
+def test_verify_coverage_passes_trigger_check_when_all_rounds_fired():
+    pool = _trigger_pool()
+    pool._process_queue_msg({"type": "TRIGGERS_DONE", "worker_id": 0, "rounds_fired": 5})
+    _, msg = pool.verify_coverage([])
+    assert "Trigger rounds incomplete" not in msg
+
+
+@pytest.mark.asyncio
+async def test_worker_reports_triggers_done_and_skips_pause_after_last_round():
+    import threading
+
+    from src.engine.client_pool import _worker_event_loop
+
+    out_q = MagicMock()
+    stop_event = threading.Event()
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock()
+    mock_client.create_subscription = AsyncMock()
+    sleeps: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def tracking_sleep(delay, *args, **kwargs):
+        if delay == 0.3:
+            sleeps.append(delay)
+            delay = 0
+        return await real_sleep(delay, *args, **kwargs)
+
+    with (
+        patch("src.engine.client_pool.Client", return_value=mock_client),
+        patch("src.engine.client_pool.load_ijt_type_definitions", new_callable=AsyncMock),
+        patch("src.engine.client_pool.resolve_namespace_index", new_callable=AsyncMock, return_value=2),
+        patch("src.engine.client_pool._locate_simulate_method", new_callable=AsyncMock, return_value=(None, None)),
+        patch("src.engine.client_pool.disconnect_client", new_callable=AsyncMock),
+        patch("src.engine.client_pool.asyncio.sleep", side_effect=tracking_sleep),
+    ):
+        task = asyncio.create_task(
+            _worker_event_loop(
+                worker_id=0,
+                endpoints=["opc.tcp://ep1:40001"],
+                out_queue=out_q,
+                stop_event=stop_event,
+                mode="both",
+                settle_timeout_s=0.0,
+                burst_trigger_count=3,
+                burst_delay=0.3,
+            )
+        )
+        for _ in range(200):
+            if any(c.args[0]["type"] == "TRIGGERS_DONE" for c in out_q.put.call_args_list):
+                break
+            await real_sleep(0.01)
+        stop_event.set()
+        await task
+
+    msgs = [c.args[0] for c in out_q.put.call_args_list]
+    done_trig = next(m for m in msgs if m["type"] == "TRIGGERS_DONE")
+    assert done_trig["rounds_fired"] == 3 and done_trig["rounds_requested"] == 3
+    assert next(m for m in msgs if m["type"] == "DONE")["trigger_rounds_fired"] == 3
+    assert sleeps == [0.3, 0.3]  # pacing only between rounds, not after the last one
+
+
+@pytest.mark.asyncio
+async def test_worker_stopped_early_reports_fewer_rounds():
+    import threading
+
+    from src.engine.client_pool import _worker_event_loop
+
+    out_q = MagicMock()
+    stop_event = threading.Event()
+    stop_event.set()
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock()
+    mock_client.create_subscription = AsyncMock()
+
+    with (
+        patch("src.engine.client_pool.Client", return_value=mock_client),
+        patch("src.engine.client_pool.load_ijt_type_definitions", new_callable=AsyncMock),
+        patch("src.engine.client_pool.resolve_namespace_index", new_callable=AsyncMock, return_value=2),
+        patch("src.engine.client_pool._locate_simulate_method", new_callable=AsyncMock, return_value=(None, None)),
+        patch("src.engine.client_pool.disconnect_client", new_callable=AsyncMock),
+    ):
+        await _worker_event_loop(
+            worker_id=0,
+            endpoints=["opc.tcp://ep1:40001"],
+            out_queue=out_q,
+            stop_event=stop_event,
+            mode="active_burst",
+            settle_timeout_s=0.0,
+            burst_trigger_count=4,
+            burst_delay=0.0,
+        )
+
+    msgs = [c.args[0] for c in out_q.put.call_args_list]
+    assert next(m for m in msgs if m["type"] == "TRIGGERS_DONE")["rounds_fired"] == 0
+    assert next(m for m in msgs if m["type"] == "DONE")["trigger_rounds_fired"] == 0

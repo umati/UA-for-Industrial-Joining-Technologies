@@ -1,8 +1,6 @@
 # Keep repo-root Docker builds small. The Web Client and Browser CI image use
-# the repo root as build context so they can consume constraints.txt.
+# the repo root as build context.
 *
-
-!constraints.txt
 
 !.github/
 .github/*
@@ -16,14 +14,14 @@ OPC_UA_Clients/*
 OPC_UA_Clients/Release2/*
 !OPC_UA_Clients/Release2/IJT_Web_Client/**
 
-# Allow the shared readiness module to be vendored into the Web Client
-# Docker test image (see OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile,
-# test stage). tests/python/_live_server_readiness.py imports it at runtime.
+# Allow shared runtime tooling and session policy in the Web Client base image,
+# plus readiness support in its test stage.
 !scripts/
 scripts/*
 !scripts/ijt_live_readiness.py
 !scripts/opcua_session_policy.py
 !scripts/opcua_session_policy_loader.py
+!scripts/tool_bootstrap.py
 
 **/__pycache__/
 **/*.py[cod]

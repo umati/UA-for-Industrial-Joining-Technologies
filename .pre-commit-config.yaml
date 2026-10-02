@@ -250,15 +250,13 @@ repos:
       # baseline assertions, extracted summary snapshot/contract tests).
       # pass_filenames: false — the tests read workflow paths from
       # `_runner.REPO_ROOT / .github / workflows / ...` themselves.
-      # Every Python client installs from its generated requirements.lock.
-      # Offline hash check: fails when requirements*.txt, constraints.txt or
-      # .python-version changed without regenerating the locks.
+      # Client lock check (uv lock --check): fails when a client pyproject.toml changed without updating its uv.lock.
       - id: python-locks-current
         name: Python client locks up to date
         language: system
-        entry: python scripts/update_python_locks.py --check
+        entry: python scripts/check_python_locks.py
         pass_filenames: false
-        files: '(^constraints\.txt$|^\.python-version$|^scripts/update_python_locks\.py$|^OPC_UA_Clients/Release2/[^/]+/requirements[^/]*\.(txt|lock)$)'
+        files: '(^\.python-version$|^OPC_UA_Clients/Release2/[^/]+/(pyproject\.toml|uv\.lock)$)'
 
       - id: workflow-policy-guard
         name: Workflow policy guard (root runner)
@@ -266,7 +264,7 @@ repos:
         entry: python
         args: ['scripts/precommit_pytest_hook.py', 'tests/test_root_runner.py', 'tests/test_image_pin.py', 'tests/reporting', '-q']
         pass_filenames: false
-        files: '(^\.pre-commit-config\.yaml$|^\.github/workflows/.*\.ya?ml$|^\.github/docker/ijt-browser-ci/.*$|^\.github/scripts/update_browser_ci_image_pin\.py$|^reporting/.*\.py$|^tests/requirements\.txt$|^constraints\.txt$|^run_precommit_all\.py$|^scripts/update_python_locks\.py$|^OPC_UA_Clients/Release2/[^/]+/(requirements[^/]*\.(txt|lock)|run_all_tests\.py|setup_[a-z]+\.py|Dockerfile)$|^tests/reporting/.*$|^tests/test_image_pin\.py$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
+        files: '(^\.pre-commit-config\.yaml$|^\.github/workflows/.*\.ya?ml$|^\.github/docker/ijt-browser-ci/.*$|^\.github/scripts/update_browser_ci_image_pin\.py$|^reporting/.*\.py$|^tests/requirements\.txt$|^uv\.lock$|^run_precommit_all\.py$|^OPC_UA_Clients/Release2/[^/]+/(pyproject\.toml|run_all_tests\.py|setup_[a-z]+\.py|Dockerfile)$|^tests/reporting/.*$|^tests/test_image_pin\.py$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
 
       # Lightweight static guard for optional imports that are known to trip
       # mypy when packages are installed without stubs. Full mypy stays in

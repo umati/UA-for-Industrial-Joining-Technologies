@@ -29,7 +29,6 @@ _RESULTS_DIR = _HERE / "test-results"
 # Stdlib-only runner helpers: simulator lifecycle and the shared venv bootstrap.
 from run_all_tests import (
     _ENV_IS_PRE_ISOLATED,
-    _REQUIREMENTS,
     _find_simulator_exe,
     _inside_venv,
     _launch_simulator_fleet,
@@ -38,7 +37,7 @@ from run_all_tests import (
     _stop_simulators,
 )
 
-# Runtime venv (requirements.txt only, pinned by requirements.lock), like setup_client.py elsewhere.
+# Runtime venv (runtime dependencies only, locked in uv.lock), like setup_client.py elsewhere.
 _RUNTIME_VENV = _HERE / ".venv"
 
 
@@ -163,7 +162,7 @@ def main() -> int:
         return 1
 
     if not _ENV_IS_PRE_ISOLATED and not _inside_venv(_RUNTIME_VENV):
-        return _relaunch_under_venv(_RUNTIME_VENV, (_REQUIREMENTS,), Path(__file__).resolve())
+        return _relaunch_under_venv(_RUNTIME_VENV, False, Path(__file__).resolve())
 
     # Imported only after the venv switch: src.cli needs asyncua from the lock-pinned venv.
     from src.cli import main as client_main

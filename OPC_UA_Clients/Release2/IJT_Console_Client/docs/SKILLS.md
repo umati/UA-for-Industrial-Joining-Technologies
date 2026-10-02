@@ -1,5 +1,9 @@
 # IJT Console Client — Developer Reference
 
+User setup and commands are in the [README](../README.md). Pip deployment and
+source reuse are in the [shared integration guide](../../../../docs/PYTHON_CLIENT_INTEGRATION.md).
+This document describes contributor architecture and test rules.
+
 ---
 
 ## Project Identity
@@ -8,7 +12,7 @@
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_Console_Client/` |
 | **Purpose** | Minimal reference OPC UA IJT console client — events, methods, results |
-| **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt (exact versions in generated requirements.lock) (shared released version across Web/Test/Console), asyncio |
+| **Stack** | Python 3.14+, asyncua 2.0.1 (locked in `uv.lock`), asyncio, uv |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
 | **Server default** | `opc.tcp://localhost:40451` |
 
@@ -30,8 +34,8 @@ IJT_Console_Client/
 ├── serialize_data.py        # OPC UA → dict/JSON serialisation (shared pattern with Web Client)
 ├── ijt_logger.py            # Logging setup (ijt_log)
 ├── utils.py                 # nodeid_to_str, localizedtext_to_str, log_joining_system_event
-├── requirements.txt         # asyncua (pin lives in repo-root constraints.txt), pytz, aiofiles, orjson, cryptography, pyOpenSSL
-├── pyproject.toml           # asyncio_mode=auto (+ ruff, coverage, bandit, mypy)
+├── uv.lock                  # Deterministic cross-platform dependencies locked via uv
+├── pyproject.toml           # PEP 621 dependencies & config (ruff, coverage, bandit, mypy)
 ├── docs/
 │   └── SKILLS.md             # ← this file — developer reference (includes method quick reference)
 └── tests/
@@ -70,26 +74,34 @@ IJT_Console_Client/
 
 ## Test Commands
 
+Run from the client directory with Python 3.14+. Scripts prepare uv automatically
+in `.state/tools/` if needed; first use requires package-index access or a cache.
+`pyproject.toml` defines dependencies and `uv.lock` pins them. Setup uses `.venv`
+for runtime; the test runner uses `.venv_test` or local `.venv_ci`. Update
+dependencies in the manifest and run `uv lock`; do not hand-edit the lock.
+
 ```bash
 # Full suite — OPC UA server auto-launched if needed
 python run_all_tests.py
 
-# Unit tests only (no server needed) — live/ excluded by norecursedirs
-python -m pytest tests/unit -v
+# Static analysis and unit tests (no server needed)
+python run_all_tests.py --phase1
 
 # Live tests with running OPC UA server (auto-starts server if not up)
-python -m pytest tests/live -v
-
-# Install test deps first (if needed)
-pip install -r requirements-dev.txt
+python run_all_tests.py --phase2
 ```
 
-**Test isolation**: filesystem-touching unit tests in `test_setup_client.py` use the `pyfakefs` `fs` fixture — all `pathlib`/`os`/`shutil`/`zipfile` calls are intercepted in-process. No real files are written for those tests, eliminating OS ACL issues on all platforms. `pyfakefs~=6.1` is pinned in `requirements-dev.txt`.
+For a focused pytest invocation after the runner has prepared `.venv_test`, use
+`.venv_test\Scripts\python.exe -m pytest tests\unit -v` on Windows or
+`.venv_test/bin/python -m pytest tests/unit -v` on Linux. Do not assume a bare
+`python` uses the runner's environment.
+
+**Test isolation**: filesystem-touching unit tests in `test_setup_client.py` use the `pyfakefs` `fs` fixture — all `pathlib`/`os`/`shutil`/`zipfile` calls are intercepted in-process. No real files are written for those tests, eliminating OS ACL issues on all platforms. `pyfakefs~=6.1` is pinned in `pyproject.toml`.
 
 ## Zero-Escape Testing Tools (run_all_tests.py Phase 1)
 
 All auto-detected — present=run, absent=skip with install hint.
-`pyright` is installed by default (listed in `requirements-dev.txt`) and runs as **advisory** (non-blocking; findings written to `pyright.stderr.txt`). It uses basic mode; `tests/unit` is excluded from pyright scope because unit tests intentionally pass wrong types for edge-case testing. See `pyrightconfig.json`.
+`pyright` is installed by default (listed in `[dependency-groups] dev`) and runs as **advisory** (non-blocking; findings written to `pyright.stderr.txt`). It uses basic mode; `tests/unit` is excluded from pyright scope because unit tests intentionally pass wrong types for edge-case testing. See `pyrightconfig.json`.
 `ruff` (lint+format), `mypy` (types), `bandit` (security), `pip-audit` (CVE scan),
 `semgrep` (static analysis), `pyright` (standard install, advisory), `detect-secrets` (secrets).
 pip-audit uses the PyPI JSON endpoint preflight, local project cache, spinner disabled, and short timeouts; network/TLS/timeout outcomes are SKIP, not PASS/FAIL. Fixable CVEs fail the suite; advisory-only CVEs may pass with an explicit note.

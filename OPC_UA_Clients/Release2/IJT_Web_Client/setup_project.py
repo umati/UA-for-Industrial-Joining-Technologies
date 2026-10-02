@@ -20,6 +20,12 @@ import zipfile
 from pathlib import Path
 from typing import IO, Any
 
+for _parent in Path(__file__).resolve().parents:
+    if (_parent / "scripts" / "tool_bootstrap.py").is_file():
+        sys.path.insert(0, str(_parent / "scripts"))
+        break
+from tool_bootstrap import ensure_uv
+
 # Add src/ to path so "from python.xxx import" works regardless of cwd
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 from python.network_utils import endpoint_reachable, parse_endpoint_host_port
@@ -90,8 +96,8 @@ VENV_DIR = Path("/opt/ijt_venv") if IS_DOCKER else Path(".venv")
 SETUP_TIMESTAMP_FILE = STATE_DIR / "setup_timestamp"
 IS_WINDOWS = os.name == "nt"
 REPO_ROOT = _detect_repo_root(PROJECT_DIR)
-PYTHON_CONSTRAINTS = REPO_ROOT / "constraints.txt"
-PYTHON_LOCK = PROJECT_DIR / "requirements.lock"
+PYTHON_LOCK = PROJECT_DIR / "uv.lock"
+PYTHON_CONSTRAINTS = PROJECT_DIR / "pyproject.toml"
 SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
 SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
 SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
@@ -1073,93 +1079,20 @@ def _create_virtualenv(latest_cmd):
 # Python: Install packages (stable-first asyncua with optional pre-release fallback)
 # ---------------------------------------------------------------------------
 def _install_python_packages():
-    """
-    Install from requirements.txt, then ensure asyncua in the configured range.
-    Prefer stable builds first; if resolution fails (e.g. newest Python support lag),
-    optionally retry with --pre.
-    """
-    python = _get_python_path()
-    log.info("Using Python executable: %s", python)
-
-    # Keep pip bootstrap deterministic but avoid noisy version-check chatter.
-    subprocess.check_call([str(python), "-m", "pip", "install", "--upgrade", "pip", "--disable-pip-version-check"])
-
-    req_file = Path("requirements.txt")
-    if not req_file.exists():
-        log.error("requirements.txt not found. Cannot continue.")
+    """Synchronize virtual environment dependencies using uv."""
+    pyproject = PROJECT_DIR / "pyproject.toml"
+    if not pyproject.is_file():
+        log.error("pyproject.toml not found at %s", pyproject)
         sys.exit(1)
-
-    # Install core from requirements (stable channel)
-    log.info("Installing packages from requirements.txt (stable channel)...")
+    uv = ensure_uv(PROJECT_DIR)
+    env = os.environ.copy()
+    env["UV_PROJECT_ENVIRONMENT"] = str((PROJECT_DIR / VENV_DIR).resolve())
+    log.info("Synchronizing %s with uv (--no-dev)...", VENV_DIR)
     subprocess.check_call(
-        [
-            str(python),
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            *_pip_constraint_args(),
-            "-r",
-            str(req_file),
-        ]
+        [uv, "sync", "--locked", "--no-dev"],
+        cwd=str(PROJECT_DIR),
+        env=env,
     )
-
-    # Proactively upgrade crypto stack for asyncua (often required by newer wheels)
-    # (The asyncua project lists cryptography / pyOpenSSL among dependencies.)
-    # https://github.com/FreeOpcUa/opcua-asyncio/network/dependencies
-    try:
-        subprocess.check_call(
-            [
-                str(python),
-                "-m",
-                "pip",
-                "install",
-                "--upgrade",
-                *_pip_constraint_args(),
-                "cryptography",
-                "pyOpenSSL",
-            ]
-        )
-    except Exception as exc:
-        log.debug("Optional crypto stack upgrade skipped: %s", exc)
-
-    # asyncua is pinned in repo-root constraints.txt to the shared released version.
-    # ASYNCUA_VERSION_SPEC is a deliberate operator
-    # escape hatch for testing a future tagged release; when set, this final
-    # asyncua install intentionally bypasses constraints so the override wins.
-    asyncua_override = os.getenv("ASYNCUA_VERSION_SPEC")
-    asyncua_spec = (asyncua_override or "asyncua").strip() or "asyncua"
-    log.info("Installing asyncua (constraints pin or explicit ASYNCUA_VERSION_SPEC): %s", asyncua_spec)
-    subprocess.check_call(
-        [
-            str(python),
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            *([] if asyncua_override and asyncua_override.strip() else _pip_constraint_args()),
-            asyncua_spec,
-        ]
-    )
-
-    # Verify the installed asyncua satisfies the minimum version.
-    try:
-        installed = subprocess.check_output(
-            [str(python), "-c", "import asyncua; print(asyncua.__version__)"],
-            text=True,
-        ).strip()
-        log.info("asyncua installed version: %s", installed)
-        from packaging.version import Version
-
-        if Version(installed) < Version("2.0.1"):
-            log.error(
-                "asyncua %s is too old for this workspace. Minimum required: 2.0.1. "
-                "Run with --force_full to trigger a clean reinstall.",
-                installed,
-            )
-            sys.exit(1)
-    except Exception as exc:
-        log.warning("Could not verify asyncua version: %s", exc)
 
 
 # ---------------------------------------------------------------------------

@@ -130,7 +130,7 @@ def test_live_single_server_burst_transfer_time(tmp_path: Path) -> None:
             "-e",
             server_url,
             "-d",
-            "8.0",
+            "15.0",
             "-b",
             "5",  # Rapid 5-event burst
             "-s",

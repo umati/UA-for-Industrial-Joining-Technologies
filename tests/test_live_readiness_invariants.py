@@ -608,13 +608,14 @@ def test_web_docker_test_image_vendors_shared_readiness_module() -> None:
     )
 
 
-def test_web_docker_image_vendors_shared_session_policy() -> None:
+def test_web_docker_image_vendors_shared_runtime_helpers() -> None:
     dockerignore = _read(DOCKERIGNORE)
     dockerfile = _read(WEB_CLIENT_DOCKERFILE)
 
     for filename in (
         "scripts/opcua_session_policy.py",
         "scripts/opcua_session_policy_loader.py",
+        "scripts/tool_bootstrap.py",
     ):
         assert filename in dockerfile, f"The Web Client Docker image must vendor {filename}."
         assert f"!{filename}" in dockerignore, f"The root Docker context must include {filename}."

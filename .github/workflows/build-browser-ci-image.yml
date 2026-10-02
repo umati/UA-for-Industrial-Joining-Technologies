@@ -35,12 +35,11 @@ on:
       - '.github/scripts/compute_browser_image_fingerprint.py'
       - '.github/workflows/build-browser-ci-image.yml'
       - '.dockerignore'
-      - 'constraints.txt'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements.lock'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package.json'
       - 'OPC_UA_Clients/Release2/IJT_Web_Client/package-lock.json'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt'
-      - 'OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/pyproject.toml'
+      - 'OPC_UA_Clients/Release2/IJT_Web_Client/uv.lock'
+
   schedule:
     - cron: '17 5 * * 1'  # weekly Monday 05:17 UTC
   workflow_dispatch:
@@ -301,15 +300,15 @@ jobs:
               test -n "$asyncua_wheel"
               asyncua_version="${asyncua_wheel#asyncua-}"
               asyncua_version="${asyncua_version%%-*}"
+              uv export --project OPC_UA_Clients/Release2/IJT_Web_Client --frozen -o "$HOME/requirements.txt"
               awk -v version="$asyncua_version" \
                 '\''BEGIN { replaced=0 } tolower($0) ~ /^asyncua([[:space:]]|[=<>!~@]|$)/ { print "asyncua==" version; replaced=1; next } { print } END { if (replaced == 0) print "asyncua==" version }'\'' \
-                OPC_UA_Clients/Release2/IJT_Web_Client/requirements.lock > "$HOME/runtime-constraints.txt"
+                "$HOME/requirements.txt" > "$HOME/runtime-constraints.txt"
               python -m venv "$HOME/ijt-browser-probe"
               "$HOME/ijt-browser-probe/bin/python" -m pip install --pre --no-index \
                 --find-links /opt/ijt-browser-ci/pip-wheelhouse \
                 -c "$HOME/runtime-constraints.txt" \
-                -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt \
-                -r OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt
+                -r "$HOME/requirements.txt"
               "$HOME/ijt-browser-probe/bin/python" -c "import asyncua, pytest, pytest_timeout, websockets; print(\"offline python closure OK\")"
               cd OPC_UA_Clients/Release2/IJT_Web_Client
               npm ci --legacy-peer-deps --offline --no-audit --no-fund

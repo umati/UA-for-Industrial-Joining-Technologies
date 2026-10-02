@@ -266,7 +266,7 @@ run their live/integration tests in parallel without port conflicts.
 | IJT_CSharp_Client  | **40464** | N/A (.NET)   | Dedicated port — copy-patch mechanism in `OpcUaServerFixture.cs` |
 | IJT_Console_Client | 40461     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
 | IJT_Test_Client    | 40462     | `.venv_test` | Per-port isolated launch via `run_all_tests.py` |
-| IJT_Performance_Client | 40485 | `.venv` (root runner) | Dedicated port (`OPCUA_SERVER_PORT_PERFORMANCE_CLIENT`) — live benchmark on simulator |
+| IJT_Performance_Client | 40485 | `.venv_test` | Dedicated port (`OPCUA_SERVER_PORT_PERFORMANCE_CLIENT`) — live benchmark on simulator |
 | Web Client Python OPC UA | 40463 | `.venv_test` | Direct OPC UA and method tests; no WebSocket backend |
 | Web Client Python backend | OPC UA 40466 / WS 8002 | `.venv_test` | WebSocket backend contract and Python integration tests |
 | Web Client Python lifecycle | OPC UA 40467 / WS 8003 | `.venv_test` | WebSocket connection lifecycle tests isolated from backend contract tests |
@@ -348,7 +348,7 @@ Python clients use separate virtual environments for runtime, tests, and local C
 
 | venv | Purpose | Created by |
 |------|---------|-----------|
-| `.venv` | Runtime-only — production dependencies | `setup_client.py` / `setup_project.py` |
+| `.venv` | Runtime-only — production dependencies | `setup_client.py` / `setup_project.py` / Performance `run_fleet.py` |
 | `.venv_test` | Test runner + dev tools (`pytest`, `ruff`, `mypy`, …) | `run_all_tests.py` (first run) |
 | `.venv_ci` | Local `--ci-mode` test mirror | `run_all_tests.py --ci-mode` (first local CI-mode run) |
 
@@ -357,6 +357,18 @@ environment, and vice versa.
 Local `--ci-mode` uses `.venv_ci` so global developer packages cannot affect CI-mode
 results. Real GitHub Actions and Docker jobs are already isolated and may use their
 provided Python directly.
+
+Python client setup and test scripts prepare uv automatically. Each client owns
+its `pyproject.toml` and `uv.lock`; the runner chooses its environment explicitly.
+Plain `uv sync` defaults to `.venv` and does not prepare `.venv_test` automatically.
+The Web production Docker image uses `/opt/ijt_venv` so an `/app` bind mount cannot
+hide its runtime packages.
+
+Tool preparation is separate from client runtime/test packages:
+`.state/tools/` holds reviewed uv installations, root `root-tests-py<major><minor>`
+and `precommit-py<major><minor>` environments. CI/Docker use provisioned tools
+without bootstrap downloads. Missing prerequisites in an explicitly selected
+root `--suite` fail validation rather than producing a successful skip.
 
 ### `OPCUA_SERVER_URL` Override
 

@@ -624,8 +624,8 @@ def test_build_browser_ci_image_workflow_keeps_pin_updates_manual_without_loop()
     assert "npm ci --legacy-peer-deps --offline --no-audit --no-fund" in build_body
     assert "--find-links /opt/ijt-browser-ci/pip-wheelhouse" in build_body
     assert "IS_DOCKER=true" in build_body
-    assert "IJT_OPCUA_HOST_REWRITE" not in build_body
-    assert 'IJT_Web_Client/requirements.lock > "$HOME/runtime-constraints.txt"' in build_body
+    assert "uv export --project OPC_UA_Clients/Release2/IJT_Web_Client --frozen" in build_body
+    assert "requirements.lock" not in build_body
     assert 'python -m venv "$HOME/ijt-browser-probe"' in build_body
     assert '-c "$HOME/runtime-constraints.txt"' in build_body
     forbidden_probe_python = "/" + "tmp" + "/ijt-browser-probe/bin/python"
@@ -730,8 +730,8 @@ def test_browser_ci_image_smoke_runtime_probe_uses_writable_home_paths() -> None
     )
     body = probe_step["run"]
 
-    assert "-e HOME=/opt/ijt-browser-ci/home" in body
-    assert 'IJT_Web_Client/requirements.lock > "$HOME/runtime-constraints.txt"' in body
+    assert "uv export --project OPC_UA_Clients/Release2/IJT_Web_Client --frozen" in body
+    assert "requirements.lock" not in body
     assert 'python -m venv "$HOME/ijt-browser-probe"' in body
     assert '"$HOME/ijt-browser-probe/bin/python" -m pip install' in body
     assert '-c "$HOME/runtime-constraints.txt"' in body

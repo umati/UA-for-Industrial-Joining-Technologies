@@ -184,7 +184,47 @@ def test_pip_install_reinstalls_when_hash_matches_but_required_modules_missing(m
     result = runner._stage_pip_install(Path(sys.executable), required_modules=("pytest",))
 
     assert result.rc == 0
-    assert any("-r" in cmd for cmd in calls)
+    export_cmd = next(c for c in calls if "export" in c)
+    assert "--frozen" in export_cmd
+    assert "--group" in export_cmd and "dev" in export_cmd
+    assert "--no-emit-project" in export_cmd
+
+    install_cmd = next(c for c in calls if "pip" in c and "install" in c and "--python" in c)
+    assert "--python" in install_cmd
+    assert str(Path(sys.executable)) in install_cmd
+    assert "-r" in install_cmd
+
+
+def test_pip_install_invokes_locked_uv_export_and_pip_install_contract(monkeypatch, tmp_path):
+    runner = _load_runner()
+    venv_dir = tmp_path / ".venv_test"
+    fake_python = Path("/fake/python/executable")
+    calls = []
+
+    monkeypatch.setattr(runner, "_VENV", venv_dir)
+    monkeypatch.setattr(runner, "_PIP_CACHE", tmp_path / "pip-cache")
+    monkeypatch.setattr(runner, "_TMP_DIR", tmp_path / "tmp")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner, "_info", lambda msg: None)
+    monkeypatch.setattr(runner, "_run", lambda cmd, **kwargs: calls.append((list(cmd), kwargs)) or 0)
+    monkeypatch.setattr(runner.shutil, "which", lambda name: "mock-uv")
+    monkeypatch.setattr(runner, "ensure_uv", lambda project: "mock-uv")
+    monkeypatch.setattr(runner, "_requirements_hash", lambda: "hash456")
+    monkeypatch.setattr(runner, "_ensure_precommit_hooks", lambda: None)
+    monkeypatch.setattr(runner, "_missing_py_modules", lambda python, modules: [])
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+
+    result = runner._stage_pip_install(fake_python)
+
+    assert result.rc == 0
+    req_file = str(tmp_path / "tmp" / "locked-dev-requirements.txt")
+    assert [cmd for cmd, _kwargs in calls] == [
+        [fake_python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
+        ["mock-uv", "export", "--frozen", "--group", "dev", "--no-emit-project", "-o", req_file],
+        ["mock-uv", "pip", "install", "--python", str(fake_python), "-r", req_file],
+    ]
+    assert calls[1][1]["env"] == calls[2][1]["env"]
+    assert calls[1][1]["cwd"] == calls[2][1]["cwd"] == runner.ROOT
 
 
 def test_pip_install_does_not_mark_hash_current_when_required_modules_remain_missing(monkeypatch, tmp_path):

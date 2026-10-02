@@ -243,6 +243,12 @@ After the run, the client reports the **Likely Cause of Delay**. The console and
 
 ## 6. Practical Execution Scenarios
 
+Run commands from the Performance Client directory. `run_fleet.py` and
+`run_all_tests.py` prepare their own environments automatically. Before direct
+`python main.py` examples, prepare and activate a runtime environment using the
+[Python Client Integration Guide](../../../../docs/PYTHON_CLIENT_INTEGRATION.md).
+An unactivated system Python does not use the launcher's installed packages.
+
 The Performance Client supports command-line flags, environment variables, and YAML profile configurations.
 
 ### Scenario A: Single Server Benchmark
@@ -326,6 +332,18 @@ python run_fleet.py --settle-timeout 15         # Wait longer for late results (
 python run_fleet.py --fail-p90 100 --fail-p90-client-ready 150   # Fail if 90%-under times exceed the limits (ms)
 ```
 
+For an advanced 500-server load test targeting 25,000 results:
+
+```bash
+python run_fleet.py --servers 500 -w 20 --samples-per-server 50 --settle-timeout 15 --fail-p90 300
+```
+
+This uses ports 40001-40500, 500 simulator processes, and 20 client workers.
+Scale up from a smaller run and measure a baseline without limits first.
+The worker count and 300 ms gate are example host-specific settings, not a
+guaranteed capacity or production SLA. Add `--fail-p90-client-ready` separately
+if decoded/client-ready time must also meet a limit.
+
 #### Choosing a time limit
 
 `--fail-p90` and `--fail-p90-client-ready` are off unless you pass them. A limit only means something for the setup it was chosen for. When every server runs on the same machine as the client, the times include CPU sharing between servers and client, so they grow with the number of servers. Suggested starting limits for `--fail-p90` (90%-under Delivery Time):
@@ -341,6 +359,13 @@ Set `--fail-p90-client-ready` about 50 ms above `--fail-p90`. If a single-machin
 
 
 **Option 2 — Test Suite Runner (`run_all_tests.py`):**
+
+Use this for regression validation, not as an alias for `run_fleet.py`.
+`--fleet` selects local fleet size; `--fleet-start-port`, `-w`, and
+`--burst-delay` control its orchestration. Benchmark-launcher options such as
+`--samples-per-server`, `--settle-timeout`, and `--fail-p90` are not accepted
+by this test runner. Consult each command's `--help` for its supported options.
+
 ```bash
 # Full test suite with 50 local server instances spawned in parallel:
 python run_all_tests.py --fleet 50 -w 8
@@ -458,6 +483,8 @@ The `--burst-delay` option (in seconds, float, default `1.0`) controls the delay
 | **High-Throughput Stress Test** | `python run_fleet.py --servers 150 -w 12 --burst-delay 0.2` | Fires bursts every 200 ms. Verifies controller queue depth, socket buffer limits, and client pool drain efficiency under rapid fire. |
 | **Standard Baseline** | `python run_fleet.py --servers 50 -w 8 --burst-delay 1.0` | Default 1-second cadence between burst rounds. |
 | **Production Takt Emulation** | `python run_fleet.py --servers 100 -w 8 --burst-delay 5.0` | Emulates realistic automotive/aerospace cycle times (e.g., 5 ± 1 seconds takt time). |
+
+The pause happens only between rounds, not after the last one. Collection terminates once `--duration` has elapsed or the `--samples` target has been reached. In active trigger modes (`active_burst`, `both`), if the duration ends before workers finish their assigned rounds (for example, if connecting took longer on a constrained host), listening undergoes a bounded extension until all worker rounds complete or the safety timeout (`duration + rounds × burst-delay + 60 s`) is reached. If a worker still stops early, the run fails with `Trigger rounds incomplete: … (worker 0: 4/5)`; increase `--duration` or reduce `--burst-delay`.
 
 ---
 

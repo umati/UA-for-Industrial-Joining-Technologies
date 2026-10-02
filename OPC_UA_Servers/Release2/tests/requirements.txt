@@ -1,7 +1,6 @@
 # Runtime requirement for smoke_test.py
-# Install with: pip install -c <repo>/constraints.txt -r requirements.txt
-# constraints.txt enforces repo-wide transitive dependency security floors.
-#
-# asyncua is pinned in repo-root constraints.txt to the shared released version
-# so server tests use the same runtime floor as the IJT clients.
-asyncua
+# asyncua is pinned to 2.0.1 (matching IJT clients) with transitive security floors preserved.
+asyncua==2.0.1
+cryptography>=50.0.0
+pyOpenSSL>=26.4.0
+idna>=3.15

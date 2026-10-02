@@ -139,13 +139,14 @@ class TestDockerfileInstructions:
         text = _DOCKERFILE.read_text(encoding="utf-8")
         assert "npm_config_update_notifier=false" in text
 
-    def test_shared_session_policy_is_available_in_all_image_stages(self):
-        """Production and test images must include repo-owned OPC UA session policy files."""
+    def test_shared_runtime_helpers_are_available_in_all_image_stages(self):
+        """Production and test images must include shared session policy and tooling."""
         text = _DOCKERFILE.read_text(encoding="utf-8")
         test_stage = text.index("FROM base AS test")
         for filename in {
             "scripts/opcua_session_policy.py",
             "scripts/opcua_session_policy_loader.py",
+            "scripts/tool_bootstrap.py",
         }:
             assert filename in text
             assert text.index(filename) < test_stage

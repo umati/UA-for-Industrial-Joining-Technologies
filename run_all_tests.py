@@ -95,6 +95,8 @@ from pathlib import Path
 if str(Path(__file__).parent / "scripts") not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 
+from tool_bootstrap import ensure_requirements_environment, environment_python
+
 from reporting.timing_artifacts import local_runner_timing_payload, write_timing_bundle
 
 # ---------------------------------------------------------------------------
@@ -404,7 +406,7 @@ def _kill_proc_tree(pid: int) -> None:
     held by grandchild processes (MSBuild workers, vitest node, etc.).
     On Unix sends SIGKILL to the process group.
     """
-    if IS_WINDOWS:
+    if sys.platform == "win32":
         subprocess.run(
             ["taskkill", "/F", "/T", "/PID", str(pid)],
             stdout=subprocess.DEVNULL,
@@ -606,8 +608,12 @@ def _parse_suite_counts(text: str) -> str:
 
     fraction_passed = re.search(r"\b(\d+)/(\d+)\s+passed\b", text)
     if fraction_passed:
-        passed, total = fraction_passed.groups()
-        return f"{passed} passed" if passed == total else f"{passed}/{total} passed"
+        passed_text, total_text = fraction_passed.groups()
+        return (
+            f"{passed_text} passed"
+            if passed_text == total_text
+            else f"{passed_text}/{total_text} passed"
+        )
 
     # Stage-result lines from child runners such as Web Client Docker smoke.
     # These are checks, not executable tests, so keep them out of aggregate
@@ -615,41 +621,43 @@ def _parse_suite_counts(text: str) -> str:
     pass_checks = len(re.findall(r"^\s*\[PASS\]\s+\S+", text, flags=re.MULTILINE))
     fail_checks = len(re.findall(r"^\s*\[FAIL\]\s+\S+", text, flags=re.MULTILINE))
     if pass_checks or fail_checks:
-        parts: list[str] = []
+        check_parts: list[str] = []
         if pass_checks:
             noun = "check" if pass_checks == 1 else "checks"
-            parts.append(f"{pass_checks} {noun} passed")
+            check_parts.append(f"{pass_checks} {noun} passed")
         if fail_checks:
             noun = "check" if fail_checks == 1 else "checks"
-            parts.append(f"{fail_checks} {noun} failed")
-        return ", ".join(parts)
+            check_parts.append(f"{fail_checks} {noun} failed")
+        return ", ".join(check_parts)
 
     return ""
 
 
-def _parse_suite_coverage(text: str) -> str | None:
-    """Extract code coverage percentage from sub-runner output if present.
+_COVERAGE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    # C# / Node sub-runner step line: "[PHASE 1] Coverage ...... PASS (98.6% (threshold: 95%))"
+    re.compile(r"\bCoverage\s*\.{2,}\s*(?:PASS|WARN|FAIL)\s*\(\s*(\d+(?:\.\d+)?)%"),
+    # Vitest / Istanbul text-summary: "Lines        : 99.91% ( 4321/4325 )"
+    re.compile(r"^\s*Lines\s*:\s*(\d+(?:\.\d+)?)%", re.MULTILINE),
+    # pytest-cov fail-under message: "Required test coverage of 95% reached. Total coverage: 99.60%"
+    re.compile(r"\bTotal coverage:\s*(\d+(?:\.\d+)?)%"),
+    # Python sub-runner step note: "PASS (650 passed in 48.31s; coverage 99.6%)"
+    re.compile(r"\bcoverage (\d+(?:\.\d+)?)%"),
+)
 
-    Handles:
-      - pytest-cov: "TOTAL   1457      0   100%" -> "100%"
-      - C# coverlet: "Coverage (IJT_CSharp_Client.*) .... PASS (98.6% (threshold: 95%))" -> "98.6%"
-      - Vitest: "All files |   99.4 |" -> "99.4%"
+
+def _parse_suite_coverage(text: str) -> str | None:
+    """Return the gated code coverage percentage from sub-runner output, e.g. "98.6%".
+
+    Each sub-runner computes coverage with its own rules (e.g. C# excludes generated UAModel
+    bindings), so the root reads the number the sub-runner reports instead of re-deriving it.
+    Patterns are tried in the order of ``_COVERAGE_PATTERNS``; the last match of the first
+    matching pattern wins (the final report of the run).
     """
     clean_text = _strip_ansi(text).replace("\r", "\n")
-    # 1. pytest-cov summary row
-    m = re.search(r"^\s*TOTAL\s+\d+\s+\d+\s+(\d+(?:\.\d+)?%)", clean_text, re.MULTILINE)
-    if m:
-        return m.group(1)
-    # 2. C# sub-runner step result
-    m = re.search(
-        r"Coverage\s*\([^)]*\)\s*\.+(?:[^\n]*?\b(?:PASS|WARN)\s*\()?\s*([\d.]+)%", clean_text
-    )
-    if m:
-        return f"{m.group(1)}%"
-    # 3. Vitest summary table
-    m = re.search(r"All files\s*\|\s*([\d.]+)\s*\|", clean_text)
-    if m:
-        return f"{m.group(1)}%"
+    for pattern in _COVERAGE_PATTERNS:
+        matches = pattern.findall(clean_text)
+        if matches:
+            return f"{float(matches[-1]):.1f}%"
     return None
 
 
@@ -760,8 +768,8 @@ def _delegate_to_runner(
     )
     raw_counts = _parse_suite_counts(out)
     cov = _parse_suite_coverage(out)
-    if cov and raw_counts and "cov" not in raw_counts:
-        raw_counts = f"{raw_counts} ({cov} cov)"
+    if cov and raw_counts and "coverage" not in raw_counts:
+        raw_counts = f"{raw_counts}; {cov} coverage"
     counts = _clarify_suite_counts(name, raw_counts)
     skipped = rc == 0 and _counts_are_only_skipped(counts)
     return SuiteResult(
@@ -3092,7 +3100,6 @@ def _configure_stdio_utf8() -> None:
 def main() -> int:
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     _configure_stdio_utf8()
-    _cleanup_caches(REPO_ROOT)  # pre-run: clear stale caches from interrupted runs
     parser = _build_parser()
     args = parser.parse_args()
     _validate_suite_arg(parser, args)
@@ -3120,6 +3127,7 @@ def main() -> int:
         _print_suite_list()
         return 0
 
+    _cleanup_caches(REPO_ROOT)  # pre-run: clear stale caches from interrupted runs
     _setup_logging(verbose=args.verbose)
 
     global _USE_COLOUR
@@ -3158,7 +3166,10 @@ def main() -> int:
             _emit_suite_output(result)
             total_time = time.monotonic() - t_total
             _write_timing_artifacts([result], total_time, _timing_mode(args))
-            return 0 if (result.ok or result.skipped) else 1
+            if result.skipped:
+                log.error("Requested suite %s was NOT VALIDATED: %s", args.suite, result.output)
+                return 1
+            return 0 if result.ok else 1
 
         # -- Pre-flight + Phase 1a + Phase 1b -------------------------------
         if not args.phase2:
@@ -3202,7 +3213,7 @@ def _force_rmtree(path: Path) -> None:
 
 def _cleanup_caches(root: Path) -> None:
     """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
-    _SKIP = {"node_modules", ".git", "test-results"}
+    _SKIP = {"node_modules", ".git", ".state", "test-results"}
     _CACHE_DIRS = {
         "__pycache__",
         ".pytest_cache",
@@ -3229,5 +3240,40 @@ def _cleanup_caches(root: Path) -> None:
                     (Path(dirpath) / f).unlink(missing_ok=True)
 
 
+def entrypoint() -> int:
+    if any(flag in sys.argv[1:] for flag in ("--help", "-h", "--list")):
+        return main()
+    if os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("IS_DOCKER") == "true":
+        return main()
+    parser = _build_parser()
+    _validate_suite_arg(parser, parser.parse_args())
+    directory = (
+        REPO_ROOT
+        / ".state"
+        / "tools"
+        / f"root-tests-py{sys.version_info.major}{sys.version_info.minor}"
+    )
+    os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    try:
+        if not environment_python(directory).is_file():
+            print("Preparing isolated root test tooling...", flush=True)
+        python = ensure_requirements_environment(
+            REPO_ROOT,
+            [REPO_ROOT / "tests" / "requirements.txt"],
+            ["pytest", "yaml", "defusedxml"],
+            name="root-tests",
+        )
+        if Path(sys.prefix).resolve() != directory.resolve():
+            return subprocess.run(  # noqa: S603 - managed interpreter and this runner
+                [str(python), str(Path(__file__).resolve()), *sys.argv[1:]],
+                cwd=REPO_ROOT,
+                check=False,
+            ).returncode
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        log.error("Root Python tooling preparation failed: %s", exc)
+        return 1
+    return main()
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(entrypoint())

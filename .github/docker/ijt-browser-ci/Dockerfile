@@ -111,33 +111,30 @@ RUN mkdir -p /opt/ijt-browser-ci/home \
 # 5. Bake Python wheelhouse (complete closure, wheels only) from IJT Web
 #    Client requirements. PIP_FIND_LINKS at runtime points here, plus
 #    PIP_NO_INDEX=1, so the runtime venv-create + pip install is offline.
-#    Versions come from the Web Client requirements.lock (exact pins) at image build
-#    time, then the no-index verification install constrains it by the version
-#    in the built wheel so pip cannot follow a direct archive URL at runtime.
+#    Versions come from the Web Client uv.lock (exact pins) at image build
+#    time, exported on demand during image build.
 # ---------------------------------------------------------------------------
-COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.lock /tmp/constraints.txt
-COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements.txt /tmp/requirements.txt
-COPY OPC_UA_Clients/Release2/IJT_Web_Client/requirements-dev.txt /tmp/requirements-dev.txt
-RUN python -m pip install --upgrade pip \
- && python -m pip wheel --pre \
-        -c /tmp/constraints.txt \
+COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 /uv /uvx /bin/
+COPY OPC_UA_Clients/Release2/IJT_Web_Client/pyproject.toml /tmp/pyproject.toml
+COPY OPC_UA_Clients/Release2/IJT_Web_Client/uv.lock /tmp/uv.lock
+RUN cd /tmp && uv export --frozen -o /tmp/requirements.txt \
+ && python -m pip install --upgrade pip \
+ && python -m pip wheel \
         -r /tmp/requirements.txt \
-        -r /tmp/requirements-dev.txt \
         --wheel-dir /opt/ijt-browser-ci/pip-wheelhouse \
  && asyncua_wheel="$(find /opt/ijt-browser-ci/pip-wheelhouse -maxdepth 1 -name 'asyncua-*.whl' -printf '%f\n' | sort | tail -n 1)" \
  && test -n "$asyncua_wheel" \
  && asyncua_version="${asyncua_wheel#asyncua-}" \
  && asyncua_version="${asyncua_version%%-*}" \
- && awk -v version="$asyncua_version" \
-        'BEGIN { replaced=0 } tolower($0) ~ /^asyncua([[:space:]]|[=<>!~@]|$)/ { print "asyncua==" version; replaced=1; next } { print } END { if (replaced == 0) print "asyncua==" version }' \
-        /tmp/constraints.txt > /tmp/runtime-constraints.txt \
+ && echo "asyncua==${asyncua_version}" > /tmp/runtime-constraints.txt \
  && python -m pip install --pre \
         --no-index \
         --find-links /opt/ijt-browser-ci/pip-wheelhouse \
         -c /tmp/runtime-constraints.txt \
         -r /tmp/requirements.txt \
-        -r /tmp/requirements-dev.txt \
  && python -c "import pytest, pytest_asyncio, pytest_timeout, asyncua, websockets, dotenv, aiofiles, pytz; print('python deps OK')"
+
+
 
 # ---------------------------------------------------------------------------
 # 6. Bake npm cache from IJT Web Client package-lock + install Playwright

@@ -131,14 +131,15 @@ def main() -> int:
 
     adapter_names = [x.strip().lower() for x in args.adapters.split(",") if x.strip()]
     if "console" in adapter_names:
-        console_requirements = Path(args.console_dir) / "requirements.txt"
-        if console_requirements.exists():
-            ensure_additional_requirements(
-                test_python,
-                [console_requirements],
-                state_name="console_adapter_env",
-                import_probe="import orjson",
-            )
+        console_dir = Path(args.console_dir) if args.console_dir else (PROJECT_ROOT.parent / "IJT_Console_Client")
+        console_lock = console_dir / "uv.lock"
+        req_files = [console_lock] if console_lock.exists() else []
+        ensure_additional_requirements(
+            test_python,
+            req_files,
+            state_name="console_adapter_env",
+            import_probe="import orjson",
+        )
 
     if not _endpoint_reachable(args.endpoint):
         print(

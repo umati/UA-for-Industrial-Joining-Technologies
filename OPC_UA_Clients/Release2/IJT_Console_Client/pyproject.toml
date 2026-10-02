@@ -1,5 +1,46 @@
 [project]
+name = "ijt-console-client"
+version = "1.0.0"
+description = "OPC UA IJT Console Client"
 requires-python = ">=3.14"
+dependencies = [
+    "asyncua==2.0.1",
+    "pytz~=2026.1",
+    "aiofiles~=25.1",
+    "orjson~=3.11",
+]
+
+[dependency-groups]
+dev = [
+    "pytest~=9.0",
+    "pyfakefs~=6.1",
+    "pytest-asyncio~=1.3",
+    "pytest-timeout~=2.4",
+    "pytest-cov~=7.1",
+    "coverage[toml]~=7.0",
+    "pre-commit~=4.0",
+    "ruff~=0.15",
+    "mypy~=2.3.0",
+    "pyright~=1.1",
+    "bandit~=1.9",
+    "pip-audit~=2.9",
+    "detect-secrets~=1.5",
+    "urllib3>=2.8.0",
+]
+
+[tool.uv]
+package = false
+constraint-dependencies = [
+    "asyncua==2.0.1",
+    "cryptography>=50.0.0",
+    "pyOpenSSL>=26.4.0",
+    "idna>=3.15",
+    "urllib3>=2.8.0",
+    "jinja2>=3.1.6",
+    "werkzeug>=3.1.3",
+    "filelock>=3.20.1",
+    "setuptools>=78.1.1",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

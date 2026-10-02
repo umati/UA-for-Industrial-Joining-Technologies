@@ -32,6 +32,21 @@ def _urlopen(request, timeout):
     return https_only_opener().open(request, timeout=timeout)
 
 
+# Minimum line/statement coverage (%) each unit job is gated at. Must match the real
+# gates: pyproject.toml fail_under (Python), vitest.config thresholds (JS), the C#
+# runner threshold, and --cov-fail-under in ci.yml (Performance Client).
+# tests/reporting/test_workflow_contracts.py fails if any of them drift apart.
+COVERAGE_GATES: dict[str, float] = {
+    "web-client-python": 95.0,
+    "web-client-js": 95.0,
+    "console-client": 95.0,
+    "performance-client": 95.0,
+    "node-client": 95.0,
+    "csharp-unit": 95.0,
+    "test-client": 95.0,
+}
+
+
 # ── Parsers ──────────────────────────────────────────────────────────
 
 
@@ -566,14 +581,15 @@ def main() -> None:
     _warn(tc_r, tc_cov, "test-client", "coverage.xml")
     _warn(ss_r, ss_smoke[0], "server-smoke-windows", "smoke.xml")
 
+    gate = COVERAGE_GATES
     coverage_checks = [
-        ("Web Client — Python", web_cov, 95.0),
-        ("Web Client — JavaScript", web_js_cov, 95.0),
-        ("Console Client — Python", con_cov, 95.0),
-        ("Performance Client — Python", perf_client_cov, 85.0),
-        ("Node Client — Legacy JavaScript", nod_cov, 95.0),
-        ("C# Client — Unit", cs_cov, 95.0),
-        ("Test Client — Python", tc_cov, 95.0),
+        ("Web Client — Python", web_cov, COVERAGE_GATES["web-client-python"]),
+        ("Web Client — JavaScript", web_js_cov, COVERAGE_GATES["web-client-js"]),
+        ("Console Client — Python", con_cov, COVERAGE_GATES["console-client"]),
+        ("Performance Client — Python", perf_client_cov, COVERAGE_GATES["performance-client"]),
+        ("Node Client — Legacy JavaScript", nod_cov, COVERAGE_GATES["node-client"]),
+        ("C# Client — Unit", cs_cov, COVERAGE_GATES["csharp-unit"]),
+        ("Test Client — Python", tc_cov, COVERAGE_GATES["test-client"]),
     ]
     coverage_warnings = []
     for label, pct, threshold in coverage_checks:
@@ -804,38 +820,39 @@ def main() -> None:
         (
             f"| Web Client — Python | Ubuntu Release 2 Python unit suite | "
             f"{tests_cell(web_py_t, web_py_r)} | "
-            f"{skips(web_py_t[3], web_py_r)} | {cov(web_cov, 95, web_py_r)} |"
+            f"{skips(web_py_t[3], web_py_r)} | "
+            f"{cov(web_cov, gate['web-client-python'], web_py_r)} |"
         ),
         (
             "| Web Client — JavaScript | Ubuntu Release 2 JavaScript unit suite | "
             f"{tests_cell(web_js_t, web_js_r)} | "
-            f"{skips(web_js_t[3], web_js_r)} | {cov(web_js_cov, 95, web_js_r)} |"
+            f"{skips(web_js_t[3], web_js_r)} | {cov(web_js_cov, gate['web-client-js'], web_js_r)} |"
         ),
         (
             f"| Console Client — Python | Ubuntu Python unit suite | "
             f"{tests_cell(con_py_t, con_r)} | "
-            f"{skips(con_py_t[3], con_r)} | {cov(con_cov, 95, con_r)} |"
+            f"{skips(con_py_t[3], con_r)} | {cov(con_cov, gate['console-client'], con_r)} |"
         ),
         (
             f"| Performance Client — Python | Ubuntu Python unit suite | "
             f"{tests_cell(perf_client_t, perf_client_r)} | "
             f"{skips(perf_client_t[3], perf_client_r)} | "
-            f"{cov(perf_client_cov, 85, perf_client_r)} |"
+            f"{cov(perf_client_cov, gate['performance-client'], perf_client_r)} |"
         ),
         (
             "| Node Client — Legacy JavaScript | Ubuntu Release 1 JavaScript unit suite | "
             f"{tests_cell(nod_js_t, nod_r)} | "
-            f"{skips(nod_js_t[3], nod_r)} | {cov(nod_cov, 95, nod_r)} |"
+            f"{skips(nod_js_t[3], nod_r)} | {cov(nod_cov, gate['node-client'], nod_r)} |"
         ),
         (
             f"| C# Client — Unit (xUnit) | Windows C# xUnit unit suite | "
             f"{tests_cell(cs_unit_t, cs_u_r)} | "
-            f"{skips(cs_unit_t[3], cs_u_r)} | {cov(cs_cov, 95, cs_u_r)} |"
+            f"{skips(cs_unit_t[3], cs_u_r)} | {cov(cs_cov, gate['csharp-unit'], cs_u_r)} |"
         ),
         (
             f"| Test Client — Python (Unit) | Ubuntu Python unit suite | "
             f"{tests_cell(tc_py_t, tc_r)} | "
-            f"{skips(tc_py_t[3], tc_r)} | {cov(tc_cov, 95, tc_r)} |"
+            f"{skips(tc_py_t[3], tc_r)} | {cov(tc_cov, gate['test-client'], tc_r)} |"
         ),
         (
             f"| OPC UA Server — Smoke | Windows native server smoke check | "

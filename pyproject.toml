@@ -2,6 +2,7 @@
 # Each sub-project (Console, Web, Test clients) has its own pyproject.toml
 # for project-specific settings. This file holds repo-root concerns only.
 
+
 [tool.pytest.ini_options]
 # Root-level pytest is reserved for repo-root infrastructure tests under tests/.
 # Sub-project suites still run via their own run_all_tests.py entrypoints.
@@ -30,9 +31,10 @@ line-length = 100
 # Direct ruff cache into tmp/ — resolved relative to this file, so it never
 # leaks to the repo root or any ancestor regardless of the invoking CWD.
 cache-dir = "tmp/ruff-cache"
-# Exclude auto-generated files (UA-ModelCompiler output) — never hand-edit these.
+# Exclude auto-generated files (UA-ModelCompiler output) and standalone submodules.
 exclude = [
     "OPC_UA_Clients/Release2/IJT_CSharp_Client/Types/",
+    "OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope/",
 ]
 
 [tool.ruff.lint]

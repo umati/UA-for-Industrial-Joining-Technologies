@@ -1,5 +1,9 @@
 # IJT Web Client — Developer Reference
 
+User setup and commands are in the [README](../README.md). Pip deployment and
+source reuse are in the [shared integration guide](../../../../docs/PYTHON_CLIENT_INTEGRATION.md).
+This document describes contributor architecture and test rules.
+
 ---
 
 ## Project Identity
@@ -8,7 +12,7 @@
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_Web_Client/` |
 | **Purpose** | Reference OPC UA IJT client: Python WebSocket backend + Node.js browser frontend |
-| **Stack** | Python 3.14+, asyncua pinned via repo-root constraints.txt (exact versions in generated requirements.lock), Node.js 24.15+, Vite/Vitest, ESLint |
+| **Stack** | Python 3.14+, asyncua 2.0.1 (locked in `uv.lock`), Node.js 24.15+, Vite/Vitest, ESLint |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
 | **Docker** | Standalone container healthy on HTTP:3000 + WS:8001; root Phase 2 isolates Docker smoke on HTTP:3008 + WS:8011 (non-root `appuser`) |
 
@@ -22,11 +26,8 @@ IJT_Web_Client/
 ├── index.py                # Python WebSocket backend (asyncio + websockets, default port 8001)
 ├── config.js               # Browser runtime WS config (window.__IJT_RUNTIME__ / query params)
 ├── run_all_tests.py        # PRIMARY TEST RUNNER — one command for everything
-├── pyproject.toml          # pytest settings: asyncio_mode=auto, timeout=30 (+ ruff, coverage, bandit, mypy)
-├── vitest.config.mjs       # Vitest config for JS unit tests
-├── eslint.config.mjs       # ESLint flat config
-├── requirements.txt        # Python runtime deps
-├── requirements-dev.txt    # Pinned: pytest~=9.0, pytest-asyncio~=1.3, pyfakefs~=6.1, and tooling
+├── pyproject.toml          # PEP 621 metadata, tool configs, and [dependency-groups] dev
+├── uv.lock                 # Pinned deterministic lockfile for runtime + dev dependencies
 ├── package.json            # Node deps + scripts (lint, test:unit:js, start)
 ├── Dockerfile              # FROM nikolaik/python-nodejs:python3.14-nodejs24; CMD setup_project.py
 ├── docker-compose.yml      # Bind-mounted development stack
@@ -120,15 +121,18 @@ IJT_Web_Client/
 
 ## Test Commands
 
-```bash
-# Install dev dependencies (includes pyfakefs for unit test isolation)
-pip install -r requirements-dev.txt
+Run from the client directory with Python 3.14+ and Node.js 24.15+. Scripts prepare
+uv automatically in isolated `.state/tools/` environments when needed.
+The runner installs a frozen runtime/development export from this client's
+`uv.lock` into `.venv_test` (local CI mode: `.venv_ci`). Setup uses `.venv` for
+runtime. Edit `pyproject.toml` and run `uv lock` to update dependencies.
 
+```bash
 # Full suite — OPC UA server auto-launched if needed
 python run_all_tests.py
 
 # Python unit tests only (no server)
-python -m pytest tests/python/unit/ -v
+python run_all_tests.py --phase1-python
 
 # JS unit only
 npx vitest run
@@ -138,7 +142,7 @@ npx eslint src/javascripts config.js --config eslint.config.mjs --max-warnings 0
 
 # Live OPC UA tests (server must be running at endpoint)
 set OPCUA_TEST_ENDPOINT=opc.tcp://localhost:40451
-python -m pytest tests/python/live/test_opcua_methods.py tests/python/live/test_opcua_live.py --timeout=120 -v
+.venv_test\Scripts\python.exe -m pytest tests/python/live/test_opcua_methods.py tests/python/live/test_opcua_live.py --timeout=120 -v
 
 # Docker tests (no live container needed)
 python scripts/run_docker_tests.py
@@ -146,6 +150,10 @@ python scripts/run_docker_tests.py
 # Docker live build+run test
 python scripts/run_docker_tests.py --live-docker
 ```
+
+For direct pytest commands, prepare the environment with the runner first. Use
+`.venv_test\Scripts\python.exe` on Windows or `.venv_test/bin/python` on Linux;
+the runner's relaunch does not activate the caller's shell.
 
 ## Zero-Escape Testing Tools (run_all_tests.py Phase 1)
 
@@ -289,8 +297,9 @@ sim_node = client.get_node("ns=1;s=TighteningSystem/Simulations/SimulateResults"
 ### Key Facts
 - Base image: `nikolaik/python-nodejs:python3.14-nodejs24`
 - Runs as **non-root `appuser`** (uid/gid 1001)
-- Packages pre-installed globally via `RUN pip install ...` (no venv needed in container)
-- `IS_DOCKER=true` and `GITHUB_ACTIONS=true` mark Python as pre-isolated
+- Runtime packages installed from `uv.lock` into `/opt/ijt_venv` with `uv sync --locked --no-dev`
+- `UV_PROJECT_ENVIRONMENT=/opt/ijt_venv` and `PATH` select that environment; `appuser` owns it
+- Either `IS_DOCKER=true` or `GITHUB_ACTIONS=true` marks the supplied Python as pre-isolated
 - Docker mode takes precedence over WSL detection, including Docker Desktop environments that expose Microsoft kernel markers
 - `IJT_OPCUA_HOST_REWRITE=true` is a separate opt-in for Docker Compose flows
   where a container must reach an OPC UA simulator running on the host
@@ -371,7 +380,7 @@ test image intentionally contains the Web Client project without the repository
 root `.git` metadata and root-level files.
 | Action versions | `actions/checkout@v6`, `setup-python@v6`, `setup-node@v6` (all current) |
 | Python version | `3.14` (stable in actions manifest) |
-| asyncua | pinned through repo-root `constraints.txt` to released `2.0.1`; keep Web/Test/Console clients aligned and revalidate method calls, structures, subscriptions, and type loading on each bump |
+| asyncua | pinned to released `2.0.1` in `pyproject.toml` / `uv.lock`; keep Web/Test/Console/Performance clients aligned and revalidate method calls, structures, subscriptions, and type loading on each bump |
 
 ---
 
@@ -412,7 +421,7 @@ Only standard files at root: `index.html`, `index.py`, `config.js`, `run_all_tes
 `pyproject.toml`, `vitest.config.mjs`, `eslint.config.mjs`, `Dockerfile`, `docker-compose.yml`,
 `docker-compose.smoke.yml`,
 `Makefile`, `package.json`, `package-lock.json`, `playwright.config.mjs`,
-`requirements.txt`, `requirements-dev.txt`, `README.md`, `.env`, `.env.example`, `.gitignore`
+`pyproject.toml`, `uv.lock`, `README.md`, `.env`, `.env.example`, `.gitignore`
 
 ### Root Directories
 `.state/`, `docs/`, `logs/` (includes `logs/results/`), `scripts/`, `src/`, `tests/`

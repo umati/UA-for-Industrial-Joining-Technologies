@@ -188,6 +188,7 @@ def test_inside_venv_uses_prefix_not_resolved_executable(monkeypatch, tmp_path):
     python.write_text("", encoding="utf-8")
 
     monkeypatch.setattr(_mod, "_VENV", venv)
+    monkeypatch.setattr(_mod, "ensure_uv", lambda project: "managed-uv")
     monkeypatch.setattr(_mod.sys, "prefix", str(venv))
     monkeypatch.setattr(_mod.sys, "executable", str(python))
 
@@ -206,35 +207,26 @@ def test_inside_venv_rejects_other_venv(monkeypatch, tmp_path):
     assert not _mod._inside_venv()
 
 
-def test_install_requirements_preserves_explicit_pip_cache_dir(monkeypatch, tmp_path):
+def test_sync_environment_runs_uv_sync(monkeypatch, tmp_path):
     venv = tmp_path / ".venv_test"
     venv.mkdir()
-    requirements = tmp_path / "requirements.txt"
-    requirements_dev = tmp_path / "requirements-dev.txt"
-    requirements.write_text("PyYAML>=6.0\n", encoding="utf-8")
-    requirements_dev.write_text("urllib3>=2.7.0\n", encoding="utf-8")
-    caller_cache = tmp_path / "caller-pip-cache"
-    runner_cache = tmp_path / "tmp" / "pip-cache"
-    envs: list[dict[str, str]] = []
+    commands: list[list[str]] = []
 
-    def fake_check_call(_cmd, **kwargs):
-        envs.append(kwargs["env"])
+    def fake_check_call(cmd, **kwargs):
+        commands.append(list(cmd))
 
     monkeypatch.setattr(_mod, "_VENV", venv)
-    monkeypatch.setattr(_mod, "_REQUIREMENTS", requirements)
-    monkeypatch.setattr(_mod, "_REQUIREMENTS_DEV", requirements_dev)
-    monkeypatch.setattr(_mod, "_TMP_DIR", tmp_path / "tmp")
-    monkeypatch.setattr(_mod, "_venv_pip", lambda path: Path("pip"))
-    monkeypatch.setattr(_mod, "_venv_python", lambda path: Path("python"))
+    monkeypatch.setattr(_mod, "ensure_uv", lambda project: "managed-uv")
     monkeypatch.setattr(_mod.subprocess, "check_call", fake_check_call)
-    monkeypatch.setenv("PIP_CACHE_DIR", str(caller_cache))
     monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
 
-    _mod._install_requirements()
+    _mod._sync_environment()
 
-    assert envs
-    assert all(env["PIP_CACHE_DIR"] == str(caller_cache) for env in envs)
-    assert not runner_cache.exists()
+    assert commands
+    assert commands[0][1] == "sync"
+    assert "--locked" in commands[0]
+    assert "--group" in commands[0]
+    assert "dev" in commands[0]
 
 
 # ---------------------------------------------------------------------------

@@ -76,6 +76,9 @@ _NS_META_KEYS = ("version", "publication_date")
 # Worker teardown budget (subscription delete + disconnect) plus margin, added to the settle time
 # when the master waits for workers to finish.
 _WORKER_SHUTDOWN_BUDGET_S: float = 8.0
+# Extra time the master waits beyond the measurement duration (plus pacing) for workers that are
+# still connecting or firing requested trigger rounds. Bounds the run so it can never hang.
+_TRIGGER_COMPLETION_GRACE_S: float = 60.0
 
 
 @dataclass
@@ -343,6 +346,7 @@ async def _worker_event_loop(
     # Per-endpoint trigger-call counters; first_success_send_us is the client send time (epoch
     # microseconds) of the first call that succeeded, used by the master for UNMATCHED detection.
     call_stats: dict[str, dict[str, int]] = {}
+    trigger_rounds_fired: int = 0
 
     type_definitions_loaded = False
     loaded_ns_ijt: int | None = None
@@ -623,8 +627,20 @@ async def _worker_event_loop(
                         burst_failures += 1
                         burst_errors.append(f"{url}: unhandled burst task error: {result}")
                         logger.error(f"[Worker {worker_id}] {burst_errors[-1]}")
-            if burst_delay > 0:
+            trigger_rounds_fired += 1
+            if burst_delay > 0 and burst_idx < burst_trigger_count - 1:
                 await asyncio.sleep(burst_delay)
+
+        # Tell the master that all requested rounds were fired, so it can stop without cutting any off.
+        out_queue.put(
+            {
+                "type": "TRIGGERS_DONE",
+                "worker_id": worker_id,
+                "rounds_fired": trigger_rounds_fired,
+                "rounds_requested": burst_trigger_count,
+                "endpoint_stats": endpoint_stats(),
+            }
+        )
 
     # Listen until stop signal is set
     while not stop_event.is_set():
@@ -705,6 +721,7 @@ async def _worker_event_loop(
             "endpoint_stats": endpoint_stats(),
             "burst_failures": burst_failures,
             "burst_errors": burst_errors,
+            "trigger_rounds_fired": trigger_rounds_fired,
             "teardown_errors": teardown_errors,
             "timing": {
                 "hooks_installed": hook_status.installed,
@@ -838,6 +855,11 @@ class OpcUaClientPool:
         self.fleet_integrity: FleetIntegritySummary | None = None
         self.worker_timing: dict[int, dict[str, Any]] = {}
         self.namespace_metadata: dict[str, dict[str, str | None]] = {}
+        self._burst_trigger_count = 0
+        self._worker_procs: dict[int, Any] = {}
+        self._errored_worker_ids: set[int] = set()
+        # worker_id -> trigger rounds fired; set by TRIGGERS_DONE (or DONE) from active-mode workers
+        self.trigger_rounds_fired: dict[int, int] = {}
 
     def start(self, burst_trigger_count: int = 0) -> None:
         """Start all worker processes and begin connecting to controllers."""
@@ -860,6 +882,10 @@ class OpcUaClientPool:
         self.fleet_integrity = None
         self.worker_timing.clear()
         self.namespace_metadata.clear()
+        self._burst_trigger_count = burst_trigger_count
+        self._worker_procs.clear()
+        self._errored_worker_ids.clear()
+        self.trigger_rounds_fired.clear()
         self._stopped = False
 
         # Split endpoints evenly across worker processes
@@ -900,6 +926,22 @@ class OpcUaClientPool:
             )
             proc.start()
             self._processes.append(proc)
+            self._worker_procs[w_id] = proc
+
+    @property
+    def _triggers_active(self) -> bool:
+        return self.mode in ("active_burst", "both") and self._burst_trigger_count > 0
+
+    def _triggers_pending(self) -> bool:
+        """True while any live worker has not yet fired all requested trigger rounds."""
+        if not self._triggers_active:
+            return False
+        errored = self._errored_worker_ids
+        for w_id, proc in self._worker_procs.items():
+            finished = w_id in self.trigger_rounds_fired or w_id in self.completed_worker_ids or w_id in errored
+            if not finished and proc.is_alive():
+                return True
+        return False
 
     def timing_summary(self) -> dict[str, Any]:
         """Wire-timing hook status and worst event-loop lag across workers that reported DONE."""
@@ -924,7 +966,7 @@ class OpcUaClientPool:
             if isinstance(worker_id, int) and isinstance(dropped, int) and dropped >= 0:
                 self._dropped_by_worker[worker_id] = max(self._dropped_by_worker.get(worker_id, 0), dropped)
                 self.total_dropped_samples = sum(self._dropped_by_worker.values())
-        if msg_type in ("BATCH", "DONE"):
+        if msg_type in ("BATCH", "DONE", "TRIGGERS_DONE"):
             raw_stats = msg.get("endpoint_stats")
             if isinstance(raw_stats, dict):
                 for ep, counters in raw_stats.items():
@@ -951,11 +993,21 @@ class OpcUaClientPool:
         elif msg_type == "ERROR":
             err = f"Worker {msg.get('worker_id')} error: {msg.get('error')}"
             self.worker_errors.append(err)
+            if isinstance(msg.get("worker_id"), int):
+                self._errored_worker_ids.add(msg["worker_id"])
             logger.error(err)
+        elif msg_type == "TRIGGERS_DONE":
+            w_id = msg.get("worker_id")
+            rounds = msg.get("rounds_fired")
+            if isinstance(w_id, int) and isinstance(rounds, int) and rounds >= 0:
+                self.trigger_rounds_fired[w_id] = rounds
         elif msg_type == "DONE":
             w_id = msg.get("worker_id")
             if w_id is not None:
                 self.completed_worker_ids.add(w_id)
+            rounds = msg.get("trigger_rounds_fired")
+            if isinstance(w_id, int) and isinstance(rounds, int) and rounds >= 0:
+                self.trigger_rounds_fired.setdefault(w_id, rounds)
             self.burst_trigger_failures += msg.get("burst_failures", 0)
             self.burst_trigger_errors.extend(msg.get("burst_errors", []))
             self.teardown_errors.extend(msg.get("teardown_errors", []))
@@ -970,17 +1022,35 @@ class OpcUaClientPool:
     ) -> list[LatencySample]:
         """Collect incoming LatencySamples from worker processes via IPC queue.
         Enforces explicit FLEET_STATUS tracking, BATCH handling, and coverage checks.
+
+        ``duration_seconds`` is the minimum listening time. In active trigger modes collection
+        continues until every live worker has fired all requested trigger rounds, so a slow start
+        (process spawn, connect, method discovery) never silently cuts rounds off. The extension is
+        bounded by the pacing time plus a fixed grace period; rounds still missing then are reported
+        by ``verify_coverage``.
         """
         if not math.isfinite(duration_seconds) or duration_seconds <= 0:
             raise ValueError(f"duration_seconds must be a finite positive number, got {duration_seconds}")
         start_t = time.monotonic()
+        hard_limit_s = duration_seconds
+        if self._triggers_active:
+            hard_limit_s += self._burst_trigger_count * self.burst_delay + _TRIGGER_COMPLETION_GRACE_S
+        extension_logged = False
 
         while True:
             elapsed = time.monotonic() - start_t
-            if elapsed >= duration_seconds:
-                break
-            if target_sample_count and len(self.collected_samples) >= target_sample_count:
-                break
+            done = elapsed >= duration_seconds or bool(
+                target_sample_count and len(self.collected_samples) >= target_sample_count
+            )
+            if done:
+                if elapsed >= hard_limit_s or not self._triggers_pending():
+                    break
+                if not extension_logged:
+                    logger.info(
+                        f"Waiting for workers to fire all {self._burst_trigger_count} trigger rounds "
+                        f"(up to {hard_limit_s - elapsed:.0f}s more)"
+                    )
+                    extension_logged = True
 
             try:
                 msg = self._out_queue.get(timeout=0.1)
@@ -1159,6 +1229,21 @@ class OpcUaClientPool:
         # 6. Endpoint coverage
         if self.require_full_coverage and missing_sample_endpoints:
             failures.append(f"Incomplete coverage: {len(missing_sample_endpoints)} endpoints produced zero samples")
+
+        # 6b. Every requested trigger round must have been fired (never relaxed); listed before the
+        # sample target because cut-off rounds are the root cause of the resulting shortfall
+        if self._triggers_active:
+            short = {
+                w_id: rounds
+                for w_id, rounds in sorted(self.trigger_rounds_fired.items())
+                if rounds < self._burst_trigger_count
+            }
+            if short:
+                details = "; ".join(f"worker {w}: {r}/{self._burst_trigger_count}" for w, r in list(short.items())[:3])
+                failures.append(
+                    f"Trigger rounds incomplete: {len(short)} worker(s) stopped before firing every requested "
+                    f"round ({details}). Increase --duration or reduce --burst-delay"
+                )
 
         # 7. Total sample target (count check: relaxed by allow_partial_samples)
         if target_sample_count is not None and target_sample_count > 0:

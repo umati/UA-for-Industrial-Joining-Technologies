@@ -24,6 +24,12 @@ Release 2 reference clients for the OPC UA Industrial Joining Technologies (IJT)
 
 **Default endpoint:** `opc.tcp://localhost:40451`
 
+The Python clients require Python 3.14+; the Web Client also requires Node.js 24.15+.
+Setup and test scripts prepare Python package tooling automatically.
+Each client keeps its own dependency manifest and lock. Run setup and test
+commands from the selected client directory; no shared Python workspace is needed.
+
 ## Learn More
 
 - [Shared contribution guide](../../docs/CONTRIBUTING.md)
+- [Python client integration](../../docs/PYTHON_CLIENT_INTEGRATION.md) - pip deployment and source reuse

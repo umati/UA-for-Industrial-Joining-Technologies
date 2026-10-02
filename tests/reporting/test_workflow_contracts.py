@@ -368,3 +368,49 @@ def test_integration_paths_include_reporting_modules() -> None:
     assert "reporting/**" in triggers["pull_request"]["paths"]
     assert "scripts/reporting/**" in triggers["push"]["paths"]
     assert "scripts/reporting/**" in triggers["pull_request"]["paths"]
+
+
+def _first_number(path: Path, pattern: str) -> float:
+    match = re.search(pattern, path.read_text(encoding="utf-8"), re.MULTILINE)
+    assert match, f"{pattern!r} not found in {path.relative_to(REPO_ROOT)}"
+    return float(match.group(1))
+
+
+def test_ci_summary_coverage_gates_match_real_gates() -> None:
+    """The CI summary must show the thresholds that actually gate each job."""
+    from reporting.ci_run_summary import COVERAGE_GATES
+
+    r2 = REPO_ROOT / "OPC_UA_Clients" / "Release2"
+    r1 = REPO_ROOT / "OPC_UA_Clients" / "Release1"
+    fail_under = r"^fail_under\s*=\s*(\d+(?:\.\d+)?)"
+    vitest_lines = r"thresholds:\s*\{\s*lines:\s*(\d+(?:\.\d+)?)"
+    real = {
+        "web-client-python": _first_number(r2 / "IJT_Web_Client" / "pyproject.toml", fail_under),
+        "web-client-js": _first_number(r2 / "IJT_Web_Client" / "vitest.config.mjs", vitest_lines),
+        "console-client": _first_number(r2 / "IJT_Console_Client" / "pyproject.toml", fail_under),
+        "performance-client": _first_number(
+            r2 / "IJT_Performance_Client" / "run_all_tests.py", r"--cov-fail-under=(\d+(?:\.\d+)?)"
+        ),
+        "node-client": _first_number(r1 / "IJT_Node_Client" / "vitest.config.mjs", vitest_lines),
+        "csharp-unit": _first_number(
+            r2 / "IJT_CSharp_Client" / "run_all_tests.py",
+            r"^_COVERAGE_THRESHOLD\s*=\s*(\d+(?:\.\d+)?)",
+        ),
+        "test-client": _first_number(r2 / "IJT_Test_Client" / "pyproject.toml", fail_under),
+    }
+    assert real == COVERAGE_GATES
+
+
+def test_ci_workflow_does_not_override_coverage_gates() -> None:
+    """Only the Performance Client (no coverage config in pyproject) may pass --cov-fail-under;
+    every other Python job must use its pyproject.toml fail_under so local and CI agree."""
+    from reporting.ci_run_summary import COVERAGE_GATES
+
+    workflow = _workflow("ci.yml")
+    for job_id, job in workflow["jobs"].items():
+        for step in job.get("steps", []):
+            for value in re.findall(r"--cov-fail-under=(\d+(?:\.\d+)?)", str(step.get("run", ""))):
+                assert job_id == "performance-client", (
+                    f"{job_id} overrides the pyproject coverage gate"
+                )
+                assert float(value) == COVERAGE_GATES["performance-client"]

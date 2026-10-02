@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 CLIENT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -19,6 +21,20 @@ def _load_module(name: str, path: Path) -> ModuleType:
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.mark.parametrize("dev", [True, False])
+def test_runner_sync_uses_managed_uv_and_selected_environment(tmp_path, monkeypatch, dev):
+    runner = _load_module("ijt_performance_project_runner_sync", CLIENT_ROOT / "run_all_tests.py")
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+    monkeypatch.setattr(runner, "ensure_uv", lambda project: "managed-uv")
+    calls = []
+    monkeypatch.setattr(runner.subprocess, "check_call", lambda command, **kwargs: calls.append((command, kwargs)))
+    runner._sync_environment(tmp_path / ".venv_test", dev=dev)
+    command, options = calls[0]
+    assert command == ["managed-uv", "sync", "--locked"] + (["--group", "dev"] if dev else ["--no-dev"])
+    assert options["env"]["UV_PROJECT_ENVIRONMENT"] == str((tmp_path / ".venv_test").resolve())
+    assert options["cwd"] == str(CLIENT_ROOT)
 
 
 def _write_live_junit(path: Path, *, skip_required: bool) -> None:
@@ -174,9 +190,9 @@ def test_run_fleet_uses_lock_pinned_runtime_venv(monkeypatch):
 
     monkeypatch.setattr(sys, "argv", ["run_fleet.py", "--servers", "2"])
     assert fleet_module.main() == 7
-    venv, requirements, script = calls[0]
+    venv, dev_flag, script = calls[0]
     assert venv == CLIENT_ROOT / ".venv"
-    assert [req.name for req in requirements] == ["requirements.txt"]
+    assert dev_flag is False
     assert script.name == "run_fleet.py"
 
 

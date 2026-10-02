@@ -27,6 +27,9 @@ of OPC UA IJT clients and servers, supporting documents, and specification testi
 
 ## Contributing & Development
 
+For pip-based deployment and reusing Python clients in another system, see the
+[Python Client Integration Guide](docs/PYTHON_CLIENT_INTEGRATION.md).
+
 For development setup, testing, and contribution guidelines, see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 For detailed technical information on runtime configuration, Docker, troubleshooting, and advanced testing, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).

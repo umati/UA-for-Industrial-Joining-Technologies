@@ -1292,51 +1292,47 @@ class TestCreateVirtualenv:
 
 
 class TestInstallPythonPackages:
-    """Tests for _install_python_packages() — pip installs into .venv."""
+    """Tests for _install_python_packages() — uv sync into .venv."""
 
-    def test_missing_requirements_txt_calls_sys_exit(self, fs, monkeypatch):
+    @pytest.fixture(autouse=True)
+    def managed_uv(self, monkeypatch):
+        monkeypatch.setattr(sc, "ensure_uv", lambda project: "managed-uv")
+
+    def test_sync_failure_raises_called_process_error(self, fs, monkeypatch):
         rundir = Path("/fake/rundir")
         rundir.mkdir(parents=True)
         monkeypatch.chdir(rundir)
         monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
-        with pytest.raises(SystemExit) as exc_info:
+        monkeypatch.setattr(sc, "PROJECT_DIR", rundir)
+
+        def bad_sync(*a, **kw):
+            raise subprocess.CalledProcessError(1, ["uv", "sync"])
+
+        monkeypatch.setattr(subprocess, "check_call", bad_sync)
+        with pytest.raises(subprocess.CalledProcessError):
             sc._install_python_packages()
-        assert exc_info.value.code == 1
 
     def test_success_installs_all_packages(self, fs, monkeypatch):
         rundir = Path("/fake/rundir")
         rundir.mkdir(parents=True)
         monkeypatch.chdir(rundir)
-        (rundir / "requirements.txt").write_text("requests\n")
         monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
+        monkeypatch.setattr(sc, "PROJECT_DIR", rundir)
         calls = []
         monkeypatch.setattr(subprocess, "check_call", lambda args, **kw: calls.append(list(args)))
         monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "2.0.1\n")
         sc._install_python_packages()
-        assert any("requirements.txt" in str(c) for c in calls)
-        assert any("asyncua" in str(c) for c in calls)
-
-    def test_crypto_upgrade_exception_does_not_exit(self, fs, monkeypatch):
-        rundir = Path("/fake/rundir")
-        rundir.mkdir(parents=True)
-        monkeypatch.chdir(rundir)
-        (rundir / "requirements.txt").write_text("requests\n")
-        monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
-
-        def selective_check_call(args, **kw):
-            if "cryptography" in args or "pyOpenSSL" in args:
-                raise subprocess.CalledProcessError(1, args)
-
-        monkeypatch.setattr(subprocess, "check_call", selective_check_call)
-        monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "2.0.1\n")
-        sc._install_python_packages()  # must not raise
+        assert calls[0][0] == "managed-uv"
+        assert "sync" in calls[0]
+        assert "--locked" in calls[0]
+        assert "--no-dev" in calls[0]
 
     def test_asyncua_too_old_calls_sys_exit(self, fs, monkeypatch):
         rundir = Path("/fake/rundir")
         rundir.mkdir(parents=True)
         monkeypatch.chdir(rundir)
-        (rundir / "requirements.txt").write_text("requests\n")
         monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
+        monkeypatch.setattr(sc, "PROJECT_DIR", rundir)
         monkeypatch.setattr(subprocess, "check_call", lambda args, **kw: None)
         monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "1.1.0\n")
         with pytest.raises(SystemExit) as exc_info:

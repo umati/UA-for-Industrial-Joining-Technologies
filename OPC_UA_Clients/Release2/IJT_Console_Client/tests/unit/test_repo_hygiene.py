@@ -62,17 +62,21 @@ def test_no_hardcoded_absolute_paths(source_file):
 
 
 # ---------------------------------------------------------------------------
-# requirements.txt
+# pyproject.toml and uv.lock
 # ---------------------------------------------------------------------------
 
 
-def test_requirements_txt_exists():
-    assert (_CONSOLE_ROOT / "requirements.txt").exists()
+def test_pyproject_toml_exists():
+    assert (_CONSOLE_ROOT / "pyproject.toml").exists()
 
 
-def test_requirements_txt_is_nonempty():
-    content = (_CONSOLE_ROOT / "requirements.txt").read_text(encoding="utf-8").strip()
-    assert content, "requirements.txt is empty"
+def test_pyproject_toml_is_nonempty():
+    content = (_CONSOLE_ROOT / "pyproject.toml").read_text(encoding="utf-8").strip()
+    assert content, "pyproject.toml is empty"
+
+
+def test_uv_lock_exists():
+    assert (_CONSOLE_ROOT / "uv.lock").exists()
 
 
 # ---------------------------------------------------------------------------
