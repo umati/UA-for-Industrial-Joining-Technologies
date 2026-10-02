@@ -5,6 +5,8 @@ from pathlib import Path
 
 import yaml
 
+from scripts.tool_bootstrap import UV_VERSION
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DORNY_ACTION = "dorny/test-reporter"
 DOCKER_BUILD_PUSH_ACTION = "docker/build-push-action"
@@ -30,6 +32,46 @@ def _is_sha_pinned_action(uses: str | None, action: str) -> bool:
 def _workflow(name: str):
     path = REPO_ROOT / ".github" / "workflows" / name
     return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def test_bash_workflow_command_file_redirects_are_quoted() -> None:
+    offenders: list[str] = []
+    for workflow_path in sorted(_WORKFLOWS_DIR.glob("*.yml")):
+        for line_number, line in enumerate(
+            workflow_path.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            if re.search(r">>\s*\$(?:GITHUB_PATH|GITHUB_ENV|GITHUB_OUTPUT)\b", line):
+                offenders.append(f"{workflow_path.name}:{line_number}")
+    assert not offenders, (
+        "Quote Bash command-file redirect paths to prevent word splitting: " + ", ".join(offenders)
+    )
+
+
+def test_runner_jobs_provision_pinned_uv_before_execution() -> None:
+    for workflow_name, job_name, run_step in (
+        ("integration.yml", "live-webclient", "Run Web Client local live suite"),
+        ("integration.yml", "console-client-opcua-security", "Run Console OPC UA security tests"),
+        (
+            "internal-private-envelope.yml",
+            "private-envelope-validation",
+            "Run root Web Client static suite with private modules required",
+        ),
+        (
+            "web-client-compatibility-smoke.yml",
+            "web-client-compatibility-smoke",
+            "Run Web Client — Browser Compatibility Smoke",
+        ),
+    ):
+        workflow = _workflow(workflow_name)
+        steps = workflow["jobs"][job_name]["steps"]
+        setup_index = next(
+            index
+            for index, step in enumerate(steps)
+            if _is_sha_pinned_action(step.get("uses"), "astral-sh/setup-uv")
+        )
+        run_index = next(index for index, step in enumerate(steps) if step.get("name") == run_step)
+        assert setup_index < run_index
+        assert steps[setup_index]["with"]["version"] == UV_VERSION
 
 
 def test_sha_pinned_workflow_actions_use_exact_version_comments() -> None:

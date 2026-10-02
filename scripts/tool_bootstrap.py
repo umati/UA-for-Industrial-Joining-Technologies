@@ -15,7 +15,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 # renovate: datasource=pypi depName=uv
-UV_VERSION = "0.12.21"
+UV_VERSION = "0.12.22"
 BOOTSTRAP_TIMEOUT = 180.0
 log = logging.getLogger(__name__)
 
@@ -206,4 +206,4 @@ def ensure_requirements_environment(
         _run([str(python), "-c", probe], project)
         _run([str(python), "-m", "pip", "check"], project)
         marker.write_text(fingerprint, encoding="utf-8")
-        return python
+    return python

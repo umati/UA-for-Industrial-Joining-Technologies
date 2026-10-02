@@ -2,7 +2,7 @@
 FROM nikolaik/python-nodejs:python3.14-nodejs24 AS base
 
 # Install uv pinned by image digest
-COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.22@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc /uv /uvx /bin/
 
 WORKDIR /app
 

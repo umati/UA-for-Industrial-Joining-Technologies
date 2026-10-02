@@ -105,6 +105,7 @@ def test_pip_install_creates_venv_dir_for_hash_file_in_ci(monkeypatch, tmp_path)
     """Regression: in CI, .venv_test/ does not exist (relaunch is skipped),
     so the hash file write must create the parent directory first."""
     runner = _load_runner()
+    monkeypatch.setattr(runner, "ensure_uv", lambda project: "mock-uv")
     venv_dir = tmp_path / ".venv_test"
     pip_cache = tmp_path / "pip-cache"
     monkeypatch.setattr(runner, "_VENV", venv_dir)
@@ -127,6 +128,7 @@ def test_pip_install_creates_venv_dir_for_hash_file_in_ci(monkeypatch, tmp_path)
 
 def test_pip_install_preserves_explicit_pip_cache_dir(monkeypatch, tmp_path):
     runner = _load_runner()
+    monkeypatch.setattr(runner, "ensure_uv", lambda project: "mock-uv")
     venv_dir = tmp_path / ".venv_test"
     req = tmp_path / "requirements.txt"
     req.write_text("pytest\n", encoding="utf-8")
@@ -161,6 +163,7 @@ def test_pip_install_preserves_explicit_pip_cache_dir(monkeypatch, tmp_path):
 
 def test_pip_install_reinstalls_when_hash_matches_but_required_modules_missing(monkeypatch, tmp_path):
     runner = _load_runner()
+    monkeypatch.setattr(runner, "ensure_uv", lambda project: "mock-uv")
     venv_dir = tmp_path / ".venv_test"
     venv_dir.mkdir()
     (venv_dir / ".req-hash").write_text("abc123", encoding="utf-8")
@@ -229,6 +232,7 @@ def test_pip_install_invokes_locked_uv_export_and_pip_install_contract(monkeypat
 
 def test_pip_install_does_not_mark_hash_current_when_required_modules_remain_missing(monkeypatch, tmp_path):
     runner = _load_runner()
+    monkeypatch.setattr(runner, "ensure_uv", lambda project: "mock-uv")
     venv_dir = tmp_path / ".venv_test"
     req = tmp_path / "requirements.txt"
     req.write_text("pytest\n", encoding="utf-8")

@@ -8,6 +8,7 @@ import threading
 from pathlib import Path
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import tool_bootstrap as bootstrap
@@ -169,12 +170,22 @@ def test_requirements_environment_never_installs_globally(tmp_path, monkeypatch)
     assert len(commands) == before
 
 
-def test_bootstrap_uv_pin_matches_ci():
+def test_bootstrap_uv_pin_matches_all_workflows_and_docker_images():
     root = Path(__file__).resolve().parents[1]
-    assert (
-        f'version: "{bootstrap.UV_VERSION}"'
-        in (root / ".github" / "workflows" / "ci.yml").read_text()
-    )
+    provisioned = 0
+    for path in (root / ".github" / "workflows").glob("*.yml"):
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job in workflow["jobs"].values():
+            for step in job.get("steps", []):
+                if step.get("uses", "").startswith("astral-sh/setup-uv@"):
+                    assert step["with"]["version"] == bootstrap.UV_VERSION, path
+                    provisioned += 1
+    assert provisioned > 0
+    for path in (
+        root / ".github" / "docker" / "ijt-browser-ci" / "Dockerfile",
+        root / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "Dockerfile",
+    ):
+        assert f"ghcr.io/astral-sh/uv:{bootstrap.UV_VERSION}@sha256:" in path.read_text()
 
 
 @pytest.mark.parametrize("strict", [False, True])

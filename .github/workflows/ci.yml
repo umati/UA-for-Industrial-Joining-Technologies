@@ -120,7 +120,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
-          version: "0.12.21"
+          version: "0.12.22"
 
       - name: Run Web Client Python Phase 1 runner
         id: web_python_runner
@@ -259,13 +259,13 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
-          version: "0.12.21"
+          version: "0.12.22"
 
       - name: Install Python Dependencies
         run: |
           uv sync --locked
-          echo "$PWD/.venv/bin" >> $GITHUB_PATH
-          echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
 
 
       - run: mkdir -p test-results
@@ -758,13 +758,13 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
-          version: "0.12.21"
+          version: "0.12.22"
 
       - name: Install Python Dependencies
         run: |
           uv sync --locked
-          echo "$PWD/.venv/bin" >> $GITHUB_PATH
-          echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
 
 
       - run: mkdir -p test-results
@@ -859,13 +859,13 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
-          version: "0.12.21"
+          version: "0.12.22"
 
       - name: Install Python Dependencies
         run: |
           uv sync --locked
-          echo "$PWD/.venv/bin" >> $GITHUB_PATH
-          echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
 
 
       - run: mkdir -p test-results
@@ -1285,7 +1285,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
-          version: "0.12.21"
+          version: "0.12.22"
 
       - name: Install pre-commit and root test dependencies
         run: |
