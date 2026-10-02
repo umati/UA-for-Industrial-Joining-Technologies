@@ -15,7 +15,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 # renovate: datasource=pypi depName=uv
-UV_VERSION = "0.12.21"
+UV_VERSION = "0.12.22"
 BOOTSTRAP_TIMEOUT = 180.0
 log = logging.getLogger(__name__)
 
