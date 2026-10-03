@@ -173,7 +173,7 @@ Pyright resolves application imports through `src/` and shared readiness imports
 | `detect-secrets` | Hardcoded secrets/tokens |
 | `eslint` | JS lint, including the scoped guard that forbids `Math.random()` in `connection-manager.mjs` and future auth/token/nonce modules |
 | `prettier` | JS formatting |
-| `npm audit` | CVE scan of JS dependencies |
+| `npm audit` | CVE scan of JS production runtime dependencies |
 | `depcheck` | Unused JS dependencies |
 | `hadolint` | Dockerfile lint |
 | `yamllint` | YAML validation |

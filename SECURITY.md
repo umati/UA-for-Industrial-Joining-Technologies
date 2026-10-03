@@ -48,7 +48,8 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
   dependencies in per-client `uv.lock` files. Dependency vulnerability status is audited via
   `pip-audit` against exported lock definitions during pre-commit checks and CI.
   Local `run_precommit_all.py` and the Node/Web Client test runners enforce npm audit in
-  strict mode by default (`IJT_NPM_AUDIT_MODE=strict`), so npm registry
+  strict mode by default (`IJT_NPM_AUDIT_MODE=strict`) across production runtime dependencies
+  (`--omit=dev --audit-level=high`), so npm registry
   timeout/connectivity failures fail because vulnerability status is unknown.
   npm audit subprocesses are bounded to 15 seconds to prevent an unavailable advisory endpoint from
   hanging validation. `IJT_NPM_AUDIT_MODE=offline` exists only for

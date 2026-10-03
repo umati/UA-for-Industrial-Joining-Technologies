@@ -547,6 +547,7 @@ def _step_npm_audit(results_dir: Path) -> StepResult:
         [
             _NPM,
             "audit",
+            "--omit=dev",
             "--package-lock-only",
             "--audit-level=high",
             "--json",

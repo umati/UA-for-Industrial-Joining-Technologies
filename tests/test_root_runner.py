@@ -251,7 +251,12 @@ def test_every_python_client_has_a_current_lock() -> None:
         assert lock_file.is_file(), f"{client_dir.name}: missing uv.lock"
         pyproject = client_dir / "pyproject.toml"
         assert pyproject.is_file(), f"{client_dir.name}: missing pyproject.toml"
-        uv = shutil.which("uv") or "uv"
+        scripts_dir = _runner.REPO_ROOT / "scripts"
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        from tool_bootstrap import ensure_uv
+
+        uv = shutil.which("uv") or ensure_uv(_runner.REPO_ROOT)
         proc = subprocess.run(
             [uv, "lock", "--check"],
             cwd=client_dir,

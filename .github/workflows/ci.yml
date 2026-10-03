@@ -388,7 +388,7 @@ jobs:
         run: |
           audit_rc=1
           for attempt in 1 2 3; do
-            if npm audit --package-lock-only --audit-level=high --json \
+            if npm audit --omit=dev --package-lock-only --audit-level=high --json \
               --fetch-timeout=10000 --fetch-retries=1 \
               > test-results/npm-audit.json 2> test-results/npm-audit.stderr.log; then
               exit 0

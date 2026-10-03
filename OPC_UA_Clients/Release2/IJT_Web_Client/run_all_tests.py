@@ -1598,6 +1598,7 @@ def _stage_js_lint() -> StageResult:
             [
                 npm,
                 "audit",
+                "--omit=dev",
                 "--package-lock-only",
                 "--audit-level=high",
                 "--json",

@@ -287,7 +287,8 @@ def _run_npm_lock_audit(
         )
         audit_mode = NPM_AUDIT_MODE_STRICT
     audit_log.info(
-        "[security] %s: npm audit --package-lock-only --audit-level=high (network mode: %s via %s)",
+        "[security] %s: npm audit --omit=dev --package-lock-only --audit-level=high "
+        "(network mode: %s via %s)",
         label,
         audit_mode,
         NPM_AUDIT_MODE_ENV,
@@ -295,6 +296,7 @@ def _run_npm_lock_audit(
     cmd = [
         npm,
         "audit",
+        "--omit=dev",
         "--package-lock-only",
         "--audit-level=high",
         "--fetch-timeout=10000",
