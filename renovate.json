@@ -12,6 +12,13 @@
       "customType": "regex",
       "managerFilePatterns": ["/^scripts/tool_bootstrap\\.py$/"],
       "matchStrings": ["# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+UV_VERSION = \"(?<currentValue>[^\"]+)\""]
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": ["uses: astral-sh/setup-uv@[^\\n]+(?:\\n\\s+[^\\n]+)*?\\n\\s+version: \"(?<currentValue>[^\"]+)\""],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "uv"
     }
   ],
   "lockFileMaintenance": {
@@ -22,6 +29,14 @@
     "commitMessageAction": "Refresh lockfile"
   },
   "packageRules": [
+    {
+      "description": "Group uv CLI, workflow steps, and Docker image updates together into a single atomic toolchain update so CI runners, bootstrap scripts, and container images remain strictly synchronized to the same uv release.",
+      "matchPackageNames": ["uv", "ghcr.io/astral-sh/uv"],
+      "groupName": "uv toolchain",
+      "groupSlug": "uv-toolchain",
+      "automerge": false,
+      "addLabels": ["dependencies", "toolchain", "needs-manual-review"]
+    },
     {
       "description": "Group cryptography and pyOpenSSL together: pyOpenSSL places an explicit upper-bound ceiling on the cryptography version it accepts (e.g. pyOpenSSL 26.3.0 requires cryptography<50). Bumping them independently creates impossible pip resolves. A single combined PR ensures both floors are updated only when a new pyOpenSSL release extends its cryptography upper bound.",
       "matchPackageNames": ["cryptography", "pyOpenSSL"],

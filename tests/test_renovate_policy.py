@@ -127,3 +127,22 @@ def test_no_legacy_requirements_in_release2_python_clients() -> None:
                 if (client / pattern).is_file():
                     legacy_files.append(str((client / pattern).relative_to(_REPO_ROOT)))
     assert not legacy_files, f"Legacy requirements files found: {legacy_files}"
+
+
+def test_renovate_groups_uv_toolchain_and_covers_workflows() -> None:
+    """uv updates must be grouped as an atomic toolchain across CLI, workflows, and Docker."""
+    renovate_config = _renovate()
+    custom_managers = renovate_config.get("customManagers", [])
+    workflow_mgr = [
+        mgr
+        for mgr in custom_managers
+        if any(".github/workflows" in pat for pat in mgr.get("managerFilePatterns", []))
+    ]
+    assert workflow_mgr, "renovate.json must define a custom manager covering .github/workflows"
+    assert workflow_mgr[0].get("depNameTemplate") == "uv"
+
+    toolchain_rules = [rule for rule in _rules() if rule.get("groupSlug") == "uv-toolchain"]
+    assert toolchain_rules, "renovate.json must define a 'uv-toolchain' grouping rule"
+    rule = toolchain_rules[0]
+    matched = set(rule.get("matchPackageNames", []))
+    assert {"uv", "ghcr.io/astral-sh/uv"}.issubset(matched)
