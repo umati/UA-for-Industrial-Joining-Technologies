@@ -557,7 +557,17 @@ class MachineryTypes:
     MACHINE_IDENTIFICATION_TYPE = 1012
     MACHINERY_COMPONENT_IDENTIFICATION_TYPE = 1005
     MONITORING_TYPE = 1014
+    MACHINERY_ITEM_STATE_TYPE = 1002
     NOTIFICATIONS_TYPE = 1017
+
+
+class MachineryStates:
+    """Standard state object IDs from the Machinery NodeSet, not enum values."""
+
+    NOT_AVAILABLE = 5005
+    OUT_OF_SERVICE = 5004
+    NOT_EXECUTING = 5007
+    EXECUTING = 5006
 
 
 # ---------------------------------------------------------------------------

@@ -85,6 +85,15 @@ Test areas: address space structure, asset management, result retrieval, event
 subscriptions, joining process management, joint management, and conformance units
 from the IJT specification.
 
+Optional Machinery companion-model checks live in
+`specification_tests/test_optional_machinery_item_state.py`. They have no
+`requires_cu` or conformance marker and do not add an IJT CU. Missing Tool
+MachineryItemState is skipped; exposed nodes are checked for namespaces,
+references, types and scalar data types. Good values must be LocalizedText and
+a standard Machinery state NodeId. Non-Good values are not required to be Good.
+Checks are read-only, allow derived types and localized labels, and do not
+require simulator-specific states or an atomic cross-node snapshot.
+
 ---
 
 ## Critical Technical Requirements
