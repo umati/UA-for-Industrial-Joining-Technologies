@@ -40,6 +40,22 @@ def teardown_function() -> None:
     _runner._server_smoke_requirements_ready = False
 
 
+def test_source_scan_prunes_generated_state_but_keeps_project_sources(tmp_path, monkeypatch):
+    monkeypatch.setattr(_runner, "REPO_ROOT", tmp_path)
+    client = tmp_path / "OPC_UA_Clients" / "example"
+    generated = client / ".state" / "tools" / "python" / "Lib" / "site-packages"
+    generated.mkdir(parents=True)
+    (generated / "dependency.py").write_text("pass\n", encoding="utf-8")
+    source = client / "src"
+    source.mkdir()
+    (source / "application.py").write_text("pass\n", encoding="utf-8")
+    assert _runner._skip_dir(".state")
+    assert not _runner._skip_dir("state")
+    assert _runner._collect_source_files(tmp_path / "OPC_UA_Clients") == [
+        "OPC_UA_Clients/example/src/application.py"
+    ]
+
+
 @pytest.mark.parametrize(
     "skipped,ok,exit_code", [(True, True, 1), (False, True, 0), (False, False, 1)]
 )

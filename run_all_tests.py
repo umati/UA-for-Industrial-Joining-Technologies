@@ -1624,6 +1624,7 @@ _SKIP_DIRS: frozenset[str] = frozenset(
         "bin",
         "obj",
         ".git",
+        ".state",
         "pki",
         "PKI",
         ".ruff_cache",

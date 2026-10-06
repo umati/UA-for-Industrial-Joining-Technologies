@@ -1,5 +1,12 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-10-06
+
+1. Updated the Windows and Linux simulator packages to the 1.16.0 version series.
+2. Added standard MachineryItemState status for Tool assets under Monitoring/Status, with NotAvailable, OutOfService, NotExecuting, and Executing states. CurrentState.Id identifies the corresponding state in the Machinery namespace.
+3. Updated selected joining simulation to publish Executing during a cycle and return to NotExecuting on completion. Successful result creation increments the target Tool's OperationCycleCounter once.
+4. Improved Tool disconnect handling so retained MachineryItemState values have BadNoCommunication quality. Reconnection requires a fresh state update before quality returns to Good.
+
 ## 2026-09-11
 
 1. Refactored the Linux simulator Docker build to a production-grade multi-stage architecture using an ephemeral BusyBox stage to extract the server archive, eliminating all `apt-get` external package downloads during container build.
