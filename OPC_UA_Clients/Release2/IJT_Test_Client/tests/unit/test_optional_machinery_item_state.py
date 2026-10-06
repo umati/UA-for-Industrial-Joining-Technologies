@@ -131,3 +131,98 @@ async def test_wrong_or_cyclic_type_fails(monkeypatch, parents):
     )
     with pytest.raises(AssertionError, match="or a subtype"):
         await checks._assert_type(node, ua.NodeId(1002, 12))
+
+
+@pytest.mark.parametrize(
+    "property_name,value,variant_type,valid",
+    [
+        ("Name", ua.QualifiedName("Executing", 12), ua.VariantType.QualifiedName, True),
+        ("Name", ua.QualifiedName("Executing", 99), ua.VariantType.QualifiedName, False),
+        ("Name", ua.QualifiedName("Unknown", 12), ua.VariantType.QualifiedName, False),
+        ("Name", "Executing", ua.VariantType.String, False),
+        *[("Number", value, ua.VariantType.UInt32, True) for value in range(4)],
+        ("Number", 5006, ua.VariantType.UInt32, False),
+        ("Number", 3, ua.VariantType.Int32, False),
+    ],
+)
+async def test_optional_property_values(monkeypatch, property_name, value, variant_type, valid):
+    data_type = ua.ObjectIds.QualifiedName if property_name == "Name" else ua.ObjectIds.UInt32
+    node = SimpleNamespace(
+        read_data_type=AsyncMock(return_value=ua.NodeId(data_type)),
+        read_value_rank=AsyncMock(return_value=-1),
+        read_data_value=AsyncMock(return_value=ua.DataValue(ua.Variant(value, variant_type))),
+    )
+    monkeypatch.setattr(checks, "_assert_type", AsyncMock())
+    if valid:
+        await checks._validate_optional_state_property(node, property_name, 12)
+    else:
+        with pytest.raises(AssertionError):
+            await checks._validate_optional_state_property(node, property_name, 12)
+
+
+async def test_missing_optional_properties_skip(monkeypatch):
+    monkeypatch.setattr(checks, "_state_variables", AsyncMock(return_value=(object(), object())))
+    monkeypatch.setattr(checks, "_child", AsyncMock(return_value=None))
+    with pytest.raises(pytest.skip.Exception, match="Name and Number not exposed"):
+        await checks.test_optional_tool_state_name_and_number(([("tool", object())], 12))
+
+
+@pytest.mark.parametrize("property_name", ["Name", "Number"])
+async def test_non_good_optional_property_values_are_accepted(monkeypatch, property_name):
+    data_type = ua.ObjectIds.QualifiedName if property_name == "Name" else ua.ObjectIds.UInt32
+    node = SimpleNamespace(
+        read_data_type=AsyncMock(return_value=ua.NodeId(data_type)),
+        read_value_rank=AsyncMock(return_value=-1),
+        read_data_value=AsyncMock(
+            return_value=ua.DataValue(StatusCode=ua.StatusCode(ua.StatusCodes.BadNoCommunication))
+        ),
+    )
+    monkeypatch.setattr(checks, "_assert_type", AsyncMock())
+    await checks._validate_optional_state_property(node, property_name, 12)
+
+
+@pytest.mark.parametrize(
+    "values,valid",
+    [
+        ([ua.NodeId(i, 12) for i in (5006, 5005, 5007, 5004)], True),
+        ([ua.NodeId(5007, 12)], True),
+        ([], False),
+        ([ua.NodeId(5007, 12), ua.NodeId(5007, 12)], False),
+        ([ua.NodeId(5007, 99)], False),
+        ([ua.NodeId(9999, 12)], False),
+        (["Executing"], False),
+    ],
+)
+async def test_available_states_values(monkeypatch, values, valid):
+    node = SimpleNamespace(
+        read_data_type=AsyncMock(return_value=ua.NodeId(ua.ObjectIds.NodeId)),
+        read_value_rank=AsyncMock(return_value=1),
+        read_data_value=AsyncMock(return_value=ua.DataValue(ua.Variant(values, ua.VariantType.NodeId))),
+    )
+    monkeypatch.setattr(checks, "_assert_type", AsyncMock())
+    if valid:
+        await checks._validate_available_states(node, 12)
+    else:
+        with pytest.raises(AssertionError):
+            await checks._validate_available_states(node, 12)
+
+
+async def test_missing_available_states_skips(monkeypatch):
+    monkeypatch.setattr(checks, "_child", AsyncMock(return_value=None))
+    with pytest.raises(pytest.skip.Exception, match="AvailableStates not exposed"):
+        await checks.test_optional_tool_available_states(([("tool", object())], 12))
+
+
+@pytest.mark.parametrize("rank,quality,valid", [(1, ua.StatusCodes.BadNoCommunication, True), (-1, 0, False)])
+async def test_available_states_rank_and_quality(monkeypatch, rank, quality, valid):
+    node = SimpleNamespace(
+        read_data_type=AsyncMock(return_value=ua.NodeId(ua.ObjectIds.NodeId)),
+        read_value_rank=AsyncMock(return_value=rank),
+        read_data_value=AsyncMock(return_value=ua.DataValue(StatusCode=ua.StatusCode(quality))),
+    )
+    monkeypatch.setattr(checks, "_assert_type", AsyncMock())
+    if valid:
+        await checks._validate_available_states(node, 12)
+    else:
+        with pytest.raises(AssertionError):
+            await checks._validate_available_states(node, 12)

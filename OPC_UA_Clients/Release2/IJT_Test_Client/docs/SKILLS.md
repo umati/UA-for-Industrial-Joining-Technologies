@@ -93,6 +93,15 @@ references, types and scalar data types. Good values must be LocalizedText and
 a standard Machinery state NodeId. Non-Good values are not required to be Good.
 Checks are read-only, allow derived types and localized labels, and do not
 require simulator-specific states or an atomic cross-node snapshot.
+`CurrentState.Name` and `Number` are also checked when present, but are not
+required. Name uses the Machinery state QualifiedName; Number uses standard
+StateNumber values 0 (NotAvailable), 1 (OutOfService), 2 (NotExecuting) or
+3 (Executing), not a state NodeId. Their values are checked independently so
+normal transitions between reads do not produce false mismatch failures.
+`MachineryItemState.AvailableStates` is checked when exposed: a one-dimensional
+NodeId array referencing a nonempty, duplicate-free subset of standard Machinery
+states. Other servers may restrict states per instance, so the four-state
+simulator set is not required. Non-Good values are not treated as valid samples.
 
 ---
 

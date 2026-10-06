@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.live import test_result_transfer_time as transfer_time
 from tests.live.test_result_transfer_time import (
     _delta_ms,
     _extract_sample,
@@ -120,19 +121,31 @@ def test_extract_sample_applies_skew_to_cross_clock_metrics():
 
 
 @pytest.mark.asyncio
-async def test_calibrate_clock_skew_calculates_skew_via_cristian():
+async def test_calibrate_clock_skew_calculates_skew_via_cristian(monkeypatch):
     client = MagicMock()
     server_node = AsyncMock()
 
-    # Simulate server clock ahead by 25ms
-    now_utc = datetime.now(timezone.utc)
-    server_time = now_utc + timedelta(milliseconds=25)
-    server_node.read_value = AsyncMock(return_value=server_time)
+    now_utc = datetime(2026, 9, 25, 12, 0, 0, tzinfo=timezone.utc)
+    timestamps = iter(now_utc + timedelta(milliseconds=offset) for offset in (0, 20, 100, 104))
+
+    class ProbeClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return next(timestamps)
+
+    monkeypatch.setattr(transfer_time, "datetime", ProbeClock)
+    # The second probe has the lower RTT and a server clock ahead by 25 ms.
+    server_node.read_value = AsyncMock(
+        side_effect=[
+            ProbeClock.fromtimestamp(now_utc.timestamp() + 0.050, timezone.utc),
+            ProbeClock.fromtimestamp(now_utc.timestamp() + 0.127, timezone.utc),
+        ]
+    )
     client.get_node.return_value = server_node
 
     skew = await calibrate_clock_skew(client, num_probes=2)
-    # The skew should be positive and close to 25ms (within reasonable RTT uncertainty)
-    assert 20.0 <= skew <= 30.0
+    assert skew == 25.0
+    assert server_node.read_value.await_count == 2
 
 
 @pytest.mark.asyncio

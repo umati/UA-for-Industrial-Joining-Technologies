@@ -156,3 +156,73 @@ async def test_optional_tool_state_values(optional_tool_states):
             checked += 1
     if not checked:
         pytest.skip("Optional MachineryItemState values have non-Good quality")
+
+
+async def _validate_optional_state_property(node, property_name, namespace):
+    await _assert_type(node, ua.NodeId(ua.Int32(ua.ObjectIds.PropertyType)))
+    data_type = ua.ObjectIds.QualifiedName if property_name == "Name" else ua.ObjectIds.UInt32
+    assert await asyncio.wait_for(node.read_data_type(), _TIMEOUT) == ua.NodeId(ua.Int32(data_type))
+    assert await asyncio.wait_for(node.read_value_rank(), _TIMEOUT) == -1
+    data = await asyncio.wait_for(node.read_data_value(raise_on_bad_status=False), _TIMEOUT)
+    if not data.StatusCode.is_good():
+        return
+    assert data.Value is not None
+    value = data.Value.Value
+    # Validate each value independently: controllers can transition between reads.
+    if property_name == "Name":
+        assert isinstance(value, ua.QualifiedName)
+        assert value.NamespaceIndex == namespace
+        assert value.Name in {"NotAvailable", "OutOfService", "NotExecuting", "Executing"}
+    else:
+        assert data.Value.VariantType == ua.VariantType.UInt32
+        assert type(value) is int and value in {0, 1, 2, 3}, "Number must be a standard Machinery StateNumber"
+
+
+async def test_optional_tool_state_name_and_number(optional_tool_states):
+    states, namespace = optional_tool_states
+    exposed = 0
+    for _name, state in states:
+        current, _identifier = await _state_variables(state)
+        for property_name in ("Name", "Number"):
+            node = await _child(current, property_name, 0, RefTypes.HAS_PROPERTY, ua.NodeClass.Variable, required=False)
+            if node is not None:
+                await _validate_optional_state_property(node, property_name, namespace)
+                exposed += 1
+    if not exposed:
+        pytest.skip("Optional CurrentState.Name and Number not exposed")
+
+
+async def _validate_available_states(node, namespace):
+    await _assert_type(node, ua.NodeId(ua.Int32(ua.ObjectIds.BaseDataVariableType)))
+    assert await asyncio.wait_for(node.read_data_type(), _TIMEOUT) == ua.NodeId(ua.Int32(ua.ObjectIds.NodeId))
+    assert await asyncio.wait_for(node.read_value_rank(), _TIMEOUT) == 1
+    data = await asyncio.wait_for(node.read_data_value(raise_on_bad_status=False), _TIMEOUT)
+    if not data.StatusCode.is_good():
+        return
+    assert data.Value is not None and data.Value.is_array
+    values = data.Value.Value
+    assert isinstance(values, list) and values, "AvailableStates must contain supported states"
+    assert all(isinstance(value, ua.NodeId) for value in values)
+    assert len(set(values)) == len(values), "AvailableStates must not contain duplicates"
+    supported = {
+        ua.NodeId(ua.Int32(identifier), namespace)
+        for identifier in (
+            MachineryStates.NOT_AVAILABLE,
+            MachineryStates.OUT_OF_SERVICE,
+            MachineryStates.NOT_EXECUTING,
+            MachineryStates.EXECUTING,
+        )
+    }
+    assert set(values) <= supported, "AvailableStates must reference standard Machinery states"
+
+
+async def test_optional_tool_available_states(optional_tool_states):
+    states, namespace = optional_tool_states
+    exposed = 0
+    for _name, state in states:
+        node = await _child(state, "AvailableStates", 0, RefTypes.HAS_COMPONENT, ua.NodeClass.Variable, required=False)
+        if node is not None:
+            await _validate_available_states(node, namespace)
+            exposed += 1
+    if not exposed:
+        pytest.skip("Optional MachineryItemState.AvailableStates not exposed")
