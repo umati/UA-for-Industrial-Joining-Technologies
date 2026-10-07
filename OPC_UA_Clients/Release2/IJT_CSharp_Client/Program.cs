@@ -66,6 +66,15 @@ await using (js)
         _log.LogInformation("Result logged to: {Path}", path);
     };
 
+    js.ResultVariable.OnResultVariableChanged += (_, env) =>
+    {
+        _log.LogInformation("Result variable received | {Name} | Seq#{Seq} | {Class} | {Time:HH:mm:ss}",
+            env.Name ?? env.ResultId ?? "Unknown",
+            env.SequenceNumber ?? 0,
+            env.Classification?.ToString() ?? env.ResultEvaluation ?? "Unknown",
+            env.CreationTime ?? DateTime.UtcNow);
+    };
+
     js.EventSubscriber.OnJoiningSystemEvent += (_, e) =>
     {
         _log.LogInformation("System event | Code:{Code} | {Text} | {Time:HH:mm:ss}",
@@ -129,10 +138,10 @@ await using (js)
                 showMenu = true;
                 break;
             case "2":
-                if (js.ResultManagement.IsResultVarSubscribed)
-                    js.ResultManagement.StopResultVariableSubscription();
+                if (js.ResultVariable.IsResultVarSubscribed)
+                    js.ResultVariable.StopResultVariableSubscription();
                 else
-                    js.ResultManagement.SubscribeResultVariable();
+                    js.ResultVariable.SubscribeResultVariable();
                 showMenu = true;
                 break;
             case "3":
@@ -145,12 +154,12 @@ await using (js)
 
             // ── RESULT MANAGEMENT ─────────────────────────────────────────────
             case "4":
-                js.ResultManagement.GetLatestResult();
+                js.ResultMethods.GetLatestResult();
                 break;
             case "5":
                 {
                     var rid = Prompt("Result ID");
-                    if (rid != null) js.ResultManagement.GetResultById(rid);
+                    if (rid != null) js.ResultMethods.GetResultById(rid);
                     break;
                 }
 
@@ -576,7 +585,7 @@ static void PrintBanner()
 static void PrintMenu(JoiningSystem js, string serverUrl)
 {
     var ev = js.ResultEvents.IsSubscribed ? "ON " : "off";
-    var rv = js.ResultManagement.IsResultVarSubscribed ? "ON " : "off";
+    var rv = js.ResultVariable.IsResultVarSubscribed ? "ON " : "off";
     var av = js.AssetManagement.IsAssetVarSubscribed ? "ON " : "off";
 
     Console.WriteLine($"""

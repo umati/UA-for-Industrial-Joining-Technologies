@@ -5,6 +5,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using IJT_CSharp_Client.Configuration;
 using IJT_CSharp_Client.Domain.Events;
+using IJT_CSharp_Client.Domain.Results;
 using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -52,6 +53,8 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- Management surface ----------------------------------------------------
     public IResultEventReceiver ResultEvents => EventSubscriber;
+    public IResultVariableReceiver ResultVariable => ResultManagement;
+    public IResultMethodClient ResultMethods => ResultManagement;
     public ResultManagement ResultManagement { get; private set; } = null!;
     public AssetManagement AssetManagement { get; private set; } = null!;
     public JoiningProcessManagement JoiningProcessManagement { get; private set; } = null!;

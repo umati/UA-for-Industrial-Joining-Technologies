@@ -2,6 +2,7 @@
 
 using IJT_CSharp_Client.Configuration;
 using IJT_CSharp_Client.Domain.Events;
+using IJT_CSharp_Client.Domain.Results;
 using Opc.Ua;
 using Opc.Ua.Client;
 
@@ -13,10 +14,16 @@ namespace IJT_CSharp_Client.Client;
 /// </summary>
 public interface IJoiningSystem
 {
-    // -- Application-owned result event reception ───────────────────────────────
+    // -- Application-owned result boundaries ────────────────────────────────────
 
     /// <summary>Application-owned interface for receiving result events.</summary>
     IResultEventReceiver ResultEvents { get; }
+
+    /// <summary>Application-owned interface for result variable data-change subscriptions.</summary>
+    IResultVariableReceiver ResultVariable { get; }
+
+    /// <summary>Application-owned interface for result method calls (GetLatestResult, GetResultById).</summary>
+    IResultMethodClient ResultMethods { get; }
 
     // -- OPC UA session access -------------------------------------------------
 

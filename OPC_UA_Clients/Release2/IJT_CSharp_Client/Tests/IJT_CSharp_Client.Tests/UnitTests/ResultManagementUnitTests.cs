@@ -609,7 +609,7 @@ public sealed class ResultManagementUnitTests
                 },
             });
             var handler = typeof(ResultManagement).GetMethod(
-                "OnResultVariableChanged",
+                "OnMonitoredItemNotification",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
             handler!.Invoke(rm, [item, null]);
