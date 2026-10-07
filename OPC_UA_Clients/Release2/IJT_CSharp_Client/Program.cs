@@ -3,6 +3,7 @@
 using System.Text;
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Configuration;
+using IJT_CSharp_Client.Domain.Events;
 using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
 
@@ -45,15 +46,23 @@ await using (js)
     IjtFileLogger.ClearSessionLogs();
 
     // ── Event handlers — all output through logger, no Console calls ───────────
-    js.EventSubscriber.OnResultReady += (_, e) =>
+    js.ResultEvents.OnResultNotification += (_, e) =>
     {
         _log.LogInformation("Result received | {Name} | Seq#{Seq} | {Class} | {Time:HH:mm:ss}",
-            e.Name ?? e.ResultId, e.SequenceNumber, e.Classification, e.EventTime);
+            e.Result?.Name ?? e.Result?.ResultId ?? e.SourceName,
+            e.Result?.SequenceNumber ?? 0,
+            e.Result?.Classification?.ToString() ?? e.Result?.ResultEvaluation ?? e.EventTypeName,
+            e.EventTime);
         var text = e.Result is not null
             ? IjtResultFormatter.FormatResult(e.Result, e.EventTime)
             : IjtResultFormatter.FormatResultEventFields(
-                e.ResultId, e.Classification, e.Name, e.SequenceNumber, e.AssemblyType, e.EventTime);
-        var path = IjtFileLogger.WriteResultTimestamped(text, e.ResultId, e.Name);
+                e.Result?.ResultId,
+                e.Result?.Classification?.ToString() ?? e.Result?.ResultEvaluation,
+                e.Result?.Name,
+                (int)(e.Result?.SequenceNumber ?? 0),
+                e.Result?.AssemblyType,
+                e.EventTime);
+        var path = IjtFileLogger.WriteResultTimestamped(text, e.Result?.ResultId, e.Result?.Name);
         _log.LogInformation("Result logged to: {Path}", path);
     };
 
@@ -109,11 +118,11 @@ await using (js)
         {
             // ── SUBSCRIPTIONS (toggle) ─────────────────────────────────────────
             case "1":
-                if (js.EventSubscriber.IsSubscribed)
-                    js.EventSubscriber.Unsubscribe();
+                if (js.ResultEvents.IsSubscribed)
+                    js.ResultEvents.Unsubscribe();
                 else
                 {
-                    js.EventSubscriber.Subscribe();
+                    js.ResultEvents.Subscribe();
                     _log.LogInformation("Result log: {P}", IjtFileLogger.ResultLogPath);
                     _log.LogInformation("Event  log: {P}", IjtFileLogger.EventLogPath);
                 }
@@ -566,7 +575,7 @@ static void PrintBanner()
 /// </summary>
 static void PrintMenu(JoiningSystem js, string serverUrl)
 {
-    var ev = js.EventSubscriber.IsSubscribed ? "ON " : "off";
+    var ev = js.ResultEvents.IsSubscribed ? "ON " : "off";
     var rv = js.ResultManagement.IsResultVarSubscribed ? "ON " : "off";
     var av = js.AssetManagement.IsAssetVarSubscribed ? "ON " : "off";
 

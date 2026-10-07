@@ -1,3 +1,4 @@
+using IJT_CSharp_Client.Domain.Events;
 using IJT_CSharp_Client.Helpers;
 using UAModel.MachineryResult;
 using Xunit;
@@ -9,8 +10,11 @@ public class IjtResultFormatterTests
     [Fact]
     public void FormatResult_NullResult_ReturnsNullString()
     {
-        var result = IjtResultFormatter.FormatResult(null);
-        Assert.Equal("(null result)", result);
+        var result1 = IjtResultFormatter.FormatResult((ResultDataType?)null);
+        Assert.Equal("(null result)", result1);
+
+        var result2 = IjtResultFormatter.FormatResult((DomainResultEnvelope?)null);
+        Assert.Equal("(null result)", result2);
     }
 
     [Fact]

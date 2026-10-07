@@ -1,6 +1,7 @@
 #nullable enable
 
 using IJT_CSharp_Client.Configuration;
+using IJT_CSharp_Client.Domain.Events;
 using Opc.Ua;
 using Opc.Ua.Client;
 
@@ -12,6 +13,11 @@ namespace IJT_CSharp_Client.Client;
 /// </summary>
 public interface IJoiningSystem
 {
+    // -- Application-owned result event reception ───────────────────────────────
+
+    /// <summary>Application-owned interface for receiving result events.</summary>
+    IResultEventReceiver ResultEvents { get; }
+
     // -- OPC UA session access -------------------------------------------------
 
     /// <summary>The underlying OPC UA SDK session.</summary>

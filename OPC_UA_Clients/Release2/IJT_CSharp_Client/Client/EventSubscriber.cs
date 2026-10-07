@@ -16,13 +16,16 @@ namespace IJT_CSharp_Client.Client;
 /// and one for JoiningSystemEventType.
 /// </para>
 /// </summary>
-public sealed class EventSubscriber : IDisposable
+public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Events.IResultEventReceiver
 {
     private readonly ILogger<EventSubscriber> _log = IjtLog.For<EventSubscriber>();
     private readonly IJoiningSystem _s;
     private Subscription? _eventSubscription;
 
     // -- Public .NET events ----------------------------------------------------
+
+    /// <summary>Raised when an application-owned ResultEvent arrives.</summary>
+    public event EventHandler<IJT_CSharp_Client.Domain.Events.ResultEventNotification>? OnResultNotification;
 
     /// <summary>Raised when a ResultReady or JoiningSystemResultReady event arrives.</summary>
     public event EventHandler<ResultReadyEventArgs>? OnResultReady;
@@ -183,10 +186,9 @@ public sealed class EventSubscriber : IDisposable
 
     internal EventFilter BuildResultEventFilter()
     {
-        var ijtNs = _s.IjtBaseNsIdx;
         var mrNs = _s.MachineryResultNsIdx;
 
-        var jsResultReadyTypeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemResultReadyEventType, ijtNs);
+        var resultReadyTypeId = new NodeId(UAModel.MachineryResult.ObjectTypes.ResultReadyEventType, mrNs);
 
         var filter = new EventFilter();
 
@@ -197,15 +199,14 @@ public sealed class EventSubscriber : IDisposable
         AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "Message");
         AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "SourceName");
 
-        // Full Result object - BrowseName is "6:Result" in the NodeSet (ns=6 = MachineryResult namespace).
-        // Must use mrNs here; using ijtNs causes the server to return null for this field.
-        AddSelectClause(filter, jsResultReadyTypeId, mrNs, "Result");
+        // Full Result object - BrowseName is "Result" on ResultReadyEventType (ns=mrNs).
+        // Anchored at base ResultReadyEventType to resolve across both standard and IJT events.
+        AddSelectClause(filter, resultReadyTypeId, mrNs, "Result");
 
-        // WhereClause: OfType JoiningSystemResultReadyEventType - the IJT abstract type fired for
-        // all joining results (SimulateSingleResult, real controller results).
-        // Also catches concrete subtypes (e.g. RequestedResultEventType).
+        // WhereClause: OfType ResultReadyEventType - captures base ResultReadyEventType,
+        // JoiningSystemResultReadyEventType, and RequestedResultEventType.
         filter.WhereClause = new ContentFilter();
-        filter.WhereClause.Push(FilterOperator.OfType, new LiteralOperand(jsResultReadyTypeId));
+        filter.WhereClause.Push(FilterOperator.OfType, new LiteralOperand(resultReadyTypeId));
 
         return filter;
     }
@@ -284,6 +285,11 @@ public sealed class EventSubscriber : IDisposable
                 OverallStatus = baseMeta?.ResultEvaluation.ToString(),
                 AllFields = [.. map.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value))],
             };
+
+            // Emit application-owned domain notification (SDK-neutral contract)
+            var domainNotification = DomainResultMapper.MapEvent(map, result);
+            OnResultNotification?.Invoke(this, domainNotification);
+
             OnResultReady?.Invoke(this, args);
         }
         catch (Opc.Ua.ServiceResultException srex)

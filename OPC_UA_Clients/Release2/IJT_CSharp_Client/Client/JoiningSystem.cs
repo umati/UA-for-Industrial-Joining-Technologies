@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using IJT_CSharp_Client.Configuration;
+using IJT_CSharp_Client.Domain.Events;
 using IJT_CSharp_Client.Helpers;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -50,6 +51,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     public bool IsConnected => _session?.Connected ?? false;
 
     // -- Management surface ----------------------------------------------------
+    public IResultEventReceiver ResultEvents => EventSubscriber;
     public ResultManagement ResultManagement { get; private set; } = null!;
     public AssetManagement AssetManagement { get; private set; } = null!;
     public JoiningProcessManagement JoiningProcessManagement { get; private set; } = null!;
