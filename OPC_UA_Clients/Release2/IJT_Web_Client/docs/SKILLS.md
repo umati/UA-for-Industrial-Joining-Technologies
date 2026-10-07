@@ -12,7 +12,7 @@ This document describes contributor architecture and test rules.
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_Web_Client/` |
 | **Purpose** | Reference OPC UA IJT client: Python WebSocket backend + Node.js browser frontend |
-| **Stack** | Python 3.14+, asyncua 2.0.1 (locked in `uv.lock`), Node.js 24.15+, Vite/Vitest, ESLint |
+| **Stack** | Python 3.14+, asyncua 2.1.0 (locked in `uv.lock`), Node.js 24.15+, Vite/Vitest, ESLint |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
 | **Docker** | Standalone container healthy on HTTP:3000 + WS:8001; root Phase 2 isolates Docker smoke on HTTP:3008 + WS:8011 (non-root `appuser`) |
 
@@ -180,7 +180,7 @@ Pyright resolves application imports through `src/` and shared readiness imports
 
 ---
 
-## asyncua 2.0.1 Runtime Contract
+## asyncua 2.1.0 Runtime Contract
 
 ### Shared session and type loading
 
@@ -207,16 +207,14 @@ closure cannot interrupt it between unsubscribe and session disconnect.
 Flattened Web Docker images must copy both shared session-policy modules into
 `/app/scripts`; keep their root `.dockerignore` allowlist entries in sync.
 
-asyncua 2.0.1 and current upstream master discard generated
-`Annotated[..., "AllowSubtypes"]` metadata. They also route every preserved
-subtype through ExtensionObject encoding, although abstract `ua.Number` fields
-such as `SignalDataType.SignalValue` are encoded as Variants. The shared adapter
-preserves the metadata, uses Variant encoding only for numeric subtype fields,
-and retains ExtensionObject encoding for structured subtype fields. Root binary
-round-trip tests guard both categories.
+The shared adapter preserves generated `Annotated[..., "AllowSubtypes"]`
+metadata, uses Variant encoding only for abstract numeric subtype fields such as
+`SignalDataType.SignalValue`, and retains ExtensionObject encoding for structured
+subtype fields. Root binary round-trip tests guard both categories and pass with
+asyncua 2.1.0.
 
-The former `_send_request` timeout shim is removed because asyncua 2.0.1 no
-longer has the affected hard-coded timeout signature.
+The former `_send_request` timeout shim was removed when asyncua stopped using
+the affected hard-coded timeout signature.
 
 ### `create_subscription()` rejects `max_notif_per_publish` kwarg
 **Fix:** Use explicit parameters object:
@@ -380,7 +378,7 @@ test image intentionally contains the Web Client project without the repository
 root `.git` metadata and root-level files.
 | Action versions | `actions/checkout@v6`, `setup-python@v6`, `setup-node@v6` (all current) |
 | Python version | `3.14` (stable in actions manifest) |
-| asyncua | pinned to released `2.0.1` in `pyproject.toml` / `uv.lock`; keep Web/Test/Console/Performance clients aligned and revalidate method calls, structures, subscriptions, and type loading on each bump |
+| asyncua | pinned to released `2.1.0` in `pyproject.toml` / `uv.lock`; keep Web/Test/Console/Performance clients aligned and revalidate method calls, structures, subscriptions, and type loading on each bump |
 
 ---
 

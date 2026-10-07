@@ -389,7 +389,7 @@ UA-for-Industrial-Joining-Technologies/
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
 
 ### IJT Performance Client (`OPC_UA_Clients/Release2/IJT_Performance_Client/`)
-- **Stack**: Python 3.14+, asyncua == 2.0.1, pyyaml, pytest, pytest-asyncio
+- **Stack**: Python 3.14+, asyncua == 2.1.0, pyyaml, pytest, pytest-asyncio
 - **Purpose**: Multi-controller latency and diagnostic benchmark client for controlled validation across 1 to 500+ endpoints. It reduces per-connection thread growth through process-sharded asyncio loops and computes result-transfer timing diagnostics ($T_{\text{end}} \to T_{\text{event}} \to T_{\text{client}}$). Scale conclusions require measured runs in the target environment.
 - **Execution**: CLI (`python -m ijt_performance_client --config profiles/single_server.yaml`) and importable Python SDK (`from ijt_performance_client import OpcUaClientPool`).
 - **Tests**: unit (`tests/unit/` — latency math, config validation, root-cause attribution); live (`tests/live/` — live controller benchmark on port 40485).
@@ -601,9 +601,9 @@ All jobs have explicit `timeout-minutes` (5–45 min) and `permissions: contents
 
 | Decision | Reason |
 |----------|--------|
-| asyncua pinned in client `pyproject.toml` / `uv.lock` | Keep all IJT Python clients on the same released asyncua version (`2.0.1` currently) and revalidate method calls, structures, subscriptions, and type loading on each bump |
+| asyncua pinned in client `pyproject.toml` / `uv.lock` | Keep all IJT Python clients on the same released asyncua version (`2.1.0` currently) and revalidate method calls, structures, subscriptions, and type loading on each bump |
 | Modern DataTypeDefinition loading only | Web, Console, Test, and Web live clients all use the shared `load_ijt_type_definitions()` policy; do not restore deprecated OPC Binary dictionary loading |
-| Shared generated-type compatibility adapter | asyncua 2.0.1 and current upstream master drop `Annotated[..., "AllowSubtypes"]` metadata and use the wrong codec for abstract numeric subtype fields; the root policy preserves metadata and uses Variant encoding for `ua.Number` while retaining ExtensionObject encoding for structured subtypes |
+| Shared generated-type compatibility adapter | Regression tests preserve `Annotated[..., "AllowSubtypes"]` metadata and guard the distinct wire codecs: Variant for abstract numeric `ua.Number` fields and ExtensionObject for structured subtype fields |
 | Shared enum-aware connection-state policy | asyncua 2.x exposes enum-backed client/socket states; all clients use `is_client_connected()` with `has_session` and `UaClientState.CONNECTED`, never local string comparisons against `protocol.state` |
 | Serialized, idempotent client lifecycle | Web/Console connect and cleanup paths are locked; repeated healthy endpoint connects are reused, browser closure cancels in-flight Web retries, and every partial main/subscription connect is disconnected before references are cleared |
 | Subscribe events on Server node, not method nodes | Subscribing on individual nodes causes `BadNoSubscription` under load |

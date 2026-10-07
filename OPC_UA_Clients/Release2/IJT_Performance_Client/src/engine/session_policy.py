@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_REQUESTED_SESSION_TIMEOUT_MS = 600_000
 DISCONNECT_SETTLE_DELAY_S = 0.2
 _TYPE_SERIALIZER_PATCHED_ATTR = "_ijt_number_serializer_patched"
-ASYNCUA_VERIFIED_VERSION = "2.0.1"
+ASYNCUA_VERIFIED_VERSION = "2.1.0"
 
 
 def verify_asyncua_version_compatibility() -> str:

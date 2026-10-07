@@ -49,6 +49,49 @@ def _write_cert_pair(tmp_path: Path) -> tuple[Path, Path]:
     return cert, key
 
 
+def _make_test_certificate(
+    common_name: str,
+    uri: str = "urn:test:server",
+    *,
+    is_ca: bool = False,
+):
+    from datetime import datetime, timedelta, timezone
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, common_name)])
+    builder = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(1000)
+        .not_valid_before(datetime.now(timezone.utc) - timedelta(days=1))
+        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=1))
+        .add_extension(x509.BasicConstraints(ca=is_ca, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=True,
+                key_encipherment=True,
+                data_encipherment=True,
+                key_agreement=False,
+                key_cert_sign=is_ca,
+                crl_sign=is_ca,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.ExtendedKeyUsage([x509.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+        .add_extension(x509.SubjectAlternativeName([x509.UniformResourceIdentifier(uri)]), critical=False)
+    )
+    return builder.sign(key, hashes.SHA256())
+
+
 def _secure_config(tmp_path: Path, **overrides) -> ConnectionSecurity:
     cert, key = _write_cert_pair(tmp_path)
     base = {
@@ -483,14 +526,58 @@ class TestApplyConnectionSecurity:
             await apply_connection_security(_mock_client(), _secure_config(tmp_path, trust_store_path=str(store)))
 
     async def test_real_trust_store_helper_builds_a_validator(self, tmp_path):
+        from cryptography.hazmat.primitives import serialization
+
         from helpers.connection_security import _apply_trust_store
 
         store = tmp_path / "trusted"
         store.mkdir()
+        cert = _make_test_certificate("Test CA", is_ca=True)
+        (store / "ca.der").write_bytes(cert.public_bytes(serialization.Encoding.DER))
+
         client = _mock_client()
         client.certificate_validator = None
         await _apply_trust_store(client, ConnectionSecurity(trust_store_path=str(store)))
         assert callable(client.certificate_validator)
+
+    async def test_trust_store_validator_accepts_trusted_and_rejects_untrusted(self, tmp_path):
+        from asyncua import ua
+        from asyncua.common.utils import ServiceError
+        from cryptography.hazmat.primitives import serialization
+
+        from helpers.connection_security import _apply_trust_store
+
+        store = tmp_path / "trusted"
+        store.mkdir()
+        trusted_cert = _make_test_certificate("Trusted Server", uri="urn:test:trusted")
+        (store / "server.der").write_bytes(trusted_cert.public_bytes(serialization.Encoding.DER))
+
+        client = _mock_client()
+        client.certificate_validator = None
+        await _apply_trust_store(client, ConnectionSecurity(trust_store_path=str(store)))
+
+        trusted_app = ua.ApplicationDescription()
+        trusted_app.ApplicationUri = "urn:test:trusted"
+        trusted_app.ApplicationType = ua.ApplicationType.Server
+
+        # 1. Trusted server certificate validates without error
+        await client.certificate_validator(trusted_cert, trusted_app)
+
+        # 2. Untrusted certificate fails validation with BadCertificateUntrusted
+        untrusted_cert = _make_test_certificate("Untrusted Server", uri="urn:test:untrusted")
+        untrusted_app = ua.ApplicationDescription()
+        untrusted_app.ApplicationUri = "urn:test:untrusted"
+        untrusted_app.ApplicationType = ua.ApplicationType.Server
+
+        with pytest.raises(ServiceError) as exc_info:
+            await client.certificate_validator(untrusted_cert, untrusted_app)
+        assert exc_info.value.code == ua.StatusCodes.BadCertificateUntrusted
+
+    async def test_empty_trust_store_fails_closed_with_connection_security_error(self, tmp_path):
+        store = tmp_path / "empty_trusted"
+        store.mkdir()
+        with pytest.raises(ConnectionSecurityError, match="Could not load the trust store"):
+            await apply_connection_security(_mock_client(), _secure_config(tmp_path, trust_store_path=str(store)))
 
     async def test_no_secret_reaches_the_log(self, tmp_path, caplog):
         client = _mock_client()

@@ -232,5 +232,5 @@ def test_verify_asyncua_version_compatibility_rejects_unknown_version(monkeypatc
     from src.engine.session_policy import verify_asyncua_version_compatibility
 
     monkeypatch.setattr(asyncua, "__version__", "3.0.0")
-    with pytest.raises(RuntimeError, match="validated only with asyncua 2.0.1"):
+    with pytest.raises(RuntimeError, match="validated only with asyncua 2.1.0"):
         verify_asyncua_version_compatibility()

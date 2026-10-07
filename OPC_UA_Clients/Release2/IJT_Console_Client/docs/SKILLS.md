@@ -12,7 +12,7 @@ This document describes contributor architecture and test rules.
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_Console_Client/` |
 | **Purpose** | Minimal reference OPC UA IJT console client — events, methods, results |
-| **Stack** | Python 3.14+, asyncua 2.0.1 (locked in `uv.lock`), asyncio, uv |
+| **Stack** | Python 3.14+, asyncua 2.1.0 (locked in `uv.lock`), asyncio, uv |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT) |
 | **Server default** | `opc.tcp://localhost:40451` |
 
@@ -163,7 +163,7 @@ python3 setup_client.py --url="opc.tcp://<ip>:<port>"
 
 ---
 
-## asyncua 2.0.1 Runtime Contract
+## asyncua 2.1.0 Runtime Contract
 
 The Console, Web, and Test clients share
 `scripts/opcua_session_policy.py`. It applies the common session lifecycle and
@@ -174,7 +174,8 @@ loads generated types only through asyncua's modern
 The same policy preserves generated `AllowSubtypes` metadata and selects the
 correct wire codec: Variant for abstract numeric subtype fields and
 ExtensionObject for structured subtype fields. This is required for
-`SignalDataType` and nested result payloads with asyncua 2.0.1. The obsolete
+`SignalDataType` and nested result payloads; the shared binary round-trip tests
+are run against asyncua 2.1.0. The obsolete
 `_send_request` timeout shim was removed because the released client no longer
 has the affected signature.
 

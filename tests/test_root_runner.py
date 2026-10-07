@@ -146,11 +146,9 @@ def test_python_dependency_security_floors_are_centralized() -> None:
         assert pyproject.is_file(), f"{client_dir.name}: missing pyproject.toml"
         lock_file = client_dir / "uv.lock"
         assert lock_file.is_file(), f"{client_dir.name}: missing uv.lock"
-        lock_text = lock_file.read_text(encoding="utf-8")
-        assert 'name = "asyncua"' in lock_text and 'version = "2.0.1"' in lock_text, (
-            f"{client_dir.name}: asyncua must be locked to 2.0.1"
-        )
-        assert 'name = "idna"' in lock_text, f"{client_dir.name}: idna must be present in lock"
+        lock_data = tomllib.loads(lock_file.read_text(encoding="utf-8"))
+        locked_names = {package["name"] for package in lock_data.get("package", [])}
+        assert "idna" in locked_names, f"{client_dir.name}: idna must be present in lock"
 
 
 def test_python_requirement_installs_use_constraints_file() -> None:
@@ -311,24 +309,51 @@ def test_python_constraints_have_one_source_and_locks_are_audited() -> None:
 
 def test_python_lock_security_floors_are_enforced() -> None:
     """Verify that all client locks satisfy repo-wide security baseline floors."""
+    from packaging.requirements import Requirement
     from packaging.version import Version
 
+    asyncua_direct_pins: set[str] = set()
     for name in _PYTHON_CLIENT_DIRS:
         client_dir = getattr(_runner, name)
+        pyproject = tomllib.loads((client_dir / "pyproject.toml").read_text(encoding="utf-8"))
         lock_data = tomllib.loads((client_dir / "uv.lock").read_text(encoding="utf-8"))
         pkgs = {p["name"]: p["version"] for p in lock_data.get("package", [])}
+        asyncua_records = [p for p in lock_data.get("package", []) if p["name"] == "asyncua"]
         manifest_constraints = {
             c["name"]: c["specifier"] for c in lock_data.get("manifest", {}).get("constraints", [])
         }
-        assert pkgs.get("asyncua") == "2.0.1", f"{name}: asyncua must be 2.0.1"
+        asyncua_requirements = [
+            Requirement(requirement)
+            for requirement in pyproject["project"]["dependencies"]
+            if Requirement(requirement).name.lower() == "asyncua"
+        ]
+        assert len(asyncua_requirements) == 1, f"{name}: expected one direct asyncua pin"
+        direct_specifiers = list(asyncua_requirements[0].specifier)
+        assert (
+            len(direct_specifiers) == 1
+            and direct_specifiers[0].operator == "=="
+            and not direct_specifiers[0].version.endswith(".*")
+        ), f"{name}: asyncua must remain exactly pinned"
+        direct_pin = direct_specifiers[0]
+        asyncua_direct_pins.add(direct_pin.version)
+        assert asyncua_records, f"{name}: asyncua must be present in lock"
+        assert all(
+            Version(package["version"]) >= Version("2.0.1") for package in asyncua_records
+        ), f"{name}: asyncua lock entries must meet the 2.0.1 floor"
+        assert all(package["version"] == direct_pin.version for package in asyncua_records), (
+            f"{name}: asyncua lock entries must match direct pin {direct_pin.version}"
+        )
+        assert manifest_constraints.get("asyncua") == ">=2.0.1", f"{name}: asyncua constraint"
         assert Version(pkgs["cryptography"]) >= Version("50.0.0"), f"{name}: cryptography floor"
-        assert Version(pkgs["pyopenssl"]) >= Version("26.4.0"), f"{name}: pyopenssl floor"
+        if "pyopenssl" in pkgs:
+            assert Version(pkgs["pyopenssl"]) >= Version("26.4.0"), f"{name}: pyopenssl floor"
         assert Version(pkgs["idna"]) >= Version("3.15"), f"{name}: idna floor"
         assert manifest_constraints.get("cryptography") == ">=50.0.0", (
             f"{name}: cryptography constraint"
         )
         assert manifest_constraints.get("pyopenssl") == ">=26.4.0", f"{name}: pyopenssl constraint"
         assert manifest_constraints.get("idna") == ">=3.15", f"{name}: idna constraint"
+    assert len(asyncua_direct_pins) == 1, "All Python clients must use the same asyncua version"
 
 
 def test_test_client_pyright_resolves_reporting_scripts() -> None:

@@ -1,5 +1,5 @@
 """
-Wire-level timestamps for subscription notifications (asyncua 2.0.1).
+Wire-level timestamps for subscription notifications (validated asyncua 2.1.0 API).
 
 Why does this module exist?
 The subscription handler runs in its own asyncio task after asyncua has received, decoded and
