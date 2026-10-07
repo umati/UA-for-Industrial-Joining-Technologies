@@ -19,7 +19,7 @@ def test_print_console_report_empty(capsys):
     print_console_report([], verdict, "TestPool")
     captured = capsys.readouterr()
     assert "IJT PERFORMANCE & SCALE BENCHMARK REPORT: TestPool" in captured.out
-    assert "Results received: 0 | VALID (used for statistics): 0" in captured.out
+    assert "Results Received         : 0 total" in captured.out
     assert "NO_DATA" in captured.out
     assert "Test warning" in captured.out
 
@@ -43,7 +43,8 @@ def test_print_console_report_with_samples(capsys):
     print_console_report([sample], verdict, "TestPoolWithSamples")
     captured = capsys.readouterr()
     assert "IJT PERFORMANCE & SCALE BENCHMARK REPORT: TestPoolWithSamples" in captured.out
-    assert "Results received: 1 | VALID (used for statistics): 1 | Wire timing: 0/1" in captured.out
+    assert "Results Received         : 1 total" in captured.out
+    assert "Integrity Audit          : 1 valid (100.0% valid rate)" in captured.out
     assert "HEALTHY" in captured.out
     assert "22.0ms" in captured.out
 
@@ -102,7 +103,9 @@ def test_print_console_report_excludes_invalid_results_from_statistics(capsys):
     ]
     print_console_report(samples, verdict, "Mixed")
     out = capsys.readouterr().out
-    assert "Results received: 2 | VALID (used for statistics): 1 | Wire timing: 1/1" in out
+    assert "Results Received         : 2 total" in out
+    assert "Integrity Audit          : 1 valid (50.0% valid rate)" in out
+    assert "Wire Timing Samples      : 1/1 verified (100.0%)" in out
     assert "11.0ms" in out
     assert "999.0" not in out
     assert "BENCHMARK INTEGRITY AUDIT (1 issues detected)" in out

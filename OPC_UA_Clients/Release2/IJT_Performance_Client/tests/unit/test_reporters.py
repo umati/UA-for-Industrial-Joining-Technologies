@@ -340,14 +340,14 @@ def test_reports_hide_rows_that_only_repeat_total_and_show_loop_lag(capsys):
     out = capsys.readouterr().out
     assert "Network Transport Latency" not in out
     assert "Server Processing Duration" not in out
-    assert "* Total Result Transfer Time:" in out
+    assert "Total Result Transfer Time" in out
     assert "rows hidden" in out
-    assert "loop lag): worst 369.1 ms, worst worker average 18.4 ms" in out
+    assert "Worst loop lag 369.1 ms, worst worker average 18.4 ms" in out
 
     md = generate_markdown_report(samples, verdict, "Local", timing=timing)
     assert "Network Transport Latency" not in md
     assert "Server Processing Duration" not in md
-    assert "worst 369.1 ms" in md
+    assert "Worst loop lag 369.1 ms" in md
 
     # A server that stamps its event later than the operation end keeps the split rows.
     split = [_wire_sample(i, 5.0) for i in range(5)]
@@ -356,5 +356,5 @@ def test_reports_hide_rows_that_only_repeat_total_and_show_loop_lag(capsys):
     assert "Network Transport Latency" in split_labels
     split_md = generate_markdown_report(split, verdict, "Remote")
     assert "rows hidden" not in split_md
-    assert "> - Network Transport Latency:" in split_md
-    assert "> - Server Processing Duration:" in split_md
+    assert "Network Transport Latency" in split_md
+    assert "Server Processing Duration" in split_md

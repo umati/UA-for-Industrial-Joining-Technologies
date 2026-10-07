@@ -15,7 +15,7 @@ from ..results import INTEGRITY_VALID, TIMING_SOURCE_WIRE, LatencySample
 
 # (LatencySample attribute, report label, always shown). Optional rows are shown only when they have data.
 METRIC_ROWS: list[tuple[str, str, bool]] = [
-    ("delivery_time_ms", "Delivery Time (headline)", True),
+    ("delivery_time_ms", "End-to-End Delivery Time", True),
     ("client_ready_time_ms", "Client-Ready Time", True),
     ("total_result_transfer_time_ms", "Total Result Transfer Time", True),
     ("server_processing_time_ms", "Server Processing Duration", True),
@@ -31,30 +31,35 @@ HEADLINE_METRIC = "delivery_time_ms"
 METRIC_GUIDE: list[tuple[str | None, str]] = [
     (
         "delivery_time_ms",
-        "Delivery Time: operation end to result bytes read by the client (network + server publishing).",
+        "End-to-End Delivery Time: Time from Operation End until raw bytes arrive at the client.",
     ),
-    ("client_ready_time_ms", "Client-Ready Time: operation end to result decoded and usable by the client."),
+    (
+        "client_ready_time_ms",
+        "Client-Ready Time: Time until result is completely decoded and ready for application use.",
+    ),
     (
         "total_result_transfer_time_ms",
-        "Total Result Transfer Time: operation end to the application handler "
-        "(includes time waiting for the client to be free).",
+        "Total Result Transfer Time: Operation End to Application Handler (includes time waiting for client loop).",
     ),
     (
         "server_processing_time_ms",
-        "Server Processing Duration: operation end to the server event time (time the server needed to publish).",
+        "Server Processing Duration: Operation End to Server Event Timestamp (time the server needed to publish).",
     ),
     (
         "network_transport_time_ms",
-        "Network Transport Latency: server event time to the application handler (includes client decode and dispatch).",
+        "Network Transport Latency: Server Event Timestamp to Application Handler (includes client decode and dispatch).",
     ),
-    ("client_decode_time_ms", "Client Decode Time: result bytes read to result decoded by the client."),
+    ("client_decode_time_ms", "Client Decode Time: Raw result bytes read to decoded object in client memory."),
     (
         "dispatch_delay_ms",
-        "Dispatch Delay: result decoded to the application handler (waiting for the client to be free).",
+        "Dispatch Delay: Decoded result to Application Handler invocation (waiting for client loop to be free).",
     ),
-    ("joining_duration_ms", "Joining Duration: time the joining operation itself took on the server."),
-    (None, "Statistics use VALID results only; without wire timing, delivery falls back to handler time."),
-    (None, "Clock offset: server clock minus client clock, used to correct cross-machine times."),
+    ("joining_duration_ms", "Joining Duration: Time the joining operation itself took on the server controller."),
+    (
+        None,
+        "Statistics Policy: Statistics use VALID results only; without wire timing, delivery falls back to handler time.",
+    ),
+    (None, "Clock Offset: Server Clock minus Client Clock, used to synchronize cross-machine timestamps."),
 ]
 
 
@@ -88,11 +93,11 @@ def report_notes(valid: Sequence[LatencySample], timing: Mapping[str, Any] | Non
     if valid and not server_reports_processing_time(valid):
         notes.append(
             "Server Processing and Network Transport rows hidden: the server stamps its event at the "
-            "operation end time, so both equal Total Result Transfer Time."
+            "Operation End Time, so both equal Total Result Transfer Time."
         )
     if timing and timing.get("workers_reported"):
         notes.append(
-            f"Client busy delay (loop lag): worst {float(timing.get('loop_lag_max_ms', 0.0)):.1f} ms, "
+            f"Client Busy Delay (Loop Lag): Worst loop lag {float(timing.get('loop_lag_max_ms', 0.0)):.1f} ms, "
             f"worst worker average {float(timing.get('loop_lag_worst_mean_ms', 0.0)):.1f} ms. "
             "High values mean the client was busy, which also delays the measured delivery time."
         )
