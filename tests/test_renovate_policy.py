@@ -146,3 +146,20 @@ def test_renovate_groups_uv_toolchain_and_covers_workflows() -> None:
     rule = toolchain_rules[0]
     matched = set(rule.get("matchPackageNames", []))
     assert {"uv", "ghcr.io/astral-sh/uv"}.issubset(matched)
+
+
+def test_renovate_holds_opc_foundation_major_updates() -> None:
+    """OPC Foundation SDK 2.0 requires Roslyn source generation migration; hold major updates."""
+    opc_rules = [
+        rule
+        for rule in _rules()
+        if {"OPCFoundation.NetStandard.Opc.Ua", "OPCFoundation.NetStandard.Opc.Ua.Core"}.issubset(
+            set(rule.get("matchPackageNames", []))
+        )
+    ]
+    assert opc_rules, "renovate.json must define a rule holding OPCFoundation.NetStandard packages"
+    rule = opc_rules[0]
+    assert rule.get("enabled") is False, "Major update for OPC Foundation must be disabled"
+    assert rule.get("matchUpdateTypes") == ["major"], (
+        "Only major updates must be held (1.x patches allowed)"
+    )
