@@ -131,9 +131,10 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         ConnectionHooks hooks,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var log = IjtLog.For<JoiningSystem>();
 
-        var appConfig = BuildApplicationConfig(config);
+        var appConfig = OpcUaSessionConnector.BuildApplicationConfig(config);
         await hooks.ValidateApplicationConfigAsync(appConfig).ConfigureAwait(false);
         await hooks.EnsureApplicationCertificateAsync(config, appConfig, ct).ConfigureAwait(false);
 
@@ -143,8 +144,18 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             log.LogWarning("DEV ONLY - AutoAcceptUntrustedCertificates enabled.");
         }
 
+        ct.ThrowIfCancellationRequested();
         log.LogInformation("Discovering endpoints at {Url} ...", config.ServerUrl);
-        var session = await DiscoverAndConnectAsync(appConfig, config, log, hooks, ct).ConfigureAwait(false);
+        var endpointDesc = hooks.SelectEndpointDescription(appConfig, config, log);
+        var configuredEndpoint = new ConfiguredEndpoint(null, endpointDesc, EndpointConfiguration.Create(appConfig));
+        var userIdentity = OpcUaSessionConnector.BuildUserIdentity(config, endpointDesc);
+
+        ct.ThrowIfCancellationRequested();
+        var session = await hooks.CreateSessionAsync(
+            appConfig,
+            configuredEndpoint,
+            config,
+            userIdentity).ConfigureAwait(false);
 
         // Register all IJT encodeable types so the SDK can encode/decode ExtensionObjects.
         session.MessageContext.Factory.AddEncodeableTypes(
@@ -169,82 +180,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         return js;
     }
 
-    // -- Private: session setup ------------------------------------------------
-
-    private static ApplicationConfiguration BuildApplicationConfig(ClientConfig config)
-    {
-        var pkiRoot = string.IsNullOrWhiteSpace(config.PkiRootPath)
-            ? Path.Combine(AppContext.BaseDirectory, "PKI")
-            : config.PkiRootPath;
-
-        return new ApplicationConfiguration(DefaultTelemetry.Create(_ => { }))
-        {
-            ApplicationName = config.ApplicationName,
-            ApplicationType = ApplicationType.Client,
-            ApplicationUri = $"urn:{System.Net.Dns.GetHostName()}:{config.ApplicationName.Replace(' ', '-')}",
-            SecurityConfiguration = new SecurityConfiguration
-            {
-                ApplicationCertificate = new CertificateIdentifier
-                {
-                    StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiRoot, "own"),
-                    SubjectName = config.ApplicationName.StartsWith("CN=", StringComparison.OrdinalIgnoreCase)
-                        ? config.ApplicationName
-                        : $"CN={config.ApplicationName}",
-                },
-                TrustedIssuerCertificates = new CertificateTrustList
-                {
-                    StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiRoot, "issuer"),
-                },
-                TrustedPeerCertificates = new CertificateTrustList
-                {
-                    StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiRoot, "trusted"),
-                },
-                RejectedCertificateStore = new CertificateStoreIdentifier
-                {
-                    StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiRoot, "rejected"),
-                },
-                AutoAcceptUntrustedCertificates = config.AutoAcceptServerCertificate,
-                AddAppCertToTrustedStore = true,
-            },
-            TransportQuotas = new TransportQuotas { OperationTimeout = 30_000 },
-            ClientConfiguration = new ClientConfiguration
-            {
-                DefaultSessionTimeout = config.SessionTimeoutMs,
-            },
-        };
-    }
-
-    internal static async Task EnsureApplicationCertificateForTestingAsync(
-        ClientConfig config,
-        CancellationToken ct = default)
-    {
-        var appConfig = BuildApplicationConfig(config);
-        await appConfig.Validate(ApplicationType.Client).ConfigureAwait(false);
-        await EnsureApplicationCertificateAsync(config, appConfig, ct).ConfigureAwait(false);
-    }
-
-    private static async Task<ISession> DiscoverAndConnectAsync(
-        ApplicationConfiguration appConfig,
-        ClientConfig config,
-        ILogger log,
-        ConnectionHooks hooks,
-        CancellationToken ct)
-    {
-        ct.ThrowIfCancellationRequested();
-        var endpointDesc = hooks.SelectEndpointDescription(appConfig, config, log);
-
-        var endpoint = new ConfiguredEndpoint(
-            null, endpointDesc, EndpointConfiguration.Create(appConfig));
-        var identity = BuildUserIdentity(config, endpointDesc);
-
-        log.LogInformation("Opening session ...");
-        ct.ThrowIfCancellationRequested();
-        return await hooks.CreateSessionAsync(appConfig, endpoint, config, identity).ConfigureAwait(false);
-    }
+    // -- Test & backwards-compatibility forwarders ------------------------------
 
     internal sealed record ConnectionHooks(
         Func<ApplicationConfiguration, Task> ValidateApplicationConfigAsync,
@@ -253,300 +189,64 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         Func<ApplicationConfiguration, ConfiguredEndpoint, ClientConfig, IUserIdentity, Task<ISession>> CreateSessionAsync)
     {
         public static ConnectionHooks Production { get; } = new(
-            appConfig => appConfig.Validate(ApplicationType.Client),
-            JoiningSystem.EnsureApplicationCertificateAsync,
-            JoiningSystem.SelectEndpointDescription,
-            (appConfig, endpoint, config, identity) => new DefaultSessionFactory().CreateAsync(
-                    appConfig,
-                    endpoint,
-                    updateBeforeConnect: false,
-                    sessionName: config.ApplicationName,
-                    sessionTimeout: (uint)config.SessionTimeoutMs,
-                    identity: identity,
-                    preferredLocales: default,
-                    ct: CancellationToken.None));
+            OpcUaSessionConnector.ConnectionHooks.Production.ValidateApplicationConfigAsync,
+            OpcUaSessionConnector.ConnectionHooks.Production.EnsureApplicationCertificateAsync,
+            OpcUaSessionConnector.ConnectionHooks.Production.SelectEndpointDescription,
+            OpcUaSessionConnector.ConnectionHooks.Production.CreateSessionAsync);
+
+        public static implicit operator OpcUaSessionConnector.ConnectionHooks(ConnectionHooks hooks)
+            => new(
+                hooks.ValidateApplicationConfigAsync,
+                hooks.EnsureApplicationCertificateAsync,
+                hooks.SelectEndpointDescription,
+                hooks.CreateSessionAsync);
+
+        public static implicit operator ConnectionHooks(OpcUaSessionConnector.ConnectionHooks hooks)
+            => new(
+                hooks.ValidateApplicationConfigAsync,
+                hooks.EnsureApplicationCertificateAsync,
+                hooks.SelectEndpointDescription,
+                hooks.CreateSessionAsync);
     }
 
-    internal static string EndpointDiscoveryCacheKey(ClientConfig config)
-        => string.Join(
-            "|",
-            config.ServerUrl,
-            $"security={(config.UseSecurityPolicyForEndpointDiscovery ? "true" : "false")}",
-            $"policy={config.SecurityPolicyUri ?? "<default>"}",
-            $"mode={config.MessageSecurityMode?.ToString() ?? "<default>"}");
-
-    internal static void ClearEndpointDiscoveryCacheForTesting()
-        => EndpointDiscoveryCache.Clear();
-
-    private static EndpointDescription SelectEndpointDescription(
-        ApplicationConfiguration appConfig,
-        ClientConfig config,
-        ILogger log)
-        => SelectEndpointDescription(
-            config,
-            () => DiscoverEndpoints(appConfig, config),
-            log);
-
-    internal static EndpointDescription SelectEndpointDescription(
-        ClientConfig config,
-        Func<EndpointDescription> discoverEndpoint,
-        ILogger? log = null)
-        => SelectEndpointDescription(
-            config,
-            () => [discoverEndpoint()],
-            log);
+    internal static IUserIdentity BuildUserIdentity(ClientConfig config, EndpointDescription? endpoint = null)
+        => OpcUaSessionConnector.BuildUserIdentity(config, endpoint);
 
     internal static EndpointDescription SelectEndpointDescription(
         ClientConfig config,
         Func<IReadOnlyList<EndpointDescription>> discoverEndpoints,
         ILogger? log = null)
-    {
-        if (!config.CacheEndpointDiscovery)
-        {
-            return SelectConfiguredEndpoint(config, discoverEndpoints());
-        }
+        => OpcUaSessionConnector.SelectEndpointDescription(config, discoverEndpoints, log);
 
-        var cacheKey = EndpointDiscoveryCacheKey(config);
-        if (EndpointDiscoveryCache.TryGetValue(cacheKey, out var cachedEndpoint))
-        {
-            log?.LogDebug("Using cached endpoint discovery metadata for {Url}.", config.ServerUrl);
-            return cachedEndpoint;
-        }
-
-        // A concurrent cache miss may do duplicate discovery work before GetOrAdd
-        // collapses to one value. That is acceptable: the cache avoids repeated
-        // serial live-test discovery, while keeping production discovery default-off.
-        var discoveredEndpoint = SelectConfiguredEndpoint(config, discoverEndpoints());
-        return EndpointDiscoveryCache.GetOrAdd(cacheKey, discoveredEndpoint);
-    }
-
-    private static IReadOnlyList<EndpointDescription> DiscoverEndpoints(
-        ApplicationConfiguration appConfig,
-        ClientConfig config)
-    {
-        if (RequiresExactEndpointSelection(config))
-        {
-            using var discoveryClient = DiscoveryClient.Create(
-                appConfig,
-                new Uri(config.ServerUrl),
-                EndpointConfiguration.Create(appConfig));
-            discoveryClient.OperationTimeout = EndpointDiscoveryTimeoutMs;
-            return discoveryClient.GetEndpoints(default).ToList();
-        }
-
-        return
-        [
-            CoreClientUtils.SelectEndpoint(
-                appConfig,
-                config.ServerUrl,
-                useSecurity: config.UseSecurityPolicyForEndpointDiscovery,
-                discoverTimeout: EndpointDiscoveryTimeoutMs)!,
-        ];
-    }
-
-    private static EndpointDescription SelectConfiguredEndpoint(
+    internal static EndpointDescription SelectEndpointDescription(
         ClientConfig config,
-        IReadOnlyList<EndpointDescription> endpoints)
-    {
-        if (endpoints.Count == 0)
-            throw new InvalidOperationException($"No OPC UA endpoints were discovered at {config.ServerUrl}.");
+        Func<EndpointDescription> discoverEndpoint,
+        ILogger? log = null)
+        => OpcUaSessionConnector.SelectEndpointDescription(config, discoverEndpoint, log);
 
-        if (!RequiresExactEndpointSelection(config))
-            return endpoints[0];
+    internal static void ClearEndpointDiscoveryCacheForTesting()
+        => OpcUaSessionConnector.ClearEndpointDiscoveryCacheForTesting();
 
-        var matches = endpoints.Where(endpoint =>
-            (config.SecurityPolicyUri is null ||
-             string.Equals(endpoint.SecurityPolicyUri, config.SecurityPolicyUri, StringComparison.Ordinal)) &&
-            (config.MessageSecurityMode is null || endpoint.SecurityMode == config.MessageSecurityMode.Value))
-            .ToList();
-
-        if (matches.Count > 0)
-            return matches[0];
-
-        var requestedPolicy = config.SecurityPolicyUri ?? "<any>";
-        var requestedMode = config.MessageSecurityMode?.ToString() ?? "<any>";
-        var available = string.Join(
-            ", ",
-            endpoints.Select(endpoint => $"{endpoint.SecurityPolicyUri}/{endpoint.SecurityMode}"));
-        throw new InvalidOperationException(
-            $"Endpoint not found at {config.ServerUrl} for policy={requestedPolicy}, mode={requestedMode}. Available endpoints: {available}");
-    }
-
-    private static bool RequiresExactEndpointSelection(ClientConfig config)
-        => !string.IsNullOrWhiteSpace(config.SecurityPolicyUri) || config.MessageSecurityMode is not null;
-
-    private static bool RequiresSecureChannel(ClientConfig config)
-        => config.UseSecurityPolicyForEndpointDiscovery ||
-           (config.SecurityPolicyUri is not null &&
-            !string.Equals(config.SecurityPolicyUri, SecurityPolicies.None, StringComparison.Ordinal)) ||
-           (config.MessageSecurityMode is not null && config.MessageSecurityMode != MessageSecurityMode.None);
-
-    private static async Task EnsureApplicationCertificateAsync(
+    internal static Task EnsureApplicationCertificateForTestingAsync(
         ClientConfig config,
-        ApplicationConfiguration appConfig,
-        CancellationToken ct)
-    {
-        if (!RequiresSecureChannel(config))
-            return;
-
-        var app = new ApplicationInstance(appConfig)
-        {
-            ApplicationName = config.ApplicationName,
-            ApplicationType = ApplicationType.Client,
-            ApplicationConfiguration = appConfig,
-        };
-        var ok = await app.CheckApplicationInstanceCertificatesAsync(false, null, ct).ConfigureAwait(false);
-        if (!ok)
-            throw new InvalidOperationException("OPC UA application certificate is required for secure endpoints but could not be created or validated.");
-    }
-
-    internal static IUserIdentity BuildUserIdentity(ClientConfig config, EndpointDescription? endpoint = null)
-    {
-        var tokenPolicy = FindUserTokenPolicy(endpoint, config.UserIdentityKind);
-        if (endpoint is not null)
-        {
-            if (config.UserIdentityKind == UserIdentityKind.UserName)
-                ValidateUserNameUserTokenPolicy(tokenPolicy, endpoint.SecurityPolicyUri ?? string.Empty);
-            else if (config.UserIdentityKind == UserIdentityKind.X509)
-                ValidateX509UserTokenPolicy(tokenPolicy, endpoint.SecurityPolicyUri ?? string.Empty);
-        }
-
-        var identity = config.UserIdentityKind switch
-        {
-            UserIdentityKind.Anonymous => new UserIdentity(new AnonymousIdentityToken()),
-            UserIdentityKind.UserName => BuildUserNameIdentity(config),
-            UserIdentityKind.X509 => BuildX509UserIdentity(config, tokenPolicy),
-            _ => throw new InvalidOperationException($"Unsupported user identity kind: {config.UserIdentityKind}"),
-        };
-
-        if (!string.IsNullOrWhiteSpace(tokenPolicy?.PolicyId))
-            identity.PolicyId = tokenPolicy.PolicyId;
-
-        return identity;
-    }
-
-    private static UserIdentity BuildX509UserIdentity(ClientConfig config, UserTokenPolicy? tokenPolicy = null)
-    {
-        using var initialCertificate = LoadX509IdentityCertificate(config);
-        var identifier = new CertificateIdentifier
-        {
-            Thumbprint = initialCertificate.Thumbprint,
-            RawData = initialCertificate.RawData,
-        };
-        var passwordProvider = new CertificatePasswordProvider();
-        var certificateProvider = new X509CertificateProvider(
-            initialCertificate.Thumbprint,
-            () => LoadX509IdentityCertificate(config));
-        var handler = new X509IdentityTokenHandler(identifier, passwordProvider, certificateProvider);
-        if (tokenPolicy is not null)
-        {
-            handler.UpdatePolicy(tokenPolicy);
-        }
-        return new UserIdentity(handler);
-    }
-
-    private static UserIdentity BuildUserNameIdentity(ClientConfig config)
-    {
-        if (string.IsNullOrWhiteSpace(config.UserName))
-            throw new InvalidOperationException("UserName identity requires ClientConfig.UserName.");
-        if (config.Password is null)
-            throw new InvalidOperationException("UserName identity requires ClientConfig.Password.");
-
-        return new UserIdentity(config.UserName, Encoding.UTF8.GetBytes(config.Password));
-    }
+        CancellationToken ct = default)
+        => OpcUaSessionConnector.EnsureApplicationCertificateForTestingAsync(config, ct);
 
     internal static X509Certificate2 LoadX509IdentityCertificate(ClientConfig config)
-    {
-        if (string.IsNullOrWhiteSpace(config.X509IdentityCertificatePath))
-            throw new InvalidOperationException("X509 identity requires ClientConfig.X509IdentityCertificatePath.");
+        => OpcUaSessionConnector.LoadX509IdentityCertificate(config);
 
-        if (!File.Exists(config.X509IdentityCertificatePath))
-            throw new FileNotFoundException("X509 identity certificate file was not found.", config.X509IdentityCertificatePath);
+    internal static void ValidateX509UserTokenPolicy(UserTokenPolicy? tokenPolicy, string expectedSecurityPolicyUri)
+        => OpcUaSessionConnector.ValidateX509UserTokenPolicy(tokenPolicy, expectedSecurityPolicyUri);
 
-        var extension = Path.GetExtension(config.X509IdentityCertificatePath);
-        if (extension.Equals(".pem", StringComparison.OrdinalIgnoreCase))
-        {
-            if (string.IsNullOrWhiteSpace(config.X509IdentityPrivateKeyPath))
-                return X509Certificate2.CreateFromPem(File.ReadAllText(config.X509IdentityCertificatePath));
+    internal static void ValidateUserNameUserTokenPolicy(UserTokenPolicy? tokenPolicy, string expectedSecurityPolicyUri)
+        => OpcUaSessionConnector.ValidateUserNameUserTokenPolicy(tokenPolicy, expectedSecurityPolicyUri);
 
-            return X509Certificate2.CreateFromPemFile(
-                config.X509IdentityCertificatePath,
-                config.X509IdentityPrivateKeyPath);
-        }
+    private static ApplicationConfiguration BuildApplicationConfig(ClientConfig config)
+        => OpcUaSessionConnector.BuildApplicationConfig(config);
 
-        var flags = X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet;
-#pragma warning disable SYSLIB0057
-        return new X509Certificate2(config.X509IdentityCertificatePath, (string?)null, flags);
-#pragma warning restore SYSLIB0057
-    }
+    private static UserTokenPolicy? FindUserTokenPolicy(EndpointDescription endpoint, UserIdentityKind kind)
+        => OpcUaSessionConnector.FindUserTokenPolicy(endpoint, kind);
 
-    private static UserTokenPolicy? FindUserTokenPolicy(EndpointDescription? endpoint, UserIdentityKind kind)
-    {
-        if (endpoint is null)
-            return null;
-
-        var tokenType = kind switch
-        {
-            UserIdentityKind.Anonymous => UserTokenType.Anonymous,
-            UserIdentityKind.UserName => UserTokenType.UserName,
-            UserIdentityKind.X509 => UserTokenType.Certificate,
-            _ => UserTokenType.Anonymous,
-        };
-
-        foreach (var policy in endpoint.UserIdentityTokens)
-        {
-            if (policy.TokenType == tokenType)
-                return policy;
-        }
-        return null;
-    }
-
-    internal static void ValidateX509UserTokenPolicy(
-        UserTokenPolicy? tokenPolicy,
-        string expectedSecurityPolicyUri)
-        => ValidateUserTokenPolicy(
-            tokenPolicy,
-            expectedSecurityPolicyUri,
-            "X509 Certificate");
-
-    internal static void ValidateUserNameUserTokenPolicy(
-        UserTokenPolicy? tokenPolicy,
-        string expectedSecurityPolicyUri)
-        => ValidateUserTokenPolicy(
-            tokenPolicy,
-            expectedSecurityPolicyUri,
-            "UserName");
-
-    private static void ValidateUserTokenPolicy(
-        UserTokenPolicy? tokenPolicy,
-        string expectedSecurityPolicyUri,
-        string tokenName)
-    {
-        if (tokenPolicy is null)
-            throw new InvalidOperationException($"Selected endpoint does not advertise a {tokenName} user-token policy.");
-
-        if (string.Equals(expectedSecurityPolicyUri, SecurityPolicies.None, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"{tokenName} user-token policy requires a secure endpoint policy.");
-        }
-
-        var tokenPolicyUri = tokenPolicy.SecurityPolicyUri ?? string.Empty;
-        if (string.Equals(tokenPolicyUri, SecurityPolicies.None, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"{tokenName} user-token policy must not use SecurityPolicy#None. " +
-                "Rebuild the IJT simulator package from source that registers concrete " +
-                $"{tokenName} token policies for secure endpoints.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(tokenPolicyUri) &&
-            !string.Equals(tokenPolicyUri, expectedSecurityPolicyUri, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"{tokenName} user-token policy URI '{tokenPolicyUri}' does not match endpoint policy '{expectedSecurityPolicyUri}'.");
-        }
-    }
 
     // -- Namespace resolution --------------------------------------------------
 
@@ -838,6 +538,11 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         if (IjtBaseNsIdx == 0) { _log.LogWarning("IjtBaseVariableId: IJT namespace unresolved - returning NodeId.Null"); return NodeId.Null; }
         return new NodeId(varConstant, IjtBaseNsIdx);
     }
+
+    // -- Forwarding Helpers ---------------------------------------------------
+
+    internal static string EndpointDiscoveryCacheKey(ClientConfig config)
+        => OpcUaSessionConnector.EndpointDiscoveryCacheKey(config);
 
     // -- Cleanup ---------------------------------------------------------------
 
