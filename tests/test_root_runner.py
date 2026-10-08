@@ -2934,15 +2934,6 @@ def test_ci_report_web_python_skip_budget_uses_expected_skip_identities() -> Non
     assert "expected skips not observed" in report_script
 
 
-def test_ci_report_steps_skip_missing_artifacts_for_skipped_jobs() -> None:
-    workflow = (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-
-    assert "if: always() && needs.web-client-python.result != 'skipped'" in workflow
-    assert "if: always() && needs.web-client-js.result != 'skipped'" in workflow
-    assert "if: always() && needs.test-client.result != 'skipped'" in workflow
-    assert "if: always() && needs.csharp-unit.result != 'skipped'" in workflow
-
-
 def test_csharp_phase1_filter_excludes_dedicated_live_and_security_suites() -> None:
     module = _load_runner_at(
         "OPC_UA_Clients/Release2/IJT_CSharp_Client/run_all_tests.py",

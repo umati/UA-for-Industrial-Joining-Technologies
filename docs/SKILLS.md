@@ -455,11 +455,11 @@ UA-for-Industrial-Joining-Technologies/
 | `actionlint` | GitHub Actions syntax/static validation for workflow changes (configured in `.github/actionlint.yaml`) |
 | `zizmor` | GitHub Actions security audit with SARIF upload to Code Scanning; local root-runner parsing fails High/Critical findings from current zizmor v1 JSON output |
 | `pre-commit` | Runs `.pre-commit-config.yaml` on all files with npm-backed JS hooks skipped because dedicated JS jobs already own them |
-| `report` | Downloads all artifacts · publishes dorny/test-reporter Checks tab (per-test drill-down) · writes summary table to Actions Summary with full pass · fail · skip counts · coverage/threshold cells from each client gate · skip-budget and coverage-threshold warnings · artifact sanity gate warns on missing XMLs · `continue-on-error` on all dorny steps (fork PR safe) |
+| `report` | Downloads all artifacts · writes summary table to Actions Summary with full pass · fail · skip counts · coverage/threshold cells from each client gate · failed-test detail (suite, test, message) and `::error` annotations parsed from the JUnit XML · skip-budget and coverage-threshold warnings · artifact sanity gate warns on missing XMLs |
 
 Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
 Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v5`, `upload-artifact@v7`, `download-artifact@v8`
-All jobs have explicit `timeout-minutes` (5–30 min) and `permissions: contents: read` (plus `checks: write` where dorny/test-reporter runs inline).
+All jobs have explicit `timeout-minutes` (5–30 min) and least-privilege `permissions` (`contents: read`; `actions: read` only for the report jobs). No job needs `checks: write` because test results are reported through the repo's own summary scripts, not the Checks API.
 Connection-layer Web Client JavaScript is linted with a scoped security guard:
 `Math.random()` is forbidden in `connection-manager.mjs` and future
 `connection/auth/**`, `connection/token/**`, and `connection/nonce/**` modules;

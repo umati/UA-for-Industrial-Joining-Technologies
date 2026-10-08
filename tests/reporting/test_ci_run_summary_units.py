@@ -135,6 +135,57 @@ def test_collect_skips_takes_first_line_of_multiline_message(tmp_path):
     assert skips[0][1] == "First line"
 
 
+def test_collect_failures_extracts_failed_tests(tmp_path):
+    """collect_failures returns list of (classname, name, message) tuples."""
+    xml = tmp_path / "junit.xml"
+    xml.write_text("""<?xml version="1.0"?>
+<testsuite>
+  <testcase classname="pkg.Test" name="test_fail">
+    <failure message="Assertion failed"/>
+  </testcase>
+  <testcase classname="pkg.Test" name="test_err">
+    <error>Unhandled exception</error>
+  </testcase>
+  <testcase classname="pkg.Test" name="test_pass"/>
+</testsuite>
+""")
+    failures = ci_run_summary.collect_failures(str(xml))
+    assert len(failures) == 2
+    assert ("pkg.Test", "test_fail", "Assertion failed") in failures
+    assert ("pkg.Test", "test_err", "Unhandled exception") in failures
+
+
+def test_collect_failures_no_match(tmp_path):
+    """collect_failures returns empty list when pattern matches no files."""
+    assert ci_run_summary.collect_failures(str(tmp_path / "nonexistent-*.xml")) == []
+
+
+def test_collect_failures_invalid_xml_warning(tmp_path, capsys):
+    """collect_failures handles invalid XML by printing warning and returning empty list."""
+    xml = tmp_path / "bad.xml"
+    xml.write_text("not xml")
+    failures = ci_run_summary.collect_failures(str(xml))
+    assert failures == []
+    captured = capsys.readouterr()
+    assert "[WARN] collect_failures" in captured.out
+
+
+def test_format_failure_section_empty():
+    """format_failure_section returns empty list when no failures."""
+    assert ci_run_summary.format_failure_section("Comp", [], fail_count=0) == []
+
+
+def test_format_failure_section_with_failures():
+    """format_failure_section renders collapsible details table."""
+    failures = [("pkg.Test", "test_one", "assertion failed")]
+    lines = ci_run_summary.format_failure_section("Comp", failures, fail_count=1)
+    assert len(lines) > 0
+    assert any("Comp" in line for line in lines)
+    assert any("1 Failed" in line for line in lines)
+    assert any("pkg.Test.test_one" in line for line in lines)
+    assert any("<details open>" in line for line in lines)
+
+
 def test_md_cell_escapes_pipe():
     """md_cell escapes pipe characters for markdown tables."""
     assert ci_run_summary.md_cell("a|b") == "a\\|b"

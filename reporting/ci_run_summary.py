@@ -16,9 +16,11 @@ from collections import Counter
 from defusedxml import ElementTree as ET
 
 try:
+    from reporting import _junit_failures
     from reporting._http import https_only_opener
     from reporting._table_padding import pad_table_rows
 except ImportError:  # pragma: no cover - standalone: python3 reporting/X.py
+    import _junit_failures  # type: ignore[no-redef]
     from _http import https_only_opener  # type: ignore[no-redef]
     from _table_padding import pad_table_rows  # type: ignore[no-redef]
 
@@ -120,6 +122,17 @@ def collect_skips(pattern):
         except Exception as exc:
             print(f"[WARN] collect_skips({path}): {exc}")
     return skips_list
+
+
+def collect_failures(pattern):
+    """Extract failed/errored test names and messages from JUnit XML."""
+    failures = []
+    for path in glob.glob(pattern, recursive=True):
+        try:
+            failures += _junit_failures.extract_failures(parse_xml_root(path))
+        except Exception as exc:
+            print(f"[WARN] collect_failures({path}): {exc}")
+    return failures
 
 
 def md_cell(value):
@@ -249,6 +262,11 @@ def format_skip_section(label, skips_list, skip_count=None):
         lines.append(f"| {md_cell(reason)} | {count} |")
     lines += ["", "</details>"]
     return lines
+
+
+def format_failure_section(label, failures, fail_count=None):
+    """Open collapsible markdown section listing failed tests for one suite."""
+    return _junit_failures.format_failure_section(label, failures, md_cell, fail_count)
 
 
 def parse_coverage(pattern):
@@ -552,6 +570,17 @@ def main() -> None:
     cs_unit_skips = collect_skips("all-results/results-csharp-unit/tests.xml")
     tc_py_skips = collect_skips("all-results/results-test-client/pytest.xml")
     ss_smoke_skips = collect_skips("all-results/results-server-smoke/smoke.xml")
+
+    # ── Collect failed-test details from JUnit XML ───────────────────
+
+    web_py_failures = collect_failures("all-results/results-web-client-python/pytest.xml")
+    web_js_failures = collect_failures("all-results/results-web-client-js/vitest.xml")
+    con_py_failures = collect_failures("all-results/results-console-client/pytest.xml")
+    perf_client_failures = collect_failures("all-results/results-performance-client/pytest.xml")
+    nod_js_failures = collect_failures("all-results/results-node-client/vitest.xml")
+    cs_unit_failures = collect_failures("all-results/results-csharp-unit/tests.xml")
+    tc_py_failures = collect_failures("all-results/results-test-client/pytest.xml")
+    ss_smoke_failures = collect_failures("all-results/results-server-smoke/smoke.xml")
 
     # ── Artifact sanity gate ─────────────────────────────────────────────
 
@@ -991,7 +1020,7 @@ def main() -> None:
         "- ESLint JSON",
         "- Bandit JSON",
         "- pip-audit / npm-audit JSON",
-        "- Per-test drill-down: Checks tab",
+        "- Failed-test detail: Failed Tests section of this summary",
         "",
         '<a id="ci-coverage-legend"></a>',
         "",
@@ -1005,6 +1034,46 @@ def main() -> None:
         "",
         "Thresholds come from `pyproject.toml`, `vitest.config.mjs`, and the C# coverage gate.",
     ]
+
+    # ── Failed-test detail (rendered only when a suite has failures) ──
+    # Replaces the former per-suite Check Runs. `::error` workflow commands go
+    # to stdout (the job log), not to $GITHUB_STEP_SUMMARY, so the runner turns
+    # them into annotations without any Checks API call.
+
+    failure_suite_counts = [
+        ("Web Client — Python", web_py_failures, web_py_t[2]),
+        ("Web Client — JavaScript", web_js_failures, web_js_t[2]),
+        ("Console Client — Python", con_py_failures, con_py_t[2]),
+        ("Performance Client — Python", perf_client_failures, perf_client_t[2]),
+        ("Node Client — Legacy JavaScript", nod_js_failures, nod_js_t[2]),
+        ("C# Client — Unit", cs_unit_failures, cs_unit_t[2]),
+        ("Test Client — Python", tc_py_failures, tc_py_t[2]),
+        ("OPC UA Server — Smoke", ss_smoke_failures, ss_smoke[2]),
+    ]
+    failure_sections = []
+    for label, failures_list, suite_fail_count in failure_suite_counts:
+        failure_sections += format_failure_section(label, failures_list, suite_fail_count)
+        for annotation in _junit_failures.annotation_lines(label, failures_list):
+            print(annotation)
+
+    if failure_sections:
+        failing_suites = [
+            max(suite_fail_count or 0, len(failures_list))
+            for _, failures_list, suite_fail_count in failure_suite_counts
+            if (suite_fail_count or 0) > 0 or failures_list
+        ]
+        out += [
+            "",
+            "---",
+            "",
+            '<a id="ci-failed-tests"></a>',
+            "",
+            (
+                f"### ❌ Failed Tests — {plural_label(len(failing_suites), 'suite')}, "
+                f"{plural_label(sum(failing_suites), 'failure')}"
+            ),
+        ]
+        out += failure_sections
 
     # ── Inline skip details (collapsible) ─────────────────────────────
 

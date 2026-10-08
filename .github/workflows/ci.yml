@@ -25,7 +25,7 @@
 # Standards used:
 #   Python security : bandit    (pyproject.toml [tool.bandit]  ·  -c pyproject.toml)
 #   JS security     : npm audit (--audit-level=high)
-#   Test reports    : JUnit XML → dorny/test-reporter (Checks tab)
+#   Test reports    : JUnit XML artifacts → parsed in report job (Actions Summary tab, failed-test detail included)
 #   ESLint results  : JSON artifact → parsed in report job
 #   Summary table   : $GITHUB_STEP_SUMMARY (Actions Summary tab)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -100,7 +100,6 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      checks: write
     outputs:
       mypy_result:   ${{ steps.web_python_runner.outcome }} # zizmor: ignore[template-injection]
       ruff_result:   ${{ steps.web_python_runner.outcome }} # zizmor: ignore[template-injection]
@@ -127,18 +126,6 @@ jobs:
         continue-on-error: true
         run: python run_all_tests.py --phase1-python
 
-
-      - name: "Publish Test Reports — Python"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always()
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "Web Client — Python Tests"
-          path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/pytest.xml
-          reporter: java-junit
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -168,7 +155,6 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      checks: write
     outputs:
       eslint_result: ${{ steps.web_js_runner.outcome }} # zizmor: ignore[template-injection]
     defaults:
@@ -199,18 +185,6 @@ jobs:
           IJT_NPM_AUDIT_MODE: offline
         run: python run_all_tests.py --phase1-js
 
-      - name: "Publish Test Reports — JS"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always()
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "Web Client — JS Tests (Vitest)"
-          path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/vitest.xml
-          reporter: java-junit
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
-
       - name: Upload Artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         if: always()
@@ -240,7 +214,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      checks: write
     outputs:
       mypy_result: ${{ steps.mypy.outcome }}   # zizmor: ignore[template-injection]
       ruff_result: ${{ steps.pylint.outcome }} # zizmor: ignore[template-injection]
@@ -300,17 +273,6 @@ jobs:
         continue-on-error: true
         run: python -m mypy . --ignore-missing-imports --no-error-summary
 
-      - name: Publish Test Reports
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always()
-        with:
-          name: "Console Client — Tests"
-          path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/pytest.xml
-          reporter: java-junit
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
-
       - name: Upload Artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         if: always()
@@ -350,7 +312,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      checks: write
     outputs:
       eslint_result: ${{ steps.eslint.outcome }} # zizmor: ignore[template-injection]
     defaults:
@@ -409,17 +370,6 @@ jobs:
           done
           echo "::warning::npm audit advisory endpoint remained unavailable; dependency findings could not be refreshed"
           exit 0
-
-      - name: Publish Test Reports
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always()
-        with:
-          name: "Node Client — Tests"
-          path: OPC_UA_Clients/Release1/IJT_Node_Client/test-results/vitest.xml
-          reporter: java-junit
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -527,7 +477,6 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      checks: write
     outputs:
       build_result:  ${{ steps.build.outcome }}     # zizmor: ignore[template-injection]
       format_result: ${{ steps.format.outcome }}    # zizmor: ignore[template-injection]
@@ -739,7 +688,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      checks: write
     outputs:
       mypy_result: ${{ steps.mypy.outcome }}   # zizmor: ignore[template-injection]
       ruff_result: ${{ steps.pylint.outcome }} # zizmor: ignore[template-injection]
@@ -840,7 +788,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      checks: write
     outputs:
       mypy_result: ${{ steps.mypy.outcome }}   # zizmor: ignore[template-injection]
       ruff_result: ${{ steps.pylint.outcome }} # zizmor: ignore[template-injection]
@@ -1012,7 +959,6 @@ jobs:
     permissions:
       actions: read
       contents: read
-      checks: write
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -1035,110 +981,6 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           path: all-results/
-
-      - name: "Report — Web Client Python Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always() && needs.web-client-python.result != 'skipped'
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "Web Client — Python Tests"
-          path: all-results/results-web-client-python/pytest.xml
-          reporter: java-junit
-          list-tests: failed
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: "Report — Web Client JS Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always() && needs.web-client-js.result != 'skipped'
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "Web Client — JS Tests (Vitest)"
-          path: all-results/results-web-client-js/vitest.xml
-          reporter: java-junit
-          list-tests: failed
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: "Report — Console Client Python Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always() && needs.console-client.result != 'skipped'
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "Console Client — Python Tests"
-          path: all-results/results-console-client/pytest.xml
-          reporter: java-junit
-          list-tests: failed
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: "Report — Performance Client Python Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always() && needs.performance-client.result != 'skipped'
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "Performance Client — Python Tests (Unit)"
-          path: all-results/results-performance-client/pytest.xml
-          reporter: java-junit
-          list-tests: failed
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: "Report — Node Client JS Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always() && needs.node-client.result != 'skipped'
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "Node Client — JS Tests (Vitest)"
-          path: all-results/results-node-client/vitest.xml
-          reporter: java-junit
-          list-tests: failed
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: "Report — Test Client Python Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always() && needs.test-client.result != 'skipped'
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "Test Client — Python Tests (Unit)"
-          path: all-results/results-test-client/pytest.xml
-          reporter: java-junit
-          list-tests: failed
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: "Report — C# Client Unit Tests"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always() && needs.csharp-unit.result != 'skipped'
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "C# Client — Unit Tests (xUnit)"
-          path: all-results/results-csharp-unit/tests.xml
-          reporter: java-junit
-          list-tests: failed
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: "Report — OPC UA Server Smoke (Windows)"
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
-        if: always() && needs.server-smoke-windows.result != 'skipped'
-        continue-on-error: true  # checks:write unavailable on forked PRs
-        with:
-          name: "OPC UA Server — Smoke Tests (Windows)"
-          path: all-results/results-server-smoke/smoke.xml
-          reporter: java-junit
-          list-tests: failed
-          use-actions-summary: false
-          fail-on-error: false
-          fail-on-empty: false
 
       - name: Generate Summary Table
         env:

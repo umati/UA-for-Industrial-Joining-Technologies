@@ -8,7 +8,6 @@ import yaml
 from scripts.tool_bootstrap import UV_VERSION
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DORNY_ACTION = "dorny/test-reporter"
 DOCKER_BUILD_PUSH_ACTION = "docker/build-push-action"
 _WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 
@@ -172,32 +171,26 @@ def test_ci_timing_artifacts_are_collected_from_report_job() -> None:
     assert upload_step["with"]["path"] == "timing-results/"
 
 
-def test_ci_dorny_actions_keep_check_runs_but_suppress_step_summaries() -> None:
+def test_ci_workflow_has_no_dorny_steps_and_no_checks_write() -> None:
     workflow = _workflow("ci.yml")
-    expected_names = [
-        "Web Client — Python Tests",
-        "Web Client — JS Tests (Vitest)",
-        "Console Client — Tests",
-        "Node Client — Tests",
-        "Web Client — Python Tests",
-        "Web Client — JS Tests (Vitest)",
-        "Console Client — Python Tests",
-        "Performance Client — Python Tests (Unit)",
-        "Node Client — JS Tests (Vitest)",
-        "Test Client — Python Tests (Unit)",
-        "C# Client — Unit Tests (xUnit)",
-        "OPC UA Server — Smoke Tests (Windows)",
-    ]
-
-    dorny_steps = [
-        step
+    uses_dorny = [
+        step.get("uses", "")
         for job in workflow["jobs"].values()
         for step in job.get("steps", [])
-        if _is_sha_pinned_action(step.get("uses"), DORNY_ACTION)
+        if "dorny" in str(step.get("uses", ""))
     ]
+    assert not uses_dorny, f"ci.yml must not use dorny action: {uses_dorny}"
 
-    assert [step["with"]["name"] for step in dorny_steps] == expected_names
-    assert all(step["with"]["use-actions-summary"] is False for step in dorny_steps)
+    top_permissions = workflow.get("permissions", {})
+    if isinstance(top_permissions, dict):
+        assert top_permissions.get("checks") != "write"
+
+    checks_write_jobs = [
+        job_id
+        for job_id, job in workflow["jobs"].items()
+        if isinstance(job.get("permissions"), dict) and job["permissions"].get("checks") == "write"
+    ]
+    assert not checks_write_jobs, f"ci.yml jobs must not have checks: write: {checks_write_jobs}"
 
 
 def test_ci_outcome_pie_chart_removed_q11() -> None:
@@ -333,46 +326,28 @@ def test_integration_timing_artifacts_are_collected_from_report_job() -> None:
     assert upload_step["with"]["path"] == "timing-results/"
 
 
-def test_integration_dorny_actions_keep_check_runs_but_suppress_step_summaries() -> None:
+def test_integration_workflow_has_no_dorny_steps_and_no_checks_write() -> None:
     workflow = _workflow("integration.yml")
-    expected_names = [
-        "OPC UA Server — Smoke Tests (Docker Linux)",
-        "Web Client Docker — Python Tests",
-        "Web Client Docker — JS Tests (Vitest)",
-        "Test Client — Specification Tests (Live)",
-        "Web Client — Local Live Suites",
-        "Console Client — Live Tests",
-        "Performance Client — Live Benchmark",
-        "C# Client — Live Tests (xUnit)",
-        "C# Client — OPC UA Security",
-        "Console Client — OPC UA Security",
+    uses_dorny = [
+        step.get("uses", "")
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+        if "dorny" in str(step.get("uses", ""))
     ]
+    assert not uses_dorny, f"integration.yml must not use dorny action: {uses_dorny}"
 
-    dorny_steps = [
-        step
-        for step in workflow["jobs"]["report"]["steps"]
-        if _is_sha_pinned_action(step.get("uses"), DORNY_ACTION)
+    top_permissions = workflow.get("permissions", {})
+    if isinstance(top_permissions, dict):
+        assert top_permissions.get("checks") != "write"
+
+    checks_write_jobs = [
+        job_id
+        for job_id, job in workflow["jobs"].items()
+        if isinstance(job.get("permissions"), dict) and job["permissions"].get("checks") == "write"
     ]
-
-    assert [step["with"]["name"] for step in dorny_steps] == expected_names
-    assert all(step["with"]["use-actions-summary"] is False for step in dorny_steps)
-
-
-def test_integration_security_reporters_only_run_when_security_matrices_run() -> None:
-    csharp_step = _report_step("integration.yml", "Report — C# OPC UA Security")
-    console_step = _report_step("integration.yml", "Report — Console OPC UA Security")
-
-    csharp_expected = (
-        "always() && needs.csharp-client-opcua-security.result != 'skipped' "
-        "&& needs.csharp-client-opcua-security.result != 'cancelled'"
+    assert not checks_write_jobs, (
+        f"integration.yml jobs must not have checks: write: {checks_write_jobs}"
     )
-    console_expected = (
-        "always() && needs.console-client-opcua-security.result != 'skipped' "
-        "&& needs.console-client-opcua-security.result != 'cancelled'"
-    )
-
-    assert csharp_step["if"] == csharp_expected
-    assert console_step["if"] == console_expected
 
 
 def test_integration_docker_jobs_suppress_build_summary_noise() -> None:

@@ -1145,7 +1145,6 @@ _ACTION_MIN_VERSIONS = {
     "docker/login-action": 3,
     "docker/setup-buildx-action": 4,
     "docker/metadata-action": 5,
-    "dorny/test-reporter": 3,
     "github/codeql-action/analyze": 3,
     "github/codeql-action/autobuild": 3,
     "github/codeql-action/init": 3,

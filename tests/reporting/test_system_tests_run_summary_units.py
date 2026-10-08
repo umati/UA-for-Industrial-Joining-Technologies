@@ -91,6 +91,57 @@ def test_collect_skips_aggregates_from_multiple_files(tmp_path):
     assert ("test2", "reason2") in skips
 
 
+def test_collect_failures_aggregates_from_multiple_files(tmp_path):
+    """collect_failures aggregates failures across multiple files."""
+    xml1 = tmp_path / "junit1.xml"
+    xml1.write_text("""<?xml version="1.0"?>
+<testsuite>
+  <testcase classname="pkg.Suite1" name="test1"><failure message="fail1"/></testcase>
+</testsuite>
+""")
+    xml2 = tmp_path / "junit2.xml"
+    xml2.write_text("""<?xml version="1.0"?>
+<testsuite>
+  <testcase classname="pkg.Suite2" name="test2"><error>err2</error></testcase>
+</testsuite>
+""")
+    failures = system_tests_run_summary.collect_failures(str(tmp_path / "junit*.xml"))
+    assert len(failures) == 2
+    assert ("pkg.Suite1", "test1", "fail1") in failures
+    assert ("pkg.Suite2", "test2", "err2") in failures
+
+
+def test_collect_failures_no_match(tmp_path):
+    """collect_failures returns empty list when pattern matches no files."""
+    assert system_tests_run_summary.collect_failures(str(tmp_path / "nonexistent-*.xml")) == []
+
+
+def test_collect_failures_invalid_xml_warning(tmp_path, capsys):
+    """collect_failures handles invalid XML by printing warning and returning empty list."""
+    xml = tmp_path / "bad.xml"
+    xml.write_text("not xml")
+    failures = system_tests_run_summary.collect_failures(str(xml))
+    assert failures == []
+    captured = capsys.readouterr()
+    assert "[WARN] collect_failures" in captured.out
+
+
+def test_format_failure_section_empty():
+    """format_failure_section returns empty list when no failures."""
+    assert system_tests_run_summary.format_failure_section("Comp", [], fail_count=0) == []
+
+
+def test_format_failure_section_with_failures():
+    """format_failure_section renders collapsible details table."""
+    failures = [("pkg.Test", "test_one", "assertion failed")]
+    lines = system_tests_run_summary.format_failure_section("Comp", failures, fail_count=1)
+    assert len(lines) > 0
+    assert any("Comp" in line for line in lines)
+    assert any("1 Failed" in line for line in lines)
+    assert any("pkg.Test.test_one" in line for line in lines)
+    assert any("<details open>" in line for line in lines)
+
+
 def test_md_cell_escapes_pipe():
     """md_cell escapes pipe characters."""
     assert system_tests_run_summary.md_cell("a|b") == "a\\|b"

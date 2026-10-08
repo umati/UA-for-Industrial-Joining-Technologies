@@ -17,9 +17,11 @@ from collections import Counter
 from defusedxml import ElementTree as ET
 
 try:
+    from reporting import _junit_failures
     from reporting._http import https_only_opener
     from reporting._table_padding import pad_table_rows
 except ImportError:  # pragma: no cover - standalone: python3 reporting/X.py
+    import _junit_failures  # type: ignore[no-redef]
     from _http import https_only_opener  # type: ignore[no-redef]
     from _table_padding import pad_table_rows  # type: ignore[no-redef]
 
@@ -202,6 +204,17 @@ def collect_skips(pattern):
         except Exception as exc:
             print(f"[WARN] collect_skips({path}): {exc}")
     return skips_list
+
+
+def collect_failures(pattern):
+    """Extract failed/errored test names and messages from JUnit XML."""
+    failures = []
+    for path in glob.glob(pattern, recursive=True):
+        try:
+            failures += _junit_failures.extract_failures(parse_xml_root(path))
+        except Exception as exc:
+            print(f"[WARN] collect_failures({path}): {exc}")
+    return failures
 
 
 # Numeric perf properties produced by the live perf tests. Required fields
@@ -478,6 +491,11 @@ def format_skip_section(label, skips_list, skip_count=None):
         lines.append(f"| {md_cell(reason)} | {count} |")
     lines += ["", "</details>"]
     return lines
+
+
+def format_failure_section(label, failures, fail_count=None):
+    """Open collapsible markdown section listing failed tests for one suite."""
+    return _junit_failures.format_failure_section(label, failures, md_cell, fail_count)
 
 
 def _test_client_diagnostic_category(reason: str) -> str:
@@ -1187,6 +1205,30 @@ def main() -> None:
         "all-results/results-console-client-opcua-security-*/opcua-security-*.xml"
     )
 
+    # ── Collect failed-test details from JUnit XML ────────────────
+
+    sd_smoke_failures = collect_failures("all-results/results-server-smoke-docker/smoke.xml")
+    wd_py_failures = collect_failures("all-results/results-webclient-docker/pytest-unit.xml")
+    wd_js_failures = collect_failures("all-results/results-webclient-docker/vitest.xml")
+    tc_smoke_failures = collect_failures("all-results/results-testclient/smoke-sanity.xml")
+    tc_conf_failures = collect_failures("all-results/results-testclient/pytest.xml")
+    con_live_failures = collect_failures("all-results/results-live-console/**/pytest-live.xml")
+    wc_live_failures = collect_failures(
+        "all-results/results-live-webclient-web-client-live-*/**/*.xml"
+    )
+    wc_browser_failures = collect_failures(
+        "all-results/results-live-webclient-web-client-e2e-*/**/*.xml"
+    )
+    perf_live = parse_junit("all-results/results-live-performance/**/perf-live.xml")
+    perf_live_failures = collect_failures("all-results/results-live-performance/**/perf-live.xml")
+    cs_live_failures = collect_failures("all-results/results-csharp-live/tests.xml")
+    csharp_opcua_security_failures = collect_failures(
+        "all-results/results-csharp-client-opcua-security-*/opcua-security-*.xml"
+    )
+    console_opcua_security_failures = collect_failures(
+        "all-results/results-console-client-opcua-security-*/opcua-security-*.xml"
+    )
+
     # ── Artifact sanity gate ─────────────────────────────────────────
 
     artifact_warnings = []
@@ -1584,6 +1626,58 @@ def main() -> None:
         csharp_opcua_security_skips,
         csharp_opcua_security[3],
     )
+
+    # ── Failed-test detail (rendered only when a suite has failures) ──
+    # Replaces the former per-suite Check Runs. `::error` workflow commands go
+    # to stdout (the job log), not to $GITHUB_STEP_SUMMARY, so the runner turns
+    # them into annotations without any Checks API call.
+
+    failure_suite_counts = [
+        ("OPC UA Server — Docker Smoke", sd_smoke_failures, sd_smoke[2]),
+        ("Web Client — Docker Python Unit", wd_py_failures, wd_py[2]),
+        ("Web Client — Docker JavaScript", wd_js_failures, wd_js[2]),
+        ("Test Client — Smoke Sanity", tc_smoke_failures, tc_smoke[2]),
+        ("Test Client — Specification Tests", tc_conf_failures, tc_tests[2]),
+        ("Console Client — Live", con_live_failures, con_live[2]),
+        (
+            "Console Client — OPC UA Security",
+            console_opcua_security_failures,
+            console_opcua_security[2],
+        ),
+        ("Web Client — Python/WebSocket Live", wc_live_failures, wc_live[2]),
+        ("Web Client — Browser E2E", wc_browser_failures, wc_browser[2]),
+        ("Performance Client — Live Benchmark", perf_live_failures, perf_live[2]),
+        ("C# Client — Live", cs_live_failures, cs_live[2]),
+        (
+            "C# Client — OPC UA Security",
+            csharp_opcua_security_failures,
+            csharp_opcua_security[2],
+        ),
+    ]
+    failure_sections = []
+    for label, failures_list, suite_fail_count in failure_suite_counts:
+        failure_sections += format_failure_section(label, failures_list, suite_fail_count)
+        for annotation in _junit_failures.annotation_lines(label, failures_list):
+            print(annotation)
+
+    if failure_sections:
+        failing_suites = [
+            max(suite_fail_count or 0, len(failures_list))
+            for _, failures_list, suite_fail_count in failure_suite_counts
+            if (suite_fail_count or 0) > 0 or failures_list
+        ]
+        out += [
+            "",
+            "---",
+            "",
+            '<a id="system-failed-tests"></a>',
+            "",
+            (
+                f"### ❌ Failed Tests — {plural_label(len(failing_suites), 'suite')}, "
+                f"{plural_label(sum(failing_suites), 'failure')}"
+            ),
+        ]
+        out += failure_sections
 
     if skip_sections:
         out += [

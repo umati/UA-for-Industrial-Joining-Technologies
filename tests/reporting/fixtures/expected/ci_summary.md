@@ -107,7 +107,7 @@ No reliable job duration source was available. Job durations require the current
 - ESLint JSON
 - Bandit JSON
 - pip-audit / npm-audit JSON
-- Per-test drill-down: Checks tab
+- Failed-test detail: Failed Tests section of this summary
 
 <a id="ci-coverage-legend"></a>
 
