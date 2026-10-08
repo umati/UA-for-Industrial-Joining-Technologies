@@ -1,6 +1,8 @@
 using IJT_CSharp_Client.Domain.Events;
 using IJT_CSharp_Client.Domain.Results;
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
+using MachineryResult;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -20,7 +22,7 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
     private readonly ILogger<ResultManagement> _log = IjtLog.For<ResultManagement>();
     private readonly IJoiningSystem _js;
     private Subscription? _resultVarSubscription;
-    private NodeId? _rmNodeId;
+    private NodeId _rmNodeId = NodeId.Null;
 
     /// <summary>Event raised whenever a new result is published via the live Result variable.</summary>
     public event EventHandler<DomainResultEnvelope>? OnResultVariableChanged;
@@ -32,7 +34,7 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
     public bool IsResultVarSubscribed => _resultVarSubscription != null;
 
     /// <summary>Clears the cached ResultManagement node reference so the next operation re-browses the address space.</summary>
-    public void InvalidateNodeCache() => _rmNodeId = null;
+    public void InvalidateNodeCache() => _rmNodeId = NodeId.Null;
 
     // -- Node lookup -----------------------------------------------------------
 
@@ -43,11 +45,11 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
     /// </summary>
     private NodeId GetResultManagementNode()
     {
-        if (_rmNodeId is not null && !_rmNodeId.IsNullNodeId)
+        if (!_rmNodeId.IsNullNodeId())
             return _rmNodeId;
 
         var child = _js.BrowseChild(_js.NodeId, UAModel.MachineryResult.BrowseNames.ResultManagement);
-        if (!child.IsNullNodeId)
+        if (!child.IsNullNodeId())
         {
             _rmNodeId = child;
             return _rmNodeId;
@@ -55,7 +57,7 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
 
         // Fallback: type-definition node (most servers honour this for method calls)
         var fallback = _js.IjtBaseObjectId(UAModel.IJTBase.Objects.JoiningSystemType_ResultManagement);
-        if (!fallback.IsNullNodeId)
+        if (!fallback.IsNullNodeId())
             _log.LogWarning("WARN ResultManagement fallback to type NodeId.");
         _rmNodeId = fallback;
         return _rmNodeId;
@@ -76,7 +78,7 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
         var methodId = _js.BrowseMethod(objectId, "GetLatestResult",
             UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             var msg = "ResultManagement node or method not found.";
             _log.LogError("ERROR {Msg}", msg);
@@ -117,7 +119,7 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
         var methodId = _js.BrowseMethod(objectId, "GetResultById",
             UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetResultById);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             var msg = "ResultManagement node or method not found.";
             _log.LogError("ERROR {Msg}", msg);
@@ -165,7 +167,7 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
         var resultsFolder = _js.BrowseChild(rmNode, "Results");
         NodeId resultVarNode = NodeId.Null;
 
-        if (!resultsFolder.IsNullNodeId)
+        if (!resultsFolder.IsNullNodeId())
         {
             // Find first variable child of Results via mockable BrowseChildren
             var varRefs = _js.BrowseChildren(resultsFolder, (uint)NodeClass.Variable);
@@ -173,7 +175,7 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
                 resultVarNode = (NodeId)varRefs[0].NodeId;
         }
 
-        if (resultVarNode.IsNullNodeId)
+        if (resultVarNode.IsNullNodeId())
         {
             _log.LogError("ERROR Result variable node not found - skipping subscription.");
             return;
@@ -219,8 +221,8 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
         // Unwrap Variant -> ExtensionObject -> ResultDataType
         var raw = value.Value is Variant v ? v.Value : value.Value;
         var rd = raw is ExtensionObject eo
-            ? eo.Body as UAModel.MachineryResult.ResultDataType
-            : raw as UAModel.MachineryResult.ResultDataType;
+            ? eo.Body as ResultDataType
+            : raw as ResultDataType;
 
         if (rd != null)
         {
@@ -247,7 +249,7 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
             writer(IjtJsonSerializer.FormatOutput("Result", rd));
 
             // Also write timestamped copy so multiple results are preserved
-            var jMeta = rd.ResultMetaData as UAModel.IJTBase.JoiningResultMetaDataType;
+            var jMeta = rd.ResultMetaData as JoiningResultMetaDataType;
             var tsPath = IjtFileLogger.WriteResultTimestamped(
                 IjtJsonSerializer.FormatOutput("Result", rd),
                 rd.ResultMetaData?.ResultId,
@@ -321,8 +323,8 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
             ? (outputs[1] is Variant vt ? vt.Value : outputs[1])
             : null;
         var rd = raw is ExtensionObject eo
-            ? eo.Body as UAModel.MachineryResult.ResultDataType
-            : raw as UAModel.MachineryResult.ResultDataType;
+            ? eo.Body as ResultDataType
+            : raw as ResultDataType;
 
         int serverError = 0;
         if (outputs.Count > 2 && outputs[2] is not null)
@@ -342,7 +344,7 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
         var tsPath = IjtFileLogger.WriteResultTimestamped(
             content,
             domainEnvelope?.ResultId ?? rd?.ResultMetaData?.ResultId,
-            domainEnvelope?.Name ?? (rd?.ResultMetaData as UAModel.IJTBase.JoiningResultMetaDataType)?.Name);
+            domainEnvelope?.Name ?? (rd?.ResultMetaData as JoiningResultMetaDataType)?.Name);
 
         // Console: brief summary only
         _log.LogInformation("OK Result received.  ResultHandle={Handle}  Error={Error}",
@@ -360,7 +362,7 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
 
     private void PrintResultOutputs(IList<object> outputs) => ParseMethodOutputs("", outputs);
 
-    private static bool HasMeaningfulResult(UAModel.MachineryResult.ResultDataType rd)
+    private static bool HasMeaningfulResult(ResultDataType rd)
     {
         if (rd.ResultMetaData is null) return false;
         if (string.IsNullOrWhiteSpace(rd.ResultMetaData.ResultId)) return false;

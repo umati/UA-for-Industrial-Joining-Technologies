@@ -1,8 +1,8 @@
 #nullable enable
 
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
 using Opc.Ua;
-using UAModel.IJTBase;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Helpers;

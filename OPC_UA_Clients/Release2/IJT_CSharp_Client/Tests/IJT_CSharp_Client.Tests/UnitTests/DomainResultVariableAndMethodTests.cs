@@ -3,10 +3,10 @@
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Domain.Events;
 using IJT_CSharp_Client.Domain.Results;
+using IJTBase;
+using MachineryResult;
 using Moq;
 using Opc.Ua;
-using UAModel.IJTBase;
-using UAModel.MachineryResult;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.UnitTests;
@@ -59,7 +59,7 @@ public sealed class DomainResultVariableAndMethodTests
         };
 
         var processed = rm.ProcessResultVariableValue(
-            new DataValue { Value = new Variant(new ExtensionObject(rd)) },
+            new DataValue(new Variant(new ExtensionObject(rd)), StatusCodes.Good),
             _ => { });
 
         Assert.True(processed);
@@ -81,7 +81,7 @@ public sealed class DomainResultVariableAndMethodTests
         rm.OnResultVariableChanged += (_, envelope) => received = envelope;
 
         // 1. Null value
-        var processedNull = rm.ProcessResultVariableValue(new DataValue { Value = null }, _ => { });
+        var processedNull = rm.ProcessResultVariableValue(new DataValue(Variant.Null, StatusCodes.Good), _ => { });
         Assert.False(processedNull);
         Assert.Null(received);
 
@@ -91,7 +91,7 @@ public sealed class DomainResultVariableAndMethodTests
             ResultMetaData = new ResultMetaDataType { ResultId = "" }
         };
         var processedPlaceholder = rm.ProcessResultVariableValue(
-            new DataValue { Value = new Variant(new ExtensionObject(placeholderRd)) },
+            new DataValue(new Variant(new ExtensionObject(placeholderRd)), StatusCodes.Good),
             _ => { });
         Assert.False(processedPlaceholder);
         Assert.Null(received);
@@ -160,7 +160,7 @@ public sealed class DomainResultVariableAndMethodTests
 
         Assert.False(response.IsSuccess);
         Assert.Equal(0u, response.ResultHandle);
-        Assert.Equal(unchecked((int)StatusCodes.BadTimeout), response.ServerErrorCode);
+        Assert.Equal(unchecked((int)StatusCodes.BadTimeout.Code), response.ServerErrorCode);
         Assert.Null(response.Result);
         Assert.NotNull(response.ErrorMessage);
         Assert.Contains("BadTimeout", response.ErrorMessage);

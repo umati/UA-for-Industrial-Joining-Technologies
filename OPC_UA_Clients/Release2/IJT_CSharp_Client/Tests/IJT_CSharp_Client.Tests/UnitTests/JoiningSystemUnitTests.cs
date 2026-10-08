@@ -26,8 +26,11 @@ public sealed class JoiningSystemUnitTests
         var mock = new Mock<ISession>();
         mock.Setup(s => s.Connected).Returns(connected);
 #pragma warning disable CS0618
+        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.GlobalContext);
         mock.Setup(s => s.DefaultSubscription).Returns(new Subscription());
 #pragma warning restore CS0618
+        mock.Setup(s => s.OperationLimits).Returns(new OperationLimits());
+        mock.Setup(s => s.ServerCapabilities).Returns(new ServerCapabilities());
         mock.Setup(s => s.AddSubscription(It.IsAny<Subscription>())).Returns(true);
         return mock;
     }
@@ -35,45 +38,47 @@ public sealed class JoiningSystemUnitTests
     private static Mock<ISession> CreateMockSessionWithBrowseResult(ReferenceDescriptionCollection? refs)
     {
         var mock = CreateMockSession();
-        var results = new BrowseResultCollection { new BrowseResult { References = refs } };
-        var diagnostics = new DiagnosticInfoCollection();
-#pragma warning disable CS0618
-        mock.Setup(s => s.Browse(
+        var browseRefs = refs != null ? new ArrayOf<ReferenceDescription>(refs.ToArray()) : default;
+        mock.Setup(s => s.BrowseAsync(
                 It.IsAny<RequestHeader>(),
                 It.IsAny<ViewDescription>(),
                 It.IsAny<uint>(),
-                It.IsAny<BrowseDescriptionCollection>(),
-                out results,
-                out diagnostics))
-            .Returns(new ResponseHeader());
-#pragma warning restore CS0618
+                It.IsAny<ArrayOf<BrowseDescription>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<BrowseResponse>(new BrowseResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<BrowseResult>(new[]
+                {
+                    new BrowseResult
+                    {
+                        StatusCode = StatusCodes.Good,
+                        References = browseRefs
+                    }
+                })
+            }));
         return mock;
     }
 
     private static Mock<ISession> CreateMockSessionWithBrowseException(Exception exception)
     {
         var mock = CreateMockSession();
-        var results = new BrowseResultCollection();
-        var diagnostics = new DiagnosticInfoCollection();
-#pragma warning disable CS0618
-        mock.Setup(s => s.Browse(
+        mock.Setup(s => s.BrowseAsync(
                 It.IsAny<RequestHeader>(),
                 It.IsAny<ViewDescription>(),
                 It.IsAny<uint>(),
-                It.IsAny<BrowseDescriptionCollection>(),
-                out results,
-                out diagnostics))
+                It.IsAny<ArrayOf<BrowseDescription>>(),
+                It.IsAny<CancellationToken>()))
             .Throws(exception);
-#pragma warning restore CS0618
         return mock;
     }
 
     private static NamespaceTable CreateNamespaceTable()
     {
         var ns = new NamespaceTable();
-        ns.Append(UAModel.IJTBase.Namespaces.IJTBase);
-        ns.Append(UAModel.IJTTightening.Namespaces.IJTTightening);
-        ns.Append(UAModel.MachineryResult.Namespaces.MachineryResult);
+        ns.Append(IJTBase.Namespaces.IJTBase);
+        ns.Append(IJTTightening.Namespaces.IJTTightening);
+        ns.Append(MachineryResult.Namespaces.MachineryResult);
         ns.Append("http://opcfoundation.org/UA/DI/");
         return ns;
     }
@@ -88,8 +93,8 @@ public sealed class JoiningSystemUnitTests
             SecurityPolicyUri = securityPolicyUri,
             SecurityMode = securityMode,
             UserIdentityTokens = userTokenPolicy is null
-                ? new UserTokenPolicyCollection { new() { TokenType = UserTokenType.Anonymous, PolicyId = "anonymous" } }
-                : new UserTokenPolicyCollection { userTokenPolicy },
+                ? new UserTokenPolicy[] { new() { TokenType = UserTokenType.Anonymous, PolicyId = "anonymous" } }
+                : new UserTokenPolicy[] { userTokenPolicy },
         };
 
     private static Mock<ISession> CreateConnectableMockSession(NodeId joiningSystemNodeId)
@@ -100,7 +105,7 @@ public sealed class JoiningSystemUnitTests
             {
                 BrowseName = new QualifiedName("JoiningSystem", 7),
                 NodeId = new ExpandedNodeId(joiningSystemNodeId),
-                TypeDefinition = new ExpandedNodeId(new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 7)),
+                TypeDefinition = new ExpandedNodeId(new NodeId(IJTBase.ObjectTypes.JoiningSystemType, 7)),
             },
         };
         var mock = CreateMockSessionWithBrowseResult(refs);
@@ -119,21 +124,22 @@ public sealed class JoiningSystemUnitTests
     public void CallMethod_ValidNodes_ReturnsOutputValues()
     {
         var mockSession = CreateMockSession();
-        var callResults = new CallMethodResultCollection
-        {
-            new CallMethodResult
-            {
-                StatusCode = new StatusCode(StatusCodes.Good),
-                OutputArguments = new VariantCollection(new[] { new Variant("output-1") }),
-            }
-        };
-        DiagnosticInfoCollection diagInfos = [];
-        mockSession
-            .Setup(s => s.Call(
+        mockSession.Setup(s => s.CallAsync(
                 It.IsAny<RequestHeader>(),
-                It.IsAny<CallMethodRequestCollection>(),
-                out callResults,
-                out diagInfos));
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.Good,
+                        OutputArguments = new ArrayOf<Variant>(new[] { new Variant("output-1") })
+                    }
+                })
+            }));
 
         var sut = CreateSession(mockSession.Object);
         var objectId = new NodeId(1001u, 1);
@@ -149,21 +155,22 @@ public sealed class JoiningSystemUnitTests
     public void CallMethod_WithInputArgs_SucceedsAndReturnsOutputs()
     {
         var mockSession = CreateMockSession();
-        var callResults = new CallMethodResultCollection
-        {
-            new CallMethodResult
-            {
-                StatusCode = new StatusCode(StatusCodes.Good),
-                OutputArguments = new VariantCollection(),
-            }
-        };
-        DiagnosticInfoCollection diagInfos = [];
-        mockSession
-            .Setup(s => s.Call(
+        mockSession.Setup(s => s.CallAsync(
                 It.IsAny<RequestHeader>(),
-                It.IsAny<CallMethodRequestCollection>(),
-                out callResults,
-                out diagInfos));
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.Good,
+                        OutputArguments = new ArrayOf<Variant>()
+                    }
+                })
+            }));
 
         var sut = CreateSession(mockSession.Object);
 
@@ -194,21 +201,22 @@ public sealed class JoiningSystemUnitTests
     public void CallMethod_BadStatusCode_ThrowsServiceResultException()
     {
         var mockSession = CreateMockSession();
-        var callResults = new CallMethodResultCollection
-        {
-            new CallMethodResult
-            {
-                StatusCode = new StatusCode(StatusCodes.BadNotSupported),
-                OutputArguments = new VariantCollection(),
-            }
-        };
-        DiagnosticInfoCollection diagInfos = [];
-        mockSession
-            .Setup(s => s.Call(
+        mockSession.Setup(s => s.CallAsync(
                 It.IsAny<RequestHeader>(),
-                It.IsAny<CallMethodRequestCollection>(),
-                out callResults,
-                out diagInfos));
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.BadNotSupported,
+                        OutputArguments = new ArrayOf<Variant>()
+                    }
+                })
+            }));
 
         var sut = CreateSession(mockSession.Object);
 
@@ -220,21 +228,22 @@ public sealed class JoiningSystemUnitTests
     public void CallMethod_NoInputArgs_SucceedsWithEmptyArgList()
     {
         var mockSession = CreateMockSession();
-        var callResults = new CallMethodResultCollection
-        {
-            new CallMethodResult
-            {
-                StatusCode = new StatusCode(StatusCodes.Good),
-                OutputArguments = new VariantCollection(),
-            }
-        };
-        DiagnosticInfoCollection diagInfos = [];
-        mockSession
-            .Setup(s => s.Call(
+        mockSession.Setup(s => s.CallAsync(
                 It.IsAny<RequestHeader>(),
-                It.IsAny<CallMethodRequestCollection>(),
-                out callResults,
-                out diagInfos));
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.Good,
+                        OutputArguments = new ArrayOf<Variant>()
+                    }
+                })
+            }));
 
         var sut = CreateSession(mockSession.Object);
         var outputs = sut.CallMethod(new NodeId(100u, 1), new NodeId(200u, 1));
@@ -281,21 +290,21 @@ public sealed class JoiningSystemUnitTests
     public void IjtBaseMethodId_WhenNsUnresolved_ReturnsNodeIdNull()
     {
         var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
-        Assert.True(sut.IjtBaseMethodId(1234u).IsNullNodeId);
+        Assert.True(sut.IjtBaseMethodId(1234u).IsNullNodeId());
     }
 
     [Fact]
     public void IjtBaseObjectId_WhenNsUnresolved_ReturnsNodeIdNull()
     {
         var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
-        Assert.True(sut.IjtBaseObjectId(5678u).IsNullNodeId);
+        Assert.True(sut.IjtBaseObjectId(5678u).IsNullNodeId());
     }
 
     [Fact]
     public void IjtBaseVariableId_WhenNsUnresolved_ReturnsNodeIdNull()
     {
         var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
-        Assert.True(sut.IjtBaseVariableId(9999u).IsNullNodeId);
+        Assert.True(sut.IjtBaseVariableId(9999u).IsNullNodeId());
     }
 
     // ── IsConnected ───────────────────────────────────────────────────────────
@@ -372,22 +381,22 @@ public sealed class JoiningSystemUnitTests
     public void CallMethod_UncertainStatus_DoesNotThrow_AndReturnsOutputs()
     {
         var mockSession = CreateMockSession();
-        var callResults = new CallMethodResultCollection
-        {
-            new CallMethodResult
-            {
-                // Uncertain = OPC UA non-Bad status; output args are valid
-                StatusCode = new StatusCode(StatusCodes.UncertainInitialValue),
-                OutputArguments = new VariantCollection(new[] { new Variant("domain-error-msg") }),
-            }
-        };
-        DiagnosticInfoCollection diagInfos = [];
-        mockSession
-            .Setup(s => s.Call(
+        mockSession.Setup(s => s.CallAsync(
                 It.IsAny<RequestHeader>(),
-                It.IsAny<CallMethodRequestCollection>(),
-                out callResults,
-                out diagInfos));
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.UncertainInitialValue,
+                        OutputArguments = new ArrayOf<Variant>(new[] { new Variant("domain-error-msg") })
+                    }
+                })
+            }));
 
         var sut = CreateSession(mockSession.Object);
 
@@ -415,7 +424,7 @@ public sealed class JoiningSystemUnitTests
 
         var result = sut.BrowseMethod(new NodeId(5000u, 7), "NonExistentMethod");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     [Fact]
@@ -427,7 +436,7 @@ public sealed class JoiningSystemUnitTests
 
         var result = sut.BrowseMethod(new NodeId(5000u, 7), "GetLatestResult", fallbackConstant: 7001u);
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     [Fact]
@@ -449,7 +458,7 @@ public sealed class JoiningSystemUnitTests
     public void BrowseChild_NullParentId_ReturnsNodeIdNull()
     {
         var sut = CreateSession(CreateMockSession().Object);
-        Assert.True(sut.BrowseChild(NodeId.Null, "AnyChild").IsNullNodeId);
+        Assert.True(sut.BrowseChild(NodeId.Null, "AnyChild").IsNullNodeId());
     }
 
     [Fact]
@@ -483,7 +492,7 @@ public sealed class JoiningSystemUnitTests
 
         var result = sut.BrowseChild(new NodeId(5000u, 3), "MissingChild");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     [Fact]
@@ -501,7 +510,7 @@ public sealed class JoiningSystemUnitTests
 
         var result = sut.BrowseChild(new NodeId(5000u, 3), "TargetChild", nsIndex: 3);
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     [Fact]
@@ -512,7 +521,7 @@ public sealed class JoiningSystemUnitTests
 
         var result = sut.BrowseChild(new NodeId(5000u, 3), "TargetChild");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     [Fact]
@@ -523,7 +532,7 @@ public sealed class JoiningSystemUnitTests
 
         var result = sut.BrowseChild(new NodeId(5000u, 3), "TargetChild");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     // ── BrowseChildren ───────────────────────────────────────────────────────
@@ -675,7 +684,7 @@ public sealed class JoiningSystemUnitTests
             {
                 BrowseName = new QualifiedName("JoiningSystem1", 4),
                 NodeId = new ExpandedNodeId(joiningSystemId),
-                TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 4),
+                TypeDefinition = new ExpandedNodeId(IJTBase.ObjectTypes.JoiningSystemType, 4),
             },
         };
         var mockSession = CreateMockSessionWithBrowseResult(refs);
@@ -701,14 +710,14 @@ public sealed class JoiningSystemUnitTests
             new()
             {
                 BrowseName = new QualifiedName("Server", 0),
-                NodeId = new ExpandedNodeId(ObjectIds.Server),
-                TypeDefinition = new ExpandedNodeId(ObjectTypeIds.BaseObjectType),
+                NodeId = new ExpandedNodeId(Opc.Ua.ObjectIds.Server),
+                TypeDefinition = new ExpandedNodeId(Opc.Ua.ObjectTypeIds.BaseObjectType),
             },
             new()
             {
                 BrowseName = new QualifiedName("ApplicationRoot", 4),
                 NodeId = new ExpandedNodeId(fallbackId),
-                TypeDefinition = new ExpandedNodeId(ObjectTypeIds.BaseObjectType),
+                TypeDefinition = new ExpandedNodeId(Opc.Ua.ObjectTypeIds.BaseObjectType),
             },
         };
         var mockSession = CreateMockSessionWithBrowseResult(refs);
@@ -739,7 +748,7 @@ public sealed class JoiningSystemUnitTests
         var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
-        Assert.True(sut.NodeId.IsNullNodeId);
+        Assert.True(sut.NodeId.IsNullNodeId());
     }
 
     [Fact]
@@ -750,8 +759,8 @@ public sealed class JoiningSystemUnitTests
             new()
             {
                 BrowseName = new QualifiedName("Server", 0),
-                NodeId = new ExpandedNodeId(ObjectIds.Server),
-                TypeDefinition = new ExpandedNodeId(ObjectTypeIds.BaseObjectType),
+                NodeId = new ExpandedNodeId(Opc.Ua.ObjectIds.Server),
+                TypeDefinition = new ExpandedNodeId(Opc.Ua.ObjectTypeIds.BaseObjectType),
             },
         };
         var mockSession = CreateMockSessionWithBrowseResult(refs);
@@ -764,7 +773,7 @@ public sealed class JoiningSystemUnitTests
 
         sut.OnKeepAlive(mockSession.Object, e);
 
-        Assert.True(sut.NodeId.IsNullNodeId);
+        Assert.True(sut.NodeId.IsNullNodeId());
     }
 
     [Fact]
@@ -782,7 +791,7 @@ public sealed class JoiningSystemUnitTests
         var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
-        Assert.True(sut.NodeId.IsNullNodeId);
+        Assert.True(sut.NodeId.IsNullNodeId());
     }
 
     [Fact]
@@ -800,7 +809,7 @@ public sealed class JoiningSystemUnitTests
         var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
-        Assert.True(sut.NodeId.IsNullNodeId);
+        Assert.True(sut.NodeId.IsNullNodeId());
     }
 
     [Fact]
@@ -888,9 +897,9 @@ public sealed class JoiningSystemUnitTests
         };
         var appConfig = (Opc.Ua.ApplicationConfiguration)method!.Invoke(null, new object[] { config })!;
 
-        Assert.Equal(Path.Combine(config.PkiRootPath, "own"), appConfig.SecurityConfiguration.ApplicationCertificate.StorePath);
+        Assert.Equal(Path.Combine(config.PkiRootPath, "own"), appConfig.SecurityConfiguration.ApplicationCertificate?.StorePath);
         Assert.Equal(Path.Combine(config.PkiRootPath, "trusted"), appConfig.SecurityConfiguration.TrustedPeerCertificates.StorePath);
-        Assert.Equal(Path.Combine(config.PkiRootPath, "rejected"), appConfig.SecurityConfiguration.RejectedCertificateStore.StorePath);
+        Assert.Equal(Path.Combine(config.PkiRootPath, "rejected"), appConfig.SecurityConfiguration.RejectedCertificateStore?.StorePath);
     }
 
     [Fact]
@@ -972,17 +981,7 @@ public sealed class JoiningSystemUnitTests
             (_, _, _) => Task.CompletedTask,
             (appConfig, _, _) =>
             {
-                var handler = appConfig.CertificateValidator.GetType()
-                    .GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-                    .Select(field => field.GetValue(appConfig.CertificateValidator))
-                    .OfType<MulticastDelegate>()
-                    .Single(candidate => candidate.GetInvocationList().Any(callback =>
-                        callback.Method.GetParameters().Last().ParameterType.Name == "CertificateValidationEventArgs"));
-                var eventArgsType = handler.Method.GetParameters().Last().ParameterType;
-                var eventArgs = RuntimeHelpers.GetUninitializedObject(eventArgsType);
-
-                handler.DynamicInvoke(appConfig.CertificateValidator, eventArgs);
-                validationWasAccepted = (bool)eventArgsType.GetProperty("Accept")!.GetValue(eventArgs)!;
+                validationWasAccepted = appConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 return endpoint;
             },
             (_, _, _, _) => Task.FromResult<ISession>(mockSession.Object));

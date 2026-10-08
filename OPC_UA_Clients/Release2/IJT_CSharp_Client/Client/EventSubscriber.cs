@@ -1,6 +1,8 @@
 #nullable enable
 
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
+using MachineryResult;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -56,7 +58,7 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
         /// <summary>Server-side event time.</summary>
         public DateTime EventTime { get; init; }
         /// <summary>Full decoded ResultDataType - contains ResultMetaData + ResultContent.</summary>
-        public UAModel.MachineryResult.ResultDataType? Result { get; init; }
+        public ResultDataType? Result { get; init; }
         /// <summary>All event fields as received, keyed by field name.</summary>
         public IReadOnlyList<KeyValuePair<string, object?>> AllFields { get; init; } = [];
     }
@@ -71,9 +73,9 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
         /// <summary>Joining technology identifier (e.g. "Tightening").</summary>
         public string? JoiningTechnology { get; init; }
         /// <summary>Assets associated with this event (may be empty).</summary>
-        public UAModel.IJTBase.EntityDataType[]? AssociatedEntities { get; init; }
+        public EntityDataType[]? AssociatedEntities { get; init; }
         /// <summary>Reported measurement values attached to this event (may be empty).</summary>
-        public UAModel.IJTBase.ReportedValueDataType[]? ReportedValues { get; init; }
+        public ReportedValueDataType[]? ReportedValues { get; init; }
         /// <summary>Server-side event time.</summary>
         public DateTime EventTime { get; init; }
         /// <summary>All event fields as received, keyed by field name.</summary>
@@ -121,7 +123,7 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
         var resultItem = new MonitoredItem(_eventSubscription.DefaultItem)
         {
             DisplayName = "IJT Result Events",
-            StartNodeId = ObjectIds.Server,
+            StartNodeId = Opc.Ua.ObjectIds.Server,
             AttributeId = Attributes.EventNotifier,
             NodeClass = NodeClass.Object,
             SamplingInterval = 0,
@@ -134,7 +136,7 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
         var sysItem = new MonitoredItem(_eventSubscription.DefaultItem)
         {
             DisplayName = "IJT JoiningSystem Events",
-            StartNodeId = ObjectIds.Server,
+            StartNodeId = Opc.Ua.ObjectIds.Server,
             AttributeId = Attributes.EventNotifier,
             NodeClass = NodeClass.Object,
             SamplingInterval = 0,
@@ -190,23 +192,22 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
 
         var resultReadyTypeId = new NodeId(UAModel.MachineryResult.ObjectTypes.ResultReadyEventType, mrNs);
 
-        var filter = new EventFilter();
+        var selectClauses = new List<SimpleAttributeOperand>
+        {
+            CreateSelectClause(Opc.Ua.ObjectTypeIds.BaseEventType, 0, "EventId"),
+            CreateSelectClause(Opc.Ua.ObjectTypeIds.BaseEventType, 0, "EventType"),
+            CreateSelectClause(Opc.Ua.ObjectTypeIds.BaseEventType, 0, "Time"),
+            CreateSelectClause(Opc.Ua.ObjectTypeIds.BaseEventType, 0, "Message"),
+            CreateSelectClause(Opc.Ua.ObjectTypeIds.BaseEventType, 0, "SourceName"),
+            CreateSelectClause(resultReadyTypeId, mrNs, "Result"),
+        };
 
-        // Common BaseEventType fields
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "EventId");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "EventType");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "Time");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "Message");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "SourceName");
-
-        // Full Result object - BrowseName is "Result" on ResultReadyEventType (ns=mrNs).
-        // Anchored at base ResultReadyEventType to resolve across both standard and IJT events.
-        AddSelectClause(filter, resultReadyTypeId, mrNs, "Result");
-
-        // WhereClause: OfType ResultReadyEventType - captures base ResultReadyEventType,
-        // JoiningSystemResultReadyEventType, and RequestedResultEventType.
-        filter.WhereClause = new ContentFilter();
-        filter.WhereClause.Push(FilterOperator.OfType, new LiteralOperand(resultReadyTypeId));
+        var filter = new EventFilter
+        {
+            SelectClauses = selectClauses.ToArray(),
+            WhereClause = new ContentFilter(),
+        };
+        filter.WhereClause.Push(FilterOperator.OfType, new Variant(resultReadyTypeId));
 
         return filter;
     }
@@ -223,21 +224,26 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
         var ijtNs = _s.IjtBaseNsIdx;
         var sysTypeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemEventType, ijtNs);
 
-        var filter = new EventFilter();
+        var selectClauses = new List<SimpleAttributeOperand>
+        {
+            CreateSelectClause(Opc.Ua.ObjectTypeIds.BaseEventType, 0, "EventId"),
+            CreateSelectClause(Opc.Ua.ObjectTypeIds.BaseEventType, 0, "EventType"),
+            CreateSelectClause(Opc.Ua.ObjectTypeIds.BaseEventType, 0, "Time"),
+            CreateSelectClause(Opc.Ua.ObjectTypeIds.BaseEventType, 0, "Message"),
+            CreateSelectClause(Opc.Ua.ObjectTypeIds.BaseEventType, 0, "SourceName"),
+            CreateSelectClause(sysTypeId, ijtNs, "JoiningSystemEventContent", "EventCode"),
+            CreateSelectClause(sysTypeId, ijtNs, "JoiningSystemEventContent", "EventText"),
+            CreateSelectClause(sysTypeId, ijtNs, "JoiningSystemEventContent", "JoiningTechnology"),
+            CreateSelectClause(sysTypeId, ijtNs, "JoiningSystemEventContent", "AssociatedEntities"),
+            CreateSelectClause(sysTypeId, ijtNs, "JoiningSystemEventContent", "ReportedValues"),
+        };
 
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "EventId");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "EventType");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "Time");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "Message");
-        AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "SourceName");
-        AddSelectClause(filter, sysTypeId, ijtNs, "JoiningSystemEventContent", "EventCode");
-        AddSelectClause(filter, sysTypeId, ijtNs, "JoiningSystemEventContent", "EventText");
-        AddSelectClause(filter, sysTypeId, ijtNs, "JoiningSystemEventContent", "JoiningTechnology");
-        AddSelectClause(filter, sysTypeId, ijtNs, "JoiningSystemEventContent", "AssociatedEntities");
-        AddSelectClause(filter, sysTypeId, ijtNs, "JoiningSystemEventContent", "ReportedValues");
-
-        filter.WhereClause = new ContentFilter();
-        filter.WhereClause.Push(FilterOperator.OfType, new LiteralOperand(sysTypeId));
+        var filter = new EventFilter
+        {
+            SelectClauses = selectClauses.ToArray(),
+            WhereClause = new ContentFilter(),
+        };
+        filter.WhereClause.Push(FilterOperator.OfType, new Variant(sysTypeId));
 
         return filter;
     }
@@ -251,25 +257,28 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
     private void OnResultEventNotification(MonitoredItem item, MonitoredItemNotificationEventArgs e)
     {
         foreach (EventFieldList notification in item.DequeueEvents())
-            ProcessResultEvent(notification.EventFields);
+        {
+            if (notification.EventFields.Count > 0)
+                ProcessResultEvent(notification.EventFields.ToArray() ?? []);
+        }
     }
 
-    internal void ProcessResultEvent(VariantCollection fields)
+    internal void ProcessResultEvent(IReadOnlyList<Variant> fields)
     {
         try
         {
             var map = BuildFieldMap(fields, ResultFieldNames);
 
             // Decode full Result (ResultDataType)
-            UAModel.MachineryResult.ResultDataType? result = null;
+            ResultDataType? result = null;
             var rawResult = map.GetValueOrDefault("Result");
             if (rawResult is ExtensionObject eo)
-                result = eo.Body as UAModel.MachineryResult.ResultDataType;
+                result = eo.Body as ResultDataType;
             else
-                result = rawResult as UAModel.MachineryResult.ResultDataType;
+                result = rawResult as ResultDataType;
 
             // Extract summary fields from JoiningResultMetaDataType (subtype of ResultMetaDataType)
-            var jMeta = result?.ResultMetaData as UAModel.IJTBase.JoiningResultMetaDataType;
+            var jMeta = result?.ResultMetaData as JoiningResultMetaDataType;
             var baseMeta = result?.ResultMetaData;
 
             var args = new ResultReadyEventArgs
@@ -306,10 +315,13 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
     private void OnJoiningSystemEventNotification(MonitoredItem item, MonitoredItemNotificationEventArgs e)
     {
         foreach (EventFieldList notification in item.DequeueEvents())
-            ProcessJoiningSystemEvent(notification.EventFields);
+        {
+            if (notification.EventFields.Count > 0)
+                ProcessJoiningSystemEvent(notification.EventFields.ToArray() ?? []);
+        }
     }
 
-    internal void ProcessJoiningSystemEvent(VariantCollection fields)
+    internal void ProcessJoiningSystemEvent(IReadOnlyList<Variant> fields)
     {
         try
         {
@@ -320,9 +332,9 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
                 EventCode = AsString(map, "EventCode"),
                 EventText = AsString(map, "EventText"),
                 JoiningTechnology = AsString(map, "JoiningTechnology"),
-                AssociatedEntities = AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(
+                AssociatedEntities = AsExtensionObjectArray<EntityDataType>(
                                          map, "AssociatedEntities"),
-                ReportedValues = AsExtensionObjectArray<UAModel.IJTBase.ReportedValueDataType>(
+                ReportedValues = AsExtensionObjectArray<ReportedValueDataType>(
                                          map, "ReportedValues"),
                 AllFields = [.. map.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value))],
             };
@@ -342,26 +354,24 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
     // -- Filter / field-map helpers --------------------------------------------
 
     /// <summary>
-    /// Appends a SimpleAttributeOperand to the event filter's select clauses.
+    /// Creates a SimpleAttributeOperand for the event filter's select clauses.
     /// </summary>
-    internal static void AddSelectClause(
-        EventFilter filter,
+    internal static SimpleAttributeOperand CreateSelectClause(
         NodeId typeDefinitionId,
         ushort browsePathNs,
         params string[] pathNames)
     {
-        filter.SelectClauses.Add(new SimpleAttributeOperand
+        return new SimpleAttributeOperand
         {
             TypeDefinitionId = typeDefinitionId,
-            BrowsePath = new QualifiedNameCollection(
-                pathNames.Select(n => new QualifiedName(n, browsePathNs))),
+            BrowsePath = pathNames.Select(n => new QualifiedName(n, browsePathNs)).ToArray(),
             AttributeId = Attributes.Value,
-        });
+        };
     }
 
-    /// <summary>Maps incoming VariantCollection values to field names.</summary>
+    /// <summary>Maps incoming Variant values to field names.</summary>
     internal static Dictionary<string, object?> BuildFieldMap(
-        VariantCollection fields,
+        IReadOnlyList<Variant> fields,
         string[] names)
     {
         var map = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
@@ -384,8 +394,13 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
 
     internal static DateTime AsDateTime(Dictionary<string, object?> map, string key)
     {
-        if (!map.TryGetValue(key, out var val)) return DateTime.MinValue;
-        return val is DateTime dt ? dt : DateTime.MinValue;
+        if (!map.TryGetValue(key, out var val) || val is null) return DateTime.MinValue;
+        if (val is Variant v) val = v.Value;
+        if (val is DateTime dt) return dt;
+        if (val is DateTimeUtc dtc) return dtc.ToDateTime();
+        if (val is DateTimeOffset dto) return dto.UtcDateTime;
+        if (val?.ToString() is { } s && DateTime.TryParse(s, out var parsed)) return parsed;
+        return DateTime.MinValue;
     }
 
     /// <summary>

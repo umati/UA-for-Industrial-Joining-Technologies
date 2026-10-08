@@ -2,10 +2,10 @@
 #pragma warning disable CS0618 // OPC UA sync methods are obsolete but still functional
 
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
 using Moq;
 using Opc.Ua;
 using Opc.Ua.Client;
-using UAModel.IJTBase;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Helpers;
@@ -23,20 +23,46 @@ public sealed class AddressSpaceHelperTests
     // ISession.Browse(NodeId, ...) is a static extension method (SessionObsolete.Browse)
     // that internally delegates to ISessionClientMethods.Browse which IS mockable.
 
-    private static Mock<ISession> SessionWithBrowseResult(ReferenceDescriptionCollection refs)
+    private static Mock<ISession> SessionWithBrowseResult(ReferenceDescriptionCollection? refs)
     {
         var mock = new Mock<ISession>();
-        var results = new BrowseResultCollection { new BrowseResult { References = refs } };
-        var diags = new DiagnosticInfoCollection();
+#pragma warning disable CS0618
+        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.GlobalContext);
+#pragma warning restore CS0618
+        mock.Setup(s => s.OperationLimits).Returns(new OperationLimits());
+        mock.Setup(s => s.ServerCapabilities).Returns(new ServerCapabilities());
 
-        mock.Setup(s => s.Browse(
+        var browseRefs = refs != null ? new ArrayOf<ReferenceDescription>(refs.ToArray()) : default;
+        mock.Setup(s => s.BrowseAsync(
                 It.IsAny<RequestHeader>(),
                 It.IsAny<ViewDescription>(),
                 It.IsAny<uint>(),
-                It.IsAny<BrowseDescriptionCollection>(),
-                out results,
-                out diags))
-            .Returns(new ResponseHeader());
+                It.IsAny<ArrayOf<BrowseDescription>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<BrowseResponse>(new BrowseResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<BrowseResult>(new[]
+                {
+                    new BrowseResult
+                    {
+                        StatusCode = StatusCodes.Good,
+                        References = browseRefs
+                    }
+                })
+            }));
+
+        mock.Setup(s => s.ReadAsync(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<double>(),
+                It.IsAny<TimestampsToReturn>(),
+                It.IsAny<ArrayOf<ReadValueId>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<ReadResponse>(new ReadResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new[] { new DataValue(StatusCodes.BadNodeIdUnknown) }
+            }));
 
         return mock;
     }
@@ -44,18 +70,17 @@ public sealed class AddressSpaceHelperTests
     private static Mock<ISession> SessionWithReadResult(DataValue value)
     {
         var mock = new Mock<ISession>();
-        var dvColl = new DataValueCollection { value };
-        var readDiag = new DiagnosticInfoCollection();
-
-        mock.Setup(s => s.Read(
+        mock.Setup(s => s.ReadAsync(
                 It.IsAny<RequestHeader>(),
                 It.IsAny<double>(),
                 It.IsAny<TimestampsToReturn>(),
-                It.IsAny<ReadValueIdCollection>(),
-                out dvColl,
-                out readDiag))
-            .Returns(new ResponseHeader());
-
+                It.IsAny<ArrayOf<ReadValueId>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<ReadResponse>(new ReadResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new[] { value }
+            }));
         return mock;
     }
 
@@ -64,13 +89,7 @@ public sealed class AddressSpaceHelperTests
     [Fact]
     public void BrowseChildren_WhenBrowseReturnsNullRefs_ReturnsEmptyCollection()
     {
-        var results = new BrowseResultCollection { new BrowseResult { References = null! } };
-        var diags = new DiagnosticInfoCollection();
-        var mock = new Mock<ISession>();
-        mock.Setup(s => s.Browse(
-                It.IsAny<RequestHeader>(), It.IsAny<ViewDescription>(), It.IsAny<uint>(),
-                It.IsAny<BrowseDescriptionCollection>(), out results, out diags))
-            .Returns(new ResponseHeader());
+        var mock = SessionWithBrowseResult(null);
 
         var refs = AddressSpaceHelper.BrowseChildren(mock.Object, new NodeId(1u, 0));
 
@@ -121,7 +140,7 @@ public sealed class AddressSpaceHelperTests
             new NodeId(1u, 0),
             "NonExistent");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     [Fact]
@@ -151,7 +170,7 @@ public sealed class AddressSpaceHelperTests
             new NodeId(1u, 0),
             "Missing.Path");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     [Fact]
@@ -177,7 +196,7 @@ public sealed class AddressSpaceHelperTests
     public void ReadValue_WhenStatusIsGood_ReturnsValue()
     {
         var result = AddressSpaceHelper.ReadValue(
-            SessionWithReadResult(new DataValue { Value = "hello", StatusCode = StatusCodes.Good }).Object,
+            SessionWithReadResult(new DataValue(new Variant("hello"), StatusCodes.Good)).Object,
             new NodeId(99u, 1));
 
         Assert.Equal("hello", result);
@@ -187,7 +206,7 @@ public sealed class AddressSpaceHelperTests
     public void ReadValue_WhenStatusIsBad_ReturnsNull()
     {
         var result = AddressSpaceHelper.ReadValue(
-            SessionWithReadResult(new DataValue { Value = "ignored", StatusCode = StatusCodes.Bad }).Object,
+            SessionWithReadResult(new DataValue(new Variant("ignored"), StatusCodes.Bad)).Object,
             new NodeId(99u, 1));
 
         Assert.Null(result);
@@ -197,11 +216,12 @@ public sealed class AddressSpaceHelperTests
     public void ReadValue_WhenServiceThrows_ReturnsNull()
     {
         var mock = new Mock<ISession>();
-        var dvColl = new DataValueCollection();
-        var readDiag = new DiagnosticInfoCollection();
-        mock.Setup(s => s.Read(
-                It.IsAny<RequestHeader>(), It.IsAny<double>(), It.IsAny<TimestampsToReturn>(),
-                It.IsAny<ReadValueIdCollection>(), out dvColl, out readDiag))
+        mock.Setup(s => s.ReadAsync(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<double>(),
+                It.IsAny<TimestampsToReturn>(),
+                It.IsAny<ArrayOf<ReadValueId>>(),
+                It.IsAny<CancellationToken>()))
             .Throws(new ServiceResultException(StatusCodes.BadNodeIdUnknown));
 
         var result = AddressSpaceHelper.ReadValue(mock.Object, new NodeId(99u, 1));
@@ -215,7 +235,7 @@ public sealed class AddressSpaceHelperTests
     public void ReadValueT_WhenValueMatchesType_ReturnsTyped()
     {
         var result = AddressSpaceHelper.ReadValue<string>(
-            SessionWithReadResult(new DataValue { Value = "typed-string", StatusCode = StatusCodes.Good }).Object,
+            SessionWithReadResult(new DataValue(new Variant("typed-string"), StatusCodes.Good)).Object,
             new NodeId(100u, 1));
 
         Assert.Equal("typed-string", result);
@@ -225,7 +245,7 @@ public sealed class AddressSpaceHelperTests
     public void ReadValueT_WhenValueIsWrongType_ReturnsDefault()
     {
         var result = AddressSpaceHelper.ReadValue<int>(
-            SessionWithReadResult(new DataValue { Value = "not-an-int", StatusCode = StatusCodes.Good }).Object,
+            SessionWithReadResult(new DataValue(new Variant("not-an-int"), StatusCodes.Good)).Object,
             new NodeId(101u, 1));
 
         Assert.Equal(0, result);
@@ -271,7 +291,7 @@ public sealed class AddressSpaceHelperTests
         var result = helper.GetOrFindManagementNodeAsync(
             session, new NodeId(1u, 1), "ResultManagement");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     [Fact]
@@ -293,12 +313,10 @@ public sealed class AddressSpaceHelperTests
         Assert.Equal(first, second);
         Assert.Equal(childId, first);
 
-        var verifyResults = new BrowseResultCollection();
-        var verifyDiags = new DiagnosticInfoCollection();
-        mock.Verify(s => s.Browse(
+        mock.Verify(s => s.BrowseAsync(
             It.IsAny<RequestHeader>(), It.IsAny<ViewDescription>(),
-            It.IsAny<uint>(), It.IsAny<BrowseDescriptionCollection>(),
-            out verifyResults, out verifyDiags),
+            It.IsAny<uint>(), It.IsAny<ArrayOf<BrowseDescription>>(),
+            It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -352,7 +370,7 @@ public sealed class AddressSpaceHelperTests
         };
         var result = AddressSpaceHelper.FindByTypeDefinition(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
-            new NodeId(Opc.Ua.ObjectIds.ObjectsFolder),
+            Opc.Ua.ObjectIds.ObjectsFolder,
             1005u);
 
         Assert.Equal(childId, result);
@@ -369,10 +387,10 @@ public sealed class AddressSpaceHelperTests
         };
         var result = AddressSpaceHelper.FindByTypeDefinition(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
-            new NodeId(Opc.Ua.ObjectIds.ObjectsFolder),
+            Opc.Ua.ObjectIds.ObjectsFolder,
             1005u);
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     // ── FindChildAsync and FindMethodNodeAsync ────────────────────────────────
@@ -443,7 +461,7 @@ public sealed class AddressSpaceHelperTests
             new NodeId(1u, 0),
             "NonExistentMethod");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     // ── FindJoiningSystemAsync ────────────────────────────────────────────────
@@ -456,7 +474,7 @@ public sealed class AddressSpaceHelperTests
         {
             BrowseName = new QualifiedName("JoiningSystem1", 2),
             NodeId = new ExpandedNodeId(nodeId),
-            TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 2),
+            TypeDefinition = new ExpandedNodeId(IJTBase.ObjectTypes.JoiningSystemType, 2),
         };
         var helper = new AddressSpaceHelper();
         var result = helper.FindJoiningSystemAsync(
@@ -473,7 +491,7 @@ public sealed class AddressSpaceHelperTests
         {
             BrowseName = new QualifiedName("JoiningSystem1", 2),
             NodeId = new ExpandedNodeId(nodeId),
-            TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 2),
+            TypeDefinition = new ExpandedNodeId(IJTBase.ObjectTypes.JoiningSystemType, 2),
         };
         var mock = SessionWithBrowseResult(new ReferenceDescriptionCollection { rd });
         var helper = new AddressSpaceHelper();
@@ -483,12 +501,10 @@ public sealed class AddressSpaceHelperTests
 
         Assert.Equal(first, second);
         // Browse called exactly once (second call uses cache)
-        var verifyResults = new BrowseResultCollection();
-        var verifyDiags = new DiagnosticInfoCollection();
-        mock.Verify(s => s.Browse(
+        mock.Verify(s => s.BrowseAsync(
             It.IsAny<RequestHeader>(), It.IsAny<ViewDescription>(),
-            It.IsAny<uint>(), It.IsAny<BrowseDescriptionCollection>(),
-            out verifyResults, out verifyDiags), Times.Once);
+            It.IsAny<uint>(), It.IsAny<ArrayOf<BrowseDescription>>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -522,7 +538,7 @@ public sealed class AddressSpaceHelperTests
         var result = helper.FindJoiningSystemAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object, 2);
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     [Fact]
@@ -533,7 +549,7 @@ public sealed class AddressSpaceHelperTests
         {
             BrowseName = new QualifiedName("JS2", 2),
             NodeId = new ExpandedNodeId(nodeId),
-            TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 5),
+            TypeDefinition = new ExpandedNodeId(IJTBase.ObjectTypes.JoiningSystemType, 5),
         };
         var helper = new AddressSpaceHelper();
         var result = helper.FindJoiningSystemAsync(
@@ -549,7 +565,7 @@ public sealed class AddressSpaceHelperTests
         var result = helper.FindJoiningSystemAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object, 2);
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     // ── GetIdentificationNodeAsync ────────────────────────────────────────────
@@ -607,7 +623,7 @@ public sealed class AddressSpaceHelperTests
             diNsIndex: 4,
             ijtNsIndex: 2);
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNullNodeId());
     }
 
     // ── EnumerateAssets ───────────────────────────────────────────────────────
@@ -715,11 +731,12 @@ public sealed class AddressSpaceHelperTests
     public void ReadValue_WhenInvalidCastException_ReturnsNull()
     {
         var mock = new Mock<ISession>();
-        var dvColl = new DataValueCollection();
-        var readDiag = new DiagnosticInfoCollection();
-        mock.Setup(s => s.Read(
-                It.IsAny<RequestHeader>(), It.IsAny<double>(), It.IsAny<TimestampsToReturn>(),
-                It.IsAny<ReadValueIdCollection>(), out dvColl, out readDiag))
+        mock.Setup(s => s.ReadAsync(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<double>(),
+                It.IsAny<TimestampsToReturn>(),
+                It.IsAny<ArrayOf<ReadValueId>>(),
+                It.IsAny<CancellationToken>()))
             .Throws(new InvalidCastException());
 
         var result = AddressSpaceHelper.ReadValue(mock.Object, new NodeId(1u, 0));
@@ -729,13 +746,7 @@ public sealed class AddressSpaceHelperTests
     [Fact]
     public void ReadValueT_WhenConvertThrowsInvalidCast_ReturnsDefault()
     {
-        var mock = new Mock<ISession>();
-        var dvColl = new DataValueCollection { new DataValue { Value = new NodeId(1u, 0), StatusCode = StatusCodes.Good } };
-        var readDiag = new DiagnosticInfoCollection();
-        mock.Setup(s => s.Read(
-                It.IsAny<RequestHeader>(), It.IsAny<double>(), It.IsAny<TimestampsToReturn>(),
-                It.IsAny<ReadValueIdCollection>(), out dvColl, out readDiag))
-            .Returns(new ResponseHeader());
+        var mock = SessionWithReadResult(new DataValue(new Variant(new NodeId(1u, 0)), StatusCodes.Good));
 
         var result = AddressSpaceHelper.ReadValue<int>(mock.Object, new NodeId(1u, 0));
         Assert.Equal(0, result);
@@ -744,13 +755,7 @@ public sealed class AddressSpaceHelperTests
     [Fact]
     public void ReadValueT_WhenConvertThrowsOverflow_ReturnsDefault()
     {
-        var mock = new Mock<ISession>();
-        var dvColl = new DataValueCollection { new DataValue { Value = long.MaxValue, StatusCode = StatusCodes.Good } };
-        var readDiag = new DiagnosticInfoCollection();
-        mock.Setup(s => s.Read(
-                It.IsAny<RequestHeader>(), It.IsAny<double>(), It.IsAny<TimestampsToReturn>(),
-                It.IsAny<ReadValueIdCollection>(), out dvColl, out readDiag))
-            .Returns(new ResponseHeader());
+        var mock = SessionWithReadResult(new DataValue(new Variant(long.MaxValue), StatusCodes.Good));
 
         var result = AddressSpaceHelper.ReadValue<byte>(mock.Object, new NodeId(1u, 0));
         Assert.Equal(0, result);
@@ -786,36 +791,40 @@ public sealed class AddressSpaceHelperTests
             {
                 BrowseName = new QualifiedName("JoiningSystem1", 4),
                 NodeId = new ExpandedNodeId(joiningSystemId),
-                TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 4),
+                TypeDefinition = new ExpandedNodeId(IJTBase.ObjectTypes.JoiningSystemType, 4),
             },
         };
 
         // Mock that returns different results for different Browse calls
         var mock = new Mock<ISession>();
+#pragma warning disable CS0618
+        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.GlobalContext);
+#pragma warning restore CS0618
+        mock.Setup(s => s.OperationLimits).Returns(new OperationLimits());
+        mock.Setup(s => s.ServerCapabilities).Returns(new ServerCapabilities());
         var callCount = 0;
-        var diagnostics = new DiagnosticInfoCollection();
 
-        mock.Setup(s => s.Browse(
+        mock.Setup(s => s.BrowseAsync(
                 It.IsAny<RequestHeader>(),
                 It.IsAny<ViewDescription>(),
                 It.IsAny<uint>(),
-                It.IsAny<BrowseDescriptionCollection>(),
-                out It.Ref<BrowseResultCollection>.IsAny,
-                out It.Ref<DiagnosticInfoCollection>.IsAny))
-            .Returns((RequestHeader rh, ViewDescription vd, uint mr, BrowseDescriptionCollection bd,
-                out BrowseResultCollection br, out DiagnosticInfoCollection d) =>
+                It.IsAny<ArrayOf<BrowseDescription>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
             {
-                // First call: return top-level refs
-                // Subsequent calls: return nested refs
-                br = new BrowseResultCollection
+                var curRefs = callCount++ == 0 ? firstLevelRefs : secondLevelRefs;
+                return new ValueTask<BrowseResponse>(new BrowseResponse
                 {
-                    new BrowseResult
+                    ResponseHeader = new ResponseHeader(),
+                    Results = new ArrayOf<BrowseResult>(new[]
                     {
-                        References = callCount++ == 0 ? firstLevelRefs : secondLevelRefs
-                    }
-                };
-                d = diagnostics;
-                return new ResponseHeader();
+                        new BrowseResult
+                        {
+                            StatusCode = StatusCodes.Good,
+                            References = new ArrayOf<ReferenceDescription>(curRefs.ToArray())
+                        }
+                    })
+                });
             });
 
         var helper = new AddressSpaceHelper();

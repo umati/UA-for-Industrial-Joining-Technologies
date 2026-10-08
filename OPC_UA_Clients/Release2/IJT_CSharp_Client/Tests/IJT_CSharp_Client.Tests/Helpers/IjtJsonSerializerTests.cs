@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using IJT_CSharp_Client.Helpers;
+using MachineryResult;
 using Opc.Ua;
-using UAModel.MachineryResult;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Helpers;
@@ -89,7 +89,7 @@ public class IjtJsonSerializerTests
     [Fact]
     public void Serialize_StatusCode_UsesStatusCodeConverter()
     {
-        var result = IjtJsonSerializer.Serialize(new StatusCode(StatusCodes.Good));
+        var result = IjtJsonSerializer.Serialize(StatusCodes.Good);
         Assert.Contains("Good", result);
     }
 
@@ -173,7 +173,7 @@ public class IjtJsonSerializerTests
     {
         var rd = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "PR-TEST",
                 Name = "Test Program",
@@ -240,7 +240,7 @@ public class IjtJsonSerializerTests
     {
         var rd = new ResultDataType
         {
-            ResultContent = new Opc.Ua.VariantCollection { new Opc.Ua.Variant("content-item") }
+            ResultContent = new Variant[] { new Opc.Ua.Variant("content-item") }
         };
         var ex = Record.Exception(() => IjtJsonSerializer.PrintResult(rd));
         Assert.Null(ex);
@@ -280,12 +280,12 @@ public class IjtJsonSerializerTests
     {
         var rd = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "AE-TEST",
-                AssociatedEntities = new UAModel.IJTBase.EntityDataTypeCollection
+                AssociatedEntities = new[]
                 {
-                    new UAModel.IJTBase.EntityDataType { EntityId = "DEV-1" },
+                    new IJTBase.EntityDataType { EntityId = "DEV-1" },
                 },
             }
         };
@@ -298,12 +298,12 @@ public class IjtJsonSerializerTests
     {
         var rd = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "RC-TEST",
-                ResultCounters = new UAModel.IJTBase.ResultCounterDataTypeCollection
+                ResultCounters = new[]
                 {
-                    new UAModel.IJTBase.ResultCounterDataType { Name = "TotalCount", CounterValue = 7u },
+                    new IJTBase.ResultCounterDataType { Name = "TotalCount", CounterValue = 7u },
                 },
             }
         };
@@ -344,12 +344,12 @@ public class IjtJsonSerializerTests
     {
         var rd = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "EM-TEST",
-                ExtendedMetaData = new UAModel.IJTBase.KeyValueDataTypeCollection
+                ExtendedMetaData = new[]
                 {
-                    new UAModel.IJTBase.KeyValueDataType
+                    new IJTBase.KeyValueDataType
                     {
                         Key   = "param1",
                         Value = new Variant("value1"),
@@ -439,7 +439,7 @@ public class IjtJsonSerializerTests
         var opts = GetSerializerOpts();
         var guid = Guid.NewGuid().ToString();
         var result = System.Text.Json.JsonSerializer.Deserialize<Uuid>($"\"{guid}\"", opts);
-        Assert.Equal(guid, result.GuidString);
+        Assert.Equal(guid, result.ToString());
     }
 
     [Fact]

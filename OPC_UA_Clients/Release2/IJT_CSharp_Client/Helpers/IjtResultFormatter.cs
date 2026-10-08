@@ -1,10 +1,12 @@
 #nullable enable
 
 using System.Globalization;
+using System.Linq;
 using System.Text;
+using IJTBase;
+using IJTTightening;
+using MachineryResult;
 using Opc.Ua;
-using UAModel.IJTBase;
-using UAModel.MachineryResult;
 
 namespace IJT_CSharp_Client.Helpers;
 
@@ -99,25 +101,25 @@ public static class IjtResultFormatter
         AppendField(sb, "ResultEvaluation", meta.ResultEvaluation.ToString(), baseIndent);
         AppendField(sb, "ResultEvaluationCode",
             meta.ResultEvaluationCode != 0 ? meta.ResultEvaluationCode.ToString() : null, baseIndent);
-        AppendField(sb, "ResultEvaluationDetails", meta.ResultEvaluationDetails?.Text, baseIndent);
+        AppendField(sb, "ResultEvaluationDetails", meta.ResultEvaluationDetails.Text, baseIndent);
         AppendField(sb, "ResultUri",
-            meta.ResultUri?.Count > 0 ? string.Join(", ", meta.ResultUri) : null, baseIndent);
+            meta.ResultUri.Count > 0 ? string.Join(", ", meta.ResultUri.ToArray() ?? Array.Empty<string>()) : null, baseIndent);
         AppendField(sb, "FileFormat",
-            meta.FileFormat?.Count > 0 ? string.Join(", ", meta.FileFormat) : null, baseIndent);
+            meta.FileFormat.Count > 0 ? string.Join(", ", meta.FileFormat.ToArray() ?? Array.Empty<string>()) : null, baseIndent);
 
         // IJT JoiningResultMetaDataType subtype extra fields
-        if (meta is UAModel.IJTBase.JoiningResultMetaDataType jm)
+        if (meta is JoiningResultMetaDataType jm)
         {
-            AppendField(sb, "JoiningTechnology", jm.JoiningTechnology?.Text, baseIndent);
+            AppendField(sb, "JoiningTechnology", jm.JoiningTechnology.Text, baseIndent);
             AppendField(sb, "SequenceNumber", jm.SequenceNumber.ToString(), baseIndent);
             AppendField(sb, "Name", jm.Name, baseIndent);
-            AppendField(sb, "Description", jm.Description?.Text, baseIndent);
+            AppendField(sb, "Description", jm.Description.Text, baseIndent);
             AppendField(sb, "Classification", jm.Classification.ToString(), baseIndent);
             AppendField(sb, "OperationMode", jm.OperationMode.ToString(), baseIndent);
             AppendField(sb, "AssemblyType", jm.AssemblyType.ToString(), baseIndent);
             AppendField(sb, "InterventionType", jm.InterventionType.ToString(), baseIndent);
             AppendField(sb, "IsGeneratedOffline", jm.IsGeneratedOffline.ToString(), baseIndent);
-            if (jm.AssociatedEntities?.Count > 0)
+            if (jm.AssociatedEntities.Count > 0)
             {
                 sb.AppendLine($"{Pad(baseIndent)}{"AssociatedEntities",-28} ({jm.AssociatedEntities.Count} entities)");
                 foreach (var entity in jm.AssociatedEntities)
@@ -130,13 +132,13 @@ public static class IjtResultFormatter
                         sb.AppendLine($"{Pad(baseIndent + 4)}EntityOriginId: {entity.EntityOriginId}");
                 }
             }
-            if (jm.ResultCounters?.Count > 0)
+            if (jm.ResultCounters.Count > 0)
             {
                 sb.AppendLine($"{Pad(baseIndent)}{"ResultCounters",-28} ({jm.ResultCounters.Count} counters)");
                 foreach (var c in jm.ResultCounters)
                     sb.AppendLine($"{Pad(baseIndent + 2)}- {c.Name}: {c.CounterValue}");
             }
-            if (jm.ExtendedMetaData?.Count > 0)
+            if (jm.ExtendedMetaData.Count > 0)
             {
                 sb.AppendLine($"{Pad(baseIndent)}{"ExtendedMetaData",-28} ({jm.ExtendedMetaData.Count} entries)");
                 foreach (var kv in jm.ExtendedMetaData)
@@ -147,9 +149,9 @@ public static class IjtResultFormatter
 
     private static string Pad(int count) => new string(' ', count);
 
-    private static void FormatContent(StringBuilder sb, VariantCollection? content)
+    private static void FormatContent(StringBuilder sb, ArrayOf<Variant> content)
     {
-        if (content is null || content.Count == 0)
+        if (content.Count == 0)
         {
             sb.AppendLine("    (no content)");
             return;
@@ -167,7 +169,7 @@ public static class IjtResultFormatter
                 sb.AppendLine($"    --- ResultContent[{i}] (Child Result) ---");
                 sb.AppendLine("      ResultMetaData");
                 FormatMetaData(sb, childRd.ResultMetaData, indentLevel: 2);
-                if (childRd.ResultContent is not null && childRd.ResultContent.Count > 0)
+                if (childRd.ResultContent.Count > 0)
                 {
                     sb.AppendLine("      ResultContent");
                     FormatContent(sb, childRd.ResultContent);
@@ -185,28 +187,28 @@ public static class IjtResultFormatter
         var mask = (JoiningResultDataTypeFields)jr.EncodingMask;
 
         var ovs = jr.OverallResultValues;
-        sb.AppendLine($"    OverallResultValues ({ovs?.Count ?? 0}):");
-        if (ovs?.Count > 0)
+        sb.AppendLine($"    OverallResultValues ({ovs.Count}):");
+        if (ovs.Count > 0)
             foreach (var rv in ovs)
                 FormatResultValue(sb, rv, indent: 6);
 
-        if ((mask & JoiningResultDataTypeFields.StepResults) != 0 && jr.StepResults?.Count > 0)
+        if ((mask & JoiningResultDataTypeFields.StepResults) != 0 && jr.StepResults.Count > 0)
         {
             sb.AppendLine($"    StepResults ({jr.StepResults.Count}):");
             foreach (var step in jr.StepResults)
             {
                 sb.AppendLine($"      Step {step.StepResultId ?? "?",-12} [{step.ResultEvaluation}]  {step.Name}");
-                if (step.StepResultValues?.Count > 0)
+                if (step.StepResultValues.Count > 0)
                     foreach (var rv in step.StepResultValues)
                         FormatResultValue(sb, rv, indent: 8);
             }
         }
 
-        if ((mask & JoiningResultDataTypeFields.Errors) != 0 && jr.Errors?.Count > 0)
+        if ((mask & JoiningResultDataTypeFields.Errors) != 0 && jr.Errors.Count > 0)
         {
             sb.AppendLine($"    Errors ({jr.Errors.Count}):");
             foreach (var err in jr.Errors)
-                sb.AppendLine($"      ErrorId={err.ErrorId}  Type={err.ErrorType}  {err.ErrorMessage?.Text}");
+                sb.AppendLine($"      ErrorId={err.ErrorId}  Type={err.ErrorType}  {err.ErrorMessage.Text}");
         }
 
         if ((mask & JoiningResultDataTypeFields.FailureReason) != 0 && jr.FailureReason != 0)
@@ -219,7 +221,7 @@ public static class IjtResultFormatter
     private static void FormatResultValue(StringBuilder sb, ResultValueDataType rv, int indent)
     {
         var pad = new string(' ', indent);
-        var units = NormalizeUnits(rv.EngineeringUnits?.DisplayName?.Text, rv.PhysicalQuantity);
+        var units = NormalizeUnits(rv.EngineeringUnits?.DisplayName.Text, rv.PhysicalQuantity);
         var valStr = rv.MeasuredValue.ToString("F3", CultureInfo.InvariantCulture);
         sb.AppendLine(
             $"{pad}{rv.Name ?? rv.ValueId ?? "?",-24} {valStr,10}  {units,-10} [{rv.ResultEvaluation}]");
@@ -231,7 +233,7 @@ public static class IjtResultFormatter
         AppendField(sb, "TraceId", trace.TraceId, 6);
         AppendField(sb, "ResultId", trace.ResultId, 6);
 
-        if (trace.StepTraces is null || trace.StepTraces.Count == 0)
+        if (trace.StepTraces.Count == 0)
         {
             sb.AppendLine("      StepTraces               (none)");
             return;
@@ -247,7 +249,7 @@ public static class IjtResultFormatter
             AppendField(sb, "StartTimeOffset", stepTrace.StartTimeOffset.ToString(CultureInfo.InvariantCulture), 10);
 
             var channels = stepTrace.StepTraceContent;
-            if (channels is null || channels.Count == 0)
+            if (channels.Count == 0)
             {
                 sb.AppendLine("          Channels              (none)");
                 continue;
@@ -257,15 +259,15 @@ public static class IjtResultFormatter
             for (int i = 0; i < channels.Count; i++)
             {
                 var channel = channels[i];
-                var units = NormalizeUnits(channel.EngineeringUnits?.DisplayName?.Text, channel.PhysicalQuantity);
+                var units = NormalizeUnits(channel.EngineeringUnits?.DisplayName.Text, channel.PhysicalQuantity);
                 sb.AppendLine($"            [{i}] {channel.Name ?? "Channel"}  SensorId={channel.SensorId ?? "-"}  PQ={channel.PhysicalQuantity}  Unit={units}");
-                if (channel.Values is null || channel.Values.Count == 0)
+                if (channel.Values.Count == 0)
                 {
                     sb.AppendLine("              Values: (none)");
                     continue;
                 }
 
-                var values = string.Join(", ", channel.Values.Select(v => v.ToString("G6", CultureInfo.InvariantCulture)));
+                var values = string.Join(", ", (channel.Values.ToArray() ?? Array.Empty<double>()).Select(v => v.ToString("G6", CultureInfo.InvariantCulture)));
                 sb.AppendLine($"              Values[{channel.Values.Count}]: {values}");
             }
         }

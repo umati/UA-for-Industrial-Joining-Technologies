@@ -1,5 +1,5 @@
 using IJT_CSharp_Client.Helpers;
-using UAModel.MachineryResult;
+using MachineryResult;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Helpers;
@@ -35,7 +35,7 @@ public class IjtEventFormatterTests
     {
         var entities = new[]
         {
-            new UAModel.IJTBase.EntityDataType
+            new IJTBase.EntityDataType
             {
                 EntityId   = "TOOL-001",
                 Name       = "Screwdriver",
@@ -68,7 +68,7 @@ public class IjtEventFormatterTests
     {
         var rv = new[]
         {
-            new UAModel.IJTBase.ReportedValueDataType { Name = "Torque" },
+            new IJTBase.ReportedValueDataType { Name = "Torque" },
         };
 
         var result = IjtEventFormatter.FormatJoiningSystemEvent(
@@ -117,8 +117,8 @@ public class IjtEventFormatterTests
     [Fact]
     public void SerializeEventJson_WithEntitiesAndValues_ContainsAllData()
     {
-        var entities = new[] { new UAModel.IJTBase.EntityDataType { EntityId = "e-123" } };
-        var values = new[] { new UAModel.IJTBase.ReportedValueDataType { Name = "Speed" } };
+        var entities = new[] { new IJTBase.EntityDataType { EntityId = "e-123" } };
+        var values = new[] { new IJTBase.ReportedValueDataType { Name = "Speed" } };
 
         var result = IjtEventFormatter.SerializeEventJson(
             "EVT-200", "Event with data", "Tightening",
@@ -136,7 +136,7 @@ public class IjtEventFormatterTests
     {
         var rv = new[]
         {
-            new UAModel.IJTBase.ReportedValueDataType
+            new IJTBase.ReportedValueDataType
             {
                 Name = "Angle",
                 CurrentValue = new Opc.Ua.Variant(45.0),
@@ -158,7 +158,7 @@ public class IjtEventFormatterTests
     {
         var rv = new[]
         {
-            new UAModel.IJTBase.ReportedValueDataType
+            new IJTBase.ReportedValueDataType
             {
                 Name = "Torque",
                 CurrentValue = new Opc.Ua.Variant(12.3),
@@ -180,7 +180,7 @@ public class IjtEventFormatterTests
     {
         var rv = new[]
         {
-            new UAModel.IJTBase.ReportedValueDataType
+            new IJTBase.ReportedValueDataType
             {
                 Name = "Rotation",
                 CurrentValue = new Opc.Ua.Variant(90.0),
@@ -202,7 +202,7 @@ public class IjtEventFormatterTests
     {
         var rv = new[]
         {
-            new UAModel.IJTBase.ReportedValueDataType
+            new IJTBase.ReportedValueDataType
             {
                 Name = "Counter",
                 CurrentValue = new Opc.Ua.Variant(42),
@@ -222,7 +222,7 @@ public class IjtEventFormatterTests
     {
         var rv = new[]
         {
-            new UAModel.IJTBase.ReportedValueDataType
+            new IJTBase.ReportedValueDataType
             {
                 Name = "Pressure",
                 CurrentValue = new Opc.Ua.Variant(3.14f),
@@ -242,7 +242,7 @@ public class IjtEventFormatterTests
     {
         var rv = new[]
         {
-            new UAModel.IJTBase.ReportedValueDataType
+            new IJTBase.ReportedValueDataType
             {
                 Name = "Ticks",
                 CurrentValue = new Opc.Ua.Variant(9999999999L),

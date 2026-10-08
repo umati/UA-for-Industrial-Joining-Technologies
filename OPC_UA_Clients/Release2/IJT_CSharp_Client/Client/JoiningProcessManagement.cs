@@ -1,6 +1,7 @@
 #nullable enable
 
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -15,13 +16,13 @@ public sealed class JoiningProcessManagement : IDisposable
 {
     private readonly ILogger<JoiningProcessManagement> _log = IjtLog.For<JoiningProcessManagement>();
     private readonly IJoiningSystem _js;
-    private NodeId? _jpmNodeId;
+    private NodeId _jpmNodeId = NodeId.Null;
 
     /// <summary>Creates a JoiningProcessManagement facade backed by <paramref name="js"/>.</summary>
     public JoiningProcessManagement(IJoiningSystem js) => _js = js;
 
     /// <summary>Clears cached node references so the next operation re-browses the address space.</summary>
-    public void InvalidateNodeCache() => _jpmNodeId = null;
+    public void InvalidateNodeCache() => _jpmNodeId = NodeId.Null;
 
     // -- Node lookup -----------------------------------------------------------
 
@@ -31,14 +32,14 @@ public sealed class JoiningProcessManagement : IDisposable
     /// </summary>
     private NodeId GetJpmNode()
     {
-        if (_jpmNodeId is not null && !_jpmNodeId.IsNullNodeId)
+        if (!_jpmNodeId.IsNullNodeId())
             return _jpmNodeId;
 
         var node = _js.BrowseChild(
             _js.NodeId,
             UAModel.IJTBase.BrowseNames.JoiningProcessManagement);
 
-        if (node.IsNullNodeId)
+        if (node.IsNullNodeId())
         {
             node = _js.IjtBaseObjectId(
                 UAModel.IJTBase.Objects.JoiningSystemType_JoiningProcessManagement);
@@ -64,7 +65,7 @@ public sealed class JoiningProcessManagement : IDisposable
         var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR JoiningProcessManagement node or method not found.");
             return;
@@ -124,7 +125,7 @@ public sealed class JoiningProcessManagement : IDisposable
         var methodId = _js.BrowseMethod(objectId, "SelectJoiningProcess",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR JoiningProcessManagement node or method not found.");
             return;
@@ -133,7 +134,7 @@ public sealed class JoiningProcessManagement : IDisposable
         // JoiningProcessIdentificationDataType uses an EncodingMask pattern: optional
         // fields are only written to the binary stream when their mask bit is set.
         // Without the mask the server receives an empty struct and returns BadArgumentsMissing.
-        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+        var jpId = JoiningProcessIdentificationDataType.Create(
             joiningProcessId: joiningProcessId,
             joiningProcessOriginId: joiningProcessOriginId,
             selectionName: selectionName);
@@ -173,7 +174,7 @@ public sealed class JoiningProcessManagement : IDisposable
             UAModel.IJTBase.BrowseNames.GetSelectedJoiningProgram,
             UAModel.IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram);
 
-        if (jpmNode.IsNullNodeId || methodId.IsNullNodeId)
+        if (jpmNode.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR JoiningProcessManagement node or method not found.");
             return;
@@ -215,13 +216,13 @@ public sealed class JoiningProcessManagement : IDisposable
         string productInstanceUri,
         string joiningProcessId,
         string joiningProcessOriginId = "",
-        IList<UAModel.IJTBase.EntityDataType>? entities = null)
+        IList<EntityDataType>? entities = null)
     {
         _log.LogInformation("\n-- StartJoiningProcess ({Id}) ------", joiningProcessId);
         var objectId = GetJpmNode();
         var methodId = _js.BrowseMethod(objectId, "StartJoiningProcess",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_StartJoiningProcess);
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         { _log.LogError("ERROR JoiningProcessManagement node or method not found."); return; }
         var extEntities = (entities is { Count: > 0 })
             ? (object)entities.Select(e => new ExtensionObject(e)).ToArray()
@@ -251,7 +252,7 @@ public sealed class JoiningProcessManagement : IDisposable
         var objectId = GetJpmNode();
         var methodId = _js.BrowseMethod(objectId, "AbortJoiningProcess",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_AbortJoiningProcess);
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         { _log.LogError("ERROR JoiningProcessManagement node or method not found."); return; }
         try
         {
@@ -278,7 +279,7 @@ public sealed class JoiningProcessManagement : IDisposable
         var objectId = GetJpmNode();
         var methodId = _js.BrowseMethod(objectId, "DeselectJoiningProcess",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_DeselectJoiningProcess);
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         { _log.LogError("ERROR JoiningProcessManagement node or method not found."); return; }
         try
         {
@@ -304,7 +305,7 @@ public sealed class JoiningProcessManagement : IDisposable
         var objectId = GetJpmNode();
         var methodId = _js.BrowseMethod(objectId, "ResetJoiningProcess",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_ResetJoiningProcess);
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         { _log.LogError("ERROR JoiningProcessManagement node or method not found."); return; }
         try
         {
@@ -332,7 +333,7 @@ public sealed class JoiningProcessManagement : IDisposable
         var objectId = GetJpmNode();
         var methodId = _js.BrowseMethod(objectId, "StartSelectedJoining",
             UAModel.IJTBase.Methods.JoiningProcessManagementType_StartSelectedJoining);
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         { _log.LogError("ERROR JoiningProcessManagement node or method not found."); return; }
         try
         {
@@ -358,7 +359,7 @@ public sealed class JoiningProcessManagement : IDisposable
         var objectId = GetJpmNode();
         var methodId = _js.BrowseMethod(objectId, "IncrementJoiningProcessCounter",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_IncrementJoiningProcessCounter);
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         { _log.LogError("ERROR JoiningProcessManagement node or method not found."); return; }
         try
         {
@@ -385,7 +386,7 @@ public sealed class JoiningProcessManagement : IDisposable
         var objectId = GetJpmNode();
         var methodId = _js.BrowseMethod(objectId, "DecrementJoiningProcessCounter",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_DecrementJoiningProcessCounter);
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         { _log.LogError("ERROR JoiningProcessManagement node or method not found."); return; }
         try
         {
@@ -412,7 +413,7 @@ public sealed class JoiningProcessManagement : IDisposable
         var objectId = GetJpmNode();
         var methodId = _js.BrowseMethod(objectId, "SetJoiningProcessCounter",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SetJoiningProcessCounter);
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         { _log.LogError("ERROR JoiningProcessManagement node or method not found."); return; }
         try
         {
@@ -439,7 +440,7 @@ public sealed class JoiningProcessManagement : IDisposable
         var objectId = GetJpmNode();
         var methodId = _js.BrowseMethod(objectId, "SetJoiningProcessSize",
             UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SetJoiningProcessSize);
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         { _log.LogError("ERROR JoiningProcessManagement node or method not found."); return; }
         try
         {
@@ -458,7 +459,7 @@ public sealed class JoiningProcessManagement : IDisposable
 
     private static ExtensionObject BuildJpId(string joiningProcessId, string originId = "", string selectionName = "")
     {
-        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+        var jpId = JoiningProcessIdentificationDataType.Create(
             joiningProcessId: joiningProcessId,
             joiningProcessOriginId: originId,
             selectionName: selectionName);

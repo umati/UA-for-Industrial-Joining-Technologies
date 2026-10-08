@@ -156,9 +156,9 @@ public sealed class AssetManagementTests
     public void SendIdentifiers_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "4Y1SL65848Z411439",
                 entityType: (short)20,
                 name: "VIN",
@@ -175,7 +175,7 @@ public sealed class AssetManagementTests
     public void SendIdentifiers_EmptyList_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new AssetManagement(mock.Object).SendIdentifiers(new List<UAModel.IJTBase.EntityDataType>());
+        new AssetManagement(mock.Object).SendIdentifiers(new List<IJTBase.EntityDataType>());
 
         mock.Verify(s => s.CallMethod(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
@@ -303,9 +303,9 @@ public sealed class AssetManagementTests
 
         var ex = Record.Exception(() =>
             new AssetManagement(mock.Object).SendIdentifiers(
-                new List<UAModel.IJTBase.EntityDataType>
+                new List<IJTBase.EntityDataType>
                 {
-                    UAModel.IJTBase.EntityDataType.Create(
+                    IJTBase.EntityDataType.Create(
                         "4Y1SL65848Z411439",
                         entityType: (short)20,
                         name: "VIN",
@@ -364,7 +364,7 @@ public sealed class AssetManagementTests
 
         var sut = new AssetManagement(mock.Object);
         var ex = Record.Exception(() => sut.SendIdentifiers(
-            new List<UAModel.IJTBase.EntityDataType>()));
+            new List<IJTBase.EntityDataType>()));
         Assert.Null(ex);
 
         mock.Verify(s => s.CallMethod(
@@ -381,9 +381,9 @@ public sealed class AssetManagementTests
 
         var ex = Record.Exception(() =>
             new AssetManagement(mock.Object).SendIdentifiers(
-                new List<UAModel.IJTBase.EntityDataType>
+                new List<IJTBase.EntityDataType>
                 {
-                    UAModel.IJTBase.EntityDataType.Create(
+                    IJTBase.EntityDataType.Create(
                         "4Y1SL65848Z411439",
                         entityType: (short)20,
                         name: "VIN",
@@ -576,9 +576,9 @@ public sealed class AssetManagementTests
     public void SetIOSignals_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        var signals = new List<UAModel.IJTBase.SignalDataType>
+        var signals = new List<IJTBase.SignalDataType>
         {
-            new UAModel.IJTBase.SignalDataType
+            new IJTBase.SignalDataType
             {
                 SignalId = "sig1",
                 SignalValue = new Variant(42)
@@ -597,7 +597,7 @@ public sealed class AssetManagementTests
         var mock = NullNodeMock();
         var ex = Record.Exception(() =>
             new AssetManagement(mock.Object).SetIOSignals("urn:x",
-                new List<UAModel.IJTBase.SignalDataType>()));
+                new List<IJTBase.SignalDataType>()));
         Assert.Null(ex);
     }
 
@@ -611,7 +611,7 @@ public sealed class AssetManagementTests
 
         var ex = Record.Exception(() =>
             new AssetManagement(mock.Object).SetIOSignals("urn:x",
-                new List<UAModel.IJTBase.SignalDataType>()));
+                new List<IJTBase.SignalDataType>()));
         Assert.Null(ex);
     }
 
@@ -625,9 +625,9 @@ public sealed class AssetManagementTests
 
         var ex = Record.Exception(() =>
             new AssetManagement(mock.Object).SetIOSignals("urn:x",
-                new List<UAModel.IJTBase.SignalDataType>
+                new List<IJTBase.SignalDataType>
                 {
-                    new UAModel.IJTBase.SignalDataType
+                    new IJTBase.SignalDataType
                     {
                         SignalId = "sig1",
                         SignalValue = new Variant(42)

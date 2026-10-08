@@ -2,9 +2,10 @@
 
 using System.Globalization;
 using IJT_CSharp_Client.Domain.Events;
+using IJTBase;
+using IJTTightening;
+using MachineryResult;
 using Opc.Ua;
-using UAModel.IJTBase;
-using UAModel.MachineryResult;
 
 namespace IJT_CSharp_Client.Client;
 
@@ -49,6 +50,9 @@ internal static class DomainResultMapper
         {
             var rawT = tObj is Variant vt ? vt.Value : tObj;
             if (rawT is DateTime dt) eventTime = dt;
+            else if (rawT is DateTimeUtc dtc) eventTime = dtc.ToDateTime();
+            else if (rawT is DateTimeOffset dto) eventTime = dto.UtcDateTime;
+            else if (DateTime.TryParse(rawT?.ToString(), out var parsed)) eventTime = parsed;
         }
 
         string eventTypeName = "";
@@ -95,15 +99,15 @@ internal static class DomainResultMapper
         var unprojected = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         if (meta is not null)
         {
-            if (meta.ResultUri?.Count > 0)
+            if (meta.ResultUri.Count > 0)
                 unprojected["ResultUri"] = meta.ResultUri.ToArray();
-            if (meta.FileFormat?.Count > 0)
+            if (meta.FileFormat.Count > 0)
                 unprojected["FileFormat"] = meta.FileFormat.ToArray();
         }
 
         var contentItems = new List<DomainResultContentItem>();
 
-        if (rd.ResultContent?.Count > 0)
+        if (rd.ResultContent.Count > 0)
         {
             for (int i = 0; i < rd.ResultContent.Count; i++)
             {
@@ -142,26 +146,26 @@ internal static class DomainResultMapper
             ExternalConfigurationId = meta?.ExternalConfigurationId,
             InternalConfigurationId = meta?.InternalConfigurationId,
             JobId = meta?.JobId,
-            CreationTime = meta?.CreationTime > DateTime.MinValue ? meta.CreationTime : null,
+            CreationTime = meta is not null && meta.CreationTime > DateTime.MinValue ? (DateTime)meta.CreationTime : null,
             ResultEvaluation = meta?.ResultEvaluation.ToString(),
             ResultEvaluationCode = meta?.ResultEvaluationCode != 0 ? meta?.ResultEvaluationCode : null,
-            ResultEvaluationDetails = meta?.ResultEvaluationDetails?.Text,
-            ResultUri = meta?.ResultUri?.ToArray() ?? [],
-            FileFormat = meta?.FileFormat?.ToArray() ?? [],
+            ResultEvaluationDetails = meta is not null ? meta.ResultEvaluationDetails.Text : null,
+            ResultUri = meta is not null ? meta.ResultUri.ToArray() ?? [] : [],
+            FileFormat = meta is not null ? meta.FileFormat.ToArray() ?? [] : [],
 
-            JoiningTechnology = jMeta?.JoiningTechnology?.Text,
+            JoiningTechnology = jMeta is not null ? jMeta.JoiningTechnology.Text : null,
             SequenceNumber = jMeta is not null ? (long)jMeta.SequenceNumber : null,
             Name = jMeta?.Name,
-            Description = jMeta?.Description?.Text,
+            Description = jMeta is not null ? jMeta.Description.Text : null,
             Classification = jMeta?.Classification,
             ClassificationName = jMeta?.Classification.ToString(),
             OperationMode = jMeta?.OperationMode,
             AssemblyType = jMeta?.AssemblyType.ToString(),
             InterventionType = jMeta?.InterventionType,
             IsGeneratedOffline = jMeta?.IsGeneratedOffline,
-            AssociatedEntities = MapEntities(jMeta?.AssociatedEntities),
-            ResultCounters = MapCounters(jMeta?.ResultCounters),
-            ExtendedMetaData = MapExtendedMeta(jMeta?.ExtendedMetaData),
+            AssociatedEntities = MapEntities(jMeta != null ? jMeta.AssociatedEntities.ToArray() : null),
+            ResultCounters = MapCounters(jMeta != null ? jMeta.ResultCounters.ToArray() : null),
+            ExtendedMetaData = MapExtendedMeta(jMeta != null ? jMeta.ExtendedMetaData.ToArray() : null),
             ContentItems = contentItems,
             RawPayload = unprojected,
         };
@@ -172,33 +176,33 @@ internal static class DomainResultMapper
         var mask = (JoiningResultDataTypeFields)jr.EncodingMask;
 
         var ovs = new List<DomainResultValue>();
-        if (jr.OverallResultValues?.Count > 0)
+        if (jr.OverallResultValues.Count > 0)
         {
             foreach (var rv in jr.OverallResultValues)
             {
                 ovs.Add(new DomainResultValue(
                     rv.Name ?? rv.ValueId ?? "?",
                     rv.MeasuredValue,
-                    rv.EngineeringUnits?.DisplayName?.Text,
+                    rv.EngineeringUnits?.DisplayName.Text,
                     rv.PhysicalQuantity,
                     rv.ResultEvaluation.ToString()));
             }
         }
 
         var steps = new List<DomainStepResult>();
-        if ((mask & JoiningResultDataTypeFields.StepResults) != 0 && jr.StepResults?.Count > 0)
+        if ((mask & JoiningResultDataTypeFields.StepResults) != 0 && jr.StepResults.Count > 0)
         {
             foreach (var step in jr.StepResults)
             {
                 var sValues = new List<DomainResultValue>();
-                if (step.StepResultValues?.Count > 0)
+                if (step.StepResultValues.Count > 0)
                 {
                     foreach (var rv in step.StepResultValues)
                     {
                         sValues.Add(new DomainResultValue(
                             rv.Name ?? rv.ValueId ?? "?",
                             rv.MeasuredValue,
-                            rv.EngineeringUnits?.DisplayName?.Text,
+                            rv.EngineeringUnits?.DisplayName.Text,
                             rv.PhysicalQuantity,
                             rv.ResultEvaluation.ToString()));
                     }
@@ -212,14 +216,14 @@ internal static class DomainResultMapper
         }
 
         var errors = new List<DomainErrorInfo>();
-        if ((mask & JoiningResultDataTypeFields.Errors) != 0 && jr.Errors?.Count > 0)
+        if ((mask & JoiningResultDataTypeFields.Errors) != 0 && jr.Errors.Count > 0)
         {
             foreach (var err in jr.Errors)
             {
                 errors.Add(new DomainErrorInfo(
                     err.ErrorId,
                     err.ErrorType,
-                    err.ErrorMessage?.Text,
+                    err.ErrorMessage.Text,
                     err.LegacyError));
             }
         }
@@ -228,12 +232,12 @@ internal static class DomainResultMapper
         if ((mask & JoiningResultDataTypeFields.Trace) != 0 && jr.Trace is not null)
         {
             var stepTraces = new List<DomainStepTrace>();
-            if (jr.Trace.StepTraces?.Count > 0)
+            if (jr.Trace.StepTraces.Count > 0)
             {
                 foreach (var st in jr.Trace.StepTraces)
                 {
                     var channels = new List<DomainTraceChannel>();
-                    if (st.StepTraceContent?.Count > 0)
+                    if (st.StepTraceContent.Count > 0)
                     {
                         foreach (var ch in st.StepTraceContent)
                         {
@@ -241,8 +245,8 @@ internal static class DomainResultMapper
                                 ch.Name,
                                 ch.SensorId,
                                 ch.PhysicalQuantity,
-                                ch.EngineeringUnits?.DisplayName?.Text,
-                                ch.Values?.ToArray() ?? []));
+                                ch.EngineeringUnits?.DisplayName.Text,
+                                ch.Values.ToArray() ?? []));
                         }
                     }
                     stepTraces.Add(new DomainStepTrace(
@@ -268,10 +272,10 @@ internal static class DomainResultMapper
         };
     }
 
-    private static IReadOnlyList<DomainEntity> MapEntities(EntityDataTypeCollection? entities)
+    private static IReadOnlyList<DomainEntity> MapEntities(IEnumerable<EntityDataType>? entities)
     {
-        if (entities is null || entities.Count == 0) return [];
-        var list = new List<DomainEntity>(entities.Count);
+        if (entities is null) return [];
+        var list = new List<DomainEntity>();
         foreach (var e in entities)
         {
             list.Add(new DomainEntity(
@@ -285,10 +289,10 @@ internal static class DomainResultMapper
         return list;
     }
 
-    private static IReadOnlyList<DomainCounter> MapCounters(ResultCounterDataTypeCollection? counters)
+    private static IReadOnlyList<DomainCounter> MapCounters(IEnumerable<ResultCounterDataType>? counters)
     {
-        if (counters is null || counters.Count == 0) return [];
-        var list = new List<DomainCounter>(counters.Count);
+        if (counters is null) return [];
+        var list = new List<DomainCounter>();
         foreach (var c in counters)
         {
             list.Add(new DomainCounter(c.Name ?? "-", c.CounterValue));
@@ -296,10 +300,10 @@ internal static class DomainResultMapper
         return list;
     }
 
-    private static IReadOnlyDictionary<string, string> MapExtendedMeta(KeyValueDataTypeCollection? kvs)
+    private static IReadOnlyDictionary<string, string> MapExtendedMeta(IEnumerable<KeyValueDataType>? kvs)
     {
-        if (kvs is null || kvs.Count == 0) return new Dictionary<string, string>();
-        var dict = new Dictionary<string, string>(kvs.Count, StringComparer.OrdinalIgnoreCase);
+        if (kvs is null) return new Dictionary<string, string>();
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var kv in kvs)
         {
             if (kv.Key is not null)
@@ -365,9 +369,64 @@ internal static class DomainResultMapper
             {
                 ["NamespaceUri"] = eu.NamespaceUri,
                 ["UnitId"] = eu.UnitId,
-                ["DisplayName"] = eu.DisplayName?.Text,
-                ["Description"] = eu.Description?.Text
+                ["DisplayName"] = eu.DisplayName.Text,
+                ["Description"] = eu.Description.Text
             };
+        }
+
+        if (obj is Uuid uuid) return uuid.ToString();
+
+        if (type.IsGenericType && type.Name.StartsWith("ArrayOf", StringComparison.Ordinal))
+        {
+            var toArrayMethod = type.GetMethod("ToArray");
+            if (toArrayMethod is not null)
+            {
+                var arr = toArrayMethod.Invoke(obj, null) as System.Collections.IEnumerable;
+                if (arr is not null)
+                {
+                    var list = new List<object?>();
+                    foreach (var item in arr)
+                    {
+                        list.Add(ToSdkNeutral(item, visited));
+                    }
+                    return list;
+                }
+            }
+            return new List<object?>();
+        }
+
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ReadOnlyMemory<>))
+        {
+            var toArrayMethod = type.GetMethod("ToArray");
+            if (toArrayMethod is not null)
+            {
+                var arr = toArrayMethod.Invoke(obj, null) as System.Collections.IEnumerable;
+                if (arr is not null)
+                {
+                    var list = new List<object?>();
+                    foreach (var item in arr)
+                    {
+                        list.Add(ToSdkNeutral(item, visited));
+                    }
+                    return list;
+                }
+            }
+            return new List<object?>();
+        }
+
+        if (obj is ExtensionObject eo)
+        {
+            return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TypeId"] = eo.TypeId.ToString(),
+                ["Encoding"] = eo.Encoding.ToString(),
+                ["Body"] = ToSdkNeutral(eo.Body, visited)
+            };
+        }
+
+        if (type.IsValueType)
+        {
+            return obj.ToString();
         }
 
         // Reference cycle guard for all complex reference types (including ExtensionObject, collections, domain models)
@@ -383,16 +442,6 @@ internal static class DomainResultMapper
 
         try
         {
-            if (obj is ExtensionObject eo)
-            {
-                return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["TypeId"] = eo.TypeId?.ToString(),
-                    ["Encoding"] = eo.Encoding.ToString(),
-                    ["Body"] = ToSdkNeutral(eo.Body, visited)
-                };
-            }
-
             if (obj is System.Collections.IEnumerable enumerable)
             {
                 var list = new List<object?>();

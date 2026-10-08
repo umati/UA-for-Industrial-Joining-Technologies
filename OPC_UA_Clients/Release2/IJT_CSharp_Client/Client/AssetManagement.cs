@@ -2,6 +2,7 @@
 
 using System.Collections.Concurrent;
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -18,7 +19,7 @@ public sealed class AssetManagement : IDisposable
     private readonly ILogger<AssetManagement> _log = IjtLog.For<AssetManagement>();
     private readonly IJoiningSystem _js;
     private Subscription? _assetVarSubscription;
-    private NodeId? _methodSetNodeId;
+    private NodeId _methodSetNodeId = NodeId.Null;
 
     // Flat store of all subscribed values per asset.
     // Outer key: asset DisplayName (= file name).
@@ -32,7 +33,7 @@ public sealed class AssetManagement : IDisposable
     public bool IsAssetVarSubscribed => _assetVarSubscription != null;
 
     /// <summary>Clears cached node references so the next operation re-browses the address space.</summary>
-    public void InvalidateNodeCache() => _methodSetNodeId = null;
+    public void InvalidateNodeCache() => _methodSetNodeId = NodeId.Null;
 
     // -- Node lookup -----------------------------------------------------------
 
@@ -42,14 +43,14 @@ public sealed class AssetManagement : IDisposable
     /// </summary>
     private NodeId GetMethodSetNode()
     {
-        if (_methodSetNodeId is not null && !_methodSetNodeId.IsNullNodeId)
+        if (!_methodSetNodeId.IsNullNodeId())
             return _methodSetNodeId;
 
         var assetMgmt = _js.BrowseChild(_js.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
-        if (!assetMgmt.IsNullNodeId)
+        if (!assetMgmt.IsNullNodeId())
         {
             var methodSet = _js.BrowseChild(assetMgmt, UAModel.IJTBase.BrowseNames.MethodSet);
-            if (!methodSet.IsNullNodeId)
+            if (!methodSet.IsNullNodeId())
             {
                 _methodSetNodeId = methodSet;
                 return _methodSetNodeId;
@@ -78,7 +79,7 @@ public sealed class AssetManagement : IDisposable
         var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.EnableAsset,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR MethodSet node or EnableAsset method not found.");
             return;
@@ -105,15 +106,15 @@ public sealed class AssetManagement : IDisposable
 
     /// <summary>
     /// Calls <c>AssetManagement/MethodSet/SendIdentifiers</c> (NodeId 7085).
-    /// Input: ProductInstanceUri (string), array of <see cref="UAModel.IJTBase.EntityDataType"/> wrapped as ExtensionObjects.
+    /// Input: ProductInstanceUri (string), array of <see cref="EntityDataType"/> wrapped as ExtensionObjects.
     /// </summary>
-    public void SendIdentifiers(IList<UAModel.IJTBase.EntityDataType> entities, string productInstanceUri = "")
+    public void SendIdentifiers(IList<EntityDataType> entities, string productInstanceUri = "")
     {
         _log.LogInformation("\n-- SendIdentifiers ({Count} entities) -------------", entities.Count);
 
         var objectId = GetMethodSetNode();
 
-        if (objectId.IsNullNodeId)
+        if (objectId.IsNullNodeId())
         {
             _log.LogError("ERROR MethodSet node or SendIdentifiers method not found.");
             return;
@@ -123,7 +124,7 @@ public sealed class AssetManagement : IDisposable
         {
             var methodId = _js.BrowseMethod(objectId, "SendIdentifiers",
                 UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers);
-            if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+            if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
             {
                 _log.LogError("ERROR MethodSet node or SendIdentifiers method not found.");
                 return;
@@ -158,7 +159,7 @@ public sealed class AssetManagement : IDisposable
         var methodId = _js.BrowseMethod(objectId, "SendTextIdentifiers",
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR MethodSet node or SendTextIdentifiers method not found.");
             return;
@@ -195,7 +196,7 @@ public sealed class AssetManagement : IDisposable
         var methodId = _js.BrowseMethod(objectId, "ResetIdentifiers",
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR MethodSet node or ResetIdentifiers method not found.");
             return;
@@ -232,7 +233,7 @@ public sealed class AssetManagement : IDisposable
         var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetIdentifiers,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR MethodSet node or GetIdentifiers method not found.");
             return;
@@ -295,14 +296,14 @@ public sealed class AssetManagement : IDisposable
 
         var assetMgmtNode = _js.BrowseChild(
             _js.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
-        if (assetMgmtNode.IsNullNodeId)
+        if (assetMgmtNode.IsNullNodeId())
         {
             _log.LogError("ERROR AssetManagement node not found.");
             return;
         }
 
         var assetsNode = _js.BrowseChild(assetMgmtNode, UAModel.IJTBase.BrowseNames.Assets);
-        if (assetsNode.IsNullNodeId)
+        if (assetsNode.IsNullNodeId())
         {
             _log.LogError("ERROR Assets node not found.");
             return;
@@ -320,7 +321,7 @@ public sealed class AssetManagement : IDisposable
         var categoryRefs = _js.BrowseChildren(assetsNode, (uint)NodeClass.Object);
         foreach (var catRef in categoryRefs ?? [])
         {
-            var catName = catRef.BrowseName?.Name;
+            var catName = catRef.BrowseName.Name;
             if (catName == null || catName.StartsWith('<')) continue;
 
             var catNodeId = (NodeId)catRef.NodeId;
@@ -329,8 +330,8 @@ public sealed class AssetManagement : IDisposable
             var instanceRefs = _js.BrowseChildren(catNodeId, (uint)NodeClass.Object);
             foreach (var instRef in instanceRefs ?? [])
             {
-                var browseName = instRef.BrowseName?.Name;
-                var displayName = instRef.DisplayName?.Text ?? browseName ?? "Unknown";
+                var browseName = instRef.BrowseName.Name;
+                var displayName = !string.IsNullOrEmpty(instRef.DisplayName.Text) ? instRef.DisplayName.Text : (browseName ?? "Unknown");
                 if (browseName == null || browseName.StartsWith('<')) continue;
 
                 var instNodeId = (NodeId)instRef.NodeId;
@@ -383,7 +384,7 @@ public sealed class AssetManagement : IDisposable
         int added = 0;
         foreach (var child in children)
         {
-            var name = child.BrowseName?.Name;
+            var name = child.BrowseName.Name;
             if (name == null || name.StartsWith('<')) continue;
 
             // Skip MethodSet — contains only OPC UA Method nodes, no data variables
@@ -515,7 +516,7 @@ public sealed class AssetManagement : IDisposable
         var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.SetTime,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SetTime);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR MethodSet node or SetTime method not found.");
             return;
@@ -554,7 +555,7 @@ public sealed class AssetManagement : IDisposable
         var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetIOSignals,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIOSignals);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR MethodSet node or GetIOSignals method not found.");
             return;
@@ -592,7 +593,7 @@ public sealed class AssetManagement : IDisposable
     /// </summary>
     /// <param name="productInstanceUri">Target asset URI.</param>
     /// <param name="signals">Signals to set. Each must have SignalId and Value populated.</param>
-    public void SetIOSignals(string productInstanceUri, IList<UAModel.IJTBase.SignalDataType> signals)
+    public void SetIOSignals(string productInstanceUri, IList<SignalDataType> signals)
     {
         _log.LogInformation("\n-- SetIOSignals ({Uri}, {Count} signals) ----------", productInstanceUri, signals.Count);
 
@@ -600,7 +601,7 @@ public sealed class AssetManagement : IDisposable
         var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.SetIOSignals,
             UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SetIOSignals);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR MethodSet node or SetIOSignals method not found.");
             return;

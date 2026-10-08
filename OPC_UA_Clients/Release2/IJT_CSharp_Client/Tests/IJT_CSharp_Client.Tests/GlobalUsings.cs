@@ -1,0 +1,11 @@
+global using IJT_CSharp_Client.Helpers;
+global using IJTBase;
+global using IJTTightening;
+global using MachineryResult;
+global using EndpointDescriptionCollection = System.Collections.Generic.List<Opc.Ua.EndpointDescription>;
+global using ExtensionObjectCollection = System.Collections.Generic.List<Opc.Ua.ExtensionObject>;
+global using ObjectIds = Opc.Ua.ObjectIds;
+global using ObjectTypeIds = Opc.Ua.ObjectTypeIds;
+global using ReferenceDescriptionCollection = System.Collections.Generic.List<Opc.Ua.ReferenceDescription>;
+global using UserTokenPolicyCollection = System.Collections.Generic.List<Opc.Ua.UserTokenPolicy>;
+global using VariantCollection = System.Collections.Generic.List<Opc.Ua.Variant>;

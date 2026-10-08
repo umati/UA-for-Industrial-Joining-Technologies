@@ -18,9 +18,9 @@ public sealed class SimulationManagement : IDisposable
     private readonly IJoiningSystem _js;
 
     // Cached node references — cleared on InvalidateNodeCache()
-    private NodeId? _simulationsNodeId;
-    private NodeId? _simulateResultsNodeId;
-    private NodeId? _simulateEventsNodeId;
+    private NodeId _simulationsNodeId = NodeId.Null;
+    private NodeId _simulateResultsNodeId = NodeId.Null;
+    private NodeId _simulateEventsNodeId = NodeId.Null;
 
     /// <summary>Creates a SimulationManagement facade backed by <paramref name="js"/>.</summary>
     public SimulationManagement(IJoiningSystem js) => _js = js;
@@ -28,20 +28,20 @@ public sealed class SimulationManagement : IDisposable
     /// <summary>Clears cached node references so the next operation re-browses the address space.</summary>
     public void InvalidateNodeCache()
     {
-        _simulationsNodeId = null;
-        _simulateResultsNodeId = null;
-        _simulateEventsNodeId = null;
+        _simulationsNodeId = NodeId.Null;
+        _simulateResultsNodeId = NodeId.Null;
+        _simulateEventsNodeId = NodeId.Null;
     }
 
     // -- Node lookup -----------------------------------------------------------
 
     private NodeId GetSimulationsNode()
     {
-        if (_simulationsNodeId is not null && !_simulationsNodeId.IsNullNodeId)
+        if (!_simulationsNodeId.IsNullNodeId())
             return _simulationsNodeId;
 
         var node = _js.BrowseChild(_js.NodeId, "Simulations");
-        if (node.IsNullNodeId)
+        if (node.IsNullNodeId())
             _log.LogWarning("WARN Simulations node not found under JoiningSystem.");
         _simulationsNodeId = node;
         return _simulationsNodeId;
@@ -49,14 +49,14 @@ public sealed class SimulationManagement : IDisposable
 
     private NodeId GetSimulateResultsNode()
     {
-        if (_simulateResultsNodeId is not null && !_simulateResultsNodeId.IsNullNodeId)
+        if (!_simulateResultsNodeId.IsNullNodeId())
             return _simulateResultsNodeId;
 
         var simsNode = GetSimulationsNode();
-        if (simsNode.IsNullNodeId) return (_simulateResultsNodeId = NodeId.Null);
+        if (simsNode.IsNullNodeId()) return (_simulateResultsNodeId = NodeId.Null);
 
         var node = _js.BrowseChild(simsNode, "SimulateResults");
-        if (node.IsNullNodeId)
+        if (node.IsNullNodeId())
             _log.LogWarning("WARN SimulateResults node not found under Simulations.");
         _simulateResultsNodeId = node;
         return _simulateResultsNodeId;
@@ -64,17 +64,17 @@ public sealed class SimulationManagement : IDisposable
 
     private NodeId GetSimulateEventsNode()
     {
-        if (_simulateEventsNodeId is not null && !_simulateEventsNodeId.IsNullNodeId)
+        if (!_simulateEventsNodeId.IsNullNodeId())
             return _simulateEventsNodeId;
 
         var simsNode = GetSimulationsNode();
-        if (simsNode.IsNullNodeId) return (_simulateEventsNodeId = NodeId.Null);
+        if (simsNode.IsNullNodeId()) return (_simulateEventsNodeId = NodeId.Null);
 
         // Try both possible browse names the server may use
         var node = _js.BrowseChild(simsNode, "SimulateEventsAndConditions");
-        if (node.IsNullNodeId)
+        if (node.IsNullNodeId())
             node = _js.BrowseChild(simsNode, "SimulateEvents");
-        if (node.IsNullNodeId)
+        if (node.IsNullNodeId())
             _log.LogWarning("WARN SimulateEventsAndConditions node not found under Simulations.");
         _simulateEventsNodeId = node;
         return _simulateEventsNodeId;
@@ -100,7 +100,7 @@ public sealed class SimulationManagement : IDisposable
         var objectId = GetSimulateResultsNode();
         var methodId = _js.BrowseMethod(objectId, "SimulateSingleResult");
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR Simulations/SimulateResults node or SimulateSingleResult method not found.");
             return;
@@ -143,7 +143,7 @@ public sealed class SimulationManagement : IDisposable
         var objectId = GetSimulateResultsNode();
         var methodId = _js.BrowseMethod(objectId, "SimulateBatch_Or_Sync_Result");
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR Simulations/SimulateResults node or SimulateBatch_Or_Sync_Result method not found.");
             return;
@@ -180,7 +180,7 @@ public sealed class SimulationManagement : IDisposable
         var objectId = GetSimulateResultsNode();
         var methodId = _js.BrowseMethod(objectId, "SimulateJobResult");
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR Simulations/SimulateResults node or SimulateJobResult method not found.");
             return;
@@ -236,7 +236,7 @@ public sealed class SimulationManagement : IDisposable
         var objectId = GetSimulateResultsNode();
         var methodId = _js.BrowseMethod(objectId, "SimulateBulkResults");
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR Simulations/SimulateResults node or SimulateBulkResults method not found.");
             return;
@@ -278,7 +278,7 @@ public sealed class SimulationManagement : IDisposable
         var objectId = GetSimulateEventsNode();
         var methodId = _js.BrowseMethod(objectId, "SimulateEvents");
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR SimulateEventsAndConditions node or SimulateEvents method not found.");
             return;
@@ -322,7 +322,7 @@ public sealed class SimulationManagement : IDisposable
         var objectId = GetSimulateEventsNode();
         var methodId = _js.BrowseMethod(objectId, "SimulateBulkEvents");
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
         {
             _log.LogError("ERROR SimulateEventsAndConditions node or SimulateBulkEvents method not found.");
             return;

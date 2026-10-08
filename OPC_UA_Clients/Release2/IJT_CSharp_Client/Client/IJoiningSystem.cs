@@ -53,7 +53,7 @@ public interface IJoiningSystem
     /// whose <see cref="NodeClass"/> matches <paramref name="nodeClassMask"/>.
     /// Returns an empty collection on failure or when the parent is null.
     /// </summary>
-    ReferenceDescriptionCollection BrowseChildren(
+    IReadOnlyList<ReferenceDescription> BrowseChildren(
         NodeId parentId,
         uint nodeClassMask = (uint)NodeClass.Unspecified);
 

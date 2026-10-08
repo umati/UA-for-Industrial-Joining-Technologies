@@ -2,6 +2,7 @@
 
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Helpers;
+using MachineryResult;
 using Moq;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -251,7 +252,7 @@ public sealed class ResultManagementUnitTests
 
     // ── HasMeaningfulResult (private static) via reflection ───────────────────
 
-    private static bool InvokeHasMeaningfulResult(UAModel.MachineryResult.ResultDataType rd)
+    private static bool InvokeHasMeaningfulResult(MachineryResult.ResultDataType rd)
     {
         var method = typeof(ResultManagement).GetMethod(
             "HasMeaningfulResult",
@@ -262,9 +263,9 @@ public sealed class ResultManagementUnitTests
     [Fact]
     public void HasMeaningfulResult_WithNullMetadata_ReturnsFalse()
     {
-        var rd = new UAModel.MachineryResult.ResultDataType();
+        var rd = new MachineryResult.ResultDataType();
         // ResultMetaData defaults to null in some UAModel versions; ensure it's null
-        rd.ResultMetaData = null;
+        rd.ResultMetaData = null!;
 
         Assert.False(InvokeHasMeaningfulResult(rd));
     }
@@ -272,9 +273,9 @@ public sealed class ResultManagementUnitTests
     [Fact]
     public void HasMeaningfulResult_WithEmptyResultId_ReturnsFalse()
     {
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "" }
         };
 
         Assert.False(InvokeHasMeaningfulResult(rd));
@@ -283,9 +284,9 @@ public sealed class ResultManagementUnitTests
     [Fact]
     public void HasMeaningfulResult_WithWhitespaceResultId_ReturnsFalse()
     {
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "   " }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "   " }
         };
 
         Assert.False(InvokeHasMeaningfulResult(rd));
@@ -294,9 +295,9 @@ public sealed class ResultManagementUnitTests
     [Fact]
     public void HasMeaningfulResult_WithValidResultId_ReturnsTrue()
     {
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RESULT-001" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "RESULT-001" }
         };
 
         Assert.True(InvokeHasMeaningfulResult(rd));
@@ -355,7 +356,7 @@ public sealed class ResultManagementUnitTests
         using var rm = new ResultManagement(session.Object);
         var writes = new List<string>();
 
-        var processed = rm.ProcessResultVariableValue(new DataValue { Value = null }, writes.Add);
+        var processed = rm.ProcessResultVariableValue(new DataValue(Variant.Null, StatusCodes.Good), writes.Add);
 
         Assert.False(processed);
         Assert.Empty(writes);
@@ -367,13 +368,13 @@ public sealed class ResultManagementUnitTests
         var session = MockSessionBuilder.Create();
         using var rm = new ResultManagement(session.Object);
         var writes = new List<string>();
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RESULT-VAR-1" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "RESULT-VAR-1" }
         };
 
         var processed = rm.ProcessResultVariableValue(
-            new DataValue { Value = new Variant(new ExtensionObject(rd)) },
+            new DataValue(new Variant(new ExtensionObject(rd)), StatusCodes.Good),
             writes.Add);
 
         Assert.True(processed);
@@ -387,12 +388,12 @@ public sealed class ResultManagementUnitTests
         var session = MockSessionBuilder.Create();
         using var rm = new ResultManagement(session.Object);
         var writes = new List<string>();
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RESULT-DIRECT-1" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "RESULT-DIRECT-1" }
         };
 
-        var processed = rm.ProcessResultVariableValue(new DataValue { Value = rd }, writes.Add);
+        var processed = rm.ProcessResultVariableValue(new DataValue(new Variant(rd), StatusCodes.Good), writes.Add);
 
         Assert.True(processed);
         Assert.Single(writes);
@@ -404,12 +405,12 @@ public sealed class ResultManagementUnitTests
         var session = MockSessionBuilder.Create();
         using var rm = new ResultManagement(session.Object);
         var writes = new List<string>();
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = " " }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = " " }
         };
 
-        var processed = rm.ProcessResultVariableValue(new DataValue { Value = rd }, writes.Add);
+        var processed = rm.ProcessResultVariableValue(new DataValue(new Variant(rd), StatusCodes.Good), writes.Add);
 
         Assert.False(processed);
         Assert.Empty(writes);
@@ -422,7 +423,7 @@ public sealed class ResultManagementUnitTests
         using var rm = new ResultManagement(session.Object);
         var writes = new List<string>();
 
-        var processed = rm.ProcessResultVariableValue(new DataValue { Value = "raw-value" }, writes.Add);
+        var processed = rm.ProcessResultVariableValue(new DataValue(new Variant("raw-value"), StatusCodes.Good), writes.Add);
 
         Assert.False(processed);
         Assert.Empty(writes);
@@ -597,16 +598,15 @@ public sealed class ResultManagementUnitTests
             var item = new MonitoredItem { NodeClass = NodeClass.Variable };
             item.SaveValueInCache(new MonitoredItemNotification
             {
-                Value = new DataValue
-                {
-                    Value = new UAModel.MachineryResult.ResultDataType
+                Value = new DataValue(
+                    new Variant(new MachineryResult.ResultDataType
                     {
-                        ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType
+                        ResultMetaData = new MachineryResult.ResultMetaDataType
                         {
                             ResultId = "NOTIFICATION-RESULT",
                         },
-                    },
-                },
+                    }),
+                    StatusCodes.Good),
             });
             var handler = typeof(ResultManagement).GetMethod(
                 "OnMonitoredItemNotification",

@@ -4,10 +4,10 @@ using System.Globalization;
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Domain.Events;
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
+using MachineryResult;
 using Moq;
 using Opc.Ua;
-using UAModel.IJTBase;
-using UAModel.MachineryResult;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.UnitTests;
@@ -42,15 +42,15 @@ public sealed class DomainResultEventTests
         var filter = sut.BuildResultEventFilter();
 
         Assert.NotNull(filter.WhereClause);
-        Assert.Single(filter.WhereClause.Elements);
+        Assert.Single(filter.WhereClause.Elements.ToArray()!);
 
         var element = filter.WhereClause.Elements[0];
         Assert.Equal(FilterOperator.OfType, element.FilterOperator);
-        Assert.Single(element.FilterOperands);
+        Assert.Single(element.FilterOperands.ToArray()!);
 
         var rawOperand = element.FilterOperands[0];
         var operand = Assert.IsType<LiteralOperand>(rawOperand.Body);
-        var expectedTypeId = new NodeId(UAModel.MachineryResult.ObjectTypes.ResultReadyEventType, 6);
+        var expectedTypeId = new NodeId(MachineryResult.ObjectTypes.ResultReadyEventType, 6);
         Assert.Equal(expectedTypeId, operand.Value.Value);
     }
 
@@ -66,9 +66,9 @@ public sealed class DomainResultEventTests
         Assert.Equal(6, filter.SelectClauses.Count);
         var resultClause = filter.SelectClauses[5];
 
-        var expectedTypeId = new NodeId(UAModel.MachineryResult.ObjectTypes.ResultReadyEventType, 6);
+        var expectedTypeId = new NodeId(MachineryResult.ObjectTypes.ResultReadyEventType, 6);
         Assert.Equal(expectedTypeId, resultClause.TypeDefinitionId);
-        Assert.Single(resultClause.BrowsePath);
+        Assert.Single(resultClause.BrowsePath.ToArray()!);
         Assert.Equal("Result", resultClause.BrowsePath[0].Name);
         Assert.Equal(6, resultClause.BrowsePath[0].NamespaceIndex);
     }
@@ -293,7 +293,7 @@ public sealed class DomainResultEventTests
         var single = new JoiningResultDataType
         {
             FailureReason = 0,
-            OverallResultValues = new ResultValueDataTypeCollection
+            OverallResultValues = new[]
             {
                 new ResultValueDataType
                 {
@@ -631,9 +631,9 @@ public sealed class DomainResultEventTests
             IsPartial = false,
             IsSimulated = false,
             ResultState = 1,
-            ResultUri = new StringCollection { "file:///results/res-12345.dat" },
-            FileFormat = new StringCollection { "csv", "xml" },
-            AssociatedEntities = new EntityDataTypeCollection
+            ResultUri = new[] { "file:///results/res-12345.dat" },
+            FileFormat = new[] { "csv", "xml" },
+            AssociatedEntities = new[]
             {
                 new EntityDataType
                 {
@@ -645,7 +645,7 @@ public sealed class DomainResultEventTests
                     EntityOriginId = "ORIG-1"
                 }
             },
-            ResultCounters = new ResultCounterDataTypeCollection
+            ResultCounters = new[]
             {
                 new ResultCounterDataType
                 {
@@ -653,7 +653,7 @@ public sealed class DomainResultEventTests
                     CounterValue = 1050
                 }
             },
-            ExtendedMetaData = new KeyValueDataTypeCollection
+            ExtendedMetaData = new[]
             {
                 new KeyValueDataType
                 {
@@ -670,7 +670,7 @@ public sealed class DomainResultEventTests
                          | (uint)JoiningResultDataTypeFields.StepResults
                          | (uint)JoiningResultDataTypeFields.Errors
                          | (uint)JoiningResultDataTypeFields.Trace,
-            OverallResultValues = new ResultValueDataTypeCollection
+            OverallResultValues = new[]
             {
                 new ResultValueDataType
                 {
@@ -689,14 +689,14 @@ public sealed class DomainResultEventTests
                     ResultEvaluation = ResultEvaluationEnum.OK
                 }
             },
-            StepResults = new StepResultDataTypeCollection
+            StepResults = new[]
             {
                 new StepResultDataType
                 {
                     StepResultId = "STEP-1",
                     Name = "Fast Run",
                     ResultEvaluation = ResultEvaluationEnum.OK,
-                    StepResultValues = new ResultValueDataTypeCollection
+                    StepResultValues = new[]
                     {
                         new ResultValueDataType
                         {
@@ -709,7 +709,7 @@ public sealed class DomainResultEventTests
                     }
                 }
             },
-            Errors = new ErrorInformationDataTypeCollection
+            Errors = new[]
             {
                 new ErrorInformationDataType
                 {
@@ -723,7 +723,7 @@ public sealed class DomainResultEventTests
             {
                 TraceId = "TRC-01",
                 ResultId = "RES-12345",
-                StepTraces = new StepTraceDataTypeCollection
+                StepTraces = new[]
                 {
                     new StepTraceDataType
                     {
@@ -732,7 +732,7 @@ public sealed class DomainResultEventTests
                         NumberOfTracePoints = 3,
                         SamplingInterval = 0.001,
                         StartTimeOffset = 0.0,
-                        StepTraceContent = new TraceContentDataTypeCollection
+                        StepTraceContent = new[]
                         {
                             new TraceContentDataType
                             {
@@ -740,7 +740,7 @@ public sealed class DomainResultEventTests
                                 SensorId = "SENS-1",
                                 PhysicalQuantity = 1,
                                 EngineeringUnits = new EUInformation { DisplayName = new LocalizedText("Nm") },
-                                Values = new DoubleCollection { 10.0, 20.0, 25.5 }
+                                Values = new[] { 10.0, 20.0, 25.5 }
                             }
                         }
                     }
@@ -751,7 +751,7 @@ public sealed class DomainResultEventTests
         return new ResultDataType
         {
             ResultMetaData = jMeta,
-            ResultContent = new VariantCollection
+            ResultContent = new[]
             {
                 new Variant(new ExtensionObject(jr))
             }

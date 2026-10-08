@@ -403,9 +403,9 @@ public sealed class ResultManagementTests
     [Fact]
     public void GetLatestResult_WithExtensionObjectResult_DoesNotThrow()
     {
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "EO-001" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "EO-001" }
         };
 
         var mock = HappyPathMock();
@@ -425,9 +425,9 @@ public sealed class ResultManagementTests
     [Fact]
     public void GetLatestResult_WithVariantWrappedExtensionObject_DoesNotThrow()
     {
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "VAR-001" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "VAR-001" }
         };
 
         var mock = HappyPathMock();

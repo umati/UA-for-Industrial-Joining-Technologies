@@ -5,6 +5,7 @@ using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Configuration;
 using IJT_CSharp_Client.Domain.Events;
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
 using Microsoft.Extensions.Logging;
 
 using var cts = new CancellationTokenSource();
@@ -192,7 +193,7 @@ await using (js)
                     { _log.LogWarning("Enter a number between 1 and 10."); break; }
 
                     IjtEntityTypes.PrintTable();
-                    var entities = new List<UAModel.IJTBase.EntityDataType>();
+                    var entities = new List<EntityDataType>();
                     bool entityOk = true;
                     for (int ei = 0; ei < entCount && entityOk; ei++)
                     {
@@ -216,7 +217,7 @@ await using (js)
                         bool? isExt = isExtRaw.Equals("y", StringComparison.OrdinalIgnoreCase) ? true
                                     : isExtRaw.Equals("n", StringComparison.OrdinalIgnoreCase) ? false
                                     : (bool?)null;
-                        entities.Add(UAModel.IJTBase.EntityDataType.Create(
+                        entities.Add(EntityDataType.Create(
                             entityId: entityId,
                             entityType: entityType,
                             name: string.IsNullOrEmpty(entityName) ? null : entityName,
@@ -322,9 +323,9 @@ await using (js)
                     var oid = PromptOptional("Joining Process Origin ID") ?? "";
                     // PROGRAM entity — key entity describing which program to start
                     var progOrigin = PromptOptional("Program EntityOriginId (e.g. DCCA6C76-3926-455B-959B-EA3082FCD091)") ?? "";
-                    var entities = new List<UAModel.IJTBase.EntityDataType>
+                    var entities = new List<EntityDataType>
                     {
-                        UAModel.IJTBase.EntityDataType.Create(
+                        EntityDataType.Create(
                             id, entityType: (short)27,
                             name: "ProgramId", description: "Program_4_Steps",
                             entityOriginId: string.IsNullOrEmpty(progOrigin) ? null : progOrigin,
@@ -333,7 +334,7 @@ await using (js)
                     // Optional VIN — external identifier for the vehicle/product being joined
                     var vin = PromptOptional("VIN (VEHICLE entity, e.g. 4Y1SL65848Z411439, Enter to skip)") ?? "";
                     if (!string.IsNullOrEmpty(vin))
-                        entities.Add(UAModel.IJTBase.EntityDataType.Create(
+                        entities.Add(EntityDataType.Create(
                             vin, entityType: (short)20,
                             name: "VIN", description: "Vehicle Identification Number",
                             isExternal: true));
@@ -446,7 +447,7 @@ await using (js)
                     if (!double.TryParse(sigValRaw, System.Globalization.NumberStyles.Any,
                             System.Globalization.CultureInfo.InvariantCulture, out var sigVal))
                     { _log.LogWarning("Invalid number."); break; }
-                    var signal = new UAModel.IJTBase.SignalDataType { SignalId = sigId, SignalValue = new Opc.Ua.Variant(sigVal) };
+                    var signal = new SignalDataType { SignalId = sigId, SignalValue = new Opc.Ua.Variant(sigVal) };
                     js.AssetManagement.SetIOSignals(uri, [signal]);
                     break;
                 }

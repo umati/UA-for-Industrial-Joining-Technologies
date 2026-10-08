@@ -2,9 +2,9 @@
 
 using System.Collections.Generic;
 using IJT_CSharp_Client.Client;
+using IJTBase;
 using Moq;
 using Opc.Ua;
-using UAModel.IJTBase;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Client;
@@ -300,9 +300,9 @@ public sealed class JoiningProcessManagementTests
     [Fact]
     public void StartJoiningProcess_WithEntities_DoesNotThrow()
     {
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            new UAModel.IJTBase.EntityDataType { EntityId = "e1", EntityType = 27 }
+            new IJTBase.EntityDataType { EntityId = "e1", EntityType = 27 }
         };
         var ex = Record.Exception(() =>
             new JoiningProcessManagement(HappyPathMock().Object)

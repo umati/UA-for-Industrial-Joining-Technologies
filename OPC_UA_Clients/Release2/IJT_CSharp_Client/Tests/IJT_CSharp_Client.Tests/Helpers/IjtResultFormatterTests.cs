@@ -1,6 +1,7 @@
 using IJT_CSharp_Client.Domain.Events;
 using IJT_CSharp_Client.Helpers;
-using UAModel.MachineryResult;
+using MachineryResult;
+using Opc.Ua;
 using Xunit;
 
 namespace IJT_CSharp_Client.Tests.Helpers;
@@ -42,7 +43,7 @@ public class IjtResultFormatterTests
     {
         var rd = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "IJT-002",
                 Name = "SingleTightening",
@@ -78,7 +79,7 @@ public class IjtResultFormatterTests
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "CNT" },
-            ResultContent = new Opc.Ua.VariantCollection { new Opc.Ua.Variant("step-value") },
+            ResultContent = new Variant[] { new Opc.Ua.Variant("step-value") },
         };
 
         var result = IjtResultFormatter.FormatResult(rd);
@@ -91,11 +92,11 @@ public class IjtResultFormatterTests
     {
         var rd = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "ENT",
-                AssociatedEntities = new UAModel.IJTBase.EntityDataTypeCollection {
-                    new UAModel.IJTBase.EntityDataType
+                AssociatedEntities = new[] {
+                    new IJTBase.EntityDataType
                     {
                         EntityId = "e1",
                         Name = "Tool_A",
@@ -104,7 +105,7 @@ public class IjtResultFormatterTests
                         Description = "Atlas Copco Spindle",
                         EntityOriginId = "EXT-001",
                     },
-                    new UAModel.IJTBase.EntityDataType { EntityId = "e2", Name = "Part_B" },
+                    new IJTBase.EntityDataType { EntityId = "e2", Name = "Part_B" },
                 },
             }
         };
@@ -128,11 +129,11 @@ public class IjtResultFormatterTests
     {
         var rd = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "CTR",
-                ResultCounters = new UAModel.IJTBase.ResultCounterDataTypeCollection {
-                    new UAModel.IJTBase.ResultCounterDataType { Name = "TotalCount", CounterValue = 7u },
+                ResultCounters = new[] {
+                    new IJTBase.ResultCounterDataType { Name = "TotalCount", CounterValue = 7u },
                 },
             }
         };
@@ -148,11 +149,11 @@ public class IjtResultFormatterTests
     {
         var rd = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "EXT",
-                ExtendedMetaData = new UAModel.IJTBase.KeyValueDataTypeCollection {
-                    new UAModel.IJTBase.KeyValueDataType { Key = "myKey", Value = new Opc.Ua.Variant("myVal") },
+                ExtendedMetaData = new[] {
+                    new IJTBase.KeyValueDataType { Key = "myKey", Value = new Opc.Ua.Variant("myVal") },
                 },
             }
         };
@@ -193,22 +194,22 @@ public class IjtResultFormatterTests
     [Fact]
     public void FormatResult_WithJoiningResultDataType_OverallResultValues_Decoded()
     {
-        var rv = new UAModel.IJTBase.ResultValueDataType
+        var rv = new IJTBase.ResultValueDataType
         {
             Name = "Torque",
             MeasuredValue = 12.5,
-            ResultEvaluation = UAModel.MachineryResult.ResultEvaluationEnum.OK,
+            ResultEvaluation = MachineryResult.ResultEvaluationEnum.OK,
         };
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
-            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection { rv },
+            OverallResultValues = new[] { rv },
             // OverallResultValues is always shown (no mask gate in formatter)
         };
 
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "JR-001" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },
@@ -224,33 +225,33 @@ public class IjtResultFormatterTests
     [Fact]
     public void FormatResult_WithJoiningResultDataType_StepResults_Decoded()
     {
-        var stepRv = new UAModel.IJTBase.ResultValueDataType
+        var stepRv = new IJTBase.ResultValueDataType
         {
             Name = "Angle",
             MeasuredValue = 90.0,
-            ResultEvaluation = UAModel.MachineryResult.ResultEvaluationEnum.OK,
+            ResultEvaluation = MachineryResult.ResultEvaluationEnum.OK,
         };
-        var step = new UAModel.IJTBase.StepResultDataType
+        var step = new IJTBase.StepResultDataType
         {
             StepResultId = "STEP-1",
             Name = "FinalAngle",
-            ResultEvaluation = UAModel.MachineryResult.ResultEvaluationEnum.OK,
-            StepResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection { stepRv },
-            EncodingMask = (uint)UAModel.IJTBase.StepResultDataTypeFields.StepResultValues
-                         | (uint)UAModel.IJTBase.StepResultDataTypeFields.Name
-                         | (uint)UAModel.IJTBase.StepResultDataTypeFields.ResultEvaluation,
+            ResultEvaluation = MachineryResult.ResultEvaluationEnum.OK,
+            StepResultValues = new[] { stepRv },
+            EncodingMask = (uint)IJTBase.StepResultDataTypeFields.StepResultValues
+                         | (uint)IJTBase.StepResultDataTypeFields.Name
+                         | (uint)IJTBase.StepResultDataTypeFields.ResultEvaluation,
         };
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
-            StepResults = new UAModel.IJTBase.StepResultDataTypeCollection { step },
+            StepResults = new[] { step },
             // Must set StepResults bit (0x2) so formatter processes it
-            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.StepResults,
+            EncodingMask = (uint)IJTBase.JoiningResultDataTypeFields.StepResults,
         };
 
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "JR-STEP" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },
@@ -266,23 +267,23 @@ public class IjtResultFormatterTests
     [Fact]
     public void FormatResult_WithJoiningResultDataType_Errors_Decoded()
     {
-        var err = new UAModel.IJTBase.ErrorInformationDataType
+        var err = new IJTBase.ErrorInformationDataType
         {
             ErrorId = "ERR-42",
             ErrorType = 1,   // byte — 1 = generic error type per spec
-            EncodingMask = (uint)UAModel.IJTBase.ErrorInformationDataTypeFields.ErrorId,
+            EncodingMask = (uint)IJTBase.ErrorInformationDataTypeFields.ErrorId,
         };
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
-            Errors = new UAModel.IJTBase.ErrorInformationDataTypeCollection { err },
+            Errors = new[] { err },
             // Must set Errors bit (0x4) so formatter processes it
-            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.Errors,
+            EncodingMask = (uint)IJTBase.JoiningResultDataTypeFields.Errors,
         };
 
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "JR-ERR" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },
@@ -301,7 +302,7 @@ public class IjtResultFormatterTests
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "RAW-001" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant("raw-string-value"),
             },
@@ -322,7 +323,7 @@ public class IjtResultFormatterTests
         // Simulates a Job/Batch result where ResultContent contains child ResultDataType items
         var childResult = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "CHILD-001",
                 Name = "ChildTightening",
@@ -333,13 +334,13 @@ public class IjtResultFormatterTests
 
         var parentRd = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "JOB-001",
                 Name = "JobResult",
                 Classification = 3,
             },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(childResult)),
             },
@@ -361,7 +362,7 @@ public class IjtResultFormatterTests
         {
             new ResultDataType
             {
-                ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+                ResultMetaData = new IJTBase.JoiningResultMetaDataType
                 {
                     ResultId = "BATCH-C1",
                     Name = "Step1",
@@ -370,7 +371,7 @@ public class IjtResultFormatterTests
             },
             new ResultDataType
             {
-                ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+                ResultMetaData = new IJTBase.JoiningResultMetaDataType
                 {
                     ResultId = "BATCH-C2",
                     Name = "Step2",
@@ -379,7 +380,7 @@ public class IjtResultFormatterTests
             },
             new ResultDataType
             {
-                ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+                ResultMetaData = new IJTBase.JoiningResultMetaDataType
                 {
                     ResultId = "BATCH-C3",
                     Name = "Step3",
@@ -390,14 +391,13 @@ public class IjtResultFormatterTests
 
         var parentRd = new ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "BATCH-001",
                 Name = "BatchResult",
                 Classification = 3,
             },
-            ResultContent = new Opc.Ua.VariantCollection(
-                children.Select(c => new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(c)))),
+            ResultContent = children.Select(c => new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(c))).ToArray(),
         };
 
         var result = IjtResultFormatter.FormatResult(parentRd, DateTime.UtcNow);
@@ -415,20 +415,20 @@ public class IjtResultFormatterTests
     public void FormatResult_ChildResultWithJoiningContent_FormatsNestedContent()
     {
         // Child result that itself has JoiningResultDataType content
-        var rv = new UAModel.IJTBase.ResultValueDataType
+        var rv = new IJTBase.ResultValueDataType
         {
             Name = "Torque",
             MeasuredValue = 25.0,
             ResultEvaluation = ResultEvaluationEnum.OK,
         };
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
-            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection { rv },
+            OverallResultValues = new[] { rv },
         };
         var childResult = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "NESTED-001" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },
@@ -437,7 +437,7 @@ public class IjtResultFormatterTests
         var parentRd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "PARENT-001" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(childResult)),
             },
@@ -455,11 +455,11 @@ public class IjtResultFormatterTests
     public void FormatResult_MixedContent_JoiningAndChildResult_FormatsAll()
     {
         // ResultContent with both a JoiningResultDataType and a child ResultDataType
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
-            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection
+            OverallResultValues = new ResultValueDataType[]
             {
-                new UAModel.IJTBase.ResultValueDataType
+                new IJTBase.ResultValueDataType
                 {
                     Name = "Angle",
                     MeasuredValue = 90.0,
@@ -475,7 +475,7 @@ public class IjtResultFormatterTests
         var parentRd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "MIX-PARENT" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(childRd)),
@@ -497,7 +497,7 @@ public class IjtResultFormatterTests
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "EMPTY" },
-            ResultContent = new Opc.Ua.VariantCollection(), // explicitly empty
+            ResultContent = Array.Empty<Variant>(), // explicitly empty
         };
 
         var result = IjtResultFormatter.FormatResult(rd, DateTime.UtcNow);
@@ -510,23 +510,23 @@ public class IjtResultFormatterTests
     [Fact]
     public void FormatResult_WithTrace_NoStepTraces_ContainsTraceSection()
     {
-        var trace = new UAModel.IJTBase.JoiningTraceDataType
+        var trace = new IJTBase.JoiningTraceDataType
         {
             TraceId = "TRACE-001",
             ResultId = "RES-TRACE-001",
             // StepTraces is null/empty → "StepTraces (none)" path
         };
 
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
             Trace = trace,
-            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.Trace,
+            EncodingMask = (uint)IJTBase.JoiningResultDataTypeFields.Trace,
         };
 
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "TR-001" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },
@@ -541,7 +541,7 @@ public class IjtResultFormatterTests
     [Fact]
     public void FormatResult_WithTrace_WithStepTraces_NoChannels_ContainsStepTraceId()
     {
-        var stepTrace = new UAModel.IJTBase.StepTraceDataType
+        var stepTrace = new IJTBase.StepTraceDataType
         {
             StepTraceId = "STEP-TRACE-1",
             StepResultId = "STEP-RES-1",
@@ -551,22 +551,22 @@ public class IjtResultFormatterTests
             // StepTraceContent is null → "Channels (none)" path
         };
 
-        var trace = new UAModel.IJTBase.JoiningTraceDataType
+        var trace = new IJTBase.JoiningTraceDataType
         {
             TraceId = "TRACE-002",
-            StepTraces = new UAModel.IJTBase.StepTraceDataTypeCollection { stepTrace },
+            StepTraces = new[] { stepTrace },
         };
 
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
             Trace = trace,
-            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.Trace,
+            EncodingMask = (uint)IJTBase.JoiningResultDataTypeFields.Trace,
         };
 
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "TR-STEP" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },
@@ -581,38 +581,38 @@ public class IjtResultFormatterTests
     [Fact]
     public void FormatResult_WithTrace_WithStepTraces_WithChannels_ContainsChannelValues()
     {
-        var channel = new UAModel.IJTBase.TraceContentDataType
+        var channel = new IJTBase.TraceContentDataType
         {
             Name = "Torque",
             SensorId = "SENSOR-1",
             PhysicalQuantity = (byte)0,
             EngineeringUnits = new Opc.Ua.EUInformation
             { DisplayName = new Opc.Ua.LocalizedText("Nm") },
-            Values = new Opc.Ua.DoubleCollection { 1.5, 2.0, 3.0 },
+            Values = new[] { 1.5, 2.0, 3.0 },
         };
 
-        var stepTrace = new UAModel.IJTBase.StepTraceDataType
+        var stepTrace = new IJTBase.StepTraceDataType
         {
             StepTraceId = "STEP-TRACE-2",
-            StepTraceContent = new UAModel.IJTBase.TraceContentDataTypeCollection { channel },
+            StepTraceContent = new[] { channel },
         };
 
-        var trace = new UAModel.IJTBase.JoiningTraceDataType
+        var trace = new IJTBase.JoiningTraceDataType
         {
             TraceId = "TRACE-003",
-            StepTraces = new UAModel.IJTBase.StepTraceDataTypeCollection { stepTrace },
+            StepTraces = new[] { stepTrace },
         };
 
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
             Trace = trace,
-            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.Trace,
+            EncodingMask = (uint)IJTBase.JoiningResultDataTypeFields.Trace,
         };
 
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "TR-CHAN" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },
@@ -628,16 +628,16 @@ public class IjtResultFormatterTests
     [Fact]
     public void FormatResult_WithFailureReason_ContainsFailureReason()
     {
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
             FailureReason = (byte)42,
-            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.FailureReason,
+            EncodingMask = (uint)IJTBase.JoiningResultDataTypeFields.FailureReason,
         };
 
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "FR-001" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },
@@ -663,7 +663,7 @@ public class IjtResultFormatterTests
     [Fact]
     public void FormatResult_NormalizeUnits_DegreeSymbol_ReplacedWithDeg()
     {
-        var rv = new UAModel.IJTBase.ResultValueDataType
+        var rv = new IJTBase.ResultValueDataType
         {
             Name = "Angle",
             MeasuredValue = 90.0,
@@ -671,15 +671,15 @@ public class IjtResultFormatterTests
             { DisplayName = new Opc.Ua.LocalizedText("°") },
         };
 
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
-            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection { rv },
+            OverallResultValues = new[] { rv },
         };
 
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "UNIT-DEG" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },
@@ -693,7 +693,7 @@ public class IjtResultFormatterTests
     [Fact]
     public void FormatResult_NormalizeUnits_PhysicalQuantity3_EmptyUnit_ReturnsDeg()
     {
-        var rv = new UAModel.IJTBase.ResultValueDataType
+        var rv = new IJTBase.ResultValueDataType
         {
             Name = "Rotation",
             MeasuredValue = 45.0,
@@ -701,15 +701,15 @@ public class IjtResultFormatterTests
             // No engineering units → empty → physicalQuantity 3 → "deg"
         };
 
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
-            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection { rv },
+            OverallResultValues = new[] { rv },
         };
 
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "PQ3-DEG" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },
@@ -724,35 +724,35 @@ public class IjtResultFormatterTests
     public void FormatResult_TraceChannelWithNoValues_ShowsNoneLabel()
     {
         // Covers IjtResultFormatter lines 223-224: channel.Values is null/empty → "(none)" branch
-        var channelNoValues = new UAModel.IJTBase.TraceContentDataType
+        var channelNoValues = new IJTBase.TraceContentDataType
         {
             Name = "EmptyChannel",
             PhysicalQuantity = 1,
-            Values = new Opc.Ua.DoubleCollection(),  // empty
+            Values = Array.Empty<double>(),  // empty
         };
-        var stepTrace = new UAModel.IJTBase.StepTraceDataType
+        var stepTrace = new IJTBase.StepTraceDataType
         {
             StepTraceId = "ST-001",
             NumberOfTracePoints = 0,
             SamplingInterval = 10.0,
             StartTimeOffset = 0.0,
-            StepTraceContent = new UAModel.IJTBase.TraceContentDataTypeCollection { channelNoValues },
+            StepTraceContent = new[] { channelNoValues },
         };
-        var trace = new UAModel.IJTBase.JoiningTraceDataType
+        var trace = new IJTBase.JoiningTraceDataType
         {
             TraceId = "TRACE-001",
-            StepTraces = new UAModel.IJTBase.StepTraceDataTypeCollection { stepTrace },
+            StepTraces = new[] { stepTrace },
         };
-        var jr = new UAModel.IJTBase.JoiningResultDataType
+        var jr = new IJTBase.JoiningResultDataType
         {
-            EncodingMask = (uint)UAModel.IJTBase.JoiningResultDataTypeFields.Trace,
-            OverallResultValues = new UAModel.IJTBase.ResultValueDataTypeCollection(),
+            EncodingMask = (uint)IJTBase.JoiningResultDataTypeFields.Trace,
+            OverallResultValues = Array.Empty<ResultValueDataType>(),
             Trace = trace,
         };
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "TRACE-001" },
-            ResultContent = new Opc.Ua.VariantCollection
+            ResultContent = new Variant[]
             {
                 new Opc.Ua.Variant(new Opc.Ua.ExtensionObject(jr)),
             },

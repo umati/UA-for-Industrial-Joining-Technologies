@@ -1,6 +1,7 @@
 #nullable enable
 
 using System.Text;
+using IJTBase;
 
 namespace IJT_CSharp_Client.Helpers;
 
@@ -25,8 +26,8 @@ public static class IjtEventFormatter
         string? eventText,
         string? joiningTechnology,
         DateTime eventTime,
-        UAModel.IJTBase.EntityDataType[]? associatedEntities = null,
-        UAModel.IJTBase.ReportedValueDataType[]? reportedValues = null)
+        EntityDataType[]? associatedEntities = null,
+        ReportedValueDataType[]? reportedValues = null)
     {
         return IjtJsonSerializer.FormatOutput("JoiningSystemEvent", new
         {
@@ -49,8 +50,8 @@ public static class IjtEventFormatter
         string? eventText,
         string? joiningTechnology,
         DateTime eventTime,
-        UAModel.IJTBase.EntityDataType[]? associatedEntities = null,
-        UAModel.IJTBase.ReportedValueDataType[]? reportedValues = null)
+        EntityDataType[]? associatedEntities = null,
+        ReportedValueDataType[]? reportedValues = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Received: {eventTime:yyyy-MM-dd HH:mm:ss.fff} UTC");
@@ -78,7 +79,7 @@ public static class IjtEventFormatter
                         : r.CurrentValue.Value is long l ? (double)l
                         : (double?)null;
                 var valStr = val.HasValue ? $"{val.Value,10:F3}" : $"{r.CurrentValue.Value,10}";
-                var units = NormalizeUnits(r.EngineeringUnits?.DisplayName?.Text, r.PhysicalQuantity);
+                var units = NormalizeUnits(r.EngineeringUnits?.DisplayName.Text, r.PhysicalQuantity);
                 sb.AppendLine($"    {r.Name,-24} {valStr}  {units,-10}  Low={r.LowLimit}  High={r.HighLimit}");
             }
         }

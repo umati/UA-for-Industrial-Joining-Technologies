@@ -286,7 +286,7 @@ public sealed class JointDataTypeEncodingMaskTests
         jm.SendJoint("urn:product-1", "JNT-007", "DESIGN-001");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var joint = Assert.IsType<UAModel.IJTBase.JointDataType>(ext.Body);
+        var joint = Assert.IsType<IJTBase.JointDataType>(ext.Body);
         Assert.Equal("JNT-007", joint.JointId);
     }
 
@@ -304,8 +304,8 @@ public sealed class JointDataTypeEncodingMaskTests
         jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var joint = Assert.IsType<UAModel.IJTBase.JointDataType>(ext.Body);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.JointDesignId) != 0,
+        var joint = Assert.IsType<IJTBase.JointDataType>(ext.Body);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.JointDesignId) != 0,
             "JointDesignId must be in EncodingMask so it reaches the server");
     }
 
@@ -323,9 +323,9 @@ public sealed class JointDataTypeEncodingMaskTests
         jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001", name: "Left bolt");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var joint = Assert.IsType<UAModel.IJTBase.JointDataType>(ext.Body);
+        var joint = Assert.IsType<IJTBase.JointDataType>(ext.Body);
         Assert.Equal("Left bolt", joint.Name);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.Name) != 0,
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.Name) != 0,
             "Name must be in EncodingMask when provided");
     }
 
@@ -343,8 +343,8 @@ public sealed class JointDataTypeEncodingMaskTests
         jm.SendJoint("urn:product-1", "JNT-001", "");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var joint = Assert.IsType<UAModel.IJTBase.JointDataType>(ext.Body);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.JointDesignId) == 0u,
+        var joint = Assert.IsType<IJTBase.JointDataType>(ext.Body);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.JointDesignId) == 0u,
             "Empty JointDesignId must not be in EncodingMask");
     }
 
@@ -362,8 +362,8 @@ public sealed class JointDataTypeEncodingMaskTests
         jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var joint = Assert.IsType<UAModel.IJTBase.JointDataType>(ext.Body);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.Name) == 0u,
+        var joint = Assert.IsType<IJTBase.JointDataType>(ext.Body);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.Name) == 0u,
             "Empty/omitted Name must not be in EncodingMask");
     }
 
@@ -400,35 +400,35 @@ public sealed class JointDataTypeEncodingMaskTests
     [Fact]
     public void JointDataType_Create_WithDesignId_MaskIncludesDesignIdBit()
     {
-        var joint = UAModel.IJTBase.JointDataType.Create("JNT-001", jointDesignId: "DESIGN-001");
+        var joint = IJTBase.JointDataType.Create("JNT-001", jointDesignId: "DESIGN-001");
 
         Assert.Equal("JNT-001", joint.JointId);
         Assert.Equal("DESIGN-001", joint.JointDesignId);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.JointDesignId) != 0);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.JointDesignId) != 0);
     }
 
     [Fact]
     public void JointDataType_Create_WithName_MaskIncludesNameBit()
     {
-        var joint = UAModel.IJTBase.JointDataType.Create("JNT-002", name: "Left bolt");
+        var joint = IJTBase.JointDataType.Create("JNT-002", name: "Left bolt");
 
         Assert.Equal("Left bolt", joint.Name);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.Name) != 0);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.Name) != 0);
     }
 
     [Fact]
     public void JointDataType_Create_WithOriginId_MaskIncludesOriginIdBit()
     {
-        var joint = UAModel.IJTBase.JointDataType.Create("JNT-003", jointOriginId: "ORIGIN-001");
+        var joint = IJTBase.JointDataType.Create("JNT-003", jointOriginId: "ORIGIN-001");
 
         Assert.Equal("ORIGIN-001", joint.JointOriginId);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.JointOriginId) != 0);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.JointOriginId) != 0);
     }
 
     [Fact]
     public void JointDataType_Create_NoOptionalFields_MaskIsZero()
     {
-        var joint = UAModel.IJTBase.JointDataType.Create("JNT-MIN");
+        var joint = IJTBase.JointDataType.Create("JNT-MIN");
 
         Assert.True(joint.EncodingMask == 0u,
             "JointId is always encoded — mask must be 0 when no optional fields provided");
@@ -439,9 +439,9 @@ public sealed class JointDataTypeEncodingMaskTests
     {
         var associated = new[]
         {
-            UAModel.IJTBase.EntityDataType.Create("urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A"),
+            IJTBase.EntityDataType.Create("urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A"),
         };
-        var joint = UAModel.IJTBase.JointDataType.Create(
+        var joint = IJTBase.JointDataType.Create(
             "JNT-ALL",
             jointOriginId: "ORIG-001",
             jointDesignId: "DESIGN-001",
@@ -449,11 +449,11 @@ public sealed class JointDataTypeEncodingMaskTests
             description: "M8 torque bolt",
             associatedEntities: associated);
 
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.JointOriginId) != 0);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.JointDesignId) != 0);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.Name) != 0);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.Description) != 0);
-        Assert.True((joint.EncodingMask & (uint)UAModel.IJTBase.JointDataTypeFields.AssociatedEntities) != 0);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.JointOriginId) != 0);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.JointDesignId) != 0);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.Name) != 0);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.Description) != 0);
+        Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.AssociatedEntities) != 0);
     }
 
     // -- Cache hit paths -------------------------------------------------------

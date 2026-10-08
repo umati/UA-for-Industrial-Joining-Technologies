@@ -378,9 +378,9 @@ public sealed class AssetManagementUnitTests
     {
         var session = MockSessionBuilder.Create();
         using var am = new AssetManagement(session.Object);
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false)
+            IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false)
         };
 
         var ex = Record.Exception(() => am.SendIdentifiers(entities));
@@ -395,15 +395,15 @@ public sealed class AssetManagementUnitTests
     {
         var session = MockSessionBuilder.Create();
         using var am = new AssetManagement(session.Object);
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:part:chassis-001", entityType: (short)22,
                 name: "Chassis Component", description: "Engine bay chassis bracket", isExternal: false),
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:tool:spindle-002", entityType: (short)4,
                 name: "Secondary Spindle", description: "Right-side torque spindle", isExternal: false),
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:controller:atlas-003", entityType: (short)3,
                 name: "Atlas Controller-3", description: "Line controller unit 3", isExternal: false),
         };
@@ -422,7 +422,7 @@ public sealed class AssetManagementUnitTests
         using var am = new AssetManagement(session.Object);
 
         var ex = Record.Exception(() =>
-            am.SendIdentifiers(new List<UAModel.IJTBase.EntityDataType>()));
+            am.SendIdentifiers(new List<IJTBase.EntityDataType>()));
 
         Assert.Null(ex);
     }
@@ -432,9 +432,9 @@ public sealed class AssetManagementUnitTests
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
         using var am = new AssetManagement(session.Object);
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A", isExternal: false)
         };
 
@@ -453,9 +453,9 @@ public sealed class AssetManagementUnitTests
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadArgumentsMissing));
         using var am = new AssetManagement(session.Object);
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A", isExternal: false)
         };
 
@@ -472,9 +472,9 @@ public sealed class AssetManagementUnitTests
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("serialisation error"));
         using var am = new AssetManagement(session.Object);
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A", isExternal: false)
         };
 
@@ -859,82 +859,82 @@ public sealed class EntityDataTypeEncodingMaskTests
     [Fact]
     public void EntityDataType_Create_WithName_EncodingMaskIncludesNameBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A");
+        var entity = IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A");
 
         Assert.Equal("ENT-001", entity.EntityId);
         Assert.Equal("Batch-A", entity.Name);
         Assert.Equal((short)1, entity.EntityType);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) != 0,
             "Name must be in EncodingMask so it is written to the binary stream");
     }
 
     [Fact]
     public void EntityDataType_Create_WithoutName_EncodingMaskExcludesNameBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-002", entityType: 2);
+        var entity = IJTBase.EntityDataType.Create("ENT-002", entityType: 2);
 
         Assert.Null(entity.Name);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) == 0u,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) == 0u,
             "Name bit must NOT be set when Name is not provided");
     }
 
     [Fact]
     public void EntityDataType_Create_WithIsExternalFalse_EncodingMaskIncludesIsExternalBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-003", entityType: 1, isExternal: false);
+        var entity = IJTBase.EntityDataType.Create("ENT-003", entityType: 1, isExternal: false);
 
         Assert.False(entity.IsExternal);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.IsExternal) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.IsExternal) != 0,
             "IsExternal must be in EncodingMask when explicitly supplied");
     }
 
     [Fact]
     public void EntityDataType_Create_WithIsExternalNull_EncodingMaskExcludesIsExternalBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-004", entityType: 1);
+        var entity = IJTBase.EntityDataType.Create("ENT-004", entityType: 1);
 
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.IsExternal) == 0u,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.IsExternal) == 0u,
             "IsExternal must NOT be in mask when not explicitly supplied");
     }
 
     [Fact]
     public void EntityDataType_Create_WithDescription_EncodingMaskIncludesDescriptionBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-005", entityType: 1, description: "Test part");
+        var entity = IJTBase.EntityDataType.Create("ENT-005", entityType: 1, description: "Test part");
 
         Assert.Equal("Test part", entity.Description);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Description) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Description) != 0,
             "Description must be in EncodingMask when provided");
     }
 
     [Fact]
     public void EntityDataType_Create_WithEntityOriginId_EncodingMaskIncludesOriginIdBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-006", entityType: 1, entityOriginId: "ORIG-001");
+        var entity = IJTBase.EntityDataType.Create("ENT-006", entityType: 1, entityOriginId: "ORIG-001");
 
         Assert.Equal("ORIG-001", entity.EntityOriginId);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.EntityOriginId) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.EntityOriginId) != 0,
             "EntityOriginId must be in EncodingMask when provided");
     }
 
     [Fact]
     public void EntityDataType_Create_AllFieldsSet_AllBitsInMask()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create(
+        var entity = IJTBase.EntityDataType.Create(
             "ENT-ALL", entityType: 1,
             name: "Name", description: "Desc",
             entityOriginId: "ORIG", isExternal: true);
 
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) != 0);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Description) != 0);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.EntityOriginId) != 0);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.IsExternal) != 0);
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) != 0);
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Description) != 0);
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.EntityOriginId) != 0);
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.IsExternal) != 0);
     }
 
     [Fact]
     public void EntityDataType_Create_NoOptionalFields_MaskIsZero()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-MIN", entityType: 1);
+        var entity = IJTBase.EntityDataType.Create("ENT-MIN", entityType: 1);
 
         Assert.True(entity.EncodingMask == 0u,
             "EncodingMask must be 0 when no optional fields are provided — EntityId and EntityType are always encoded");
@@ -951,9 +951,9 @@ public sealed class EntityDataTypeEncodingMaskTests
             .Returns(new List<object>());
         using var am = new AssetManagement(session.Object);
 
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A"),
+            IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A"),
         };
         am.SendIdentifiers(entities);
 
@@ -961,9 +961,9 @@ public sealed class EntityDataTypeEncodingMaskTests
         Assert.Equal(2, capturedArgs.Length);
         var extObjects = Assert.IsType<ExtensionObject[]>(capturedArgs[1]);
         Assert.Single(extObjects);
-        var entity = Assert.IsType<UAModel.IJTBase.EntityDataType>(extObjects[0].Body);
+        var entity = Assert.IsType<IJTBase.EntityDataType>(extObjects[0].Body);
         Assert.Equal("Batch-A", entity.Name);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) != 0,
             "Name must be in EncodingMask to be included in the OPC UA binary stream");
     }
 
@@ -972,7 +972,7 @@ public sealed class EntityDataTypeEncodingMaskTests
     {
         // Documents the known pitfall: assigning Name without setting the mask bit
         // results in Name being silently omitted from the binary stream.
-        var entity = new UAModel.IJTBase.EntityDataType
+        var entity = new IJTBase.EntityDataType
         {
             Name = "Will-Be-Dropped",
             EntityId = "ENT-MASK-TRAP",
@@ -980,7 +980,7 @@ public sealed class EntityDataTypeEncodingMaskTests
         };
 
         // Verify the mask is NOT set for Name (documents the pitfall, prevents regression)
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) == 0u,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) == 0u,
             "Object-initializer without EncodingMask leaves Name bit unset — use EntityDataType.Create() instead");
     }
 }

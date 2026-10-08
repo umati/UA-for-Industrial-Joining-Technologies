@@ -60,15 +60,15 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         var browseTask = Task.Run(() =>
         {
             var sims = session.BrowseChild(session.NodeId, "Simulations");
-            var simRes = sims.IsNullNodeId ? NodeId.Null : session.BrowseChild(sims, "SimulateResults");
-            var simMeth = simRes.IsNullNodeId ? NodeId.Null : session.BrowseChild(simRes, "SimulateSingleResult");
+            var simRes = sims.IsNullNodeId() ? NodeId.Null : session.BrowseChild(sims, "SimulateResults");
+            var simMeth = simRes.IsNullNodeId() ? NodeId.Null : session.BrowseChild(simRes, "SimulateSingleResult");
             return (sims, simRes, simMeth);
         });
         var browseWinner = await Task.WhenAny(browseTask, Task.Delay(Timeout.Infinite, browseTimeoutCts.Token)).ConfigureAwait(false);
         Skip.IfNot(browseWinner == browseTask, "Browse timed out — server may be overloaded; skipping");
         (simulationsNode, simResultsNode, simMethodId) = await browseTask.ConfigureAwait(false);
 
-        Skip.IfNot(!simMethodId.IsNullNodeId,
+        Skip.IfNot(!simMethodId.IsNullNodeId(),
             "SimulateSingleResult method not found — server may not expose simulation nodes");
 
         var tcs = new TaskCompletionSource<bool>();
@@ -229,9 +229,9 @@ public sealed class LiveIntegrationTests(OpcUaServerFixture fixture)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "4Y1SL65848Z411439",
                 entityType: (short)20,
                 name: "VIN",

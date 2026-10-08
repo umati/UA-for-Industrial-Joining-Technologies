@@ -125,15 +125,15 @@ internal static class MockSessionBuilder
                 It.IsAny<RequestHeader>(),
                 It.IsAny<uint>(),
                 It.IsAny<TimestampsToReturn>(),
-                It.IsAny<MonitoredItemCreateRequestCollection>(),
+                It.IsAny<ArrayOf<MonitoredItemCreateRequest>>(),
                 It.IsAny<CancellationToken>()))
             .Returns((
                 RequestHeader _,
                 uint _,
                 TimestampsToReturn _,
-                MonitoredItemCreateRequestCollection requests,
+                ArrayOf<MonitoredItemCreateRequest> requests,
                 CancellationToken _) =>
-                Task.FromResult(CreateMonitoredItemsResponse(requests.Count)));
+                new ValueTask<CreateMonitoredItemsResponse>(CreateMonitoredItemsResponse(requests.Count)));
 #pragma warning restore CS0618
 
         return session;
@@ -141,7 +141,7 @@ internal static class MockSessionBuilder
 
     private static CreateMonitoredItemsResponse CreateMonitoredItemsResponse(int count)
     {
-        var results = new MonitoredItemCreateResultCollection();
+        var results = new List<MonitoredItemCreateResult>();
         for (uint i = 0; i < count; i++)
         {
             results.Add(new MonitoredItemCreateResult
@@ -156,7 +156,7 @@ internal static class MockSessionBuilder
         return new CreateMonitoredItemsResponse
         {
             ResponseHeader = new ResponseHeader(),
-            Results = results,
+            Results = results.ToArray(),
             DiagnosticInfos = [],
         };
     }

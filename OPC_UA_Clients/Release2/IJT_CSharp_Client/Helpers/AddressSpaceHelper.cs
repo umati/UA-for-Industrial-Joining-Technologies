@@ -7,6 +7,47 @@ using Opc.Ua.Client;
 namespace IJT_CSharp_Client.Helpers;
 
 /// <summary>
+/// Compatibility extensions for OPC UA types migrating from SDK 1.5 to 2.0.
+/// </summary>
+public static class AddressSpaceExtensions
+{
+    /// <summary>
+    /// Returns true if the node ID is null or equivalent to NodeId.Null.
+    /// Replaces the removed NodeId.IsNullNodeId property from SDK 1.5.
+    /// </summary>
+    public static bool IsNullNodeId(this NodeId nodeId) => nodeId.IsNull;
+
+    /// <summary>
+    /// Returns true if the nullable node ID is null or equivalent to NodeId.Null.
+    /// </summary>
+    public static bool IsNullNodeId(this NodeId? nodeId) => !nodeId.HasValue || nodeId.Value.IsNull;
+
+    /// <summary>
+    /// Synchronously reads the value of a single variable node (SDK 2.0 migration helper).
+    /// </summary>
+    public static DataValue ReadValue(this ISession session, NodeId nodeId)
+        => session.ReadValueAsync(nodeId).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Synchronously creates a subscription on the server (SDK 2.0 migration helper).
+    /// </summary>
+    public static void Create(this Subscription subscription)
+        => subscription.CreateAsync().GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Synchronously deletes a subscription on the server (SDK 2.0 migration helper).
+    /// </summary>
+    public static void Delete(this Subscription subscription, bool silent = false)
+        => subscription.DeleteAsync(silent).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Removes a subscription from the concrete session if applicable (SDK 2.0 migration helper).
+    /// </summary>
+    public static bool RemoveSubscription(this ISession session, Subscription subscription)
+        => session.RemoveSubscriptionAsync(subscription).GetAwaiter().GetResult();
+}
+
+/// <summary>
 /// Discovers and caches IJT-specific nodes in the server address space.
 /// Static helper methods are thread-safe; instance caching members are not thread-safe
 /// and are intended for single-threaded connect/setup scenarios.
@@ -14,7 +55,7 @@ namespace IJT_CSharp_Client.Helpers;
 public sealed class AddressSpaceHelper
 {
     private static readonly ILogger _log = IjtLog.ForCategory(nameof(AddressSpaceHelper));
-    private NodeId? _cachedJoiningSystemId;
+    private NodeId _cachedJoiningSystemId = NodeId.Null;
     private readonly Dictionary<string, NodeId> _mgmtNodeCache = new(StringComparer.OrdinalIgnoreCase);
 
     // -- Instance (caching) methods --------------------------------------------
@@ -25,12 +66,12 @@ public sealed class AddressSpaceHelper
     /// </summary>
     public NodeId FindJoiningSystemAsync(ISession session, ushort ijtBaseNsIdx)
     {
-        if (_cachedJoiningSystemId is not null && !_cachedJoiningSystemId.IsNullNodeId)
+        if (!_cachedJoiningSystemId.IsNullNodeId())
             return _cachedJoiningSystemId;
 
         var joiningSystemTypeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, ijtBaseNsIdx);
 
-        var topRefs = BrowseChildren(session, ObjectIds.ObjectsFolder, NodeClass.Object);
+        var topRefs = BrowseChildren(session, Opc.Ua.ObjectIds.ObjectsFolder, NodeClass.Object);
         foreach (var r in topRefs)
         {
             if (IsJoiningSystemType((NodeId)r.TypeDefinition, joiningSystemTypeId))
@@ -43,7 +84,7 @@ public sealed class AddressSpaceHelper
         // Search one level deeper (e.g. inside folder objects)
         foreach (var r in topRefs)
         {
-            if (r.BrowseName?.Name == "Server") continue;
+            if (r.BrowseName.Name == "Server") continue;
             var sub = BrowseChildren(session, (NodeId)r.NodeId, NodeClass.Object);
             foreach (var s in sub)
             {
@@ -59,10 +100,10 @@ public sealed class AddressSpaceHelper
         foreach (var r in topRefs)
         {
             var nid = (NodeId)r.NodeId;
-            if (nid != ObjectIds.Server && r.BrowseName?.Name != "Server")
+            if (nid != Opc.Ua.ObjectIds.Server && r.BrowseName.Name != "Server")
             {
                 _cachedJoiningSystemId = nid;
-                _log.LogWarning("WARN JoiningSystem fallback node: {Name} ({NodeId})", r.BrowseName?.Name, nid);
+                _log.LogWarning("WARN JoiningSystem fallback node: {Name} ({NodeId})", r.BrowseName.Name, nid);
                 return _cachedJoiningSystemId;
             }
         }
@@ -84,7 +125,7 @@ public sealed class AddressSpaceHelper
     {
         var refs = BrowseChildren(session, parentId);
         var match = refs.FirstOrDefault(r =>
-            (r.BrowseName?.Name?.Equals(browseName, StringComparison.OrdinalIgnoreCase) ?? false) &&
+            (r.BrowseName.Name?.Equals(browseName, StringComparison.OrdinalIgnoreCase) ?? false) &&
             (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
         return match != null ? (NodeId)match.NodeId : NodeId.Null;
     }
@@ -100,7 +141,7 @@ public sealed class AddressSpaceHelper
     {
         var refs = BrowseChildren(session, parentId, NodeClass.Method);
         var match = refs.FirstOrDefault(r =>
-            (r.BrowseName?.Name?.Equals(methodBrowseName, StringComparison.OrdinalIgnoreCase) ?? false) &&
+            (r.BrowseName.Name?.Equals(methodBrowseName, StringComparison.OrdinalIgnoreCase) ?? false) &&
             (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
         return match != null ? (NodeId)match.NodeId : NodeId.Null;
     }
@@ -119,7 +160,7 @@ public sealed class AddressSpaceHelper
             return cached;
 
         var nodeId = FindChildAsync(session, joiningSystemId, mgmtBrowseName, nsIndex);
-        if (!nodeId.IsNullNodeId)
+        if (!nodeId.IsNullNodeId())
             _mgmtNodeCache[mgmtBrowseName] = nodeId;
 
         return nodeId;
@@ -135,8 +176,8 @@ public sealed class AddressSpaceHelper
     {
         var refs = BrowseChildren(session, assetFolderNodeId, NodeClass.Object);
         return refs
-            .Where(r => !(r.BrowseName?.Name?.StartsWith('<') ?? false))
-            .Select(r => (r.DisplayName?.Text ?? r.BrowseName?.Name ?? string.Empty, (NodeId)r.NodeId))
+            .Where(r => !(r.BrowseName.Name?.StartsWith('<') ?? false))
+            .Select(r => (r.DisplayName.Text ?? r.BrowseName.Name ?? string.Empty, (NodeId)r.NodeId))
             .ToList();
     }
 
@@ -153,20 +194,21 @@ public sealed class AddressSpaceHelper
         var refs = BrowseChildren(session, assetNodeId, NodeClass.Object);
         // Prefer DI namespace
         var diMatch = refs.FirstOrDefault(r =>
-            (r.BrowseName?.Name?.Equals("Identification", StringComparison.OrdinalIgnoreCase) ?? false) &&
+            (r.BrowseName.Name?.Equals("Identification", StringComparison.OrdinalIgnoreCase) ?? false) &&
             r.BrowseName.NamespaceIndex == diNsIndex);
         if (diMatch != null) return (NodeId)diMatch.NodeId;
 
         // Any namespace fallback
         var anyMatch = refs.FirstOrDefault(r =>
-            r.BrowseName?.Name?.Equals("Identification", StringComparison.OrdinalIgnoreCase) ?? false);
-        return anyMatch != null ? (NodeId)anyMatch.NodeId : NodeId.Null;
+            r.BrowseName.Name?.Equals("Identification", StringComparison.OrdinalIgnoreCase) ?? false);
+        if (anyMatch != null) return (NodeId)anyMatch.NodeId;
+        return NodeId.Null;
     }
 
     /// <summary>Clears all cached node IDs (useful after reconnect).</summary>
     public void InvalidateCache()
     {
-        _cachedJoiningSystemId = null;
+        _cachedJoiningSystemId = NodeId.Null;
         _mgmtNodeCache.Clear();
     }
 
@@ -176,34 +218,23 @@ public sealed class AddressSpaceHelper
 
     /// <summary>
     /// Returns all forward hierarchical references from <paramref name="startNodeId"/>.
-    /// Uses the multi-node <c>ISessionClientMethods.Browse</c> overload (not the
-    /// extension method) so that unit tests can mock it with <c>Mock&lt;ISession&gt;</c>.
     /// </summary>
-    public static ReferenceDescriptionCollection BrowseChildren(
+    public static IReadOnlyList<ReferenceDescription> BrowseChildren(
         ISession session,
         NodeId startNodeId,
         NodeClass nodeClassMask = NodeClass.Object | NodeClass.Variable | NodeClass.Method)
     {
-        var nodesToBrowse = new BrowseDescriptionCollection
+        var browser = new Browser(session)
         {
-            new BrowseDescription
-            {
-                NodeId          = startNodeId,
-                BrowseDirection = BrowseDirection.Forward,
-                ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
-                IncludeSubtypes = true,
-                NodeClassMask   = (uint)nodeClassMask,
-                ResultMask      = (uint)BrowseResultMask.All,
-            },
+            BrowseDirection = BrowseDirection.Forward,
+            ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
+            IncludeSubtypes = true,
+            NodeClassMask = (uint)nodeClassMask,
+            ResultMask = (uint)BrowseResultMask.All,
         };
 
-        session.Browse(
-            null, null, 0u,
-            nodesToBrowse,
-            out var results,
-            out _);
-
-        return results?[0]?.References ?? new ReferenceDescriptionCollection();
+        var refs = browser.Browse(startNodeId);
+        return refs.ToList();
     }
 
 
@@ -215,7 +246,7 @@ public sealed class AddressSpaceHelper
     {
         var refs = BrowseChildren(session, parentId);
         var match = refs.FirstOrDefault(r =>
-            r.BrowseName?.Name?.Equals(browseName, StringComparison.OrdinalIgnoreCase) ?? false);
+            r.BrowseName.Name?.Equals(browseName, StringComparison.OrdinalIgnoreCase) ?? false);
         return match != null ? (NodeId)match.NodeId : NodeId.Null;
     }
 
@@ -230,7 +261,7 @@ public sealed class AddressSpaceHelper
         foreach (var segment in path.Split('.'))
         {
             current = FindChild(session, current, segment);
-            if (current.IsNullNodeId) return NodeId.Null;
+            if (current.IsNullNodeId()) return NodeId.Null;
         }
         return current;
     }
@@ -262,22 +293,15 @@ public sealed class AddressSpaceHelper
 
     /// <summary>
     /// Reads the <c>Value</c> attribute of a single variable node via
-    /// <c>ISessionClientMethods.Read</c> (the actual interface method, not the
-    /// extension-method wrapper, so the call can be intercepted in unit tests).
+    /// <c>ISession.ReadValue</c>.
     /// Returns <c>null</c> on any error (bad status, node not found, etc.).
     /// </summary>
     public static object? ReadValue(ISession session, NodeId nodeId)
     {
         try
         {
-            var nodesToRead = new ReadValueIdCollection
-            {
-                new ReadValueId { NodeId = nodeId, AttributeId = Attributes.Value },
-            };
-            session.Read(null, 0.0, TimestampsToReturn.Neither, nodesToRead,
-                out var results, out _);
-            var dv = results?[0];
-            return dv != null && StatusCode.IsGood(dv.StatusCode) ? dv.Value : null;
+            var dv = session.ReadValue(nodeId);
+            return StatusCode.IsGood(dv.StatusCode) ? dv.Value : null;
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
@@ -285,6 +309,10 @@ public sealed class AddressSpaceHelper
             return null;
         }
         catch (InvalidCastException)
+        {
+            return null;
+        }
+        catch (NullReferenceException)
         {
             return null;
         }
@@ -319,12 +347,12 @@ public sealed class AddressSpaceHelper
         var result = new List<(string, NodeId)>();
         var assetsNode = ResolvePath(session, joiningSystemNodeId,
             $"AssetManagement.Assets.{assetCategory}");
-        if (assetsNode.IsNullNodeId) return result;
+        if (assetsNode.IsNullNodeId()) return result;
 
         var refs = BrowseChildren(session, assetsNode, NodeClass.Object);
         foreach (var r in refs)
         {
-            var name = r.BrowseName?.Name;
+            var name = r.BrowseName.Name;
             if (name is not null && !name.StartsWith('<')) // skip placeholder nodes
                 result.Add((name, (NodeId)r.NodeId));
         }
@@ -338,7 +366,7 @@ public sealed class AddressSpaceHelper
     public static string ReadAssetIdentification(ISession session, NodeId assetNodeId)
     {
         var idNode = FindChild(session, assetNodeId, "Identification");
-        if (idNode.IsNullNodeId) return "(no Identification node)";
+        if (idNode.IsNullNodeId()) return "(no Identification node)";
 
         var manufacturer = ReadValue<string>(session, FindChild(session, idNode, "Manufacturer"));
         var serial = ReadValue<string>(session, FindChild(session, idNode, "SerialNumber"));

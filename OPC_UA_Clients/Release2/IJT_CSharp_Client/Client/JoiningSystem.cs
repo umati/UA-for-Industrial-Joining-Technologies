@@ -1,12 +1,15 @@
 #nullable enable
 
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using IJT_CSharp_Client.Configuration;
 using IJT_CSharp_Client.Domain.Events;
 using IJT_CSharp_Client.Domain.Results;
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
+using MachineryResult;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -135,20 +138,19 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         await hooks.EnsureApplicationCertificateAsync(config, appConfig, ct).ConfigureAwait(false);
 
         if (config.AutoAcceptServerCertificate)
-            appConfig.CertificateValidator.CertificateValidation += (_, e) =>
-            {
-                log.LogWarning("DEV ONLY - accepting untrusted certificate: {Subject}", e.Certificate?.Subject);
-                e.Accept = true;
-            };
+        {
+            appConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates = true;
+            log.LogWarning("DEV ONLY - AutoAcceptUntrustedCertificates enabled.");
+        }
 
         log.LogInformation("Discovering endpoints at {Url} ...", config.ServerUrl);
         var session = await DiscoverAndConnectAsync(appConfig, config, log, hooks, ct).ConfigureAwait(false);
 
         // Register all IJT encodeable types so the SDK can encode/decode ExtensionObjects.
         session.MessageContext.Factory.AddEncodeableTypes(
-            typeof(UAModel.IJTBase.EntityDataType).Assembly);
+            typeof(EntityDataType).Assembly);
         session.MessageContext.Factory.AddEncodeableTypes(
-            typeof(UAModel.MachineryResult.ResultDataType).Assembly);
+            typeof(ResultDataType).Assembly);
 
         var js = new JoiningSystem(session, config);
         session.KeepAliveInterval = KeepAliveIntervalMs;
@@ -161,7 +163,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         log.LogInformation(
             "Connected - IJTBase ns={IjtBase}, IJTTightening ns={IjtTightening}, MachineryResult ns={MachineryResult}",
             js.IjtBaseNsIdx, js.IjtTighteningNsIdx, js.MachineryResultNsIdx);
-        if (!js._joiningSystemNodeId.IsNullNodeId)
+        if (!js._joiningSystemNodeId.IsNullNodeId())
             log.LogInformation("JoiningSystem node: {NodeId}", js._joiningSystemNodeId);
 
         return js;
@@ -175,7 +177,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             ? Path.Combine(AppContext.BaseDirectory, "PKI")
             : config.PkiRootPath;
 
-        return new ApplicationConfiguration
+        return new ApplicationConfiguration(DefaultTelemetry.Create(_ => { }))
         {
             ApplicationName = config.ApplicationName,
             ApplicationType = ApplicationType.Client,
@@ -186,7 +188,9 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
                 {
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(pkiRoot, "own"),
-                    SubjectName = config.ApplicationName,
+                    SubjectName = config.ApplicationName.StartsWith("CN=", StringComparison.OrdinalIgnoreCase)
+                        ? config.ApplicationName
+                        : $"CN={config.ApplicationName}",
                 },
                 TrustedIssuerCertificates = new CertificateTrustList
                 {
@@ -252,15 +256,15 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             appConfig => appConfig.Validate(ApplicationType.Client),
             JoiningSystem.EnsureApplicationCertificateAsync,
             JoiningSystem.SelectEndpointDescription,
-            async (appConfig, endpoint, config, identity) => await Opc.Ua.Client.Session.Create(
+            (appConfig, endpoint, config, identity) => new DefaultSessionFactory().CreateAsync(
                     appConfig,
                     endpoint,
                     updateBeforeConnect: false,
                     sessionName: config.ApplicationName,
                     sessionTimeout: (uint)config.SessionTimeoutMs,
                     identity: identity,
-                    preferredLocales: null)
-                .ConfigureAwait(false));
+                    preferredLocales: default,
+                    ct: CancellationToken.None));
     }
 
     internal static string EndpointDiscoveryCacheKey(ClientConfig config)
@@ -289,12 +293,12 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         ILogger? log = null)
         => SelectEndpointDescription(
             config,
-            () => new EndpointDescriptionCollection { discoverEndpoint() },
+            () => [discoverEndpoint()],
             log);
 
     internal static EndpointDescription SelectEndpointDescription(
         ClientConfig config,
-        Func<EndpointDescriptionCollection> discoverEndpoints,
+        Func<IReadOnlyList<EndpointDescription>> discoverEndpoints,
         ILogger? log = null)
     {
         if (!config.CacheEndpointDiscovery)
@@ -316,7 +320,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         return EndpointDiscoveryCache.GetOrAdd(cacheKey, discoveredEndpoint);
     }
 
-    private static EndpointDescriptionCollection DiscoverEndpoints(
+    private static IReadOnlyList<EndpointDescription> DiscoverEndpoints(
         ApplicationConfiguration appConfig,
         ClientConfig config)
     {
@@ -327,7 +331,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
                 new Uri(config.ServerUrl),
                 EndpointConfiguration.Create(appConfig));
             discoveryClient.OperationTimeout = EndpointDiscoveryTimeoutMs;
-            return discoveryClient.GetEndpoints(null);
+            return discoveryClient.GetEndpoints(default).ToList();
         }
 
         return
@@ -336,13 +340,13 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
                 appConfig,
                 config.ServerUrl,
                 useSecurity: config.UseSecurityPolicyForEndpointDiscovery,
-                discoverTimeout: EndpointDiscoveryTimeoutMs),
+                discoverTimeout: EndpointDiscoveryTimeoutMs)!,
         ];
     }
 
     private static EndpointDescription SelectConfiguredEndpoint(
         ClientConfig config,
-        EndpointDescriptionCollection endpoints)
+        IReadOnlyList<EndpointDescription> endpoints)
     {
         if (endpoints.Count == 0)
             throw new InvalidOperationException($"No OPC UA endpoints were discovered at {config.ServerUrl}.");
@@ -402,7 +406,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         {
             UserIdentityKind.Anonymous => new UserIdentity(new AnonymousIdentityToken()),
             UserIdentityKind.UserName => BuildUserNameIdentity(config),
-            UserIdentityKind.X509 => new UserIdentity(LoadX509IdentityCertificate(config)),
+            UserIdentityKind.X509 => new UserIdentity(new X509IdentityTokenHandler(new X509IdentityToken { CertificateData = new ByteString(LoadX509IdentityCertificate(config).RawData) })),
             _ => throw new InvalidOperationException($"Unsupported user identity kind: {config.UserIdentityKind}"),
         };
 
@@ -410,9 +414,9 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         if (endpoint is not null)
         {
             if (config.UserIdentityKind == UserIdentityKind.UserName)
-                ValidateUserNameUserTokenPolicy(tokenPolicy, endpoint.SecurityPolicyUri);
+                ValidateUserNameUserTokenPolicy(tokenPolicy, endpoint.SecurityPolicyUri ?? string.Empty);
             else if (config.UserIdentityKind == UserIdentityKind.X509)
-                ValidateX509UserTokenPolicy(tokenPolicy, endpoint.SecurityPolicyUri);
+                ValidateX509UserTokenPolicy(tokenPolicy, endpoint.SecurityPolicyUri ?? string.Empty);
         }
 
         if (!string.IsNullOrWhiteSpace(tokenPolicy?.PolicyId))
@@ -471,7 +475,12 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             _ => UserTokenType.Anonymous,
         };
 
-        return endpoint.UserIdentityTokens.FirstOrDefault(policy => policy.TokenType == tokenType);
+        foreach (var policy in endpoint.UserIdentityTokens)
+        {
+            if (policy.TokenType == tokenType)
+                return policy;
+        }
+        return null;
     }
 
     internal static void ValidateX509UserTokenPolicy(
@@ -546,7 +555,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     {
         try
         {
-            var refs = AddressSpaceHelper.BrowseChildren(_session, ObjectIds.ObjectsFolder, NodeClass.Object);
+            var refs = AddressSpaceHelper.BrowseChildren(_session, Opc.Ua.ObjectIds.ObjectsFolder, NodeClass.Object);
             if (refs.Count == 0) return;
 
             var typeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, IjtBaseNsIdx);
@@ -568,8 +577,8 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             foreach (var r in refs)
             {
                 var nid = (NodeId)r.NodeId;
-                var browseName = r.BrowseName?.Name;
-                if (nid != ObjectIds.Server && browseName != "Server")
+                var browseName = r.BrowseName.Name;
+                if (nid != Opc.Ua.ObjectIds.Server && browseName != "Server")
                 {
                     _joiningSystemNodeId = nid;
                     _log.LogWarning("JoiningSystem fallback: {BrowseName} ({NodeId})", browseName ?? "<null>", nid);
@@ -609,7 +618,11 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         _log.LogWarning("Keep-alive failed ({Status}). Attempting reconnect ...", e.Status);
         try
         {
-            session.Reconnect();
+            if (session is Session concreteSession)
+            {
+                var reconnectHandler = new SessionReconnectHandler();
+                reconnectHandler.BeginReconnect(concreteSession, 10000, (_, _) => { });
+            }
             ResolveNamespaceIndices();
             DiscoverJoiningSystem();
             ResultManagement?.InvalidateNodeCache();
@@ -637,35 +650,39 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         NodeId methodId,
         params object[] inputArgs)
     {
-        if (objectId == null || objectId.IsNullNodeId)
+        if (objectId.IsNullNodeId())
             throw new InvalidOperationException("CallMethod: objectId is null/empty.");
-        if (methodId == null || methodId.IsNullNodeId)
+        if (methodId.IsNullNodeId())
             throw new InvalidOperationException("CallMethod: methodId is null/empty.");
 
-        var request = new CallMethodRequestCollection
+        var variants = inputArgs.Select(a => a is Variant v ? v : new Variant(a)).ToArray();
+        var request = new CallMethodRequest
         {
-            new CallMethodRequest
-            {
-                ObjectId       = objectId,
-                MethodId       = methodId,
-                InputArguments = inputArgs.Length > 0
-                    ? new VariantCollection(inputArgs.Select(a => new Variant(a)))
-                    : new VariantCollection(),
-            }
+            ObjectId = objectId,
+            MethodId = methodId,
+            InputArguments = new ArrayOf<Variant>(variants),
         };
+        var response = _session.CallAsync(
+            null,
+            new ArrayOf<CallMethodRequest>(new[] { request }),
+            CancellationToken.None).AsTask().GetAwaiter().GetResult();
 
-        _session.Call(
-            requestHeader: null,
-            methodsToCall: request,
-            results: out var results,
-            diagnosticInfos: out _);
+        if (response?.Results == null || response.Results.Count == 0)
+            return [];
 
-        ClientBase.ValidateResponse(results, request);
-        var result = results[0];
+        var result = response.Results[0];
         if (StatusCode.IsBad(result.StatusCode))
             throw new ServiceResultException(result.StatusCode);
 
-        return result.OutputArguments.Select(v => v.Value).ToList();
+        if (result.OutputArguments.Count == 0)
+            return [];
+
+        var list = new List<object>(result.OutputArguments.Count);
+        foreach (var arg in result.OutputArguments)
+        {
+            list.Add(arg.Value!);
+        }
+        return list;
     }
 
     // -- Browse helper ---------------------------------------------------------
@@ -676,7 +693,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         ushort nsIndex = 0,
         NodeClass nodeClassMask = NodeClass.Unspecified)
     {
-        if (parentId == null || parentId.IsNullNodeId)
+        if (parentId.IsNullNodeId())
             return NodeId.Null;
 
         var mask = nodeClassMask == NodeClass.Unspecified
@@ -687,7 +704,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         {
             var refs = AddressSpaceHelper.BrowseChildren(_session, parentId, mask);
             var match = refs.FirstOrDefault(r =>
-                r.BrowseName?.Name?.Equals(childBrowseName, StringComparison.OrdinalIgnoreCase) == true &&
+                r.BrowseName.Name?.Equals(childBrowseName, StringComparison.OrdinalIgnoreCase) == true &&
                 (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
 
             return match != null ? (NodeId)match.NodeId : NodeId.Null;
@@ -708,11 +725,11 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- BrowseChildren helper ------------------------------------------------
 
-    public ReferenceDescriptionCollection BrowseChildren(
+    public IReadOnlyList<ReferenceDescription> BrowseChildren(
         NodeId parentId,
         uint nodeClassMask = (uint)NodeClass.Unspecified)
     {
-        if (parentId == null || parentId.IsNullNodeId)
+        if (parentId.IsNullNodeId())
             return [];
 
         var mask = nodeClassMask == (uint)NodeClass.Unspecified
@@ -740,7 +757,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     public Dictionary<string, NodeId> DiscoverMethodsUnder(NodeId objectId)
     {
-        if (objectId == null || objectId.IsNullNodeId)
+        if (objectId.IsNullNodeId())
             return new Dictionary<string, NodeId>(StringComparer.OrdinalIgnoreCase);
 
         try
@@ -748,7 +765,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             var refs = AddressSpaceHelper.BrowseChildren(_session, objectId, NodeClass.Method);
 
             return refs.ToDictionary(
-                r => r.BrowseName.Name,
+                r => r.BrowseName.Name ?? string.Empty,
                 r => (NodeId)r.NodeId,
                 StringComparer.OrdinalIgnoreCase);
         }
@@ -765,7 +782,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     {
         // Tier 1: exact browse by name
         var m = BrowseChild(objectId, methodBrowseName, nodeClassMask: NodeClass.Method);
-        if (!m.IsNullNodeId) return m;
+        if (!m.IsNullNodeId()) return m;
 
         // Tier 2: enumerate all Method children, case-insensitive match
         var methods = DiscoverMethodsUnder(objectId);

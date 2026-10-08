@@ -1,8 +1,8 @@
 #nullable enable
 
+using IJTBase;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using UAModel.IJTBase;
 
 namespace IJT_CSharp_Client.Helpers;
 

@@ -310,7 +310,7 @@ public sealed class EventSubscriberTests
     public void AsExtensionObjectArray_WithMissingKey_ReturnsNull()
     {
         var map = new Dictionary<string, object?>();
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Missing");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Missing");
         Assert.Null(result);
     }
 
@@ -318,18 +318,18 @@ public sealed class EventSubscriberTests
     public void AsExtensionObjectArray_WithNullValue_ReturnsNull()
     {
         var map = new Dictionary<string, object?> { ["Entities"] = null };
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
         Assert.Null(result);
     }
 
     [Fact]
     public void AsExtensionObjectArray_WithExtensionObjectArray_ReturnsTypedArray()
     {
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "E1" };
+        var entity = new IJTBase.EntityDataType { EntityId = "E1" };
         var eoArr = new ExtensionObject[] { new ExtensionObject(entity) };
         var map = new Dictionary<string, object?> { ["Entities"] = eoArr };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.NotNull(result);
         Assert.Single(result);
@@ -339,10 +339,10 @@ public sealed class EventSubscriberTests
     [Fact]
     public void AsExtensionObjectArray_WithSingleExtensionObject_ReturnsSingleElementArray()
     {
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "E2" };
+        var entity = new IJTBase.EntityDataType { EntityId = "E2" };
         var map = new Dictionary<string, object?> { ["Entity"] = new ExtensionObject(entity) };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entity");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entity");
 
         Assert.NotNull(result);
         Assert.Single(result);
@@ -351,11 +351,11 @@ public sealed class EventSubscriberTests
     [Fact]
     public void AsExtensionObjectArray_WithVariantWrapped_ExtractsValue()
     {
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "E3" };
+        var entity = new IJTBase.EntityDataType { EntityId = "E3" };
         var eoArr = new ExtensionObject[] { new ExtensionObject(entity) };
         var map = new Dictionary<string, object?> { ["Entities"] = new Variant(eoArr) };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.NotNull(result);
     }
@@ -364,7 +364,7 @@ public sealed class EventSubscriberTests
     public void AsExtensionObjectArray_WithUnknownType_ReturnsNull()
     {
         var map = new Dictionary<string, object?> { ["Key"] = "not-an-extension-object" };
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Key");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Key");
         Assert.Null(result);
     }
 
@@ -417,9 +417,9 @@ public sealed class EventSubscriberTests
         EventSubscriber.ResultReadyEventArgs? captured = null;
         sut.OnResultReady += (_, args) => captured = args;
 
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RES-EVT-1" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "RES-EVT-1" }
         };
 
         var fields = new VariantCollection
@@ -445,9 +445,9 @@ public sealed class EventSubscriberTests
         EventSubscriber.ResultReadyEventArgs? captured = null;
         sut.OnResultReady += (_, args) => captured = args;
 
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "RES-JPM-1",
                 Name = "TighteningProgram",
@@ -497,7 +497,7 @@ public sealed class EventSubscriberTests
         sut.OnJoiningSystemEvent += (_, args) => captured = args;
 
         var eventTime = new DateTime(2026, 3, 1, 11, 0, 0, DateTimeKind.Utc);
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "TOOL-001" };
+        var entity = new IJTBase.EntityDataType { EntityId = "TOOL-001" };
         var eoArr = new ExtensionObject[] { new ExtensionObject(entity) };
 
         // Fields: EventId=0, EventType=1, Time=2, Message=3, SourceName=4,
@@ -548,25 +548,25 @@ public sealed class EventSubscriberTests
         Assert.NotNull(filter.WhereClause);
     }
 
-    // ── AddSelectClause ───────────────────────────────────────────────────────
+    // ── CreateSelectClause ───────────────────────────────────────────────────────
 
     [Fact]
-    public void AddSelectClause_AddsClauseToFilter()
+    public void CreateSelectClause_AddsClauseToFilter()
     {
-        var filter = new EventFilter();
-        EventSubscriber.AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "EventId");
+        var clause = EventSubscriber.CreateSelectClause(ObjectTypeIds.BaseEventType, 0, "EventId");
+        var filter = new EventFilter { SelectClauses = new[] { clause } };
 
-        Assert.Single(filter.SelectClauses);
+        Assert.Single(filter.SelectClauses.ToArray()!);
         Assert.Equal("EventId", filter.SelectClauses[0].BrowsePath[0].Name);
     }
 
     [Fact]
-    public void AddSelectClause_WithMultiplePathSegments_CreatesMultiSegmentPath()
+    public void CreateSelectClause_WithMultiplePathSegments_CreatesMultiSegmentPath()
     {
-        var filter = new EventFilter();
-        EventSubscriber.AddSelectClause(filter, ObjectTypeIds.BaseEventType, 1, "Parent", "Child");
+        var clause = EventSubscriber.CreateSelectClause(ObjectTypeIds.BaseEventType, 1, "Parent", "Child");
+        var filter = new EventFilter { SelectClauses = new[] { clause } };
 
-        Assert.Single(filter.SelectClauses);
+        Assert.Single(filter.SelectClauses.ToArray()!);
         Assert.Equal(2, filter.SelectClauses[0].BrowsePath.Count);
     }
 }

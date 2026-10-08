@@ -70,9 +70,9 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         return await WithTimeout(() =>
         {
             var sims = session.BrowseChild(session.NodeId, "Simulations");
-            if (sims.IsNullNodeId) return (NodeId.Null, NodeId.Null);
+            if (sims.IsNullNodeId()) return (NodeId.Null, NodeId.Null);
             var simRes = session.BrowseChild(sims, "SimulateResults");
-            if (simRes.IsNullNodeId) return (NodeId.Null, NodeId.Null);
+            if (simRes.IsNullNodeId()) return (NodeId.Null, NodeId.Null);
             var simMeth = session.BrowseChild(simRes, "SimulateSingleResult", nodeClassMask: NodeClass.Method);
             return (simRes, simMeth);
         }, 10, "browse Simulations/SimulateResults/SimulateSingleResult").ConfigureAwait(false);
@@ -89,13 +89,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         return await WithTimeout(() =>
         {
             var sims = session.BrowseChild(session.NodeId, "Simulations");
-            if (sims.IsNullNodeId) return (NodeId.Null, NodeId.Null);
+            if (sims.IsNullNodeId()) return (NodeId.Null, NodeId.Null);
 
             var eventSimulationNode = session.BrowseChild(
                 sims,
                 "SimulateEventsAndConditions",
                 nodeClassMask: NodeClass.Object);
-            if (!eventSimulationNode.IsNullNodeId)
+            if (!eventSimulationNode.IsNullNodeId())
             {
                 var meth = session.BrowseChild(
                     eventSimulationNode,
@@ -118,10 +118,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         return await WithTimeout(() =>
         {
-            var am = session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
-            if (am.IsNullNodeId) return NodeId.Null;
-            var ms = session.BrowseChild(am, UAModel.IJTBase.BrowseNames.MethodSet);
-            return ms.IsNullNodeId ? am : ms;
+            var am = session.BrowseChild(session.NodeId, IJTBase.BrowseNames.AssetManagement);
+            if (am.IsNullNodeId()) return NodeId.Null;
+            var ms = session.BrowseChild(am, IJTBase.BrowseNames.MethodSet);
+            return ms.IsNullNodeId() ? am : ms;
         }, 10, "browse AssetManagement MethodSet").ConfigureAwait(false);
     }
 
@@ -134,26 +134,26 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         var productInstanceUri = await WithTimeout(() =>
         {
-            var assetManagement = session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
-            if (assetManagement.IsNullNodeId) return string.Empty;
+            var assetManagement = session.BrowseChild(session.NodeId, IJTBase.BrowseNames.AssetManagement);
+            if (assetManagement.IsNullNodeId()) return string.Empty;
 
-            var assets = session.BrowseChild(assetManagement, UAModel.IJTBase.BrowseNames.Assets);
-            if (assets.IsNullNodeId) return string.Empty;
+            var assets = session.BrowseChild(assetManagement, IJTBase.BrowseNames.Assets);
+            if (assets.IsNullNodeId()) return string.Empty;
 
             var tools = session.BrowseChild(assets, "Tools");
-            if (tools.IsNullNodeId) return string.Empty;
+            if (tools.IsNullNodeId()) return string.Empty;
 
             foreach (var toolRef in session.BrowseChildren(tools, (uint)NodeClass.Object))
             {
                 var toolNode = (NodeId)toolRef.NodeId;
                 var identification = session.BrowseChild(toolNode, "Identification");
-                if (identification.IsNullNodeId) continue;
+                if (identification.IsNullNodeId()) continue;
 
                 var piuNode = session.BrowseChild(
                     identification,
                     "ProductInstanceUri",
                     nodeClassMask: NodeClass.Variable);
-                if (piuNode.IsNullNodeId) continue;
+                if (piuNode.IsNullNodeId()) continue;
 
                 var value = AddressSpaceHelper.ReadValue<string>(session.Session, piuNode);
                 if (!string.IsNullOrWhiteSpace(value)) return value;
@@ -177,7 +177,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         var (simResultsNode, simMethodId) = await BrowseSimulateSingleResultMethod(session)
             .ConfigureAwait(false);
-        if (simResultsNode.IsNullNodeId || simMethodId.IsNullNodeId) return false;
+        if (simResultsNode.IsNullNodeId() || simMethodId.IsNullNodeId()) return false;
         await WithTimeout(
             () => session.CallMethod(simResultsNode, simMethodId, resultType, includeTraces),
             10, "CallMethod SimulateSingleResult").ConfigureAwait(false);
@@ -215,7 +215,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         return await WithTimeout(() =>
         {
             var m = session.BrowseChild(objectNode, methodBrowseName, nodeClassMask: NodeClass.Method);
-            if (!m.IsNullNodeId) return m;
+            if (!m.IsNullNodeId()) return m;
             return fallbackConstant > 0 ? session.IjtBaseMethodId(fallbackConstant) : NodeId.Null;
         }, 10, $"browse method {methodBrowseName}").ConfigureAwait(false);
     }
@@ -263,7 +263,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
-        Assert.False(session.NodeId.IsNullNodeId,
+        Assert.False(session.NodeId.IsNullNodeId(),
             "JoiningSystem instance must be found in Objects folder via HasTypeDefinition=JoiningSystemType");
     }
 
@@ -278,7 +278,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
 
-        Assert.False(node.IsNullNodeId, "ResultManagement child node must be browseable under JoiningSystem");
+        Assert.False(node.IsNullNodeId(), "ResultManagement child node must be browseable under JoiningSystem");
     }
 
     [SkippableFact]
@@ -289,10 +289,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var node = await WithTimeout(
-            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement),
+            () => session.BrowseChild(session.NodeId, IJTBase.BrowseNames.AssetManagement),
             10, "browse AssetManagement").ConfigureAwait(false);
 
-        Assert.False(node.IsNullNodeId, "AssetManagement child node must be browseable under JoiningSystem");
+        Assert.False(node.IsNullNodeId(), "AssetManagement child node must be browseable under JoiningSystem");
     }
 
     [SkippableFact]
@@ -303,10 +303,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var node = await WithTimeout(
-            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
+            () => session.BrowseChild(session.NodeId, IJTBase.BrowseNames.JoiningProcessManagement),
             10, "browse JoiningProcessManagement").ConfigureAwait(false);
 
-        Assert.False(node.IsNullNodeId, "JoiningProcessManagement child node must be browseable under JoiningSystem");
+        Assert.False(node.IsNullNodeId(), "JoiningProcessManagement child node must be browseable under JoiningSystem");
     }
 
     [SkippableFact]
@@ -320,8 +320,8 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
 
-        Skip.If(node.IsNullNodeId, "Simulations node absent — server does not expose simulation nodes; skipping");
-        Assert.False(node.IsNullNodeId);
+        Skip.If(node.IsNullNodeId(), "Simulations node absent — server does not expose simulation nodes; skipping");
+        Assert.False(node.IsNullNodeId());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -468,7 +468,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(subOk, "Subscribe timed out; skipping");
 
         var (eventSimulationNode, simEventsMethod) = await BrowseSimulateEventsMethod(session).ConfigureAwait(false);
-        Skip.IfNot(!simEventsMethod.IsNullNodeId, "SimulateEvents method not found; skipping");
+        Skip.IfNot(!simEventsMethod.IsNullNodeId(), "SimulateEvents method not found; skipping");
 
         var tcs = new TaskCompletionSource<EventSubscriber.JoiningSystemEventArgs>(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -506,11 +506,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var rmNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
-        Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
+        Skip.IfNot(!rmNode.IsNullNodeId(), "ResultManagement node not found; skipping");
 
         var methodId = await BrowseMethodNode(session, rmNode, "GetLatestResult",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetLatestResult method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetLatestResult method not found; skipping");
         var outputs = await WithTimeout(
             () => session.CallMethod(rmNode, methodId, 5000),
             15, "GetLatestResult").ConfigureAwait(false);
@@ -534,11 +534,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var rmNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
-        Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
+        Skip.IfNot(!rmNode.IsNullNodeId(), "ResultManagement node not found; skipping");
 
         var methodId = await BrowseMethodNode(session, rmNode, "GetLatestResult",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetLatestResult method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetLatestResult method not found; skipping");
         var outputs = await WithTimeout(
             () => session.CallMethod(rmNode, methodId, 5000),
             15, "GetLatestResult").ConfigureAwait(false);
@@ -563,11 +563,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var rmNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
-        Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
+        Skip.IfNot(!rmNode.IsNullNodeId(), "ResultManagement node not found; skipping");
 
         var methodId = await BrowseMethodNode(session, rmNode, "GetLatestResult",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetLatestResult method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetLatestResult method not found; skipping");
         var outputs = await WithTimeout(
             () => session.CallMethod(rmNode, methodId, 5000),
             15, "GetLatestResult").ConfigureAwait(false);
@@ -575,7 +575,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 
         var body = Unwrap(outputs[1]);
         Assert.NotNull(body);
-        Assert.IsAssignableFrom<UAModel.MachineryResult.ResultDataType>(body);
+        Assert.IsAssignableFrom<MachineryResult.ResultDataType>(body);
     }
 
     [SkippableFact]
@@ -592,17 +592,17 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var rmNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
-        Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
+        Skip.IfNot(!rmNode.IsNullNodeId(), "ResultManagement node not found; skipping");
 
         var methodId = await BrowseMethodNode(session, rmNode, "GetLatestResult",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetLatestResult method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetLatestResult method not found; skipping");
         var outputs = await WithTimeout(
             () => session.CallMethod(rmNode, methodId, 5000),
             15, "GetLatestResult").ConfigureAwait(false);
         Skip.IfNot(outputs.Count >= 2, "No payload; skipping");
 
-        var rd = Unwrap(outputs[1]) as UAModel.MachineryResult.ResultDataType;
+        var rd = Unwrap(outputs[1]) as MachineryResult.ResultDataType;
         Skip.IfNot(rd is not null, "Result body is not ResultDataType; skipping");
 
         Assert.NotNull(rd.ResultMetaData);
@@ -620,11 +620,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var rmNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
-        Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
+        Skip.IfNot(!rmNode.IsNullNodeId(), "ResultManagement node not found; skipping");
 
         var methodId = await BrowseMethodNode(session, rmNode, "GetResultById",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetResultById).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetResultById method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetResultById).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetResultById method not found; skipping");
         var outputs = await WithTimeout(
             () => session.CallMethod(rmNode, methodId, string.Empty, 5000),
             15, "GetResultById(empty)").ConfigureAwait(false);
@@ -649,13 +649,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var rmNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
-        Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement node not found; skipping");
+        Skip.IfNot(!rmNode.IsNullNodeId(), "ResultManagement node not found; skipping");
 
         var getLatestId = await BrowseMethodNode(session, rmNode, "GetLatestResult",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
         var getByIdId = await BrowseMethodNode(session, rmNode, "GetResultById",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetResultById).ConfigureAwait(false);
-        Skip.IfNot(!getLatestId.IsNullNodeId && !getByIdId.IsNullNodeId, "Result method(s) not found; skipping");
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetResultById).ConfigureAwait(false);
+        Skip.IfNot(!getLatestId.IsNullNodeId() && !getByIdId.IsNullNodeId(), "Result method(s) not found; skipping");
 
         // Step 1: get latest result to obtain a real ResultId
         var latestOutputs = await WithTimeout(
@@ -663,7 +663,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             15, "GetLatestResult").ConfigureAwait(false);
         Skip.IfNot(latestOutputs.Count >= 2, "GetLatestResult returned no payload; skipping");
 
-        var latestRd = Unwrap(latestOutputs[1]) as UAModel.MachineryResult.ResultDataType;
+        var latestRd = Unwrap(latestOutputs[1]) as MachineryResult.ResultDataType;
         Skip.IfNot(latestRd is not null, "Latest result not deserializable as ResultDataType; skipping");
 
         var resultId = latestRd.ResultMetaData?.ResultId;
@@ -676,7 +676,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(byIdOutputs.Count >= 2 && byIdOutputs[1] is not null,
             "GetResultById returned no payload; skipping");
 
-        var byIdRd = Unwrap(byIdOutputs[1]) as UAModel.MachineryResult.ResultDataType;
+        var byIdRd = Unwrap(byIdOutputs[1]) as MachineryResult.ResultDataType;
         Skip.IfNot(byIdRd is not null, "GetResultById result not deserializable; skipping");
 
         Assert.Equal(resultId, byIdRd.ResultMetaData?.ResultId);
@@ -692,22 +692,17 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var rmNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
-        Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement not found; skipping");
+        Skip.IfNot(!rmNode.IsNullNodeId(), "ResultManagement not found; skipping");
 
         var resultsFolder = await WithTimeout(
             () => session.BrowseChild(rmNode, "Results"),
             10, "browse Results folder").ConfigureAwait(false);
-        Skip.IfNot(!resultsFolder.IsNullNodeId, "Results folder not found; skipping");
+        Skip.IfNot(!resultsFolder.IsNullNodeId(), "Results folder not found; skipping");
 
-        ReferenceDescriptionCollection? varRefs = null;
-        await WithTimeout(() =>
-            session.Session.Browse(null, null, resultsFolder, 0,
-                BrowseDirection.Forward, ReferenceTypeIds.HierarchicalReferences,
-                true, (uint)NodeClass.Variable, out _, out varRefs),
-            10, "browse Results variables").ConfigureAwait(false);
-        Skip.IfNot(varRefs?.Count > 0, "No result variable found under Results; skipping");
+        var varRefs = session.BrowseChildren(resultsFolder, (uint)NodeClass.Variable);
+        Skip.IfNot(varRefs.Count > 0, "No result variable found under Results; skipping");
 
-        var resultVarId = (NodeId)varRefs![0].NodeId;
+        var resultVarId = (NodeId)varRefs[0].NodeId;
         var sub = new Subscription(session.Session.DefaultSubscription)
         {
             DisplayName = "test-result-variable-watch",
@@ -756,11 +751,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.EnableAsset,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "EnableAsset method not found; skipping");
+        var methodId = await BrowseMethodNode(session, methodSetNode, IJTBase.BrowseNames.EnableAsset,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "EnableAsset method not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         var outputs = await WithTimeout(
@@ -778,11 +773,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.EnableAsset,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "EnableAsset method not found; skipping");
+        var methodId = await BrowseMethodNode(session, methodSetNode, IJTBase.BrowseNames.EnableAsset,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "EnableAsset method not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         var disableEx = await Record.ExceptionAsync(() =>
@@ -804,13 +799,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
         var sendTextId = await BrowseMethodNode(session, methodSetNode, "SendTextIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
-        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.GetIdentifiers,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
-        Skip.IfNot(!sendTextId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
+        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, IJTBase.BrowseNames.GetIdentifiers,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!sendTextId.IsNullNodeId() && !getIdentifiersId.IsNullNodeId(),
             "SendTextIdentifiers or GetIdentifiers method not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
@@ -836,13 +831,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
         var sendId = await BrowseMethodNode(session, methodSetNode, "SendIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers).ConfigureAwait(false);
-        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.GetIdentifiers,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
-        Skip.IfNot(!sendId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers).ConfigureAwait(false);
+        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, IJTBase.BrowseNames.GetIdentifiers,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!sendId.IsNullNodeId() && !getIdentifiersId.IsNullNodeId(),
             "SendIdentifiers or GetIdentifiers method not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
@@ -850,7 +845,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         {
             // EntityDataType.Create sets EncodingMask correctly so all supplied optional
             // fields (including IsExternal=false) are present in the binary stream.
-            new ExtensionObject(UAModel.IJTBase.EntityDataType.Create(
+            new ExtensionObject(IJTBase.EntityDataType.Create(
                 "urn:live-test:nut-001", entityType: 1, isExternal: false)),
         };
 
@@ -876,13 +871,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
         var sendTextId = await BrowseMethodNode(session, methodSetNode, "SendTextIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
         var resetId = await BrowseMethodNode(session, methodSetNode, "ResetIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers).ConfigureAwait(false);
-        Skip.IfNot(!sendTextId.IsNullNodeId && !resetId.IsNullNodeId,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!sendTextId.IsNullNodeId() && !resetId.IsNullNodeId(),
             "SendTextIdentifiers or ResetIdentifiers method not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
@@ -922,13 +917,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await WithTimeout(
-            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
+            () => session.BrowseChild(session.NodeId, IJTBase.BrowseNames.JoiningProcessManagement),
             10, "browse JoiningProcessManagement").ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJoiningProcessList method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jpmNode, IJTBase.BrowseNames.GetJoiningProcessList,
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJoiningProcessList method not found; skipping");
         var outputs = await WithTimeout(
             () => session.CallMethod(jpmNode, methodId, string.Empty),
             15, "GetJoiningProcessList").ConfigureAwait(false);
@@ -946,15 +941,15 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await WithTimeout(
-            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
+            () => session.BrowseChild(session.NodeId, IJTBase.BrowseNames.JoiningProcessManagement),
             10, "browse JoiningProcessManagement").ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
         var methodId = await BrowseMethodNode(session, jpmNode, "SelectJoiningProcess",
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "SelectJoiningProcess method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "SelectJoiningProcess method not found; skipping");
 
-        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+        var jpId = IJTBase.JoiningProcessIdentificationDataType.Create(
             joiningProcessId: "TEST-JP-LIVE-001",
             selectionName: "live-integration-test");
         var outputs = await WithTimeout(
@@ -974,21 +969,21 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await WithTimeout(
-            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
+            () => session.BrowseChild(session.NodeId, IJTBase.BrowseNames.JoiningProcessManagement),
             10, "browse JoiningProcessManagement").ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
         // Browse first; fall back to type-level constant (same as production code)
         var methodId = await WithTimeout(() =>
         {
             var mid = session.BrowseChild(jpmNode,
-                UAModel.IJTBase.BrowseNames.GetSelectedJoiningProgram,
+                IJTBase.BrowseNames.GetSelectedJoiningProgram,
                 nodeClassMask: NodeClass.Method);
-            return mid.IsNullNodeId
-                ? session.IjtBaseMethodId(UAModel.IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram)
+            return mid.IsNullNodeId()
+                ? session.IjtBaseMethodId(IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram)
                 : mid;
         }, 10, "browse GetSelectedJoiningProgram").ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetSelectedJoiningProgram method not found; skipping");
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetSelectedJoiningProgram method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jpmNode, methodId, SimToolUri),
@@ -1007,22 +1002,22 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await WithTimeout(
-            () => session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement),
+            () => session.BrowseChild(session.NodeId, IJTBase.BrowseNames.JoiningProcessManagement),
             10, "browse JoiningProcessManagement").ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
-        var listMethodId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        var listMethodId = await BrowseMethodNode(session, jpmNode, IJTBase.BrowseNames.GetJoiningProcessList,
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
         var selectMethodId = await BrowseMethodNode(session, jpmNode, "SelectJoiningProcess",
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
-        Skip.IfNot(!listMethodId.IsNullNodeId && !selectMethodId.IsNullNodeId, "JPM method(s) not found; skipping");
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
+        Skip.IfNot(!listMethodId.IsNullNodeId() && !selectMethodId.IsNullNodeId(), "JPM method(s) not found; skipping");
 
         var listOutputs = await WithTimeout(
             () => session.CallMethod(jpmNode, listMethodId, string.Empty),
             15, "GetJoiningProcessList").ConfigureAwait(false);
         Skip.IfNot(listOutputs.Count >= 1, "No outputs from GetJoiningProcessList; skipping round-trip");
 
-        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+        var jpId = IJTBase.JoiningProcessIdentificationDataType.Create(
             joiningProcessId: SimProgram4StepsId);
         var selectEx = await Record.ExceptionAsync(() =>
             WithTimeout(() => session.CallMethod(jpmNode, selectMethodId, SimToolUri, new ExtensionObject(jpId)),
@@ -1068,18 +1063,18 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.IfNot(!simsNode.IsNullNodeId, "Simulations node not found; skipping");
+        Skip.IfNot(!simsNode.IsNullNodeId(), "Simulations node not found; skipping");
 
         var simResultsNode = await WithTimeout(
             () => session.BrowseChild(simsNode, "SimulateResults"),
             10, "browse SimulateResults").ConfigureAwait(false);
-        Skip.IfNot(!simResultsNode.IsNullNodeId, "SimulateResults node not found; skipping");
+        Skip.IfNot(!simResultsNode.IsNullNodeId(), "SimulateResults node not found; skipping");
 
         var simBatchMethod = await WithTimeout(
             () => session.BrowseChild(simResultsNode, "SimulateBatch_Or_Sync_Result",
                 nodeClassMask: NodeClass.Method),
             10, "browse SimulateBatch_Or_Sync_Result").ConfigureAwait(false);
-        Skip.IfNot(!simBatchMethod.IsNullNodeId, "SimulateBatch_Or_Sync_Result method not found; skipping");
+        Skip.IfNot(!simBatchMethod.IsNullNodeId(), "SimulateBatch_Or_Sync_Result method not found; skipping");
 
         // SimulateBatch_Or_Sync_Result(classification: Byte, num_children: UInt32, include_traces: Bool, send_as_refs: Bool)
         var ex = await Record.ExceptionAsync(() =>
@@ -1099,17 +1094,17 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.IfNot(!simsNode.IsNullNodeId, "Simulations node not found; skipping");
+        Skip.IfNot(!simsNode.IsNullNodeId(), "Simulations node not found; skipping");
 
         var simResultsNode = await WithTimeout(
             () => session.BrowseChild(simsNode, "SimulateResults"),
             10, "browse SimulateResults").ConfigureAwait(false);
-        Skip.IfNot(!simResultsNode.IsNullNodeId, "SimulateResults node not found; skipping");
+        Skip.IfNot(!simResultsNode.IsNullNodeId(), "SimulateResults node not found; skipping");
 
         var simJobMethod = await WithTimeout(
             () => session.BrowseChild(simResultsNode, "SimulateJobResult", nodeClassMask: NodeClass.Method),
             10, "browse SimulateJobResult").ConfigureAwait(false);
-        Skip.IfNot(!simJobMethod.IsNullNodeId, "SimulateJobResult method not found; skipping");
+        Skip.IfNot(!simJobMethod.IsNullNodeId(), "SimulateJobResult method not found; skipping");
 
         // SimulateJobResult(send_as_refs: Boolean)
         var ex = await Record.ExceptionAsync(() =>
@@ -1156,17 +1151,17 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var rmNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
-        Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement not found; skipping cross-check");
+        Skip.IfNot(!rmNode.IsNullNodeId(), "ResultManagement not found; skipping cross-check");
 
         var getLatestId = await BrowseMethodNode(session, rmNode, "GetLatestResult",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
-        Skip.IfNot(!getLatestId.IsNullNodeId, "GetLatestResult method not found; skipping cross-check");
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
+        Skip.IfNot(!getLatestId.IsNullNodeId(), "GetLatestResult method not found; skipping cross-check");
         var outputs = await WithTimeout(
             () => session.CallMethod(rmNode, getLatestId, 5000),
             15, "GetLatestResult").ConfigureAwait(false);
         Skip.IfNot(outputs.Count >= 2, "GetLatestResult returned no payload; skipping cross-check");
 
-        var rd = Unwrap(outputs[1]) as UAModel.MachineryResult.ResultDataType;
+        var rd = Unwrap(outputs[1]) as MachineryResult.ResultDataType;
         // Simulator timing note: GetLatestResult may return a slightly stale result in race conditions.
         // Use Skip rather than Assert.Equal so CI does not fail on a valid timing gap.
         Skip.IfNot(rd?.ResultMetaData?.ResultId == eventResultId,
@@ -1183,15 +1178,15 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
         var sendTextId = await BrowseMethodNode(session, methodSetNode, "SendTextIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
         var resetId = await BrowseMethodNode(session, methodSetNode, "ResetIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers).ConfigureAwait(false);
-        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.GetIdentifiers,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
-        Skip.IfNot(!sendTextId.IsNullNodeId && !resetId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers).ConfigureAwait(false);
+        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, IJTBase.BrowseNames.GetIdentifiers,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!sendTextId.IsNullNodeId() && !resetId.IsNullNodeId() && !getIdentifiersId.IsNullNodeId(),
             "One or more identifier methods not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
@@ -1236,11 +1231,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var rmNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "ResultManagement"),
             10, "browse ResultManagement").ConfigureAwait(false);
-        Skip.IfNot(!rmNode.IsNullNodeId, "ResultManagement not found; skipping direct-call check");
+        Skip.IfNot(!rmNode.IsNullNodeId(), "ResultManagement not found; skipping direct-call check");
 
         var methodId = await BrowseMethodNode(session, rmNode, "GetLatestResult",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetLatestResult method not found; skipping direct-call check");
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetLatestResult method not found; skipping direct-call check");
         var outputs = await WithTimeout(
             () => session.CallMethod(rmNode, methodId, 5000),
             15, "direct GetLatestResult").ConfigureAwait(false);
@@ -1268,9 +1263,9 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         return await WithTimeout(() =>
         {
-            var jm = session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JointManagement);
-            return jm.IsNullNodeId
-                ? session.IjtBaseObjectId(UAModel.IJTBase.Objects.JoiningSystemType_JointManagement)
+            var jm = session.BrowseChild(session.NodeId, IJTBase.BrowseNames.JointManagement);
+            return jm.IsNullNodeId()
+                ? session.IjtBaseObjectId(IJTBase.Objects.JoiningSystemType_JointManagement)
                 : jm;
         }, 10, "browse JointManagement").ConfigureAwait(false);
     }
@@ -1282,9 +1277,9 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     {
         return await WithTimeout(() =>
         {
-            var jpm = session.BrowseChild(session.NodeId, UAModel.IJTBase.BrowseNames.JoiningProcessManagement);
-            return jpm.IsNullNodeId
-                ? session.IjtBaseObjectId(UAModel.IJTBase.Objects.JoiningSystemType_JoiningProcessManagement)
+            var jpm = session.BrowseChild(session.NodeId, IJTBase.BrowseNames.JoiningProcessManagement);
+            return jpm.IsNullNodeId()
+                ? session.IjtBaseObjectId(IJTBase.Objects.JoiningSystemType_JoiningProcessManagement)
                 : jpm;
         }, 10, "browse JoiningProcessManagement").ConfigureAwait(false);
     }
@@ -1314,11 +1309,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJointList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJointList method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.GetJointList,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJointList method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jmNode, methodId, string.Empty),
@@ -1337,11 +1332,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJointList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJointList method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.GetJointList,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJointList method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jmNode, methodId, string.Empty),
@@ -1361,11 +1356,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJointList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJointList method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.GetJointList,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJointList method not found; skipping");
 
         var emptyOutputs = await WithTimeout(
             () => session.CallMethod(jmNode, methodId, string.Empty),
@@ -1388,11 +1383,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJoint method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.GetJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJoint method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jmNode, methodId, SimToolUri, SimJoint1Id),
@@ -1410,11 +1405,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJoint method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.GetJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJoint method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jmNode, methodId, SimToolUri, SimJoint2Id),
@@ -1431,11 +1426,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJoint method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.GetJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJoint method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jmNode, methodId, SimToolUri, SimJoint1Id),
@@ -1443,7 +1438,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(outputs.Count >= 1 && outputs[0] is not null, "GetJoint returned no joint data; skipping");
 
         var body = Unwrap(outputs[0]);
-        var joint = body as UAModel.IJTBase.JointDataType;
+        var joint = body as IJTBase.JointDataType;
         Skip.IfNot(joint is not null, "GetJoint body is not JointDataType; skipping");
 
         Assert.Equal(SimJoint1Id, joint!.JointId);
@@ -1457,11 +1452,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJoint method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.GetJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJoint method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jmNode, methodId, SimToolUri, "NonExistentJoint_XYZ"),
@@ -1480,11 +1475,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SelectJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "SelectJoint method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.SelectJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "SelectJoint method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jmNode, methodId, SimToolUri, SimJoint1Id, SimJoint1Id),
@@ -1502,16 +1497,16 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var sendMethodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SendJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
-        var delMethodId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.DeleteJoint,
-            UAModel.IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
-        Skip.IfNot(!sendMethodId.IsNullNodeId, "SendJoint method not found; skipping");
+        var sendMethodId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.SendJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
+        var delMethodId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.DeleteJoint,
+            IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
+        Skip.IfNot(!sendMethodId.IsNullNodeId(), "SendJoint method not found; skipping");
 
         const string testJointId = "LiveTest_SendJoint_Status0";
-        var joint = UAModel.IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "TestDesign");
+        var joint = IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "TestDesign");
         var ext = new ExtensionObject(joint);
 
         var outputs = await WithTimeout(
@@ -1519,7 +1514,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             10, "SendJoint").ConfigureAwait(false);
 
         // Best-effort cleanup — delete the test joint regardless of send result
-        if (!delMethodId.IsNullNodeId)
+        if (!delMethodId.IsNullNodeId())
         {
             try
             {
@@ -1542,18 +1537,18 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var sendId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SendJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
-        var getId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
-        var deleteId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.DeleteJoint,
-            UAModel.IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
-        Skip.IfNot(!sendId.IsNullNodeId && !getId.IsNullNodeId, "SendJoint or GetJoint method not found; skipping");
+        var sendId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.SendJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
+        var getId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.GetJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        var deleteId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.DeleteJoint,
+            IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
+        Skip.IfNot(!sendId.IsNullNodeId() && !getId.IsNullNodeId(), "SendJoint or GetJoint method not found; skipping");
 
         const string testJointId = "LiveTest_SendGetJoint_RoundTrip";
-        var joint = UAModel.IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "RoundTripDesign");
+        var joint = IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "RoundTripDesign");
 
         await WithTimeout(
             () => session.CallMethod(jmNode, sendId, SimToolUri, new ExtensionObject(joint)),
@@ -1564,7 +1559,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             10, $"GetJoint({testJointId})").ConfigureAwait(false);
 
         // Cleanup
-        if (!deleteId.IsNullNodeId)
+        if (!deleteId.IsNullNodeId())
         {
             try
             {
@@ -1576,7 +1571,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         }
 
         Assert.Equal(0, ReadStatus(getOutputs));
-        var body = Unwrap(getOutputs.Count > 0 ? getOutputs[0] : null) as UAModel.IJTBase.JointDataType;
+        var body = Unwrap(getOutputs.Count > 0 ? getOutputs[0] : null) as IJTBase.JointDataType;
         Skip.IfNot(body is not null, "GetJoint returned non-JointDataType body; skipping ID check");
         Assert.Equal(testJointId, body!.JointId);
     }
@@ -1589,17 +1584,17 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var sendId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SendJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
-        var deleteId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.DeleteJoint,
-            UAModel.IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
-        Skip.IfNot(!sendId.IsNullNodeId && !deleteId.IsNullNodeId,
+        var sendId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.SendJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
+        var deleteId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.DeleteJoint,
+            IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
+        Skip.IfNot(!sendId.IsNullNodeId() && !deleteId.IsNullNodeId(),
             "SendJoint or DeleteJoint method not found; skipping");
 
         const string testJointId = "LiveTest_SendDeleteJoint";
-        var joint = UAModel.IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "DeleteDesign");
+        var joint = IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "DeleteDesign");
 
         var sendOutputs = await WithTimeout(
             () => session.CallMethod(jmNode, sendId, SimToolUri, new ExtensionObject(joint)),
@@ -1621,27 +1616,27 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
-        var sendId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SendJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
-        var getId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.GetJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
-        var selectId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.SelectJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint).ConfigureAwait(false);
-        var deleteId = await BrowseMethodNode(session, jmNode, UAModel.IJTBase.BrowseNames.DeleteJoint,
-            UAModel.IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
-        Skip.IfNot(!sendId.IsNullNodeId && !getId.IsNullNodeId
-                   && !selectId.IsNullNodeId && !deleteId.IsNullNodeId,
+        var sendId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.SendJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint).ConfigureAwait(false);
+        var getId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.GetJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint).ConfigureAwait(false);
+        var selectId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.SelectJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint).ConfigureAwait(false);
+        var deleteId = await BrowseMethodNode(session, jmNode, IJTBase.BrowseNames.DeleteJoint,
+            IJTBase.Methods.JointManagementType_DeleteJoint).ConfigureAwait(false);
+        Skip.IfNot(!sendId.IsNullNodeId() && !getId.IsNullNodeId()
+                   && !selectId.IsNullNodeId() && !deleteId.IsNullNodeId(),
             "One or more JointManagement methods not found; skipping");
 
         const string testJointId = "LiveTest_FullJointFlow";
-        var joint = UAModel.IJTBase.JointDataType.Create(
+        var joint = IJTBase.JointDataType.Create(
             jointId: testJointId,
             jointDesignId: "FlowDesign",
             associatedEntities: new[]
             {
-                UAModel.IJTBase.EntityDataType.Create(
+                IJTBase.EntityDataType.Create(
                     SimProgram4StepsId, entityType: (short)27, name: "Program_4_Steps", isExternal: false)
             });
 
@@ -1755,11 +1750,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJoiningProcessList method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jpmNode, IJTBase.BrowseNames.GetJoiningProcessList,
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJoiningProcessList method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jpmNode, methodId, string.Empty),
@@ -1779,11 +1774,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJoiningProcessList method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jpmNode, IJTBase.BrowseNames.GetJoiningProcessList,
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJoiningProcessList method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jpmNode, methodId, string.Empty),
@@ -1803,11 +1798,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJoiningProcessList method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jpmNode, IJTBase.BrowseNames.GetJoiningProcessList,
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJoiningProcessList method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jpmNode, methodId, SimToolUri),
@@ -1827,11 +1822,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "GetJoiningProcessList method not found; skipping");
+        var methodId = await BrowseMethodNode(session, jpmNode, IJTBase.BrowseNames.GetJoiningProcessList,
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "GetJoiningProcessList method not found; skipping");
 
         var outputs = await WithTimeout(
             () => session.CallMethod(jpmNode, methodId, SimControllerUri),
@@ -1851,13 +1846,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
         var methodId = await BrowseMethodNode(session, jpmNode, "SelectJoiningProcess",
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "SelectJoiningProcess method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "SelectJoiningProcess method not found; skipping");
 
-        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+        var jpId = IJTBase.JoiningProcessIdentificationDataType.Create(
             joiningProcessId: SimProgram4StepsId);
         var outputs = await WithTimeout(
             () => session.CallMethod(jpmNode, methodId, SimToolUri, new ExtensionObject(jpId)),
@@ -1875,13 +1870,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
         var methodId = await BrowseMethodNode(session, jpmNode, "SelectJoiningProcess",
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "SelectJoiningProcess method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "SelectJoiningProcess method not found; skipping");
 
-        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+        var jpId = IJTBase.JoiningProcessIdentificationDataType.Create(
             joiningProcessId: SimProgramOneStepId, selectionName: "ProgramIndex_1");
         var outputs = await WithTimeout(
             () => session.CallMethod(jpmNode, methodId, SimToolUri, new ExtensionObject(jpId)),
@@ -1898,18 +1893,18 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
         var selectId = await BrowseMethodNode(session, jpmNode, "SelectJoiningProcess",
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
         var getSelectedId = await BrowseMethodNode(session, jpmNode,
-            UAModel.IJTBase.BrowseNames.GetSelectedJoiningProgram,
-            UAModel.IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram).ConfigureAwait(false);
-        Skip.IfNot(!selectId.IsNullNodeId && !getSelectedId.IsNullNodeId,
+            IJTBase.BrowseNames.GetSelectedJoiningProgram,
+            IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram).ConfigureAwait(false);
+        Skip.IfNot(!selectId.IsNullNodeId() && !getSelectedId.IsNullNodeId(),
             "SelectJoiningProcess or GetSelectedJoiningProgram method not found; skipping");
 
         // First select a known process
-        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(joiningProcessId: SimProgram4StepsId);
+        var jpId = IJTBase.JoiningProcessIdentificationDataType.Create(joiningProcessId: SimProgram4StepsId);
         await WithTimeout(
             () => session.CallMethod(jpmNode, selectId, SimToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcess").ConfigureAwait(false);
@@ -1931,16 +1926,16 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jpmNode.IsNullNodeId, "JoiningProcessManagement node not found; skipping");
+        Skip.IfNot(!jpmNode.IsNullNodeId(), "JoiningProcessManagement node not found; skipping");
 
-        var listId = await BrowseMethodNode(session, jpmNode, UAModel.IJTBase.BrowseNames.GetJoiningProcessList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
+        var listId = await BrowseMethodNode(session, jpmNode, IJTBase.BrowseNames.GetJoiningProcessList,
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_GetJoiningProcessList).ConfigureAwait(false);
         var selectId = await BrowseMethodNode(session, jpmNode, "SelectJoiningProcess",
-            UAModel.IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
+            IJTBase.Methods.JoiningSystemType_JoiningProcessManagement_SelectJoiningProcess).ConfigureAwait(false);
         var getProgId = await BrowseMethodNode(session, jpmNode,
-            UAModel.IJTBase.BrowseNames.GetSelectedJoiningProgram,
-            UAModel.IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram).ConfigureAwait(false);
-        Skip.IfNot(!listId.IsNullNodeId && !selectId.IsNullNodeId && !getProgId.IsNullNodeId,
+            IJTBase.BrowseNames.GetSelectedJoiningProgram,
+            IJTBase.Methods.JoiningProcessManagementType_GetSelectedJoiningProgram).ConfigureAwait(false);
+        Skip.IfNot(!listId.IsNullNodeId() && !selectId.IsNullNodeId() && !getProgId.IsNullNodeId(),
             "One or more JPM methods not found; skipping");
 
         // Step 1 — get list, extract first process ID
@@ -1950,7 +1945,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(listOutputs.Count >= 1, "No list output; skipping round-trip");
 
         // Use known ID directly (faster, avoids parsing the extension object array)
-        var jpId = UAModel.IJTBase.JoiningProcessIdentificationDataType.Create(
+        var jpId = IJTBase.JoiningProcessIdentificationDataType.Create(
             joiningProcessId: SimProgram4StepsId);
 
         // Step 2 — select
@@ -1978,11 +1973,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
-        var methodId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.EnableAsset,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "EnableAsset method not found; skipping");
+        var methodId = await BrowseMethodNode(session, methodSetNode, IJTBase.BrowseNames.EnableAsset,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "EnableAsset method not found; skipping");
 
         // Per IJT spec 7.4: business logic failures return OpcUa_Uncertain (not Bad) so output
         // arguments remain readable.  The method-level StatusCode is Good or Uncertain; the
@@ -2007,11 +2002,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
         var methodId = await BrowseMethodNode(session, methodSetNode, "SendTextIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "SendTextIdentifiers method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "SendTextIdentifiers method not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         var outputs = await WithTimeout(
@@ -2031,19 +2026,19 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
         var methodId = await BrowseMethodNode(session, methodSetNode, "SendIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "SendIdentifiers method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "SendIdentifiers method not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         // Entity 1 — PART (type 22), Entity 2 — TOOL (type 4)
         var entities = new[]
         {
-            new ExtensionObject(UAModel.IJTBase.EntityDataType.Create(
+            new ExtensionObject(IJTBase.EntityDataType.Create(
                 "urn:live-test:part-001", entityType: (short)22, name: "PartA", isExternal: false)),
-            new ExtensionObject(UAModel.IJTBase.EntityDataType.Create(
+            new ExtensionObject(IJTBase.EntityDataType.Create(
                 "urn:live-test:tool-001", entityType: (short)4,  name: "ToolB", isExternal: true)),
         };
 
@@ -2063,17 +2058,17 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
         var methodId = await BrowseMethodNode(session, methodSetNode, "SendIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers).ConfigureAwait(false);
-        Skip.IfNot(!methodId.IsNullNodeId, "SendIdentifiers method not found; skipping");
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!methodId.IsNullNodeId(), "SendIdentifiers method not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
         // PROGRAM (type 27)
         var entities = new[]
         {
-            new ExtensionObject(UAModel.IJTBase.EntityDataType.Create(
+            new ExtensionObject(IJTBase.EntityDataType.Create(
                 SimProgram4StepsId, entityType: (short)27, name: "Program_4_Steps", isExternal: false)),
         };
 
@@ -2092,13 +2087,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
         var sendTextId = await BrowseMethodNode(session, methodSetNode, "SendTextIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
-        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.GetIdentifiers,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
-        Skip.IfNot(!sendTextId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
+        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, IJTBase.BrowseNames.GetIdentifiers,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!sendTextId.IsNullNodeId() && !getIdentifiersId.IsNullNodeId(),
             "SendTextIdentifiers or GetIdentifiers method not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
@@ -2126,15 +2121,15 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
-        Skip.IfNot(!methodSetNode.IsNullNodeId, "AssetManagement MethodSet not found; skipping");
+        Skip.IfNot(!methodSetNode.IsNullNodeId(), "AssetManagement MethodSet not found; skipping");
 
         var sendTextId = await BrowseMethodNode(session, methodSetNode, "SendTextIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers).ConfigureAwait(false);
         var resetId = await BrowseMethodNode(session, methodSetNode, "ResetIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers).ConfigureAwait(false);
-        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, UAModel.IJTBase.BrowseNames.GetIdentifiers,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
-        Skip.IfNot(!sendTextId.IsNullNodeId && !resetId.IsNullNodeId && !getIdentifiersId.IsNullNodeId,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers).ConfigureAwait(false);
+        var getIdentifiersId = await BrowseMethodNode(session, methodSetNode, IJTBase.BrowseNames.GetIdentifiers,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers).ConfigureAwait(false);
+        Skip.IfNot(!sendTextId.IsNullNodeId() && !resetId.IsNullNodeId() && !getIdentifiersId.IsNullNodeId(),
             "One or more identifier methods not found; skipping");
         var productInstanceUri = await ReadRequiredToolProductInstanceUri(session).ConfigureAwait(false);
 
@@ -2366,12 +2361,12 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
-        Skip.IfNot(!jmNode.IsNullNodeId, "JointManagement node not found; skipping");
+        Skip.IfNot(!jmNode.IsNullNodeId(), "JointManagement node not found; skipping");
 
         var selectJointId = await BrowseMethodNode(session, jmNode,
-            UAModel.IJTBase.BrowseNames.SelectJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint).ConfigureAwait(false);
-        Skip.IfNot(!selectJointId.IsNullNodeId, "SelectJoint method not found; skipping");
+            IJTBase.BrowseNames.SelectJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint).ConfigureAwait(false);
+        Skip.IfNot(!selectJointId.IsNullNodeId(), "SelectJoint method not found; skipping");
 
         var selectOutputs = await WithTimeout(
             () => session.CallMethod(jmNode, selectJointId, SimToolUri, SimJoint1Id, ""),
@@ -2435,14 +2430,14 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
 
-        var signal = new UAModel.IJTBase.SignalDataType
+        var signal = new IJTBase.SignalDataType
         {
             SignalId = "SIG-001",
             SignalValue = new Variant(42.0),
         };
 
         await WithTimeout(
-            () => session.AssetManagement.SetIOSignals(SimToolUri, new[] { signal }),
+            () => session.AssetManagement.SetIOSignals(SimToolUri, new List<SignalDataType> { signal }),
             10, "SetIOSignals(1 signal)").ConfigureAwait(false);
     }
 
@@ -2460,7 +2455,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+        Skip.If(simsNode.IsNullNodeId(), "Simulations node absent; skipping");
 
         await WithTimeout(
             () => session.SimulationManagement.SimulateSingleResult(0, true),
@@ -2477,7 +2472,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+        Skip.If(simsNode.IsNullNodeId(), "Simulations node absent; skipping");
 
         await WithTimeout(
             () => session.SimulationManagement.SimulateSingleResult(2, true),
@@ -2494,7 +2489,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+        Skip.If(simsNode.IsNullNodeId(), "Simulations node absent; skipping");
 
         var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
         Skip.IfNot(subOk, "Subscribe timed out; skipping");
@@ -2526,7 +2521,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+        Skip.If(simsNode.IsNullNodeId(), "Simulations node absent; skipping");
 
         await WithTimeout(
             () => session.SimulationManagement.SimulateBatchOrSyncResult(3, 3, true, true),
@@ -2543,7 +2538,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+        Skip.If(simsNode.IsNullNodeId(), "Simulations node absent; skipping");
 
         await WithTimeout(
             () => session.SimulationManagement.SimulateBatchOrSyncResult(2, 2, true, true),
@@ -2560,7 +2555,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+        Skip.If(simsNode.IsNullNodeId(), "Simulations node absent; skipping");
 
         await WithTimeout(
             () => session.SimulationManagement.SimulateJobResult(true),
@@ -2577,7 +2572,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+        Skip.If(simsNode.IsNullNodeId(), "Simulations node absent; skipping");
 
         await WithTimeout(
             () => session.SimulationManagement.SimulateBulkResults(0, true, 1, 10, 200, true),
@@ -2594,7 +2589,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+        Skip.If(simsNode.IsNullNodeId(), "Simulations node absent; skipping");
 
         await WithTimeout(
             () => session.SimulationManagement.SimulateEvent(1),
@@ -2611,7 +2606,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+        Skip.If(simsNode.IsNullNodeId(), "Simulations node absent; skipping");
 
         var subOk = await SubscribeWithTimeout(session.EventSubscriber).ConfigureAwait(false);
         Skip.IfNot(subOk, "Subscribe timed out; skipping");
@@ -2644,7 +2639,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var simsNode = await WithTimeout(
             () => session.BrowseChild(session.NodeId, "Simulations"),
             10, "browse Simulations").ConfigureAwait(false);
-        Skip.If(simsNode.IsNullNodeId, "Simulations node absent; skipping");
+        Skip.If(simsNode.IsNullNodeId(), "Simulations node absent; skipping");
 
         await WithTimeout(
             () => session.SimulationManagement.SimulateBulkEvents(1, 10),

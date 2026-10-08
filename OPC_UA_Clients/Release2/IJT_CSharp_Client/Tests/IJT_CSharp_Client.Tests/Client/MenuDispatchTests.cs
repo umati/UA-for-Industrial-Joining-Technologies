@@ -691,10 +691,10 @@ public sealed class MenuDispatchTests
     public void MenuItem8_SendIdentifiers_WithDemoEntity_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
             // Exact values from Program.cs
-            UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false),
+            IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false),
         };
         new AssetManagement(mock.Object).SendIdentifiers(entities);
 
@@ -705,9 +705,9 @@ public sealed class MenuDispatchTests
     [Fact]
     public void MenuItem8_SendIdentifiers_WhenNodesNull_DoesNotThrow()
     {
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false),
+            IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false),
         };
         var ex = Record.Exception(() =>
             new AssetManagement(NullNodeMock().Object).SendIdentifiers(entities));
@@ -719,16 +719,16 @@ public sealed class MenuDispatchTests
     {
         // Program.cs case "14" now uses EntityDataType.Create() to ensure EncodingMask is set.
         // Verify the factory produces correctly masked data for a typical EntityType=1 entity.
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false);
+        var entity = IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false);
 
         Assert.Equal("ENT-001", entity.EntityId);
         Assert.Equal("Batch-A", entity.Name);
         Assert.False(entity.IsExternal);
         Assert.Equal((short)1, entity.EntityType);
         // Mask must include Name and IsExternal bits so they reach the server
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) != 0,
             "Name bit must be set in EncodingMask");
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.IsExternal) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.IsExternal) != 0,
             "IsExternal bit must be set in EncodingMask when IsExternal is explicitly supplied");
     }
 
@@ -740,9 +740,9 @@ public sealed class MenuDispatchTests
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("server fault"));
 
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A"),
+            IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A"),
         };
         var ex = Record.Exception(() =>
             new AssetManagement(mock.Object).SendIdentifiers(entities));
