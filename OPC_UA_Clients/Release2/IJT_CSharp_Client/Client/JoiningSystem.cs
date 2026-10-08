@@ -402,14 +402,6 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     internal static IUserIdentity BuildUserIdentity(ClientConfig config, EndpointDescription? endpoint = null)
     {
-        var identity = config.UserIdentityKind switch
-        {
-            UserIdentityKind.Anonymous => new UserIdentity(new AnonymousIdentityToken()),
-            UserIdentityKind.UserName => BuildUserNameIdentity(config),
-            UserIdentityKind.X509 => new UserIdentity(new X509IdentityTokenHandler(new X509IdentityToken { CertificateData = new ByteString(LoadX509IdentityCertificate(config).RawData) })),
-            _ => throw new InvalidOperationException($"Unsupported user identity kind: {config.UserIdentityKind}"),
-        };
-
         var tokenPolicy = FindUserTokenPolicy(endpoint, config.UserIdentityKind);
         if (endpoint is not null)
         {
@@ -419,10 +411,38 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
                 ValidateX509UserTokenPolicy(tokenPolicy, endpoint.SecurityPolicyUri ?? string.Empty);
         }
 
+        var identity = config.UserIdentityKind switch
+        {
+            UserIdentityKind.Anonymous => new UserIdentity(new AnonymousIdentityToken()),
+            UserIdentityKind.UserName => BuildUserNameIdentity(config),
+            UserIdentityKind.X509 => BuildX509UserIdentity(config, tokenPolicy),
+            _ => throw new InvalidOperationException($"Unsupported user identity kind: {config.UserIdentityKind}"),
+        };
+
         if (!string.IsNullOrWhiteSpace(tokenPolicy?.PolicyId))
             identity.PolicyId = tokenPolicy.PolicyId;
 
         return identity;
+    }
+
+    private static UserIdentity BuildX509UserIdentity(ClientConfig config, UserTokenPolicy? tokenPolicy = null)
+    {
+        using var initialCertificate = LoadX509IdentityCertificate(config);
+        var identifier = new CertificateIdentifier
+        {
+            Thumbprint = initialCertificate.Thumbprint,
+            RawData = initialCertificate.RawData,
+        };
+        var passwordProvider = new CertificatePasswordProvider();
+        var certificateProvider = new X509CertificateProvider(
+            initialCertificate.Thumbprint,
+            () => LoadX509IdentityCertificate(config));
+        var handler = new X509IdentityTokenHandler(identifier, passwordProvider, certificateProvider);
+        if (tokenPolicy is not null)
+        {
+            handler.UpdatePolicy(tokenPolicy);
+        }
+        return new UserIdentity(handler);
     }
 
     private static UserIdentity BuildUserNameIdentity(ClientConfig config)
@@ -449,16 +469,14 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             if (string.IsNullOrWhiteSpace(config.X509IdentityPrivateKeyPath))
                 return X509Certificate2.CreateFromPem(File.ReadAllText(config.X509IdentityCertificatePath));
 
-            var certificate = X509Certificate2.CreateFromPemFile(
+            return X509Certificate2.CreateFromPemFile(
                 config.X509IdentityCertificatePath,
                 config.X509IdentityPrivateKeyPath);
-#pragma warning disable SYSLIB0057
-            return new X509Certificate2(certificate.Export(X509ContentType.Pkcs12));
-#pragma warning restore SYSLIB0057
         }
 
+        var flags = X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet;
 #pragma warning disable SYSLIB0057
-        return new X509Certificate2(config.X509IdentityCertificatePath);
+        return new X509Certificate2(config.X509IdentityCertificatePath, (string?)null, flags);
 #pragma warning restore SYSLIB0057
     }
 
