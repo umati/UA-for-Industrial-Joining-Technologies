@@ -194,8 +194,8 @@ public sealed class EventSubscriberHelperUnitTests
     [Fact]
     public void AsExtensionObjectArray_WithExtensionObjectArray_DecodesCorrectly()
     {
-        var entity1 = new UAModel.IJTBase.EntityDataType { EntityId = "E-001" };
-        var entity2 = new UAModel.IJTBase.EntityDataType { EntityId = "E-002" };
+        var entity1 = new IJTBase.EntityDataType { EntityId = "E-001" };
+        var entity2 = new IJTBase.EntityDataType { EntityId = "E-002" };
         var eoArr = new ExtensionObject[]
         {
             new ExtensionObject(entity1),
@@ -203,7 +203,7 @@ public sealed class EventSubscriberHelperUnitTests
         };
         var map = new Dictionary<string, object?> { ["Entities"] = eoArr };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.NotNull(result);
         Assert.Equal(2, result!.Length);
@@ -214,11 +214,11 @@ public sealed class EventSubscriberHelperUnitTests
     [Fact]
     public void AsExtensionObjectArray_WithSingleExtensionObject_ReturnsSingleElementArray()
     {
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "E-SINGLE" };
+        var entity = new IJTBase.EntityDataType { EntityId = "E-SINGLE" };
         var eo = new ExtensionObject(entity);
         var map = new Dictionary<string, object?> { ["Entities"] = eo };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.NotNull(result);
         Assert.Single(result!);
@@ -230,12 +230,12 @@ public sealed class EventSubscriberHelperUnitTests
     {
         var entities = new[]
         {
-            new UAModel.IJTBase.EntityDataType { EntityId = "E-T1" },
-            new UAModel.IJTBase.EntityDataType { EntityId = "E-T2" },
+            new IJTBase.EntityDataType { EntityId = "E-T1" },
+            new IJTBase.EntityDataType { EntityId = "E-T2" },
         };
         var map = new Dictionary<string, object?> { ["Entities"] = entities };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.NotNull(result);
         Assert.Equal(2, result!.Length);
@@ -246,7 +246,7 @@ public sealed class EventSubscriberHelperUnitTests
     {
         var map = new Dictionary<string, object?> { ["Entities"] = null };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.Null(result);
     }
@@ -256,7 +256,7 @@ public sealed class EventSubscriberHelperUnitTests
     {
         var map = new Dictionary<string, object?>();
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Missing");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Missing");
 
         Assert.Null(result);
     }
@@ -264,12 +264,12 @@ public sealed class EventSubscriberHelperUnitTests
     [Fact]
     public void AsExtensionObjectArray_VariantWrapped_UnwrapsAndDecodes()
     {
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "E-VARIANT" };
+        var entity = new IJTBase.EntityDataType { EntityId = "E-VARIANT" };
         var eoArr = new ExtensionObject[] { new ExtensionObject(entity) };
         var wrapped = new Variant(eoArr);
         var map = new Dictionary<string, object?> { ["Entities"] = wrapped };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.NotNull(result);
         Assert.Single(result!);
@@ -281,7 +281,7 @@ public sealed class EventSubscriberHelperUnitTests
     {
         var map = new Dictionary<string, object?> { ["Entities"] = Array.Empty<ExtensionObject>() };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.Null(result);
     }
@@ -292,11 +292,11 @@ public sealed class EventSubscriberHelperUnitTests
         // ExtensionObjects with wrong body type — none should decode as EntityDataType
         var eoArr = new ExtensionObject[]
         {
-            new ExtensionObject(new UAModel.MachineryResult.ResultDataType()),
+            new ExtensionObject(new MachineryResult.ResultDataType()),
         };
         var map = new Dictionary<string, object?> { ["Entities"] = eoArr };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.Null(result);
     }
@@ -338,12 +338,12 @@ public sealed class EventSubscriberHelperUnitTests
         EventSubscriber.ResultReadyEventArgs? received = null;
         sut.OnResultReady += (_, args) => received = args;
 
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType
+            ResultMetaData = new MachineryResult.ResultMetaDataType
             {
                 ResultId = "RES-12345",
-                ResultEvaluation = UAModel.MachineryResult.ResultEvaluationEnum.OK,
+                ResultEvaluation = MachineryResult.ResultEvaluationEnum.OK,
             }
         };
 
@@ -373,9 +373,9 @@ public sealed class EventSubscriberHelperUnitTests
         EventSubscriber.ResultReadyEventArgs? received = null;
         sut.OnResultReady += (_, args) => received = args;
 
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "J-001",
                 Name = "TorqueProgram_A",
@@ -441,13 +441,13 @@ public sealed class EventSubscriberHelperUnitTests
     }
 
     [Fact]
-    public void ProcessResultEvent_NoHandlerAttached_DoesNotThrow()
+    public async Task ProcessResultEvent_NoHandlerAttached_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
         // No handler attached
 
-        var ex = Record.Exception(() => sut.ProcessResultEvent(new VariantCollection()));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessResultEvent(new VariantCollection()));
         Assert.Null(ex);
     }
 
@@ -494,7 +494,7 @@ public sealed class EventSubscriberHelperUnitTests
         EventSubscriber.JoiningSystemEventArgs? received = null;
         sut.OnJoiningSystemEvent += (_, args) => received = args;
 
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "tool-001" };
+        var entity = new IJTBase.EntityDataType { EntityId = "tool-001" };
         var eoArr = new ExtensionObject[] { new ExtensionObject(entity) };
 
         var fields = new VariantCollection(new[]
@@ -535,12 +535,12 @@ public sealed class EventSubscriberHelperUnitTests
     }
 
     [Fact]
-    public void ProcessJoiningSystemEvent_NoHandlerAttached_DoesNotThrow()
+    public async Task ProcessJoiningSystemEvent_NoHandlerAttached_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
 
-        var ex = Record.Exception(() => sut.ProcessJoiningSystemEvent(new VariantCollection()));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessJoiningSystemEvent(new VariantCollection()));
         Assert.Null(ex);
     }
 
@@ -555,7 +555,7 @@ public sealed class EventSubscriberHelperUnitTests
         var filter = sut.BuildResultEventFilter();
 
         Assert.NotNull(filter);
-        Assert.NotEmpty(filter.SelectClauses);
+        Assert.NotEmpty(filter.SelectClauses.ToArray()!);
         // 6 clauses: EventId, EventType, Time, Message, SourceName, Result
         Assert.Equal(6, filter.SelectClauses.Count);
     }
@@ -569,7 +569,7 @@ public sealed class EventSubscriberHelperUnitTests
         var filter = sut.BuildResultEventFilter();
 
         Assert.NotNull(filter.WhereClause);
-        Assert.NotEmpty(filter.WhereClause.Elements);
+        Assert.NotEmpty(filter.WhereClause.Elements.ToArray()!);
     }
 
     // ── BuildJoiningSystemEventFilter ─────────────────────────────────────────
@@ -583,7 +583,7 @@ public sealed class EventSubscriberHelperUnitTests
         var filter = sut.BuildJoiningSystemEventFilter();
 
         Assert.NotNull(filter);
-        Assert.NotEmpty(filter.SelectClauses);
+        Assert.NotEmpty(filter.SelectClauses.ToArray()!);
         // 10 clauses: EventId, EventType, Time, Message, SourceName, EventCode, EventText,
         // JoiningTechnology, AssociatedEntities, ReportedValues
         Assert.Equal(10, filter.SelectClauses.Count);
@@ -598,36 +598,32 @@ public sealed class EventSubscriberHelperUnitTests
         var filter = sut.BuildJoiningSystemEventFilter();
 
         Assert.NotNull(filter.WhereClause);
-        Assert.NotEmpty(filter.WhereClause.Elements);
+        Assert.NotEmpty(filter.WhereClause.Elements.ToArray()!);
     }
 
-    // ── AddSelectClause ───────────────────────────────────────────────────────
+    // ── CreateSelectClause ───────────────────────────────────────────────────────
 
     [Fact]
-    public void AddSelectClause_AppendsClauseToFilter()
+    public void CreateSelectClause_ReturnsOperand()
     {
-        var filter = new EventFilter();
         var typeId = new NodeId(1001u, 7);
 
-        EventSubscriber.AddSelectClause(filter, typeId, 7, "MyField");
+        var clause = EventSubscriber.CreateSelectClause(typeId, 7, "MyField");
 
-        Assert.Single(filter.SelectClauses);
-        Assert.Equal(typeId, filter.SelectClauses[0].TypeDefinitionId);
-        Assert.Equal("MyField", filter.SelectClauses[0].BrowsePath[0].Name);
+        Assert.Equal(typeId, clause.TypeDefinitionId);
+        Assert.Equal("MyField", clause.BrowsePath[0].Name);
     }
 
     [Fact]
-    public void AddSelectClause_MultiSegmentPath_AppendsAllSegments()
+    public void CreateSelectClause_MultiSegmentPath_AppendsAllSegments()
     {
-        var filter = new EventFilter();
         var typeId = new NodeId(1001u, 7);
 
-        EventSubscriber.AddSelectClause(filter, typeId, 7, "Parent", "Child");
+        var clause = EventSubscriber.CreateSelectClause(typeId, 7, "Parent", "Child");
 
-        Assert.Single(filter.SelectClauses);
-        Assert.Equal(2, filter.SelectClauses[0].BrowsePath.Count);
-        Assert.Equal("Parent", filter.SelectClauses[0].BrowsePath[0].Name);
-        Assert.Equal("Child", filter.SelectClauses[0].BrowsePath[1].Name);
+        Assert.Equal(2, clause.BrowsePath.Count);
+        Assert.Equal("Parent", clause.BrowsePath[0].Name);
+        Assert.Equal("Child", clause.BrowsePath[1].Name);
     }
 
     // ── AsExtensionObjectArray — additional edge-case branches ────────────────
@@ -635,11 +631,11 @@ public sealed class EventSubscriberHelperUnitTests
     [Fact]
     public void AsExtensionObjectArray_SingleExtensionObject_ReturnsSingleItemArray()
     {
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "single-001" };
+        var entity = new IJTBase.EntityDataType { EntityId = "single-001" };
         var singleEo = new ExtensionObject(entity);
         var map = new Dictionary<string, object?> { ["Single"] = singleEo };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Single");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Single");
 
         Assert.NotNull(result);
         Assert.Single(result!);
@@ -649,14 +645,14 @@ public sealed class EventSubscriberHelperUnitTests
     [Fact]
     public void AsExtensionObjectArray_AlreadyTypedArray_ReturnsIt()
     {
-        var entities = new UAModel.IJTBase.EntityDataType[]
+        var entities = new IJTBase.EntityDataType[]
         {
-            new UAModel.IJTBase.EntityDataType { EntityId = "tool-001" },
-            new UAModel.IJTBase.EntityDataType { EntityId = "tool-002" },
+            new IJTBase.EntityDataType { EntityId = "tool-001" },
+            new IJTBase.EntityDataType { EntityId = "tool-002" },
         };
         var map = new Dictionary<string, object?> { ["Entities"] = entities };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.NotNull(result);
         Assert.Equal(2, result!.Length);
@@ -667,11 +663,11 @@ public sealed class EventSubscriberHelperUnitTests
     {
         var entities = new ExtensionObject[]
         {
-            new ExtensionObject(new UAModel.IJTBase.EntityDataType { EntityId = "unwrapped" }),
+            new ExtensionObject(new IJTBase.EntityDataType { EntityId = "unwrapped" }),
         };
         var map = new Dictionary<string, object?> { ["Entities"] = new Variant(entities) };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.NotNull(result);
         Assert.Single(result!);
@@ -683,7 +679,7 @@ public sealed class EventSubscriberHelperUnitTests
         // string[] cannot be cast to EntityDataType[]
         var map = new Dictionary<string, object?> { ["Data"] = new string[] { "a", "b" } };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Data");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Data");
 
         Assert.Null(result);
     }
@@ -691,7 +687,7 @@ public sealed class EventSubscriberHelperUnitTests
     // ── ProcessResultEvent error handling ─────────────────────────────────────
 
     [Fact]
-    public void ProcessResultEvent_WithServiceResultException_DoesNotThrow()
+    public async Task ProcessResultEvent_WithServiceResultException_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
@@ -707,13 +703,13 @@ public sealed class EventSubscriberHelperUnitTests
             new Variant(DateTime.UtcNow),
         });
 
-        var ex = Record.Exception(() => sut.ProcessResultEvent(fields));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessResultEvent(fields));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ProcessResultEvent_WithUnexpectedException_DoesNotThrow()
+    public async Task ProcessResultEvent_WithUnexpectedException_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
@@ -726,13 +722,13 @@ public sealed class EventSubscriberHelperUnitTests
             new Variant("event-id"),
         });
 
-        var ex = Record.Exception(() => sut.ProcessResultEvent(fields));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessResultEvent(fields));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ProcessJoiningSystemEvent_WithServiceResultException_DoesNotThrow()
+    public async Task ProcessJoiningSystemEvent_WithServiceResultException_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
@@ -742,13 +738,13 @@ public sealed class EventSubscriberHelperUnitTests
 
         var fields = new VariantCollection(new[] { new Variant("event-id") });
 
-        var ex = Record.Exception(() => sut.ProcessJoiningSystemEvent(fields));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessJoiningSystemEvent(fields));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ProcessJoiningSystemEvent_WithUnexpectedException_DoesNotThrow()
+    public async Task ProcessJoiningSystemEvent_WithUnexpectedException_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
@@ -758,7 +754,7 @@ public sealed class EventSubscriberHelperUnitTests
 
         var fields = new VariantCollection(new[] { new Variant("event-id") });
 
-        var ex = Record.Exception(() => sut.ProcessJoiningSystemEvent(fields));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessJoiningSystemEvent(fields));
 
         Assert.Null(ex);
     }

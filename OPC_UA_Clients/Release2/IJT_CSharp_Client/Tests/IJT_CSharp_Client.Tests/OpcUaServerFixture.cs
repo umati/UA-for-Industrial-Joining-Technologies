@@ -34,7 +34,7 @@ namespace IJT_CSharp_Client.Tests;
 /// If the server cannot be started, <see cref="IsAvailable"/> is false and live tests
 /// must skip themselves via <c>Skip.If(!Fixture.IsAvailable)</c>.
 /// </summary>
-public sealed class OpcUaServerFixture : IDisposable
+public sealed class OpcUaServerFixture : IAsyncLifetime
 {
     private const string DockerImageName = "opcua-ijt-server:latest";
     private const string LinuxSimulatorZipName = "OPC_UA_IJT_Server_Simulator_Linux.zip";
@@ -1465,13 +1465,15 @@ public sealed class OpcUaServerFixture : IDisposable
            || string.Equals(Environment.GetEnvironmentVariable("IJT_PRESERVE_TEST_ARTIFACTS"), "true", StringComparison.OrdinalIgnoreCase)
            || string.Equals(Environment.GetEnvironmentVariable("IJT_PRESERVE_TEST_ARTIFACTS"), "yes", StringComparison.OrdinalIgnoreCase);
 
-    public void Dispose()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         if (_reusableSession is not null)
         {
             try
             {
-                _reusableSession.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                await _reusableSession.DisposeAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {

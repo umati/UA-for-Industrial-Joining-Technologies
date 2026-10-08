@@ -51,7 +51,7 @@ public sealed class IjtStatusHelperTests
         var result = IjtStatusHelper.FormatCode(StatusCodes.BadNodeIdUnknown);
 
         // The hex representation of BadNodeIdUnknown should appear
-        var code = (uint)new StatusCode(StatusCodes.BadNodeIdUnknown);
+        var code = (uint)StatusCodes.BadNodeIdUnknown;
         Assert.Contains($"0x{code:X8}", result);
     }
 }

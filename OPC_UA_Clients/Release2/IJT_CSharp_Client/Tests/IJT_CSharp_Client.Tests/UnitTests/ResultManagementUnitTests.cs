@@ -2,6 +2,7 @@
 
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Helpers;
+using MachineryResult;
 using Moq;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -14,29 +15,29 @@ namespace IJT_CSharp_Client.Tests.UnitTests;
 /// All tests use a mocked <see cref="IJoiningSystem"/>; no live OPC UA server is required.
 ///
 /// Covered operations:
-///   3  GetLatestResult
-///   4  GetResultById
-///   5  SubscribeResultVariable (node-discovery and guard paths)
+///   3  GetLatestResultAsync
+///   4  GetResultByIdAsync
+///   5  SubscribeResultVariableAsync (node-discovery and guard paths)
 /// </summary>
 public sealed class ResultManagementUnitTests
 {
-    // ── 3. GetLatestResult ────────────────────────────────────────────────────
+    // ── 3. GetLatestResultAsync ────────────────────────────────────────────────────
 
     [Fact]
-    public void GetLatestResult_NodeFound_CallsMethodOnce()
+    public async Task GetLatestResult_NodeFound_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
-        using var rm = new ResultManagement(session.Object);
+            .ReturnsAsync(new List<object>());
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetLatestResult());
+        var ex = await Record.ExceptionAsync(async () => await rm.GetLatestResultAsync());
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
         Assert.NotNull(capturedArgs);
         Assert.Single(capturedArgs);
@@ -44,85 +45,85 @@ public sealed class ResultManagementUnitTests
     }
 
     [Fact]
-    public void GetLatestResult_NodeNotFound_DoesNotCallMethod()
+    public async Task GetLatestResult_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetLatestResult());
+        var ex = await Record.ExceptionAsync(async () => await rm.GetLatestResultAsync());
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void GetLatestResult_OpcUaServiceException_HandledWithoutRethrow()
+    public async Task GetLatestResult_OpcUaServiceException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadTimeout));
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetLatestResult());
+        var ex = await Record.ExceptionAsync(async () => await rm.GetLatestResultAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetLatestResult_UnexpectedException_HandledWithoutRethrow()
+    public async Task GetLatestResult_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("simulated failure"));
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetLatestResult());
+        var ex = await Record.ExceptionAsync(async () => await rm.GetLatestResultAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetLatestResult_WithCustomTimeout_PassesTimeoutToMethod()
+    public async Task GetLatestResult_WithCustomTimeout_PassesTimeoutToMethod()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetLatestResult(timeoutMs: 10_000));
+        var ex = await Record.ExceptionAsync(async () => await rm.GetLatestResultAsync(timeoutMs: 10_000));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetLatestResult_WithZeroTimeout_PassesZeroToMethod()
+    public async Task GetLatestResult_WithZeroTimeout_PassesZeroToMethod()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetLatestResult(timeoutMs: 0));
+        var ex = await Record.ExceptionAsync(async () => await rm.GetLatestResultAsync(timeoutMs: 0));
 
         Assert.Null(ex);
     }
 
-    // ── 4. GetResultById ──────────────────────────────────────────────────────
+    // ── 4. GetResultByIdAsync ──────────────────────────────────────────────────────
 
     [Fact]
-    public void GetResultById_WithValidId_CallsMethodOnce()
+    public async Task GetResultById_WithValidId_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
-        using var rm = new ResultManagement(session.Object);
+            .ReturnsAsync(new List<object>());
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetResultById("RESULT-2024-001"));
+        var ex = await Record.ExceptionAsync(async () => await rm.GetResultByIdAsync("RESULT-2024-001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
         Assert.NotNull(capturedArgs);
         Assert.Equal(2, capturedArgs.Length);
@@ -131,83 +132,83 @@ public sealed class ResultManagementUnitTests
     }
 
     [Fact]
-    public void GetResultById_WithEmptyId_CallsMethodWithEmptyString()
+    public async Task GetResultById_WithEmptyId_CallsMethodWithEmptyString()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetResultById(string.Empty));
+        var ex = await Record.ExceptionAsync(async () => await rm.GetResultByIdAsync(string.Empty));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetResultById_WithLongId_CallsMethod()
+    public async Task GetResultById_WithLongId_CallsMethod()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
         var longId = new string('X', 256);
 
-        var ex = Record.Exception(() => rm.GetResultById(longId));
+        var ex = await Record.ExceptionAsync(async () => await rm.GetResultByIdAsync(longId));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetResultById_NodeNotFound_DoesNotCallMethod()
+    public async Task GetResultById_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetResultById("RESULT-001"));
+        var ex = await Record.ExceptionAsync(async () => await rm.GetResultByIdAsync("RESULT-001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void GetResultById_OpcUaServiceException_HandledWithoutRethrow()
+    public async Task GetResultById_OpcUaServiceException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadNodeIdUnknown));
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetResultById("UNKNOWN-ID"));
+        var ex = await Record.ExceptionAsync(async () => await rm.GetResultByIdAsync("UNKNOWN-ID"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetResultById_UnexpectedException_HandledWithoutRethrow()
+    public async Task GetResultById_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new TimeoutException("simulated timeout"));
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetResultById("RESULT-001"));
+        var ex = await Record.ExceptionAsync(async () => await rm.GetResultByIdAsync("RESULT-001"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetResultById_WithCustomTimeout_DoesNotThrow()
+    public async Task GetResultById_WithCustomTimeout_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetResultById("RESULT-001", timeoutMs: 3000));
+        var ex = await Record.ExceptionAsync(async () => await rm.GetResultByIdAsync("RESULT-001", timeoutMs: 3000));
 
         Assert.Null(ex);
     }
 
-    // ── 5. SubscribeResultVariable ────────────────────────────────────────────
+    // ── 5. SubscribeResultVariableAsync ────────────────────────────────────────────
 
     /// <remarks>
     /// The "already subscribed" guard (preventing a second subscription) is tested by
@@ -215,35 +216,35 @@ public sealed class ResultManagementUnitTests
     /// OPC UA server to complete (Subscription.Create() communicates with the server).
     /// </remarks>
     [Fact]
-    public void SubscribeResultVariable_NodeNotFound_DoesNotThrow()
+    public async Task SubscribeResultVariable_NodeNotFound_DoesNotThrow()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
-        // BrowseChild returns Null, so "Results" folder won't be found
-        using var rm = new ResultManagement(session.Object);
+        // BrowseChildAsync returns Null, so "Results" folder won't be found
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.SubscribeResultVariable());
-
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void StopResultVariableSubscription_WhenNotSubscribed_DoesNotThrow()
-    {
-        var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
-
-        var ex = Record.Exception(() => rm.StopResultVariableSubscription());
+        var ex = await Record.ExceptionAsync(async () => await rm.SubscribeResultVariableAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Dispose_WhenNotSubscribed_DoesNotThrow()
+    public async Task StopResultVariableSubscription_WhenNotSubscribed_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        var ex = Record.Exception(() =>
+        await using var rm = new ResultManagement(session.Object);
+
+        var ex = await Record.ExceptionAsync(async () => await rm.StopResultVariableSubscriptionAsync());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task Dispose_WhenNotSubscribed_DoesNotThrow()
+    {
+        var session = MockSessionBuilder.Create();
+        var ex = await Record.ExceptionAsync(async () =>
         {
-            using var rm = new ResultManagement(session.Object);
+            await using var rm = new ResultManagement(session.Object);
         });
 
         Assert.Null(ex);
@@ -251,7 +252,7 @@ public sealed class ResultManagementUnitTests
 
     // ── HasMeaningfulResult (private static) via reflection ───────────────────
 
-    private static bool InvokeHasMeaningfulResult(UAModel.MachineryResult.ResultDataType rd)
+    private static bool InvokeHasMeaningfulResult(MachineryResult.ResultDataType rd)
     {
         var method = typeof(ResultManagement).GetMethod(
             "HasMeaningfulResult",
@@ -262,9 +263,9 @@ public sealed class ResultManagementUnitTests
     [Fact]
     public void HasMeaningfulResult_WithNullMetadata_ReturnsFalse()
     {
-        var rd = new UAModel.MachineryResult.ResultDataType();
+        var rd = new MachineryResult.ResultDataType();
         // ResultMetaData defaults to null in some UAModel versions; ensure it's null
-        rd.ResultMetaData = null;
+        rd.ResultMetaData = null!;
 
         Assert.False(InvokeHasMeaningfulResult(rd));
     }
@@ -272,9 +273,9 @@ public sealed class ResultManagementUnitTests
     [Fact]
     public void HasMeaningfulResult_WithEmptyResultId_ReturnsFalse()
     {
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "" }
         };
 
         Assert.False(InvokeHasMeaningfulResult(rd));
@@ -283,9 +284,9 @@ public sealed class ResultManagementUnitTests
     [Fact]
     public void HasMeaningfulResult_WithWhitespaceResultId_ReturnsFalse()
     {
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "   " }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "   " }
         };
 
         Assert.False(InvokeHasMeaningfulResult(rd));
@@ -294,54 +295,54 @@ public sealed class ResultManagementUnitTests
     [Fact]
     public void HasMeaningfulResult_WithValidResultId_ReturnsTrue()
     {
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RESULT-001" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "RESULT-001" }
         };
 
         Assert.True(InvokeHasMeaningfulResult(rd));
     }
 
-    // ── PrintResultOutputs via GetLatestResult (non-empty output) ─────────────
+    // ── PrintResultOutputs via GetLatestResultAsync (non-empty output) ─────────────
 
     [Fact]
-    public void GetLatestResult_WithNonEmptyOutputList_PrintsWithoutThrow()
+    public async Task GetLatestResult_WithNonEmptyOutputList_PrintsWithoutThrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object> { 1u, null!, 0 });
-        using var rm = new ResultManagement(session.Object);
+            .ReturnsAsync(new List<object> { 1u, null!, 0 });
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetLatestResult());
+        var ex = await Record.ExceptionAsync(async () => await rm.GetLatestResultAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetLatestResult_WithSingleOutput_HandlesCountEqualOne()
+    public async Task GetLatestResult_WithSingleOutput_HandlesCountEqualOne()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object> { 1u });   // only handle, no Result field
-        using var rm = new ResultManagement(session.Object);
+            .ReturnsAsync(new List<object> { 1u });   // only handle, no Result field
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetLatestResult());
+        var ex = await Record.ExceptionAsync(async () => await rm.GetLatestResultAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetResultById_WithNonEmptyOutputList_PrintsWithoutThrow()
+    public async Task GetResultById_WithNonEmptyOutputList_PrintsWithoutThrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object> { 2u, null!, 0 });
-        using var rm = new ResultManagement(session.Object);
+            .ReturnsAsync(new List<object> { 2u, null!, 0 });
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetResultById("RESULT-001"));
+        var ex = await Record.ExceptionAsync(async () => await rm.GetResultByIdAsync("RESULT-001"));
 
         Assert.Null(ex);
     }
@@ -349,31 +350,31 @@ public sealed class ResultManagementUnitTests
     // ── Result variable value processing ─────────────────────────────────────
 
     [Fact]
-    public void ProcessResultVariableValue_WithNullValue_ReturnsFalseAndDoesNotWrite()
+    public async Task ProcessResultVariableValue_WithNullValue_ReturnsFalseAndDoesNotWrite()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
         var writes = new List<string>();
 
-        var processed = rm.ProcessResultVariableValue(new DataValue { Value = null }, writes.Add);
+        var processed = rm.ProcessResultVariableValue(new DataValue(Variant.Null, StatusCodes.Good), writes.Add);
 
         Assert.False(processed);
         Assert.Empty(writes);
     }
 
     [Fact]
-    public void ProcessResultVariableValue_WithExtensionObjectResult_WritesPayload()
+    public async Task ProcessResultVariableValue_WithExtensionObjectResult_WritesPayload()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
         var writes = new List<string>();
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RESULT-VAR-1" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "RESULT-VAR-1" }
         };
 
         var processed = rm.ProcessResultVariableValue(
-            new DataValue { Value = new Variant(new ExtensionObject(rd)) },
+            new DataValue(new Variant(new ExtensionObject(rd)), StatusCodes.Good),
             writes.Add);
 
         Assert.True(processed);
@@ -382,47 +383,51 @@ public sealed class ResultManagementUnitTests
     }
 
     [Fact]
-    public void ProcessResultVariableValue_WithDirectResult_WritesPayload()
+    public async Task ProcessResultVariableValue_WithDirectResult_WritesPayload()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
         var writes = new List<string>();
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RESULT-DIRECT-1" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "RESULT-DIRECT-1" }
         };
 
-        var processed = rm.ProcessResultVariableValue(new DataValue { Value = rd }, writes.Add);
+        var processed = rm.ProcessResultVariableValue(
+            new DataValue(Variant.From(new ExtensionObject(rd)), StatusCodes.Good),
+            writes.Add);
 
         Assert.True(processed);
         Assert.Single(writes);
     }
 
     [Fact]
-    public void ProcessResultVariableValue_WithPlaceholderResult_ReturnsFalseAndDoesNotWrite()
+    public async Task ProcessResultVariableValue_WithPlaceholderResult_ReturnsFalseAndDoesNotWrite()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
         var writes = new List<string>();
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = " " }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = " " }
         };
 
-        var processed = rm.ProcessResultVariableValue(new DataValue { Value = rd }, writes.Add);
+        var processed = rm.ProcessResultVariableValue(
+            new DataValue(Variant.From(new ExtensionObject(rd)), StatusCodes.Good),
+            writes.Add);
 
         Assert.False(processed);
         Assert.Empty(writes);
     }
 
     [Fact]
-    public void ProcessResultVariableValue_WithRawNonResultValue_ReturnsFalseAndDoesNotWrite()
+    public async Task ProcessResultVariableValue_WithRawNonResultValue_ReturnsFalseAndDoesNotWrite()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
         var writes = new List<string>();
 
-        var processed = rm.ProcessResultVariableValue(new DataValue { Value = "raw-value" }, writes.Add);
+        var processed = rm.ProcessResultVariableValue(new DataValue(new Variant("raw-value"), StatusCodes.Good), writes.Add);
 
         Assert.False(processed);
         Assert.Empty(writes);
@@ -431,32 +436,32 @@ public sealed class ResultManagementUnitTests
     // ── GetResultManagementNode fallback path ────────────────────────────────
 
     [Fact]
-    public void GetLatestResult_WithBrowseChildNull_UsesTypeFallback()
+    public async Task GetLatestResult_WithBrowseChildNull_UsesTypeFallback()
     {
-        // BrowseChild returns Null → fallback to IjtBaseObjectId
+        // BrowseChildAsync returns Null → fallback to IjtBaseObjectId
         var session = MockSessionBuilder.Create(browseChildResult: NodeId.Null);
         // But IjtBaseObjectId must return valid so method is still callable
         session.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>()))
             .Returns(MockSessionBuilder.ValidNodeId);
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.GetLatestResult());
+        var ex = await Record.ExceptionAsync(async () => await rm.GetLatestResultAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void InvalidateNodeCache_ThenGetLatestResult_ReBrowsesNode()
+    public async Task InvalidateNodeCache_ThenGetLatestResult_ReBrowsesNode()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
         rm.InvalidateNodeCache();
-        var ex = Record.Exception(() => rm.GetLatestResult());
+        var ex = await Record.ExceptionAsync(async () => await rm.GetLatestResultAsync());
 
         Assert.Null(ex);
-        // Verify BrowseChild was called (node was re-looked up after cache invalidation)
-        session.Verify(s => s.BrowseChild(
+        // Verify BrowseChildAsync was called (node was re-looked up after cache invalidation)
+        session.Verify(s => s.BrowseChildAsync(
             It.IsAny<NodeId>(), It.IsAny<string>(),
             It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.AtLeastOnce);
     }
@@ -464,12 +469,12 @@ public sealed class ResultManagementUnitTests
     // ── Constructor ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void Constructor_WithValidJoiningSystem_DoesNotThrow()
+    public async Task Constructor_WithValidJoiningSystem_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
         {
-            using var rm = new ResultManagement(session.Object);
+            await using var rm = new ResultManagement(session.Object);
         });
 
         Assert.Null(ex);
@@ -478,10 +483,10 @@ public sealed class ResultManagementUnitTests
     // ── IsResultVarSubscribed property ────────────────────────────────────────
 
     [Fact]
-    public void IsResultVarSubscribed_WhenNotSubscribed_ReturnsFalse()
+    public async Task IsResultVarSubscribed_WhenNotSubscribed_ReturnsFalse()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
         Assert.False(rm.IsResultVarSubscribed);
     }
@@ -489,12 +494,12 @@ public sealed class ResultManagementUnitTests
     // ── InvalidateNodeCache ───────────────────────────────────────────────────
 
     [Fact]
-    public void InvalidateNodeCache_DoesNotThrow()
+    public async Task InvalidateNodeCache_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        var ex = Record.Exception(() => rm.InvalidateNodeCache());
+        var ex = await Record.ExceptionAsync(async () => rm.InvalidateNodeCache());
 
         Assert.Null(ex);
     }
@@ -502,35 +507,35 @@ public sealed class ResultManagementUnitTests
     // ── Node cache hit paths ───────────────────────────────────────────────────
 
     [Fact]
-    public void GetLatestResult_CalledTwice_UsesCachedNodeId()
+    public async Task GetLatestResult_CalledTwice_UsesCachedNodeId()
     {
         var session = MockSessionBuilder.Create();
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        rm.GetLatestResult();  // first call caches _rmNodeId
-        rm.GetLatestResult();  // second call hits cache
+        await rm.GetLatestResultAsync();  // first call caches _rmNodeId
+        await rm.GetLatestResultAsync();  // second call hits cache
 
-        // BrowseChild called only once per method call chain, but first call sets cache
-        session.Verify(s => s.BrowseChild(
+        // BrowseChildAsync called only once per method call chain, but first call sets cache
+        session.Verify(s => s.BrowseChildAsync(
             It.IsAny<NodeId>(), It.IsAny<string>(),
             It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
     }
 
-    // ── SubscribeResultVariable — BrowseChildren returns a variable ref ────────
+    // ── SubscribeResultVariableAsync — BrowseChildrenAsync returns a variable ref ────────
 
     /// <summary>
-    /// When BrowseChildren returns a non-empty variable list, SubscribeResultVariable
+    /// When BrowseChildrenAsync returns a non-empty variable list, SubscribeResultVariableAsync
     /// proceeds past the node-discovery phase and begins building the Subscription +
     /// MonitoredItem objects (lines 164 and 173-190). The call to
     /// Subscription.Create() will throw because the mock ISession has no real channel —
     /// that exception propagates but all lines before it are exercised.
     /// </summary>
     [Fact]
-    public void SubscribeResultVariable_WhenBrowseChildrenHasVariable_CoversSubscriptionCreationBlock()
+    public async Task SubscribeResultVariable_WhenBrowseChildrenHasVariable_CoversSubscriptionCreationBlock()
     {
         var session = MockSessionBuilder.Create();
 
-        // Make BrowseChildren return one variable reference so resultVarNode is set (line 164)
+        // Make BrowseChildrenAsync return one variable reference so resultVarNode is set (line 164)
         var varRef = new ReferenceDescription
         {
             NodeId = new ExpandedNodeId(new NodeId(5555u, 1)),
@@ -538,28 +543,28 @@ public sealed class ResultManagementUnitTests
             BrowseName = new QualifiedName("Result", 1),
             DisplayName = new LocalizedText("", "Result"),
         };
-        session.Setup(s => s.BrowseChildren(
+        session.Setup(s => s.BrowseChildrenAsync(
                 It.IsAny<NodeId>(), It.IsAny<uint>()))
-            .Returns(new ReferenceDescriptionCollection { varRef });
+            .ReturnsAsync(new ReferenceDescriptionCollection { varRef });
 
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
         // Record.Exception catches the NullReferenceException from Subscription.Create()
         // so that all lines before it are counted as covered.
-        var ex = Record.Exception(() => rm.SubscribeResultVariable());
+        var ex = await Record.ExceptionAsync(async () => await rm.SubscribeResultVariableAsync());
 
         // _resultVarSubscription was set at line 173 before Create() threw; IsResultVarSubscribed is true
         Assert.NotNull(ex);
     }
 
     [Fact]
-    public void SubscribeResultVariable_WithSubscriptionCapableSession_CreatesSubscription()
+    public async Task SubscribeResultVariable_WithSubscriptionCapableSession_CreatesSubscription()
     {
         var session = MockSessionBuilder.Create();
         var uaSession = MockSessionBuilder.CreateSubscriptionCapableSession();
         session.Setup(s => s.Session).Returns(uaSession.Object);
-        session.Setup(s => s.BrowseChildren(It.IsAny<NodeId>(), It.IsAny<uint>()))
-            .Returns(new ReferenceDescriptionCollection
+        session.Setup(s => s.BrowseChildrenAsync(It.IsAny<NodeId>(), It.IsAny<uint>()))
+            .ReturnsAsync(new ReferenceDescriptionCollection
             {
                 new()
                 {
@@ -568,9 +573,9 @@ public sealed class ResultManagementUnitTests
                     BrowseName = new QualifiedName("Result", 1),
                 },
             });
-        using var rm = new ResultManagement(session.Object);
+        await using var rm = new ResultManagement(session.Object);
 
-        rm.SubscribeResultVariable();
+        await rm.SubscribeResultVariableAsync();
 
         Assert.True(rm.IsResultVarSubscribed);
         uaSession.Verify(s => s.CreateSubscriptionAsync(
@@ -585,7 +590,7 @@ public sealed class ResultManagementUnitTests
     }
 
     [Fact]
-    public void ResultVariableNotificationHandler_ProcessesQueuedValue()
+    public async Task ResultVariableNotificationHandler_ProcessesQueuedValue()
     {
         var root = Path.Combine(Path.GetTempPath(), "ijt-result-notification", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -593,23 +598,22 @@ public sealed class ResultManagementUnitTests
         {
             using var logRoot = IjtFileLogger.PushBaseLogDirOverride(root);
             var session = MockSessionBuilder.Create();
-            using var rm = new ResultManagement(session.Object);
-            var item = new MonitoredItem { NodeClass = NodeClass.Variable };
+            await using var rm = new ResultManagement(session.Object);
+            var item = new MonitoredItem(DefaultTelemetry.Create(_ => { })) { NodeClass = NodeClass.Variable };
             item.SaveValueInCache(new MonitoredItemNotification
             {
-                Value = new DataValue
-                {
-                    Value = new UAModel.MachineryResult.ResultDataType
+                Value = new DataValue(
+                    Variant.From(new ExtensionObject(new MachineryResult.ResultDataType
                     {
-                        ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType
+                        ResultMetaData = new MachineryResult.ResultMetaDataType
                         {
                             ResultId = "NOTIFICATION-RESULT",
                         },
-                    },
-                },
+                    })),
+                    StatusCodes.Good),
             });
             var handler = typeof(ResultManagement).GetMethod(
-                "OnResultVariableChanged",
+                "OnMonitoredItemNotification",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
             handler!.Invoke(rm, [item, null]);
@@ -623,7 +627,7 @@ public sealed class ResultManagementUnitTests
         }
     }
 
-    // ── StopResultVariableSubscription — normal path ─────────────────────────
+    // ── StopResultVariableSubscriptionAsync — normal path ─────────────────────────
 
     private static void SetResultVarSubscription(ResultManagement rm, Subscription? value)
     {
@@ -634,45 +638,45 @@ public sealed class ResultManagementUnitTests
     }
 
     [Fact]
-    public void StopResultVariableSubscription_WithSubscription_NormalPath_ClearsSubscription()
+    public async Task StopResultVariableSubscription_WithSubscription_NormalPath_ClearsSubscription()
     {
         var session = MockSessionBuilder.Create();
         // RemoveSubscription returns false by default (Moq) — no exception
-        using var rm = new ResultManagement(session.Object);
-        SetResultVarSubscription(rm, new Subscription());
+        await using var rm = new ResultManagement(session.Object);
+        SetResultVarSubscription(rm, new Subscription(DefaultTelemetry.Create(_ => { })));
 
         Assert.True(rm.IsResultVarSubscribed);  // field was set
 
-        var ex = Record.Exception(() => rm.StopResultVariableSubscription());
+        var ex = await Record.ExceptionAsync(async () => await rm.StopResultVariableSubscriptionAsync());
 
         Assert.Null(ex);
         Assert.False(rm.IsResultVarSubscribed);  // finally block cleared it
     }
 
     [Fact]
-    public void StopResultVariableSubscription_WhenSessionRemovalThrowsServiceResult_CleansUp()
+    public async Task StopResultVariableSubscription_WhenSessionRemovalThrowsServiceResult_CleansUp()
     {
         var session = MockSessionBuilder.Create();
         session.Setup(s => s.Session).Returns(
             MockSessionBuilder.CreateThrowingSession(new ServiceResultException(StatusCodes.BadSessionClosed)));
-        using var rm = new ResultManagement(session.Object);
-        SetResultVarSubscription(rm, new Subscription());
+        await using var rm = new ResultManagement(session.Object);
+        SetResultVarSubscription(rm, new Subscription(DefaultTelemetry.Create(_ => { })));
 
-        rm.StopResultVariableSubscription();
+        await rm.StopResultVariableSubscriptionAsync();
 
         Assert.False(rm.IsResultVarSubscribed);
     }
 
     [Fact]
-    public void StopResultVariableSubscription_WhenSessionRemovalThrowsUnexpectedException_CleansUp()
+    public async Task StopResultVariableSubscription_WhenSessionRemovalThrowsUnexpectedException_CleansUp()
     {
         var session = MockSessionBuilder.Create();
         session.Setup(s => s.Session).Returns(
             MockSessionBuilder.CreateThrowingSession(new InvalidOperationException("remove failed")));
-        using var rm = new ResultManagement(session.Object);
-        SetResultVarSubscription(rm, new Subscription());
+        await using var rm = new ResultManagement(session.Object);
+        SetResultVarSubscription(rm, new Subscription(DefaultTelemetry.Create(_ => { })));
 
-        Assert.Null(Record.Exception(rm.StopResultVariableSubscription));
+        Assert.Null(await Record.ExceptionAsync(() => rm.StopResultVariableSubscriptionAsync()));
         Assert.False(rm.IsResultVarSubscribed);
     }
 }

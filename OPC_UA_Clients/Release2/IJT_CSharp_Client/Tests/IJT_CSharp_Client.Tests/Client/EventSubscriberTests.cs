@@ -28,33 +28,33 @@ public sealed class EventSubscriberTests
     // ── Construction ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void Constructor_DoesNotThrow()
+    public async Task Constructor_DoesNotThrow()
     {
-        var ex = Record.Exception(() => new EventSubscriber(CreateMock().Object));
+        var ex = await Record.ExceptionAsync(async () => new EventSubscriber(CreateMock().Object));
         Assert.Null(ex);
     }
 
-    // ── Unsubscribe ───────────────────────────────────────────────────────────
+    // ── UnsubscribeAsync ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void Unsubscribe_WhenNotSubscribed_DoesNotThrow()
-    {
-        var sut = new EventSubscriber(CreateMock().Object);
-        var ex = Record.Exception(() => sut.Unsubscribe());
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void Unsubscribe_CalledTwice_DoesNotThrow()
+    public async Task Unsubscribe_WhenNotSubscribed_DoesNotThrow()
     {
         var sut = new EventSubscriber(CreateMock().Object);
-        sut.Unsubscribe();
-        var ex = Record.Exception(() => sut.Unsubscribe());
+        var ex = await Record.ExceptionAsync(async () => await sut.UnsubscribeAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Unsubscribe_WhenSubscriptionActive_CleansUp_DoesNotThrow()
+    public async Task Unsubscribe_CalledTwice_DoesNotThrow()
+    {
+        var sut = new EventSubscriber(CreateMock().Object);
+        await sut.UnsubscribeAsync();
+        var ex = await Record.ExceptionAsync(async () => await sut.UnsubscribeAsync());
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task Unsubscribe_WhenSubscriptionActive_CleansUp_DoesNotThrow()
     {
         var sut = new EventSubscriber(CreateMock().Object);
 
@@ -62,39 +62,35 @@ public sealed class EventSubscriberTests
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-#pragma warning disable CS0618
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription());
-#pragma warning restore CS0618
+        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
 
         // Delete() will throw because subscription has no session; caught by handler
-        var ex = Record.Exception(() => sut.Unsubscribe());
+        var ex = await Record.ExceptionAsync(async () => await sut.UnsubscribeAsync());
 
         Assert.Null(ex);
         Assert.False(sut.IsSubscribed);
     }
 
     [Fact]
-    public void Dispose_WhenSubscriptionActive_CleansUp_DoesNotThrow()
+    public async Task Dispose_WhenSubscriptionActive_CleansUp_DoesNotThrow()
     {
         var sut = new EventSubscriber(CreateMock().Object);
 
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-#pragma warning disable CS0618
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription());
-#pragma warning restore CS0618
+        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
 
-        var ex = Record.Exception(() => sut.Dispose());
+        var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync());
         Assert.Null(ex);
     }
 
     // ── Dispose ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Dispose_WhenNotSubscribed_DoesNotThrow()
+    public async Task Dispose_WhenNotSubscribed_DoesNotThrow()
     {
-        var ex = Record.Exception(() => new EventSubscriber(CreateMock().Object).Dispose());
+        var ex = await Record.ExceptionAsync(async () => await new EventSubscriber(CreateMock().Object).DisposeAsync());
         Assert.Null(ex);
     }
 
@@ -160,7 +156,7 @@ public sealed class EventSubscriberTests
     // ── Event wire-up ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void OnResultReady_EventCanBeSubscribed_AndUnsubscribed()
+    public async Task OnResultReady_EventCanBeSubscribed_AndUnsubscribed()
     {
         var sut = new EventSubscriber(CreateMock().Object);
         var handler = new EventHandler<EventSubscriber.ResultReadyEventArgs>((_, _) => { });
@@ -168,12 +164,12 @@ public sealed class EventSubscriberTests
         sut.OnResultReady += handler;
         sut.OnResultReady -= handler;
 
-        var ex = Record.Exception(() => sut.Dispose());
+        var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void OnJoiningSystemEvent_EventCanBeSubscribed_AndUnsubscribed()
+    public async Task OnJoiningSystemEvent_EventCanBeSubscribed_AndUnsubscribed()
     {
         var sut = new EventSubscriber(CreateMock().Object);
         var handler = new EventHandler<EventSubscriber.JoiningSystemEventArgs>((_, _) => { });
@@ -181,24 +177,22 @@ public sealed class EventSubscriberTests
         sut.OnJoiningSystemEvent += handler;
         sut.OnJoiningSystemEvent -= handler;
 
-        var ex = Record.Exception(() => sut.Dispose());
+        var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Subscribe_WhenAlreadySubscribed_LogsWarningAndReturns()
+    public async Task Subscribe_WhenAlreadySubscribed_LogsWarningAndReturns()
     {
         var sut = new EventSubscriber(CreateMock().Object);
         // Inject a non-null subscription via reflection to simulate already-subscribed state
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-#pragma warning disable CS0618
-        field!.SetValue(sut, new Subscription());
-#pragma warning restore CS0618
+        field!.SetValue(sut, new Subscription(DefaultTelemetry.Create(_ => { })));
 
         // Second call should hit the "already subscribed" guard
-        var ex = Record.Exception(() => sut.Subscribe());
+        var ex = await Record.ExceptionAsync(async () => await sut.SubscribeAsync());
         Assert.Null(ex);
     }
 
@@ -310,7 +304,7 @@ public sealed class EventSubscriberTests
     public void AsExtensionObjectArray_WithMissingKey_ReturnsNull()
     {
         var map = new Dictionary<string, object?>();
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Missing");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Missing");
         Assert.Null(result);
     }
 
@@ -318,18 +312,18 @@ public sealed class EventSubscriberTests
     public void AsExtensionObjectArray_WithNullValue_ReturnsNull()
     {
         var map = new Dictionary<string, object?> { ["Entities"] = null };
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
         Assert.Null(result);
     }
 
     [Fact]
     public void AsExtensionObjectArray_WithExtensionObjectArray_ReturnsTypedArray()
     {
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "E1" };
+        var entity = new IJTBase.EntityDataType { EntityId = "E1" };
         var eoArr = new ExtensionObject[] { new ExtensionObject(entity) };
         var map = new Dictionary<string, object?> { ["Entities"] = eoArr };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.NotNull(result);
         Assert.Single(result);
@@ -339,10 +333,10 @@ public sealed class EventSubscriberTests
     [Fact]
     public void AsExtensionObjectArray_WithSingleExtensionObject_ReturnsSingleElementArray()
     {
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "E2" };
+        var entity = new IJTBase.EntityDataType { EntityId = "E2" };
         var map = new Dictionary<string, object?> { ["Entity"] = new ExtensionObject(entity) };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entity");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entity");
 
         Assert.NotNull(result);
         Assert.Single(result);
@@ -351,11 +345,11 @@ public sealed class EventSubscriberTests
     [Fact]
     public void AsExtensionObjectArray_WithVariantWrapped_ExtractsValue()
     {
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "E3" };
+        var entity = new IJTBase.EntityDataType { EntityId = "E3" };
         var eoArr = new ExtensionObject[] { new ExtensionObject(entity) };
         var map = new Dictionary<string, object?> { ["Entities"] = new Variant(eoArr) };
 
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Entities");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Entities");
 
         Assert.NotNull(result);
     }
@@ -364,20 +358,20 @@ public sealed class EventSubscriberTests
     public void AsExtensionObjectArray_WithUnknownType_ReturnsNull()
     {
         var map = new Dictionary<string, object?> { ["Key"] = "not-an-extension-object" };
-        var result = EventSubscriber.AsExtensionObjectArray<UAModel.IJTBase.EntityDataType>(map, "Key");
+        var result = EventSubscriber.AsExtensionObjectArray<IJTBase.EntityDataType>(map, "Key");
         Assert.Null(result);
     }
 
     // ── ProcessResultEvent ────────────────────────────────────────────────────
 
     [Fact]
-    public void ProcessResultEvent_WithEmptyFields_DoesNotThrow_AndRaisesEvent()
+    public async Task ProcessResultEvent_WithEmptyFields_DoesNotThrow_AndRaisesEvent()
     {
         var sut = new EventSubscriber(CreateMock().Object);
         EventSubscriber.ResultReadyEventArgs? captured = null;
         sut.OnResultReady += (_, args) => captured = args;
 
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             sut.ProcessResultEvent(new VariantCollection()));
 
         Assert.Null(ex);
@@ -417,9 +411,9 @@ public sealed class EventSubscriberTests
         EventSubscriber.ResultReadyEventArgs? captured = null;
         sut.OnResultReady += (_, args) => captured = args;
 
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.MachineryResult.ResultMetaDataType { ResultId = "RES-EVT-1" }
+            ResultMetaData = new MachineryResult.ResultMetaDataType { ResultId = "RES-EVT-1" }
         };
 
         var fields = new VariantCollection
@@ -445,9 +439,9 @@ public sealed class EventSubscriberTests
         EventSubscriber.ResultReadyEventArgs? captured = null;
         sut.OnResultReady += (_, args) => captured = args;
 
-        var rd = new UAModel.MachineryResult.ResultDataType
+        var rd = new MachineryResult.ResultDataType
         {
-            ResultMetaData = new UAModel.IJTBase.JoiningResultMetaDataType
+            ResultMetaData = new IJTBase.JoiningResultMetaDataType
             {
                 ResultId = "RES-JPM-1",
                 Name = "TighteningProgram",
@@ -476,13 +470,13 @@ public sealed class EventSubscriberTests
     // ── ProcessJoiningSystemEvent ─────────────────────────────────────────────
 
     [Fact]
-    public void ProcessJoiningSystemEvent_WithEmptyFields_DoesNotThrow_AndRaisesEvent()
+    public async Task ProcessJoiningSystemEvent_WithEmptyFields_DoesNotThrow_AndRaisesEvent()
     {
         var sut = new EventSubscriber(CreateMock().Object);
         EventSubscriber.JoiningSystemEventArgs? captured = null;
         sut.OnJoiningSystemEvent += (_, args) => captured = args;
 
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             sut.ProcessJoiningSystemEvent(new VariantCollection()));
 
         Assert.Null(ex);
@@ -497,7 +491,7 @@ public sealed class EventSubscriberTests
         sut.OnJoiningSystemEvent += (_, args) => captured = args;
 
         var eventTime = new DateTime(2026, 3, 1, 11, 0, 0, DateTimeKind.Utc);
-        var entity = new UAModel.IJTBase.EntityDataType { EntityId = "TOOL-001" };
+        var entity = new IJTBase.EntityDataType { EntityId = "TOOL-001" };
         var eoArr = new ExtensionObject[] { new ExtensionObject(entity) };
 
         // Fields: EventId=0, EventType=1, Time=2, Message=3, SourceName=4,
@@ -548,25 +542,25 @@ public sealed class EventSubscriberTests
         Assert.NotNull(filter.WhereClause);
     }
 
-    // ── AddSelectClause ───────────────────────────────────────────────────────
+    // ── CreateSelectClause ───────────────────────────────────────────────────────
 
     [Fact]
-    public void AddSelectClause_AddsClauseToFilter()
+    public void CreateSelectClause_AddsClauseToFilter()
     {
-        var filter = new EventFilter();
-        EventSubscriber.AddSelectClause(filter, ObjectTypeIds.BaseEventType, 0, "EventId");
+        var clause = EventSubscriber.CreateSelectClause(ObjectTypeIds.BaseEventType, 0, "EventId");
+        var filter = new EventFilter { SelectClauses = new[] { clause } };
 
-        Assert.Single(filter.SelectClauses);
+        Assert.Single(filter.SelectClauses.ToArray()!);
         Assert.Equal("EventId", filter.SelectClauses[0].BrowsePath[0].Name);
     }
 
     [Fact]
-    public void AddSelectClause_WithMultiplePathSegments_CreatesMultiSegmentPath()
+    public void CreateSelectClause_WithMultiplePathSegments_CreatesMultiSegmentPath()
     {
-        var filter = new EventFilter();
-        EventSubscriber.AddSelectClause(filter, ObjectTypeIds.BaseEventType, 1, "Parent", "Child");
+        var clause = EventSubscriber.CreateSelectClause(ObjectTypeIds.BaseEventType, 1, "Parent", "Child");
+        var filter = new EventFilter { SelectClauses = new[] { clause } };
 
-        Assert.Single(filter.SelectClauses);
+        Assert.Single(filter.SelectClauses.ToArray()!);
         Assert.Equal(2, filter.SelectClauses[0].BrowsePath.Count);
     }
 }

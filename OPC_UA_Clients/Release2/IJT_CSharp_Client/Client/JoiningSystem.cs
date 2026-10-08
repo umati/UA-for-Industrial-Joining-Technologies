@@ -1,10 +1,15 @@
 #nullable enable
 
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using IJT_CSharp_Client.Configuration;
+using IJT_CSharp_Client.Domain.Events;
+using IJT_CSharp_Client.Domain.Results;
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
+using MachineryResult;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -50,6 +55,9 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     public bool IsConnected => _session?.Connected ?? false;
 
     // -- Management surface ----------------------------------------------------
+    public IResultEventReceiver ResultEvents => EventSubscriber;
+    public IResultVariableReceiver ResultVariable => ResultManagement;
+    public IResultMethodClient ResultMethods => ResultManagement;
     public ResultManagement ResultManagement { get; private set; } = null!;
     public AssetManagement AssetManagement { get; private set; } = null!;
     public JoiningProcessManagement JoiningProcessManagement { get; private set; } = null!;
@@ -123,398 +131,124 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         ConnectionHooks hooks,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var log = IjtLog.For<JoiningSystem>();
 
-        var appConfig = BuildApplicationConfig(config);
-        await hooks.ValidateApplicationConfigAsync(appConfig).ConfigureAwait(false);
+        var appConfig = OpcUaSessionConnector.BuildApplicationConfig(config);
+        await hooks.ValidateApplicationConfigAsync(appConfig, ct).ConfigureAwait(false);
         await hooks.EnsureApplicationCertificateAsync(config, appConfig, ct).ConfigureAwait(false);
 
         if (config.AutoAcceptServerCertificate)
-            appConfig.CertificateValidator.CertificateValidation += (_, e) =>
-            {
-                log.LogWarning("DEV ONLY - accepting untrusted certificate: {Subject}", e.Certificate?.Subject);
-                e.Accept = true;
-            };
+        {
+            appConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates = true;
+            log.LogWarning("DEV ONLY - AutoAcceptUntrustedCertificates enabled.");
+        }
 
+        ct.ThrowIfCancellationRequested();
         log.LogInformation("Discovering endpoints at {Url} ...", config.ServerUrl);
-        var session = await DiscoverAndConnectAsync(appConfig, config, log, hooks, ct).ConfigureAwait(false);
+        var endpointDesc = await hooks.SelectEndpointDescriptionAsync(appConfig, config, log, ct)
+            .ConfigureAwait(false);
+        var configuredEndpoint = new ConfiguredEndpoint(null, endpointDesc, EndpointConfiguration.Create(appConfig));
+        var userIdentity = OpcUaSessionConnector.BuildUserIdentity(config, endpointDesc);
+
+        ct.ThrowIfCancellationRequested();
+        var session = await hooks.CreateSessionAsync(
+            appConfig,
+            configuredEndpoint,
+            config,
+            userIdentity,
+            ct).ConfigureAwait(false);
 
         // Register all IJT encodeable types so the SDK can encode/decode ExtensionObjects.
         session.MessageContext.Factory.AddEncodeableTypes(
-            typeof(UAModel.IJTBase.EntityDataType).Assembly);
+            typeof(EntityDataType).Assembly);
         session.MessageContext.Factory.AddEncodeableTypes(
-            typeof(UAModel.MachineryResult.ResultDataType).Assembly);
+            typeof(ResultDataType).Assembly);
 
         var js = new JoiningSystem(session, config);
         session.KeepAliveInterval = KeepAliveIntervalMs;
         session.KeepAlive += js.OnKeepAlive;
 
         js.ResolveNamespaceIndices();
-        js.DiscoverJoiningSystem();
+        await js.DiscoverJoiningSystemAsync().ConfigureAwait(false);
         js.InitManagement();
 
         log.LogInformation(
             "Connected - IJTBase ns={IjtBase}, IJTTightening ns={IjtTightening}, MachineryResult ns={MachineryResult}",
             js.IjtBaseNsIdx, js.IjtTighteningNsIdx, js.MachineryResultNsIdx);
-        if (!js._joiningSystemNodeId.IsNullNodeId)
+        if (!js._joiningSystemNodeId.IsNull)
             log.LogInformation("JoiningSystem node: {NodeId}", js._joiningSystemNodeId);
 
         return js;
     }
 
-    // -- Private: session setup ------------------------------------------------
-
-    private static ApplicationConfiguration BuildApplicationConfig(ClientConfig config)
-    {
-        var pkiRoot = string.IsNullOrWhiteSpace(config.PkiRootPath)
-            ? Path.Combine(AppContext.BaseDirectory, "PKI")
-            : config.PkiRootPath;
-
-        return new ApplicationConfiguration
-        {
-            ApplicationName = config.ApplicationName,
-            ApplicationType = ApplicationType.Client,
-            ApplicationUri = $"urn:{System.Net.Dns.GetHostName()}:{config.ApplicationName.Replace(' ', '-')}",
-            SecurityConfiguration = new SecurityConfiguration
-            {
-                ApplicationCertificate = new CertificateIdentifier
-                {
-                    StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiRoot, "own"),
-                    SubjectName = config.ApplicationName,
-                },
-                TrustedIssuerCertificates = new CertificateTrustList
-                {
-                    StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiRoot, "issuer"),
-                },
-                TrustedPeerCertificates = new CertificateTrustList
-                {
-                    StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiRoot, "trusted"),
-                },
-                RejectedCertificateStore = new CertificateStoreIdentifier
-                {
-                    StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiRoot, "rejected"),
-                },
-                AutoAcceptUntrustedCertificates = config.AutoAcceptServerCertificate,
-                AddAppCertToTrustedStore = true,
-            },
-            TransportQuotas = new TransportQuotas { OperationTimeout = 30_000 },
-            ClientConfiguration = new ClientConfiguration
-            {
-                DefaultSessionTimeout = config.SessionTimeoutMs,
-            },
-        };
-    }
-
-    internal static async Task EnsureApplicationCertificateForTestingAsync(
-        ClientConfig config,
-        CancellationToken ct = default)
-    {
-        var appConfig = BuildApplicationConfig(config);
-        await appConfig.Validate(ApplicationType.Client).ConfigureAwait(false);
-        await EnsureApplicationCertificateAsync(config, appConfig, ct).ConfigureAwait(false);
-    }
-
-    private static async Task<ISession> DiscoverAndConnectAsync(
-        ApplicationConfiguration appConfig,
-        ClientConfig config,
-        ILogger log,
-        ConnectionHooks hooks,
-        CancellationToken ct)
-    {
-        ct.ThrowIfCancellationRequested();
-        var endpointDesc = hooks.SelectEndpointDescription(appConfig, config, log);
-
-        var endpoint = new ConfiguredEndpoint(
-            null, endpointDesc, EndpointConfiguration.Create(appConfig));
-        var identity = BuildUserIdentity(config, endpointDesc);
-
-        log.LogInformation("Opening session ...");
-        ct.ThrowIfCancellationRequested();
-        return await hooks.CreateSessionAsync(appConfig, endpoint, config, identity).ConfigureAwait(false);
-    }
+    // -- Test & backwards-compatibility forwarders ------------------------------
 
     internal sealed record ConnectionHooks(
-        Func<ApplicationConfiguration, Task> ValidateApplicationConfigAsync,
+        Func<ApplicationConfiguration, CancellationToken, Task> ValidateApplicationConfigAsync,
         Func<ClientConfig, ApplicationConfiguration, CancellationToken, Task> EnsureApplicationCertificateAsync,
-        Func<ApplicationConfiguration, ClientConfig, ILogger, EndpointDescription> SelectEndpointDescription,
-        Func<ApplicationConfiguration, ConfiguredEndpoint, ClientConfig, IUserIdentity, Task<ISession>> CreateSessionAsync)
+        Func<ApplicationConfiguration, ClientConfig, ILogger, CancellationToken, Task<EndpointDescription>> SelectEndpointDescriptionAsync,
+        Func<ApplicationConfiguration, ConfiguredEndpoint, ClientConfig, IUserIdentity, CancellationToken, Task<ISession>> CreateSessionAsync)
     {
         public static ConnectionHooks Production { get; } = new(
-            appConfig => appConfig.Validate(ApplicationType.Client),
-            JoiningSystem.EnsureApplicationCertificateAsync,
-            JoiningSystem.SelectEndpointDescription,
-            async (appConfig, endpoint, config, identity) => await Opc.Ua.Client.Session.Create(
-                    appConfig,
-                    endpoint,
-                    updateBeforeConnect: false,
-                    sessionName: config.ApplicationName,
-                    sessionTimeout: (uint)config.SessionTimeoutMs,
-                    identity: identity,
-                    preferredLocales: null)
-                .ConfigureAwait(false));
+            OpcUaSessionConnector.ConnectionHooks.Production.ValidateApplicationConfigAsync,
+            OpcUaSessionConnector.ConnectionHooks.Production.EnsureApplicationCertificateAsync,
+            OpcUaSessionConnector.ConnectionHooks.Production.SelectEndpointDescriptionAsync,
+            OpcUaSessionConnector.ConnectionHooks.Production.CreateSessionAsync);
+
+        public static implicit operator OpcUaSessionConnector.ConnectionHooks(ConnectionHooks hooks)
+            => new(
+                hooks.ValidateApplicationConfigAsync,
+                hooks.EnsureApplicationCertificateAsync,
+                hooks.SelectEndpointDescriptionAsync,
+                hooks.CreateSessionAsync);
+
+        public static implicit operator ConnectionHooks(OpcUaSessionConnector.ConnectionHooks hooks)
+            => new(
+                hooks.ValidateApplicationConfigAsync,
+                hooks.EnsureApplicationCertificateAsync,
+                hooks.SelectEndpointDescriptionAsync,
+                hooks.CreateSessionAsync);
     }
 
-    internal static string EndpointDiscoveryCacheKey(ClientConfig config)
-        => string.Join(
-            "|",
-            config.ServerUrl,
-            $"security={(config.UseSecurityPolicyForEndpointDiscovery ? "true" : "false")}",
-            $"policy={config.SecurityPolicyUri ?? "<default>"}",
-            $"mode={config.MessageSecurityMode?.ToString() ?? "<default>"}");
+    internal static IUserIdentity BuildUserIdentity(ClientConfig config, EndpointDescription? endpoint = null)
+        => OpcUaSessionConnector.BuildUserIdentity(config, endpoint);
 
-    internal static void ClearEndpointDiscoveryCacheForTesting()
-        => EndpointDiscoveryCache.Clear();
-
-    private static EndpointDescription SelectEndpointDescription(
-        ApplicationConfiguration appConfig,
+    internal static EndpointDescription SelectEndpointDescription(
         ClientConfig config,
-        ILogger log)
-        => SelectEndpointDescription(
-            config,
-            () => DiscoverEndpoints(appConfig, config),
-            log);
+        Func<IReadOnlyList<EndpointDescription>> discoverEndpoints,
+        ILogger? log = null)
+        => OpcUaSessionConnector.SelectEndpointDescription(config, discoverEndpoints, log);
 
     internal static EndpointDescription SelectEndpointDescription(
         ClientConfig config,
         Func<EndpointDescription> discoverEndpoint,
         ILogger? log = null)
-        => SelectEndpointDescription(
-            config,
-            () => new EndpointDescriptionCollection { discoverEndpoint() },
-            log);
+        => OpcUaSessionConnector.SelectEndpointDescription(config, discoverEndpoint, log);
 
-    internal static EndpointDescription SelectEndpointDescription(
+    internal static void ClearEndpointDiscoveryCacheForTesting()
+        => OpcUaSessionConnector.ClearEndpointDiscoveryCacheForTesting();
+
+    internal static Task EnsureApplicationCertificateForTestingAsync(
         ClientConfig config,
-        Func<EndpointDescriptionCollection> discoverEndpoints,
-        ILogger? log = null)
-    {
-        if (!config.CacheEndpointDiscovery)
-        {
-            return SelectConfiguredEndpoint(config, discoverEndpoints());
-        }
-
-        var cacheKey = EndpointDiscoveryCacheKey(config);
-        if (EndpointDiscoveryCache.TryGetValue(cacheKey, out var cachedEndpoint))
-        {
-            log?.LogDebug("Using cached endpoint discovery metadata for {Url}.", config.ServerUrl);
-            return cachedEndpoint;
-        }
-
-        // A concurrent cache miss may do duplicate discovery work before GetOrAdd
-        // collapses to one value. That is acceptable: the cache avoids repeated
-        // serial live-test discovery, while keeping production discovery default-off.
-        var discoveredEndpoint = SelectConfiguredEndpoint(config, discoverEndpoints());
-        return EndpointDiscoveryCache.GetOrAdd(cacheKey, discoveredEndpoint);
-    }
-
-    private static EndpointDescriptionCollection DiscoverEndpoints(
-        ApplicationConfiguration appConfig,
-        ClientConfig config)
-    {
-        if (RequiresExactEndpointSelection(config))
-        {
-            using var discoveryClient = DiscoveryClient.Create(
-                appConfig,
-                new Uri(config.ServerUrl),
-                EndpointConfiguration.Create(appConfig));
-            discoveryClient.OperationTimeout = EndpointDiscoveryTimeoutMs;
-            return discoveryClient.GetEndpoints(null);
-        }
-
-        return
-        [
-            CoreClientUtils.SelectEndpoint(
-                appConfig,
-                config.ServerUrl,
-                useSecurity: config.UseSecurityPolicyForEndpointDiscovery,
-                discoverTimeout: EndpointDiscoveryTimeoutMs),
-        ];
-    }
-
-    private static EndpointDescription SelectConfiguredEndpoint(
-        ClientConfig config,
-        EndpointDescriptionCollection endpoints)
-    {
-        if (endpoints.Count == 0)
-            throw new InvalidOperationException($"No OPC UA endpoints were discovered at {config.ServerUrl}.");
-
-        if (!RequiresExactEndpointSelection(config))
-            return endpoints[0];
-
-        var matches = endpoints.Where(endpoint =>
-            (config.SecurityPolicyUri is null ||
-             string.Equals(endpoint.SecurityPolicyUri, config.SecurityPolicyUri, StringComparison.Ordinal)) &&
-            (config.MessageSecurityMode is null || endpoint.SecurityMode == config.MessageSecurityMode.Value))
-            .ToList();
-
-        if (matches.Count > 0)
-            return matches[0];
-
-        var requestedPolicy = config.SecurityPolicyUri ?? "<any>";
-        var requestedMode = config.MessageSecurityMode?.ToString() ?? "<any>";
-        var available = string.Join(
-            ", ",
-            endpoints.Select(endpoint => $"{endpoint.SecurityPolicyUri}/{endpoint.SecurityMode}"));
-        throw new InvalidOperationException(
-            $"Endpoint not found at {config.ServerUrl} for policy={requestedPolicy}, mode={requestedMode}. Available endpoints: {available}");
-    }
-
-    private static bool RequiresExactEndpointSelection(ClientConfig config)
-        => !string.IsNullOrWhiteSpace(config.SecurityPolicyUri) || config.MessageSecurityMode is not null;
-
-    private static bool RequiresSecureChannel(ClientConfig config)
-        => config.UseSecurityPolicyForEndpointDiscovery ||
-           (config.SecurityPolicyUri is not null &&
-            !string.Equals(config.SecurityPolicyUri, SecurityPolicies.None, StringComparison.Ordinal)) ||
-           (config.MessageSecurityMode is not null && config.MessageSecurityMode != MessageSecurityMode.None);
-
-    private static async Task EnsureApplicationCertificateAsync(
-        ClientConfig config,
-        ApplicationConfiguration appConfig,
-        CancellationToken ct)
-    {
-        if (!RequiresSecureChannel(config))
-            return;
-
-        var app = new ApplicationInstance(appConfig)
-        {
-            ApplicationName = config.ApplicationName,
-            ApplicationType = ApplicationType.Client,
-            ApplicationConfiguration = appConfig,
-        };
-        var ok = await app.CheckApplicationInstanceCertificatesAsync(false, null, ct).ConfigureAwait(false);
-        if (!ok)
-            throw new InvalidOperationException("OPC UA application certificate is required for secure endpoints but could not be created or validated.");
-    }
-
-    internal static IUserIdentity BuildUserIdentity(ClientConfig config, EndpointDescription? endpoint = null)
-    {
-        var identity = config.UserIdentityKind switch
-        {
-            UserIdentityKind.Anonymous => new UserIdentity(new AnonymousIdentityToken()),
-            UserIdentityKind.UserName => BuildUserNameIdentity(config),
-            UserIdentityKind.X509 => new UserIdentity(LoadX509IdentityCertificate(config)),
-            _ => throw new InvalidOperationException($"Unsupported user identity kind: {config.UserIdentityKind}"),
-        };
-
-        var tokenPolicy = FindUserTokenPolicy(endpoint, config.UserIdentityKind);
-        if (endpoint is not null)
-        {
-            if (config.UserIdentityKind == UserIdentityKind.UserName)
-                ValidateUserNameUserTokenPolicy(tokenPolicy, endpoint.SecurityPolicyUri);
-            else if (config.UserIdentityKind == UserIdentityKind.X509)
-                ValidateX509UserTokenPolicy(tokenPolicy, endpoint.SecurityPolicyUri);
-        }
-
-        if (!string.IsNullOrWhiteSpace(tokenPolicy?.PolicyId))
-            identity.PolicyId = tokenPolicy.PolicyId;
-
-        return identity;
-    }
-
-    private static UserIdentity BuildUserNameIdentity(ClientConfig config)
-    {
-        if (string.IsNullOrWhiteSpace(config.UserName))
-            throw new InvalidOperationException("UserName identity requires ClientConfig.UserName.");
-        if (config.Password is null)
-            throw new InvalidOperationException("UserName identity requires ClientConfig.Password.");
-
-        return new UserIdentity(config.UserName, Encoding.UTF8.GetBytes(config.Password));
-    }
+        CancellationToken ct = default)
+        => OpcUaSessionConnector.EnsureApplicationCertificateForTestingAsync(config, ct);
 
     internal static X509Certificate2 LoadX509IdentityCertificate(ClientConfig config)
-    {
-        if (string.IsNullOrWhiteSpace(config.X509IdentityCertificatePath))
-            throw new InvalidOperationException("X509 identity requires ClientConfig.X509IdentityCertificatePath.");
+        => OpcUaSessionConnector.LoadX509IdentityCertificate(config);
 
-        if (!File.Exists(config.X509IdentityCertificatePath))
-            throw new FileNotFoundException("X509 identity certificate file was not found.", config.X509IdentityCertificatePath);
+    internal static void ValidateX509UserTokenPolicy(UserTokenPolicy? tokenPolicy, string expectedSecurityPolicyUri)
+        => OpcUaSessionConnector.ValidateX509UserTokenPolicy(tokenPolicy, expectedSecurityPolicyUri);
 
-        var extension = Path.GetExtension(config.X509IdentityCertificatePath);
-        if (extension.Equals(".pem", StringComparison.OrdinalIgnoreCase))
-        {
-            if (string.IsNullOrWhiteSpace(config.X509IdentityPrivateKeyPath))
-                return X509Certificate2.CreateFromPem(File.ReadAllText(config.X509IdentityCertificatePath));
+    internal static void ValidateUserNameUserTokenPolicy(UserTokenPolicy? tokenPolicy, string expectedSecurityPolicyUri)
+        => OpcUaSessionConnector.ValidateUserNameUserTokenPolicy(tokenPolicy, expectedSecurityPolicyUri);
 
-            var certificate = X509Certificate2.CreateFromPemFile(
-                config.X509IdentityCertificatePath,
-                config.X509IdentityPrivateKeyPath);
-#pragma warning disable SYSLIB0057
-            return new X509Certificate2(certificate.Export(X509ContentType.Pkcs12));
-#pragma warning restore SYSLIB0057
-        }
+    private static ApplicationConfiguration BuildApplicationConfig(ClientConfig config)
+        => OpcUaSessionConnector.BuildApplicationConfig(config);
 
-#pragma warning disable SYSLIB0057
-        return new X509Certificate2(config.X509IdentityCertificatePath);
-#pragma warning restore SYSLIB0057
-    }
+    private static UserTokenPolicy? FindUserTokenPolicy(EndpointDescription endpoint, UserIdentityKind kind)
+        => OpcUaSessionConnector.FindUserTokenPolicy(endpoint, kind);
 
-    private static UserTokenPolicy? FindUserTokenPolicy(EndpointDescription? endpoint, UserIdentityKind kind)
-    {
-        if (endpoint is null)
-            return null;
-
-        var tokenType = kind switch
-        {
-            UserIdentityKind.Anonymous => UserTokenType.Anonymous,
-            UserIdentityKind.UserName => UserTokenType.UserName,
-            UserIdentityKind.X509 => UserTokenType.Certificate,
-            _ => UserTokenType.Anonymous,
-        };
-
-        return endpoint.UserIdentityTokens.FirstOrDefault(policy => policy.TokenType == tokenType);
-    }
-
-    internal static void ValidateX509UserTokenPolicy(
-        UserTokenPolicy? tokenPolicy,
-        string expectedSecurityPolicyUri)
-        => ValidateUserTokenPolicy(
-            tokenPolicy,
-            expectedSecurityPolicyUri,
-            "X509 Certificate");
-
-    internal static void ValidateUserNameUserTokenPolicy(
-        UserTokenPolicy? tokenPolicy,
-        string expectedSecurityPolicyUri)
-        => ValidateUserTokenPolicy(
-            tokenPolicy,
-            expectedSecurityPolicyUri,
-            "UserName");
-
-    private static void ValidateUserTokenPolicy(
-        UserTokenPolicy? tokenPolicy,
-        string expectedSecurityPolicyUri,
-        string tokenName)
-    {
-        if (tokenPolicy is null)
-            throw new InvalidOperationException($"Selected endpoint does not advertise a {tokenName} user-token policy.");
-
-        if (string.Equals(expectedSecurityPolicyUri, SecurityPolicies.None, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"{tokenName} user-token policy requires a secure endpoint policy.");
-        }
-
-        var tokenPolicyUri = tokenPolicy.SecurityPolicyUri ?? string.Empty;
-        if (string.Equals(tokenPolicyUri, SecurityPolicies.None, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"{tokenName} user-token policy must not use SecurityPolicy#None. " +
-                "Rebuild the IJT simulator package from source that registers concrete " +
-                $"{tokenName} token policies for secure endpoints.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(tokenPolicyUri) &&
-            !string.Equals(tokenPolicyUri, expectedSecurityPolicyUri, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"{tokenName} user-token policy URI '{tokenPolicyUri}' does not match endpoint policy '{expectedSecurityPolicyUri}'.");
-        }
-    }
 
     // -- Namespace resolution --------------------------------------------------
 
@@ -522,13 +256,13 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     {
         var ns = _session.NamespaceUris;
 
-        int ijtBase = ns.GetIndex(UAModel.IJTBase.Namespaces.IJTBase);
+        int ijtBase = ns.GetIndex(IJTBase.Namespaces.IJTBase);
         IjtBaseNsIdx = ijtBase >= 0 ? (ushort)ijtBase : (ushort)0;
 
-        int ijtTightening = ns.GetIndex(UAModel.IJTTightening.Namespaces.IJTTightening);
+        int ijtTightening = ns.GetIndex(IJTTightening.Namespaces.IJTTightening);
         IjtTighteningNsIdx = ijtTightening >= 0 ? (ushort)ijtTightening : (ushort)0;
 
-        int machineryResult = ns.GetIndex(UAModel.MachineryResult.Namespaces.MachineryResult);
+        int machineryResult = ns.GetIndex(MachineryResult.Namespaces.MachineryResult);
         MachineryResultNsIdx = machineryResult >= 0 ? (ushort)machineryResult : (ushort)0;
 
         int di = ns.GetIndex("http://opcfoundation.org/UA/DI/");
@@ -537,22 +271,23 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- JoiningSystem discovery -----------------------------------------------
 
-    private void DiscoverJoiningSystem()
+    private async Task DiscoverJoiningSystemAsync()
     {
         try
         {
-            var refs = AddressSpaceHelper.BrowseChildren(_session, ObjectIds.ObjectsFolder, NodeClass.Object);
+            var refs = await AddressSpaceHelper.BrowseChildrenAsync(
+                _session, Opc.Ua.ObjectIds.ObjectsFolder, NodeClass.Object).ConfigureAwait(false);
             if (refs.Count == 0) return;
 
-            var typeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, IjtBaseNsIdx);
+            var typeId = new NodeId(IJTBase.ObjectTypes.JoiningSystemType, IjtBaseNsIdx);
 
             foreach (var r in refs)
             {
                 var typeDef = (NodeId)r.TypeDefinition;
                 if (typeDef == typeId ||
                     (typeDef.IdType == IdType.Numeric &&
-                     typeDef.Identifier is uint id &&
-                     id == UAModel.IJTBase.ObjectTypes.JoiningSystemType))
+                     typeDef.TryGetValue(out uint id) &&
+                     id == IJTBase.ObjectTypes.JoiningSystemType))
                 {
                     _joiningSystemNodeId = (NodeId)r.NodeId;
                     return;
@@ -563,8 +298,8 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             foreach (var r in refs)
             {
                 var nid = (NodeId)r.NodeId;
-                var browseName = r.BrowseName?.Name;
-                if (nid != ObjectIds.Server && browseName != "Server")
+                var browseName = r.BrowseName.Name;
+                if (nid != Opc.Ua.ObjectIds.Server && browseName != "Server")
                 {
                     _joiningSystemNodeId = nid;
                     _log.LogWarning("JoiningSystem fallback: {BrowseName} ({NodeId})", browseName ?? "<null>", nid);
@@ -602,11 +337,23 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         if (!ServiceResult.IsBad(e.Status)) return;
 
         _log.LogWarning("Keep-alive failed ({Status}). Attempting reconnect ...", e.Status);
+        _ = ReconnectAsync(session);
+    }
+
+    private async Task ReconnectAsync(ISession session)
+    {
         try
         {
-            session.Reconnect();
+            if (session is Session concreteSession)
+            {
+                var reconnectHandler = new SessionReconnectHandler(
+                    session.MessageContext.Telemetry,
+                    reconnectAbort: true,
+                    maxReconnectPeriod: 10000);
+                reconnectHandler.BeginReconnect(concreteSession, 10000, (_, _) => { });
+            }
             ResolveNamespaceIndices();
-            DiscoverJoiningSystem();
+            await DiscoverJoiningSystemAsync().ConfigureAwait(false);
             ResultManagement?.InvalidateNodeCache();
             AssetManagement?.InvalidateNodeCache();
             JoiningProcessManagement?.InvalidateNodeCache();
@@ -627,51 +374,83 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- Method-call helper ----------------------------------------------------
 
-    public IList<object> CallMethod(
+    public async Task<IList<object>> CallMethodAsync(
         NodeId objectId,
         NodeId methodId,
         params object[] inputArgs)
     {
-        if (objectId == null || objectId.IsNullNodeId)
+        if (objectId.IsNull)
             throw new InvalidOperationException("CallMethod: objectId is null/empty.");
-        if (methodId == null || methodId.IsNullNodeId)
+        if (methodId.IsNull)
             throw new InvalidOperationException("CallMethod: methodId is null/empty.");
 
-        var request = new CallMethodRequestCollection
+        var variants = inputArgs.Select(ToVariant).ToArray();
+        var request = new CallMethodRequest
         {
-            new CallMethodRequest
-            {
-                ObjectId       = objectId,
-                MethodId       = methodId,
-                InputArguments = inputArgs.Length > 0
-                    ? new VariantCollection(inputArgs.Select(a => new Variant(a)))
-                    : new VariantCollection(),
-            }
+            ObjectId = objectId,
+            MethodId = methodId,
+            InputArguments = new ArrayOf<Variant>(variants),
         };
+        var response = await _session.CallAsync(
+            null,
+            new ArrayOf<CallMethodRequest>(new[] { request }),
+            CancellationToken.None).ConfigureAwait(false);
 
-        _session.Call(
-            requestHeader: null,
-            methodsToCall: request,
-            results: out var results,
-            diagnosticInfos: out _);
+        if (response?.Results == null || response.Results.Count == 0)
+            return [];
 
-        ClientBase.ValidateResponse(results, request);
-        var result = results[0];
+        var result = response.Results[0];
         if (StatusCode.IsBad(result.StatusCode))
             throw new ServiceResultException(result.StatusCode);
 
-        return result.OutputArguments.Select(v => v.Value).ToList();
+        if (result.OutputArguments.Count == 0)
+            return [];
+
+        var list = new List<object>(result.OutputArguments.Count);
+        foreach (var arg in result.OutputArguments)
+        {
+            list.Add(arg.AsBoxedObject(Variant.BoxingBehavior.Legacy)!);
+        }
+        return list;
     }
+
+    private static Variant ToVariant(object? value) => value switch
+    {
+        null => default,
+        Variant variant => variant,
+        bool item => Variant.From(item),
+        sbyte item => Variant.From(item),
+        byte item => Variant.From(item),
+        short item => Variant.From(item),
+        ushort item => Variant.From(item),
+        int item => Variant.From(item),
+        uint item => Variant.From(item),
+        long item => Variant.From(item),
+        ulong item => Variant.From(item),
+        float item => Variant.From(item),
+        double item => Variant.From(item),
+        string item => Variant.From(item),
+        DateTime item => Variant.From(new DateTimeUtc(item)),
+        Guid item => Variant.From(new Uuid(item)),
+        byte[] item => Variant.From(new ByteString(item)),
+        ExtensionObject item => Variant.From(item),
+        ExtensionObject[] item => Variant.From(item),
+        string[] item => Variant.From(item),
+        IEncodeable item => Variant.From(new ExtensionObject(item)),
+        _ => throw new ArgumentException(
+            $"The OPC UA SDK does not support a Variant input for CLR type '{value.GetType().FullName}'.",
+            nameof(value)),
+    };
 
     // -- Browse helper ---------------------------------------------------------
 
-    public NodeId BrowseChild(
+    public async Task<NodeId> BrowseChildAsync(
         NodeId parentId,
         string childBrowseName,
         ushort nsIndex = 0,
         NodeClass nodeClassMask = NodeClass.Unspecified)
     {
-        if (parentId == null || parentId.IsNullNodeId)
+        if (parentId.IsNull)
             return NodeId.Null;
 
         var mask = nodeClassMask == NodeClass.Unspecified
@@ -680,9 +459,10 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
         try
         {
-            var refs = AddressSpaceHelper.BrowseChildren(_session, parentId, mask);
+            var refs = await AddressSpaceHelper.BrowseChildrenAsync(
+                _session, parentId, mask).ConfigureAwait(false);
             var match = refs.FirstOrDefault(r =>
-                r.BrowseName?.Name?.Equals(childBrowseName, StringComparison.OrdinalIgnoreCase) == true &&
+                r.BrowseName.Name?.Equals(childBrowseName, StringComparison.OrdinalIgnoreCase) == true &&
                 (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
 
             return match != null ? (NodeId)match.NodeId : NodeId.Null;
@@ -703,11 +483,11 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- BrowseChildren helper ------------------------------------------------
 
-    public ReferenceDescriptionCollection BrowseChildren(
+    public async Task<IReadOnlyList<ReferenceDescription>> BrowseChildrenAsync(
         NodeId parentId,
         uint nodeClassMask = (uint)NodeClass.Unspecified)
     {
-        if (parentId == null || parentId.IsNullNodeId)
+        if (parentId.IsNull)
             return [];
 
         var mask = nodeClassMask == (uint)NodeClass.Unspecified
@@ -716,7 +496,8 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
         try
         {
-            return AddressSpaceHelper.BrowseChildren(_session, parentId, mask);
+            return await AddressSpaceHelper.BrowseChildrenAsync(
+                _session, parentId, mask).ConfigureAwait(false);
         }
         catch (ServiceResultException ex)
         {
@@ -733,17 +514,18 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- DiscoverMethodsUnder helper -------------------------------------------
 
-    public Dictionary<string, NodeId> DiscoverMethodsUnder(NodeId objectId)
+    public async Task<Dictionary<string, NodeId>> DiscoverMethodsUnderAsync(NodeId objectId)
     {
-        if (objectId == null || objectId.IsNullNodeId)
+        if (objectId.IsNull)
             return new Dictionary<string, NodeId>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
-            var refs = AddressSpaceHelper.BrowseChildren(_session, objectId, NodeClass.Method);
+            var refs = await AddressSpaceHelper.BrowseChildrenAsync(
+                _session, objectId, NodeClass.Method).ConfigureAwait(false);
 
             return refs.ToDictionary(
-                r => r.BrowseName.Name,
+                r => r.BrowseName.Name ?? string.Empty,
                 r => (NodeId)r.NodeId,
                 StringComparer.OrdinalIgnoreCase);
         }
@@ -756,14 +538,15 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- BrowseMethod helper ---------------------------------------------------
 
-    public NodeId BrowseMethod(NodeId objectId, string methodBrowseName, uint fallbackConstant = 0)
+    public async Task<NodeId> BrowseMethodAsync(NodeId objectId, string methodBrowseName, uint fallbackConstant = 0)
     {
         // Tier 1: exact browse by name
-        var m = BrowseChild(objectId, methodBrowseName, nodeClassMask: NodeClass.Method);
-        if (!m.IsNullNodeId) return m;
+        var m = await BrowseChildAsync(
+            objectId, methodBrowseName, nodeClassMask: NodeClass.Method).ConfigureAwait(false);
+        if (!m.IsNull) return m;
 
         // Tier 2: enumerate all Method children, case-insensitive match
-        var methods = DiscoverMethodsUnder(objectId);
+        var methods = await DiscoverMethodsUnderAsync(objectId).ConfigureAwait(false);
         if (methods.TryGetValue(methodBrowseName, out var found)) return found;
 
         // Tier 3: spec constant fallback (not server-verified)
@@ -799,24 +582,43 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         return new NodeId(varConstant, IjtBaseNsIdx);
     }
 
+    // -- Forwarding Helpers ---------------------------------------------------
+
+    internal static string EndpointDiscoveryCacheKey(ClientConfig config)
+        => OpcUaSessionConnector.EndpointDiscoveryCacheKey(config);
+
     // -- Cleanup ---------------------------------------------------------------
 
     public async ValueTask DisposeAsync()
     {
         _session.KeepAlive -= OnKeepAlive;
 
-        using var cleanupCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8));
-        await Task.WhenAny(
-            Task.Run(() =>
+        var cleanupTask = Task.Run(async () =>
+        {
+            try
             {
-                EventSubscriber?.Dispose();
-                ResultManagement?.Dispose();
-                AssetManagement?.Dispose();
+                if (EventSubscriber is not null)
+                    await EventSubscriber.DisposeAsync().ConfigureAwait(false);
+                if (ResultManagement is not null)
+                    await ResultManagement.DisposeAsync().ConfigureAwait(false);
+                if (AssetManagement is not null)
+                    await AssetManagement.DisposeAsync().ConfigureAwait(false);
                 JoiningProcessManagement?.Dispose();
                 JointManagement?.Dispose();
-            }),
-            Task.Delay(Timeout.Infinite, cleanupCts.Token)
-        ).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Subscription cleanup warning");
+            }
+        });
+        try
+        {
+            await cleanupTask.WaitAsync(TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            _log.LogWarning(ex, "Subscription cleanup exceeded the 8 second shutdown timeout");
+        }
 
         try
         {

@@ -9,8 +9,29 @@
     <Compile Remove> must run AFTER the SDK has populated the default **\*.cs glob.
     Placing it in .props causes it to fire before the glob exists, so nothing gets removed.
   -->
-  <ItemGroup Condition="'$(OpcUaClientOnly)' == 'true'">
+  <!-- Classes.cs contains server-side TypeState classes; the client does not use them. -->
+  <ItemGroup>
     <Compile Remove="**\*.Classes.cs" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(OpcUaClientOnly)' != 'true'">
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)/generated</CompilerGeneratedFilesOutputPath>
+    <ModelSourceGeneratorOmitFluentApi>true</ModelSourceGeneratorOmitFluentApi>
+    <ModelSourceGeneratorExclude>JoiningSystemResultType</ModelSourceGeneratorExclude>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(OpcUaClientOnly)' != 'true'">
+    <Compile Remove="**\*.DataTypes.cs" />
+    <Compile Remove="**\*.DataTypes.Helpers.cs" />
+    <Compile Remove="**\*.Constants.cs" />
+    <Compile Remove="**\*.PredefinedNodes.cs" />
+    <Compile Remove="**\Constants\CSharp\*.cs" />
+    <AdditionalFiles Include="**\*.NodeSet2.xml" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(OpcUaClientOnly)' == 'true'">
+    <Compile Remove="**\*Extensions.cs" />
   </ItemGroup>
 
 </Project>

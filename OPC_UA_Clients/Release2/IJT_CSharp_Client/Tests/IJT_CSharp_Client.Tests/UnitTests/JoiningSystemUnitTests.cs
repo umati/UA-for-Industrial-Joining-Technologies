@@ -25,9 +25,10 @@ public sealed class JoiningSystemUnitTests
     {
         var mock = new Mock<ISession>();
         mock.Setup(s => s.Connected).Returns(connected);
-#pragma warning disable CS0618
-        mock.Setup(s => s.DefaultSubscription).Returns(new Subscription());
-#pragma warning restore CS0618
+        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.CreateEmpty(DefaultTelemetry.Create(_ => { })));
+        mock.Setup(s => s.DefaultSubscription).Returns(new Subscription(DefaultTelemetry.Create(_ => { })));
+        mock.Setup(s => s.OperationLimits).Returns(new OperationLimits());
+        mock.Setup(s => s.ServerCapabilities).Returns(new ServerCapabilities());
         mock.Setup(s => s.AddSubscription(It.IsAny<Subscription>())).Returns(true);
         return mock;
     }
@@ -35,45 +36,47 @@ public sealed class JoiningSystemUnitTests
     private static Mock<ISession> CreateMockSessionWithBrowseResult(ReferenceDescriptionCollection? refs)
     {
         var mock = CreateMockSession();
-        var results = new BrowseResultCollection { new BrowseResult { References = refs } };
-        var diagnostics = new DiagnosticInfoCollection();
-#pragma warning disable CS0618
-        mock.Setup(s => s.Browse(
+        var browseRefs = refs != null ? new ArrayOf<ReferenceDescription>(refs.ToArray()) : default;
+        mock.Setup(s => s.BrowseAsync(
                 It.IsAny<RequestHeader>(),
                 It.IsAny<ViewDescription>(),
                 It.IsAny<uint>(),
-                It.IsAny<BrowseDescriptionCollection>(),
-                out results,
-                out diagnostics))
-            .Returns(new ResponseHeader());
-#pragma warning restore CS0618
+                It.IsAny<ArrayOf<BrowseDescription>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<BrowseResponse>(new BrowseResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<BrowseResult>(new[]
+                {
+                    new BrowseResult
+                    {
+                        StatusCode = StatusCodes.Good,
+                        References = browseRefs
+                    }
+                })
+            }));
         return mock;
     }
 
     private static Mock<ISession> CreateMockSessionWithBrowseException(Exception exception)
     {
         var mock = CreateMockSession();
-        var results = new BrowseResultCollection();
-        var diagnostics = new DiagnosticInfoCollection();
-#pragma warning disable CS0618
-        mock.Setup(s => s.Browse(
+        mock.Setup(s => s.BrowseAsync(
                 It.IsAny<RequestHeader>(),
                 It.IsAny<ViewDescription>(),
                 It.IsAny<uint>(),
-                It.IsAny<BrowseDescriptionCollection>(),
-                out results,
-                out diagnostics))
+                It.IsAny<ArrayOf<BrowseDescription>>(),
+                It.IsAny<CancellationToken>()))
             .Throws(exception);
-#pragma warning restore CS0618
         return mock;
     }
 
     private static NamespaceTable CreateNamespaceTable()
     {
         var ns = new NamespaceTable();
-        ns.Append(UAModel.IJTBase.Namespaces.IJTBase);
-        ns.Append(UAModel.IJTTightening.Namespaces.IJTTightening);
-        ns.Append(UAModel.MachineryResult.Namespaces.MachineryResult);
+        ns.Append(IJTBase.Namespaces.IJTBase);
+        ns.Append(IJTTightening.Namespaces.IJTTightening);
+        ns.Append(MachineryResult.Namespaces.MachineryResult);
         ns.Append("http://opcfoundation.org/UA/DI/");
         return ns;
     }
@@ -88,8 +91,8 @@ public sealed class JoiningSystemUnitTests
             SecurityPolicyUri = securityPolicyUri,
             SecurityMode = securityMode,
             UserIdentityTokens = userTokenPolicy is null
-                ? new UserTokenPolicyCollection { new() { TokenType = UserTokenType.Anonymous, PolicyId = "anonymous" } }
-                : new UserTokenPolicyCollection { userTokenPolicy },
+                ? new UserTokenPolicy[] { new() { TokenType = UserTokenType.Anonymous, PolicyId = "anonymous" } }
+                : new UserTokenPolicy[] { userTokenPolicy },
         };
 
     private static Mock<ISession> CreateConnectableMockSession(NodeId joiningSystemNodeId)
@@ -100,12 +103,12 @@ public sealed class JoiningSystemUnitTests
             {
                 BrowseName = new QualifiedName("JoiningSystem", 7),
                 NodeId = new ExpandedNodeId(joiningSystemNodeId),
-                TypeDefinition = new ExpandedNodeId(new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 7)),
+                TypeDefinition = new ExpandedNodeId(new NodeId(IJTBase.ObjectTypes.JoiningSystemType, 7)),
             },
         };
         var mock = CreateMockSessionWithBrowseResult(refs);
         mock.Setup(s => s.NamespaceUris).Returns(CreateNamespaceTable());
-        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.GlobalContext);
+        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.CreateEmpty(DefaultTelemetry.Create(_ => { })));
         mock.SetupProperty(s => s.KeepAliveInterval);
         return mock;
     }
@@ -113,131 +116,135 @@ public sealed class JoiningSystemUnitTests
     private static JoiningSystem CreateSession(ISession session)
         => JoiningSystem.CreateForTesting(session, new ClientConfig { ServerUrl = "opc.tcp://localhost:40451" });
 
-    // ── CallMethod ────────────────────────────────────────────────────────────
+    // ── CallMethodAsync ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void CallMethod_ValidNodes_ReturnsOutputValues()
+    public async Task CallMethod_ValidNodes_ReturnsOutputValues()
     {
         var mockSession = CreateMockSession();
-        var callResults = new CallMethodResultCollection
-        {
-            new CallMethodResult
-            {
-                StatusCode = new StatusCode(StatusCodes.Good),
-                OutputArguments = new VariantCollection(new[] { new Variant("output-1") }),
-            }
-        };
-        DiagnosticInfoCollection diagInfos = [];
-        mockSession
-            .Setup(s => s.Call(
+        mockSession.Setup(s => s.CallAsync(
                 It.IsAny<RequestHeader>(),
-                It.IsAny<CallMethodRequestCollection>(),
-                out callResults,
-                out diagInfos));
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.Good,
+                        OutputArguments = new ArrayOf<Variant>(new[] { new Variant("output-1") })
+                    }
+                })
+            }));
 
         var sut = CreateSession(mockSession.Object);
         var objectId = new NodeId(1001u, 1);
         var methodId = new NodeId(1002u, 1);
 
-        var outputs = sut.CallMethod(objectId, methodId);
+        var outputs = await sut.CallMethodAsync(objectId, methodId);
 
         Assert.Single(outputs);
         Assert.Equal("output-1", outputs[0]);
     }
 
     [Fact]
-    public void CallMethod_WithInputArgs_SucceedsAndReturnsOutputs()
+    public async Task CallMethod_WithInputArgs_SucceedsAndReturnsOutputs()
     {
         var mockSession = CreateMockSession();
-        var callResults = new CallMethodResultCollection
-        {
-            new CallMethodResult
-            {
-                StatusCode = new StatusCode(StatusCodes.Good),
-                OutputArguments = new VariantCollection(),
-            }
-        };
-        DiagnosticInfoCollection diagInfos = [];
-        mockSession
-            .Setup(s => s.Call(
+        mockSession.Setup(s => s.CallAsync(
                 It.IsAny<RequestHeader>(),
-                It.IsAny<CallMethodRequestCollection>(),
-                out callResults,
-                out diagInfos));
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.Good,
+                        OutputArguments = new ArrayOf<Variant>()
+                    }
+                })
+            }));
 
         var sut = CreateSession(mockSession.Object);
 
-        var outputs = sut.CallMethod(new NodeId(100u, 1), new NodeId(200u, 1), "arg1", 42);
+        var outputs = await sut.CallMethodAsync(new NodeId(100u, 1), new NodeId(200u, 1), "arg1", 42);
 
         Assert.Empty(outputs);
     }
 
     [Fact]
-    public void CallMethod_NullObjectId_ThrowsInvalidOperationException()
+    public async Task CallMethod_NullObjectId_ThrowsInvalidOperationException()
     {
         var sut = CreateSession(CreateMockSession().Object);
 
-        Assert.Throws<InvalidOperationException>(() =>
-            sut.CallMethod(NodeId.Null, new NodeId(200u, 1)));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await sut.CallMethodAsync(NodeId.Null, new NodeId(200u, 1)));
     }
 
     [Fact]
-    public void CallMethod_NullMethodId_ThrowsInvalidOperationException()
+    public async Task CallMethod_NullMethodId_ThrowsInvalidOperationException()
     {
         var sut = CreateSession(CreateMockSession().Object);
 
-        Assert.Throws<InvalidOperationException>(() =>
-            sut.CallMethod(new NodeId(100u, 1), NodeId.Null));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await sut.CallMethodAsync(new NodeId(100u, 1), NodeId.Null));
     }
 
     [Fact]
-    public void CallMethod_BadStatusCode_ThrowsServiceResultException()
+    public async Task CallMethod_BadStatusCode_ThrowsServiceResultException()
     {
         var mockSession = CreateMockSession();
-        var callResults = new CallMethodResultCollection
-        {
-            new CallMethodResult
-            {
-                StatusCode = new StatusCode(StatusCodes.BadNotSupported),
-                OutputArguments = new VariantCollection(),
-            }
-        };
-        DiagnosticInfoCollection diagInfos = [];
-        mockSession
-            .Setup(s => s.Call(
+        mockSession.Setup(s => s.CallAsync(
                 It.IsAny<RequestHeader>(),
-                It.IsAny<CallMethodRequestCollection>(),
-                out callResults,
-                out diagInfos));
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.BadNotSupported,
+                        OutputArguments = new ArrayOf<Variant>()
+                    }
+                })
+            }));
 
         var sut = CreateSession(mockSession.Object);
 
-        Assert.Throws<ServiceResultException>(() =>
-            sut.CallMethod(new NodeId(100u, 1), new NodeId(200u, 1)));
+        await Assert.ThrowsAsync<ServiceResultException>(async () =>
+            await sut.CallMethodAsync(new NodeId(100u, 1), new NodeId(200u, 1)));
     }
 
     [Fact]
-    public void CallMethod_NoInputArgs_SucceedsWithEmptyArgList()
+    public async Task CallMethod_NoInputArgs_SucceedsWithEmptyArgList()
     {
         var mockSession = CreateMockSession();
-        var callResults = new CallMethodResultCollection
-        {
-            new CallMethodResult
-            {
-                StatusCode = new StatusCode(StatusCodes.Good),
-                OutputArguments = new VariantCollection(),
-            }
-        };
-        DiagnosticInfoCollection diagInfos = [];
-        mockSession
-            .Setup(s => s.Call(
+        mockSession.Setup(s => s.CallAsync(
                 It.IsAny<RequestHeader>(),
-                It.IsAny<CallMethodRequestCollection>(),
-                out callResults,
-                out diagInfos));
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.Good,
+                        OutputArguments = new ArrayOf<Variant>()
+                    }
+                })
+            }));
 
         var sut = CreateSession(mockSession.Object);
-        var outputs = sut.CallMethod(new NodeId(100u, 1), new NodeId(200u, 1));
+        var outputs = await sut.CallMethodAsync(new NodeId(100u, 1), new NodeId(200u, 1));
 
         Assert.Empty(outputs);
     }
@@ -252,7 +259,8 @@ public sealed class JoiningSystemUnitTests
         var result = sut.IjtBaseMethodId(1234u);
 
         Assert.Equal(5, result.NamespaceIndex);
-        Assert.Equal(1234u, (uint)result.Identifier);
+        Assert.True(result.TryGetValue(out uint identifier));
+        Assert.Equal(1234u, identifier);
     }
 
     [Fact]
@@ -263,7 +271,8 @@ public sealed class JoiningSystemUnitTests
         var result = sut.IjtBaseObjectId(5678u);
 
         Assert.Equal(6, result.NamespaceIndex);
-        Assert.Equal(5678u, (uint)result.Identifier);
+        Assert.True(result.TryGetValue(out uint identifier));
+        Assert.Equal(5678u, identifier);
     }
 
     [Fact]
@@ -274,28 +283,29 @@ public sealed class JoiningSystemUnitTests
         var result = sut.IjtBaseVariableId(9999u);
 
         Assert.Equal(8, result.NamespaceIndex);
-        Assert.Equal(9999u, (uint)result.Identifier);
+        Assert.True(result.TryGetValue(out uint identifier));
+        Assert.Equal(9999u, identifier);
     }
 
     [Fact]
     public void IjtBaseMethodId_WhenNsUnresolved_ReturnsNodeIdNull()
     {
         var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
-        Assert.True(sut.IjtBaseMethodId(1234u).IsNullNodeId);
+        Assert.True(sut.IjtBaseMethodId(1234u).IsNull);
     }
 
     [Fact]
     public void IjtBaseObjectId_WhenNsUnresolved_ReturnsNodeIdNull()
     {
         var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
-        Assert.True(sut.IjtBaseObjectId(5678u).IsNullNodeId);
+        Assert.True(sut.IjtBaseObjectId(5678u).IsNull);
     }
 
     [Fact]
     public void IjtBaseVariableId_WhenNsUnresolved_ReturnsNodeIdNull()
     {
         var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
-        Assert.True(sut.IjtBaseVariableId(9999u).IsNullNodeId);
+        Assert.True(sut.IjtBaseVariableId(9999u).IsNull);
     }
 
     // ── IsConnected ───────────────────────────────────────────────────────────
@@ -317,88 +327,88 @@ public sealed class JoiningSystemUnitTests
     // ── OnKeepAlive ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void OnKeepAlive_GoodStatus_DoesNotThrow()
+    public async Task OnKeepAlive_GoodStatus_DoesNotThrow()
     {
         var mockSession = CreateMockSession();
         var sut = CreateSession(mockSession.Object);
         var e = new KeepAliveEventArgs(ServiceResult.Good, ServerState.Running, DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void OnKeepAlive_BadStatus_DoesNotThrow()
+    public async Task OnKeepAlive_BadStatus_DoesNotThrow()
     {
         var mockSession = CreateMockSession();
         var sut = CreateSession(mockSession.Object);
         var e = new KeepAliveEventArgs(new ServiceResult(StatusCodes.BadCommunicationError), ServerState.Unknown, DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void OnKeepAlive_BadStatus_ReconnectThrowsServiceResult_DoesNotRethrow()
+    public async Task OnKeepAlive_BadStatus_ReconnectThrowsServiceResult_DoesNotRethrow()
     {
         var session = MockSessionBuilder.CreateThrowingSession(
             new ServiceResultException(StatusCodes.BadSessionClosed));
         var sut = CreateSession(session);
         var e = new KeepAliveEventArgs(new ServiceResult(StatusCodes.BadCommunicationError), ServerState.Unknown, DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(session, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(session, e));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void OnKeepAlive_BadStatus_ReconnectThrowsGenericException_DoesNotRethrow()
+    public async Task OnKeepAlive_BadStatus_ReconnectThrowsGenericException_DoesNotRethrow()
     {
         var session = MockSessionBuilder.CreateThrowingSession(
             new InvalidOperationException("reconnect failed"));
         var sut = CreateSession(session);
         var e = new KeepAliveEventArgs(new ServiceResult(StatusCodes.BadCommunicationError), ServerState.Unknown, DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(session, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(session, e));
 
         Assert.Null(ex);
     }
 
-    // ── CallMethod — Uncertain status (domain-level failure, outputs still readable) ──
+    // ── CallMethodAsync — Uncertain status (domain-level failure, outputs still readable) ──
 
     [Fact]
-    public void CallMethod_UncertainStatus_DoesNotThrow_AndReturnsOutputs()
+    public async Task CallMethod_UncertainStatus_DoesNotThrow_AndReturnsOutputs()
     {
         var mockSession = CreateMockSession();
-        var callResults = new CallMethodResultCollection
-        {
-            new CallMethodResult
-            {
-                // Uncertain = OPC UA non-Bad status; output args are valid
-                StatusCode = new StatusCode(StatusCodes.UncertainInitialValue),
-                OutputArguments = new VariantCollection(new[] { new Variant("domain-error-msg") }),
-            }
-        };
-        DiagnosticInfoCollection diagInfos = [];
-        mockSession
-            .Setup(s => s.Call(
+        mockSession.Setup(s => s.CallAsync(
                 It.IsAny<RequestHeader>(),
-                It.IsAny<CallMethodRequestCollection>(),
-                out callResults,
-                out diagInfos));
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                ResponseHeader = new ResponseHeader(),
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.UncertainInitialValue,
+                        OutputArguments = new ArrayOf<Variant>(new[] { new Variant("domain-error-msg") })
+                    }
+                })
+            }));
 
         var sut = CreateSession(mockSession.Object);
 
         // Must NOT throw — Uncertain is not Bad
-        var outputs = sut.CallMethod(new NodeId(100u, 1), new NodeId(200u, 1));
+        var outputs = await sut.CallMethodAsync(new NodeId(100u, 1), new NodeId(200u, 1));
 
         Assert.Single(outputs);
         Assert.Equal("domain-error-msg", outputs[0]);
     }
 
-    // ── BrowseMethod — tier ordering via null-input guards ────────────────────
+    // ── BrowseMethodAsync — tier ordering via null-input guards ────────────────────
 
     // Note: Tests that mock _session.Browse() are not possible in unit tests because
     // the synchronous Browse overload used by JoiningSystem is an extension method
@@ -407,53 +417,56 @@ public sealed class JoiningSystemUnitTests
     // The tests below verify the early-return guard paths that don't require Browse.
 
     [Fact]
-    public void BrowseMethod_AllTiersFail_NoFallbackConstant_ReturnsNodeIdNull()
+    public async Task BrowseMethod_AllTiersFail_NoFallbackConstant_ReturnsNodeIdNull()
     {
         // With a mock that returns null from Browse (Moq default for out params),
         // all tiers fail and fallbackConstant=0 means Tier 3 is skipped.
         var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 7);
 
-        var result = sut.BrowseMethod(new NodeId(5000u, 7), "NonExistentMethod");
+        var result = await sut.BrowseMethodAsync(new NodeId(5000u, 7), "NonExistentMethod");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNull);
     }
 
     [Fact]
-    public void BrowseMethod_Tier3_WhenNsUnresolved_ReturnsNodeIdNull()
+    public async Task BrowseMethod_Tier3_WhenNsUnresolved_ReturnsNodeIdNull()
     {
         // When IjtBaseNsIdx==0, IjtBaseMethodId returns NodeId.Null, so Tier 3 also
         // returns NodeId.Null regardless of the fallback constant.
         var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 0);
 
-        var result = sut.BrowseMethod(new NodeId(5000u, 7), "GetLatestResult", fallbackConstant: 7001u);
+        var result = await sut.BrowseMethodAsync(
+            new NodeId(5000u, 7), MachineryResult.BrowseNames.GetLatestResult, fallbackConstant: 7001u);
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNull);
     }
 
     [Fact]
-    public void BrowseMethod_Tier3_WithResolvedNs_ReturnsSyntheticNodeId()
+    public async Task BrowseMethod_Tier3_WithResolvedNs_ReturnsSyntheticNodeId()
     {
         // When Tiers 1 and 2 fail (Browse returns null refs via Moq default),
         // and fallbackConstant > 0 and ns is resolved, Tier 3 returns a synthetic NodeId.
         var sut = JoiningSystem.CreateForTesting(CreateMockSession().Object, ijtBaseNsIdx: 7);
 
-        var result = sut.BrowseMethod(new NodeId(5000u, 7), "GetLatestResult", fallbackConstant: 7001u);
+        var result = await sut.BrowseMethodAsync(
+            new NodeId(5000u, 7), MachineryResult.BrowseNames.GetLatestResult, fallbackConstant: 7001u);
 
         Assert.Equal((ushort)7, result.NamespaceIndex);
-        Assert.Equal(7001u, (uint)result.Identifier);
+        Assert.True(result.TryGetValue(out uint identifier));
+        Assert.Equal(7001u, identifier);
     }
 
-    // ── BrowseChild — null guard ──────────────────────────────────────────────
+    // ── BrowseChildAsync — null guard ──────────────────────────────────────────────
 
     [Fact]
-    public void BrowseChild_NullParentId_ReturnsNodeIdNull()
+    public async Task BrowseChild_NullParentId_ReturnsNodeIdNull()
     {
         var sut = CreateSession(CreateMockSession().Object);
-        Assert.True(sut.BrowseChild(NodeId.Null, "AnyChild").IsNullNodeId);
+        Assert.True((await sut.BrowseChildAsync(NodeId.Null, "AnyChild")).IsNull);
     }
 
     [Fact]
-    public void BrowseChild_MatchingBrowseNameAndNamespace_ReturnsChildNode()
+    public async Task BrowseChild_MatchingBrowseNameAndNamespace_ReturnsChildNode()
     {
         var child = new NodeId(7001u, 3);
         var refs = new ReferenceDescriptionCollection
@@ -471,23 +484,23 @@ public sealed class JoiningSystemUnitTests
         };
         var sut = CreateSession(CreateMockSessionWithBrowseResult(refs).Object);
 
-        var result = sut.BrowseChild(new NodeId(5000u, 3), "targetchild", nsIndex: 3);
+        var result = await sut.BrowseChildAsync(new NodeId(5000u, 3), "targetchild", nsIndex: 3);
 
         Assert.Equal(child, result);
     }
 
     [Fact]
-    public void BrowseChild_WhenBrowseReturnsNullReferences_ReturnsNodeIdNull()
+    public async Task BrowseChild_WhenBrowseReturnsNullReferences_ReturnsNodeIdNull()
     {
         var sut = CreateSession(CreateMockSessionWithBrowseResult(null).Object);
 
-        var result = sut.BrowseChild(new NodeId(5000u, 3), "MissingChild");
+        var result = await sut.BrowseChildAsync(new NodeId(5000u, 3), "MissingChild");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNull);
     }
 
     [Fact]
-    public void BrowseChild_WhenNoNamespaceMatch_ReturnsNodeIdNull()
+    public async Task BrowseChild_WhenNoNamespaceMatch_ReturnsNodeIdNull()
     {
         var refs = new ReferenceDescriptionCollection
         {
@@ -499,47 +512,47 @@ public sealed class JoiningSystemUnitTests
         };
         var sut = CreateSession(CreateMockSessionWithBrowseResult(refs).Object);
 
-        var result = sut.BrowseChild(new NodeId(5000u, 3), "TargetChild", nsIndex: 3);
+        var result = await sut.BrowseChildAsync(new NodeId(5000u, 3), "TargetChild", nsIndex: 3);
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNull);
     }
 
     [Fact]
-    public void BrowseChild_WhenBrowseThrowsServiceResult_ReturnsNodeIdNull()
+    public async Task BrowseChild_WhenBrowseThrowsServiceResult_ReturnsNodeIdNull()
     {
         var sut = CreateSession(CreateMockSessionWithBrowseException(
             new ServiceResultException(StatusCodes.BadNodeIdUnknown)).Object);
 
-        var result = sut.BrowseChild(new NodeId(5000u, 3), "TargetChild");
+        var result = await sut.BrowseChildAsync(new NodeId(5000u, 3), "TargetChild");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNull);
     }
 
     [Fact]
-    public void BrowseChild_WhenBrowseThrowsUnexpectedException_ReturnsNodeIdNull()
+    public async Task BrowseChild_WhenBrowseThrowsUnexpectedException_ReturnsNodeIdNull()
     {
         var sut = CreateSession(CreateMockSessionWithBrowseException(
             new InvalidOperationException("browse failed")).Object);
 
-        var result = sut.BrowseChild(new NodeId(5000u, 3), "TargetChild");
+        var result = await sut.BrowseChildAsync(new NodeId(5000u, 3), "TargetChild");
 
-        Assert.True(result.IsNullNodeId);
+        Assert.True(result.IsNull);
     }
 
-    // ── BrowseChildren ───────────────────────────────────────────────────────
+    // ── BrowseChildrenAsync ───────────────────────────────────────────────────────
 
     [Fact]
-    public void BrowseChildren_NullParentId_ReturnsEmptyCollection()
+    public async Task BrowseChildren_NullParentId_ReturnsEmptyCollection()
     {
         var sut = CreateSession(CreateMockSession().Object);
 
-        var result = sut.BrowseChildren(NodeId.Null);
+        var result = await sut.BrowseChildrenAsync(NodeId.Null);
 
         Assert.Empty(result);
     }
 
     [Fact]
-    public void BrowseChildren_WhenBrowseReturnsReferences_ReturnsReferences()
+    public async Task BrowseChildren_WhenBrowseReturnsReferences_ReturnsReferences()
     {
         var refs = new ReferenceDescriptionCollection
         {
@@ -551,93 +564,93 @@ public sealed class JoiningSystemUnitTests
         };
         var sut = CreateSession(CreateMockSessionWithBrowseResult(refs).Object);
 
-        var result = sut.BrowseChildren(new NodeId(5000u, 3), (uint)NodeClass.Object);
+        var result = await sut.BrowseChildrenAsync(new NodeId(5000u, 3), (uint)NodeClass.Object);
 
         Assert.Single(result);
         Assert.Equal("ResultManagement", result[0].BrowseName.Name);
     }
 
     [Fact]
-    public void BrowseChildren_WhenBrowseReturnsNullReferences_ReturnsEmptyCollection()
+    public async Task BrowseChildren_WhenBrowseReturnsNullReferences_ReturnsEmptyCollection()
     {
         var sut = CreateSession(CreateMockSessionWithBrowseResult(null).Object);
 
-        var result = sut.BrowseChildren(new NodeId(5000u, 3));
+        var result = await sut.BrowseChildrenAsync(new NodeId(5000u, 3));
 
         Assert.Empty(result);
     }
 
     [Fact]
-    public void BrowseChildren_WhenBrowseThrowsServiceResult_ReturnsEmptyCollection()
+    public async Task BrowseChildren_WhenBrowseThrowsServiceResult_ReturnsEmptyCollection()
     {
         var sut = CreateSession(CreateMockSessionWithBrowseException(
             new ServiceResultException(StatusCodes.BadSessionClosed)).Object);
 
-        var result = sut.BrowseChildren(new NodeId(5000u, 3));
+        var result = await sut.BrowseChildrenAsync(new NodeId(5000u, 3));
 
         Assert.Empty(result);
     }
 
     [Fact]
-    public void BrowseChildren_WhenBrowseThrowsUnexpectedException_ReturnsEmptyCollection()
+    public async Task BrowseChildren_WhenBrowseThrowsUnexpectedException_ReturnsEmptyCollection()
     {
         var sut = CreateSession(CreateMockSessionWithBrowseException(
             new InvalidOperationException("browse failed")).Object);
 
-        var result = sut.BrowseChildren(new NodeId(5000u, 3));
+        var result = await sut.BrowseChildrenAsync(new NodeId(5000u, 3));
 
         Assert.Empty(result);
     }
 
-    // ── DiscoverMethodsUnder ─────────────────────────────────────────────────
+    // ── DiscoverMethodsUnderAsync ─────────────────────────────────────────────────
 
     [Fact]
-    public void DiscoverMethodsUnder_WhenBrowseReturnsMethods_ReturnsCaseInsensitiveMap()
+    public async Task DiscoverMethodsUnder_WhenBrowseReturnsMethods_ReturnsCaseInsensitiveMap()
     {
         var methodId = new NodeId(7100u, 3);
         var refs = new ReferenceDescriptionCollection
         {
             new()
             {
-                BrowseName = new QualifiedName("GetLatestResult", 3),
+                BrowseName = new QualifiedName(MachineryResult.BrowseNames.GetLatestResult, 3),
                 NodeId = new ExpandedNodeId(methodId),
             },
         };
         var sut = CreateSession(CreateMockSessionWithBrowseResult(refs).Object);
 
-        var result = sut.DiscoverMethodsUnder(new NodeId(5000u, 3));
+        var result = await sut.DiscoverMethodsUnderAsync(new NodeId(5000u, 3));
 
         Assert.True(result.ContainsKey("getlatestresult"));
         Assert.Equal(methodId, result["GETLATESTRESULT"]);
     }
 
     [Fact]
-    public void DiscoverMethodsUnder_NullObjectId_ReturnsEmptyMap()
+    public async Task DiscoverMethodsUnder_NullObjectId_ReturnsEmptyMap()
     {
         var sut = CreateSession(CreateMockSession().Object);
 
-        var result = sut.DiscoverMethodsUnder(NodeId.Null);
+        var result = await sut.DiscoverMethodsUnderAsync(NodeId.Null);
 
         Assert.Empty(result);
     }
 
     [Fact]
-    public void DiscoverMethodsUnder_WhenBrowseReturnsNullReferences_ReturnsEmptyMap()
+    public async Task DiscoverMethodsUnder_WhenBrowseReturnsNullReferences_ReturnsEmptyMap()
     {
         var sut = CreateSession(CreateMockSessionWithBrowseResult(null).Object);
 
-        var result = sut.DiscoverMethodsUnder(new NodeId(5000u, 3));
+        var result = await sut.DiscoverMethodsUnderAsync(new NodeId(5000u, 3));
 
         Assert.Empty(result);
     }
 
     [Fact]
-    public void DiscoverMethodsUnder_WhenBrowseThrows_ReturnsEmptyMap()
+    public async Task DiscoverMethodsUnder_WhenBrowseThrows_ReturnsEmptyMap()
     {
         var sut = CreateSession(CreateMockSessionWithBrowseException(
             new InvalidOperationException("browse failed")).Object);
 
-        var result = sut.DiscoverMethodsUnder(new NodeId(5000u, 3));
+        var result = await sut.DiscoverMethodsUnderAsync(new NodeId(5000u, 3));
 
         Assert.Empty(result);
     }
@@ -645,7 +658,7 @@ public sealed class JoiningSystemUnitTests
     // ── ResolveNamespaceIndices via OnKeepAlive reconnect ────────────────────
 
     [Fact]
-    public void OnKeepAlive_BadStatus_WithNamespaceUris_ResolvesIndices()
+    public async Task OnKeepAlive_BadStatus_WithNamespaceUris_ResolvesIndices()
     {
         // Arrange: mock NamespaceUris so ResolveNamespaceIndices completes
         var mockSession = CreateMockSession();
@@ -658,7 +671,7 @@ public sealed class JoiningSystemUnitTests
             DateTime.UtcNow);
 
         // Act: OnKeepAlive triggers reconnect → ResolveNamespaceIndices → DiscoverJoiningSystem
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(mockSession.Object, e));
 
         // Assert: does not throw; namespace indices are resolved
         Assert.Null(ex);
@@ -666,7 +679,7 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public void OnKeepAlive_BadStatus_DiscoversJoiningSystemByTypeDefinition()
+    public async Task OnKeepAlive_BadStatus_DiscoversJoiningSystemByTypeDefinition()
     {
         var joiningSystemId = new NodeId(9100u, 4);
         var refs = new ReferenceDescriptionCollection
@@ -675,7 +688,7 @@ public sealed class JoiningSystemUnitTests
             {
                 BrowseName = new QualifiedName("JoiningSystem1", 4),
                 NodeId = new ExpandedNodeId(joiningSystemId),
-                TypeDefinition = new ExpandedNodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, 4),
+                TypeDefinition = new ExpandedNodeId(IJTBase.ObjectTypes.JoiningSystemType, 4),
             },
         };
         var mockSession = CreateMockSessionWithBrowseResult(refs);
@@ -686,14 +699,14 @@ public sealed class JoiningSystemUnitTests
             ServerState.Unknown,
             DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
         Assert.Equal(joiningSystemId, sut.NodeId);
     }
 
     [Fact]
-    public void OnKeepAlive_BadStatus_DiscoveryFallsBackToFirstNonServerObject()
+    public async Task OnKeepAlive_BadStatus_DiscoveryFallsBackToFirstNonServerObject()
     {
         var fallbackId = new NodeId(9200u, 4);
         var refs = new ReferenceDescriptionCollection
@@ -701,14 +714,14 @@ public sealed class JoiningSystemUnitTests
             new()
             {
                 BrowseName = new QualifiedName("Server", 0),
-                NodeId = new ExpandedNodeId(ObjectIds.Server),
-                TypeDefinition = new ExpandedNodeId(ObjectTypeIds.BaseObjectType),
+                NodeId = new ExpandedNodeId(Opc.Ua.ObjectIds.Server),
+                TypeDefinition = new ExpandedNodeId(Opc.Ua.ObjectTypeIds.BaseObjectType),
             },
             new()
             {
                 BrowseName = new QualifiedName("ApplicationRoot", 4),
                 NodeId = new ExpandedNodeId(fallbackId),
-                TypeDefinition = new ExpandedNodeId(ObjectTypeIds.BaseObjectType),
+                TypeDefinition = new ExpandedNodeId(Opc.Ua.ObjectTypeIds.BaseObjectType),
             },
         };
         var mockSession = CreateMockSessionWithBrowseResult(refs);
@@ -719,14 +732,14 @@ public sealed class JoiningSystemUnitTests
             ServerState.Unknown,
             DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
         Assert.Equal(fallbackId, sut.NodeId);
     }
 
     [Fact]
-    public void OnKeepAlive_BadStatus_DiscoveryWithNoObjectsLeavesNodeIdNull()
+    public async Task OnKeepAlive_BadStatus_DiscoveryWithNoObjectsLeavesNodeIdNull()
     {
         var mockSession = CreateMockSessionWithBrowseResult(new ReferenceDescriptionCollection());
         mockSession.Setup(s => s.NamespaceUris).Returns(CreateNamespaceTable());
@@ -736,10 +749,10 @@ public sealed class JoiningSystemUnitTests
             ServerState.Unknown,
             DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
-        Assert.True(sut.NodeId.IsNullNodeId);
+        Assert.True(sut.NodeId.IsNull);
     }
 
     [Fact]
@@ -750,8 +763,8 @@ public sealed class JoiningSystemUnitTests
             new()
             {
                 BrowseName = new QualifiedName("Server", 0),
-                NodeId = new ExpandedNodeId(ObjectIds.Server),
-                TypeDefinition = new ExpandedNodeId(ObjectTypeIds.BaseObjectType),
+                NodeId = new ExpandedNodeId(Opc.Ua.ObjectIds.Server),
+                TypeDefinition = new ExpandedNodeId(Opc.Ua.ObjectTypeIds.BaseObjectType),
             },
         };
         var mockSession = CreateMockSessionWithBrowseResult(refs);
@@ -764,11 +777,11 @@ public sealed class JoiningSystemUnitTests
 
         sut.OnKeepAlive(mockSession.Object, e);
 
-        Assert.True(sut.NodeId.IsNullNodeId);
+        Assert.True(sut.NodeId.IsNull);
     }
 
     [Fact]
-    public void OnKeepAlive_BadStatus_DiscoveryServiceResultExceptionDoesNotRethrow()
+    public async Task OnKeepAlive_BadStatus_DiscoveryServiceResultExceptionDoesNotRethrow()
     {
         var mockSession = CreateMockSessionWithBrowseException(
             new ServiceResultException(StatusCodes.BadNodeIdUnknown));
@@ -779,14 +792,14 @@ public sealed class JoiningSystemUnitTests
             ServerState.Unknown,
             DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
-        Assert.True(sut.NodeId.IsNullNodeId);
+        Assert.True(sut.NodeId.IsNull);
     }
 
     [Fact]
-    public void OnKeepAlive_BadStatus_DiscoveryUnexpectedExceptionDoesNotRethrow()
+    public async Task OnKeepAlive_BadStatus_DiscoveryUnexpectedExceptionDoesNotRethrow()
     {
         var mockSession = CreateMockSessionWithBrowseException(
             new InvalidOperationException("browse failed"));
@@ -797,14 +810,14 @@ public sealed class JoiningSystemUnitTests
             ServerState.Unknown,
             DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
-        Assert.True(sut.NodeId.IsNullNodeId);
+        Assert.True(sut.NodeId.IsNull);
     }
 
     [Fact]
-    public void OnKeepAlive_BadStatus_WithEmptyNamespaceTable_SetsNsIdxToZero()
+    public async Task OnKeepAlive_BadStatus_WithEmptyNamespaceTable_SetsNsIdxToZero()
     {
         var mockSession = CreateMockSession();
         mockSession.Setup(s => s.NamespaceUris).Returns(new NamespaceTable());
@@ -815,7 +828,7 @@ public sealed class JoiningSystemUnitTests
             ServerState.Unknown,
             DateTime.UtcNow);
 
-        var ex = Record.Exception(() => sut.OnKeepAlive(mockSession.Object, e));
+        var ex = await Record.ExceptionAsync(async () => sut.OnKeepAlive(mockSession.Object, e));
 
         Assert.Null(ex);
         Assert.Equal((ushort)0, sut.IjtBaseNsIdx);
@@ -888,9 +901,9 @@ public sealed class JoiningSystemUnitTests
         };
         var appConfig = (Opc.Ua.ApplicationConfiguration)method!.Invoke(null, new object[] { config })!;
 
-        Assert.Equal(Path.Combine(config.PkiRootPath, "own"), appConfig.SecurityConfiguration.ApplicationCertificate.StorePath);
+        Assert.Equal(Path.Combine(config.PkiRootPath, "own"), appConfig.SecurityConfiguration.ApplicationCertificate?.StorePath);
         Assert.Equal(Path.Combine(config.PkiRootPath, "trusted"), appConfig.SecurityConfiguration.TrustedPeerCertificates.StorePath);
-        Assert.Equal(Path.Combine(config.PkiRootPath, "rejected"), appConfig.SecurityConfiguration.RejectedCertificateStore.StorePath);
+        Assert.Equal(Path.Combine(config.PkiRootPath, "rejected"), appConfig.SecurityConfiguration.RejectedCertificateStore?.StorePath);
     }
 
     [Fact]
@@ -912,7 +925,7 @@ public sealed class JoiningSystemUnitTests
         ConfiguredEndpoint? capturedEndpoint = null;
         var endpoint = CreateEndpoint();
         var hooks = new JoiningSystem.ConnectionHooks(
-            _ =>
+            (_, _) =>
             {
                 validateCalls++;
                 return Task.CompletedTask;
@@ -922,12 +935,12 @@ public sealed class JoiningSystemUnitTests
                 ensureCalls++;
                 return Task.CompletedTask;
             },
-            (_, _, _) =>
+            (_, _, _, _) =>
             {
                 selectCalls++;
-                return endpoint;
+                return Task.FromResult(endpoint);
             },
-            (_, configuredEndpoint, _, identity) =>
+            (_, configuredEndpoint, _, identity, _) =>
             {
                 createCalls++;
                 capturedEndpoint = configuredEndpoint;
@@ -968,24 +981,14 @@ public sealed class JoiningSystemUnitTests
         var endpoint = CreateEndpoint();
         var validationWasAccepted = false;
         var hooks = new JoiningSystem.ConnectionHooks(
-            _ => Task.CompletedTask,
+            (_, _) => Task.CompletedTask,
             (_, _, _) => Task.CompletedTask,
-            (appConfig, _, _) =>
+            (appConfig, _, _, _) =>
             {
-                var handler = appConfig.CertificateValidator.GetType()
-                    .GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-                    .Select(field => field.GetValue(appConfig.CertificateValidator))
-                    .OfType<MulticastDelegate>()
-                    .Single(candidate => candidate.GetInvocationList().Any(callback =>
-                        callback.Method.GetParameters().Last().ParameterType.Name == "CertificateValidationEventArgs"));
-                var eventArgsType = handler.Method.GetParameters().Last().ParameterType;
-                var eventArgs = RuntimeHelpers.GetUninitializedObject(eventArgsType);
-
-                handler.DynamicInvoke(appConfig.CertificateValidator, eventArgs);
-                validationWasAccepted = (bool)eventArgsType.GetProperty("Accept")!.GetValue(eventArgs)!;
-                return endpoint;
+                validationWasAccepted = appConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
+                return Task.FromResult(endpoint);
             },
-            (_, _, _, _) => Task.FromResult<ISession>(mockSession.Object));
+            (_, _, _, _, _) => Task.FromResult<ISession>(mockSession.Object));
 
         await using var sut = await JoiningSystem.ConnectAsync(config, hooks);
 
@@ -999,14 +1002,14 @@ public sealed class JoiningSystemUnitTests
         var config = new ClientConfig { ServerUrl = "opc.tcp://localhost:40451" };
         var selectCalls = 0;
         var hooks = new JoiningSystem.ConnectionHooks(
-            _ => Task.CompletedTask,
+            (_, _) => Task.CompletedTask,
             (_, _, _) => Task.CompletedTask,
-            (_, _, _) =>
+            (_, _, _, _) =>
             {
                 selectCalls++;
-                return CreateEndpoint();
+                return Task.FromResult(CreateEndpoint());
             },
-            (_, _, _, _) => Task.FromResult<ISession>(CreateConnectableMockSession(new NodeId(1u, 1)).Object));
+            (_, _, _, _, _) => Task.FromResult<ISession>(CreateConnectableMockSession(new NodeId(1u, 1)).Object));
 
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
             JoiningSystem.ConnectAsync(config, hooks, new CancellationToken(canceled: true)));
@@ -1115,11 +1118,11 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public void SelectEndpointDescription_WithEmptyDiscoveryResult_Throws()
+    public async Task SelectEndpointDescription_WithEmptyDiscoveryResult_Throws()
     {
         var config = new ClientConfig { ServerUrl = "opc.tcp://localhost:40464" };
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.SelectEndpointDescription(config, () => []));
 
         Assert.Contains("No OPC UA endpoints were discovered", ex.Message);
@@ -1223,7 +1226,7 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public void SelectEndpointDescription_WithMissingExactEndpoint_Throws()
+    public async Task SelectEndpointDescription_WithMissingExactEndpoint_Throws()
     {
         var config = new ClientConfig
         {
@@ -1232,7 +1235,7 @@ public sealed class JoiningSystemUnitTests
             MessageSecurityMode = MessageSecurityMode.SignAndEncrypt,
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.SelectEndpointDescription(
                 config,
                 () => new EndpointDescriptionCollection
@@ -1299,9 +1302,9 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public void BuildUserIdentity_WithMissingUserName_Throws()
+    public async Task BuildUserIdentity_WithMissingUserName_Throws()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.BuildUserIdentity(new ClientConfig
             {
                 UserIdentityKind = UserIdentityKind.UserName,
@@ -1312,9 +1315,9 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public void BuildUserIdentity_WithMissingPassword_Throws()
+    public async Task BuildUserIdentity_WithMissingPassword_Throws()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.BuildUserIdentity(new ClientConfig
             {
                 UserIdentityKind = UserIdentityKind.UserName,
@@ -1325,9 +1328,9 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public void BuildUserIdentity_WithX509MissingCertificatePath_Throws()
+    public async Task BuildUserIdentity_WithX509MissingCertificatePath_Throws()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.BuildUserIdentity(new ClientConfig
             {
                 UserIdentityKind = UserIdentityKind.X509,
@@ -1337,9 +1340,9 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public void BuildUserIdentity_WithUnsupportedKind_Throws()
+    public async Task BuildUserIdentity_WithUnsupportedKind_Throws()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.BuildUserIdentity(new ClientConfig
             {
                 UserIdentityKind = (UserIdentityKind)999,
@@ -1381,7 +1384,7 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public void ValidateX509UserTokenPolicy_RejectsSecurityPolicyNoneEndpointDefault()
+    public async Task ValidateX509UserTokenPolicy_RejectsSecurityPolicyNoneEndpointDefault()
     {
         var tokenPolicy = new UserTokenPolicy
         {
@@ -1390,14 +1393,14 @@ public sealed class JoiningSystemUnitTests
             SecurityPolicyUri = string.Empty,
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.ValidateX509UserTokenPolicy(tokenPolicy, SecurityPolicies.None));
 
         Assert.Contains("requires a secure endpoint", ex.Message);
     }
 
     [Fact]
-    public void ValidateX509UserTokenPolicy_RejectsSecurityPolicyNone()
+    public async Task ValidateX509UserTokenPolicy_RejectsSecurityPolicyNone()
     {
         var tokenPolicy = new UserTokenPolicy
         {
@@ -1406,14 +1409,14 @@ public sealed class JoiningSystemUnitTests
             SecurityPolicyUri = SecurityPolicies.None,
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.ValidateX509UserTokenPolicy(tokenPolicy, SecurityPolicies.Basic256Sha256));
 
         Assert.Contains("SecurityPolicy#None", ex.Message);
     }
 
     [Fact]
-    public void ValidateX509UserTokenPolicy_RejectsPolicyMismatch()
+    public async Task ValidateX509UserTokenPolicy_RejectsPolicyMismatch()
     {
         var tokenPolicy = new UserTokenPolicy
         {
@@ -1422,16 +1425,16 @@ public sealed class JoiningSystemUnitTests
             SecurityPolicyUri = SecurityPolicies.Aes256_Sha256_RsaPss,
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.ValidateX509UserTokenPolicy(tokenPolicy, SecurityPolicies.Basic256Sha256));
 
         Assert.Contains("does not match", ex.Message);
     }
 
     [Fact]
-    public void ValidateX509UserTokenPolicy_RequiresCertificateTokenPolicy()
+    public async Task ValidateX509UserTokenPolicy_RequiresCertificateTokenPolicy()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.ValidateX509UserTokenPolicy(null, SecurityPolicies.Basic256Sha256));
 
         Assert.Contains("Certificate user-token policy", ex.Message);
@@ -1451,7 +1454,7 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public void ValidateUserNameUserTokenPolicy_RejectsSecurityPolicyNoneEndpointDefault()
+    public async Task ValidateUserNameUserTokenPolicy_RejectsSecurityPolicyNoneEndpointDefault()
     {
         var tokenPolicy = new UserTokenPolicy
         {
@@ -1460,14 +1463,14 @@ public sealed class JoiningSystemUnitTests
             SecurityPolicyUri = string.Empty,
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.ValidateUserNameUserTokenPolicy(tokenPolicy, SecurityPolicies.None));
 
         Assert.Contains("requires a secure endpoint", ex.Message);
     }
 
     [Fact]
-    public void ValidateUserNameUserTokenPolicy_RejectsSecurityPolicyNone()
+    public async Task ValidateUserNameUserTokenPolicy_RejectsSecurityPolicyNone()
     {
         var tokenPolicy = new UserTokenPolicy
         {
@@ -1476,14 +1479,14 @@ public sealed class JoiningSystemUnitTests
             SecurityPolicyUri = SecurityPolicies.None,
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.ValidateUserNameUserTokenPolicy(tokenPolicy, SecurityPolicies.Basic256Sha256));
 
         Assert.Contains("SecurityPolicy#None", ex.Message);
     }
 
     [Fact]
-    public void ValidateUserNameUserTokenPolicy_RejectsPolicyMismatch()
+    public async Task ValidateUserNameUserTokenPolicy_RejectsPolicyMismatch()
     {
         var tokenPolicy = new UserTokenPolicy
         {
@@ -1492,16 +1495,16 @@ public sealed class JoiningSystemUnitTests
             SecurityPolicyUri = SecurityPolicies.Aes256_Sha256_RsaPss,
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.ValidateUserNameUserTokenPolicy(tokenPolicy, SecurityPolicies.Basic256Sha256));
 
         Assert.Contains("does not match", ex.Message);
     }
 
     [Fact]
-    public void ValidateUserNameUserTokenPolicy_RequiresUserNameTokenPolicy()
+    public async Task ValidateUserNameUserTokenPolicy_RequiresUserNameTokenPolicy()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             JoiningSystem.ValidateUserNameUserTokenPolicy(null, SecurityPolicies.Basic256Sha256));
 
         Assert.Contains("UserName user-token policy", ex.Message);
@@ -1617,11 +1620,11 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
-    public void LoadX509IdentityCertificate_WithMissingFile_Throws()
+    public async Task LoadX509IdentityCertificate_WithMissingFile_Throws()
     {
         var missingPath = Path.Combine(AppContext.BaseDirectory, "tmp", "unit-x509-missing", "missing.der");
 
-        var ex = Assert.Throws<FileNotFoundException>(() =>
+        var ex = await Assert.ThrowsAsync<FileNotFoundException>(async () =>
             JoiningSystem.LoadX509IdentityCertificate(new ClientConfig
             {
                 X509IdentityCertificatePath = missingPath,

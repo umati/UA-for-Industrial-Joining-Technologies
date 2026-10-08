@@ -340,10 +340,10 @@ public class IjtFileLoggerTests : IDisposable
     }
 
     [Fact]
-    public void ClearSessionLogs_DoesNotThrow_WhenDirsDoNotExist()
+    public async Task ClearSessionLogs_DoesNotThrow_WhenDirsDoNotExist()
     {
         // Should be safe to call even when directories don't exist yet
-        var ex = Record.Exception(() => IjtFileLogger.ClearSessionLogs());
+        var ex = await Record.ExceptionAsync(async () => IjtFileLogger.ClearSessionLogs());
         Assert.Null(ex);
     }
 
@@ -361,24 +361,24 @@ public class IjtFileLoggerTests : IDisposable
     }
 
     [Fact]
-    public void WriteResult_WhenDestinationIsDirectory_SwallowsAccessFailure()
+    public async Task WriteResult_WhenDestinationIsDirectory_SwallowsAccessFailure()
     {
         Directory.CreateDirectory(IjtFileLogger.ResultLogPath);
 
-        var ex = Record.Exception(() => IjtFileLogger.WriteResult("unwritable"));
+        var ex = await Record.ExceptionAsync(async () => IjtFileLogger.WriteResult("unwritable"));
 
         Assert.Null(ex);
         Assert.True(Directory.Exists(IjtFileLogger.ResultLogPath));
     }
 
     [Fact]
-    public void WriteResult_WhenLogRootIsAFile_SwallowsIoFailure()
+    public async Task WriteResult_WhenLogRootIsAFile_SwallowsIoFailure()
     {
         var blockedRoot = Path.Combine(_tempRoot, "blocked-root");
         File.WriteAllText(blockedRoot, "not a directory");
         using var blockedLogRoot = IjtFileLogger.PushBaseLogDirOverride(blockedRoot);
 
-        var ex = Record.Exception(() => IjtFileLogger.WriteResult("unwritable"));
+        var ex = await Record.ExceptionAsync(async () => IjtFileLogger.WriteResult("unwritable"));
 
         Assert.Null(ex);
         Assert.True(File.Exists(blockedRoot));

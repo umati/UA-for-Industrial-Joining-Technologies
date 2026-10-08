@@ -8,7 +8,7 @@
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_CSharp_Client/` |
 | **Purpose** | C# OPC UA IJT reference client — interactive menu covering events, results, assets, joining process, and joint management |
-| **Stack** | .NET 10, OPC Foundation UA .NET Standard SDK, xUnit, Moq, coverlet |
+| **Stack** | .NET 10, OPC Foundation UA .NET Standard SDK 2.0.0 (with dual-mode 1.5.378 legacy profile), xUnit, Moq, coverlet |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT Base + Tightening) on top of DI, Machinery, MachineryResult, AMB |
 | **Server default** | `opc.tcp://localhost:40451` |
 
@@ -18,10 +18,16 @@
 
 ```
 OPC UA Core (Part 1-14)
-  └─ ISession (Opc.Ua.Client.ISession) — OPC Foundation SDK, untouched
+  └─ ISession (Opc.Ua.Client.ISession) — OPC Foundation SDK 2.0.0
 
 Harmonized Companion Specs (DI, Machinery, Machinery/Result, AMB, IA)
-  └─ IJT Base + IJT Tightening companion specs
+  └─ IJT Base + IJT Tightening companion specs (Roslyn Source Generated from NodeSet2.xml)
+
+Decoupled Domain Layer (SDK-Neutral)
+  ├── DomainResultEnvelope / ResultEventNotification
+  ├── IResultEventReceiver       (consumed by EventSubscriber)
+  ├── IResultVariableReceiver    (consumed by ResultManagement)
+  └── IResultMethodClient        (consumed by ResultManagement)
 
 JoiningSystem : IJoiningSystem, IAsyncDisposable   ← IJT domain root object
   │  private ISession _session                     ← holds SDK session DIRECTLY, no wrapper
@@ -29,12 +35,12 @@ JoiningSystem : IJoiningSystem, IAsyncDisposable   ← IJT domain root object
   │  BrowseChild / BrowseMethod / CallMethod / DiscoverMethodsUnder
   │  IjtBaseNsIdx, IjtTighteningNsIdx, MachineryResultNsIdx, DiNsIdx
   │  NodeId (JoiningSystemType instance in Objects folder)
-  ├── ResultManagement      — Result Management menu items
-  ├── AssetManagement       — Asset Management menu items
-  ├── JoiningProcessManagement — Joining Process menu items
-  ├── JointManagement       — Joint Management menu items
-  ├── SimulationManagement   ← NEW: SimulateSingleResult, SimulateBatchOrSyncResult, SimulateJobResult, SimulateBulkResults, SimulateEvent, SimulateBulkEvents
-  └── EventSubscriber       — Event Subscription menu items
+  ├── ResultManagement      — Result Management (implements IResultVariableReceiver, IResultMethodClient)
+  ├── AssetManagement       — Asset Management
+  ├── JoiningProcessManagement — Joining Process
+  ├── JointManagement       — Joint Management
+  ├── SimulationManagement   — Simulate results and events
+  └── EventSubscriber       — Event subscriptions (implements IResultEventReceiver)
 
 IJoiningSystem  ← interface used by management classes and Moq mocks
 ```
@@ -393,7 +399,8 @@ Always call `JoiningSystem.BrowseMethod(objectId, name, fallbackConstant)` — n
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `OPCFoundation.NetStandard.Opc.Ua` | latest stable | OPC UA SDK (client + types) |
+| `OPCFoundation.NetStandard.Opc.Ua` | 2.0.0 | OPC UA SDK client and core stack |
+| `OPCFoundation.NetStandard.Opc.Ua.Core` | 2.0.0 | Core types and Roslyn Source Generators (`NodeSet2.xml`) |
 | `xunit` | latest | Unit test framework |
 | `Moq` | 4.20.72+ | Mocking `IJoiningSystem` in unit tests |
 | `coverlet.collector` | latest | Code coverage collection |
@@ -442,9 +449,11 @@ For the full port assignment table, auto-launch mechanics, and venv rationale, s
 
 ---
 
-## Softing SDK Integration (Type Libraries)
+## Softing SDK & Legacy OPC Foundation 1.5 Integration
 
-For projects using the Softing SDK, all 7 IJT type library DLLs must be referenced. Copy them to `libs\IJT\` inside the Softing solution to avoid hard-coded paths, then add to `.csproj`:
+For projects integrating with the Softing SDK or older OPC Foundation SDK 1.5.x deployments, all 7 IJT type library DLLs can be built using the legacy dual-mode profile (`-p:OpcUaClientOnly=true`).
+
+Reference them in your `.csproj`:
 
 ```xml
 <ItemGroup>
@@ -458,9 +467,9 @@ For projects using the Softing SDK, all 7 IJT type library DLLs must be referenc
 </ItemGroup>
 ```
 
-Build the DLLs with Softing-compatible SDK version (OPC Foundation 1.5.376.235):
+Build the DLLs with the legacy SDK 1.5-compatible profile (OPC Foundation 1.5.378.182):
 ```bash
 dotnet restore Types\UAModel.IJTTightening -p:OpcUaClientOnly=true --configfile Types\nuget.config
 dotnet build   Types\UAModel.IJTTightening -p:OpcUaClientOnly=true --no-restore
 ```
-Output is in `UAModel.IJTTightening\bin\Debug\` — pick subfolder: `net48\` `net6.0\` `net8.0\` `net9.0\` `netstandard2.1\`
+Output is in `UAModel.IJTTightening\bin\Debug\` — target frameworks supported: `net48`, `netstandard2.1`, `net6.0`, `net8.0`, `net9.0`.

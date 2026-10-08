@@ -8,11 +8,11 @@ namespace IJT_CSharp_Client.Tests.Helpers;
 public class IjtMenuHelperTests
 {
     [Fact]
-    public void PrintUsage_MinimalArgs_DoesNotThrow()
+    public async Task PrintUsage_MinimalArgs_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtMenuHelper.PrintUsage(
-                title: "GetJointList",
+                title: "GetJointListAsync",
                 description: "Retrieves all joints.",
                 inputs: ["ProductInstanceUri"],
                 outputs: ["JointList", "Status"]));
@@ -21,11 +21,11 @@ public class IjtMenuHelperTests
     }
 
     [Fact]
-    public void PrintUsage_WithTip_DoesNotThrow()
+    public async Task PrintUsage_WithTip_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtMenuHelper.PrintUsage(
-                title: "GetLatestResult",
+                title: "GetLatestResultAsync",
                 description: "Returns the most recent result.",
                 inputs: ["TimeoutMs"],
                 outputs: ["Result", "Status"],
@@ -35,9 +35,9 @@ public class IjtMenuHelperTests
     }
 
     [Fact]
-    public void PrintUsage_EmptyInputsAndOutputs_DoesNotThrow()
+    public async Task PrintUsage_EmptyInputsAndOutputs_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtMenuHelper.PrintUsage(
                 title: "NoArgs",
                 description: "No inputs or outputs.",
@@ -48,9 +48,9 @@ public class IjtMenuHelperTests
     }
 
     [Fact]
-    public void PrintUsage_LongTitle_DoesNotThrow()
+    public async Task PrintUsage_LongTitle_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtMenuHelper.PrintUsage(
                 title: new string('A', 120),
                 description: "Wide title that exceeds 64 chars — tests width calculation.",

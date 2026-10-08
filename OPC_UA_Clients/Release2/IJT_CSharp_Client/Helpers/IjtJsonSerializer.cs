@@ -4,10 +4,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using IJT_CSharp_Client.Client;
+using IJTBase;
+using MachineryResult;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using UAModel.IJTBase;
-using UAModel.MachineryResult;
 
 namespace IJT_CSharp_Client.Helpers;
 
@@ -51,19 +51,24 @@ public static class IjtJsonSerializer
         // Unwrap ExtensionObject transparently
         if (value is ExtensionObject eo)
         {
-            if (eo.Body is null)
+            var body = ExtensionObjectHelper.GetBody(eo);
+            if (body is null)
                 return $"\"(empty ExtensionObject, TypeId={eo.TypeId})\"";
-            return Serialize(eo.Body);
+            return Serialize(body);
         }
 
         // Unwrap Variant
         if (value is Variant v)
-            return v.Value is null ? "null" : Serialize(v.Value);
+        {
+            var boxedValue = v.AsBoxedObject(Variant.BoxingBehavior.Legacy);
+            return boxedValue is null ? "null" : Serialize(boxedValue);
+        }
 
         // Unwrap ExtensionObject arrays
         if (value is ExtensionObject[] eoArr)
         {
-            var items = eoArr.Select(x => x.Body ?? (object)$"(empty, TypeId={x.TypeId})").ToArray();
+            var items = eoArr.Select(x =>
+                ExtensionObjectHelper.GetBody(x) ?? (object)$"(empty, TypeId={x.TypeId})").ToArray();
             return JsonSerializer.Serialize(items, items.GetType(), _opts);
         }
 
@@ -129,7 +134,9 @@ public static class IjtJsonSerializer
     public static int CountItems(object? raw)
     {
         if (raw is null) return -1;
-        var val = raw is Variant v ? v.Value : raw;
+        var val = raw is Variant v
+            ? v.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+            : raw;
         return val switch
         {
             ExtensionObject[] arr => arr.Length,
@@ -153,9 +160,11 @@ public static class IjtJsonSerializer
         _log.LogInformation("-- {Method} --", methodName);
         for (int i = 0; i < outputs.Count; i++)
         {
-            var val = outputs[i] is Variant vt ? vt.Value : outputs[i];
+            var val = outputs[i] is Variant vt
+                ? vt.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : outputs[i];
             if (val is ResultDataType ||
-                (val is ExtensionObject eo && eo.Body is ResultDataType))
+                (val is ExtensionObject eo && ExtensionObjectHelper.TryDecode<ResultDataType>(eo) is not null))
                 PrintResult(val);
             else
                 Print($"output[{i}]", outputs[i]);
@@ -180,8 +189,11 @@ public static class IjtJsonSerializer
             var label = i < labels.Length && !string.IsNullOrWhiteSpace(labels[i])
                 ? labels[i]
                 : $"output[{i}]";
-            var val = outputs[i] is Variant vt ? vt.Value : outputs[i];
-            if (val is ResultDataType || (val is ExtensionObject eo && eo.Body is ResultDataType))
+            var val = outputs[i] is Variant vt
+                ? vt.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : outputs[i];
+            if (val is ResultDataType ||
+                (val is ExtensionObject eo && ExtensionObjectHelper.TryDecode<ResultDataType>(eo) is not null))
                 PrintResult(val);
             else
                 Print(label, outputs[i]);
@@ -196,8 +208,11 @@ public static class IjtJsonSerializer
     {
         if (result is null) { _log.LogInformation("(null result)"); return; }
 
-        var value = result is ExtensionObject eo ? eo.Body ?? result : result;
-        value = value is Variant v ? v.Value ?? value : value;
+        var value = result is ExtensionObject eo
+            ? ExtensionObjectHelper.GetBody(eo) ?? result
+            : result;
+        if (value is Variant v)
+            value = v.AsBoxedObject(Variant.BoxingBehavior.Legacy) ?? value;
 
         if (value is ResultDataType rd)
         {
@@ -216,7 +231,7 @@ public static class IjtJsonSerializer
         sb.AppendLine("  +-- ResultMetaData");
         AppendAllMetaDataFields(sb, rd.ResultMetaData);
         sb.AppendLine("  +-- ResultContent");
-        if (rd.ResultContent != null && rd.ResultContent.Count > 0)
+        if (rd.ResultContent.Count > 0)
             foreach (var item in rd.ResultContent)
                 AppendJsonBlock(sb, "        item", item);
         else
@@ -250,31 +265,31 @@ public static class IjtJsonSerializer
         if (meta.ProcessingTimes != null)
             AppendJsonBlock(sb, "        ProcessingTimes", meta.ProcessingTimes);
         AppendMetaField(sb, "ResultUri",
-            meta.ResultUri?.Count > 0 ? string.Join(", ", meta.ResultUri) : null);
+            meta.ResultUri.Count > 0 ? string.Join(", ", meta.ResultUri) : null);
         AppendMetaField(sb, "ResultEvaluation", meta.ResultEvaluation.ToString());
         AppendMetaField(sb, "ResultEvaluationCode",
             meta.ResultEvaluationCode != 0 ? meta.ResultEvaluationCode.ToString() : null);
-        AppendMetaField(sb, "ResultEvaluationDetails", meta.ResultEvaluationDetails?.Text);
+        AppendMetaField(sb, "ResultEvaluationDetails", meta.ResultEvaluationDetails.Text);
         AppendMetaField(sb, "FileFormat",
-            meta.FileFormat?.Count > 0 ? string.Join(", ", meta.FileFormat) : null);
+            meta.FileFormat.Count > 0 ? string.Join(", ", meta.FileFormat) : null);
 
         // -- JoiningResultMetaDataType extra fields ----------------------------
         if (meta is JoiningResultMetaDataType jm)
         {
-            AppendMetaField(sb, "JoiningTechnology", jm.JoiningTechnology?.Text);
+            AppendMetaField(sb, "JoiningTechnology", jm.JoiningTechnology.Text);
             AppendMetaField(sb, "SequenceNumber", jm.SequenceNumber.ToString());
             AppendMetaField(sb, "Name", jm.Name);
-            AppendMetaField(sb, "Description", jm.Description?.Text);
+            AppendMetaField(sb, "Description", jm.Description.Text);
             AppendMetaField(sb, "Classification", jm.Classification.ToString());
             AppendMetaField(sb, "OperationMode", jm.OperationMode.ToString());
             AppendMetaField(sb, "AssemblyType", jm.AssemblyType.ToString());
-            if (jm.AssociatedEntities?.Count > 0)
+            if (jm.AssociatedEntities.Count > 0)
                 AppendJsonBlock(sb, "        AssociatedEntities", jm.AssociatedEntities);
-            if (jm.ResultCounters?.Count > 0)
+            if (jm.ResultCounters.Count > 0)
                 AppendJsonBlock(sb, "        ResultCounters", jm.ResultCounters);
             AppendMetaField(sb, "InterventionType", jm.InterventionType.ToString());
             AppendMetaField(sb, "IsGeneratedOffline", jm.IsGeneratedOffline.ToString());
-            if (jm.ExtendedMetaData?.Count > 0)
+            if (jm.ExtendedMetaData.Count > 0)
                 AppendJsonBlock(sb, "        ExtendedMetaData", jm.ExtendedMetaData);
         }
     }
@@ -310,26 +325,26 @@ public static class IjtJsonSerializer
 
 internal sealed class LocalizedTextConverter : JsonConverter<LocalizedText>
 {
-    public override LocalizedText? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    public override LocalizedText Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
         => new LocalizedText(r.GetString());
     public override void Write(Utf8JsonWriter w, LocalizedText v, JsonSerializerOptions o)
-        => w.WriteStringValue(v?.Text ?? "");
+        => w.WriteStringValue(v.Text ?? "");
 }
 
 internal sealed class NodeIdConverter : JsonConverter<NodeId>
 {
-    public override NodeId? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    public override NodeId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
         => NodeId.Parse(r.GetString() ?? "");
     public override void Write(Utf8JsonWriter w, NodeId v, JsonSerializerOptions o)
-        => w.WriteStringValue(v?.ToString() ?? "");
+        => w.WriteStringValue(v.ToString());
 }
 
 internal sealed class ExpandedNodeIdConverter : JsonConverter<ExpandedNodeId>
 {
-    public override ExpandedNodeId? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    public override ExpandedNodeId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
         => ExpandedNodeId.Parse(r.GetString() ?? "");
     public override void Write(Utf8JsonWriter w, ExpandedNodeId v, JsonSerializerOptions o)
-        => w.WriteStringValue(v?.ToString() ?? "");
+        => w.WriteStringValue(v.ToString());
 }
 
 internal sealed class StatusCodeConverter : JsonConverter<StatusCode>
@@ -342,12 +357,20 @@ internal sealed class StatusCodeConverter : JsonConverter<StatusCode>
 
 internal sealed class ExtensionObjectConverter : JsonConverter<ExtensionObject>
 {
-    public override ExtensionObject? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    public override ExtensionObject Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
         => throw new NotSupportedException("ExtensionObject deserialization not supported.");
     public override void Write(Utf8JsonWriter w, ExtensionObject v, JsonSerializerOptions o)
     {
-        if (v?.Body is null) { w.WriteNullValue(); return; }
-        JsonSerializer.Serialize(w, v.Body, v.Body.GetType(), o);
+        var body = ExtensionObjectHelper.GetBody(v);
+        if (body is null)
+        {
+            JsonSerializer.Serialize(
+                w,
+                new { TypeId = v.TypeId.ToString(), Encoding = v.Encoding.ToString(), BodyUnavailable = true },
+                o);
+            return;
+        }
+        JsonSerializer.Serialize(w, body, body.GetType(), o);
     }
 }
 
@@ -357,17 +380,18 @@ internal sealed class VariantConverter : JsonConverter<Variant>
         => throw new NotSupportedException("Variant deserialization not supported.");
     public override void Write(Utf8JsonWriter w, Variant v, JsonSerializerOptions o)
     {
-        if (v.Value is null) { w.WriteNullValue(); return; }
-        JsonSerializer.Serialize(w, v.Value, v.Value.GetType(), o);
+        var boxedValue = v.AsBoxedObject(Variant.BoxingBehavior.Legacy);
+        if (boxedValue is null) { w.WriteNullValue(); return; }
+        JsonSerializer.Serialize(w, boxedValue, boxedValue.GetType(), o);
     }
 }
 
 internal sealed class QualifiedNameConverter : JsonConverter<QualifiedName>
 {
-    public override QualifiedName? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    public override QualifiedName Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
         => QualifiedName.Parse(r.GetString() ?? "");
     public override void Write(Utf8JsonWriter w, QualifiedName v, JsonSerializerOptions o)
-        => w.WriteStringValue(v?.ToString() ?? "");
+        => w.WriteStringValue(v.ToString());
 }
 
 internal sealed class EUInformationConverter : JsonConverter<EUInformation>
@@ -377,8 +401,8 @@ internal sealed class EUInformationConverter : JsonConverter<EUInformation>
     public override void Write(Utf8JsonWriter w, EUInformation v, JsonSerializerOptions o)
     {
         w.WriteStartObject();
-        w.WriteString("DisplayName", v?.DisplayName?.Text ?? "");
-        w.WriteString("Description", v?.Description?.Text ?? "");
+        w.WriteString("DisplayName", v?.DisplayName.Text ?? "");
+        w.WriteString("Description", v?.Description.Text ?? "");
         w.WriteNumber("UnitId", v?.UnitId ?? 0);
         w.WriteString("NamespaceUri", v?.NamespaceUri ?? "");
         w.WriteEndObject();
@@ -390,5 +414,5 @@ internal sealed class UuidConverter : JsonConverter<Uuid>
     public override Uuid Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
         => new Uuid(Guid.Parse(r.GetString() ?? Guid.Empty.ToString()));
     public override void Write(Utf8JsonWriter w, Uuid v, JsonSerializerOptions o)
-        => w.WriteStringValue(v.GuidString);
+        => w.WriteStringValue(v.ToString());
 }

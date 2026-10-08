@@ -130,14 +130,14 @@ public class IjtEntityTypesTests
     // ── PrintTable ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void PrintTable_DoesNotThrow()
+    public async Task PrintTable_DoesNotThrow()
     {
         // Redirect console output to avoid noise during test run
         var original = Console.Out;
         Console.SetOut(TextWriter.Null);
         try
         {
-            var ex = Record.Exception(() => IjtEntityTypes.PrintTable());
+            var ex = await Record.ExceptionAsync(async () => IjtEntityTypes.PrintTable());
             Assert.Null(ex);
         }
         finally

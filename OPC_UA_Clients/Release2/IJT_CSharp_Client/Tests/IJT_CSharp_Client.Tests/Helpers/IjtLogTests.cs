@@ -108,92 +108,92 @@ public sealed class IjtLogTests
     }
 
     [Fact]
-    public void Logger_LogInformation_DoesNotThrow()
+    public async Task Logger_LogInformation_DoesNotThrow()
     {
         var logger = IjtLog.For<IjtLogTests>();
-        var ex = Record.Exception(() => logger.LogInformation("Unit test log message"));
+        var ex = await Record.ExceptionAsync(async () => logger.LogInformation("Unit test log message"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Logger_LogWarning_DoesNotThrow()
+    public async Task Logger_LogWarning_DoesNotThrow()
     {
         var logger = IjtLog.For<IjtLogTests>();
-        var ex = Record.Exception(() => logger.LogWarning("Unit test warning message"));
+        var ex = await Record.ExceptionAsync(async () => logger.LogWarning("Unit test warning message"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Logger_LogError_DoesNotThrow()
+    public async Task Logger_LogError_DoesNotThrow()
     {
         var logger = IjtLog.For<IjtLogTests>();
-        var ex = Record.Exception(() => logger.LogError("Unit test error message"));
+        var ex = await Record.ExceptionAsync(async () => logger.LogError("Unit test error message"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Logger_LogCritical_DoesNotThrow()
+    public async Task Logger_LogCritical_DoesNotThrow()
     {
         var logger = IjtLog.For<IjtLogTests>();
-        var ex = Record.Exception(() => logger.LogCritical("Unit test critical message"));
+        var ex = await Record.ExceptionAsync(async () => logger.LogCritical("Unit test critical message"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Logger_LogDebug_DoesNotThrow()
+    public async Task Logger_LogDebug_DoesNotThrow()
     {
         var logger = IjtLog.For<IjtLogTests>();
-        var ex = Record.Exception(() => logger.LogDebug("Unit test debug message"));
+        var ex = await Record.ExceptionAsync(async () => logger.LogDebug("Unit test debug message"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Logger_LogTrace_DoesNotThrow()
+    public async Task Logger_LogTrace_DoesNotThrow()
     {
         var logger = IjtLog.For<IjtLogTests>();
-        var ex = Record.Exception(() => logger.LogTrace("Unit test trace message"));
+        var ex = await Record.ExceptionAsync(async () => logger.LogTrace("Unit test trace message"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Logger_LogWithException_DoesNotThrow()
+    public async Task Logger_LogWithException_DoesNotThrow()
     {
         var logger = IjtLog.For<IjtLogTests>();
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             logger.LogError(new InvalidOperationException("inner"), "Error with exception"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Logger_LogEmptyMessage_DoesNotThrow()
+    public async Task Logger_LogEmptyMessage_DoesNotThrow()
     {
         var logger = IjtLog.For<IjtLogTests>();
         // Empty message with no exception should be silently skipped
-        var ex = Record.Exception(() => logger.LogInformation(""));
+        var ex = await Record.ExceptionAsync(async () => logger.LogInformation(""));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Logger_LogWithWhitespaceMessage_DoesNotThrow()
+    public async Task Logger_LogWithWhitespaceMessage_DoesNotThrow()
     {
         var logger = IjtLog.For<IjtLogTests>();
-        var ex = Record.Exception(() => logger.LogInformation("   "));
+        var ex = await Record.ExceptionAsync(async () => logger.LogInformation("   "));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ForCategory_DottedName_LogsWithoutThrow()
+    public async Task ForCategory_DottedName_LogsWithoutThrow()
     {
         var logger = IjtLog.ForCategory("IJT_CSharp_Client.Client.JoiningSystem");
-        var ex = Record.Exception(() => logger.LogInformation("Category-based log entry"));
+        var ex = await Record.ExceptionAsync(async () => logger.LogInformation("Category-based log entry"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ForCategory_SingleSegmentName_LogsWithoutThrow()
+    public async Task ForCategory_SingleSegmentName_LogsWithoutThrow()
     {
         var logger = IjtLog.ForCategory("JoiningSystem");
-        var ex = Record.Exception(() => logger.LogWarning("Single segment category log"));
+        var ex = await Record.ExceptionAsync(async () => logger.LogWarning("Single segment category log"));
         Assert.Null(ex);
     }
 
@@ -283,12 +283,12 @@ public sealed class IjtLogTests
     }
 
     [Fact]
-    public void Logger_LogBelowMinLevel_DoesNotLog()
+    public async Task Logger_LogBelowMinLevel_DoesNotLog()
     {
         var logger = NewConsoleLogger(LogLevel.Information);
 
         Assert.False(logger.IsEnabled(LogLevel.Trace));
-        var ex = Record.Exception(() => logger.LogTrace("This should not log"));
+        var ex = await Record.ExceptionAsync(async () => logger.LogTrace("This should not log"));
         Assert.Null(ex);
     }
 

@@ -3,7 +3,9 @@
 using System.Text;
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Configuration;
+using IJT_CSharp_Client.Domain.Events;
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
 using Microsoft.Extensions.Logging;
 
 using var cts = new CancellationTokenSource();
@@ -45,16 +47,33 @@ await using (js)
     IjtFileLogger.ClearSessionLogs();
 
     // ── Event handlers — all output through logger, no Console calls ───────────
-    js.EventSubscriber.OnResultReady += (_, e) =>
+    js.ResultEvents.OnResultNotification += (_, e) =>
     {
         _log.LogInformation("Result received | {Name} | Seq#{Seq} | {Class} | {Time:HH:mm:ss}",
-            e.Name ?? e.ResultId, e.SequenceNumber, e.Classification, e.EventTime);
+            e.Result?.Name ?? e.Result?.ResultId ?? e.SourceName,
+            e.Result?.SequenceNumber ?? 0,
+            e.Result?.Classification?.ToString() ?? e.Result?.ResultEvaluation ?? e.EventTypeName,
+            e.EventTime);
         var text = e.Result is not null
             ? IjtResultFormatter.FormatResult(e.Result, e.EventTime)
             : IjtResultFormatter.FormatResultEventFields(
-                e.ResultId, e.Classification, e.Name, e.SequenceNumber, e.AssemblyType, e.EventTime);
-        var path = IjtFileLogger.WriteResultTimestamped(text, e.ResultId, e.Name);
+                e.Result?.ResultId,
+                e.Result?.Classification?.ToString() ?? e.Result?.ResultEvaluation,
+                e.Result?.Name,
+                (int)(e.Result?.SequenceNumber ?? 0),
+                e.Result?.AssemblyType,
+                e.EventTime);
+        var path = IjtFileLogger.WriteResultTimestamped(text, e.Result?.ResultId, e.Result?.Name);
         _log.LogInformation("Result logged to: {Path}", path);
+    };
+
+    js.ResultVariable.OnResultVariableChanged += (_, env) =>
+    {
+        _log.LogInformation("Result variable received | {Name} | Seq#{Seq} | {Class} | {Time:HH:mm:ss}",
+            env.Name ?? env.ResultId ?? "Unknown",
+            env.SequenceNumber ?? 0,
+            env.Classification?.ToString() ?? env.ResultEvaluation ?? "Unknown",
+            env.CreationTime ?? DateTime.UtcNow);
     };
 
     js.EventSubscriber.OnJoiningSystemEvent += (_, e) =>
@@ -109,39 +128,39 @@ await using (js)
         {
             // ── SUBSCRIPTIONS (toggle) ─────────────────────────────────────────
             case "1":
-                if (js.EventSubscriber.IsSubscribed)
-                    js.EventSubscriber.Unsubscribe();
+                if (js.ResultEvents.IsSubscribed)
+                    await js.ResultEvents.UnsubscribeAsync();
                 else
                 {
-                    js.EventSubscriber.Subscribe();
+                    await js.ResultEvents.SubscribeAsync();
                     _log.LogInformation("Result log: {P}", IjtFileLogger.ResultLogPath);
                     _log.LogInformation("Event  log: {P}", IjtFileLogger.EventLogPath);
                 }
                 showMenu = true;
                 break;
             case "2":
-                if (js.ResultManagement.IsResultVarSubscribed)
-                    js.ResultManagement.StopResultVariableSubscription();
+                if (js.ResultVariable.IsResultVarSubscribed)
+                    await js.ResultVariable.StopResultVariableSubscriptionAsync();
                 else
-                    js.ResultManagement.SubscribeResultVariable();
+                    await js.ResultVariable.SubscribeResultVariableAsync();
                 showMenu = true;
                 break;
             case "3":
                 if (js.AssetManagement.IsAssetVarSubscribed)
-                    js.AssetManagement.StopAssetVariableSubscription();
+                    await js.AssetManagement.StopAssetVariableSubscriptionAsync();
                 else
-                    js.AssetManagement.SubscribeAssetVariables();
+                    await js.AssetManagement.SubscribeAssetVariablesAsync();
                 showMenu = true;
                 break;
 
             // ── RESULT MANAGEMENT ─────────────────────────────────────────────
             case "4":
-                js.ResultManagement.GetLatestResult();
+                await js.ResultMethods.GetLatestResultAsync();
                 break;
             case "5":
                 {
                     var rid = Prompt("Result ID");
-                    if (rid != null) js.ResultManagement.GetResultById(rid);
+                    if (rid != null) await js.ResultMethods.GetResultByIdAsync(rid);
                     break;
                 }
 
@@ -151,7 +170,7 @@ await using (js)
                     var uri = Prompt("ProductInstance URI");
                     if (uri is null) break;
                     var enabled = PromptBool("Enable", defaultYes: true);
-                    js.AssetManagement.EnableAsset(uri, enabled);
+                    await js.AssetManagement.EnableAssetAsync(uri, enabled);
                     break;
                 }
             case "7":
@@ -162,7 +181,7 @@ await using (js)
                     if (idsRaw is null) break;
                     var ids = idsRaw.Split(',',
                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    js.AssetManagement.SendTextIdentifiers(uri, ids);
+                    await js.AssetManagement.SendTextIdentifiersAsync(uri, ids);
                     break;
                 }
             case "8":
@@ -174,7 +193,7 @@ await using (js)
                     { _log.LogWarning("Enter a number between 1 and 10."); break; }
 
                     IjtEntityTypes.PrintTable();
-                    var entities = new List<UAModel.IJTBase.EntityDataType>();
+                    var entities = new List<EntityDataType>();
                     bool entityOk = true;
                     for (int ei = 0; ei < entCount && entityOk; ei++)
                     {
@@ -198,7 +217,7 @@ await using (js)
                         bool? isExt = isExtRaw.Equals("y", StringComparison.OrdinalIgnoreCase) ? true
                                     : isExtRaw.Equals("n", StringComparison.OrdinalIgnoreCase) ? false
                                     : (bool?)null;
-                        entities.Add(UAModel.IJTBase.EntityDataType.Create(
+                        entities.Add(EntityDataType.Create(
                             entityId: entityId,
                             entityType: entityType,
                             name: string.IsNullOrEmpty(entityName) ? null : entityName,
@@ -207,19 +226,19 @@ await using (js)
                             isExternal: isExt));
                     }
                     if (entityOk && entities.Count > 0)
-                        js.AssetManagement.SendIdentifiers(entities, uri);
+                        await js.AssetManagement.SendIdentifiersAsync(entities, uri);
                     break;
                 }
             case "9":
                 {
                     var uri = Prompt("ProductInstance URI");
-                    if (uri != null) js.AssetManagement.GetIdentifiers(uri);
+                    if (uri != null) await js.AssetManagement.GetIdentifiersAsync(uri);
                     break;
                 }
             case "10":
                 {
                     var uri = Prompt("ProductInstance URI");
-                    if (uri != null) js.AssetManagement.ResetIdentifiers(uri);
+                    if (uri != null) await js.AssetManagement.ResetIdentifiersAsync(uri);
                     break;
                 }
 
@@ -228,7 +247,7 @@ await using (js)
                 {
                     var uri = PromptOptional("ProductInstance URI");
                     if (uri is null) break;
-                    js.JoiningProcessManagement.GetJoiningProcessList(uri);
+                    await js.JoiningProcessManagement.GetJoiningProcessListAsync(uri);
                     break;
                 }
             case "12":
@@ -236,14 +255,14 @@ await using (js)
                     var id = Prompt("Joining Process ID");
                     if (id is null) break;
                     var name = PromptOptional("Selection name") ?? "";
-                    js.JoiningProcessManagement.SelectJoiningProcess(id, selectionName: name);
+                    await js.JoiningProcessManagement.SelectJoiningProcessAsync(id, selectionName: name);
                     break;
                 }
             case "13":
                 {
                     var uri = PromptOptional("ProductInstance URI");
                     if (uri is null) break;
-                    js.JoiningProcessManagement.GetSelectedJoiningProgram(uri);
+                    await js.JoiningProcessManagement.GetSelectedJoiningProgramAsync(uri);
                     break;
                 }
 
@@ -252,14 +271,14 @@ await using (js)
                 {
                     var uri = PromptOptional("ProductInstance URI");
                     if (uri is null) break;
-                    js.JointManagement.GetJointList(uri);
+                    await js.JointManagement.GetJointListAsync(uri);
                     break;
                 }
             case "15":
                 {
                     var uri = Prompt("ProductInstance URI");
                     var id = Prompt("Joint ID");
-                    if (uri != null && id != null) js.JointManagement.GetJoint(uri, id);
+                    if (uri != null && id != null) await js.JointManagement.GetJointAsync(uri, id);
                     break;
                 }
             case "16":
@@ -267,7 +286,7 @@ await using (js)
                     var uri = Prompt("ProductInstance URI") ?? "";
                     var id = Prompt("Joint ID");
                     var oid = Prompt("Joint Origin ID") ?? "";
-                    if (id != null) js.JointManagement.SelectJoint(uri, id, oid);
+                    if (id != null) await js.JointManagement.SelectJointAsync(uri, id, oid);
                     break;
                 }
             case "17":
@@ -275,7 +294,7 @@ await using (js)
                     var uri = Prompt("ProductInstance URI") ?? "";
                     var id = Prompt("Joint ID");
                     var oid = Prompt("Joint Origin ID") ?? "";
-                    if (id != null) js.JointManagement.DeleteJoint(uri, id, oid);
+                    if (id != null) await js.JointManagement.DeleteJointAsync(uri, id, oid);
                     break;
                 }
             case "18":
@@ -283,7 +302,7 @@ await using (js)
                     var uri = Prompt("ProductInstance URI") ?? "";
                     var id = Prompt("Joint ID");
                     var did = Prompt("Joint Design ID") ?? "";
-                    if (id != null) js.JointManagement.SendJoint(uri, id, did);
+                    if (id != null) await js.JointManagement.SendJointAsync(uri, id, did);
                     break;
                 }
 
@@ -293,7 +312,7 @@ await using (js)
                     var uri = Prompt("ProductInstance URI (Tool URI)");
                     if (uri is null) break;
                     var deselect = PromptBool("Deselect after joining", defaultYes: false);
-                    js.JoiningProcessManagement.StartSelectedJoining(uri, deselect);
+                    await js.JoiningProcessManagement.StartSelectedJoiningAsync(uri, deselect);
                     break;
                 }
             case "20":
@@ -304,9 +323,9 @@ await using (js)
                     var oid = PromptOptional("Joining Process Origin ID") ?? "";
                     // PROGRAM entity — key entity describing which program to start
                     var progOrigin = PromptOptional("Program EntityOriginId (e.g. DCCA6C76-3926-455B-959B-EA3082FCD091)") ?? "";
-                    var entities = new List<UAModel.IJTBase.EntityDataType>
+                    var entities = new List<EntityDataType>
                     {
-                        UAModel.IJTBase.EntityDataType.Create(
+                        EntityDataType.Create(
                             id, entityType: (short)27,
                             name: "ProgramId", description: "Program_4_Steps",
                             entityOriginId: string.IsNullOrEmpty(progOrigin) ? null : progOrigin,
@@ -315,11 +334,11 @@ await using (js)
                     // Optional VIN — external identifier for the vehicle/product being joined
                     var vin = PromptOptional("VIN (VEHICLE entity, e.g. 4Y1SL65848Z411439, Enter to skip)") ?? "";
                     if (!string.IsNullOrEmpty(vin))
-                        entities.Add(UAModel.IJTBase.EntityDataType.Create(
+                        entities.Add(EntityDataType.Create(
                             vin, entityType: (short)20,
                             name: "VIN", description: "Vehicle Identification Number",
                             isExternal: true));
-                    js.JoiningProcessManagement.StartJoiningProcess(uri, id, oid, entities);
+                    await js.JoiningProcessManagement.StartJoiningProcessAsync(uri, id, oid, entities);
                     break;
                 }
             case "21":
@@ -329,13 +348,13 @@ await using (js)
                     if (uri is null || id is null) break;
                     var oid = PromptOptional("Joining Process Origin ID") ?? "";
                     var msg = PromptOptional("Abort message") ?? "";
-                    js.JoiningProcessManagement.AbortJoiningProcess(uri, id, oid, msg);
+                    await js.JoiningProcessManagement.AbortJoiningProcessAsync(uri, id, oid, msg);
                     break;
                 }
             case "22":
                 {
                     var uri = PromptOptional("ProductInstance URI") ?? "";
-                    js.JoiningProcessManagement.DeselectJoiningProcess(uri);
+                    await js.JoiningProcessManagement.DeselectJoiningProcessAsync(uri);
                     break;
                 }
             case "23":
@@ -344,7 +363,7 @@ await using (js)
                     var id = Prompt("Joining Process ID");
                     if (uri is null || id is null) break;
                     var oid = PromptOptional("Joining Process Origin ID") ?? "";
-                    js.JoiningProcessManagement.ResetJoiningProcess(uri, id, oid);
+                    await js.JoiningProcessManagement.ResetJoiningProcessAsync(uri, id, oid);
                     break;
                 }
             case "24":
@@ -355,7 +374,7 @@ await using (js)
                     var cntRaw = PromptOptional("Increment count (Enter=1)") ?? "1";
                     if (!uint.TryParse(cntRaw, out var cnt)) cnt = 1;
                     var oid = PromptOptional("Joining Process Origin ID") ?? "";
-                    js.JoiningProcessManagement.IncrementJoiningProcessCounter(uri, id, cnt, oid);
+                    await js.JoiningProcessManagement.IncrementJoiningProcessCounterAsync(uri, id, cnt, oid);
                     break;
                 }
             case "25":
@@ -366,7 +385,7 @@ await using (js)
                     var cntRaw = PromptOptional("Decrement count (Enter=1)") ?? "1";
                     if (!uint.TryParse(cntRaw, out var cnt)) cnt = 1;
                     var oid = PromptOptional("Joining Process Origin ID") ?? "";
-                    js.JoiningProcessManagement.DecrementJoiningProcessCounter(uri, id, cnt, oid);
+                    await js.JoiningProcessManagement.DecrementJoiningProcessCounterAsync(uri, id, cnt, oid);
                     break;
                 }
             case "26":
@@ -377,7 +396,7 @@ await using (js)
                     if (uri is null || id is null || valRaw is null) break;
                     if (!uint.TryParse(valRaw, out var val)) { _log.LogWarning("Invalid number."); break; }
                     var oid = PromptOptional("Joining Process Origin ID") ?? "";
-                    js.JoiningProcessManagement.SetJoiningProcessCounter(uri, id, val, oid);
+                    await js.JoiningProcessManagement.SetJoiningProcessCounterAsync(uri, id, val, oid);
                     break;
                 }
             case "27":
@@ -388,7 +407,7 @@ await using (js)
                     if (uri is null || id is null || sizeRaw is null) break;
                     if (!uint.TryParse(sizeRaw, out var size)) { _log.LogWarning("Invalid number."); break; }
                     var oid = PromptOptional("Joining Process Origin ID") ?? "";
-                    js.JoiningProcessManagement.SetJoiningProcessSize(uri, id, size, oid);
+                    await js.JoiningProcessManagement.SetJoiningProcessSizeAsync(uri, id, size, oid);
                     break;
                 }
 
@@ -403,7 +422,7 @@ await using (js)
                         dt = parsed.ToUniversalTime();
                     else if (!string.IsNullOrEmpty(dtRaw))
                     { _log.LogWarning("Could not parse date – using UtcNow."); }
-                    js.AssetManagement.SetTime(uri, dt);
+                    await js.AssetManagement.SetTimeAsync(uri, dt);
                     break;
                 }
             case "29":
@@ -414,7 +433,7 @@ await using (js)
                     var ids = string.IsNullOrEmpty(idsRaw)
                         ? null
                         : idsRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    js.AssetManagement.GetIOSignals(uri, ids);
+                    await js.AssetManagement.GetIOSignalsAsync(uri, ids);
                     break;
                 }
             case "30":
@@ -428,8 +447,8 @@ await using (js)
                     if (!double.TryParse(sigValRaw, System.Globalization.NumberStyles.Any,
                             System.Globalization.CultureInfo.InvariantCulture, out var sigVal))
                     { _log.LogWarning("Invalid number."); break; }
-                    var signal = new UAModel.IJTBase.SignalDataType { SignalId = sigId, SignalValue = new Opc.Ua.Variant(sigVal) };
-                    js.AssetManagement.SetIOSignals(uri, [signal]);
+                    var signal = new SignalDataType { SignalId = sigId, SignalValue = new Opc.Ua.Variant(sigVal) };
+                    await js.AssetManagement.SetIOSignalsAsync(uri, [signal]);
                     break;
                 }
 
@@ -440,7 +459,7 @@ await using (js)
                     var tRaw = PromptOptional("Result type (Enter=0)") ?? "0";
                     if (!uint.TryParse(tRaw, out var rType)) rType = 0;
                     var traces = PromptBool("Include traces", defaultYes: false);
-                    js.SimulationManagement.SimulateSingleResult(rType, traces);
+                    await js.SimulationManagement.SimulateSingleResultAsync(rType, traces);
                     break;
                 }
             case "32":
@@ -452,13 +471,13 @@ await using (js)
                     if (!uint.TryParse(nRaw, out var numCh)) numCh = 3;
                     var traces = PromptBool("Include traces", defaultYes: false);
                     var refs = PromptBool("Send as references", defaultYes: false);
-                    js.SimulationManagement.SimulateBatchOrSyncResult(cls, numCh, traces, refs);
+                    await js.SimulationManagement.SimulateBatchOrSyncResultAsync(cls, numCh, traces, refs);
                     break;
                 }
             case "33":
                 {
                     var refs = PromptBool("Send child results as references", defaultYes: false);
-                    js.SimulationManagement.SimulateJobResult(refs);
+                    await js.SimulationManagement.SimulateJobResultAsync(refs);
                     break;
                 }
             case "34":
@@ -474,7 +493,7 @@ await using (js)
                     var msRaw = PromptOptional("Min delay between results ms (Enter=500, min=100)") ?? "500";
                     if (!long.TryParse(msRaw, out var ms)) ms = 500;
                     var upd = PromptBool("Update result variables", defaultYes: true);
-                    js.SimulationManagement.SimulateBulkResults(rType, traces, fromSeq, toSeq, ms, upd);
+                    await js.SimulationManagement.SimulateBulkResultsAsync(rType, traces, fromSeq, toSeq, ms, upd);
                     break;
                 }
             case "35":
@@ -482,7 +501,7 @@ await using (js)
                     Console.WriteLine("  Event types (sample): 1=TOOL_CONNECTED  6=TOOL_STARTED  13=TOOL_ERROR  29=PROGRAM_SELECTED  31=EXECUTION_STARTED  38=RECEIVED_IDENTIFIER");
                     var eRaw = PromptOptional("Event type 1-60 (Enter=1)") ?? "1";
                     if (!uint.TryParse(eRaw, out var eType) || eType < 1 || eType > 60) eType = 1;
-                    js.SimulationManagement.SimulateEvent(eType);
+                    await js.SimulationManagement.SimulateEventAsync(eType);
                     break;
                 }
             case "36":
@@ -492,7 +511,7 @@ await using (js)
                     if (!uint.TryParse(eRaw, out var eType) || eType < 1 || eType > 60) eType = 1;
                     var cntRaw = PromptOptional("Count 1-1000 (Enter=10)") ?? "10";
                     if (!uint.TryParse(cntRaw, out var eCnt) || eCnt < 1 || eCnt > 1000) eCnt = 10;
-                    js.SimulationManagement.SimulateBulkEvents(eType, eCnt);
+                    await js.SimulationManagement.SimulateBulkEventsAsync(eType, eCnt);
                     break;
                 }
 
@@ -566,8 +585,8 @@ static void PrintBanner()
 /// </summary>
 static void PrintMenu(JoiningSystem js, string serverUrl)
 {
-    var ev = js.EventSubscriber.IsSubscribed ? "ON " : "off";
-    var rv = js.ResultManagement.IsResultVarSubscribed ? "ON " : "off";
+    var ev = js.ResultEvents.IsSubscribed ? "ON " : "off";
+    var rv = js.ResultVariable.IsResultVarSubscribed ? "ON " : "off";
     var av = js.AssetManagement.IsAssetVarSubscribed ? "ON " : "off";
 
     Console.WriteLine($"""

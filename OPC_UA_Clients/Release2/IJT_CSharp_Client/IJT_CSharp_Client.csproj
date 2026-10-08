@@ -9,7 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
-    <NoWarn>1591;CA1515;CA1707;CA1028;0618</NoWarn>
+    <NoWarn>1591;CA1515;CA1707;CA1028;0109</NoWarn>
     <Description>OPC UA IJT C# Client — reference implementation for the IJT Companion Specification using the OPC Foundation .NET SDK</Description>
   </PropertyGroup>
 
@@ -34,6 +34,9 @@
   <!-- OPC Foundation .NET SDK (MIT licensed) -->
   <ItemGroup>
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" />
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.MigrationAnalyzer">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
   </ItemGroup>
 

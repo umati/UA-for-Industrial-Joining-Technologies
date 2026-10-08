@@ -32,18 +32,18 @@ public sealed class AssetManagementTests
     {
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(MethodSetId);
+            .ReturnsAsync(MethodSetId);
         mock.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>())).Returns(MethodId);
         mock.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>())).Returns(ObjectId);
-        mock.Setup(s => s.BrowseMethod(
+        mock.Setup(s => s.BrowseMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(MethodId);
-        mock.Setup(s => s.CallMethod(
+            .ReturnsAsync(MethodId);
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         return mock;
     }
 
@@ -55,257 +55,257 @@ public sealed class AssetManagementTests
     {
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(NodeId.Null);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
         mock.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>())).Returns(NodeId.Null);
         mock.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>())).Returns(NodeId.Null);
         return mock;
     }
 
-    // ── EnableAsset ───────────────────────────────────────────────────────────
+    // ── EnableAssetAsync ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void EnableAsset_WhenNodesFound_CallsCallMethod()
+    public async Task EnableAsset_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new AssetManagement(mock.Object).EnableAsset("urn:test", true);
+        await new AssetManagement(mock.Object).EnableAssetAsync("urn:test", true);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void EnableAsset_WhenNodesNotFound_DoesNotCallMethod_AndDoesNotThrow()
+    public async Task EnableAsset_WhenNodesNotFound_DoesNotCallMethod_AndDoesNotThrow()
     {
         var mock = NullNodeMock();
-        var ex = Record.Exception(() => new AssetManagement(mock.Object).EnableAsset("urn:x", false));
+        var ex = await Record.ExceptionAsync(async () => await new AssetManagement(mock.Object).EnableAssetAsync("urn:x", false));
 
         Assert.Null(ex);
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
-    // ── SendTextIdentifiers ───────────────────────────────────────────────────
+    // ── SendTextIdentifiersAsync ───────────────────────────────────────────────────
 
     [Fact]
-    public void SendTextIdentifiers_WhenNodesFound_CallsCallMethod()
+    public async Task SendTextIdentifiers_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new AssetManagement(mock.Object).SendTextIdentifiers("urn:product", ["id-A", "id-B"]);
+        await new AssetManagement(mock.Object).SendTextIdentifiersAsync("urn:product", ["id-A", "id-B"]);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SendTextIdentifiers_WhenNodesNotFound_DoesNotThrow()
+    public async Task SendTextIdentifiers_WhenNodesNotFound_DoesNotThrow()
     {
         var mock = NullNodeMock();
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SendTextIdentifiers("urn:x", ["id1"]));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SendTextIdentifiersAsync("urn:x", ["id1"]));
         Assert.Null(ex);
     }
 
-    // ── ResetIdentifiers ──────────────────────────────────────────────────────
+    // ── ResetIdentifiersAsync ──────────────────────────────────────────────────────
 
     [Fact]
-    public void ResetIdentifiers_WhenNodesFound_CallsCallMethod()
+    public async Task ResetIdentifiers_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new AssetManagement(mock.Object).ResetIdentifiers("urn:product");
+        await new AssetManagement(mock.Object).ResetIdentifiersAsync("urn:product");
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void ResetIdentifiers_WhenNodesNotFound_DoesNotThrow()
+    public async Task ResetIdentifiers_WhenNodesNotFound_DoesNotThrow()
     {
         var mock = NullNodeMock();
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).ResetIdentifiers("urn:x"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).ResetIdentifiersAsync("urn:x"));
         Assert.Null(ex);
     }
 
-    // ── GetIdentifiers ────────────────────────────────────────────────────────
+    // ── GetIdentifiersAsync ────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetIdentifiers_WhenNodesFound_CallsCallMethod()
+    public async Task GetIdentifiers_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new AssetManagement(mock.Object).GetIdentifiers("urn:product");
+        await new AssetManagement(mock.Object).GetIdentifiersAsync("urn:product");
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetIdentifiers_WhenNodesNotFound_DoesNotThrow()
+    public async Task GetIdentifiers_WhenNodesNotFound_DoesNotThrow()
     {
         var mock = NullNodeMock();
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).GetIdentifiers("urn:x"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).GetIdentifiersAsync("urn:x"));
         Assert.Null(ex);
     }
 
-    // ── SendIdentifiers ───────────────────────────────────────────────────────
+    // ── SendIdentifiersAsync ───────────────────────────────────────────────────────
 
     [Fact]
-    public void SendIdentifiers_WhenNodesFound_CallsCallMethod()
+    public async Task SendIdentifiers_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "4Y1SL65848Z411439",
                 entityType: (short)20,
                 name: "VIN",
                 description: "Vehicle Identification Number",
                 isExternal: true),
         };
-        new AssetManagement(mock.Object).SendIdentifiers(entities);
+        await new AssetManagement(mock.Object).SendIdentifiersAsync(entities);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SendIdentifiers_EmptyList_CallsCallMethod()
+    public async Task SendIdentifiers_EmptyList_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new AssetManagement(mock.Object).SendIdentifiers(new List<UAModel.IJTBase.EntityDataType>());
+        await new AssetManagement(mock.Object).SendIdentifiersAsync(new List<IJTBase.EntityDataType>());
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
-    // ── StopAssetVariableSubscription / Dispose ───────────────────────────────
+    // ── StopAssetVariableSubscriptionAsync / Dispose ───────────────────────────────
 
     [Fact]
-    public void StopAssetVariableSubscription_WhenNoSubscription_DoesNotThrow()
+    public async Task StopAssetVariableSubscription_WhenNoSubscription_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new AssetManagement(HappyPathMock().Object).StopAssetVariableSubscription());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(HappyPathMock().Object).StopAssetVariableSubscriptionAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Dispose_WhenNoSubscription_DoesNotThrow()
+    public async Task Dispose_WhenNoSubscription_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new AssetManagement(HappyPathMock().Object).Dispose());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(HappyPathMock().Object).DisposeAsync());
         Assert.Null(ex);
     }
 
-    // ── MethodSet fallback: BrowseChild returns null, IjtBaseObjectId used ─────
+    // ── MethodSet fallback: BrowseChildAsync returns null, IjtBaseObjectId used ─────
 
     [Fact]
-    public void EnableAsset_WhenBrowseFails_FallsBackToTypeNodeId_AndCallsCallMethod()
+    public async Task EnableAsset_WhenBrowseFails_FallsBackToTypeNodeId_AndCallsCallMethod()
     {
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
-        // First BrowseChild for AssetManagement node returns null → triggers fallback to IjtBaseObjectId
-        mock.Setup(s => s.BrowseChild(
+        // First BrowseChildAsync for AssetManagement node returns null → triggers fallback to IjtBaseObjectId
+        mock.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
         mock.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>())).Returns(MethodId);
         mock.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>())).Returns(ObjectId);
-        mock.Setup(s => s.BrowseMethod(
+        mock.Setup(s => s.BrowseMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(MethodId);
-        mock.Setup(s => s.CallMethod(
+            .ReturnsAsync(MethodId);
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
 
-        new AssetManagement(mock.Object).EnableAsset("urn:product", true);
+        await new AssetManagement(mock.Object).EnableAssetAsync("urn:product", true);
 
         // Fallback path uses IjtBaseObjectId — verify it was called
         mock.Verify(s => s.IjtBaseObjectId(It.IsAny<uint>()), Times.AtLeastOnce);
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     // ── Exception handling ────────────────────────────────────────────────────
 
     [Fact]
-    public void EnableAsset_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    public async Task EnableAsset_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() => new AssetManagement(mock.Object).EnableAsset("urn:x", true));
+        var ex = await Record.ExceptionAsync(async () => await new AssetManagement(mock.Object).EnableAssetAsync("urn:x", true));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void EnableAsset_WhenCallMethodThrowsException_DoesNotThrow()
+    public async Task EnableAsset_WhenCallMethodThrowsException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() => new AssetManagement(mock.Object).EnableAsset("urn:x", false));
+        var ex = await Record.ExceptionAsync(async () => await new AssetManagement(mock.Object).EnableAssetAsync("urn:x", false));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SendTextIdentifiers_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    public async Task SendTextIdentifiers_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SendTextIdentifiers("urn:x", ["id1"]));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SendTextIdentifiersAsync("urn:x", ["id1"]));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ResetIdentifiers_WhenCallMethodThrows_DoesNotThrow()
+    public async Task ResetIdentifiers_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).ResetIdentifiers("urn:x"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).ResetIdentifiersAsync("urn:x"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetIdentifiers_WhenCallMethodThrows_DoesNotThrow()
+    public async Task GetIdentifiers_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).GetIdentifiers("urn:x"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).GetIdentifiersAsync("urn:x"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SendIdentifiers_WhenCallMethodThrows_DoesNotThrow()
+    public async Task SendIdentifiers_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SendIdentifiers(
-                new List<UAModel.IJTBase.EntityDataType>
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SendIdentifiersAsync(
+                new List<IJTBase.EntityDataType>
                 {
-                    UAModel.IJTBase.EntityDataType.Create(
+                    IJTBase.EntityDataType.Create(
                         "4Y1SL65848Z411439",
                         entityType: (short)20,
                         name: "VIN",
@@ -315,75 +315,75 @@ public sealed class AssetManagementTests
         Assert.Null(ex);
     }
 
-    // ── SubscribeAssetVariables (no-op path when no asset instances found) ────
+    // ── SubscribeAssetVariablesAsync (no-op path when no asset instances found) ────
 
     [Fact]
-    public void SubscribeAssetVariables_WhenAssetManagementNodeNotFound_LogsAndReturns()
+    public async Task SubscribeAssetVariables_WhenAssetManagementNodeNotFound_LogsAndReturns()
     {
         var mock = NullNodeMock();
-        // All BrowseChild return Null — AssetManagement node not found
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SubscribeAssetVariables());
+        // All BrowseChildAsync return Null — AssetManagement node not found
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SubscribeAssetVariablesAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SubscribeAssetVariables_WhenAlreadySubscribed_SecondCallIsNoOp()
+    public async Task SubscribeAssetVariables_WhenAlreadySubscribed_SecondCallIsNoOp()
     {
         // First call requires Assets node not found → no subscription created
         // But if subscription is null the second call is harmless too
         var mock = NullNodeMock();
         var sut = new AssetManagement(mock.Object);
-        sut.SubscribeAssetVariables();
-        var ex = Record.Exception(() => sut.SubscribeAssetVariables());
+        await sut.SubscribeAssetVariablesAsync();
+        var ex = await Record.ExceptionAsync(async () => await sut.SubscribeAssetVariablesAsync());
         Assert.Null(ex);
     }
 
     // ── Additional exception-path and cache tests ─────────────────────────────
 
     [Fact]
-    public void EnableAsset_CalledTwice_SecondCallHitsMethodSetCache()
+    public async Task EnableAsset_CalledTwice_SecondCallHitsMethodSetCache()
     {
         var mock = HappyPathMock();
         var sut = new AssetManagement(mock.Object);
 
-        sut.EnableAsset("urn:asset-1", true);
-        sut.EnableAsset("urn:asset-2", false); // second call hits cache at line 34
+        await sut.EnableAssetAsync("urn:asset-1", true);
+        await sut.EnableAssetAsync("urn:asset-2", false); // second call hits cache at line 34
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Exactly(2));
     }
 
     [Fact]
-    public void SendIdentifiers_WhenMethodIdIsNull_DoesNotCallMethod()
+    public async Task SendIdentifiers_WhenMethodIdIsNull_DoesNotCallMethod()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.BrowseMethod(
+        mock.Setup(s => s.BrowseMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
 
         var sut = new AssetManagement(mock.Object);
-        var ex = Record.Exception(() => sut.SendIdentifiers(
-            new List<UAModel.IJTBase.EntityDataType>()));
+        var ex = await Record.ExceptionAsync(async () => await sut.SendIdentifiersAsync(
+            new List<IJTBase.EntityDataType>()));
         Assert.Null(ex);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SendIdentifiers_WhenServiceException_DoesNotThrow()
+    public async Task SendIdentifiers_WhenServiceException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SendIdentifiers(
-                new List<UAModel.IJTBase.EntityDataType>
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SendIdentifiersAsync(
+                new List<IJTBase.EntityDataType>
                 {
-                    UAModel.IJTBase.EntityDataType.Create(
+                    IJTBase.EntityDataType.Create(
                         "4Y1SL65848Z411439",
                         entityType: (short)20,
                         name: "VIN",
@@ -394,53 +394,53 @@ public sealed class AssetManagementTests
     }
 
     [Fact]
-    public void SubscribeAssetVariables_WhenAssetMgmtNotFound_ReturnsEarly()
+    public async Task SubscribeAssetVariables_WhenAssetMgmtNotFound_ReturnsEarly()
     {
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SubscribeAssetVariables());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SubscribeAssetVariablesAsync());
         Assert.Null(ex);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SubscribeAssetVariables_WhenAssetsNotFound_ReturnsEarly()
+    public async Task SubscribeAssetVariables_WhenAssetsNotFound_ReturnsEarly()
     {
         var amNodeId = new NodeId(5001u, (ushort)2);
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns<NodeId, string, ushort, NodeClass>((parent, name, ns, nc) =>
+            .ReturnsAsync((NodeId parent, string name, ushort ns, NodeClass nc) =>
                 parent == JoiningSystemId ? amNodeId : NodeId.Null);
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SubscribeAssetVariables());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SubscribeAssetVariablesAsync());
         Assert.Null(ex);
     }
 
     [Fact]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Obsolete", "CS0618")]
-    public void SubscribeAssetVariables_WhenNoCategoriesFound_DisposesWithoutCreate()
+    public async Task SubscribeAssetVariables_WhenNoCategoriesFound_DisposesWithoutCreate()
     {
         var amNodeId = new NodeId(5002u, (ushort)2);
         var assetsNodeId = new NodeId(5003u, (ushort)2);
 
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns<NodeId, string, ushort, NodeClass>((parent, name, ns, nc) =>
+            .ReturnsAsync((NodeId parent, string name, ushort ns, NodeClass nc) =>
             {
                 if (parent == JoiningSystemId) return amNodeId;
                 if (parent == amNodeId) return assetsNodeId;
@@ -448,186 +448,184 @@ public sealed class AssetManagementTests
             });
 
         var mockSession = new Mock<ISession>();
-#pragma warning disable CS0618
-        mockSession.Setup(s => s.DefaultSubscription).Returns(new Subscription());
-#pragma warning restore CS0618
+        mockSession.Setup(s => s.DefaultSubscription).Returns(new Subscription(DefaultTelemetry.Create(_ => { })));
         mock.Setup(s => s.Session).Returns(mockSession.Object);
         mock.Setup(s => s.Config).Returns(new IJT_CSharp_Client.Configuration.ClientConfig());
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SubscribeAssetVariables());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SubscribeAssetVariablesAsync());
         Assert.Null(ex);
     }
 
-    // ── SetTime ───────────────────────────────────────────────────────────────
+    // ── SetTimeAsync ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void SetTime_WhenNodesFound_CallsCallMethod()
+    public async Task SetTime_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new AssetManagement(mock.Object).SetTime("urn:test", DateTime.UtcNow);
+        await new AssetManagement(mock.Object).SetTimeAsync("urn:test", DateTime.UtcNow);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SetTime_WhenNodesNotFound_DoesNotThrow()
+    public async Task SetTime_WhenNodesNotFound_DoesNotThrow()
     {
         var mock = NullNodeMock();
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SetTime("urn:x"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SetTimeAsync("urn:x"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SetTime_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    public async Task SetTime_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SetTime("urn:x", DateTime.UtcNow));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SetTimeAsync("urn:x", DateTime.UtcNow));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SetTime_WhenCallMethodThrowsException_DoesNotThrow()
+    public async Task SetTime_WhenCallMethodThrowsException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SetTime("urn:x"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SetTimeAsync("urn:x"));
         Assert.Null(ex);
     }
 
-    // ── GetIOSignals ──────────────────────────────────────────────────────────
+    // ── GetIOSignalsAsync ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetIOSignals_WhenNodesFound_CallsCallMethod()
+    public async Task GetIOSignals_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object> { new object[] { }, 0, "OK" });
+            .ReturnsAsync(new List<object> { new object[] { }, 0, "OK" });
 
-        new AssetManagement(mock.Object).GetIOSignals("urn:test", new[] { "signal1" });
+        await new AssetManagement(mock.Object).GetIOSignalsAsync("urn:test", new[] { "signal1" });
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetIOSignals_WhenNoOutputs_LogsWarning()
+    public async Task GetIOSignals_WhenNoOutputs_LogsWarning()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).GetIOSignals("urn:test"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).GetIOSignalsAsync("urn:test"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetIOSignals_WhenNodesNotFound_DoesNotThrow()
+    public async Task GetIOSignals_WhenNodesNotFound_DoesNotThrow()
     {
         var mock = NullNodeMock();
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).GetIOSignals("urn:x"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).GetIOSignalsAsync("urn:x"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetIOSignals_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    public async Task GetIOSignals_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).GetIOSignals("urn:x"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).GetIOSignalsAsync("urn:x"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetIOSignals_WhenCallMethodThrowsException_DoesNotThrow()
+    public async Task GetIOSignals_WhenCallMethodThrowsException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).GetIOSignals("urn:x", null));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).GetIOSignalsAsync("urn:x", null));
         Assert.Null(ex);
     }
 
-    // ── SetIOSignals ──────────────────────────────────────────────────────────
+    // ── SetIOSignalsAsync ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void SetIOSignals_WhenNodesFound_CallsCallMethod()
+    public async Task SetIOSignals_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        var signals = new List<UAModel.IJTBase.SignalDataType>
+        var signals = new List<IJTBase.SignalDataType>
         {
-            new UAModel.IJTBase.SignalDataType
+            new IJTBase.SignalDataType
             {
                 SignalId = "sig1",
                 SignalValue = new Variant(42)
             }
         };
 
-        new AssetManagement(mock.Object).SetIOSignals("urn:test", signals);
+        await new AssetManagement(mock.Object).SetIOSignalsAsync("urn:test", signals);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SetIOSignals_WhenNodesNotFound_DoesNotThrow()
+    public async Task SetIOSignals_WhenNodesNotFound_DoesNotThrow()
     {
         var mock = NullNodeMock();
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SetIOSignals("urn:x",
-                new List<UAModel.IJTBase.SignalDataType>()));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SetIOSignalsAsync("urn:x",
+                new List<IJTBase.SignalDataType>()));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SetIOSignals_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    public async Task SetIOSignals_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SetIOSignals("urn:x",
-                new List<UAModel.IJTBase.SignalDataType>()));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SetIOSignalsAsync("urn:x",
+                new List<IJTBase.SignalDataType>()));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SetIOSignals_WhenCallMethodThrowsException_DoesNotThrow()
+    public async Task SetIOSignals_WhenCallMethodThrowsException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new AssetManagement(mock.Object).SetIOSignals("urn:x",
-                new List<UAModel.IJTBase.SignalDataType>
+        var ex = await Record.ExceptionAsync(async () =>
+            await new AssetManagement(mock.Object).SetIOSignalsAsync("urn:x",
+                new List<IJTBase.SignalDataType>
                 {
-                    new UAModel.IJTBase.SignalDataType
+                    new IJTBase.SignalDataType
                     {
                         SignalId = "sig1",
                         SignalValue = new Variant(42)
@@ -639,17 +637,17 @@ public sealed class AssetManagementTests
     // ── InvalidateNodeCache and IsAssetVarSubscribed ──────────────────────────
 
     [Fact]
-    public void InvalidateNodeCache_ClearsCache()
+    public async Task InvalidateNodeCache_ClearsCache()
     {
         var mock = HappyPathMock();
         var sut = new AssetManagement(mock.Object);
 
-        sut.EnableAsset("urn:test", true);
+        await sut.EnableAssetAsync("urn:test", true);
         sut.InvalidateNodeCache();
-        sut.EnableAsset("urn:test2", false);
+        await sut.EnableAssetAsync("urn:test2", false);
 
-        // After invalidation, BrowseChild is called again
-        mock.Verify(s => s.BrowseChild(
+        // After invalidation, BrowseChildAsync is called again
+        mock.Verify(s => s.BrowseChildAsync(
             It.IsAny<NodeId>(), It.IsAny<string>(),
             It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.AtLeast(2));
     }
@@ -661,10 +659,10 @@ public sealed class AssetManagementTests
         Assert.False(sut.IsAssetVarSubscribed);
     }
 
-    // ── StopAssetVariableSubscription — with active subscription (reflection) ──
+    // ── StopAssetVariableSubscriptionAsync — with active subscription (reflection) ──
 
     [Fact]
-    public void StopAssetVariableSubscription_WhenSubscriptionActive_CleansUp_DoesNotThrow()
+    public async Task StopAssetVariableSubscription_WhenSubscriptionActive_CleansUp_DoesNotThrow()
     {
         var mock = HappyPathMock();
         var sut = new AssetManagement(mock.Object);
@@ -672,19 +670,17 @@ public sealed class AssetManagementTests
         var field = typeof(AssetManagement).GetField(
             "_assetVarSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-#pragma warning disable CS0618
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription());
-#pragma warning restore CS0618
+        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
 
         // Delete() will throw because subscription has no session; caught by handler
-        var ex = Record.Exception(() => sut.StopAssetVariableSubscription());
+        var ex = await Record.ExceptionAsync(async () => await sut.StopAssetVariableSubscriptionAsync());
 
         Assert.Null(ex);
         Assert.False(sut.IsAssetVarSubscribed);
     }
 
     [Fact]
-    public void Dispose_WhenSubscriptionActive_CleansUp_DoesNotThrow()
+    public async Task Dispose_WhenSubscriptionActive_CleansUp_DoesNotThrow()
     {
         var mock = HappyPathMock();
         var sut = new AssetManagement(mock.Object);
@@ -692,18 +688,16 @@ public sealed class AssetManagementTests
         var field = typeof(AssetManagement).GetField(
             "_assetVarSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-#pragma warning disable CS0618
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription());
-#pragma warning restore CS0618
+        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
 
-        var ex = Record.Exception(() => sut.Dispose());
+        var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync());
         Assert.Null(ex);
     }
 
-    // ── SubscribeAssetVariables — already subscribed flag ─────────────────────
+    // ── SubscribeAssetVariablesAsync — already subscribed flag ─────────────────────
 
     [Fact]
-    public void SubscribeAssetVariables_WhenAlreadySubscribedViaReflection_LogsWarningAndReturns()
+    public async Task SubscribeAssetVariables_WhenAlreadySubscribedViaReflection_LogsWarningAndReturns()
     {
         var mock = HappyPathMock();
         var sut = new AssetManagement(mock.Object);
@@ -711,11 +705,9 @@ public sealed class AssetManagementTests
         var field = typeof(AssetManagement).GetField(
             "_assetVarSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-#pragma warning disable CS0618
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription());
-#pragma warning restore CS0618
+        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
 
-        var ex = Record.Exception(() => sut.SubscribeAssetVariables());
+        var ex = await Record.ExceptionAsync(async () => await sut.SubscribeAssetVariablesAsync());
         Assert.Null(ex);
         Assert.True(sut.IsAssetVarSubscribed);
     }

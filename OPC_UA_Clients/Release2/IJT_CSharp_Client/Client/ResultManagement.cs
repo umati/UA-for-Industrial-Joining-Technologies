@@ -1,6 +1,8 @@
-#nullable enable
-
+using IJT_CSharp_Client.Domain.Events;
+using IJT_CSharp_Client.Domain.Results;
 using IJT_CSharp_Client.Helpers;
+using IJTBase;
+using MachineryResult;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -15,12 +17,15 @@ namespace IJT_CSharp_Client.Client;
 ///   <item>SubscribeResultVariable - monitor the live result variable via data-change subscription</item>
 /// </list>
 /// </summary>
-public sealed class ResultManagement : IDisposable
+public sealed class ResultManagement : IResultVariableReceiver, IResultMethodClient
 {
     private readonly ILogger<ResultManagement> _log = IjtLog.For<ResultManagement>();
     private readonly IJoiningSystem _js;
     private Subscription? _resultVarSubscription;
-    private NodeId? _rmNodeId;
+    private NodeId _rmNodeId = NodeId.Null;
+
+    /// <summary>Event raised whenever a new result is published via the live Result variable.</summary>
+    public event EventHandler<DomainResultEnvelope>? OnResultVariableChanged;
 
     /// <summary>Creates a new ResultManagement facade backed by <paramref name="js"/>.</summary>
     public ResultManagement(IJoiningSystem js) => _js = js;
@@ -29,7 +34,7 @@ public sealed class ResultManagement : IDisposable
     public bool IsResultVarSubscribed => _resultVarSubscription != null;
 
     /// <summary>Clears the cached ResultManagement node reference so the next operation re-browses the address space.</summary>
-    public void InvalidateNodeCache() => _rmNodeId = null;
+    public void InvalidateNodeCache() => _rmNodeId = NodeId.Null;
 
     // -- Node lookup -----------------------------------------------------------
 
@@ -38,21 +43,21 @@ public sealed class ResultManagement : IDisposable
     /// for a "ResultManagement" child; falls back to the type-level object NodeId.
     /// Result is cached until <see cref="InvalidateNodeCache"/> is called.
     /// </summary>
-    private NodeId GetResultManagementNode()
+    private async Task<NodeId> GetResultManagementNodeAsync()
     {
-        if (_rmNodeId is not null && !_rmNodeId.IsNullNodeId)
+        if (!_rmNodeId.IsNull)
             return _rmNodeId;
 
-        var child = _js.BrowseChild(_js.NodeId, UAModel.MachineryResult.BrowseNames.ResultManagement);
-        if (!child.IsNullNodeId)
+        var child = await _js.BrowseChildAsync(_js.NodeId, MachineryResult.BrowseNames.ResultManagement);
+        if (!child.IsNull)
         {
             _rmNodeId = child;
             return _rmNodeId;
         }
 
         // Fallback: type-definition node (most servers honour this for method calls)
-        var fallback = _js.IjtBaseObjectId(UAModel.IJTBase.Objects.JoiningSystemType_ResultManagement);
-        if (!fallback.IsNullNodeId)
+        var fallback = _js.IjtBaseObjectId(IJTBase.Objects.JoiningSystemType_ResultManagement);
+        if (!fallback.IsNull)
             _log.LogWarning("WARN ResultManagement fallback to type NodeId.");
         _rmNodeId = fallback;
         return _rmNodeId;
@@ -65,33 +70,41 @@ public sealed class ResultManagement : IDisposable
     /// Output: [ResultHandle (uint32), Result (ExtensionObject), Error (int32)].
     /// </summary>
     /// <param name="timeoutMs">Timeout hint for the server in milliseconds (default 5000). Pass 0 for no estimate.</param>
-    public void GetLatestResult(int timeoutMs = 5000)
+    public async Task<MethodResultResponse> GetLatestResultAsync(int timeoutMs = 5000)
     {
         _log.LogInformation("\n-- GetLatestResult ----------------------------------");
 
-        var objectId = GetResultManagementNode();
-        var methodId = _js.BrowseMethod(objectId, "GetLatestResult",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult);
+        var objectId = await GetResultManagementNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, "GetLatestResult",
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetLatestResult);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNull || methodId.IsNull)
         {
-            _log.LogError("ERROR ResultManagement node or method not found.");
-            return;
+            var msg = "ResultManagement node or method not found.";
+            _log.LogError("ERROR {Msg}", msg);
+            return new MethodResultResponse(0, 0, null, MethodResultStatus.TransportError, msg);
         }
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, (int)timeoutMs);
-            PrintResultOutputs(outputs);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, (int)timeoutMs);
+            return ParseMethodOutputs("GetLatestResult", outputs);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("ERROR OPC UA error {Status}: {Message}",
-                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
+            var msg = $"OPC UA error {IjtStatusHelper.FormatCode(srex.StatusCode)}: {srex.Message}";
+            _log.LogError("ERROR {Msg}", msg);
+            return new MethodResultResponse(0, 0, null, MethodResultStatus.TransportError, msg, (uint)srex.StatusCode);
+        }
+        catch (OperationCanceledException)
+        {
+            _log.LogWarning("{Method} interrupted by OperationCanceledException from the underlying operation.", nameof(GetLatestResultAsync));
+            return new MethodResultResponse(0, 0, null, MethodResultStatus.Cancelled, "Operation interrupted by an OperationCanceledException (no caller cancellation token is exposed).");
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetLatestResult));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetLatestResultAsync));
+            return new MethodResultResponse(0, 0, null, MethodResultStatus.TransportError, ex.Message);
         }
     }
 
@@ -103,33 +116,41 @@ public sealed class ResultManagement : IDisposable
     /// </summary>
     /// <param name="resultId">The ResultId string to look up.</param>
     /// <param name="timeoutMs">Timeout hint for the server in milliseconds (default 5000). Pass 0 for no estimate.</param>
-    public void GetResultById(string resultId, int timeoutMs = 5000)
+    public async Task<MethodResultResponse> GetResultByIdAsync(string resultId, int timeoutMs = 5000)
     {
         _log.LogInformation("\n-- GetResultById (id={ResultId}) ----------------------", resultId);
 
-        var objectId = GetResultManagementNode();
-        var methodId = _js.BrowseMethod(objectId, "GetResultById",
-            UAModel.IJTBase.Methods.JoiningSystemType_ResultManagement_GetResultById);
+        var objectId = await GetResultManagementNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, "GetResultById",
+            IJTBase.Methods.JoiningSystemType_ResultManagement_GetResultById);
 
-        if (objectId.IsNullNodeId || methodId.IsNullNodeId)
+        if (objectId.IsNull || methodId.IsNull)
         {
-            _log.LogError("ERROR ResultManagement node or method not found.");
-            return;
+            var msg = "ResultManagement node or method not found.";
+            _log.LogError("ERROR {Msg}", msg);
+            return new MethodResultResponse(0, 0, null, MethodResultStatus.TransportError, msg);
         }
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, resultId, (int)timeoutMs);
-            PrintResultOutputs(outputs);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, resultId, (int)timeoutMs);
+            return ParseMethodOutputs("GetResultById", outputs);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
-            _log.LogError("ERROR OPC UA error {Status}: {Message}",
-                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
+            var msg = $"OPC UA error {IjtStatusHelper.FormatCode(srex.StatusCode)}: {srex.Message}";
+            _log.LogError("ERROR {Msg}", msg);
+            return new MethodResultResponse(0, 0, null, MethodResultStatus.TransportError, msg, (uint)srex.StatusCode);
+        }
+        catch (OperationCanceledException)
+        {
+            _log.LogWarning("{Method} interrupted by OperationCanceledException from the underlying operation.", nameof(GetResultByIdAsync));
+            return new MethodResultResponse(0, 0, null, MethodResultStatus.Cancelled, "Operation interrupted by an OperationCanceledException (no caller cancellation token is exposed).");
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetResultById));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetResultByIdAsync));
+            return new MethodResultResponse(0, 0, null, MethodResultStatus.TransportError, ex.Message);
         }
     }
 
@@ -140,7 +161,7 @@ public sealed class ResultManagement : IDisposable
     /// <c>ResultManagement/Results</c>. Prints notifications to console.
     /// Does nothing if already subscribed.
     /// </summary>
-    public void SubscribeResultVariable()
+    public async Task SubscribeResultVariableAsync()
     {
         if (_resultVarSubscription != null)
         {
@@ -150,21 +171,21 @@ public sealed class ResultManagement : IDisposable
 
         _log.LogInformation("\n-- Subscribing to Result variable -------------------");
 
-        var rmNode = GetResultManagementNode();
+        var rmNode = await GetResultManagementNodeAsync();
 
         // Try to find the Results folder child, then the first variable inside
-        var resultsFolder = _js.BrowseChild(rmNode, "Results");
+        var resultsFolder = await _js.BrowseChildAsync(rmNode, "Results");
         NodeId resultVarNode = NodeId.Null;
 
-        if (!resultsFolder.IsNullNodeId)
+        if (!resultsFolder.IsNull)
         {
             // Find first variable child of Results via mockable BrowseChildren
-            var varRefs = _js.BrowseChildren(resultsFolder, (uint)NodeClass.Variable);
+            var varRefs = await _js.BrowseChildrenAsync(resultsFolder, (uint)NodeClass.Variable);
             if (varRefs?.Count > 0)
                 resultVarNode = (NodeId)varRefs[0].NodeId;
         }
 
-        if (resultVarNode.IsNullNodeId)
+        if (resultVarNode.IsNull)
         {
             _log.LogError("ERROR Result variable node not found - skipping subscription.");
             return;
@@ -183,16 +204,16 @@ public sealed class ResultManagement : IDisposable
             AttributeId = Attributes.Value,
             SamplingInterval = 500,
         };
-        item.Notification += OnResultVariableChanged;
+        item.Notification += OnMonitoredItemNotification;
 
         _resultVarSubscription.AddItem(item);
         _js.Session.AddSubscription(_resultVarSubscription);
-        _resultVarSubscription.Create();
+        await _resultVarSubscription.CreateAsync().ConfigureAwait(false);
 
         _log.LogInformation("OK Subscribed to Result variable ({NodeId}).", resultVarNode);
     }
 
-    private void OnResultVariableChanged(MonitoredItem item, MonitoredItemNotificationEventArgs e)
+    private void OnMonitoredItemNotification(MonitoredItem item, MonitoredItemNotificationEventArgs e)
     {
         foreach (var value in item.DequeueValues())
         {
@@ -205,13 +226,16 @@ public sealed class ResultManagement : IDisposable
         _log.LogDebug("[DATA] ResultVariable changed @ {Time:HH:mm:ss.fff}  Status={Status}",
             DateTime.Now, value.StatusCode);
 
-        if (value.Value is null) return false;
+        var rawValue = value.WrappedValue.AsBoxedObject(Variant.BoxingBehavior.Legacy);
+        if (rawValue is null) return false;
 
         // Unwrap Variant -> ExtensionObject -> ResultDataType
-        var raw = value.Value is Variant v ? v.Value : value.Value;
+        var raw = rawValue is Variant v
+            ? v.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+            : rawValue;
         var rd = raw is ExtensionObject eo
-            ? eo.Body as UAModel.MachineryResult.ResultDataType
-            : raw as UAModel.MachineryResult.ResultDataType;
+            ? ExtensionObjectHelper.TryDecode<ResultDataType>(eo)
+            : raw as ResultDataType;
 
         if (rd != null)
         {
@@ -221,11 +245,24 @@ public sealed class ResultManagement : IDisposable
                 return false;
             }
 
+            var envelope = DomainResultMapper.MapEnvelope(rd);
+            if (envelope != null)
+            {
+                try
+                {
+                    OnResultVariableChanged?.Invoke(this, envelope);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex, "Exception in OnResultVariableChanged handler");
+                }
+            }
+
             var writer = writeResult ?? IjtFileLogger.WriteResult;
             writer(IjtJsonSerializer.FormatOutput("Result", rd));
 
             // Also write timestamped copy so multiple results are preserved
-            var jMeta = rd.ResultMetaData as UAModel.IJTBase.JoiningResultMetaDataType;
+            var jMeta = rd.ResultMetaData as JoiningResultMetaDataType;
             var tsPath = IjtFileLogger.WriteResultTimestamped(
                 IjtJsonSerializer.FormatOutput("Result", rd),
                 rd.ResultMetaData?.ResultId,
@@ -236,18 +273,19 @@ public sealed class ResultManagement : IDisposable
             return true;
         }
 
-        _log.LogDebug("Result variable raw value: {Value}", IjtJsonSerializer.Serialize(value.Value));
+        _log.LogDebug("Result variable raw value: {Value}", IjtJsonSerializer.Serialize(rawValue));
         return false;
     }
 
     /// <summary>Stops the result variable data-change subscription if active.</summary>
-    public void StopResultVariableSubscription()
+    public async Task StopResultVariableSubscriptionAsync()
     {
-        if (_resultVarSubscription == null) return;
+        var subscription = _resultVarSubscription;
+        if (subscription == null) return;
+        _resultVarSubscription = null;
         try
         {
-            _resultVarSubscription.Delete(silent: true);
-            _js.Session.RemoveSubscription(_resultVarSubscription);
+            await subscription.DeleteAsync(silent: true).ConfigureAwait(false);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
@@ -258,64 +296,146 @@ public sealed class ResultManagement : IDisposable
         {
             _log.LogWarning(ex, "WARN Subscription stop warning");
         }
+        try
+        {
+            await _js.Session.RemoveSubscriptionAsync(subscription).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "WARN Removing the result-variable subscription from the session failed");
+        }
         finally
         {
-            _resultVarSubscription?.Dispose();
-            _resultVarSubscription = null;
+            subscription.Dispose();
             _log.LogInformation("OK Result variable subscription stopped.");
         }
     }
 
     /// <inheritdoc/>
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        StopResultVariableSubscription();
+        await StopResultVariableSubscriptionAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
     }
 
-    // -- Output formatting -----------------------------------------------------
+    // -- Output formatting & Method result parsing ------------------------------
 
     /// <summary>
-    /// Writes the full result payload to file and logs a brief summary to console.
-    /// Full content: logs/result/result.json.
-    /// Pattern end users can copy:
-    /// <code>
-    ///   var rd = UnwrapResult(outputs[1]);
-    ///   IjtFileLogger.WriteResult(rd != null
-    ///       ? IjtResultFormatter.FormatResult(rd, DateTime.UtcNow)
-    ///       : IjtJsonSerializer.FormatOutput("Result", outputs[1]));
-    /// </code>
+    /// Parses output arguments from GetLatestResult or GetResultById into a structured
+    /// <see cref="MethodResultResponse"/>, writes the full result payload to disk, and logs summary.
     /// </summary>
-    private void PrintResultOutputs(IList<object> outputs)
+    private MethodResultResponse ParseMethodOutputs(string methodName, IList<object> outputs)
     {
-        if (outputs.Count == 0)
+        // Output contract: [ResultHandle (uint32), Result (ExtensionObject), Error (int32)].
+        // The NodeSet declares exactly three outputs; any other count is malformed.
+        if (outputs.Count != 3)
         {
-            _log.LogInformation("(no output arguments)");
-            return;
+            var msg = $"{methodName}: malformed response - expected exactly 3 output arguments, received {outputs.Count}.";
+            _log.LogError("ERROR {Msg}", msg);
+            return new MethodResultResponse(0, 0, null, MethodResultStatus.MalformedResponse, msg);
         }
 
-        // Unwrap Result (outputs[1]: ExtensionObject -> ResultDataType)
-        var raw = outputs.Count > 1
-            ? (outputs[1] is Variant vt ? vt.Value : outputs[1])
-            : null;
+        if (!TryGetOutput(outputs[0], out uint handle))
+        {
+            var msg = $"{methodName}: malformed response - ResultHandle output is missing or not a uint32.";
+            _log.LogError("ERROR {Msg}", msg);
+            return new MethodResultResponse(0, 0, null, MethodResultStatus.MalformedResponse, msg);
+        }
+
+        if (!TryGetOutput(outputs[2], out int serverError))
+        {
+            var msg = $"{methodName}: malformed response - Error output is missing or not an int32.";
+            _log.LogError("ERROR {Msg}", msg);
+            return new MethodResultResponse(handle, 0, null, MethodResultStatus.MalformedResponse, msg);
+        }
+
+        // Output 1: Result (ExtensionObject -> ResultDataType)
+        var raw = outputs[1] is Variant vt
+            ? vt.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+            : outputs[1];
         var rd = raw is ExtensionObject eo
-            ? eo.Body as UAModel.MachineryResult.ResultDataType
-            : raw as UAModel.MachineryResult.ResultDataType;
+            ? ExtensionObjectHelper.TryDecode<ResultDataType>(eo)
+            : raw as ResultDataType;
+
+        if (serverError == 0 && rd is null)
+        {
+            var msg = $"{methodName}: malformed response - server reported success but Result is absent or not a ResultDataType.";
+            _log.LogError("ERROR {Msg}", msg);
+            return new MethodResultResponse(handle, 0, null, MethodResultStatus.MalformedResponse, msg);
+        }
+
+        DomainResultEnvelope? domainEnvelope = null;
+        if (rd is not null)
+        {
+            domainEnvelope = DomainResultMapper.MapEnvelope(rd);
+        }
 
         // Write full payload to file as JSON (timestamped + latest)
         var content = IjtJsonSerializer.FormatOutput("Result", outputs.Count > 1 ? outputs[1] : null);
-        var tsPath = IjtFileLogger.WriteResultTimestamped(content, rd?.ResultMetaData?.ResultId,
-            (rd?.ResultMetaData as UAModel.IJTBase.JoiningResultMetaDataType)?.Name);
+        var tsPath = IjtFileLogger.WriteResultTimestamped(
+            content,
+            domainEnvelope?.ResultId ?? rd?.ResultMetaData?.ResultId,
+            domainEnvelope?.Name ?? (rd?.ResultMetaData as JoiningResultMetaDataType)?.Name);
 
-        // Console: brief summary only
-        var handle = IjtJsonSerializer.Serialize(outputs[0]);
-        var error = outputs.Count > 2 ? IjtJsonSerializer.Serialize(outputs[2]) : "?";
-        _log.LogInformation("OK Result received.  ResultHandle={Handle}  Error={Error}",
-            handle, error);
+        // Console: brief summary only; success and server-reported errors are logged distinctly.
+        if (serverError == 0)
+        {
+            _log.LogInformation("OK Result received.  ResultHandle={Handle}  Error={Error}",
+                handle, serverError);
+        }
+        else
+        {
+            _log.LogWarning("WARN {Method}: server reported method error.  ResultHandle={Handle}  Error={Error}",
+                methodName, handle, serverError);
+        }
         _log.LogInformation("  -> Full result -> {Path}", tsPath);
+
+        var isSuccess = serverError == 0;
+        return new MethodResultResponse(
+            ResultHandle: handle,
+            ServerErrorCode: serverError,
+            Result: domainEnvelope,
+            Status: isSuccess ? MethodResultStatus.Success : MethodResultStatus.ServerError,
+            ErrorMessage: isSuccess ? null : $"Server reported method error: {serverError}");
     }
 
-    private static bool HasMeaningfulResult(UAModel.MachineryResult.ResultDataType rd)
+    /// <summary>
+    /// Strict runtime type check of one OPC UA output argument (after unwrapping a <see cref="Variant"/>).
+    /// No coercion: numeric strings, floating-point values and other numeric widths are rejected.
+    /// </summary>
+    private static bool TryGetOutput(object? value, out uint result)
+    {
+        if (value is Variant variant)
+            return variant.TryGetValue(out result);
+        if (value is uint typed)
+        {
+            result = typed;
+            return true;
+        }
+        result = default;
+        return false;
+    }
+
+    private static bool TryGetOutput(object? value, out int result)
+    {
+        if (value is Variant variant)
+            return variant.TryGetValue(out result);
+        var unwrapped = value is Variant v
+            ? v.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+            : value;
+        if (unwrapped is int typed)
+        {
+            result = typed;
+            return true;
+        }
+
+        result = default!;
+        return false;
+    }
+
+    private void PrintResultOutputs(IList<object> outputs) => ParseMethodOutputs("", outputs);
+
+    private static bool HasMeaningfulResult(ResultDataType rd)
     {
         if (rd.ResultMetaData is null) return false;
         if (string.IsNullOrWhiteSpace(rd.ResultMetaData.ResultId)) return false;

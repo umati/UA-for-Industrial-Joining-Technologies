@@ -15,32 +15,32 @@ namespace IJT_CSharp_Client.Tests.UnitTests;
 /// All tests use a mocked <see cref="IJoiningSystem"/>; no live OPC UA server is required.
 ///
 /// Covered operations:
-///    6  EnableAsset
-///    7  SendTextIdentifiers
-///    8  GetIdentifiers
-///    9  ResetIdentifiers
-///   10  SubscribeAssetVariables
-///   14  SendIdentifiers (EntityDataType demo)
+///    6  EnableAssetAsync
+///    7  SendTextIdentifiersAsync
+///    8  GetIdentifiersAsync
+///    9  ResetIdentifiersAsync
+///   10  SubscribeAssetVariablesAsync
+///   14  SendIdentifiersAsync (EntityDataType demo)
 /// </summary>
 public sealed class AssetManagementUnitTests
 {
-    // ── 6. EnableAsset ────────────────────────────────────────────────────────
+    // ── 6. EnableAssetAsync ────────────────────────────────────────────────────────
 
     [Fact]
-    public void EnableAsset_WithValidUri_Enable_CallsMethodOnce()
+    public async Task EnableAsset_WithValidUri_Enable_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
-        using var am = new AssetManagement(session.Object);
+            .ReturnsAsync(new List<object>());
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: true));
+        var ex = await Record.ExceptionAsync(async () => await am.EnableAssetAsync("urn:tool:001", enable: true));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
         Assert.NotNull(capturedArgs);
         Assert.Equal(2, capturedArgs.Length);
@@ -49,20 +49,20 @@ public sealed class AssetManagementUnitTests
     }
 
     [Fact]
-    public void EnableAsset_WithValidUri_Disable_CallsMethodOnce()
+    public async Task EnableAsset_WithValidUri_Disable_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
-        using var am = new AssetManagement(session.Object);
+            .ReturnsAsync(new List<object>());
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: false));
+        var ex = await Record.ExceptionAsync(async () => await am.EnableAssetAsync("urn:tool:001", enable: false));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
         Assert.NotNull(capturedArgs);
         Assert.Equal(2, capturedArgs.Length);
@@ -71,276 +71,276 @@ public sealed class AssetManagementUnitTests
     }
 
     [Fact]
-    public void EnableAsset_WithEmptyUri_CallsMethodOnce()
+    public async Task EnableAsset_WithEmptyUri_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.EnableAsset(string.Empty, enable: true));
+        var ex = await Record.ExceptionAsync(async () => await am.EnableAssetAsync(string.Empty, enable: true));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void EnableAsset_NodeNotFound_DoesNotCallMethod()
+    public async Task EnableAsset_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: true));
+        var ex = await Record.ExceptionAsync(async () => await am.EnableAssetAsync("urn:tool:001", enable: true));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void EnableAsset_OpcUaServiceException_HandledWithoutRethrow()
+    public async Task EnableAsset_OpcUaServiceException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadArgumentsMissing));
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: true));
+        var ex = await Record.ExceptionAsync(async () => await am.EnableAssetAsync("urn:tool:001", enable: true));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void EnableAsset_UnexpectedException_HandledWithoutRethrow()
+    public async Task EnableAsset_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("simulated"));
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: true));
+        var ex = await Record.ExceptionAsync(async () => await am.EnableAssetAsync("urn:tool:001", enable: true));
 
         Assert.Null(ex);
     }
 
-    // ── 7. SendTextIdentifiers ────────────────────────────────────────────────
+    // ── 7. SendTextIdentifiersAsync ────────────────────────────────────────────────
 
     [Fact]
-    public void SendTextIdentifiers_WithUriAndIdentifiers_CallsMethodOnce()
+    public async Task SendTextIdentifiers_WithUriAndIdentifiers_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() =>
-            am.SendTextIdentifiers("urn:tool:001", new[] { "ID-001", "Batch-2024" }));
+        var ex = await Record.ExceptionAsync(async () =>
+            await am.SendTextIdentifiersAsync("urn:tool:001", new[] { "ID-001", "Batch-2024" }));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SendTextIdentifiers_WithEmptyUri_CallsMethod()
+    public async Task SendTextIdentifiers_WithEmptyUri_CallsMethod()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() =>
-            am.SendTextIdentifiers(string.Empty, new[] { "DEMO-001" }));
+        var ex = await Record.ExceptionAsync(async () =>
+            await am.SendTextIdentifiersAsync(string.Empty, new[] { "DEMO-001" }));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SendTextIdentifiers_WithEmptyIdentifiers_CallsMethod()
+    public async Task SendTextIdentifiers_WithEmptyIdentifiers_CallsMethod()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() =>
-            am.SendTextIdentifiers("urn:tool:001", Array.Empty<string>()));
+        var ex = await Record.ExceptionAsync(async () =>
+            await am.SendTextIdentifiersAsync("urn:tool:001", Array.Empty<string>()));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SendTextIdentifiers_NodeNotFound_DoesNotCallMethod()
+    public async Task SendTextIdentifiers_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() =>
-            am.SendTextIdentifiers("urn:tool:001", new[] { "ID-001" }));
+        var ex = await Record.ExceptionAsync(async () =>
+            await am.SendTextIdentifiersAsync("urn:tool:001", new[] { "ID-001" }));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SendTextIdentifiers_OpcUaException_HandledWithoutRethrow()
+    public async Task SendTextIdentifiers_OpcUaException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadNotSupported));
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() =>
-            am.SendTextIdentifiers("urn:tool:001", new[] { "ID-001" }));
+        var ex = await Record.ExceptionAsync(async () =>
+            await am.SendTextIdentifiersAsync("urn:tool:001", new[] { "ID-001" }));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SendTextIdentifiers_UnexpectedException_HandledWithoutRethrow()
+    public async Task SendTextIdentifiers_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("serialisation error"));
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() =>
-            am.SendTextIdentifiers("urn:tool:001", new[] { "ID-001" }));
+        var ex = await Record.ExceptionAsync(async () =>
+            await am.SendTextIdentifiersAsync("urn:tool:001", new[] { "ID-001" }));
 
         Assert.Null(ex);
     }
 
-    // ── 8. GetIdentifiers ─────────────────────────────────────────────────────
+    // ── 8. GetIdentifiersAsync ─────────────────────────────────────────────────────
 
     [Fact]
-    public void GetIdentifiers_WithValidUri_CallsMethodOnce()
+    public async Task GetIdentifiers_WithValidUri_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.GetIdentifiers("urn:tool:001"));
+        var ex = await Record.ExceptionAsync(async () => await am.GetIdentifiersAsync("urn:tool:001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetIdentifiers_WithEmptyUri_CallsMethod()
+    public async Task GetIdentifiers_WithEmptyUri_CallsMethod()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.GetIdentifiers(string.Empty));
+        var ex = await Record.ExceptionAsync(async () => await am.GetIdentifiersAsync(string.Empty));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetIdentifiers_NodeNotFound_DoesNotCallMethod()
+    public async Task GetIdentifiers_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.GetIdentifiers("urn:tool:001"));
+        var ex = await Record.ExceptionAsync(async () => await am.GetIdentifiersAsync("urn:tool:001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void GetIdentifiers_OpcUaException_HandledWithoutRethrow()
+    public async Task GetIdentifiers_OpcUaException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadNodeIdUnknown));
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.GetIdentifiers("urn:unknown:001"));
+        var ex = await Record.ExceptionAsync(async () => await am.GetIdentifiersAsync("urn:unknown:001"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetIdentifiers_UnexpectedException_HandledWithoutRethrow()
+    public async Task GetIdentifiers_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new TimeoutException("RPC timed out"));
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.GetIdentifiers("urn:tool:001"));
+        var ex = await Record.ExceptionAsync(async () => await am.GetIdentifiersAsync("urn:tool:001"));
 
         Assert.Null(ex);
     }
 
-    // ── 9. ResetIdentifiers ───────────────────────────────────────────────────
+    // ── 9. ResetIdentifiersAsync ───────────────────────────────────────────────────
 
     [Fact]
-    public void ResetIdentifiers_WithValidUri_CallsMethodOnce()
+    public async Task ResetIdentifiers_WithValidUri_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.ResetIdentifiers("urn:tool:001"));
+        var ex = await Record.ExceptionAsync(async () => await am.ResetIdentifiersAsync("urn:tool:001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void ResetIdentifiers_WithEmptyUri_CallsMethod()
+    public async Task ResetIdentifiers_WithEmptyUri_CallsMethod()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.ResetIdentifiers(string.Empty));
+        var ex = await Record.ExceptionAsync(async () => await am.ResetIdentifiersAsync(string.Empty));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ResetIdentifiers_NodeNotFound_DoesNotCallMethod()
+    public async Task ResetIdentifiers_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.ResetIdentifiers("urn:tool:001"));
+        var ex = await Record.ExceptionAsync(async () => await am.ResetIdentifiersAsync("urn:tool:001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void ResetIdentifiers_OpcUaException_HandledWithoutRethrow()
+    public async Task ResetIdentifiers_OpcUaException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadNotSupported));
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.ResetIdentifiers("urn:tool:001"));
+        var ex = await Record.ExceptionAsync(async () => await am.ResetIdentifiersAsync("urn:tool:001"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ResetIdentifiers_UnexpectedException_HandledWithoutRethrow()
+    public async Task ResetIdentifiers_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("simulated failure"));
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.ResetIdentifiers("urn:tool:001"));
+        var ex = await Record.ExceptionAsync(async () => await am.ResetIdentifiersAsync("urn:tool:001"));
 
         Assert.Null(ex);
     }
 
-    // ── 10. SubscribeAssetVariables ───────────────────────────────────────────
+    // ── 10. SubscribeAssetVariablesAsync ───────────────────────────────────────────
 
     /// <remarks>
     /// The "already subscribed" guard is tested by <see cref="LiveIntegrationTests"/> because
@@ -348,137 +348,137 @@ public sealed class AssetManagementUnitTests
     /// the code browses for asset nodes before creating the subscription object).
     /// </remarks>
     [Fact]
-    public void SubscribeAssetVariables_AssetManagementNodeNotFound_DoesNotThrow()
+    public async Task SubscribeAssetVariables_AssetManagementNodeNotFound_DoesNotThrow()
     {
         // When JoiningSystemNodeId browse for AssetManagement returns Null, the method returns early
         var session = MockSessionBuilder.CreateWithNullNodes();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.SubscribeAssetVariables());
+        var ex = await Record.ExceptionAsync(async () => await am.SubscribeAssetVariablesAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Dispose_WhenNotSubscribed_DoesNotThrow()
+    public async Task Dispose_WhenNotSubscribed_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
         {
-            using var am = new AssetManagement(session.Object);
+            await using var am = new AssetManagement(session.Object);
         });
 
         Assert.Null(ex);
     }
 
-    // ── 14. SendIdentifiers (EntityDataType demo) ─────────────────────────────
+    // ── 14. SendIdentifiersAsync (EntityDataType demo) ─────────────────────────────
 
     [Fact]
-    public void SendIdentifiers_WithSingleEntity_CallsMethodOnce()
+    public async Task SendIdentifiers_WithSingleEntity_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        await using var am = new AssetManagement(session.Object);
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false)
+            IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A", isExternal: false)
         };
 
-        var ex = Record.Exception(() => am.SendIdentifiers(entities));
+        var ex = await Record.ExceptionAsync(async () => await am.SendIdentifiersAsync(entities));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SendIdentifiers_WithMultipleEntities_CallsMethodOnce()
+    public async Task SendIdentifiers_WithMultipleEntities_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        await using var am = new AssetManagement(session.Object);
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:part:chassis-001", entityType: (short)22,
                 name: "Chassis Component", description: "Engine bay chassis bracket", isExternal: false),
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:tool:spindle-002", entityType: (short)4,
                 name: "Secondary Spindle", description: "Right-side torque spindle", isExternal: false),
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:controller:atlas-003", entityType: (short)3,
                 name: "Atlas Controller-3", description: "Line controller unit 3", isExternal: false),
         };
 
-        var ex = Record.Exception(() => am.SendIdentifiers(entities));
+        var ex = await Record.ExceptionAsync(async () => await am.SendIdentifiersAsync(entities));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SendIdentifiers_WithEmptyList_CallsMethod()
+    public async Task SendIdentifiers_WithEmptyList_CallsMethod()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() =>
-            am.SendIdentifiers(new List<UAModel.IJTBase.EntityDataType>()));
+        var ex = await Record.ExceptionAsync(async () =>
+            await am.SendIdentifiersAsync(new List<IJTBase.EntityDataType>()));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SendIdentifiers_NodeNotFound_DoesNotCallMethod()
+    public async Task SendIdentifiers_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
-        using var am = new AssetManagement(session.Object);
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        await using var am = new AssetManagement(session.Object);
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A", isExternal: false)
         };
 
-        var ex = Record.Exception(() => am.SendIdentifiers(entities));
+        var ex = await Record.ExceptionAsync(async () => await am.SendIdentifiersAsync(entities));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SendIdentifiers_OpcUaException_HandledWithoutRethrow()
+    public async Task SendIdentifiers_OpcUaException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadArgumentsMissing));
-        using var am = new AssetManagement(session.Object);
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        await using var am = new AssetManagement(session.Object);
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A", isExternal: false)
         };
 
-        var ex = Record.Exception(() => am.SendIdentifiers(entities));
+        var ex = await Record.ExceptionAsync(async () => await am.SendIdentifiersAsync(entities));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SendIdentifiers_UnexpectedException_HandledWithoutRethrow()
+    public async Task SendIdentifiers_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("serialisation error"));
-        using var am = new AssetManagement(session.Object);
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        await using var am = new AssetManagement(session.Object);
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create(
+            IJTBase.EntityDataType.Create(
                 "urn:tool:spindle-001", entityType: (short)4, name: "Spindle-A", isExternal: false)
         };
 
-        var ex = Record.Exception(() => am.SendIdentifiers(entities));
+        var ex = await Record.ExceptionAsync(async () => await am.SendIdentifiersAsync(entities));
 
         Assert.Null(ex);
     }
@@ -486,84 +486,84 @@ public sealed class AssetManagementUnitTests
     // ── GetMethodSetNode fallback path ────────────────────────────────────────
 
     [Fact]
-    public void EnableAsset_WithBrowseChildNull_UsesFallbackTypeNodeId()
+    public async Task EnableAsset_WithBrowseChildNull_UsesFallbackTypeNodeId()
     {
-        // BrowseChild returns Null → fallback to IjtBaseObjectId
+        // BrowseChildAsync returns Null → fallback to IjtBaseObjectId
         var session = MockSessionBuilder.Create(browseChildResult: NodeId.Null);
         session.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>()))
             .Returns(MockSessionBuilder.ValidNodeId);
-        session.Setup(s => s.BrowseMethod(
+        session.Setup(s => s.BrowseMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(MockSessionBuilder.ValidMethodId);
-        using var am = new AssetManagement(session.Object);
+            .ReturnsAsync(MockSessionBuilder.ValidMethodId);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: true));
+        var ex = await Record.ExceptionAsync(async () => await am.EnableAssetAsync("urn:tool:001", enable: true));
 
         Assert.Null(ex);
     }
 
-    // ── SubscribeAssetVariables — count=0 path (no variables found) ───────────
+    // ── SubscribeAssetVariablesAsync — count=0 path (no variables found) ───────────
 
     [Fact]
-    public void SubscribeAssetVariables_WhenNoCategoryNodesFound_DisposesAndReturnsWithoutThrow()
+    public async Task SubscribeAssetVariables_WhenNoCategoryNodesFound_DisposesAndReturnsWithoutThrow()
     {
         var session = MockSessionBuilder.Create();
-        // BrowseChild returns valid nodes for AssetManagement and Assets
-        session.Setup(s => s.BrowseChild(
+        // BrowseChildAsync returns valid nodes for AssetManagement and Assets
+        session.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(MockSessionBuilder.ValidNodeId);
+            .ReturnsAsync(MockSessionBuilder.ValidNodeId);
 
-        // BrowseChildren returns empty list → count stays 0 → lines 353-359 executed
-        session.Setup(s => s.BrowseChildren(It.IsAny<NodeId>(), It.IsAny<uint>()))
-            .Returns(new ReferenceDescriptionCollection());
-        using var am = new AssetManagement(session.Object);
+        // BrowseChildrenAsync returns empty list → count stays 0 → lines 353-359 executed
+        session.Setup(s => s.BrowseChildrenAsync(It.IsAny<NodeId>(), It.IsAny<uint>()))
+            .ReturnsAsync(new ReferenceDescriptionCollection());
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.SubscribeAssetVariables());
+        var ex = await Record.ExceptionAsync(async () => await am.SubscribeAssetVariablesAsync());
 
         Assert.Null(ex);
         Assert.False(am.IsAssetVarSubscribed);
     }
 
     [Fact]
-    public void StopAssetVariableSubscription_WhenSessionRemovalThrowsServiceResult_CleansUp()
+    public async Task StopAssetVariableSubscription_WhenSessionRemovalThrowsServiceResult_CleansUp()
     {
         var session = MockSessionBuilder.Create();
         session.Setup(s => s.Session).Returns(
             MockSessionBuilder.CreateThrowingSession(new ServiceResultException(StatusCodes.BadSessionClosed)));
-        using var am = new AssetManagement(session.Object);
-        SetAssetVarSubscription(am, new Subscription());
+        await using var am = new AssetManagement(session.Object);
+        SetAssetVarSubscription(am, new Subscription(DefaultTelemetry.Create(_ => { })));
 
-        am.StopAssetVariableSubscription();
+        await am.StopAssetVariableSubscriptionAsync();
 
         Assert.False(am.IsAssetVarSubscribed);
     }
 
     [Fact]
-    public void StopAssetVariableSubscription_WhenSessionRemovalThrowsUnexpectedException_CleansUp()
+    public async Task StopAssetVariableSubscription_WhenSessionRemovalThrowsUnexpectedException_CleansUp()
     {
         var session = MockSessionBuilder.Create();
         session.Setup(s => s.Session).Returns(
             MockSessionBuilder.CreateThrowingSession(new InvalidOperationException("remove failed")));
-        using var am = new AssetManagement(session.Object);
-        SetAssetVarSubscription(am, new Subscription());
+        await using var am = new AssetManagement(session.Object);
+        SetAssetVarSubscription(am, new Subscription(DefaultTelemetry.Create(_ => { })));
 
-        am.StopAssetVariableSubscription();
+        await am.StopAssetVariableSubscriptionAsync();
 
         Assert.False(am.IsAssetVarSubscribed);
     }
 
-    // ── SubscribeAssetVariables — full hierarchy (covers loop bodies + SubscribeAllVariables) ──
+    // ── SubscribeAssetVariablesAsync — full hierarchy (covers loop bodies + SubscribeAllVariables) ──
 
     /// <summary>
     /// Feeds a full category → instance → variable + object-child hierarchy to
-    /// SubscribeAssetVariables so the inner foreach bodies, SubscribeAllVariables,
+    /// SubscribeAssetVariablesAsync so the inner foreach bodies, SubscribeAllVariables,
     /// and both the Variable and Object branches are exercised.
     /// The protocol-complete mock lets the subscription lifecycle complete without
     /// connecting to an OPC UA server.
     /// </summary>
     [Fact]
-    public void SubscribeAssetVariables_WithCategoryInstanceAndVariableHierarchy_CoversLoopBodiesAndSubscribeAllVariables()
+    public async Task SubscribeAssetVariables_WithCategoryInstanceAndVariableHierarchy_CoversLoopBodiesAndSubscribeAllVariables()
     {
         var catNodeId = new NodeId(2001u, 1);
         var instNodeId = new NodeId(2002u, 1);
@@ -606,32 +606,32 @@ public sealed class AssetManagementUnitTests
         session.Setup(s => s.Session).Returns(uaSession.Object);
 
         // Category objects under the Assets node (ValidNodeId == assetsNode)
-        session.Setup(s => s.BrowseChildren(
+        session.Setup(s => s.BrowseChildrenAsync(
                 It.Is<NodeId>(n => n.Equals(MockSessionBuilder.ValidNodeId)),
                 (uint)NodeClass.Object))
-            .Returns(new ReferenceDescriptionCollection { catRef });
+            .ReturnsAsync(new ReferenceDescriptionCollection { catRef });
 
         // Asset instances under the category node
-        session.Setup(s => s.BrowseChildren(
+        session.Setup(s => s.BrowseChildrenAsync(
                 It.Is<NodeId>(n => n.Equals(catNodeId)),
                 (uint)NodeClass.Object))
-            .Returns(new ReferenceDescriptionCollection { instRef });
+            .ReturnsAsync(new ReferenceDescriptionCollection { instRef });
 
         // Variables + objects under the asset instance (passed to SubscribeAllVariables)
-        session.Setup(s => s.BrowseChildren(
+        session.Setup(s => s.BrowseChildrenAsync(
                 It.Is<NodeId>(n => n.Equals(instNodeId)),
                 (uint)(NodeClass.Variable | NodeClass.Object)))
-            .Returns(new ReferenceDescriptionCollection { varRef, objChildRef });
+            .ReturnsAsync(new ReferenceDescriptionCollection { varRef, objChildRef });
 
         // Nothing under the object child (terminates recursion)
-        session.Setup(s => s.BrowseChildren(
+        session.Setup(s => s.BrowseChildrenAsync(
                 It.Is<NodeId>(n => n.Equals(objChildNodeId)),
                 (uint)(NodeClass.Variable | NodeClass.Object)))
-            .Returns(new ReferenceDescriptionCollection());
+            .ReturnsAsync(new ReferenceDescriptionCollection());
 
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        am.SubscribeAssetVariables();
+        await am.SubscribeAssetVariablesAsync();
 
         Assert.True(am.IsAssetVarSubscribed);
     }
@@ -639,28 +639,28 @@ public sealed class AssetManagementUnitTests
     // ── GetMethodSetNode — fallback when MethodSet child is not found ─────────
 
     [Fact]
-    public void EnableAsset_WhenMethodSetChildNotFound_FallsBackToTypeNodeId()
+    public async Task EnableAsset_WhenMethodSetChildNotFound_FallsBackToTypeNodeId()
     {
         var session = MockSessionBuilder.Create();
 
-        // Return ValidNodeId for the 1st BrowseChild call (AssetManagement),
+        // Return ValidNodeId for the 1st BrowseChildAsync call (AssetManagement),
         // NodeId.Null for the 2nd (MethodSet) → forces the fallback code path (line 57+).
         int callCount = 0;
-        session.Setup(s => s.BrowseChild(
+        session.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(() => callCount++ == 1 ? NodeId.Null : MockSessionBuilder.ValidNodeId);
+            .ReturnsAsync(() => callCount++ == 1 ? NodeId.Null : MockSessionBuilder.ValidNodeId);
 
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.EnableAsset("urn:tool:001", enable: true));
+        var ex = await Record.ExceptionAsync(async () => await am.EnableAssetAsync("urn:tool:001", enable: true));
 
         Assert.Null(ex);
         // IjtBaseObjectId must have been called (fallback taken)
         session.Verify(s => s.IjtBaseObjectId(It.IsAny<uint>()), Times.Once);
     }
 
-    // ── StopAssetVariableSubscription — normal path ────────────────────────────
+    // ── StopAssetVariableSubscriptionAsync — normal path ────────────────────────────
 
     private static void SetAssetVarSubscription(AssetManagement am, Subscription? value)
     {
@@ -671,38 +671,38 @@ public sealed class AssetManagementUnitTests
     }
 
     [Fact]
-    public void StopAssetVariableSubscription_WithSubscription_NormalPath_ClearsSubscription()
+    public async Task StopAssetVariableSubscription_WithSubscription_NormalPath_ClearsSubscription()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
-        SetAssetVarSubscription(am, new Subscription());
+        await using var am = new AssetManagement(session.Object);
+        SetAssetVarSubscription(am, new Subscription(DefaultTelemetry.Create(_ => { })));
 
         Assert.True(am.IsAssetVarSubscribed);
 
-        var ex = Record.Exception(() => am.StopAssetVariableSubscription());
+        var ex = await Record.ExceptionAsync(async () => await am.StopAssetVariableSubscriptionAsync());
 
         Assert.Null(ex);
         Assert.False(am.IsAssetVarSubscribed);
     }
 
     [Fact]
-    public void FlushAssetJson_WithEmptyAssetKey_DoesNotThrow()
+    public async Task FlushAssetJson_WithEmptyAssetKey_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
         // Access FlushAssetJson via reflection
         var method = typeof(AssetManagement).GetMethod(
             "FlushAssetJson",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-        var ex = Record.Exception(() => method!.Invoke(am, new object[] { "nonexistent-key" }));
+        var ex = await Record.ExceptionAsync(async () => method!.Invoke(am, new object[] { "nonexistent-key" }));
 
         Assert.Null(ex); // should return early if key not found
     }
 
     [Fact]
-    public void FlushAssetJson_WithValues_WritesNestedAssetSnapshot()
+    public async Task FlushAssetJson_WithValues_WritesNestedAssetSnapshot()
     {
         var root = Path.Combine(Path.GetTempPath(), "ijt-asset-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -710,7 +710,7 @@ public sealed class AssetManagementUnitTests
         {
             using var logRoot = IjtFileLogger.PushBaseLogDirOverride(Path.Combine(root, "logs"));
             var session = MockSessionBuilder.Create();
-            using var am = new AssetManagement(session.Object);
+            await using var am = new AssetManagement(session.Object);
             var valuesField = typeof(AssetManagement).GetField(
                 "_assetValues",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
@@ -803,18 +803,18 @@ public sealed class AssetManagementUnitTests
         Assert.Equal(99, b["c"]);
     }
 
-    // ── GetIdentifiers — multi-output path ────────────────────────────────────
+    // ── GetIdentifiersAsync — multi-output path ────────────────────────────────────
 
     [Fact]
-    public void GetIdentifiers_WithFullOutputs_DoesNotThrow()
+    public async Task GetIdentifiers_WithFullOutputs_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object> { null!, "0", "OK" });
-        using var am = new AssetManagement(session.Object);
+            .ReturnsAsync(new List<object> { null!, "0", "OK" });
+        await using var am = new AssetManagement(session.Object);
 
-        var ex = Record.Exception(() => am.GetIdentifiers("urn:tool:001"));
+        var ex = await Record.ExceptionAsync(async () => await am.GetIdentifiersAsync("urn:tool:001"));
 
         Assert.Null(ex);
     }
@@ -822,10 +822,10 @@ public sealed class AssetManagementUnitTests
     // ── IsAssetVarSubscribed property ─────────────────────────────────────────
 
     [Fact]
-    public void IsAssetVarSubscribed_WhenNotSubscribed_ReturnsFalse()
+    public async Task IsAssetVarSubscribed_WhenNotSubscribed_ReturnsFalse()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
         Assert.False(am.IsAssetVarSubscribed);
     }
@@ -833,17 +833,17 @@ public sealed class AssetManagementUnitTests
     // ── Node cache hit paths ───────────────────────────────────────────────────
 
     [Fact]
-    public void EnableAsset_CalledTwice_UsesCachedMethodSetNodeId()
+    public async Task EnableAsset_CalledTwice_UsesCachedMethodSetNodeId()
     {
         var session = MockSessionBuilder.Create();
-        using var am = new AssetManagement(session.Object);
+        await using var am = new AssetManagement(session.Object);
 
-        am.EnableAsset("urn:tool:001", enable: true);   // first call caches _methodSetNodeId
-        am.EnableAsset("urn:tool:001", enable: false);  // second call hits cache
+        await am.EnableAssetAsync("urn:tool:001", enable: true);   // first call caches _methodSetNodeId
+        await am.EnableAssetAsync("urn:tool:001", enable: false);  // second call hits cache
 
-        // BrowseChild called exactly 2 times on first call (AssetManagement + MethodSet),
+        // BrowseChildAsync called exactly 2 times on first call (AssetManagement + MethodSet),
         // then 0 times on second call because cache is populated.
-        session.Verify(s => s.BrowseChild(
+        session.Verify(s => s.BrowseChildAsync(
             It.IsAny<NodeId>(), It.IsAny<string>(),
             It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Exactly(2));
     }
@@ -859,111 +859,111 @@ public sealed class EntityDataTypeEncodingMaskTests
     [Fact]
     public void EntityDataType_Create_WithName_EncodingMaskIncludesNameBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A");
+        var entity = IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A");
 
         Assert.Equal("ENT-001", entity.EntityId);
         Assert.Equal("Batch-A", entity.Name);
         Assert.Equal((short)1, entity.EntityType);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) != 0,
             "Name must be in EncodingMask so it is written to the binary stream");
     }
 
     [Fact]
     public void EntityDataType_Create_WithoutName_EncodingMaskExcludesNameBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-002", entityType: 2);
+        var entity = IJTBase.EntityDataType.Create("ENT-002", entityType: 2);
 
         Assert.Null(entity.Name);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) == 0u,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) == 0u,
             "Name bit must NOT be set when Name is not provided");
     }
 
     [Fact]
     public void EntityDataType_Create_WithIsExternalFalse_EncodingMaskIncludesIsExternalBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-003", entityType: 1, isExternal: false);
+        var entity = IJTBase.EntityDataType.Create("ENT-003", entityType: 1, isExternal: false);
 
         Assert.False(entity.IsExternal);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.IsExternal) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.IsExternal) != 0,
             "IsExternal must be in EncodingMask when explicitly supplied");
     }
 
     [Fact]
     public void EntityDataType_Create_WithIsExternalNull_EncodingMaskExcludesIsExternalBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-004", entityType: 1);
+        var entity = IJTBase.EntityDataType.Create("ENT-004", entityType: 1);
 
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.IsExternal) == 0u,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.IsExternal) == 0u,
             "IsExternal must NOT be in mask when not explicitly supplied");
     }
 
     [Fact]
     public void EntityDataType_Create_WithDescription_EncodingMaskIncludesDescriptionBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-005", entityType: 1, description: "Test part");
+        var entity = IJTBase.EntityDataType.Create("ENT-005", entityType: 1, description: "Test part");
 
         Assert.Equal("Test part", entity.Description);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Description) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Description) != 0,
             "Description must be in EncodingMask when provided");
     }
 
     [Fact]
     public void EntityDataType_Create_WithEntityOriginId_EncodingMaskIncludesOriginIdBit()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-006", entityType: 1, entityOriginId: "ORIG-001");
+        var entity = IJTBase.EntityDataType.Create("ENT-006", entityType: 1, entityOriginId: "ORIG-001");
 
         Assert.Equal("ORIG-001", entity.EntityOriginId);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.EntityOriginId) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.EntityOriginId) != 0,
             "EntityOriginId must be in EncodingMask when provided");
     }
 
     [Fact]
     public void EntityDataType_Create_AllFieldsSet_AllBitsInMask()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create(
+        var entity = IJTBase.EntityDataType.Create(
             "ENT-ALL", entityType: 1,
             name: "Name", description: "Desc",
             entityOriginId: "ORIG", isExternal: true);
 
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) != 0);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Description) != 0);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.EntityOriginId) != 0);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.IsExternal) != 0);
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) != 0);
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Description) != 0);
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.EntityOriginId) != 0);
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.IsExternal) != 0);
     }
 
     [Fact]
     public void EntityDataType_Create_NoOptionalFields_MaskIsZero()
     {
-        var entity = UAModel.IJTBase.EntityDataType.Create("ENT-MIN", entityType: 1);
+        var entity = IJTBase.EntityDataType.Create("ENT-MIN", entityType: 1);
 
         Assert.True(entity.EncodingMask == 0u,
             "EncodingMask must be 0 when no optional fields are provided — EntityId and EntityType are always encoded");
     }
 
     [Fact]
-    public void SendIdentifiers_EntityCreatedWithFactory_EncodingMaskIsCorrectlySet()
+    public async Task SendIdentifiers_EntityCreatedWithFactory_EncodingMaskIsCorrectlySet()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
-        using var am = new AssetManagement(session.Object);
+            .ReturnsAsync(new List<object>());
+        await using var am = new AssetManagement(session.Object);
 
-        var entities = new List<UAModel.IJTBase.EntityDataType>
+        var entities = new List<IJTBase.EntityDataType>
         {
-            UAModel.IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A"),
+            IJTBase.EntityDataType.Create("ENT-001", entityType: 1, name: "Batch-A"),
         };
-        am.SendIdentifiers(entities);
+        await am.SendIdentifiersAsync(entities);
 
         Assert.NotNull(capturedArgs);
         Assert.Equal(2, capturedArgs.Length);
         var extObjects = Assert.IsType<ExtensionObject[]>(capturedArgs[1]);
         Assert.Single(extObjects);
-        var entity = Assert.IsType<UAModel.IJTBase.EntityDataType>(extObjects[0].Body);
+        Assert.True(extObjects[0].TryGetValue(out IJTBase.EntityDataType? entity));
         Assert.Equal("Batch-A", entity.Name);
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) != 0,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) != 0,
             "Name must be in EncodingMask to be included in the OPC UA binary stream");
     }
 
@@ -972,7 +972,7 @@ public sealed class EntityDataTypeEncodingMaskTests
     {
         // Documents the known pitfall: assigning Name without setting the mask bit
         // results in Name being silently omitted from the binary stream.
-        var entity = new UAModel.IJTBase.EntityDataType
+        var entity = new IJTBase.EntityDataType
         {
             Name = "Will-Be-Dropped",
             EntityId = "ENT-MASK-TRAP",
@@ -980,7 +980,7 @@ public sealed class EntityDataTypeEncodingMaskTests
         };
 
         // Verify the mask is NOT set for Name (documents the pitfall, prevents regression)
-        Assert.True((entity.EncodingMask & (uint)UAModel.IJTBase.EntityDataTypeFields.Name) == 0u,
+        Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) == 0u,
             "Object-initializer without EncodingMask leaves Name bit unset — use EntityDataType.Create() instead");
     }
 }

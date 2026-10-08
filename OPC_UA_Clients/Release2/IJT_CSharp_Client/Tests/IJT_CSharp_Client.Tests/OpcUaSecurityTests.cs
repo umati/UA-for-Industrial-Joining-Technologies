@@ -66,7 +66,7 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
-        var endpoints = DiscoverEndpoints();
+        var endpoints = await DiscoverEndpointsAsync().ConfigureAwait(false);
         foreach (var deprecatedPolicy in DeprecatedSecurityPolicies)
         {
             Assert.DoesNotContain(
@@ -83,7 +83,7 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
                 && candidate.SecurityMode == securityMode);
             Assert.NotNull(endpoint);
 
-            var tokenTypes = endpoint!.UserIdentityTokens.Select(policy => policy.TokenType).ToHashSet();
+            var tokenTypes = (endpoint!.UserIdentityTokens.ToArray() ?? []).Select(policy => policy.TokenType).ToHashSet();
             Assert.Contains(UserTokenType.Anonymous, tokenTypes);
             if (string.Equals(securityPolicyUri, SecurityPolicies.None, StringComparison.Ordinal))
             {
@@ -266,7 +266,7 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
                 UserNameMode,
                 UserIdentityKind.X509,
                 x509CertificatePath: certPath),
-            new uint[]
+            new[]
             {
                 StatusCodes.BadIdentityTokenRejected,
                 StatusCodes.BadIdentityTokenInvalid,
@@ -300,9 +300,9 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
 
     private static async Task AssertBenignFlowAsync(JoiningSystem session, CancellationToken ct)
     {
-        Assert.False(session.NodeId.IsNullNodeId, "JoiningSystem node must be discovered.");
+        Assert.False(session.NodeId.IsNull, "JoiningSystem node must be discovered.");
         var ex = await Record.ExceptionAsync(() =>
-            Task.Run(() => session.AssetManagement.GetIdentifiers(string.Empty), ct)).ConfigureAwait(false);
+            Task.Run(async () => await session.AssetManagement.GetIdentifiersAsync(string.Empty), ct)).ConfigureAwait(false);
         Assert.Null(ex);
     }
 
@@ -327,7 +327,7 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
         EndpointDescription endpoint,
         string expectedSecurityPolicyUri)
     {
-        var token = endpoint.UserIdentityTokens.FirstOrDefault(policy => policy.TokenType == UserTokenType.Certificate);
+        var token = (endpoint.UserIdentityTokens.ToArray() ?? []).FirstOrDefault(policy => policy.TokenType == UserTokenType.Certificate);
         Assert.NotNull(token);
         Assert.Equal(
             expectedSecurityPolicyUri,
@@ -338,32 +338,32 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
         EndpointDescription endpoint,
         string expectedSecurityPolicyUri)
     {
-        var token = endpoint.UserIdentityTokens.FirstOrDefault(policy => policy.TokenType == UserTokenType.UserName);
+        var token = (endpoint.UserIdentityTokens.ToArray() ?? []).FirstOrDefault(policy => policy.TokenType == UserTokenType.UserName);
         Assert.NotNull(token);
         Assert.Equal(
             expectedSecurityPolicyUri,
             token!.SecurityPolicyUri);
     }
 
-    private List<EndpointDescription> DiscoverEndpoints()
+    private async Task<List<EndpointDescription>> DiscoverEndpointsAsync()
     {
-        var appConfig = new ApplicationConfiguration
+        var appConfig = new ApplicationConfiguration(DefaultTelemetry.Create(_ => { }))
         {
             ApplicationName = OpcUaSecurityIdentity.CSharpDiscoveryApplicationName(),
             ApplicationType = ApplicationType.Client,
             TransportQuotas = new TransportQuotas { OperationTimeout = 15_000 },
             ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60_000 },
         };
-        using var discoveryClient = DiscoveryClient.Create(
+        using var discoveryClient = await DiscoveryClient.CreateAsync(
             appConfig,
             new Uri(_fixture.ServerUrl),
-            EndpointConfiguration.Create(appConfig));
-        return discoveryClient.GetEndpoints(null).ToList();
+            EndpointConfiguration.Create(appConfig)).ConfigureAwait(false);
+        return (await discoveryClient.GetEndpointsAsync(default, CancellationToken.None).ConfigureAwait(false)).ToList();
     }
 
     private async Task AssertConnectFailsWithAnyStatusAsync(
         ClientConfig config,
-        IReadOnlyCollection<uint> expectedStatusCodes,
+        IReadOnlyCollection<StatusCode> expectedStatusCodes,
         CancellationToken ct)
     {
         var ex = await Record.ExceptionAsync(() => JoiningSystem.ConnectAsync(config, ct)).ConfigureAwait(false);
@@ -376,13 +376,13 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
         Assert.NotNull(ex);
 
         var serviceResult = FindServiceResultException(ex!);
-        Assert.NotNull(serviceResult);
+        Assert.True(serviceResult is not null, $"Expected ServiceResultException, but got {ex!.GetType().FullName}: {ex.Message} Inner: {ex.InnerException?.GetType().FullName} {ex.InnerException?.Message}");
         AssertStatusCodeInExpectedSet(serviceResult!, expectedStatusCodes, config);
     }
 
     private static void AssertStatusCodeInExpectedSet(
         ServiceResultException serviceResult,
-        IReadOnlyCollection<uint> expectedStatusCodes,
+        IReadOnlyCollection<StatusCode> expectedStatusCodes,
         ClientConfig config)
     {
         var actual = serviceResult.StatusCode;
@@ -405,13 +405,13 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
         Assert.Fail(message);
     }
 
-    private static string FormatStatusCode(uint statusCode)
+    private static string FormatStatusCode(StatusCode statusCode)
     {
-        var symbolic = StatusCodes.LookupSymbolicId(statusCode);
+        var symbolic = statusCode.SymbolicId;
         if (string.IsNullOrWhiteSpace(symbolic))
             symbolic = "Unknown";
 
-        return $"0x{statusCode:X8} ({symbolic})";
+        return $"0x{statusCode.Code:X8} ({symbolic})";
     }
 
     private static string FormatSecurityPolicy(string? securityPolicyUri)
@@ -524,7 +524,7 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
         var depth = 0;
         while (inner is not null && depth < 8)
         {
-            lines.Add($"InnerResult[{depth}]: {FormatStatusCode(inner.StatusCode.Code)} | {inner.SymbolicId} | {inner.AdditionalInfo}");
+            lines.Add($"InnerResult[{depth}]: {FormatStatusCode(inner.StatusCode)} | {inner.SymbolicId} | {inner.AdditionalInfo}");
             inner = inner.InnerResult;
             depth++;
         }
