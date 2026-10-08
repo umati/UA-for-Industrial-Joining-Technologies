@@ -25,10 +25,10 @@ public sealed class DomainResultVariableAndMethodTests
         var validMeth = methodId ?? new NodeId(8003u, (ushort)2);
 
         mock.Setup(s => s.NodeId).Returns(new NodeId(8001u, (ushort)2));
-        mock.Setup(s => s.BrowseChild(It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(validRm);
-        mock.Setup(s => s.BrowseMethod(It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(validMeth);
+        mock.Setup(s => s.BrowseChildAsync(It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<ushort>(), It.IsAny<NodeClass>()))
+            .ReturnsAsync(validRm);
+        mock.Setup(s => s.BrowseMethodAsync(It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
+            .ReturnsAsync(validMeth);
         mock.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>())).Returns(validRm);
         mock.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>())).Returns(validMeth);
         return mock;
@@ -37,10 +37,10 @@ public sealed class DomainResultVariableAndMethodTests
     // ── Slice 2B: Variable Path Decoupling ────────────────────────────────────
 
     [Fact]
-    public void ProcessResultVariableValue_ValidResult_FiresOnResultVariableChangedWithDomainEnvelope()
+    public async Task ProcessResultVariableValue_ValidResult_FiresOnResultVariableChangedWithDomainEnvelope()
     {
         var mock = CreateSessionMock();
-        using var rm = new ResultManagement(mock.Object);
+        await using var rm = new ResultManagement(mock.Object);
 
         DomainResultEnvelope? received = null;
         rm.OnResultVariableChanged += (_, envelope) => received = envelope;
@@ -72,10 +72,10 @@ public sealed class DomainResultVariableAndMethodTests
     }
 
     [Fact]
-    public void ProcessResultVariableValue_NullOrPlaceholder_DoesNotFireEvent()
+    public async Task ProcessResultVariableValue_NullOrPlaceholder_DoesNotFireEvent()
     {
         var mock = CreateSessionMock();
-        using var rm = new ResultManagement(mock.Object);
+        await using var rm = new ResultManagement(mock.Object);
 
         DomainResultEnvelope? received = null;
         rm.OnResultVariableChanged += (_, envelope) => received = envelope;
@@ -100,7 +100,7 @@ public sealed class DomainResultVariableAndMethodTests
     // ── Slice 2C: Method Queries & Historical Results ─────────────────────────
 
     [Fact]
-    public void GetLatestResult_Success_ReturnsTypedMethodResultResponse()
+    public async Task GetLatestResult_Success_ReturnsTypedMethodResultResponse()
     {
         var mock = CreateSessionMock();
         var rd = new ResultDataType
@@ -114,11 +114,11 @@ public sealed class DomainResultVariableAndMethodTests
             }
         };
 
-        mock.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object> { 42u, new ExtensionObject(rd), 0 });
+        mock.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .ReturnsAsync(new List<object> { 42u, new ExtensionObject(rd), 0 });
 
-        using var rm = new ResultManagement(mock.Object);
-        var response = rm.GetLatestResult(5000);
+        await using var rm = new ResultManagement(mock.Object);
+        var response = await rm.GetLatestResultAsync(5000);
 
         Assert.True(response.IsSuccess);
         Assert.Equal(42u, response.ResultHandle);
@@ -131,14 +131,14 @@ public sealed class DomainResultVariableAndMethodTests
     }
 
     [Fact]
-    public void GetLatestResult_ServerError_ReturnsDistinctServerErrorCode()
+    public async Task GetLatestResult_ServerError_ReturnsDistinctServerErrorCode()
     {
         var mock = CreateSessionMock();
-        mock.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object> { 12u, null!, 105 }); // Error 105 returned by server
+        mock.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .ReturnsAsync(new List<object> { 12u, null!, 105 }); // Error 105 returned by server
 
-        using var rm = new ResultManagement(mock.Object);
-        var response = rm.GetLatestResult(5000);
+        await using var rm = new ResultManagement(mock.Object);
+        var response = await rm.GetLatestResultAsync(5000);
 
         Assert.False(response.IsSuccess);
         Assert.Equal(12u, response.ResultHandle);
@@ -149,25 +149,27 @@ public sealed class DomainResultVariableAndMethodTests
     }
 
     [Fact]
-    public void GetResultById_TransportFailure_ReturnsDistinctTransportError()
+    public async Task GetResultById_TransportFailure_ReturnsDistinctTransportError()
     {
         var mock = CreateSessionMock();
-        mock.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+        mock.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new ServiceResultException(StatusCodes.BadTimeout));
 
-        using var rm = new ResultManagement(mock.Object);
-        var response = rm.GetResultById("QUERY-RES-999", 5000);
+        await using var rm = new ResultManagement(mock.Object);
+        var response = await rm.GetResultByIdAsync("QUERY-RES-999", 5000);
 
         Assert.False(response.IsSuccess);
         Assert.Equal(0u, response.ResultHandle);
-        Assert.Equal(unchecked((int)StatusCodes.BadTimeout.Code), response.ServerErrorCode);
+        Assert.Equal(MethodResultStatus.TransportError, response.Status);
+        Assert.Equal(0, response.ServerErrorCode);
+        Assert.Equal(StatusCodes.BadTimeout.Code, response.TransportStatusCode);
         Assert.Null(response.Result);
         Assert.NotNull(response.ErrorMessage);
         Assert.Contains("BadTimeout", response.ErrorMessage);
     }
 
     [Fact]
-    public void GetResultById_Success_ReturnsTypedMethodResultResponse()
+    public async Task GetResultById_Success_ReturnsTypedMethodResultResponse()
     {
         var mock = CreateSessionMock();
         var rd = new ResultDataType
@@ -181,11 +183,11 @@ public sealed class DomainResultVariableAndMethodTests
             }
         };
 
-        mock.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object> { 101u, new ExtensionObject(rd), 0 });
+        mock.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .ReturnsAsync(new List<object> { 101u, new ExtensionObject(rd), 0 });
 
-        using var rm = new ResultManagement(mock.Object);
-        var response = rm.GetResultById("QUERY-RES-777", 5000);
+        await using var rm = new ResultManagement(mock.Object);
+        var response = await rm.GetResultByIdAsync("QUERY-RES-777", 5000);
 
         Assert.True(response.IsSuccess);
         Assert.Equal(101u, response.ResultHandle);
@@ -193,5 +195,192 @@ public sealed class DomainResultVariableAndMethodTests
         Assert.NotNull(response.Result);
         Assert.Equal("QUERY-RES-777", response.Result!.ResultId);
         Assert.Equal("Queried By Id", response.Result.Name);
+    }
+
+    private static ResultDataType ValidResult() => new()
+    {
+        ResultMetaData = new JoiningResultMetaDataType { ResultId = "R-1", Name = "N", SequenceNumber = 1, ResultEvaluation = ResultEvaluationEnum.OK }
+    };
+
+    private static async Task<MethodResultResponse> CallLatest(IList<object> outputs)
+    {
+        var mock = CreateSessionMock();
+        mock.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>())).ReturnsAsync(outputs);
+        await using var rm = new ResultManagement(mock.Object);
+        return await rm.GetLatestResultAsync(5000);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_EmptyOutputs_IsMalformedNotSuccess()
+    {
+        var response = await CallLatest(new List<object>());
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+        Assert.False(response.IsSuccess);
+        Assert.NotNull(response.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_TooFewOutputs_IsMalformed()
+    {
+        var response = await CallLatest(new List<object> { 1u, new ExtensionObject(ValidResult()) });
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_NonNumericHandle_IsMalformed()
+    {
+        var response = await CallLatest(new List<object> { "not-a-number", new ExtensionObject(ValidResult()), 0 });
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+        Assert.Contains("ResultHandle", response.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_NullHandle_IsMalformed()
+    {
+        var response = await CallLatest(new List<object> { null!, new ExtensionObject(ValidResult()), 0 });
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_NonNumericErrorCode_IsMalformedNotSuccess()
+    {
+        var response = await CallLatest(new List<object> { 1u, new ExtensionObject(ValidResult()), "bad" });
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+        Assert.False(response.IsSuccess);
+        Assert.Contains("Error", response.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_NullErrorCode_IsMalformedNotSuccess()
+    {
+        var response = await CallLatest(new List<object> { 1u, new ExtensionObject(ValidResult()), null! });
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_SuccessCodeButResultAbsent_IsMalformed()
+    {
+        var response = await CallLatest(new List<object> { 1u, null!, 0 });
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+        Assert.Null(response.Result);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_SuccessCodeButResultWrongType_IsMalformed()
+    {
+        var response = await CallLatest(new List<object> { 1u, "oops", 0 });
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_VariantWrappedOutputs_AreUnwrapped()
+    {
+        var response = await CallLatest(new List<object>
+        {
+            new Variant(7u), new Variant(new ExtensionObject(ValidResult())), new Variant(0)
+        });
+        Assert.Equal(MethodResultStatus.Success, response.Status);
+        Assert.Equal(7u, response.ResultHandle);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_ServerErrorWithoutResult_IsServerErrorNotMalformed()
+    {
+        var response = await CallLatest(new List<object> { 3u, null!, 9 });
+        Assert.Equal(MethodResultStatus.ServerError, response.Status);
+        Assert.Equal(9, response.ServerErrorCode);
+        Assert.Null(response.TransportStatusCode);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_Cancelled_ReturnsCancelledStatus()
+    {
+        var mock = CreateSessionMock();
+        mock.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new OperationCanceledException());
+        await using var rm = new ResultManagement(mock.Object);
+        var response = await rm.GetLatestResultAsync(5000);
+        Assert.Equal(MethodResultStatus.Cancelled, response.Status);
+        Assert.False(response.IsSuccess);
+    }
+
+    [Fact]
+    public async Task GetResultById_Cancelled_ReturnsCancelledStatus()
+    {
+        var mock = CreateSessionMock();
+        mock.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new OperationCanceledException());
+        await using var rm = new ResultManagement(mock.Object);
+        Assert.Equal(MethodResultStatus.Cancelled, (await rm.GetResultByIdAsync("x", 5000)).Status);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_UnexpectedException_IsTransportErrorWithoutStatusCode()
+    {
+        var mock = CreateSessionMock();
+        mock.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .Throws(new InvalidOperationException("boom"));
+        await using var rm = new ResultManagement(mock.Object);
+        var response = await rm.GetLatestResultAsync(5000);
+        Assert.Equal(MethodResultStatus.TransportError, response.Status);
+        Assert.Null(response.TransportStatusCode);
+        Assert.Equal("boom", response.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_MethodNotFound_IsTransportError()
+    {
+        var mock = CreateSessionMock();
+        mock.Setup(s => s.BrowseMethodAsync(It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>())).ReturnsAsync(NodeId.Null);
+        await using var rm = new ResultManagement(mock.Object);
+        Assert.Equal(MethodResultStatus.TransportError, (await rm.GetLatestResultAsync(5000)).Status);
+        Assert.Equal(MethodResultStatus.TransportError, (await rm.GetResultByIdAsync("x", 5000)).Status);
+    }
+
+    [Theory]
+    [InlineData("42")]
+    [InlineData(42.0)]
+    [InlineData(42.0f)]
+    [InlineData(42)]
+    [InlineData(42L)]
+    [InlineData((byte)42)]
+    public async Task GetLatestResult_HandleNotExactlyUInt32_IsMalformed(object badHandle)
+    {
+        var response = await CallLatest(new List<object> { badHandle, new ExtensionObject(ValidResult()), 0 });
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+        Assert.Contains("ResultHandle", response.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData(0.0)]
+    [InlineData(0.0f)]
+    [InlineData(0u)]
+    [InlineData(0L)]
+    [InlineData((short)0)]
+    public async Task GetLatestResult_ErrorNotExactlyInt32_IsMalformedNotSuccess(object badError)
+    {
+        var response = await CallLatest(new List<object> { 1u, new ExtensionObject(ValidResult()), badError });
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+        Assert.False(response.IsSuccess);
+        Assert.Contains("Error", response.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task GetLatestResult_ExtraOutputs_IsMalformed()
+    {
+        var response = await CallLatest(new List<object> { 1u, new ExtensionObject(ValidResult()), 0, "extra" });
+        Assert.Equal(MethodResultStatus.MalformedResponse, response.Status);
+        Assert.Contains("exactly 3", response.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task GetResultById_ExtraOutputs_IsMalformed()
+    {
+        var mock = CreateSessionMock();
+        mock.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+            .ReturnsAsync(new List<object> { 1u, new ExtensionObject(ValidResult()), 0, 5 });
+        await using var rm = new ResultManagement(mock.Object);
+        Assert.Equal(MethodResultStatus.MalformedResponse, (await rm.GetResultByIdAsync("x", 5000)).Status);
     }
 }

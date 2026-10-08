@@ -12,42 +12,42 @@ namespace IJT_CSharp_Client.Tests.UnitTests;
 /// All tests use a mocked <see cref="IJoiningSystem"/>; no live OPC UA server is required.
 ///
 /// Covered operations:
-///   11  GetJoiningProcessList
-///   12  SelectJoiningProcess
-///   13  GetSelectedJoiningProgram
+///   11  GetJoiningProcessListAsync
+///   12  SelectJoiningProcessAsync
+///   13  GetSelectedJoiningProgramAsync
 /// </summary>
 public sealed class JoiningProcessManagementUnitTests
 {
-    // ── 11. GetJoiningProcessList ─────────────────────────────────────────────
+    // ── 11. GetJoiningProcessListAsync ─────────────────────────────────────────────
 
     [Fact]
-    public void GetJoiningProcessList_DefaultUri_CallsMethodOnce()
+    public async Task GetJoiningProcessList_DefaultUri_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetJoiningProcessList());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetJoiningProcessListAsync());
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetJoiningProcessList_WithSpecificUri_CallsMethodOnce()
+    public async Task GetJoiningProcessList_WithSpecificUri_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetJoiningProcessList("urn:tool:controller-1"));
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetJoiningProcessListAsync("urn:tool:controller-1"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
         Assert.NotNull(capturedArgs);
         Assert.Single(capturedArgs);
@@ -55,118 +55,118 @@ public sealed class JoiningProcessManagementUnitTests
     }
 
     [Fact]
-    public void GetJoiningProcessList_ReturnsEmptyList_LogsInfoWithoutThrow()
+    public async Task GetJoiningProcessList_ReturnsEmptyList_LogsInfoWithoutThrow()
     {
-        // When CallMethod returns empty list, the method logs "No output" and returns
+        // When CallMethodAsync returns empty list, the method logs "No output" and returns
         var session = MockSessionBuilder.Create(callMethodResult: new List<object>());
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetJoiningProcessList());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetJoiningProcessListAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetJoiningProcessList_ReturnsSomeOutputs_LogsWithoutThrow()
+    public async Task GetJoiningProcessList_ReturnsSomeOutputs_LogsWithoutThrow()
     {
         var session = MockSessionBuilder.Create(
             callMethodResult: new List<object> { "process-1", "process-2", 0 });
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetJoiningProcessList());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetJoiningProcessListAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetJoiningProcessList_NodeNotFound_DoesNotCallMethod()
+    public async Task GetJoiningProcessList_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetJoiningProcessList());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetJoiningProcessListAsync());
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void GetJoiningProcessList_OpcUaServiceException_HandledWithoutRethrow()
+    public async Task GetJoiningProcessList_OpcUaServiceException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadTimeout));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetJoiningProcessList());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetJoiningProcessListAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetJoiningProcessList_UnexpectedException_HandledWithoutRethrow()
+    public async Task GetJoiningProcessList_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("simulated"));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetJoiningProcessList());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetJoiningProcessListAsync());
 
         Assert.Null(ex);
     }
 
-    // ── 12. SelectJoiningProcess ──────────────────────────────────────────────
+    // ── 12. SelectJoiningProcessAsync ──────────────────────────────────────────────
 
     [Fact]
-    public void SelectJoiningProcess_WithValidId_CallsMethodOnce()
+    public async Task SelectJoiningProcess_WithValidId_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SelectJoiningProcess(
+        var ex = await Record.ExceptionAsync(async () => await jpm.SelectJoiningProcessAsync(
             "0952E9B4-05F6-4B43-B66C-B8027FBE966A",
             joiningProcessOriginId: "ORIGIN-SYS-1",
             selectionName: "TorqueProgram_4Steps",
             productInstanceUri: "www.atlascopco.com/32CBC18F-DE66-4341-A258-142A515502E0"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SelectJoiningProcess_WithEmptyId_CallsMethod()
+    public async Task SelectJoiningProcess_WithEmptyId_CallsMethod()
     {
         var session = MockSessionBuilder.Create();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SelectJoiningProcess(string.Empty));
+        var ex = await Record.ExceptionAsync(async () => await jpm.SelectJoiningProcessAsync(string.Empty));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SelectJoiningProcess_WithId_PassesExtensionObjectWithCorrectJoiningProcessId()
+    public async Task SelectJoiningProcess_WithId_PassesExtensionObjectWithCorrectJoiningProcessId()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        jpm.SelectJoiningProcess("JP-007");
+        await jpm.SelectJoiningProcessAsync("JP-007");
 
         Assert.NotNull(capturedArgs);
         Assert.Equal(2, capturedArgs.Length);
         Assert.Equal(string.Empty, capturedArgs[0]);  // productInstanceUri default
         var ext = Assert.IsType<ExtensionObject>(capturedArgs[1]);
-        var jpId = Assert.IsType<IJTBase.JoiningProcessIdentificationDataType>(ext.Body);
+        Assert.True(ext.TryGetValue(out IJTBase.JoiningProcessIdentificationDataType? jpId));
         Assert.Equal("JP-007", jpId.JoiningProcessId);
         Assert.True(
             (jpId.EncodingMask & (uint)IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessId) != 0,
@@ -175,45 +175,45 @@ public sealed class JoiningProcessManagementUnitTests
     }
 
     [Fact]
-    public void SelectJoiningProcess_WithAllOptionalParameters_CallsMethodOnce()
+    public async Task SelectJoiningProcess_WithAllOptionalParameters_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SelectJoiningProcess(
+        var ex = await Record.ExceptionAsync(async () => await jpm.SelectJoiningProcessAsync(
             "JP-001",
             joiningProcessOriginId: "ORIGIN-SYS-1",
             selectionName: "TorqueProgram_A",
             productInstanceUri: "urn:controller:001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SelectJoiningProcess_NodeNotFound_DoesNotCallMethod()
+    public async Task SelectJoiningProcess_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SelectJoiningProcess("JP-001"));
+        var ex = await Record.ExceptionAsync(async () => await jpm.SelectJoiningProcessAsync("JP-001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SelectJoiningProcess_OpcUaServiceException_HandledWithoutRethrow()
+    public async Task SelectJoiningProcess_OpcUaServiceException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadNodeIdUnknown));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SelectJoiningProcess(
+        var ex = await Record.ExceptionAsync(async () => await jpm.SelectJoiningProcessAsync(
             "JP-UNKNOWN",
             joiningProcessOriginId: "ORIGIN-SYS-UNKNOWN",
             selectionName: "UnknownProgram",
@@ -223,15 +223,15 @@ public sealed class JoiningProcessManagementUnitTests
     }
 
     [Fact]
-    public void SelectJoiningProcess_UnexpectedException_HandledWithoutRethrow()
+    public async Task SelectJoiningProcess_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new TimeoutException("RPC timed out"));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SelectJoiningProcess(
+        var ex = await Record.ExceptionAsync(async () => await jpm.SelectJoiningProcessAsync(
             "0952E9B4-05F6-4B43-B66C-B8027FBE966A",
             joiningProcessOriginId: "ORIGIN-SYS-1",
             selectionName: "TorqueProgram_4Steps",
@@ -241,117 +241,117 @@ public sealed class JoiningProcessManagementUnitTests
     }
 
     [Fact]
-    public void SelectJoiningProcess_WithLongSelectionName_DoesNotThrow()
+    public async Task SelectJoiningProcess_WithLongSelectionName_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
         using var jpm = new JoiningProcessManagement(session.Object);
         var longName = new string('N', 256);
 
-        var ex = Record.Exception(() =>
-            jpm.SelectJoiningProcess("JP-001", selectionName: longName));
+        var ex = await Record.ExceptionAsync(async () =>
+            await jpm.SelectJoiningProcessAsync("JP-001", selectionName: longName));
 
         Assert.Null(ex);
     }
 
-    // ── 13. GetSelectedJoiningProgram ─────────────────────────────────────────
+    // ── 13. GetSelectedJoiningProgramAsync ─────────────────────────────────────────
 
     [Fact]
-    public void GetSelectedJoiningProgram_DefaultUri_CallsMethodOnce()
+    public async Task GetSelectedJoiningProgram_DefaultUri_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetSelectedJoiningProgram());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetSelectedJoiningProgramAsync());
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetSelectedJoiningProgram_WithSpecificUri_CallsMethodOnce()
+    public async Task GetSelectedJoiningProgram_WithSpecificUri_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() =>
-            jpm.GetSelectedJoiningProgram("urn:controller:001"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await jpm.GetSelectedJoiningProgramAsync("urn:controller:001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetSelectedJoiningProgram_MethodNotFoundViaBrowse_FallsBackToTypeLevel()
+    public async Task GetSelectedJoiningProgram_MethodNotFoundViaBrowse_FallsBackToTypeLevel()
     {
-        // When BrowseChild for the method node returns Null, it should fall back to
+        // When BrowseChildAsync for the method node returns Null, it should fall back to
         // IjtBaseMethodId and still call the method if that is valid.
         var session = MockSessionBuilder.Create();
 
-        // BrowseChild for "JoiningProcessManagement" node → returns valid node
-        // BrowseChild for method by browse name → returns Null (method not browseable)
-        session.Setup(s => s.BrowseChild(
+        // BrowseChildAsync for "JoiningProcessManagement" node → returns valid node
+        // BrowseChildAsync for method by browse name → returns Null (method not browseable)
+        session.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(),
                 IJTBase.BrowseNames.GetSelectedJoiningProgram,
                 It.IsAny<ushort>(),
                 It.IsAny<Opc.Ua.NodeClass>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
 
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetSelectedJoiningProgram());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetSelectedJoiningProgramAsync());
 
         // Method should still be called via fallback IjtBaseMethodId
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetSelectedJoiningProgram_NodeNotFound_DoesNotCallMethod()
+    public async Task GetSelectedJoiningProgram_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetSelectedJoiningProgram());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetSelectedJoiningProgramAsync());
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void GetSelectedJoiningProgram_OpcUaServiceException_HandledWithoutRethrow()
+    public async Task GetSelectedJoiningProgram_OpcUaServiceException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadNotImplemented));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetSelectedJoiningProgram());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetSelectedJoiningProgramAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetSelectedJoiningProgram_UnexpectedException_HandledWithoutRethrow()
+    public async Task GetSelectedJoiningProgram_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("server error"));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.GetSelectedJoiningProgram());
+        var ex = await Record.ExceptionAsync(async () => await jpm.GetSelectedJoiningProgramAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Dispose_DoesNotThrow()
+    public async Task Dispose_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
         {
             using var jpm = new JoiningProcessManagement(session.Object);
         });
@@ -365,62 +365,62 @@ public sealed class JoiningProcessManagementUnitTests
 public sealed class JoiningProcessIdentificationEncodingMaskTests
 {
     [Fact]
-    public void SelectJoiningProcess_WithId_EncodingMaskIncludesJoiningProcessIdBit()
+    public async Task SelectJoiningProcess_WithId_EncodingMaskIncludesJoiningProcessIdBit()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        jpm.SelectJoiningProcess("JP-007");
+        await jpm.SelectJoiningProcessAsync("JP-007");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var jpId = Assert.IsType<IJTBase.JoiningProcessIdentificationDataType>(ext.Body);
+        Assert.True(ext.TryGetValue(out IJTBase.JoiningProcessIdentificationDataType? jpId));
         Assert.True(
             (jpId.EncodingMask & (uint)IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessId) != 0,
             "JoiningProcessId bit must be in EncodingMask or the server receives an empty struct");
     }
 
     [Fact]
-    public void SelectJoiningProcess_WithAllOptionalParams_AllBitsSet()
+    public async Task SelectJoiningProcess_WithAllOptionalParams_AllBitsSet()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        jpm.SelectJoiningProcess("JP-001",
+        await jpm.SelectJoiningProcessAsync("JP-001",
             joiningProcessOriginId: "ORIGIN-SYS",
             selectionName: "TorqueProgram_A");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var jpId = Assert.IsType<IJTBase.JoiningProcessIdentificationDataType>(ext.Body);
+        Assert.True(ext.TryGetValue(out IJTBase.JoiningProcessIdentificationDataType? jpId));
         Assert.True((jpId.EncodingMask & (uint)IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessId) != 0);
         Assert.True((jpId.EncodingMask & (uint)IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessOriginId) != 0);
         Assert.True((jpId.EncodingMask & (uint)IJTBase.JoiningProcessIdentificationDataTypeFields.SelectionName) != 0);
     }
 
     [Fact]
-    public void SelectJoiningProcess_WithEmptyOptionals_EmptyFieldsNotInMask()
+    public async Task SelectJoiningProcess_WithEmptyOptionals_EmptyFieldsNotInMask()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        jpm.SelectJoiningProcess("JP-001");
+        await jpm.SelectJoiningProcessAsync("JP-001");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var jpId = Assert.IsType<IJTBase.JoiningProcessIdentificationDataType>(ext.Body);
+        Assert.True(ext.TryGetValue(out IJTBase.JoiningProcessIdentificationDataType? jpId));
         Assert.True((jpId.EncodingMask & (uint)IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessId) != 0);
         Assert.True((jpId.EncodingMask & (uint)IJTBase.JoiningProcessIdentificationDataTypeFields.JoiningProcessOriginId) == 0u,
             "Empty JoiningProcessOriginId must not be encoded");
@@ -464,15 +464,15 @@ public sealed class JoiningProcessIdentificationEncodingMaskTests
     // -- Cache hit paths -------------------------------------------------------
 
     [Fact]
-    public void GetJoiningProcessList_CalledTwice_UsesCachedNodeId()
+    public async Task GetJoiningProcessList_CalledTwice_UsesCachedNodeId()
     {
         var session = MockSessionBuilder.Create();
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        jpm.GetJoiningProcessList();  // first call sets node cache
-        jpm.GetJoiningProcessList();  // second call uses cache
+        await jpm.GetJoiningProcessListAsync();  // first call sets node cache
+        await jpm.GetJoiningProcessListAsync();  // second call uses cache
 
-        session.Verify(s => s.BrowseChild(
+        session.Verify(s => s.BrowseChildAsync(
             It.IsAny<NodeId>(), It.IsAny<string>(),
             It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
     }
@@ -480,66 +480,66 @@ public sealed class JoiningProcessIdentificationEncodingMaskTests
     // -- Generic exception handlers for methods added since initial tests -------
 
     [Fact]
-    public void ResetJoiningProcess_GenericException_HandledWithoutRethrow()
+    public async Task ResetJoiningProcess_GenericException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+        session.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("reset error"));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.ResetJoiningProcess("JP-001", "uri:test", "ORIGIN-001"));
+        var ex = await Record.ExceptionAsync(async () => await jpm.ResetJoiningProcessAsync("JP-001", "uri:test", "ORIGIN-001"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void IncrementJoiningProcessCounter_GenericException_HandledWithoutRethrow()
+    public async Task IncrementJoiningProcessCounter_GenericException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+        session.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("increment error"));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.IncrementJoiningProcessCounter("uri:test", "JP-001"));
+        var ex = await Record.ExceptionAsync(async () => await jpm.IncrementJoiningProcessCounterAsync("uri:test", "JP-001"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void DecrementJoiningProcessCounter_GenericException_HandledWithoutRethrow()
+    public async Task DecrementJoiningProcessCounter_GenericException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+        session.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("decrement error"));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.DecrementJoiningProcessCounter("uri:test", "JP-001"));
+        var ex = await Record.ExceptionAsync(async () => await jpm.DecrementJoiningProcessCounterAsync("uri:test", "JP-001"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SetJoiningProcessCounter_GenericException_HandledWithoutRethrow()
+    public async Task SetJoiningProcessCounter_GenericException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+        session.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("counter error"));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SetJoiningProcessCounter("uri:test", "JP-001", 5u));
+        var ex = await Record.ExceptionAsync(async () => await jpm.SetJoiningProcessCounterAsync("uri:test", "JP-001", 5u));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SetJoiningProcessSize_GenericException_HandledWithoutRethrow()
+    public async Task SetJoiningProcessSize_GenericException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+        session.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("size error"));
         using var jpm = new JoiningProcessManagement(session.Object);
 
-        var ex = Record.Exception(() => jpm.SetJoiningProcessSize("uri:test", "JP-001", 100u));
+        var ex = await Record.ExceptionAsync(async () => await jpm.SetJoiningProcessSizeAsync("uri:test", "JP-001", 100u));
 
         Assert.Null(ex);
     }

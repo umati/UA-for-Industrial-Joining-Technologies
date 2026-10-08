@@ -13,13 +13,19 @@ namespace IJT_CSharp_Client.Tests.Helpers;
 /// </summary>
 public sealed class ExtensionObjectHelperTests
 {
+    private static T GetBody<T>(ExtensionObject extensionObject) where T : IEncodeable
+    {
+        Assert.True(extensionObject.TryGetValue(out T? body));
+        return Assert.IsType<T>(body);
+    }
+
     // ── MakeJoiningProcessId ──────────────────────────────────────────────────
 
     [Fact]
     public void MakeJoiningProcessId_WithId_BodyHasId()
     {
         var eo = ExtensionObjectHelper.MakeJoiningProcessId("JP-001");
-        var body = Assert.IsType<JoiningProcessIdentificationDataType>(eo.Body);
+        var body = GetBody<JoiningProcessIdentificationDataType>(eo);
         Assert.Equal("JP-001", body.JoiningProcessId);
     }
 
@@ -27,7 +33,7 @@ public sealed class ExtensionObjectHelperTests
     public void MakeJoiningProcessId_WithSelectionName_BodyHasSelectionName()
     {
         var eo = ExtensionObjectHelper.MakeJoiningProcessId("JP-002", selectionName: "M8x1.25");
-        var body = Assert.IsType<JoiningProcessIdentificationDataType>(eo.Body);
+        var body = GetBody<JoiningProcessIdentificationDataType>(eo);
         Assert.Equal("M8x1.25", body.SelectionName);
     }
 
@@ -35,7 +41,7 @@ public sealed class ExtensionObjectHelperTests
     public void MakeJoiningProcessId_WithOriginId_BodyHasOriginId()
     {
         var eo = ExtensionObjectHelper.MakeJoiningProcessId(null, originId: "SYS-A");
-        var body = Assert.IsType<JoiningProcessIdentificationDataType>(eo.Body);
+        var body = GetBody<JoiningProcessIdentificationDataType>(eo);
         Assert.Equal("SYS-A", body.JoiningProcessOriginId);
     }
 
@@ -43,14 +49,14 @@ public sealed class ExtensionObjectHelperTests
     public void MakeJoiningProcessId_AllNullArgs_ReturnsExtensionObject()
     {
         var eo = ExtensionObjectHelper.MakeJoiningProcessId(null);
-        Assert.NotNull(eo.Body);
+        Assert.True(eo.TryGetValue(out JoiningProcessIdentificationDataType? _));
     }
 
     [Fact]
     public void MakeJoiningProcessId_WithAllArgs_SetsEncodingMask()
     {
         var eo = ExtensionObjectHelper.MakeJoiningProcessId("JP-003", "Name", "Origin");
-        var body = Assert.IsType<JoiningProcessIdentificationDataType>(eo.Body);
+        var body = GetBody<JoiningProcessIdentificationDataType>(eo);
         Assert.NotEqual(0u, body.EncodingMask);
     }
 
@@ -60,7 +66,7 @@ public sealed class ExtensionObjectHelperTests
     public void MakeEntity_MinimalArgs_BodyHasEntityId()
     {
         var eo = ExtensionObjectHelper.MakeEntity("entity-1");
-        var body = Assert.IsType<EntityDataType>(eo.Body);
+        var body = GetBody<EntityDataType>(eo);
         Assert.Equal("entity-1", body.EntityId);
     }
 
@@ -68,7 +74,7 @@ public sealed class ExtensionObjectHelperTests
     public void MakeEntity_WithName_BodyHasName()
     {
         var eo = ExtensionObjectHelper.MakeEntity("e-2", name: "Part A");
-        var body = Assert.IsType<EntityDataType>(eo.Body);
+        var body = GetBody<EntityDataType>(eo);
         Assert.Equal("Part A", body.Name);
     }
 
@@ -76,7 +82,7 @@ public sealed class ExtensionObjectHelperTests
     public void MakeEntity_WithDescription_BodyHasDescription()
     {
         var eo = ExtensionObjectHelper.MakeEntity("e-3", description: "desc");
-        var body = Assert.IsType<EntityDataType>(eo.Body);
+        var body = GetBody<EntityDataType>(eo);
         Assert.Equal("desc", body.Description);
     }
 
@@ -84,7 +90,7 @@ public sealed class ExtensionObjectHelperTests
     public void MakeEntity_WithOriginId_BodyHasOriginId()
     {
         var eo = ExtensionObjectHelper.MakeEntity("e-4", originId: "ORG-1");
-        var body = Assert.IsType<EntityDataType>(eo.Body);
+        var body = GetBody<EntityDataType>(eo);
         Assert.Equal("ORG-1", body.EntityOriginId);
     }
 
@@ -92,7 +98,7 @@ public sealed class ExtensionObjectHelperTests
     public void MakeEntity_IsExternalFalse_SetsEncodingMask()
     {
         var eo = ExtensionObjectHelper.MakeEntity("e-5", isExternal: false);
-        var body = Assert.IsType<EntityDataType>(eo.Body);
+        var body = GetBody<EntityDataType>(eo);
         Assert.False(body.IsExternal);
         Assert.NotEqual(0u, body.EncodingMask);
     }
@@ -101,7 +107,7 @@ public sealed class ExtensionObjectHelperTests
     public void MakeEntity_WithEntityType_SetsType()
     {
         var eo = ExtensionObjectHelper.MakeEntity("e-6", entityType: 1);
-        var body = Assert.IsType<EntityDataType>(eo.Body);
+        var body = GetBody<EntityDataType>(eo);
         Assert.Equal((short)1, body.EntityType);
     }
 
@@ -129,7 +135,7 @@ public sealed class ExtensionObjectHelperTests
     public void MakeEntityArray_EachElementHasCorrectEntityId()
     {
         var arr = ExtensionObjectHelper.MakeEntityArray([("id-X", "name-X")]);
-        var body = Assert.IsType<EntityDataType>(arr[0].Body);
+        var body = GetBody<EntityDataType>(arr[0]);
         Assert.Equal("id-X", body.EntityId);
     }
 
@@ -266,17 +272,17 @@ public sealed class ExtensionObjectHelperTests
     // ── PrintOutputArguments ──────────────────────────────────────────────────
 
     [Fact]
-    public void PrintOutputArguments_EmptyList_DoesNotThrow()
+    public async Task PrintOutputArguments_EmptyList_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             ExtensionObjectHelper.PrintOutputArguments(new List<object>()));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintOutputArguments_WithValues_DoesNotThrow()
+    public async Task PrintOutputArguments_WithValues_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             ExtensionObjectHelper.PrintOutputArguments(new List<object>
             {
                 "result-1",

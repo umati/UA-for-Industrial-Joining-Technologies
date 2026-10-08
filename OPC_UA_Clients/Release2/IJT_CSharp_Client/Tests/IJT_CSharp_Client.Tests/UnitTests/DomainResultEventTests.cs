@@ -49,9 +49,10 @@ public sealed class DomainResultEventTests
         Assert.Single(element.FilterOperands.ToArray()!);
 
         var rawOperand = element.FilterOperands[0];
-        var operand = Assert.IsType<LiteralOperand>(rawOperand.Body);
+        Assert.True(rawOperand.TryGetValue(out LiteralOperand? operand));
         var expectedTypeId = new NodeId(MachineryResult.ObjectTypes.ResultReadyEventType, 6);
-        Assert.Equal(expectedTypeId, operand.Value.Value);
+        Assert.True(operand.Value.TryGetValue(out NodeId actualTypeId));
+        Assert.Equal(expectedTypeId, actualTypeId);
     }
 
     [Fact]

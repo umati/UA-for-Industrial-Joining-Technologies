@@ -158,7 +158,9 @@ public static class IjtResultFormatter
         }
         for (int i = 0; i < content.Count; i++)
         {
-            var raw = content[i].Value is ExtensionObject eo ? eo.Body : content[i].Value;
+            var raw = content[i].AsBoxedObject(Variant.BoxingBehavior.Legacy);
+            if (raw is ExtensionObject eo)
+                raw = ExtensionObjectHelper.GetBody(eo);
             if (raw is JoiningResultDataType jr)
             {
                 sb.AppendLine($"    --- ResultContent[{i}] (JoiningResultDataType) ---");

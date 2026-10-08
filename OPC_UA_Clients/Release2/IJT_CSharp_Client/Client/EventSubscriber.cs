@@ -18,7 +18,7 @@ namespace IJT_CSharp_Client.Client;
 /// and one for JoiningSystemEventType.
 /// </para>
 /// </summary>
-public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Events.IResultEventReceiver
+public sealed class EventSubscriber : IJT_CSharp_Client.Domain.Events.IResultEventReceiver
 {
     private readonly ILogger<EventSubscriber> _log = IjtLog.For<EventSubscriber>();
     private readonly IJoiningSystem _s;
@@ -89,7 +89,7 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
 
     /// <summary>
     /// Creates an EventSubscriber backed by <paramref name="session"/>.
-    /// Call <see cref="Subscribe"/> to start receiving events.
+    /// Call <see cref="SubscribeAsync"/> to start receiving events.
     /// </summary>
     public EventSubscriber(IJoiningSystem session) => _s = session;
 
@@ -100,7 +100,7 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
     /// Two monitored items are used - one for result events, one for system events.
     /// Does nothing if already subscribed.
     /// </summary>
-    public void Subscribe()
+    public async Task SubscribeAsync()
     {
         if (_eventSubscription != null)
         {
@@ -148,36 +148,44 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
         _eventSubscription.AddItem(resultItem);
         _eventSubscription.AddItem(sysItem);
         _s.Session.AddSubscription(_eventSubscription);
-        _eventSubscription.Create();
+        await _eventSubscription.CreateAsync().ConfigureAwait(false);
 
         _log.LogInformation("OK Event subscription created (SubId={SubId}).", _eventSubscription.Id);
     }
 
     /// <summary>Removes and disposes the event subscription.</summary>
-    public void Unsubscribe()
+    public async Task UnsubscribeAsync()
     {
-        if (_eventSubscription == null) return;
+        var subscription = _eventSubscription;
+        if (subscription == null) return;
+        _eventSubscription = null;
         try
         {
-            _eventSubscription.Delete(silent: true);
-            _s.Session.RemoveSubscription(_eventSubscription);
+            await subscription.DeleteAsync(silent: true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _log.LogWarning(ex, "WARN Unsubscribe warning");
         }
+        try
+        {
+            await _s.Session.RemoveSubscriptionAsync(subscription).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "WARN Removing the event subscription from the session failed");
+        }
         finally
         {
-            _eventSubscription?.Dispose();
-            _eventSubscription = null;
+            subscription.Dispose();
             _log.LogInformation("OK Event subscription removed.");
         }
     }
 
     /// <inheritdoc/>
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        Unsubscribe();
+        await UnsubscribeAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
     }
 
@@ -190,7 +198,7 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
     {
         var mrNs = _s.MachineryResultNsIdx;
 
-        var resultReadyTypeId = new NodeId(UAModel.MachineryResult.ObjectTypes.ResultReadyEventType, mrNs);
+        var resultReadyTypeId = new NodeId(MachineryResult.ObjectTypes.ResultReadyEventType, mrNs);
 
         var selectClauses = new List<SimpleAttributeOperand>
         {
@@ -222,7 +230,7 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
     internal EventFilter BuildJoiningSystemEventFilter()
     {
         var ijtNs = _s.IjtBaseNsIdx;
-        var sysTypeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemEventType, ijtNs);
+        var sysTypeId = new NodeId(IJTBase.ObjectTypes.JoiningSystemEventType, ijtNs);
 
         var selectClauses = new List<SimpleAttributeOperand>
         {
@@ -273,7 +281,7 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
             ResultDataType? result = null;
             var rawResult = map.GetValueOrDefault("Result");
             if (rawResult is ExtensionObject eo)
-                result = eo.Body as ResultDataType;
+                result = ExtensionObjectHelper.TryDecode<ResultDataType>(eo);
             else
                 result = rawResult as ResultDataType;
 
@@ -377,7 +385,7 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
         var map = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         int count = Math.Min(fields.Count, names.Length);
         for (int i = 0; i < count; i++)
-            map[names[i]] = fields[i].Value;
+            map[names[i]] = fields[i].AsBoxedObject(Variant.BoxingBehavior.Legacy);
         return map;
     }
 
@@ -395,7 +403,7 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
     internal static DateTime AsDateTime(Dictionary<string, object?> map, string key)
     {
         if (!map.TryGetValue(key, out var val) || val is null) return DateTime.MinValue;
-        if (val is Variant v) val = v.Value;
+        if (val is Variant v) val = v.AsBoxedObject(Variant.BoxingBehavior.Legacy);
         if (val is DateTime dt) return dt;
         if (val is DateTimeUtc dtc) return dtc.ToDateTime();
         if (val is DateTimeOffset dto) return dto.UtcDateTime;
@@ -409,27 +417,28 @@ public sealed class EventSubscriber : IDisposable, IJT_CSharp_Client.Domain.Even
     /// Returns null if the field is absent or cannot be decoded.
     /// </summary>
     internal static T[]? AsExtensionObjectArray<T>(Dictionary<string, object?> map, string key)
-        where T : class
+        where T : class, IEncodeable
     {
         if (!map.TryGetValue(key, out var raw) || raw is null) return null;
 
         // Unwrap Variant
-        if (raw is Variant v) raw = v.Value;
+        if (raw is Variant v) raw = v.AsBoxedObject(Variant.BoxingBehavior.Legacy);
         if (raw is null) return null;
 
         // Array of ExtensionObject
         if (raw is ExtensionObject[] eoArr)
         {
             var result = eoArr
-                .Select(eo => eo.Body as T)
+                .Select(eo => ExtensionObjectHelper.TryDecode<T>(eo))
                 .OfType<T>()
                 .ToArray();
             return result.Length > 0 ? result : null;
         }
 
         // Single ExtensionObject
-        if (raw is ExtensionObject single && single.Body is T t)
-            return [t];
+        if (raw is ExtensionObject single &&
+            ExtensionObjectHelper.TryDecode<T>(single) is { } decoded)
+            return [decoded];
 
         // Already typed array
         if (raw is T[] typedArr)

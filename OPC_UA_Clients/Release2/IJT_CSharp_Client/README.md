@@ -8,14 +8,15 @@ C#/.NET reference client for connecting to an OPC UA IJT server, featuring an in
 
 ## Architecture & SDK Support
 
-The client is built on **OPC Foundation .NET SDK 2.0.0** with compile-time Roslyn Source Generators for all companion specifications (`NodeSet2.xml`), while providing an SDK-neutral domain layer (`DomainResultEnvelope`, `IResultEventReceiver`, `IResultVariableReceiver`, `IResultMethodClient`).
+The active console client targets **OPC Foundation .NET SDK 2.0.0** on .NET 10, using compile-time Roslyn source generation for companion specifications (`NodeSet2.xml`) and an SDK-neutral domain layer (`DomainResultEnvelope`, `IResultEventReceiver`, `IResultVariableReceiver`, `IResultMethodClient`).
 
-- **Primary Profile (SDK 2.0):** Modern .NET (`net8.0`, `net9.0`, `net10.0`) with compile-time Roslyn source generation from OPC UA NodeSet2 XML files.
-- **Legacy Compatibility Profile (SDK 1.5):** Dual-path multi-targeting (`net48`, `netstandard2.1`, `net6.0`, `net8.0`, `net9.0`) using committed pre-compiled classes for integrations requiring SDK 1.5 (e.g. Softing SDK).
+- **Active client:** The application and its SDK integration use SDK 2.0; the client is not dual-targeted against SDK 1.5.
+- **Previous SDK 1.5 client example:** Use the immutable [pre-migration snapshot at commit `02386911ef546623a94520d5d819fe75a5fcb137`](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/02386911ef546623a94520d5d819fe75a5fcb137/OPC_UA_Clients/Release2/IJT_CSharp_Client) rather than maintaining duplicate SDK-specific client code.
+- **Legacy model-library profile:** `OpcUaClientOnly=true` retains the model-library compatibility build using committed pre-compiled classes. This is not an SDK 1.5 build of the active console client.
 
 ## Prerequisites
 
-- .NET SDK matching the project target framework (.NET 8.0, 9.0, or 10.0)
+- .NET SDK 10.0
 - Python 3.14+ for the test runner
 - A running OPC UA IJT server, such as the [IJT Server Simulator](../../../OPC_UA_Servers/Release2)
 
@@ -30,7 +31,7 @@ dotnet run
 # Build solution in Release mode
 dotnet build IJT_CSharp_Client.sln --configuration Release -warnaserror
 
-# Build legacy SDK 1.5 compatibility profile
+# Build SDK 1.5-compatible model library profile (not the console client)
 dotnet build Types/UAModel.IJTBase/UAModel.IJTBase.csproj -p:OpcUaClientOnly=true
 ```
 

@@ -24,18 +24,18 @@ public sealed class JoiningProcessManagementTests
     {
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(JpmNodeId);
+            .ReturnsAsync(JpmNodeId);
         mock.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>())).Returns(MethodId);
         mock.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>())).Returns(JpmNodeId);
-        mock.Setup(s => s.BrowseMethod(
+        mock.Setup(s => s.BrowseMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(MethodId);
-        mock.Setup(s => s.CallMethod(
+            .ReturnsAsync(MethodId);
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         return mock;
     }
 
@@ -43,123 +43,123 @@ public sealed class JoiningProcessManagementTests
     {
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(NodeId.Null);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
         mock.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>())).Returns(NodeId.Null);
         mock.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>())).Returns(NodeId.Null);
         return mock;
     }
 
-    // ── GetJoiningProcessList ─────────────────────────────────────────────────
+    // ── GetJoiningProcessListAsync ─────────────────────────────────────────────────
 
     [Fact]
-    public void GetJoiningProcessList_WhenNodesFound_CallsCallMethod()
+    public async Task GetJoiningProcessList_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new JoiningProcessManagement(mock.Object).GetJoiningProcessList();
+        await new JoiningProcessManagement(mock.Object).GetJoiningProcessListAsync();
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetJoiningProcessList_WithProductUri_CallsCallMethod()
+    public async Task GetJoiningProcessList_WithProductUri_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new JoiningProcessManagement(mock.Object).GetJoiningProcessList("urn:product");
+        await new JoiningProcessManagement(mock.Object).GetJoiningProcessListAsync("urn:product");
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetJoiningProcessList_WhenNodesNotFound_DoesNotCallMethod_AndDoesNotThrow()
+    public async Task GetJoiningProcessList_WhenNodesNotFound_DoesNotCallMethod_AndDoesNotThrow()
     {
         var mock = NullNodeMock();
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).GetJoiningProcessList());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).GetJoiningProcessListAsync());
 
         Assert.Null(ex);
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
-    // ── SelectJoiningProcess ──────────────────────────────────────────────────
+    // ── SelectJoiningProcessAsync ──────────────────────────────────────────────────
 
     [Fact]
     public void SelectJoiningProcess_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
         new JoiningProcessManagement(mock.Object)
-            .SelectJoiningProcess("JP-001", "origin", "selection", "urn:product");
+            .SelectJoiningProcessAsync("JP-001", "origin", "selection", "urn:product");
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SelectJoiningProcess_WithDefaultOptionalArgs_DoesNotThrow()
+    public async Task SelectJoiningProcess_WithDefaultOptionalArgs_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(HappyPathMock().Object).SelectJoiningProcess("JP-001"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(HappyPathMock().Object).SelectJoiningProcessAsync("JP-001"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SelectJoiningProcess_WhenNodesNotFound_DoesNotThrow()
+    public async Task SelectJoiningProcess_WhenNodesNotFound_DoesNotThrow()
     {
         var mock = NullNodeMock();
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).SelectJoiningProcess("JP-001"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).SelectJoiningProcessAsync("JP-001"));
         Assert.Null(ex);
     }
 
-    // ── GetSelectedJoiningProgram ─────────────────────────────────────────────
+    // ── GetSelectedJoiningProgramAsync ─────────────────────────────────────────────
 
     [Fact]
-    public void GetSelectedJoiningProgram_WhenNodesFound_CallsCallMethod()
+    public async Task GetSelectedJoiningProgram_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgram();
+        await new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgramAsync();
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetSelectedJoiningProgram_WithProductUri_DoesNotThrow()
+    public async Task GetSelectedJoiningProgram_WithProductUri_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(HappyPathMock().Object)
-                .GetSelectedJoiningProgram("urn:product"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(HappyPathMock().Object)
+                .GetSelectedJoiningProgramAsync("urn:product"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetSelectedJoiningProgram_WhenNodesNotFound_DoesNotThrow()
+    public async Task GetSelectedJoiningProgram_WhenNodesNotFound_DoesNotThrow()
     {
         var mock = NullNodeMock();
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgram());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgramAsync());
         Assert.Null(ex);
     }
 
-    // ── Caching: second call to GetJoiningProcessList reuses cached node ───────
+    // ── Caching: second call to GetJoiningProcessListAsync reuses cached node ───────
 
     [Fact]
-    public void GetJoiningProcessList_CalledTwice_BrowseChildOnlyCalledOnce()
+    public async Task GetJoiningProcessList_CalledTwice_BrowseChildOnlyCalledOnce()
     {
         // The JPM node is cached after first lookup —
         // GetJpmNode checks `_jpmNodeId is not null && !IsNullNodeId` before browsing.
         var mock = HappyPathMock();
         var jpm = new JoiningProcessManagement(mock.Object);
-        jpm.GetJoiningProcessList();
-        jpm.GetJoiningProcessList();
+        await jpm.GetJoiningProcessListAsync();
+        await jpm.GetJoiningProcessListAsync();
 
-        // BrowseChild for the JPM node itself should only be called once (cached afterwards)
-        mock.Verify(s => s.BrowseChild(
+        // BrowseChildAsync for the JPM node itself should only be called once (cached afterwards)
+        mock.Verify(s => s.BrowseChildAsync(
             JoiningSystemId, It.IsAny<string>(), It.IsAny<ushort>(), It.IsAny<NodeClass>()),
             Times.Once);
     }
@@ -167,9 +167,9 @@ public sealed class JoiningProcessManagementTests
     // ── Dispose ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Dispose_DoesNotThrow()
+    public async Task Dispose_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             new JoiningProcessManagement(HappyPathMock().Object).Dispose());
         Assert.Null(ex);
     }
@@ -177,518 +177,518 @@ public sealed class JoiningProcessManagementTests
     // ── Exception handling ────────────────────────────────────────────────────
 
     [Fact]
-    public void GetJoiningProcessList_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    public async Task GetJoiningProcessList_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).GetJoiningProcessList());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).GetJoiningProcessListAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetJoiningProcessList_WhenCallMethodThrowsException_DoesNotThrow()
+    public async Task GetJoiningProcessList_WhenCallMethodThrowsException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).GetJoiningProcessList());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).GetJoiningProcessListAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SelectJoiningProcess_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    public async Task SelectJoiningProcess_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).SelectJoiningProcess("JP-ERR"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).SelectJoiningProcessAsync("JP-ERR"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SelectJoiningProcess_WhenCallMethodThrowsException_DoesNotThrow()
+    public async Task SelectJoiningProcess_WhenCallMethodThrowsException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).SelectJoiningProcess("JP-ERR"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).SelectJoiningProcessAsync("JP-ERR"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetSelectedJoiningProgram_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
+    public async Task GetSelectedJoiningProgram_WhenCallMethodThrowsServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgram());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgramAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetSelectedJoiningProgram_WhenCallMethodThrowsException_DoesNotThrow()
+    public async Task GetSelectedJoiningProgram_WhenCallMethodThrowsException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgram());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgramAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetJoiningProcessList_WhenOutputsNonEmpty_PrintsMethodOutputs()
+    public async Task GetJoiningProcessList_WhenOutputsNonEmpty_PrintsMethodOutputs()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object> { "output-item-1" });
+            .ReturnsAsync(new List<object> { "output-item-1" });
 
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).GetJoiningProcessList());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).GetJoiningProcessListAsync());
         Assert.Null(ex);
     }
 
     // ── InvalidateNodeCache ───────────────────────────────────────────────────
 
     [Fact]
-    public void InvalidateNodeCache_CausesReBrowseOnNextCall()
+    public async Task InvalidateNodeCache_CausesReBrowseOnNextCall()
     {
         var mock = HappyPathMock();
         var jpm = new JoiningProcessManagement(mock.Object);
-        jpm.GetJoiningProcessList();         // caches JPM node
+        await jpm.GetJoiningProcessListAsync();         // caches JPM node
         jpm.InvalidateNodeCache();
-        jpm.GetJoiningProcessList();         // should re-browse
+        await jpm.GetJoiningProcessListAsync();         // should re-browse
 
-        // BrowseChild for the JoiningSystem's JPM child is called at least twice
-        mock.Verify(s => s.BrowseChild(
+        // BrowseChildAsync for the JoiningSystem's JPM child is called at least twice
+        mock.Verify(s => s.BrowseChildAsync(
             JoiningSystemId, It.IsAny<string>(), It.IsAny<ushort>(), It.IsAny<NodeClass>()),
             Times.AtLeast(2));
     }
 
-    // ── StartJoiningProcess ───────────────────────────────────────────────────
+    // ── StartJoiningProcessAsync ───────────────────────────────────────────────────
 
     [Fact]
     public void StartJoiningProcess_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
         new JoiningProcessManagement(mock.Object)
-            .StartJoiningProcess("urn:product", "JP-001");
+            .StartJoiningProcessAsync("urn:product", "JP-001");
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void StartJoiningProcess_WithEntities_DoesNotThrow()
+    public async Task StartJoiningProcess_WithEntities_DoesNotThrow()
     {
         var entities = new List<IJTBase.EntityDataType>
         {
             new IJTBase.EntityDataType { EntityId = "e1", EntityType = 27 }
         };
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(HappyPathMock().Object)
-                .StartJoiningProcess("urn:product", "JP-001", "origin", entities));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(HappyPathMock().Object)
+                .StartJoiningProcessAsync("urn:product", "JP-001", "origin", entities));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void StartJoiningProcess_WhenNodesNotFound_DoesNotThrow()
+    public async Task StartJoiningProcess_WhenNodesNotFound_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(NullNodeMock().Object)
-                .StartJoiningProcess("urn:product", "JP-001"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(NullNodeMock().Object)
+                .StartJoiningProcessAsync("urn:product", "JP-001"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void StartJoiningProcess_WhenCallMethodThrows_DoesNotThrow()
+    public async Task StartJoiningProcess_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).StartJoiningProcess("urn:product", "JP-ERR"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).StartJoiningProcessAsync("urn:product", "JP-ERR"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void StartJoiningProcess_WhenCallMethodThrowsGeneral_DoesNotThrow()
+    public async Task StartJoiningProcess_WhenCallMethodThrowsGeneral_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).StartJoiningProcess("urn:product", "JP-ERR"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).StartJoiningProcessAsync("urn:product", "JP-ERR"));
         Assert.Null(ex);
     }
 
-    // ── AbortJoiningProcess ───────────────────────────────────────────────────
+    // ── AbortJoiningProcessAsync ───────────────────────────────────────────────────
 
     [Fact]
     public void AbortJoiningProcess_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
         new JoiningProcessManagement(mock.Object)
-            .AbortJoiningProcess("urn:product", "JP-001", "origin", "abort msg");
+            .AbortJoiningProcessAsync("urn:product", "JP-001", "origin", "abort msg");
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void AbortJoiningProcess_WhenNodesNotFound_DoesNotThrow()
+    public async Task AbortJoiningProcess_WhenNodesNotFound_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(NullNodeMock().Object)
-                .AbortJoiningProcess("urn:product", "JP-001"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(NullNodeMock().Object)
+                .AbortJoiningProcessAsync("urn:product", "JP-001"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void AbortJoiningProcess_WhenCallMethodThrows_DoesNotThrow()
+    public async Task AbortJoiningProcess_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).AbortJoiningProcess("urn:product", "JP-ERR"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).AbortJoiningProcessAsync("urn:product", "JP-ERR"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void AbortJoiningProcess_WhenCallMethodThrowsGeneral_DoesNotThrow()
+    public async Task AbortJoiningProcess_WhenCallMethodThrowsGeneral_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).AbortJoiningProcess("urn:product", "JP-ERR"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).AbortJoiningProcessAsync("urn:product", "JP-ERR"));
         Assert.Null(ex);
     }
 
-    // ── DeselectJoiningProcess ────────────────────────────────────────────────
+    // ── DeselectJoiningProcessAsync ────────────────────────────────────────────────
 
     [Fact]
-    public void DeselectJoiningProcess_WhenNodesFound_CallsCallMethod()
+    public async Task DeselectJoiningProcess_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new JoiningProcessManagement(mock.Object).DeselectJoiningProcess("urn:product");
+        await new JoiningProcessManagement(mock.Object).DeselectJoiningProcessAsync("urn:product");
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void DeselectJoiningProcess_WhenNodesNotFound_DoesNotThrow()
+    public async Task DeselectJoiningProcess_WhenNodesNotFound_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(NullNodeMock().Object).DeselectJoiningProcess());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(NullNodeMock().Object).DeselectJoiningProcessAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void DeselectJoiningProcess_WhenCallMethodThrows_DoesNotThrow()
+    public async Task DeselectJoiningProcess_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).DeselectJoiningProcess());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).DeselectJoiningProcessAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void DeselectJoiningProcess_WhenCallMethodThrowsGeneral_DoesNotThrow()
+    public async Task DeselectJoiningProcess_WhenCallMethodThrowsGeneral_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).DeselectJoiningProcess());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).DeselectJoiningProcessAsync());
         Assert.Null(ex);
     }
 
-    // ── ResetJoiningProcess ───────────────────────────────────────────────────
+    // ── ResetJoiningProcessAsync ───────────────────────────────────────────────────
 
     [Fact]
     public void ResetJoiningProcess_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
         new JoiningProcessManagement(mock.Object)
-            .ResetJoiningProcess("urn:product", "JP-001");
+            .ResetJoiningProcessAsync("urn:product", "JP-001");
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void ResetJoiningProcess_WhenNodesNotFound_DoesNotThrow()
+    public async Task ResetJoiningProcess_WhenNodesNotFound_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(NullNodeMock().Object)
-                .ResetJoiningProcess("urn:product", "JP-001"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(NullNodeMock().Object)
+                .ResetJoiningProcessAsync("urn:product", "JP-001"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ResetJoiningProcess_WhenCallMethodThrows_DoesNotThrow()
+    public async Task ResetJoiningProcess_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).ResetJoiningProcess("urn:product", "JP-ERR"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).ResetJoiningProcessAsync("urn:product", "JP-ERR"));
         Assert.Null(ex);
     }
 
-    // ── StartSelectedJoining ──────────────────────────────────────────────────
+    // ── StartSelectedJoiningAsync ──────────────────────────────────────────────────
 
     [Fact]
     public void StartSelectedJoining_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
         new JoiningProcessManagement(mock.Object)
-            .StartSelectedJoining("urn:tool", deselectAfterJoining: true);
+            .StartSelectedJoiningAsync("urn:tool", deselectAfterJoining: true);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void StartSelectedJoining_WhenNodesNotFound_DoesNotThrow()
+    public async Task StartSelectedJoining_WhenNodesNotFound_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(NullNodeMock().Object)
-                .StartSelectedJoining("urn:tool"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(NullNodeMock().Object)
+                .StartSelectedJoiningAsync("urn:tool"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void StartSelectedJoining_WhenCallMethodThrows_DoesNotThrow()
+    public async Task StartSelectedJoining_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).StartSelectedJoining("urn:tool"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).StartSelectedJoiningAsync("urn:tool"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void StartSelectedJoining_WhenCallMethodThrowsGeneral_DoesNotThrow()
+    public async Task StartSelectedJoining_WhenCallMethodThrowsGeneral_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).StartSelectedJoining("urn:tool"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).StartSelectedJoiningAsync("urn:tool"));
         Assert.Null(ex);
     }
 
-    // ── IncrementJoiningProcessCounter ────────────────────────────────────────
+    // ── IncrementJoiningProcessCounterAsync ────────────────────────────────────────
 
     [Fact]
     public void IncrementJoiningProcessCounter_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
         new JoiningProcessManagement(mock.Object)
-            .IncrementJoiningProcessCounter("urn:product", "JP-001", 2u);
+            .IncrementJoiningProcessCounterAsync("urn:product", "JP-001", 2u);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void IncrementJoiningProcessCounter_WhenNodesNotFound_DoesNotThrow()
+    public async Task IncrementJoiningProcessCounter_WhenNodesNotFound_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(NullNodeMock().Object)
-                .IncrementJoiningProcessCounter("urn:product", "JP-001"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(NullNodeMock().Object)
+                .IncrementJoiningProcessCounterAsync("urn:product", "JP-001"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void IncrementJoiningProcessCounter_WhenCallMethodThrows_DoesNotThrow()
+    public async Task IncrementJoiningProcessCounter_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object)
-                .IncrementJoiningProcessCounter("urn:product", "JP-ERR"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object)
+                .IncrementJoiningProcessCounterAsync("urn:product", "JP-ERR"));
         Assert.Null(ex);
     }
 
-    // ── DecrementJoiningProcessCounter ────────────────────────────────────────
+    // ── DecrementJoiningProcessCounterAsync ────────────────────────────────────────
 
     [Fact]
-    public void DecrementJoiningProcessCounter_WhenNodesFound_CallsCallMethod()
+    public async Task DecrementJoiningProcessCounter_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new JoiningProcessManagement(mock.Object)
-            .DecrementJoiningProcessCounter("urn:product", "JP-001");
+        await new JoiningProcessManagement(mock.Object)
+            .DecrementJoiningProcessCounterAsync("urn:product", "JP-001");
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void DecrementJoiningProcessCounter_WhenNodesNotFound_DoesNotThrow()
+    public async Task DecrementJoiningProcessCounter_WhenNodesNotFound_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(NullNodeMock().Object)
-                .DecrementJoiningProcessCounter("urn:product", "JP-001"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(NullNodeMock().Object)
+                .DecrementJoiningProcessCounterAsync("urn:product", "JP-001"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void DecrementJoiningProcessCounter_WhenCallMethodThrows_DoesNotThrow()
+    public async Task DecrementJoiningProcessCounter_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object)
-                .DecrementJoiningProcessCounter("urn:product", "JP-ERR"));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object)
+                .DecrementJoiningProcessCounterAsync("urn:product", "JP-ERR"));
         Assert.Null(ex);
     }
 
-    // ── SetJoiningProcessCounter ──────────────────────────────────────────────
+    // ── SetJoiningProcessCounterAsync ──────────────────────────────────────────────
 
     [Fact]
-    public void SetJoiningProcessCounter_WhenNodesFound_CallsCallMethod()
+    public async Task SetJoiningProcessCounter_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new JoiningProcessManagement(mock.Object)
-            .SetJoiningProcessCounter("urn:product", "JP-001", 5u);
+        await new JoiningProcessManagement(mock.Object)
+            .SetJoiningProcessCounterAsync("urn:product", "JP-001", 5u);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SetJoiningProcessCounter_WhenNodesNotFound_DoesNotThrow()
+    public async Task SetJoiningProcessCounter_WhenNodesNotFound_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(NullNodeMock().Object)
-                .SetJoiningProcessCounter("urn:product", "JP-001", 3u));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(NullNodeMock().Object)
+                .SetJoiningProcessCounterAsync("urn:product", "JP-001", 3u));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SetJoiningProcessCounter_WhenCallMethodThrows_DoesNotThrow()
+    public async Task SetJoiningProcessCounter_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object)
-                .SetJoiningProcessCounter("urn:product", "JP-ERR", 1u));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object)
+                .SetJoiningProcessCounterAsync("urn:product", "JP-ERR", 1u));
         Assert.Null(ex);
     }
 
-    // ── SetJoiningProcessSize ─────────────────────────────────────────────────
+    // ── SetJoiningProcessSizeAsync ─────────────────────────────────────────────────
 
     [Fact]
-    public void SetJoiningProcessSize_WhenNodesFound_CallsCallMethod()
+    public async Task SetJoiningProcessSize_WhenNodesFound_CallsCallMethod()
     {
         var mock = HappyPathMock();
-        new JoiningProcessManagement(mock.Object)
-            .SetJoiningProcessSize("urn:product", "JP-001", 100u);
+        await new JoiningProcessManagement(mock.Object)
+            .SetJoiningProcessSizeAsync("urn:product", "JP-001", 100u);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SetJoiningProcessSize_WhenNodesNotFound_DoesNotThrow()
+    public async Task SetJoiningProcessSize_WhenNodesNotFound_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(NullNodeMock().Object)
-                .SetJoiningProcessSize("urn:product", "JP-001", 50u));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(NullNodeMock().Object)
+                .SetJoiningProcessSizeAsync("urn:product", "JP-001", 50u));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SetJoiningProcessSize_WhenCallMethodThrows_DoesNotThrow()
+    public async Task SetJoiningProcessSize_WhenCallMethodThrows_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object)
-                .SetJoiningProcessSize("urn:product", "JP-ERR", 10u));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object)
+                .SetJoiningProcessSizeAsync("urn:product", "JP-ERR", 10u));
         Assert.Null(ex);
     }
 
     // ── FallbackToTypeNode path ───────────────────────────────────────────────
 
     [Fact]
-    public void GetJoiningProcessList_WhenBrowseFails_FallsBackToTypeNodeId()
+    public async Task GetJoiningProcessList_WhenBrowseFails_FallsBackToTypeNodeId()
     {
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
         mock.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>())).Returns(JpmNodeId);
-        mock.Setup(s => s.BrowseMethod(
+        mock.Setup(s => s.BrowseMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(MethodId);
-        mock.Setup(s => s.CallMethod(
+            .ReturnsAsync(MethodId);
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
 
-        new JoiningProcessManagement(mock.Object).GetJoiningProcessList();
+        await new JoiningProcessManagement(mock.Object).GetJoiningProcessListAsync();
 
         mock.Verify(s => s.IjtBaseObjectId(It.IsAny<uint>()), Times.AtLeastOnce);
     }
 
-    // ── GetSelectedJoiningProgram with multi-item output ─────────────────────
+    // ── GetSelectedJoiningProgramAsync with multi-item output ─────────────────────
 
     [Fact]
-    public void GetSelectedJoiningProgram_WithOutputs_DoesNotThrow()
+    public async Task GetSelectedJoiningProgram_WithOutputs_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object> { "program-data", 0, "OK" });
+            .ReturnsAsync(new List<object> { "program-data", 0, "OK" });
 
-        var ex = Record.Exception(() =>
-            new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgram());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new JoiningProcessManagement(mock.Object).GetSelectedJoiningProgramAsync());
         Assert.Null(ex);
     }
 }

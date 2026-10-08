@@ -7,47 +7,6 @@ using Opc.Ua.Client;
 namespace IJT_CSharp_Client.Helpers;
 
 /// <summary>
-/// Compatibility extensions for OPC UA types migrating from SDK 1.5 to 2.0.
-/// </summary>
-public static class AddressSpaceExtensions
-{
-    /// <summary>
-    /// Returns true if the node ID is null or equivalent to NodeId.Null.
-    /// Replaces the removed NodeId.IsNullNodeId property from SDK 1.5.
-    /// </summary>
-    public static bool IsNullNodeId(this NodeId nodeId) => nodeId.IsNull;
-
-    /// <summary>
-    /// Returns true if the nullable node ID is null or equivalent to NodeId.Null.
-    /// </summary>
-    public static bool IsNullNodeId(this NodeId? nodeId) => !nodeId.HasValue || nodeId.Value.IsNull;
-
-    /// <summary>
-    /// Synchronously reads the value of a single variable node (SDK 2.0 migration helper).
-    /// </summary>
-    public static DataValue ReadValue(this ISession session, NodeId nodeId)
-        => session.ReadValueAsync(nodeId).GetAwaiter().GetResult();
-
-    /// <summary>
-    /// Synchronously creates a subscription on the server (SDK 2.0 migration helper).
-    /// </summary>
-    public static void Create(this Subscription subscription)
-        => subscription.CreateAsync().GetAwaiter().GetResult();
-
-    /// <summary>
-    /// Synchronously deletes a subscription on the server (SDK 2.0 migration helper).
-    /// </summary>
-    public static void Delete(this Subscription subscription, bool silent = false)
-        => subscription.DeleteAsync(silent).GetAwaiter().GetResult();
-
-    /// <summary>
-    /// Removes a subscription from the concrete session if applicable (SDK 2.0 migration helper).
-    /// </summary>
-    public static bool RemoveSubscription(this ISession session, Subscription subscription)
-        => session.RemoveSubscriptionAsync(subscription).GetAwaiter().GetResult();
-}
-
-/// <summary>
 /// Discovers and caches IJT-specific nodes in the server address space.
 /// Static helper methods are thread-safe; instance caching members are not thread-safe
 /// and are intended for single-threaded connect/setup scenarios.
@@ -64,14 +23,15 @@ public sealed class AddressSpaceHelper
     /// Browses Objects folder (and one level deeper) for the first node whose
     /// TypeDefinition is JoiningSystemType (NodeId 1005, ijtBaseNs). Caches result.
     /// </summary>
-    public NodeId FindJoiningSystemAsync(ISession session, ushort ijtBaseNsIdx)
+    public async Task<NodeId> FindJoiningSystemAsync(ISession session, ushort ijtBaseNsIdx)
     {
-        if (!_cachedJoiningSystemId.IsNullNodeId())
+        if (!_cachedJoiningSystemId.IsNull)
             return _cachedJoiningSystemId;
 
-        var joiningSystemTypeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, ijtBaseNsIdx);
+        var joiningSystemTypeId = new NodeId(IJTBase.ObjectTypes.JoiningSystemType, ijtBaseNsIdx);
 
-        var topRefs = BrowseChildren(session, Opc.Ua.ObjectIds.ObjectsFolder, NodeClass.Object);
+        var topRefs = await BrowseChildrenAsync(
+            session, Opc.Ua.ObjectIds.ObjectsFolder, NodeClass.Object).ConfigureAwait(false);
         foreach (var r in topRefs)
         {
             if (IsJoiningSystemType((NodeId)r.TypeDefinition, joiningSystemTypeId))
@@ -85,7 +45,8 @@ public sealed class AddressSpaceHelper
         foreach (var r in topRefs)
         {
             if (r.BrowseName.Name == "Server") continue;
-            var sub = BrowseChildren(session, (NodeId)r.NodeId, NodeClass.Object);
+            var sub = await BrowseChildrenAsync(
+                session, (NodeId)r.NodeId, NodeClass.Object).ConfigureAwait(false);
             foreach (var s in sub)
             {
                 if (IsJoiningSystemType((NodeId)s.TypeDefinition, joiningSystemTypeId))
@@ -117,13 +78,13 @@ public sealed class AddressSpaceHelper
     /// for <paramref name="browseName"/>. Optionally filters by namespace index.
     /// Returns <see cref="NodeId.Null"/> when not found.
     /// </summary>
-    public NodeId FindChildAsync(
+    public async Task<NodeId> FindChildAsync(
         ISession session,
         NodeId parentId,
         string browseName,
         ushort nsIndex = 0)
     {
-        var refs = BrowseChildren(session, parentId);
+        var refs = await BrowseChildrenAsync(session, parentId).ConfigureAwait(false);
         var match = refs.FirstOrDefault(r =>
             (r.BrowseName.Name?.Equals(browseName, StringComparison.OrdinalIgnoreCase) ?? false) &&
             (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
@@ -133,13 +94,14 @@ public sealed class AddressSpaceHelper
     /// <summary>
     /// Like <see cref="FindChildAsync"/> but restricted to Method nodes.
     /// </summary>
-    public NodeId FindMethodNodeAsync(
+    public async Task<NodeId> FindMethodNodeAsync(
         ISession session,
         NodeId parentId,
         string methodBrowseName,
         ushort nsIndex = 0)
     {
-        var refs = BrowseChildren(session, parentId, NodeClass.Method);
+        var refs = await BrowseChildrenAsync(
+            session, parentId, NodeClass.Method).ConfigureAwait(false);
         var match = refs.FirstOrDefault(r =>
             (r.BrowseName.Name?.Equals(methodBrowseName, StringComparison.OrdinalIgnoreCase) ?? false) &&
             (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
@@ -150,7 +112,7 @@ public sealed class AddressSpaceHelper
     /// Cached lookup for management child nodes of the JoiningSystem
     /// (AssetManagement, ResultManagement, JoiningProcessManagement).
     /// </summary>
-    public NodeId GetOrFindManagementNodeAsync(
+    public async Task<NodeId> GetOrFindManagementNodeAsync(
         ISession session,
         NodeId joiningSystemId,
         string mgmtBrowseName,
@@ -159,8 +121,9 @@ public sealed class AddressSpaceHelper
         if (_mgmtNodeCache.TryGetValue(mgmtBrowseName, out var cached))
             return cached;
 
-        var nodeId = FindChildAsync(session, joiningSystemId, mgmtBrowseName, nsIndex);
-        if (!nodeId.IsNullNodeId())
+        var nodeId = await FindChildAsync(
+            session, joiningSystemId, mgmtBrowseName, nsIndex).ConfigureAwait(false);
+        if (!nodeId.IsNull)
             _mgmtNodeCache[mgmtBrowseName] = nodeId;
 
         return nodeId;
@@ -170,11 +133,12 @@ public sealed class AddressSpaceHelper
     /// Browses an asset folder and returns (DisplayName, NodeId) for each instance,
     /// skipping placeholder nodes (browse names that start with '&lt;').
     /// </summary>
-    public IReadOnlyList<(string DisplayName, NodeId NodeId)> DiscoverAssetInstancesAsync(
+    public async Task<IReadOnlyList<(string DisplayName, NodeId NodeId)>> DiscoverAssetInstancesAsync(
         ISession session,
         NodeId assetFolderNodeId)
     {
-        var refs = BrowseChildren(session, assetFolderNodeId, NodeClass.Object);
+        var refs = await BrowseChildrenAsync(
+            session, assetFolderNodeId, NodeClass.Object).ConfigureAwait(false);
         return refs
             .Where(r => !(r.BrowseName.Name?.StartsWith('<') ?? false))
             .Select(r => (r.DisplayName.Text ?? r.BrowseName.Name ?? string.Empty, (NodeId)r.NodeId))
@@ -185,13 +149,14 @@ public sealed class AddressSpaceHelper
     /// Finds the Identification child under an asset instance node.
     /// Prefers the DI namespace; falls back to any namespace.
     /// </summary>
-    public NodeId GetIdentificationNodeAsync(
+    public async Task<NodeId> GetIdentificationNodeAsync(
         ISession session,
         NodeId assetNodeId,
         ushort diNsIndex,
         ushort ijtNsIndex)
     {
-        var refs = BrowseChildren(session, assetNodeId, NodeClass.Object);
+        var refs = await BrowseChildrenAsync(
+            session, assetNodeId, NodeClass.Object).ConfigureAwait(false);
         // Prefer DI namespace
         var diMatch = refs.FirstOrDefault(r =>
             (r.BrowseName.Name?.Equals("Identification", StringComparison.OrdinalIgnoreCase) ?? false) &&
@@ -219,10 +184,11 @@ public sealed class AddressSpaceHelper
     /// <summary>
     /// Returns all forward hierarchical references from <paramref name="startNodeId"/>.
     /// </summary>
-    public static IReadOnlyList<ReferenceDescription> BrowseChildren(
+    public static async Task<IReadOnlyList<ReferenceDescription>> BrowseChildrenAsync(
         ISession session,
         NodeId startNodeId,
-        NodeClass nodeClassMask = NodeClass.Object | NodeClass.Variable | NodeClass.Method)
+        NodeClass nodeClassMask = NodeClass.Object | NodeClass.Variable | NodeClass.Method,
+        CancellationToken cancellationToken = default)
     {
         var browser = new Browser(session)
         {
@@ -233,7 +199,7 @@ public sealed class AddressSpaceHelper
             ResultMask = (uint)BrowseResultMask.All,
         };
 
-        var refs = browser.Browse(startNodeId);
+        var refs = await browser.BrowseAsync(startNodeId, cancellationToken).ConfigureAwait(false);
         return refs.ToList();
     }
 
@@ -242,9 +208,11 @@ public sealed class AddressSpaceHelper
     /// Finds a direct child of <paramref name="parentId"/> by browse name (case-insensitive).
     /// Returns <see cref="NodeId.Null"/> when not found.
     /// </summary>
-    public static NodeId FindChild(ISession session, NodeId parentId, string browseName)
+    public static async Task<NodeId> FindChildAsync(
+        ISession session, NodeId parentId, string browseName, CancellationToken cancellationToken = default)
     {
-        var refs = BrowseChildren(session, parentId);
+        var refs = await BrowseChildrenAsync(
+            session, parentId, cancellationToken: cancellationToken).ConfigureAwait(false);
         var match = refs.FirstOrDefault(r =>
             r.BrowseName.Name?.Equals(browseName, StringComparison.OrdinalIgnoreCase) ?? false);
         return match != null ? (NodeId)match.NodeId : NodeId.Null;
@@ -255,13 +223,15 @@ public sealed class AddressSpaceHelper
     /// returning the terminal <see cref="NodeId"/> or <see cref="NodeId.Null"/>.
     /// Example path: <c>"AssetManagement.Assets.Controllers"</c>
     /// </summary>
-    public static NodeId ResolvePath(ISession session, NodeId startNodeId, string path)
+    public static async Task<NodeId> ResolvePathAsync(
+        ISession session, NodeId startNodeId, string path, CancellationToken cancellationToken = default)
     {
         var current = startNodeId;
         foreach (var segment in path.Split('.'))
         {
-            current = FindChild(session, current, segment);
-            if (current.IsNullNodeId()) return NodeId.Null;
+            current = await FindChildAsync(
+                session, current, segment, cancellationToken).ConfigureAwait(false);
+            if (current.IsNull) return NodeId.Null;
         }
         return current;
     }
@@ -273,16 +243,18 @@ public sealed class AddressSpaceHelper
     /// whose TypeDefinition numeric identifier matches <paramref name="typeDefNumericId"/>.
     /// This is the safest way to find a JoiningSystemType instance regardless of browse name.
     /// </summary>
-    public static NodeId FindByTypeDefinition(
+    public static async Task<NodeId> FindByTypeDefinitionAsync(
         ISession session,
         NodeId parentId,
-        uint typeDefNumericId)
+        uint typeDefNumericId,
+        CancellationToken cancellationToken = default)
     {
-        var refs = BrowseChildren(session, parentId, NodeClass.Object);
+        var refs = await BrowseChildrenAsync(
+            session, parentId, NodeClass.Object, cancellationToken).ConfigureAwait(false);
         foreach (var r in refs)
         {
             if (r.TypeDefinition is ExpandedNodeId en &&
-                en.Identifier is uint id &&
+                en.TryGetValue(out uint id) &&
                 id == typeDefNumericId)
                 return (NodeId)r.NodeId;
         }
@@ -296,12 +268,15 @@ public sealed class AddressSpaceHelper
     /// <c>ISession.ReadValue</c>.
     /// Returns <c>null</c> on any error (bad status, node not found, etc.).
     /// </summary>
-    public static object? ReadValue(ISession session, NodeId nodeId)
+    public static async Task<object?> ReadValueAsync(
+        ISession session, NodeId nodeId, CancellationToken cancellationToken = default)
     {
         try
         {
-            var dv = session.ReadValue(nodeId);
-            return StatusCode.IsGood(dv.StatusCode) ? dv.Value : null;
+            var dv = await session.ReadValueAsync(nodeId, cancellationToken).ConfigureAwait(false);
+            return StatusCode.IsGood(dv.StatusCode)
+                ? dv.WrappedValue.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : null;
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
@@ -322,9 +297,10 @@ public sealed class AddressSpaceHelper
     /// Reads the <c>Value</c> attribute of a variable, cast to <typeparamref name="T"/>.
     /// Returns <c>default</c> when the node is missing or the cast fails.
     /// </summary>
-    public static T? ReadValue<T>(ISession session, NodeId nodeId)
+    public static async Task<T?> ReadValueAsync<T>(
+        ISession session, NodeId nodeId, CancellationToken cancellationToken = default)
     {
-        var raw = ReadValue(session, nodeId);
+        var raw = await ReadValueAsync(session, nodeId, cancellationToken).ConfigureAwait(false);
         if (raw is T typed) return typed;
         try { return (T?)Convert.ChangeType(raw, typeof(T)); }
         catch (InvalidCastException) { return default; }
@@ -339,17 +315,20 @@ public sealed class AddressSpaceHelper
     /// for the given <paramref name="joiningSystemNodeId"/>.
     /// Returns a list of (BrowseName, NodeId) pairs.
     /// </summary>
-    public static IReadOnlyList<(string Name, NodeId NodeId)> EnumerateAssets(
+    public static async Task<IReadOnlyList<(string Name, NodeId NodeId)>> EnumerateAssetsAsync(
         ISession session,
         NodeId joiningSystemNodeId,
-        string assetCategory)
+        string assetCategory,
+        CancellationToken cancellationToken = default)
     {
         var result = new List<(string, NodeId)>();
-        var assetsNode = ResolvePath(session, joiningSystemNodeId,
-            $"AssetManagement.Assets.{assetCategory}");
-        if (assetsNode.IsNullNodeId()) return result;
+        var assetsNode = await ResolvePathAsync(
+            session, joiningSystemNodeId, $"AssetManagement.Assets.{assetCategory}", cancellationToken)
+            .ConfigureAwait(false);
+        if (assetsNode.IsNull) return result;
 
-        var refs = BrowseChildren(session, assetsNode, NodeClass.Object);
+        var refs = await BrowseChildrenAsync(
+            session, assetsNode, NodeClass.Object, cancellationToken).ConfigureAwait(false);
         foreach (var r in refs)
         {
             var name = r.BrowseName.Name;
@@ -363,14 +342,25 @@ public sealed class AddressSpaceHelper
     /// Pretty-prints the value of standard asset identification variables
     /// (Manufacturer, SerialNumber, Description) under an asset node.
     /// </summary>
-    public static string ReadAssetIdentification(ISession session, NodeId assetNodeId)
+    public static async Task<string> ReadAssetIdentificationAsync(
+        ISession session, NodeId assetNodeId, CancellationToken cancellationToken = default)
     {
-        var idNode = FindChild(session, assetNodeId, "Identification");
-        if (idNode.IsNullNodeId()) return "(no Identification node)";
+        var idNode = await FindChildAsync(
+            session, assetNodeId, "Identification", cancellationToken).ConfigureAwait(false);
+        if (idNode.IsNull) return "(no Identification node)";
 
-        var manufacturer = ReadValue<string>(session, FindChild(session, idNode, "Manufacturer"));
-        var serial = ReadValue<string>(session, FindChild(session, idNode, "SerialNumber"));
-        var description = ReadValue<string>(session, FindChild(session, idNode, "Description"));
+        var manufacturerNode = await FindChildAsync(
+            session, idNode, "Manufacturer", cancellationToken).ConfigureAwait(false);
+        var serialNode = await FindChildAsync(
+            session, idNode, "SerialNumber", cancellationToken).ConfigureAwait(false);
+        var descriptionNode = await FindChildAsync(
+            session, idNode, "Description", cancellationToken).ConfigureAwait(false);
+        var manufacturer = await ReadValueAsync<string>(
+            session, manufacturerNode, cancellationToken).ConfigureAwait(false);
+        var serial = await ReadValueAsync<string>(
+            session, serialNode, cancellationToken).ConfigureAwait(false);
+        var description = await ReadValueAsync<string>(
+            session, descriptionNode, cancellationToken).ConfigureAwait(false);
 
         return $"Manufacturer={manufacturer ?? "?"}, SN={serial ?? "?"}, Desc={description ?? "?"}";
     }
@@ -382,7 +372,7 @@ public sealed class AddressSpaceHelper
         if (typeDefId == expectedTypeId) return true;
         // Namespace-agnostic fallback: match by numeric identifier only
         return typeDefId.IdType == IdType.Numeric &&
-               typeDefId.Identifier is uint id &&
-               id == UAModel.IJTBase.ObjectTypes.JoiningSystemType;
+               typeDefId.TryGetValue(out uint id) &&
+               id == IJTBase.ObjectTypes.JoiningSystemType;
     }
 }

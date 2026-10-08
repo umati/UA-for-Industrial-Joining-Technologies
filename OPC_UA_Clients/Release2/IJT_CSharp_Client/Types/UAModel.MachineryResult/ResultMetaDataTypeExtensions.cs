@@ -18,12 +18,8 @@ namespace MachineryResult
 
         public static implicit operator ResultMetaDataType?(global::Opc.Ua.ExtensionObject value)
         {
-#pragma warning disable CS0618
-            if (value.Body is ResultMetaDataType result)
-            {
+            if (value.TryGetValue(out ResultMetaDataType? result))
                 return result;
-            }
-#pragma warning restore CS0618
             return null;
         }
     }

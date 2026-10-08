@@ -4,6 +4,8 @@ using Opc.Ua;
 
 namespace IJTBase;
 
+#pragma warning disable UA0009 // NodeSet-generated types carry DataContract metadata; this partial adds only helper factories.
+
 public partial class EntityDataType
 {
     /// <summary>
@@ -100,3 +102,5 @@ public partial class JoiningProcessIdentificationDataType
         };
     }
 }
+
+#pragma warning restore UA0009

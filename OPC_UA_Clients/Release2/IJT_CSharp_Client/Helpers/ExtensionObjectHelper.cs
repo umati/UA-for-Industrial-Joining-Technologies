@@ -130,15 +130,27 @@ public static class ExtensionObjectHelper
     /// Attempts to decode an <see cref="ExtensionObject"/> as <typeparamref name="T"/>.
     /// Returns <c>null</c> on failure instead of throwing.
     /// </summary>
-    public static T? TryDecode<T>(object? value) where T : class
+    public static T? TryDecode<T>(object? value) where T : class, IEncodeable
     {
         return value switch
         {
             T typed => typed,
-            ExtensionObject { Body: T body } => body,
-            ExtensionObject eo => eo.Body as T,
+            ExtensionObject eo when eo.TryGetValue(out T? body) => body,
             _ => null,
         };
+    }
+
+    public static object? GetBody(ExtensionObject extensionObject)
+    {
+        if (extensionObject.TryGetValue(out IEncodeable? encodeable))
+            return encodeable;
+        if (extensionObject.TryGetAsBinary(out ByteString binary))
+            return binary.ToArray();
+        if (extensionObject.TryGetAsJson(out string? json))
+            return json;
+        if (extensionObject.TryGetAsXml(out XmlElement xml))
+            return xml;
+        return null;
     }
 
     /// <summary>
@@ -147,7 +159,7 @@ public static class ExtensionObjectHelper
     public static string Describe(object? value) => value switch
     {
         null => "(null)",
-        ExtensionObject { Body: IEncodeable enc } => $"{enc.GetType().Name}",
+        ExtensionObject eo when GetBody(eo) is IEncodeable enc => $"{enc.GetType().Name}",
         ExtensionObject eo => $"ExtensionObject TypeId={eo.TypeId}",
         byte[] b => $"byte[{b.Length}]",
         _ => value.ToString() ?? "(null)",
@@ -171,10 +183,11 @@ public static class ExtensionObjectHelper
     /// </summary>
     public static string FormatExtensionObject(ExtensionObject eo)
     {
-        if (eo.Body is null)
+        var body = GetBody(eo);
+        if (body is null)
             return $"ExtensionObject TypeId={eo.TypeId} Body=(null)";
 
-        var typeName = eo.Body.GetType().Name;
+        var typeName = body.GetType().Name;
         return $"ExtensionObject[{typeName}] TypeId={eo.TypeId}";
     }
 

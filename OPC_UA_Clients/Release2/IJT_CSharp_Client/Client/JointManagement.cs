@@ -25,19 +25,19 @@ public sealed class JointManagement : IDisposable
 
     // -- Node lookup -----------------------------------------------------------
 
-    private NodeId GetJmNode()
+    private async Task<NodeId> GetJmNodeAsync()
     {
-        if (!_jmNodeId.IsNullNodeId())
+        if (!_jmNodeId.IsNull)
             return _jmNodeId;
 
-        var node = _js.BrowseChild(
+        var node = await _js.BrowseChildAsync(
             _js.NodeId,
-            UAModel.IJTBase.BrowseNames.JointManagement);
+            IJTBase.BrowseNames.JointManagement);
 
-        if (node.IsNullNodeId())
+        if (node.IsNull)
         {
             node = _js.IjtBaseObjectId(
-                UAModel.IJTBase.Objects.JoiningSystemType_JointManagement);
+                IJTBase.Objects.JoiningSystemType_JointManagement);
             _log.LogWarning("WARN JointManagement fallback to type NodeId.");
         }
 
@@ -51,16 +51,16 @@ public sealed class JointManagement : IDisposable
     /// Calls <c>JointManagement/GetJointList</c>.
     /// Input: ProductInstanceUri (String). Output: JointList, Status, StatusMessage.
     /// </summary>
-    public void GetJointList(string productInstanceUri = "")
+    public async Task GetJointListAsync(string productInstanceUri = "")
     {
         _log.LogInformation("\n-- GetJointList (uri={Uri}) ------------------------", productInstanceUri);
 
-        var objectId = GetJmNode();
-        var methodId = _js.BrowseMethod(objectId,
-            UAModel.IJTBase.BrowseNames.GetJointList,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList);
+        var objectId = await GetJmNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId,
+            IJTBase.BrowseNames.GetJointList,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJointList);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR JointManagement node or GetJointList method not found.");
             return;
@@ -68,7 +68,7 @@ public sealed class JointManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri);
 
             // Write full list to file; show count + status on console
             IjtFileLogger.WriteJointList(
@@ -89,7 +89,7 @@ public sealed class JointManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetJointList));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetJointListAsync));
         }
     }
 
@@ -99,17 +99,17 @@ public sealed class JointManagement : IDisposable
     /// Calls <c>JointManagement/GetJoint</c>.
     /// Input: ProductInstanceUri (String), JointId (NormalizedString).
     /// </summary>
-    public void GetJoint(string productInstanceUri, string jointId)
+    public async Task GetJointAsync(string productInstanceUri, string jointId)
     {
         _log.LogInformation("\n-- GetJoint (uri={Uri}, jointId={Id}) ----------------",
             productInstanceUri, jointId);
 
-        var objectId = GetJmNode();
-        var methodId = _js.BrowseMethod(objectId,
-            UAModel.IJTBase.BrowseNames.GetJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint);
+        var objectId = await GetJmNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId,
+            IJTBase.BrowseNames.GetJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_GetJoint);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR JointManagement node or GetJoint method not found.");
             return;
@@ -117,7 +117,7 @@ public sealed class JointManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, jointId);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, jointId);
 
             // Write full joint data to file; show summary on console
             IjtFileLogger.WriteJoint(
@@ -136,7 +136,7 @@ public sealed class JointManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetJoint));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetJointAsync));
         }
     }
 
@@ -146,17 +146,17 @@ public sealed class JointManagement : IDisposable
     /// Calls <c>JointManagement/SelectJoint</c>.
     /// Input: ProductInstanceUri (String), JointId (NormalizedString), JointOriginId (NormalizedString).
     /// </summary>
-    public void SelectJoint(string productInstanceUri, string jointId, string jointOriginId)
+    public async Task SelectJointAsync(string productInstanceUri, string jointId, string jointOriginId)
     {
         _log.LogInformation("\n-- SelectJoint (uri={Uri}, jointId={Id}) --------------",
             productInstanceUri, jointId);
 
-        var objectId = GetJmNode();
-        var methodId = _js.BrowseMethod(objectId,
-            UAModel.IJTBase.BrowseNames.SelectJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint);
+        var objectId = await GetJmNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId,
+            IJTBase.BrowseNames.SelectJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_SelectJoint);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR JointManagement node or SelectJoint method not found.");
             return;
@@ -164,7 +164,7 @@ public sealed class JointManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, jointId, jointOriginId);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, jointId, jointOriginId);
             IjtJsonSerializer.PrintNamedOutputs("SelectJoint", outputs, "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
@@ -174,7 +174,7 @@ public sealed class JointManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SelectJoint));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SelectJointAsync));
         }
     }
 
@@ -184,17 +184,17 @@ public sealed class JointManagement : IDisposable
     /// Calls <c>JointManagement/DeleteJoint</c>.
     /// Input: ProductInstanceUri (String), JointId (NormalizedString), JointOriginId (NormalizedString).
     /// </summary>
-    public void DeleteJoint(string productInstanceUri, string jointId, string jointOriginId)
+    public async Task DeleteJointAsync(string productInstanceUri, string jointId, string jointOriginId)
     {
         _log.LogInformation("\n-- DeleteJoint (uri={Uri}, jointId={Id}) --------------",
             productInstanceUri, jointId);
 
-        var objectId = GetJmNode();
-        var methodId = _js.BrowseMethod(objectId,
-            UAModel.IJTBase.BrowseNames.DeleteJoint,
-            UAModel.IJTBase.Methods.JointManagementType_DeleteJoint);
+        var objectId = await GetJmNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId,
+            IJTBase.BrowseNames.DeleteJoint,
+            IJTBase.Methods.JointManagementType_DeleteJoint);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR JointManagement node or DeleteJoint method not found.");
             return;
@@ -202,7 +202,7 @@ public sealed class JointManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, jointId, jointOriginId);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, jointId, jointOriginId);
             IjtJsonSerializer.PrintNamedOutputs("DeleteJoint", outputs, "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
@@ -212,7 +212,7 @@ public sealed class JointManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(DeleteJoint));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(DeleteJointAsync));
         }
     }
 
@@ -222,7 +222,7 @@ public sealed class JointManagement : IDisposable
     /// Calls <c>JointManagement/SendJoint</c>.
     /// Input: ProductInstanceUri (String), Joint (JointDataType as ExtensionObject).
     /// </summary>
-    public void SendJoint(
+    public async Task SendJointAsync(
         string productInstanceUri,
         string jointId,
         string jointDesignId,
@@ -237,12 +237,12 @@ public sealed class JointManagement : IDisposable
 
         _log.LogInformation("\n-- SendJoint (jointId={Id}) --------------------------", jointId);
 
-        var objectId = GetJmNode();
-        var methodId = _js.BrowseMethod(objectId,
-            UAModel.IJTBase.BrowseNames.SendJoint,
-            UAModel.IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint);
+        var objectId = await GetJmNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId,
+            IJTBase.BrowseNames.SendJoint,
+            IJTBase.Methods.JoiningSystemType_JointManagement_SendJoint);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR JointManagement node or SendJoint method not found.");
             return;
@@ -258,7 +258,7 @@ public sealed class JointManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, ext);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, ext);
             _log.LogInformation("OK SendJoint called.");
             IjtJsonSerializer.PrintNamedOutputs("SendJoint", outputs, "Status", "StatusMessage");
         }
@@ -269,7 +269,7 @@ public sealed class JointManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SendJoint));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SendJointAsync));
         }
     }
 

@@ -28,6 +28,7 @@ internal static class OpcUaSessionConnector
 {
     private const int EndpointDiscoveryTimeoutMs = 15_000;
     private static readonly ConcurrentDictionary<string, EndpointDescription> EndpointDiscoveryCache = new();
+    private static readonly ITelemetryContext Telemetry = DefaultTelemetry.Create(_ => { });
 
     public static ApplicationConfiguration BuildApplicationConfig(ClientConfig config)
     {
@@ -35,7 +36,7 @@ internal static class OpcUaSessionConnector
             ? Path.Combine(AppContext.BaseDirectory, "PKI")
             : config.PkiRootPath;
 
-        return new ApplicationConfiguration(DefaultTelemetry.Create(_ => { }))
+        return new ApplicationConfiguration(Telemetry)
         {
             ApplicationName = config.ApplicationName,
             ApplicationType = ApplicationType.Client,
@@ -81,7 +82,7 @@ internal static class OpcUaSessionConnector
         CancellationToken ct = default)
     {
         var appConfig = BuildApplicationConfig(config);
-        await appConfig.Validate(ApplicationType.Client).ConfigureAwait(false);
+        await appConfig.ValidateAsync(ApplicationType.Client, ct).ConfigureAwait(false);
         await EnsureApplicationCertificateAsync(config, appConfig, ct).ConfigureAwait(false);
     }
 
@@ -93,7 +94,8 @@ internal static class OpcUaSessionConnector
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        var endpointDesc = hooks.SelectEndpointDescription(appConfig, config, log);
+        var endpointDesc = await hooks.SelectEndpointDescriptionAsync(appConfig, config, log, ct)
+            .ConfigureAwait(false);
 
         var endpoint = new ConfiguredEndpoint(
             null, endpointDesc, EndpointConfiguration.Create(appConfig));
@@ -101,7 +103,7 @@ internal static class OpcUaSessionConnector
 
         log.LogInformation("Opening session ...");
         ct.ThrowIfCancellationRequested();
-        return await hooks.CreateSessionAsync(appConfig, endpoint, config, identity).ConfigureAwait(false);
+        return await hooks.CreateSessionAsync(appConfig, endpoint, config, identity, ct).ConfigureAwait(false);
     }
 
     public static string EndpointDiscoveryCacheKey(ClientConfig config)
@@ -115,14 +117,15 @@ internal static class OpcUaSessionConnector
     public static void ClearEndpointDiscoveryCacheForTesting()
         => EndpointDiscoveryCache.Clear();
 
-    public static EndpointDescription SelectEndpointDescription(
+    public static async Task<EndpointDescription> SelectEndpointDescriptionAsync(
         ApplicationConfiguration appConfig,
         ClientConfig config,
-        ILogger log)
-        => SelectEndpointDescription(
-            config,
-            () => DiscoverEndpoints(appConfig, config),
-            log);
+        ILogger log,
+        CancellationToken ct)
+    {
+        var endpoints = await DiscoverEndpointsAsync(appConfig, config, ct).ConfigureAwait(false);
+        return SelectEndpointDescription(config, () => endpoints, log);
+    }
 
     public static EndpointDescription SelectEndpointDescription(
         ClientConfig config,
@@ -154,28 +157,30 @@ internal static class OpcUaSessionConnector
         return EndpointDiscoveryCache.GetOrAdd(cacheKey, discoveredEndpoint);
     }
 
-    public static IReadOnlyList<EndpointDescription> DiscoverEndpoints(
+    public static async Task<IReadOnlyList<EndpointDescription>> DiscoverEndpointsAsync(
         ApplicationConfiguration appConfig,
-        ClientConfig config)
+        ClientConfig config,
+        CancellationToken ct)
     {
         if (RequiresExactEndpointSelection(config))
         {
-            using var discoveryClient = DiscoveryClient.Create(
+            using var discoveryClient = await DiscoveryClient.CreateAsync(
                 appConfig,
                 new Uri(config.ServerUrl),
-                EndpointConfiguration.Create(appConfig));
+                EndpointConfiguration.Create(appConfig),
+                ct: ct).ConfigureAwait(false);
             discoveryClient.OperationTimeout = EndpointDiscoveryTimeoutMs;
-            return discoveryClient.GetEndpoints(default).ToList();
+            return (await discoveryClient.GetEndpointsAsync(default, ct).ConfigureAwait(false)).ToList();
         }
 
-        return
-        [
-            CoreClientUtils.SelectEndpoint(
+        var endpoint = await CoreClientUtils.SelectEndpointAsync(
                 appConfig,
                 config.ServerUrl,
                 useSecurity: config.UseSecurityPolicyForEndpointDiscovery,
-                discoverTimeout: EndpointDiscoveryTimeoutMs)!,
-        ];
+                discoverTimeout: EndpointDiscoveryTimeoutMs,
+                telemetry: Telemetry,
+                ct: ct).ConfigureAwait(false);
+        return endpoint is null ? [] : [endpoint];
     }
 
     public static EndpointDescription SelectConfiguredEndpoint(
@@ -224,7 +229,7 @@ internal static class OpcUaSessionConnector
         if (!RequiresSecureChannel(config))
             return;
 
-        var app = new ApplicationInstance(appConfig)
+        var app = new ApplicationInstance(appConfig, Telemetry)
         {
             ApplicationName = config.ApplicationName,
             ApplicationType = ApplicationType.Client,
@@ -309,7 +314,7 @@ internal static class OpcUaSessionConnector
                 config.X509IdentityPrivateKeyPath);
         }
 
-        var flags = X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet;
+        var flags = X509KeyStorageFlags.EphemeralKeySet;
 #pragma warning disable SYSLIB0057
         return new X509Certificate2(config.X509IdentityCertificatePath, (string?)null, flags);
 #pragma warning restore SYSLIB0057
@@ -384,16 +389,16 @@ internal static class OpcUaSessionConnector
     }
 
     public sealed record ConnectionHooks(
-        Func<ApplicationConfiguration, Task> ValidateApplicationConfigAsync,
+        Func<ApplicationConfiguration, CancellationToken, Task> ValidateApplicationConfigAsync,
         Func<ClientConfig, ApplicationConfiguration, CancellationToken, Task> EnsureApplicationCertificateAsync,
-        Func<ApplicationConfiguration, ClientConfig, ILogger, EndpointDescription> SelectEndpointDescription,
-        Func<ApplicationConfiguration, ConfiguredEndpoint, ClientConfig, IUserIdentity, Task<ISession>> CreateSessionAsync)
+        Func<ApplicationConfiguration, ClientConfig, ILogger, CancellationToken, Task<EndpointDescription>> SelectEndpointDescriptionAsync,
+        Func<ApplicationConfiguration, ConfiguredEndpoint, ClientConfig, IUserIdentity, CancellationToken, Task<ISession>> CreateSessionAsync)
     {
         public static ConnectionHooks Production { get; } = new(
-            appConfig => appConfig.Validate(ApplicationType.Client),
+            (appConfig, ct) => appConfig.ValidateAsync(ApplicationType.Client, ct),
             OpcUaSessionConnector.EnsureApplicationCertificateAsync,
-            OpcUaSessionConnector.SelectEndpointDescription,
-            (appConfig, endpoint, config, identity) => new DefaultSessionFactory().CreateAsync(
+            OpcUaSessionConnector.SelectEndpointDescriptionAsync,
+            (appConfig, endpoint, config, identity, ct) => new DefaultSessionFactory(Telemetry).CreateAsync(
                     appConfig,
                     endpoint,
                     updateBeforeConnect: false,
@@ -401,6 +406,6 @@ internal static class OpcUaSessionConnector
                     sessionTimeout: (uint)config.SessionTimeoutMs,
                     identity: identity,
                     preferredLocales: default,
-                    ct: CancellationToken.None));
+                    ct: ct));
     }
 }

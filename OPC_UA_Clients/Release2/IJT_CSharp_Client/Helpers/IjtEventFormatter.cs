@@ -2,6 +2,7 @@
 
 using System.Text;
 using IJTBase;
+using Opc.Ua;
 
 namespace IJT_CSharp_Client.Helpers;
 
@@ -73,12 +74,13 @@ public static class IjtEventFormatter
             sb.AppendLine($"  {"ReportedValues",-28} ({reportedValues.Length} values)");
             foreach (var r in reportedValues)
             {
-                var val = r.CurrentValue.Value is double d ? d
-                        : r.CurrentValue.Value is float f ? (double)f
-                        : r.CurrentValue.Value is int i ? (double)i
-                        : r.CurrentValue.Value is long l ? (double)l
+                var currentValue = r.CurrentValue.AsBoxedObject(Variant.BoxingBehavior.Legacy);
+                var val = currentValue is double d ? d
+                        : currentValue is float f ? (double)f
+                        : currentValue is int i ? (double)i
+                        : currentValue is long l ? (double)l
                         : (double?)null;
-                var valStr = val.HasValue ? $"{val.Value,10:F3}" : $"{r.CurrentValue.Value,10}";
+                var valStr = val.HasValue ? $"{val.Value,10:F3}" : $"{currentValue,10}";
                 var units = NormalizeUnits(r.EngineeringUnits?.DisplayName.Text, r.PhysicalQuantity);
                 sb.AppendLine($"    {r.Name,-24} {valStr}  {units,-10}  Low={r.LowLimit}  High={r.HighLimit}");
             }

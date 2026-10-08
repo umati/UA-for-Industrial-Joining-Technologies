@@ -41,20 +41,20 @@ internal static class MockSessionBuilder
         session.Setup(s => s.IjtTighteningNsIdx).Returns(8);
         session.Setup(s => s.MachineryResultNsIdx).Returns(6);
 
-        session.Setup(s => s.BrowseChild(
+        session.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(),
                 It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(browseChildResult ?? ValidNodeId);
+            .ReturnsAsync(browseChildResult ?? ValidNodeId);
 
-        session.Setup(s => s.DiscoverMethodsUnder(It.IsAny<NodeId>()))
-            .Returns(new Dictionary<string, NodeId>(StringComparer.OrdinalIgnoreCase));
+        session.Setup(s => s.DiscoverMethodsUnderAsync(It.IsAny<NodeId>()))
+            .ReturnsAsync(new Dictionary<string, NodeId>(StringComparer.OrdinalIgnoreCase));
 
         session.Setup(s => s.IjtBaseMethodId(It.IsAny<uint>()))
             .Returns(methodResult ?? ValidMethodId);
 
-        session.Setup(s => s.BrowseMethod(
+        session.Setup(s => s.BrowseMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(methodResult ?? ValidMethodId);
+            .ReturnsAsync(methodResult ?? ValidMethodId);
 
         session.Setup(s => s.IjtBaseObjectId(It.IsAny<uint>()))
             .Returns(browseChildResult ?? ValidNodeId);
@@ -62,16 +62,14 @@ internal static class MockSessionBuilder
         session.Setup(s => s.IjtBaseVariableId(It.IsAny<uint>()))
             .Returns(browseChildResult ?? ValidNodeId);
 
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(callMethodResult ?? new List<object>());
+            .ReturnsAsync(callMethodResult ?? new List<object>());
 
         // Mock ISession with enough surface for subscription-heavy code paths
         var mockSession = new Mock<ISession>();
-#pragma warning disable CS0618
-        mockSession.Setup(s => s.DefaultSubscription).Returns(new Subscription());
+        mockSession.Setup(s => s.DefaultSubscription).Returns(new Subscription(DefaultTelemetry.Create(_ => { })));
         mockSession.Setup(s => s.AddSubscription(It.IsAny<Subscription>())).Returns(true);
-#pragma warning restore CS0618
         session.Setup(s => s.Session).Returns(mockSession.Object);
 
         return session;
@@ -93,13 +91,12 @@ internal static class MockSessionBuilder
     public static Mock<ISession> CreateSubscriptionCapableSession()
     {
         var session = new Mock<ISession>();
-        var defaultSubscription = new Subscription();
+        var defaultSubscription = new Subscription(DefaultTelemetry.Create(_ => { }));
         // ISession assigns this internally; the SDK does not expose its setter publicly.
         var sessionSetter = typeof(Subscription).GetProperty(nameof(Subscription.Session))!
             .GetSetMethod(nonPublic: true)!;
         sessionSetter
             .Invoke(defaultSubscription, [session.Object]);
-#pragma warning disable CS0618
         session.Setup(s => s.DefaultSubscription).Returns(defaultSubscription);
         session.Setup(s => s.AddSubscription(It.IsAny<Subscription>()))
             .Callback<Subscription>(subscription => sessionSetter.Invoke(subscription, [session.Object]))
@@ -134,7 +131,6 @@ internal static class MockSessionBuilder
                 ArrayOf<MonitoredItemCreateRequest> requests,
                 CancellationToken _) =>
                 new ValueTask<CreateMonitoredItemsResponse>(CreateMonitoredItemsResponse(requests.Count)));
-#pragma warning restore CS0618
 
         return session;
     }

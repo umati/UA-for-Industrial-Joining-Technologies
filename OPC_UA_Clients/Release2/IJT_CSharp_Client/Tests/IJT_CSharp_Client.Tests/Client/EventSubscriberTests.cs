@@ -28,33 +28,33 @@ public sealed class EventSubscriberTests
     // ── Construction ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void Constructor_DoesNotThrow()
+    public async Task Constructor_DoesNotThrow()
     {
-        var ex = Record.Exception(() => new EventSubscriber(CreateMock().Object));
+        var ex = await Record.ExceptionAsync(async () => new EventSubscriber(CreateMock().Object));
         Assert.Null(ex);
     }
 
-    // ── Unsubscribe ───────────────────────────────────────────────────────────
+    // ── UnsubscribeAsync ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void Unsubscribe_WhenNotSubscribed_DoesNotThrow()
-    {
-        var sut = new EventSubscriber(CreateMock().Object);
-        var ex = Record.Exception(() => sut.Unsubscribe());
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void Unsubscribe_CalledTwice_DoesNotThrow()
+    public async Task Unsubscribe_WhenNotSubscribed_DoesNotThrow()
     {
         var sut = new EventSubscriber(CreateMock().Object);
-        sut.Unsubscribe();
-        var ex = Record.Exception(() => sut.Unsubscribe());
+        var ex = await Record.ExceptionAsync(async () => await sut.UnsubscribeAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Unsubscribe_WhenSubscriptionActive_CleansUp_DoesNotThrow()
+    public async Task Unsubscribe_CalledTwice_DoesNotThrow()
+    {
+        var sut = new EventSubscriber(CreateMock().Object);
+        await sut.UnsubscribeAsync();
+        var ex = await Record.ExceptionAsync(async () => await sut.UnsubscribeAsync());
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task Unsubscribe_WhenSubscriptionActive_CleansUp_DoesNotThrow()
     {
         var sut = new EventSubscriber(CreateMock().Object);
 
@@ -62,39 +62,35 @@ public sealed class EventSubscriberTests
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-#pragma warning disable CS0618
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription());
-#pragma warning restore CS0618
+        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
 
         // Delete() will throw because subscription has no session; caught by handler
-        var ex = Record.Exception(() => sut.Unsubscribe());
+        var ex = await Record.ExceptionAsync(async () => await sut.UnsubscribeAsync());
 
         Assert.Null(ex);
         Assert.False(sut.IsSubscribed);
     }
 
     [Fact]
-    public void Dispose_WhenSubscriptionActive_CleansUp_DoesNotThrow()
+    public async Task Dispose_WhenSubscriptionActive_CleansUp_DoesNotThrow()
     {
         var sut = new EventSubscriber(CreateMock().Object);
 
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-#pragma warning disable CS0618
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription());
-#pragma warning restore CS0618
+        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
 
-        var ex = Record.Exception(() => sut.Dispose());
+        var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync());
         Assert.Null(ex);
     }
 
     // ── Dispose ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Dispose_WhenNotSubscribed_DoesNotThrow()
+    public async Task Dispose_WhenNotSubscribed_DoesNotThrow()
     {
-        var ex = Record.Exception(() => new EventSubscriber(CreateMock().Object).Dispose());
+        var ex = await Record.ExceptionAsync(async () => await new EventSubscriber(CreateMock().Object).DisposeAsync());
         Assert.Null(ex);
     }
 
@@ -160,7 +156,7 @@ public sealed class EventSubscriberTests
     // ── Event wire-up ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void OnResultReady_EventCanBeSubscribed_AndUnsubscribed()
+    public async Task OnResultReady_EventCanBeSubscribed_AndUnsubscribed()
     {
         var sut = new EventSubscriber(CreateMock().Object);
         var handler = new EventHandler<EventSubscriber.ResultReadyEventArgs>((_, _) => { });
@@ -168,12 +164,12 @@ public sealed class EventSubscriberTests
         sut.OnResultReady += handler;
         sut.OnResultReady -= handler;
 
-        var ex = Record.Exception(() => sut.Dispose());
+        var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void OnJoiningSystemEvent_EventCanBeSubscribed_AndUnsubscribed()
+    public async Task OnJoiningSystemEvent_EventCanBeSubscribed_AndUnsubscribed()
     {
         var sut = new EventSubscriber(CreateMock().Object);
         var handler = new EventHandler<EventSubscriber.JoiningSystemEventArgs>((_, _) => { });
@@ -181,24 +177,22 @@ public sealed class EventSubscriberTests
         sut.OnJoiningSystemEvent += handler;
         sut.OnJoiningSystemEvent -= handler;
 
-        var ex = Record.Exception(() => sut.Dispose());
+        var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Subscribe_WhenAlreadySubscribed_LogsWarningAndReturns()
+    public async Task Subscribe_WhenAlreadySubscribed_LogsWarningAndReturns()
     {
         var sut = new EventSubscriber(CreateMock().Object);
         // Inject a non-null subscription via reflection to simulate already-subscribed state
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-#pragma warning disable CS0618
-        field!.SetValue(sut, new Subscription());
-#pragma warning restore CS0618
+        field!.SetValue(sut, new Subscription(DefaultTelemetry.Create(_ => { })));
 
         // Second call should hit the "already subscribed" guard
-        var ex = Record.Exception(() => sut.Subscribe());
+        var ex = await Record.ExceptionAsync(async () => await sut.SubscribeAsync());
         Assert.Null(ex);
     }
 
@@ -371,13 +365,13 @@ public sealed class EventSubscriberTests
     // ── ProcessResultEvent ────────────────────────────────────────────────────
 
     [Fact]
-    public void ProcessResultEvent_WithEmptyFields_DoesNotThrow_AndRaisesEvent()
+    public async Task ProcessResultEvent_WithEmptyFields_DoesNotThrow_AndRaisesEvent()
     {
         var sut = new EventSubscriber(CreateMock().Object);
         EventSubscriber.ResultReadyEventArgs? captured = null;
         sut.OnResultReady += (_, args) => captured = args;
 
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             sut.ProcessResultEvent(new VariantCollection()));
 
         Assert.Null(ex);
@@ -476,13 +470,13 @@ public sealed class EventSubscriberTests
     // ── ProcessJoiningSystemEvent ─────────────────────────────────────────────
 
     [Fact]
-    public void ProcessJoiningSystemEvent_WithEmptyFields_DoesNotThrow_AndRaisesEvent()
+    public async Task ProcessJoiningSystemEvent_WithEmptyFields_DoesNotThrow_AndRaisesEvent()
     {
         var sut = new EventSubscriber(CreateMock().Object);
         EventSubscriber.JoiningSystemEventArgs? captured = null;
         sut.OnJoiningSystemEvent += (_, args) => captured = args;
 
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             sut.ProcessJoiningSystemEvent(new VariantCollection()));
 
         Assert.Null(ex);

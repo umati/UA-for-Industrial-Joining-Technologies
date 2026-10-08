@@ -29,10 +29,30 @@ internal sealed class X509CertificateProvider : ICertificateProvider
 
     public Certificate? TryGetPrivateKeyCertificate(string thumbprint)
     {
-        if (string.Equals(_thumbprint, thumbprint, StringComparison.OrdinalIgnoreCase))
-            return Certificate.From(_certificateFactory());
+        if (!string.Equals(_thumbprint, thumbprint, StringComparison.OrdinalIgnoreCase))
+            return null;
 
-        return null;
+        return Certificate.From(CreateValidatedCertificate());
+    }
+
+    /// <summary>
+    /// Invokes the factory and verifies the produced certificate is the configured identity.
+    /// The identity file or factory result may change after construction; a different certificate
+    /// is never served (it is disposed and an <see cref="InvalidOperationException"/> is thrown).
+    /// </summary>
+    private X509Certificate2 CreateValidatedCertificate()
+    {
+        var certificate = _certificateFactory()
+            ?? throw new InvalidOperationException("X509 identity certificate factory returned null.");
+        if (!string.Equals(certificate.Thumbprint, _thumbprint, StringComparison.OrdinalIgnoreCase))
+        {
+            var actual = certificate.Thumbprint;
+            certificate.Dispose();
+            throw new InvalidOperationException(
+                $"X509 identity certificate changed: expected thumbprint '{_thumbprint}' but the factory produced '{actual}'.");
+        }
+
+        return certificate;
     }
 
     public ValueTask<Certificate?> GetPrivateKeyCertificateAsync(
@@ -41,7 +61,11 @@ internal sealed class X509CertificateProvider : ICertificateProvider
         string? applicationUri = null,
         CancellationToken ct = default)
     {
-        return ValueTask.FromResult<Certificate?>(Certificate.From(_certificateFactory()));
+        ArgumentNullException.ThrowIfNull(identifier);
+        ct.ThrowIfCancellationRequested();
+
+        // Only serve the identity this provider was created for; never hand out a different certificate.
+        return ValueTask.FromResult(TryGetPrivateKeyCertificate(identifier.Thumbprint ?? string.Empty));
     }
 
     public void Dispose()

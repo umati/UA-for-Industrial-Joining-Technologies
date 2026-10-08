@@ -13,39 +13,39 @@ namespace IJT_CSharp_Client.Tests.UnitTests;
 /// These tests exercise the .NET event wiring, subscription guard, and
 /// unsubscribe clean-up paths without requiring a live OPC UA server.
 ///
-/// Note: Subscribe() internally calls ISession.AddSubscription() and
+/// Note: SubscribeAsync() internally calls ISession.AddSubscription() and
 /// Subscription.Create() which communicate with the OPC UA server stack.
 /// Tests covering the subscription lifecycle end-to-end are in
 /// <see cref="LiveIntegrationTests"/> (server-required tests).
 /// Here we test the guards and event contract exposed through IJoiningSystem.
 ///
 /// Covered operations:
-///   1  Subscribe to Result + System events
-///   2  Unsubscribe
+///   1  SubscribeAsync to Result + System events
+///   2  UnsubscribeAsync
 /// </summary>
 public sealed class EventSubscriberUnitTests
 {
-    // ── 2. Unsubscribe (safe without prior subscribe) ─────────────────────────
+    // ── 2. UnsubscribeAsync (safe without prior subscribe) ─────────────────────────
 
     [Fact]
-    public void Unsubscribe_WithoutPriorSubscribe_DoesNotThrow()
+    public async Task Unsubscribe_WithoutPriorSubscribe_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        using var sub = new EventSubscriber(session.Object);
+        await using var sub = new EventSubscriber(session.Object);
 
-        var ex = Record.Exception(() => sub.Unsubscribe());
+        var ex = await Record.ExceptionAsync(async () => await sub.UnsubscribeAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Unsubscribe_CalledMultipleTimes_DoesNotThrow()
+    public async Task Unsubscribe_CalledMultipleTimes_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        using var sub = new EventSubscriber(session.Object);
+        await using var sub = new EventSubscriber(session.Object);
 
-        sub.Unsubscribe();
-        var ex = Record.Exception(() => sub.Unsubscribe());
+        await sub.UnsubscribeAsync();
+        var ex = await Record.ExceptionAsync(async () => await sub.UnsubscribeAsync());
 
         Assert.Null(ex);
     }
@@ -53,31 +53,31 @@ public sealed class EventSubscriberUnitTests
     // ── Event routing ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void OnResultReady_CanAttachAndDetachHandlerWithoutThrow()
+    public async Task OnResultReady_CanAttachAndDetachHandlerWithoutThrow()
     {
         var session = MockSessionBuilder.Create();
-        using var sub = new EventSubscriber(session.Object);
+        await using var sub = new EventSubscriber(session.Object);
 
         EventHandler<EventSubscriber.ResultReadyEventArgs>? handler =
             (_, _) => { /* no-op */ };
 
         sub.OnResultReady += handler;
-        var ex = Record.Exception(() => sub.OnResultReady -= handler);
+        var ex = await Record.ExceptionAsync(async () => sub.OnResultReady -= handler);
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void OnJoiningSystemEvent_CanAttachAndDetachHandlerWithoutThrow()
+    public async Task OnJoiningSystemEvent_CanAttachAndDetachHandlerWithoutThrow()
     {
         var session = MockSessionBuilder.Create();
-        using var sub = new EventSubscriber(session.Object);
+        await using var sub = new EventSubscriber(session.Object);
 
         EventHandler<EventSubscriber.JoiningSystemEventArgs>? handler =
             (_, _) => { /* no-op */ };
 
         sub.OnJoiningSystemEvent += handler;
-        var ex = Record.Exception(() => sub.OnJoiningSystemEvent -= handler);
+        var ex = await Record.ExceptionAsync(async () => sub.OnJoiningSystemEvent -= handler);
 
         Assert.Null(ex);
     }
@@ -85,12 +85,12 @@ public sealed class EventSubscriberUnitTests
     // ── Dispose ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Dispose_WithNoSubscription_DoesNotThrow()
+    public async Task Dispose_WithNoSubscription_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
         {
-            using var sub = new EventSubscriber(session.Object);
+            await using var sub = new EventSubscriber(session.Object);
         });
 
         Assert.Null(ex);
@@ -168,26 +168,26 @@ public sealed class EventSubscriberUnitTests
         Assert.Null(args.Result);
     }
 
-    // ── Subscribe — subscription creation code paths ─────────────────────────
+    // ── SubscribeAsync — subscription creation code paths ─────────────────────────
 
     /// <summary>
-    /// Calling Subscribe() with a protocol-complete mock exercises the subscription
+    /// Calling SubscribeAsync() with a protocol-complete mock exercises the subscription
     /// creation path without requiring a server connection.
     /// </summary>
     [Fact]
-    public void Subscribe_WithMockSession_CoversSubscriptionCreationBeforeCreate()
+    public async Task Subscribe_WithMockSession_CoversSubscriptionCreationBeforeCreate()
     {
         var session = MockSessionBuilder.Create();
         var uaSession = MockSessionBuilder.CreateSubscriptionCapableSession();
         session.Setup(s => s.Session).Returns(uaSession.Object);
-        using var sub = new EventSubscriber(session.Object);
+        await using var sub = new EventSubscriber(session.Object);
 
-        sub.Subscribe();
+        await sub.SubscribeAsync();
 
         Assert.True(sub.IsSubscribed);
     }
 
-    // ── Unsubscribe — paths when a subscription is active ────────────────────
+    // ── UnsubscribeAsync — paths when a subscription is active ────────────────────
 
     private static void SetEventSubscription(EventSubscriber sub, Subscription? value)
     {
@@ -198,27 +198,28 @@ public sealed class EventSubscriberUnitTests
     }
 
     [Fact]
-    public void Unsubscribe_WithSubscriptionSetViaReflection_NormalPath_ClearsSubscription()
+    public async Task Unsubscribe_WithSubscriptionSetViaReflection_NormalPath_ClearsSubscription()
     {
         var session = MockSessionBuilder.Create();
-        using var sub = new EventSubscriber(session.Object);
-        SetEventSubscription(sub, new Subscription());
+        await using var sub = new EventSubscriber(session.Object);
+        SetEventSubscription(sub, new Subscription(DefaultTelemetry.Create(_ => { })));
 
         Assert.True(sub.IsSubscribed);
 
-        var ex = Record.Exception(() => sub.Unsubscribe());
+        var ex = await Record.ExceptionAsync(async () => await sub.UnsubscribeAsync());
 
         Assert.Null(ex);
         Assert.False(sub.IsSubscribed);
     }
 
     [Fact]
-    public void NotificationHandlers_ProcessQueuedEvents()
+    public async Task NotificationHandlers_ProcessQueuedEvents()
     {
         var session = MockSessionBuilder.Create();
-        using var sub = new EventSubscriber(session.Object);
-        var resultItem = new MonitoredItem { NodeClass = NodeClass.Object };
-        var systemItem = new MonitoredItem { NodeClass = NodeClass.Object };
+        await using var sub = new EventSubscriber(session.Object);
+        var telemetry = DefaultTelemetry.Create(_ => { });
+        var resultItem = new MonitoredItem(telemetry) { NodeClass = NodeClass.Object };
+        var systemItem = new MonitoredItem(telemetry) { NodeClass = NodeClass.Object };
         resultItem.SaveValueInCache(new EventFieldList { EventFields = [] });
         systemItem.SaveValueInCache(new EventFieldList { EventFields = [] });
 
@@ -236,10 +237,10 @@ public sealed class EventSubscriberUnitTests
     // ── IsSubscribed property ─────────────────────────────────────────────────
 
     [Fact]
-    public void IsSubscribed_WhenNotSubscribed_ReturnsFalse()
+    public async Task IsSubscribed_WhenNotSubscribed_ReturnsFalse()
     {
         var session = MockSessionBuilder.Create();
-        using var sub = new EventSubscriber(session.Object);
+        await using var sub = new EventSubscriber(session.Object);
 
         Assert.False(sub.IsSubscribed);
     }

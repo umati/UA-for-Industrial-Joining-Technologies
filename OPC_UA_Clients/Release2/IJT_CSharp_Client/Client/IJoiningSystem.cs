@@ -42,7 +42,7 @@ public interface IJoiningSystem
     /// Resolves a child node under <paramref name="parentId"/> by browse name.
     /// Returns <see cref="NodeId.Null"/> if not found or on any error.
     /// </summary>
-    NodeId BrowseChild(
+    Task<NodeId> BrowseChildAsync(
         NodeId parentId,
         string childBrowseName,
         ushort nsIndex = 0,
@@ -53,7 +53,7 @@ public interface IJoiningSystem
     /// whose <see cref="NodeClass"/> matches <paramref name="nodeClassMask"/>.
     /// Returns an empty collection on failure or when the parent is null.
     /// </summary>
-    IReadOnlyList<ReferenceDescription> BrowseChildren(
+    Task<IReadOnlyList<ReferenceDescription>> BrowseChildrenAsync(
         NodeId parentId,
         uint nodeClassMask = (uint)NodeClass.Unspecified);
 
@@ -62,19 +62,19 @@ public interface IJoiningSystem
     /// Three-tier resolution: exact browse, case-insensitive enumeration, spec constant fallback.
     /// Returns <see cref="NodeId.Null"/> if all tiers fail.
     /// </summary>
-    NodeId BrowseMethod(NodeId objectId, string methodBrowseName, uint fallbackConstant = 0);
+    Task<NodeId> BrowseMethodAsync(NodeId objectId, string methodBrowseName, uint fallbackConstant = 0);
 
     /// <summary>
     /// Browses all direct Method-class children of <paramref name="objectId"/>.
     /// Returns an empty dictionary on null input or browse failure.
     /// </summary>
-    Dictionary<string, NodeId> DiscoverMethodsUnder(NodeId objectId);
+    Task<Dictionary<string, NodeId>> DiscoverMethodsUnderAsync(NodeId objectId);
 
     /// <summary>
     /// Calls an OPC UA method and returns output arguments.
     /// Throws <see cref="Opc.Ua.ServiceResultException"/> on Bad status codes.
     /// </summary>
-    IList<object> CallMethod(NodeId objectId, NodeId methodId, params object[] inputArgs);
+    Task<IList<object>> CallMethodAsync(NodeId objectId, NodeId methodId, params object[] inputArgs);
 
     // -- IJT companion spec domain ---------------------------------------------
 

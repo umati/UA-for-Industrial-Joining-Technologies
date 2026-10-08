@@ -2,6 +2,7 @@
 
 using System.Globalization;
 using IJT_CSharp_Client.Domain.Events;
+using IJT_CSharp_Client.Helpers;
 using IJTBase;
 using IJTTightening;
 using MachineryResult;
@@ -24,9 +25,11 @@ internal static class DomainResultMapper
         var resultDataType = decodedResult;
         if (resultDataType is null && rawResult is not null)
         {
-            var raw = rawResult is Variant v ? v.Value : rawResult;
+            var raw = rawResult is Variant v
+                ? v.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : rawResult;
             resultDataType = raw is ExtensionObject eo
-                ? eo.Body as ResultDataType
+                ? ExtensionObjectHelper.TryDecode<ResultDataType>(eo)
                 : raw as ResultDataType;
         }
 
@@ -40,7 +43,9 @@ internal static class DomainResultMapper
         byte[]? eventIdBytes = null;
         if (fieldMap.TryGetValue("EventId", out var eidObj) && eidObj is not null)
         {
-            var rawEid = eidObj is Variant ve ? ve.Value : eidObj;
+            var rawEid = eidObj is Variant ve
+                ? ve.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : eidObj;
             if (rawEid is byte[] b) eventIdBytes = b;
             else if (rawEid is string s) eventIdBytes = System.Text.Encoding.UTF8.GetBytes(s);
         }
@@ -48,7 +53,9 @@ internal static class DomainResultMapper
         DateTime eventTime = DateTime.UtcNow;
         if (fieldMap.TryGetValue("Time", out var tObj) && tObj is not null)
         {
-            var rawT = tObj is Variant vt ? vt.Value : tObj;
+            var rawT = tObj is Variant vt
+                ? vt.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : tObj;
             if (rawT is DateTime dt) eventTime = dt;
             else if (rawT is DateTimeUtc dtc) eventTime = dtc.ToDateTime();
             else if (rawT is DateTimeOffset dto) eventTime = dto.UtcDateTime;
@@ -58,21 +65,27 @@ internal static class DomainResultMapper
         string eventTypeName = "";
         if (fieldMap.TryGetValue("EventType", out var etObj) && etObj is not null)
         {
-            var rawEt = etObj is Variant ve ? ve.Value : etObj;
+            var rawEt = etObj is Variant ve
+                ? ve.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : etObj;
             eventTypeName = rawEt?.ToString() ?? "";
         }
 
         string? sourceName = null;
         if (fieldMap.TryGetValue("SourceName", out var snObj) && snObj is not null)
         {
-            var rawSn = snObj is Variant vs ? vs.Value : snObj;
+            var rawSn = snObj is Variant vs
+                ? vs.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : snObj;
             sourceName = rawSn?.ToString();
         }
 
         string? message = null;
         if (fieldMap.TryGetValue("Message", out var msgObj) && msgObj is not null)
         {
-            var rawMsg = msgObj is Variant vm ? vm.Value : msgObj;
+            var rawMsg = msgObj is Variant vm
+                ? vm.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : msgObj;
             message = rawMsg is LocalizedText lt ? lt.Text : rawMsg?.ToString();
         }
 
@@ -112,7 +125,9 @@ internal static class DomainResultMapper
             for (int i = 0; i < rd.ResultContent.Count; i++)
             {
                 var item = rd.ResultContent[i];
-                var raw = item.Value is ExtensionObject eo ? eo.Body : item.Value;
+                var raw = item.AsBoxedObject(Variant.BoxingBehavior.Legacy);
+                if (raw is ExtensionObject eo)
+                    raw = ExtensionObjectHelper.GetBody(eo);
 
                 if (raw is JoiningResultDataType jr)
                 {
@@ -307,7 +322,8 @@ internal static class DomainResultMapper
         foreach (var kv in kvs)
         {
             if (kv.Key is not null)
-                dict[kv.Key] = kv.Value.Value?.ToString() ?? kv.Value.ToString();
+                dict[kv.Key] =
+                    kv.Value.AsBoxedObject(Variant.BoxingBehavior.Legacy)?.ToString() ?? kv.Value.ToString();
         }
         return dict;
     }
@@ -321,7 +337,8 @@ internal static class DomainResultMapper
     public static object? ToSdkNeutral(object? obj, HashSet<object>? visited = null)
     {
         if (obj is null) return null;
-        if (obj is Variant v) return ToSdkNeutral(v.Value, visited);
+        if (obj is Variant v)
+            return ToSdkNeutral(v.AsBoxedObject(Variant.BoxingBehavior.Legacy), visited);
 
         var type = obj.GetType();
         if (type.IsPrimitive || obj is string || obj is decimal || obj is DateTime || obj is Guid)
@@ -344,7 +361,7 @@ internal static class DomainResultMapper
             return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Code"] = sc.Code,
-                ["Name"] = StatusCode.LookupSymbolicId(sc.Code) ?? sc.ToString()
+                ["Name"] = sc.SymbolicId ?? sc.ToString()
             };
         }
 
@@ -420,7 +437,7 @@ internal static class DomainResultMapper
             {
                 ["TypeId"] = eo.TypeId.ToString(),
                 ["Encoding"] = eo.Encoding.ToString(),
-                ["Body"] = ToSdkNeutral(eo.Body, visited)
+                ["Body"] = ToSdkNeutral(ExtensionObjectHelper.GetBody(eo), visited)
             };
         }
 

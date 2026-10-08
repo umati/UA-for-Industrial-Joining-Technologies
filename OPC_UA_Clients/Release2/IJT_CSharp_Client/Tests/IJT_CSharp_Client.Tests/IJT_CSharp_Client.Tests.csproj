@@ -5,15 +5,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <!-- Suppress CS0618 (obsolete sync ISession methods): test code intentionally exercises
-         the same sync paths used in production. Matches <NoWarn> in IJT_CSharp_Client.csproj. -->
-    <NoWarn>0618;xUnit2002;0109;UA0001;UA0002;UA0003;UA0004;UA0005;UA0006;UA0007;UA0008;UA0009;UA0010;UA0011;UA0012</NoWarn>
+    <NoWarn>xUnit2002;0109</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Moq" />
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.MigrationAnalyzer">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Xunit.SkippableFact" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />

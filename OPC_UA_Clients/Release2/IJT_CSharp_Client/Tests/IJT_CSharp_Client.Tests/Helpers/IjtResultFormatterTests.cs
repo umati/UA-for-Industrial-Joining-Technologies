@@ -650,13 +650,13 @@ public class IjtResultFormatterTests
     }
 
     [Fact]
-    public void FormatResult_WithNullMetadata_ContainsNoMetadataMarker()
+    public async Task FormatResult_WithNullMetadata_ContainsNoMetadataMarker()
     {
         // Use a result with explicitly null metadata by checking the
         // formatter handles it — some UAModel versions may provide a default
         var rd = new ResultDataType();
         // FormatResult should not throw regardless of metadata state
-        var ex = Record.Exception(() => IjtResultFormatter.FormatResult(rd, DateTime.UtcNow));
+        var ex = await Record.ExceptionAsync(async () => IjtResultFormatter.FormatResult(rd, DateTime.UtcNow));
         Assert.Null(ex);
     }
 

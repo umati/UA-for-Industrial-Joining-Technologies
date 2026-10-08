@@ -26,21 +26,21 @@ public sealed class SimulationManagementTests
     {
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 JoiningSystemId, "Simulations", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(SimulationsNodeId);
-        mock.Setup(s => s.BrowseChild(
+            .ReturnsAsync(SimulationsNodeId);
+        mock.Setup(s => s.BrowseChildAsync(
                 SimulationsNodeId, "SimulateResults", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(SimulateResultsNodeId);
-        mock.Setup(s => s.BrowseChild(
+            .ReturnsAsync(SimulateResultsNodeId);
+        mock.Setup(s => s.BrowseChildAsync(
                 SimulationsNodeId, "SimulateEventsAndConditions", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(SimulateEventsNodeId);
-        mock.Setup(s => s.BrowseMethod(
+            .ReturnsAsync(SimulateEventsNodeId);
+        mock.Setup(s => s.BrowseMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(MethodId);
-        mock.Setup(s => s.CallMethod(
+            .ReturnsAsync(MethodId);
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         return mock;
     }
 
@@ -48,578 +48,578 @@ public sealed class SimulationManagementTests
     {
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
         return mock;
     }
 
     // ── Constructor / Dispose / InvalidateNodeCache ───────────────────────────
 
     [Fact]
-    public void Constructor_DoesNotThrow()
+    public async Task Constructor_DoesNotThrow()
     {
-        var ex = Record.Exception(() => new SimulationManagement(HappyPathMock().Object));
+        var ex = await Record.ExceptionAsync(async () => new SimulationManagement(HappyPathMock().Object));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void Dispose_DoesNotThrow()
+    public async Task Dispose_DoesNotThrow()
     {
-        var ex = Record.Exception(() => new SimulationManagement(HappyPathMock().Object).Dispose());
+        var ex = await Record.ExceptionAsync(async () => new SimulationManagement(HappyPathMock().Object).Dispose());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void InvalidateNodeCache_DoesNotThrow()
+    public async Task InvalidateNodeCache_DoesNotThrow()
     {
         var sut = new SimulationManagement(HappyPathMock().Object);
-        var ex = Record.Exception(() => sut.InvalidateNodeCache());
+        var ex = await Record.ExceptionAsync(async () => sut.InvalidateNodeCache());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void InvalidateNodeCache_ForcesRebrowseOnNextCall()
+    public async Task InvalidateNodeCache_ForcesRebrowseOnNextCall()
     {
         var mock = HappyPathMock();
         var sut = new SimulationManagement(mock.Object);
-        sut.SimulateSingleResult();
-        mock.ResetCalls();
+        await sut.SimulateSingleResultAsync();
+        mock.Invocations.Clear();
 
         sut.InvalidateNodeCache();
-        sut.SimulateSingleResult();
+        await sut.SimulateSingleResultAsync();
 
-        mock.Verify(s => s.BrowseChild(
+        mock.Verify(s => s.BrowseChildAsync(
             JoiningSystemId, "Simulations", It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
     }
 
-    // ── SimulateSingleResult ──────────────────────────────────────────────────
+    // ── SimulateSingleResultAsync ──────────────────────────────────────────────────
 
     [Fact]
-    public void SimulateSingleResult_HappyPath_CallsMethod()
+    public async Task SimulateSingleResult_HappyPath_CallsMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateSingleResult(resultType: 1, includeTraces: true);
+        await new SimulationManagement(mock.Object).SimulateSingleResultAsync(resultType: 1, includeTraces: true);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             SimulateResultsNodeId, MethodId, It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateSingleResult_WithDefaultArgs_CallsMethod()
+    public async Task SimulateSingleResult_WithDefaultArgs_CallsMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateSingleResult();
+        await new SimulationManagement(mock.Object).SimulateSingleResultAsync();
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateSingleResult_WhenSimulationsNodeNotFound_DoesNotCallMethod()
+    public async Task SimulateSingleResult_WhenSimulationsNodeNotFound_DoesNotCallMethod()
     {
         var mock = NullNodesMock();
-        new SimulationManagement(mock.Object).SimulateSingleResult();
+        await new SimulationManagement(mock.Object).SimulateSingleResultAsync();
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateSingleResult_WhenMethodNotFound_DoesNotCallMethod()
+    public async Task SimulateSingleResult_WhenMethodNotFound_DoesNotCallMethod()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.BrowseMethod(
+        mock.Setup(s => s.BrowseMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
 
-        new SimulationManagement(mock.Object).SimulateSingleResult();
+        await new SimulationManagement(mock.Object).SimulateSingleResultAsync();
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateSingleResult_WhenServiceResultException_DoesNotThrow()
+    public async Task SimulateSingleResult_WhenServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() => new SimulationManagement(mock.Object).SimulateSingleResult());
+        var ex = await Record.ExceptionAsync(async () => await new SimulationManagement(mock.Object).SimulateSingleResultAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SimulateSingleResult_WhenException_DoesNotThrow()
+    public async Task SimulateSingleResult_WhenException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() => new SimulationManagement(mock.Object).SimulateSingleResult());
+        var ex = await Record.ExceptionAsync(async () => await new SimulationManagement(mock.Object).SimulateSingleResultAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SimulateSingleResult_CalledTwice_SecondCallHitsNodeCache()
+    public async Task SimulateSingleResult_CalledTwice_SecondCallHitsNodeCache()
     {
         var mock = HappyPathMock();
         var sut = new SimulationManagement(mock.Object);
-        sut.SimulateSingleResult();
-        sut.SimulateSingleResult();
+        await sut.SimulateSingleResultAsync();
+        await sut.SimulateSingleResultAsync();
 
-        mock.Verify(s => s.BrowseChild(
+        mock.Verify(s => s.BrowseChildAsync(
             JoiningSystemId, "Simulations", It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
     }
 
-    // ── SimulateBatchOrSyncResult ─────────────────────────────────────────────
+    // ── SimulateBatchOrSyncResultAsync ─────────────────────────────────────────────
 
     [Fact]
-    public void SimulateBatchOrSyncResult_HappyPath_CallsMethod()
+    public async Task SimulateBatchOrSyncResult_HappyPath_CallsMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateBatchOrSyncResult(
+        await new SimulationManagement(mock.Object).SimulateBatchOrSyncResultAsync(
             classification: 3, numChildren: 3, includeTraces: false, sendAsReferences: false);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateBatchOrSyncResult_SyncClassification_CallsMethod()
+    public async Task SimulateBatchOrSyncResult_SyncClassification_CallsMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateBatchOrSyncResult(classification: 2);
+        await new SimulationManagement(mock.Object).SimulateBatchOrSyncResultAsync(classification: 2);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateBatchOrSyncResult_WhenNodesNotFound_DoesNotCallMethod()
+    public async Task SimulateBatchOrSyncResult_WhenNodesNotFound_DoesNotCallMethod()
     {
         var mock = NullNodesMock();
-        new SimulationManagement(mock.Object).SimulateBatchOrSyncResult();
+        await new SimulationManagement(mock.Object).SimulateBatchOrSyncResultAsync();
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateBatchOrSyncResult_WhenServiceResultException_DoesNotThrow()
+    public async Task SimulateBatchOrSyncResult_WhenServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new SimulationManagement(mock.Object).SimulateBatchOrSyncResult());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new SimulationManagement(mock.Object).SimulateBatchOrSyncResultAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SimulateBatchOrSyncResult_WhenException_DoesNotThrow()
+    public async Task SimulateBatchOrSyncResult_WhenException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new SimulationManagement(mock.Object).SimulateBatchOrSyncResult());
+        var ex = await Record.ExceptionAsync(async () =>
+            await new SimulationManagement(mock.Object).SimulateBatchOrSyncResultAsync());
         Assert.Null(ex);
     }
 
-    // ── SimulateJobResult ─────────────────────────────────────────────────────
+    // ── SimulateJobResultAsync ─────────────────────────────────────────────────────
 
     [Fact]
-    public void SimulateJobResult_HappyPath_CallsMethod()
+    public async Task SimulateJobResult_HappyPath_CallsMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateJobResult(sendAsReferences: false);
+        await new SimulationManagement(mock.Object).SimulateJobResultAsync(sendAsReferences: false);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateJobResult_WithReferences_CallsMethod()
+    public async Task SimulateJobResult_WithReferences_CallsMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateJobResult(sendAsReferences: true);
+        await new SimulationManagement(mock.Object).SimulateJobResultAsync(sendAsReferences: true);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateJobResult_WhenNodesNotFound_DoesNotCallMethod()
+    public async Task SimulateJobResult_WhenNodesNotFound_DoesNotCallMethod()
     {
         var mock = NullNodesMock();
-        new SimulationManagement(mock.Object).SimulateJobResult();
+        await new SimulationManagement(mock.Object).SimulateJobResultAsync();
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateJobResult_WhenServiceResultException_DoesNotThrow()
+    public async Task SimulateJobResult_WhenServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() => new SimulationManagement(mock.Object).SimulateJobResult());
+        var ex = await Record.ExceptionAsync(async () => await new SimulationManagement(mock.Object).SimulateJobResultAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SimulateJobResult_WhenException_DoesNotThrow()
+    public async Task SimulateJobResult_WhenException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() => new SimulationManagement(mock.Object).SimulateJobResult());
+        var ex = await Record.ExceptionAsync(async () => await new SimulationManagement(mock.Object).SimulateJobResultAsync());
         Assert.Null(ex);
     }
 
-    // ── SimulateBulkResults ───────────────────────────────────────────────────
+    // ── SimulateBulkResultsAsync ───────────────────────────────────────────────────
 
     [Fact]
-    public void SimulateBulkResults_HappyPath_CallsMethod()
+    public async Task SimulateBulkResults_HappyPath_CallsMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateBulkResults(
+        await new SimulationManagement(mock.Object).SimulateBulkResultsAsync(
             resultType: 0, includeTraces: false, fromSeq: 1, toSeq: 10, minDurationMs: 500);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateBulkResults_WhenToSeqTooSmall_ReturnsEarlyWithoutCallMethod()
+    public async Task SimulateBulkResults_WhenToSeqTooSmall_ReturnsEarlyWithoutCallMethod()
     {
         var mock = HappyPathMock();
         // toSeq(5) < fromSeq(1)+5 = 6 → validation fails
-        new SimulationManagement(mock.Object).SimulateBulkResults(fromSeq: 1, toSeq: 5);
+        await new SimulationManagement(mock.Object).SimulateBulkResultsAsync(fromSeq: 1, toSeq: 5);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateBulkResults_WhenMinDurationTooSmall_ReturnsEarlyWithoutCallMethod()
+    public async Task SimulateBulkResults_WhenMinDurationTooSmall_ReturnsEarlyWithoutCallMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateBulkResults(
+        await new SimulationManagement(mock.Object).SimulateBulkResultsAsync(
             fromSeq: 1, toSeq: 10, minDurationMs: 99);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateBulkResults_BoundaryCondition_ToSeqExactlyFromSeqPlusFive_Succeeds()
+    public async Task SimulateBulkResults_BoundaryCondition_ToSeqExactlyFromSeqPlusFive_Succeeds()
     {
         var mock = HappyPathMock();
         // toSeq(6) == fromSeq(1)+5 → exactly valid
-        new SimulationManagement(mock.Object).SimulateBulkResults(
+        await new SimulationManagement(mock.Object).SimulateBulkResultsAsync(
             fromSeq: 1, toSeq: 6, minDurationMs: 100);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateBulkResults_BoundaryCondition_MinDurationExactly100_Succeeds()
+    public async Task SimulateBulkResults_BoundaryCondition_MinDurationExactly100_Succeeds()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateBulkResults(
+        await new SimulationManagement(mock.Object).SimulateBulkResultsAsync(
             fromSeq: 1, toSeq: 10, minDurationMs: 100);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateBulkResults_WhenNodesNotFound_DoesNotCallMethod()
+    public async Task SimulateBulkResults_WhenNodesNotFound_DoesNotCallMethod()
     {
         var mock = NullNodesMock();
-        new SimulationManagement(mock.Object).SimulateBulkResults(fromSeq: 1, toSeq: 10);
+        await new SimulationManagement(mock.Object).SimulateBulkResultsAsync(fromSeq: 1, toSeq: 10);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateBulkResults_WhenServiceResultException_DoesNotThrow()
+    public async Task SimulateBulkResults_WhenServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new SimulationManagement(mock.Object).SimulateBulkResults(fromSeq: 1, toSeq: 10));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new SimulationManagement(mock.Object).SimulateBulkResultsAsync(fromSeq: 1, toSeq: 10));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SimulateBulkResults_WhenException_DoesNotThrow()
+    public async Task SimulateBulkResults_WhenException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new SimulationManagement(mock.Object).SimulateBulkResults(fromSeq: 1, toSeq: 10));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new SimulationManagement(mock.Object).SimulateBulkResultsAsync(fromSeq: 1, toSeq: 10));
         Assert.Null(ex);
     }
 
-    // ── SimulateEvent ─────────────────────────────────────────────────────────
+    // ── SimulateEventAsync ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void SimulateEvent_HappyPath_CallsMethod()
+    public async Task SimulateEvent_HappyPath_CallsMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateEvent(eventType: 1);
+        await new SimulationManagement(mock.Object).SimulateEventAsync(eventType: 1);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             SimulateEventsNodeId, MethodId, It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateEvent_WithDefaultArgs_CallsMethod()
+    public async Task SimulateEvent_WithDefaultArgs_CallsMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateEvent();
+        await new SimulationManagement(mock.Object).SimulateEventAsync();
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateEvent_WhenNodesNotFound_DoesNotCallMethod()
+    public async Task SimulateEvent_WhenNodesNotFound_DoesNotCallMethod()
     {
         var mock = NullNodesMock();
-        new SimulationManagement(mock.Object).SimulateEvent();
+        await new SimulationManagement(mock.Object).SimulateEventAsync();
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateEvent_WhenFirstBrowseNameFails_FallbackBrowseNameSucceeds()
+    public async Task SimulateEvent_WhenFirstBrowseNameFails_FallbackBrowseNameSucceeds()
     {
         var mock = new Mock<IJoiningSystem>();
         mock.Setup(s => s.NodeId).Returns(JoiningSystemId);
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 JoiningSystemId, "Simulations", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(SimulationsNodeId);
-        mock.Setup(s => s.BrowseChild(
+            .ReturnsAsync(SimulationsNodeId);
+        mock.Setup(s => s.BrowseChildAsync(
                 SimulationsNodeId, "SimulateResults", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(SimulateResultsNodeId);
+            .ReturnsAsync(SimulateResultsNodeId);
         // "SimulateEventsAndConditions" not found → fallback to "SimulateEvents"
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 SimulationsNodeId, "SimulateEventsAndConditions", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(NodeId.Null);
-        mock.Setup(s => s.BrowseChild(
+            .ReturnsAsync(NodeId.Null);
+        mock.Setup(s => s.BrowseChildAsync(
                 SimulationsNodeId, "SimulateEvents", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(SimulateEventsNodeId);
-        mock.Setup(s => s.BrowseMethod(
+            .ReturnsAsync(SimulateEventsNodeId);
+        mock.Setup(s => s.BrowseMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<string>(), It.IsAny<uint>()))
-            .Returns(MethodId);
-        mock.Setup(s => s.CallMethod(
+            .ReturnsAsync(MethodId);
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
 
-        new SimulationManagement(mock.Object).SimulateEvent(eventType: 6);
+        await new SimulationManagement(mock.Object).SimulateEventAsync(eventType: 6);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             SimulateEventsNodeId, MethodId, It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateEvent_CalledTwice_SecondCallHitsEventsNodeCache()
+    public async Task SimulateEvent_CalledTwice_SecondCallHitsEventsNodeCache()
     {
         var mock = HappyPathMock();
         var sut = new SimulationManagement(mock.Object);
-        sut.SimulateEvent();
-        sut.SimulateEvent();
+        await sut.SimulateEventAsync();
+        await sut.SimulateEventAsync();
 
         // SimulateEventsAndConditions is only browsed once (cached after first call)
-        mock.Verify(s => s.BrowseChild(
+        mock.Verify(s => s.BrowseChildAsync(
             SimulationsNodeId, "SimulateEventsAndConditions",
             It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateEvent_WhenServiceResultException_DoesNotThrow()
+    public async Task SimulateEvent_WhenServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() => new SimulationManagement(mock.Object).SimulateEvent());
+        var ex = await Record.ExceptionAsync(async () => await new SimulationManagement(mock.Object).SimulateEventAsync());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SimulateEvent_WhenException_DoesNotThrow()
+    public async Task SimulateEvent_WhenException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() => new SimulationManagement(mock.Object).SimulateEvent());
+        var ex = await Record.ExceptionAsync(async () => await new SimulationManagement(mock.Object).SimulateEventAsync());
         Assert.Null(ex);
     }
 
-    // ── SimulateBulkEvents ────────────────────────────────────────────────────
+    // ── SimulateBulkEventsAsync ────────────────────────────────────────────────────
 
     [Fact]
-    public void SimulateBulkEvents_HappyPath_CallsMethod()
+    public async Task SimulateBulkEvents_HappyPath_CallsMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateBulkEvents(eventType: 1, count: 10);
+        await new SimulationManagement(mock.Object).SimulateBulkEventsAsync(eventType: 1, count: 10);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateBulkEvents_WhenCountIsZero_ReturnsEarlyWithoutCallMethod()
+    public async Task SimulateBulkEvents_WhenCountIsZero_ReturnsEarlyWithoutCallMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateBulkEvents(count: 0);
+        await new SimulationManagement(mock.Object).SimulateBulkEventsAsync(count: 0);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateBulkEvents_WhenCountExceedsMax_ReturnsEarlyWithoutCallMethod()
+    public async Task SimulateBulkEvents_WhenCountExceedsMax_ReturnsEarlyWithoutCallMethod()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateBulkEvents(count: 1001);
+        await new SimulationManagement(mock.Object).SimulateBulkEventsAsync(count: 1001);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateBulkEvents_BoundaryCondition_Count1000_Succeeds()
+    public async Task SimulateBulkEvents_BoundaryCondition_Count1000_Succeeds()
     {
         var mock = HappyPathMock();
-        new SimulationManagement(mock.Object).SimulateBulkEvents(count: 1000);
+        await new SimulationManagement(mock.Object).SimulateBulkEventsAsync(count: 1000);
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateBulkEvents_WhenNodesNotFound_DoesNotCallMethod()
+    public async Task SimulateBulkEvents_WhenNodesNotFound_DoesNotCallMethod()
     {
         var mock = NullNodesMock();
-        new SimulationManagement(mock.Object).SimulateBulkEvents();
+        await new SimulationManagement(mock.Object).SimulateBulkEventsAsync();
 
-        mock.Verify(s => s.CallMethod(
+        mock.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SimulateBulkEvents_WhenServiceResultException_DoesNotThrow()
+    public async Task SimulateBulkEvents_WhenServiceResultException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(Opc.Ua.StatusCodes.Bad));
 
-        var ex = Record.Exception(() =>
-            new SimulationManagement(mock.Object).SimulateBulkEvents(count: 5));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new SimulationManagement(mock.Object).SimulateBulkEventsAsync(count: 5));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SimulateBulkEvents_WhenException_DoesNotThrow()
+    public async Task SimulateBulkEvents_WhenException_DoesNotThrow()
     {
         var mock = HappyPathMock();
-        mock.Setup(s => s.CallMethod(
+        mock.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("test"));
 
-        var ex = Record.Exception(() =>
-            new SimulationManagement(mock.Object).SimulateBulkEvents(count: 5));
+        var ex = await Record.ExceptionAsync(async () =>
+            await new SimulationManagement(mock.Object).SimulateBulkEventsAsync(count: 5));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SimulateBulkEvents_CalledTwice_SecondCallHitsNodeCache()
+    public async Task SimulateBulkEvents_CalledTwice_SecondCallHitsNodeCache()
     {
         var mock = HappyPathMock();
         var sut = new SimulationManagement(mock.Object);
-        sut.SimulateBulkEvents(count: 5);
-        sut.SimulateBulkEvents(count: 5);
+        await sut.SimulateBulkEventsAsync(count: 5);
+        await sut.SimulateBulkEventsAsync(count: 5);
 
-        mock.Verify(s => s.BrowseChild(
+        mock.Verify(s => s.BrowseChildAsync(
             JoiningSystemId, "Simulations", It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
     }
     [Fact]
-    public void SimulateSingleResult_AfterSimulateSingleEvent_HitsSimulationsNodeCache()
+    public async Task SimulateSingleResult_AfterSimulateSingleEvent_HitsSimulationsNodeCache()
     {
         // First call SimulateSingleEvent to populate _simulationsNodeId cache
-        // Then call SimulateSingleResult, which should call GetSimulationsNode
+        // Then call SimulateSingleResultAsync, which should call GetSimulationsNode
         // and hit the cache (line 41 in SimulationManagement.cs)
         var mock = HappyPathMock();
         var sut = new SimulationManagement(mock.Object);
 
-        sut.SimulateEvent(1);    // populates _simulationsNodeId
-        sut.SimulateSingleResult(1);   // hits _simulationsNodeId cache when calling GetSimulateResultsNode
+        await sut.SimulateEventAsync(1);    // populates _simulationsNodeId
+        await sut.SimulateSingleResultAsync(1);   // hits _simulationsNodeId cache when calling GetSimulateResultsNode
 
         // Simulations node browsed only once (cached on second call)
-        mock.Verify(s => s.BrowseChild(
+        mock.Verify(s => s.BrowseChildAsync(
             JoiningSystemId, "Simulations", It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
     }
 
     [Fact]
-    public void SimulateSingleResult_WhenSimulateResultsNodeNotFound_LogsWarning()
+    public async Task SimulateSingleResult_WhenSimulateResultsNodeNotFound_LogsWarning()
     {
         // Make SimulateResults lookup return null so line 60 (LogWarning) is hit
         var mock = HappyPathMock();
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 SimulationsNodeId, "SimulateResults", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
         var sut = new SimulationManagement(mock.Object);
 
-        var ex = Record.Exception(() => sut.SimulateSingleResult(1));
+        var ex = await Record.ExceptionAsync(async () => await sut.SimulateSingleResultAsync(1));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SimulateSingleEvent_WhenSimulateEventsNodeNotFound_LogsWarning()
+    public async Task SimulateSingleEvent_WhenSimulateEventsNodeNotFound_LogsWarning()
     {
         // Make both event node browse names return null so line 78 (LogWarning) is hit
         var mock = HappyPathMock();
-        mock.Setup(s => s.BrowseChild(
+        mock.Setup(s => s.BrowseChildAsync(
                 SimulationsNodeId, "SimulateEventsAndConditions", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(NodeId.Null);
-        mock.Setup(s => s.BrowseChild(
+            .ReturnsAsync(NodeId.Null);
+        mock.Setup(s => s.BrowseChildAsync(
                 SimulationsNodeId, "SimulateEvents", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
-            .Returns(NodeId.Null);
+            .ReturnsAsync(NodeId.Null);
         var sut = new SimulationManagement(mock.Object);
 
-        var ex = Record.Exception(() => sut.SimulateEvent(1));
+        var ex = await Record.ExceptionAsync(async () => await sut.SimulateEventAsync(1));
         Assert.Null(ex);
     }
 }

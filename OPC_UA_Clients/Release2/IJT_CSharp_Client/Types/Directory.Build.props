@@ -38,13 +38,16 @@
     -->
     <TypesTargetFrameworks Condition="'$(OpcUaClientOnly)' != 'true'">net8.0;net9.0;net10.0</TypesTargetFrameworks>
     <TypesTargetFrameworks Condition="'$(OpcUaClientOnly)' == 'true'">net48;net6.0;net8.0;net9.0;netstandard2.1</TypesTargetFrameworks>
-    <NoWarn>$(NoWarn);0618;0109;1591;UA0001;UA0002;UA0003;UA0004;UA0005;UA0006;UA0007;UA0008;UA0009;UA0010;UA0011;UA0012</NoWarn>
+    <NoWarn>$(NoWarn);0109;1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(OpcUaClientOnly)' != 'true'">
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.SourceGeneration">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.MigrationAnalyzer">
+      <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>
 

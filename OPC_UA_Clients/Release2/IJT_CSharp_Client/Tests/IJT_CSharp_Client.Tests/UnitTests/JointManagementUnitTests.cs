@@ -13,224 +13,224 @@ namespace IJT_CSharp_Client.Tests.UnitTests;
 /// </summary>
 public sealed class JointManagementUnitTests
 {
-    // ── GetJointList ──────────────────────────────────────────────────────────
+    // ── GetJointListAsync ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetJointList_NodeFound_CallsMethodOnce()
+    public async Task GetJointList_NodeFound_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.GetJointList());
+        var ex = await Record.ExceptionAsync(async () => await jm.GetJointListAsync());
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetJointList_NodeNotFound_DoesNotCallMethod()
+    public async Task GetJointList_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.GetJointList());
+        var ex = await Record.ExceptionAsync(async () => await jm.GetJointListAsync());
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void GetJointList_OpcUaServiceException_HandledWithoutRethrow()
+    public async Task GetJointList_OpcUaServiceException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadTimeout));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.GetJointList());
+        var ex = await Record.ExceptionAsync(async () => await jm.GetJointListAsync());
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetJointList_UnexpectedException_HandledWithoutRethrow()
+    public async Task GetJointList_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("simulated failure"));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.GetJointList());
+        var ex = await Record.ExceptionAsync(async () => await jm.GetJointListAsync());
 
         Assert.Null(ex);
     }
 
-    // ── GetJoint ──────────────────────────────────────────────────────────────
+    // ── GetJointAsync ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetJoint_NodeFound_CallsMethodOnce()
+    public async Task GetJoint_NodeFound_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.GetJoint("urn:product-1", "JNT-001"));
+        var ex = await Record.ExceptionAsync(async () => await jm.GetJointAsync("urn:product-1", "JNT-001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void GetJoint_NodeNotFound_DoesNotCallMethod()
+    public async Task GetJoint_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.GetJoint("urn:product-1", "JNT-001"));
+        var ex = await Record.ExceptionAsync(async () => await jm.GetJointAsync("urn:product-1", "JNT-001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void GetJoint_OpcUaServiceException_HandledWithoutRethrow()
+    public async Task GetJoint_OpcUaServiceException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadNotFound));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.GetJoint("urn:product-1", "JNT-001"));
+        var ex = await Record.ExceptionAsync(async () => await jm.GetJointAsync("urn:product-1", "JNT-001"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void GetJoint_UnexpectedException_HandledWithoutRethrow()
+    public async Task GetJoint_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new TimeoutException("simulated timeout"));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.GetJoint("urn:product-1", "JNT-001"));
+        var ex = await Record.ExceptionAsync(async () => await jm.GetJointAsync("urn:product-1", "JNT-001"));
 
         Assert.Null(ex);
     }
 
-    // ── SelectJoint ───────────────────────────────────────────────────────────
+    // ── SelectJointAsync ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void SelectJoint_NodeFound_CallsMethodOnce()
+    public async Task SelectJoint_NodeFound_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SelectJoint("urn:product-1", "JNT-001", "ORIGIN-1"));
+        var ex = await Record.ExceptionAsync(async () => await jm.SelectJointAsync("urn:product-1", "JNT-001", "ORIGIN-1"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SelectJoint_NodeNotFound_DoesNotCallMethod()
+    public async Task SelectJoint_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SelectJoint("urn:product-1", "JNT-001", "ORIGIN-1"));
+        var ex = await Record.ExceptionAsync(async () => await jm.SelectJointAsync("urn:product-1", "JNT-001", "ORIGIN-1"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
-    // ── DeleteJoint ───────────────────────────────────────────────────────────
+    // ── DeleteJointAsync ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void DeleteJoint_NodeFound_CallsMethodOnce()
+    public async Task DeleteJoint_NodeFound_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.DeleteJoint("urn:product-1", "JNT-001", "ORIGIN-1"));
+        var ex = await Record.ExceptionAsync(async () => await jm.DeleteJointAsync("urn:product-1", "JNT-001", "ORIGIN-1"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void DeleteJoint_NodeNotFound_DoesNotCallMethod()
+    public async Task DeleteJoint_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.DeleteJoint("urn:product-1", "JNT-001", "ORIGIN-1"));
+        var ex = await Record.ExceptionAsync(async () => await jm.DeleteJointAsync("urn:product-1", "JNT-001", "ORIGIN-1"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
-    // ── SendJoint ─────────────────────────────────────────────────────────────
+    // ── SendJointAsync ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public void SendJoint_WithValidArgs_CallsMethodOnce()
+    public async Task SendJoint_WithValidArgs_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001",
+        var ex = await Record.ExceptionAsync(async () => await jm.SendJointAsync("urn:product-1", "JNT-001", "DESIGN-001",
             name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void SendJoint_EmptyJointId_DoesNotCallMethod()
+    public async Task SendJoint_EmptyJointId_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "", "DESIGN-001"));
+        var ex = await Record.ExceptionAsync(async () => await jm.SendJointAsync("urn:product-1", "", "DESIGN-001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void SendJoint_NodeNotFound_DoesNotCallMethod()
+    public async Task SendJoint_NodeNotFound_DoesNotCallMethod()
     {
         var session = MockSessionBuilder.CreateWithNullNodes();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001",
+        var ex = await Record.ExceptionAsync(async () => await jm.SendJointAsync("urn:product-1", "JNT-001", "DESIGN-001",
             name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Fact]
-    public void InvalidateNodeCache_DoesNotThrow()
+    public async Task InvalidateNodeCache_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.InvalidateNodeCache());
+        var ex = await Record.ExceptionAsync(async () => jm.InvalidateNodeCache());
 
         Assert.Null(ex);
     }
@@ -238,10 +238,10 @@ public sealed class JointManagementUnitTests
     // ── Dispose ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Dispose_DoesNotThrow()
+    public async Task Dispose_DoesNotThrow()
     {
         var session = MockSessionBuilder.Create();
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
         {
             using var jm = new JointManagement(session.Object);
         });
@@ -255,17 +255,17 @@ public sealed class JointManagementUnitTests
 public sealed class JointDataTypeEncodingMaskTests
 {
     [Fact]
-    public void SendJoint_PassesExtensionObjectAsSecondArg()
+    public async Task SendJoint_PassesExtensionObjectAsSecondArg()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jm = new JointManagement(session.Object);
 
-        jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001");
+        await jm.SendJointAsync("urn:product-1", "JNT-001", "DESIGN-001");
 
         Assert.NotNull(capturedArgs);
         Assert.Equal(2, capturedArgs.Length);
@@ -273,125 +273,125 @@ public sealed class JointDataTypeEncodingMaskTests
     }
 
     [Fact]
-    public void SendJoint_JointIdSetCorrectly()
+    public async Task SendJoint_JointIdSetCorrectly()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jm = new JointManagement(session.Object);
 
-        jm.SendJoint("urn:product-1", "JNT-007", "DESIGN-001");
+        await jm.SendJointAsync("urn:product-1", "JNT-007", "DESIGN-001");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var joint = Assert.IsType<IJTBase.JointDataType>(ext.Body);
+        Assert.True(ext.TryGetValue(out IJTBase.JointDataType? joint));
         Assert.Equal("JNT-007", joint.JointId);
     }
 
     [Fact]
-    public void SendJoint_WithDesignId_EncodingMaskIncludesDesignIdBit()
+    public async Task SendJoint_WithDesignId_EncodingMaskIncludesDesignIdBit()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jm = new JointManagement(session.Object);
 
-        jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001");
+        await jm.SendJointAsync("urn:product-1", "JNT-001", "DESIGN-001");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var joint = Assert.IsType<IJTBase.JointDataType>(ext.Body);
+        Assert.True(ext.TryGetValue(out IJTBase.JointDataType? joint));
         Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.JointDesignId) != 0,
             "JointDesignId must be in EncodingMask so it reaches the server");
     }
 
     [Fact]
-    public void SendJoint_WithName_EncodingMaskIncludesNameBit()
+    public async Task SendJoint_WithName_EncodingMaskIncludesNameBit()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jm = new JointManagement(session.Object);
 
-        jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001", name: "Left bolt");
+        await jm.SendJointAsync("urn:product-1", "JNT-001", "DESIGN-001", name: "Left bolt");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var joint = Assert.IsType<IJTBase.JointDataType>(ext.Body);
+        Assert.True(ext.TryGetValue(out IJTBase.JointDataType? joint));
         Assert.Equal("Left bolt", joint.Name);
         Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.Name) != 0,
             "Name must be in EncodingMask when provided");
     }
 
     [Fact]
-    public void SendJoint_EmptyDesignId_DesignIdBitNotInMask()
+    public async Task SendJoint_EmptyDesignId_DesignIdBitNotInMask()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jm = new JointManagement(session.Object);
 
-        jm.SendJoint("urn:product-1", "JNT-001", "");
+        await jm.SendJointAsync("urn:product-1", "JNT-001", "");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var joint = Assert.IsType<IJTBase.JointDataType>(ext.Body);
+        Assert.True(ext.TryGetValue(out IJTBase.JointDataType? joint));
         Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.JointDesignId) == 0u,
             "Empty JointDesignId must not be in EncodingMask");
     }
 
     [Fact]
-    public void SendJoint_EmptyName_NameBitNotInMask()
+    public async Task SendJoint_EmptyName_NameBitNotInMask()
     {
         var session = MockSessionBuilder.Create();
         object[]? capturedArgs = null;
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Callback<NodeId, NodeId, object[]>((_, _, args) => capturedArgs = args)
-            .Returns(new List<object>());
+            .ReturnsAsync(new List<object>());
         using var jm = new JointManagement(session.Object);
 
-        jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001");
+        await jm.SendJointAsync("urn:product-1", "JNT-001", "DESIGN-001");
 
         var ext = Assert.IsType<ExtensionObject>(capturedArgs![1]);
-        var joint = Assert.IsType<IJTBase.JointDataType>(ext.Body);
+        Assert.True(ext.TryGetValue(out IJTBase.JointDataType? joint));
         Assert.True((joint.EncodingMask & (uint)IJTBase.JointDataTypeFields.Name) == 0u,
             "Empty/omitted Name must not be in EncodingMask");
     }
 
     [Fact]
-    public void SendJoint_OpcUaException_HandledWithoutRethrow()
+    public async Task SendJoint_OpcUaException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadArgumentsMissing));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001",
+        var ex = await Record.ExceptionAsync(async () => await jm.SendJointAsync("urn:product-1", "JNT-001", "DESIGN-001",
             name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void SendJoint_UnexpectedException_HandledWithoutRethrow()
+    public async Task SendJoint_UnexpectedException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(
+        session.Setup(s => s.CallMethodAsync(
                 It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("simulated failure"));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SendJoint("urn:product-1", "JNT-001", "DESIGN-001",
+        var ex = await Record.ExceptionAsync(async () => await jm.SendJointAsync("urn:product-1", "JNT-001", "DESIGN-001",
             name: "Front-left flange bolt", description: "M8x30 hex bolt, class 10.9"));
 
         Assert.Null(ex);
@@ -459,84 +459,84 @@ public sealed class JointDataTypeEncodingMaskTests
     // -- Cache hit paths -------------------------------------------------------
 
     [Fact]
-    public void GetJointList_CalledTwice_UsesCachedNodeId()
+    public async Task GetJointList_CalledTwice_UsesCachedNodeId()
     {
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        jm.GetJointList();   // first call sets _jmNodeId
-        jm.GetJointList();   // second call hits cache line
+        await jm.GetJointListAsync();   // first call sets _jmNodeId
+        await jm.GetJointListAsync();   // second call hits cache line
 
-        // BrowseChild called only once (not twice) because second call uses cache
-        session.Verify(s => s.BrowseChild(
+        // BrowseChildAsync called only once (not twice) because second call uses cache
+        session.Verify(s => s.BrowseChildAsync(
             It.IsAny<NodeId>(), It.IsAny<string>(),
             It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Once);
     }
 
     [Fact]
-    public void InvalidateNodeCache_ForcesReBrowseOnNextCall()
+    public async Task InvalidateNodeCache_ForcesReBrowseOnNextCall()
     {
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        jm.GetJointList();         // populates cache
+        await jm.GetJointListAsync();         // populates cache
         jm.InvalidateNodeCache();  // clears cache
-        jm.GetJointList();         // forces re-browse
+        await jm.GetJointListAsync();         // forces re-browse
 
-        // BrowseChild should be called twice (once before, once after invalidate)
-        session.Verify(s => s.BrowseChild(
+        // BrowseChildAsync should be called twice (once before, once after invalidate)
+        session.Verify(s => s.BrowseChildAsync(
             It.IsAny<NodeId>(), It.IsAny<string>(),
             It.IsAny<ushort>(), It.IsAny<NodeClass>()), Times.Exactly(2));
     }
 
     [Fact]
-    public void SelectJoint_GenericException_HandledWithoutRethrow()
+    public async Task SelectJoint_GenericException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+        session.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("select error"));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.SelectJoint("uri:test", "JNT-001", "ORIGIN-001"));
+        var ex = await Record.ExceptionAsync(async () => await jm.SelectJointAsync("uri:test", "JNT-001", "ORIGIN-001"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void DeleteJoint_NodeFound_CallsMethodOnce()
+    public async Task DeleteJoint_NodeFound_CallsMethodOnce()
     {
         var session = MockSessionBuilder.Create();
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.DeleteJoint("uri:test", "JNT-001", "ORIGIN-001"));
+        var ex = await Record.ExceptionAsync(async () => await jm.DeleteJointAsync("uri:test", "JNT-001", "ORIGIN-001"));
 
         Assert.Null(ex);
-        session.Verify(s => s.CallMethod(
+        session.Verify(s => s.CallMethodAsync(
             It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()), Times.Once);
     }
 
     [Fact]
-    public void DeleteJoint_OpcUaServiceException_HandledWithoutRethrow()
+    public async Task DeleteJoint_OpcUaServiceException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+        session.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new Opc.Ua.ServiceResultException(StatusCodes.BadTimeout));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.DeleteJoint("uri:test", "JNT-001", "ORIGIN-001"));
+        var ex = await Record.ExceptionAsync(async () => await jm.DeleteJointAsync("uri:test", "JNT-001", "ORIGIN-001"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void DeleteJoint_GenericException_HandledWithoutRethrow()
+    public async Task DeleteJoint_GenericException_HandledWithoutRethrow()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.CallMethod(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
+        session.Setup(s => s.CallMethodAsync(It.IsAny<NodeId>(), It.IsAny<NodeId>(), It.IsAny<object[]>()))
             .Throws(new InvalidOperationException("delete error"));
         using var jm = new JointManagement(session.Object);
 
-        var ex = Record.Exception(() => jm.DeleteJoint("uri:test", "JNT-001", "ORIGIN-001"));
+        var ex = await Record.ExceptionAsync(async () => await jm.DeleteJointAsync("uri:test", "JNT-001", "ORIGIN-001"));
 
         Assert.Null(ex);
     }

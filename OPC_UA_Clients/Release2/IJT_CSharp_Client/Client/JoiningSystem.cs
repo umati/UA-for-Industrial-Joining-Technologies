@@ -135,7 +135,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         var log = IjtLog.For<JoiningSystem>();
 
         var appConfig = OpcUaSessionConnector.BuildApplicationConfig(config);
-        await hooks.ValidateApplicationConfigAsync(appConfig).ConfigureAwait(false);
+        await hooks.ValidateApplicationConfigAsync(appConfig, ct).ConfigureAwait(false);
         await hooks.EnsureApplicationCertificateAsync(config, appConfig, ct).ConfigureAwait(false);
 
         if (config.AutoAcceptServerCertificate)
@@ -146,7 +146,8 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
         ct.ThrowIfCancellationRequested();
         log.LogInformation("Discovering endpoints at {Url} ...", config.ServerUrl);
-        var endpointDesc = hooks.SelectEndpointDescription(appConfig, config, log);
+        var endpointDesc = await hooks.SelectEndpointDescriptionAsync(appConfig, config, log, ct)
+            .ConfigureAwait(false);
         var configuredEndpoint = new ConfiguredEndpoint(null, endpointDesc, EndpointConfiguration.Create(appConfig));
         var userIdentity = OpcUaSessionConnector.BuildUserIdentity(config, endpointDesc);
 
@@ -155,7 +156,8 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
             appConfig,
             configuredEndpoint,
             config,
-            userIdentity).ConfigureAwait(false);
+            userIdentity,
+            ct).ConfigureAwait(false);
 
         // Register all IJT encodeable types so the SDK can encode/decode ExtensionObjects.
         session.MessageContext.Factory.AddEncodeableTypes(
@@ -168,13 +170,13 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         session.KeepAlive += js.OnKeepAlive;
 
         js.ResolveNamespaceIndices();
-        js.DiscoverJoiningSystem();
+        await js.DiscoverJoiningSystemAsync().ConfigureAwait(false);
         js.InitManagement();
 
         log.LogInformation(
             "Connected - IJTBase ns={IjtBase}, IJTTightening ns={IjtTightening}, MachineryResult ns={MachineryResult}",
             js.IjtBaseNsIdx, js.IjtTighteningNsIdx, js.MachineryResultNsIdx);
-        if (!js._joiningSystemNodeId.IsNullNodeId())
+        if (!js._joiningSystemNodeId.IsNull)
             log.LogInformation("JoiningSystem node: {NodeId}", js._joiningSystemNodeId);
 
         return js;
@@ -183,29 +185,29 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     // -- Test & backwards-compatibility forwarders ------------------------------
 
     internal sealed record ConnectionHooks(
-        Func<ApplicationConfiguration, Task> ValidateApplicationConfigAsync,
+        Func<ApplicationConfiguration, CancellationToken, Task> ValidateApplicationConfigAsync,
         Func<ClientConfig, ApplicationConfiguration, CancellationToken, Task> EnsureApplicationCertificateAsync,
-        Func<ApplicationConfiguration, ClientConfig, ILogger, EndpointDescription> SelectEndpointDescription,
-        Func<ApplicationConfiguration, ConfiguredEndpoint, ClientConfig, IUserIdentity, Task<ISession>> CreateSessionAsync)
+        Func<ApplicationConfiguration, ClientConfig, ILogger, CancellationToken, Task<EndpointDescription>> SelectEndpointDescriptionAsync,
+        Func<ApplicationConfiguration, ConfiguredEndpoint, ClientConfig, IUserIdentity, CancellationToken, Task<ISession>> CreateSessionAsync)
     {
         public static ConnectionHooks Production { get; } = new(
             OpcUaSessionConnector.ConnectionHooks.Production.ValidateApplicationConfigAsync,
             OpcUaSessionConnector.ConnectionHooks.Production.EnsureApplicationCertificateAsync,
-            OpcUaSessionConnector.ConnectionHooks.Production.SelectEndpointDescription,
+            OpcUaSessionConnector.ConnectionHooks.Production.SelectEndpointDescriptionAsync,
             OpcUaSessionConnector.ConnectionHooks.Production.CreateSessionAsync);
 
         public static implicit operator OpcUaSessionConnector.ConnectionHooks(ConnectionHooks hooks)
             => new(
                 hooks.ValidateApplicationConfigAsync,
                 hooks.EnsureApplicationCertificateAsync,
-                hooks.SelectEndpointDescription,
+                hooks.SelectEndpointDescriptionAsync,
                 hooks.CreateSessionAsync);
 
         public static implicit operator ConnectionHooks(OpcUaSessionConnector.ConnectionHooks hooks)
             => new(
                 hooks.ValidateApplicationConfigAsync,
                 hooks.EnsureApplicationCertificateAsync,
-                hooks.SelectEndpointDescription,
+                hooks.SelectEndpointDescriptionAsync,
                 hooks.CreateSessionAsync);
     }
 
@@ -254,13 +256,13 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     {
         var ns = _session.NamespaceUris;
 
-        int ijtBase = ns.GetIndex(UAModel.IJTBase.Namespaces.IJTBase);
+        int ijtBase = ns.GetIndex(IJTBase.Namespaces.IJTBase);
         IjtBaseNsIdx = ijtBase >= 0 ? (ushort)ijtBase : (ushort)0;
 
-        int ijtTightening = ns.GetIndex(UAModel.IJTTightening.Namespaces.IJTTightening);
+        int ijtTightening = ns.GetIndex(IJTTightening.Namespaces.IJTTightening);
         IjtTighteningNsIdx = ijtTightening >= 0 ? (ushort)ijtTightening : (ushort)0;
 
-        int machineryResult = ns.GetIndex(UAModel.MachineryResult.Namespaces.MachineryResult);
+        int machineryResult = ns.GetIndex(MachineryResult.Namespaces.MachineryResult);
         MachineryResultNsIdx = machineryResult >= 0 ? (ushort)machineryResult : (ushort)0;
 
         int di = ns.GetIndex("http://opcfoundation.org/UA/DI/");
@@ -269,22 +271,23 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- JoiningSystem discovery -----------------------------------------------
 
-    private void DiscoverJoiningSystem()
+    private async Task DiscoverJoiningSystemAsync()
     {
         try
         {
-            var refs = AddressSpaceHelper.BrowseChildren(_session, Opc.Ua.ObjectIds.ObjectsFolder, NodeClass.Object);
+            var refs = await AddressSpaceHelper.BrowseChildrenAsync(
+                _session, Opc.Ua.ObjectIds.ObjectsFolder, NodeClass.Object).ConfigureAwait(false);
             if (refs.Count == 0) return;
 
-            var typeId = new NodeId(UAModel.IJTBase.ObjectTypes.JoiningSystemType, IjtBaseNsIdx);
+            var typeId = new NodeId(IJTBase.ObjectTypes.JoiningSystemType, IjtBaseNsIdx);
 
             foreach (var r in refs)
             {
                 var typeDef = (NodeId)r.TypeDefinition;
                 if (typeDef == typeId ||
                     (typeDef.IdType == IdType.Numeric &&
-                     typeDef.Identifier is uint id &&
-                     id == UAModel.IJTBase.ObjectTypes.JoiningSystemType))
+                     typeDef.TryGetValue(out uint id) &&
+                     id == IJTBase.ObjectTypes.JoiningSystemType))
                 {
                     _joiningSystemNodeId = (NodeId)r.NodeId;
                     return;
@@ -334,15 +337,23 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         if (!ServiceResult.IsBad(e.Status)) return;
 
         _log.LogWarning("Keep-alive failed ({Status}). Attempting reconnect ...", e.Status);
+        _ = ReconnectAsync(session);
+    }
+
+    private async Task ReconnectAsync(ISession session)
+    {
         try
         {
             if (session is Session concreteSession)
             {
-                var reconnectHandler = new SessionReconnectHandler();
+                var reconnectHandler = new SessionReconnectHandler(
+                    session.MessageContext.Telemetry,
+                    reconnectAbort: true,
+                    maxReconnectPeriod: 10000);
                 reconnectHandler.BeginReconnect(concreteSession, 10000, (_, _) => { });
             }
             ResolveNamespaceIndices();
-            DiscoverJoiningSystem();
+            await DiscoverJoiningSystemAsync().ConfigureAwait(false);
             ResultManagement?.InvalidateNodeCache();
             AssetManagement?.InvalidateNodeCache();
             JoiningProcessManagement?.InvalidateNodeCache();
@@ -363,27 +374,27 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- Method-call helper ----------------------------------------------------
 
-    public IList<object> CallMethod(
+    public async Task<IList<object>> CallMethodAsync(
         NodeId objectId,
         NodeId methodId,
         params object[] inputArgs)
     {
-        if (objectId.IsNullNodeId())
+        if (objectId.IsNull)
             throw new InvalidOperationException("CallMethod: objectId is null/empty.");
-        if (methodId.IsNullNodeId())
+        if (methodId.IsNull)
             throw new InvalidOperationException("CallMethod: methodId is null/empty.");
 
-        var variants = inputArgs.Select(a => a is Variant v ? v : new Variant(a)).ToArray();
+        var variants = inputArgs.Select(ToVariant).ToArray();
         var request = new CallMethodRequest
         {
             ObjectId = objectId,
             MethodId = methodId,
             InputArguments = new ArrayOf<Variant>(variants),
         };
-        var response = _session.CallAsync(
+        var response = await _session.CallAsync(
             null,
             new ArrayOf<CallMethodRequest>(new[] { request }),
-            CancellationToken.None).AsTask().GetAwaiter().GetResult();
+            CancellationToken.None).ConfigureAwait(false);
 
         if (response?.Results == null || response.Results.Count == 0)
             return [];
@@ -398,20 +409,48 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         var list = new List<object>(result.OutputArguments.Count);
         foreach (var arg in result.OutputArguments)
         {
-            list.Add(arg.Value!);
+            list.Add(arg.AsBoxedObject(Variant.BoxingBehavior.Legacy)!);
         }
         return list;
     }
 
+    private static Variant ToVariant(object? value) => value switch
+    {
+        null => default,
+        Variant variant => variant,
+        bool item => Variant.From(item),
+        sbyte item => Variant.From(item),
+        byte item => Variant.From(item),
+        short item => Variant.From(item),
+        ushort item => Variant.From(item),
+        int item => Variant.From(item),
+        uint item => Variant.From(item),
+        long item => Variant.From(item),
+        ulong item => Variant.From(item),
+        float item => Variant.From(item),
+        double item => Variant.From(item),
+        string item => Variant.From(item),
+        DateTime item => Variant.From(new DateTimeUtc(item)),
+        Guid item => Variant.From(new Uuid(item)),
+        byte[] item => Variant.From(new ByteString(item)),
+        ExtensionObject item => Variant.From(item),
+        ExtensionObject[] item => Variant.From(item),
+        string[] item => Variant.From(item),
+        IEncodeable item => Variant.From(new ExtensionObject(item)),
+        _ => throw new ArgumentException(
+            $"The OPC UA SDK does not support a Variant input for CLR type '{value.GetType().FullName}'.",
+            nameof(value)),
+    };
+
     // -- Browse helper ---------------------------------------------------------
 
-    public NodeId BrowseChild(
+    public async Task<NodeId> BrowseChildAsync(
         NodeId parentId,
         string childBrowseName,
         ushort nsIndex = 0,
         NodeClass nodeClassMask = NodeClass.Unspecified)
     {
-        if (parentId.IsNullNodeId())
+        if (parentId.IsNull)
             return NodeId.Null;
 
         var mask = nodeClassMask == NodeClass.Unspecified
@@ -420,7 +459,8 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
         try
         {
-            var refs = AddressSpaceHelper.BrowseChildren(_session, parentId, mask);
+            var refs = await AddressSpaceHelper.BrowseChildrenAsync(
+                _session, parentId, mask).ConfigureAwait(false);
             var match = refs.FirstOrDefault(r =>
                 r.BrowseName.Name?.Equals(childBrowseName, StringComparison.OrdinalIgnoreCase) == true &&
                 (nsIndex == 0 || r.BrowseName.NamespaceIndex == nsIndex));
@@ -443,11 +483,11 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- BrowseChildren helper ------------------------------------------------
 
-    public IReadOnlyList<ReferenceDescription> BrowseChildren(
+    public async Task<IReadOnlyList<ReferenceDescription>> BrowseChildrenAsync(
         NodeId parentId,
         uint nodeClassMask = (uint)NodeClass.Unspecified)
     {
-        if (parentId.IsNullNodeId())
+        if (parentId.IsNull)
             return [];
 
         var mask = nodeClassMask == (uint)NodeClass.Unspecified
@@ -456,7 +496,8 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
         try
         {
-            return AddressSpaceHelper.BrowseChildren(_session, parentId, mask);
+            return await AddressSpaceHelper.BrowseChildrenAsync(
+                _session, parentId, mask).ConfigureAwait(false);
         }
         catch (ServiceResultException ex)
         {
@@ -473,14 +514,15 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- DiscoverMethodsUnder helper -------------------------------------------
 
-    public Dictionary<string, NodeId> DiscoverMethodsUnder(NodeId objectId)
+    public async Task<Dictionary<string, NodeId>> DiscoverMethodsUnderAsync(NodeId objectId)
     {
-        if (objectId.IsNullNodeId())
+        if (objectId.IsNull)
             return new Dictionary<string, NodeId>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
-            var refs = AddressSpaceHelper.BrowseChildren(_session, objectId, NodeClass.Method);
+            var refs = await AddressSpaceHelper.BrowseChildrenAsync(
+                _session, objectId, NodeClass.Method).ConfigureAwait(false);
 
             return refs.ToDictionary(
                 r => r.BrowseName.Name ?? string.Empty,
@@ -496,14 +538,15 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     // -- BrowseMethod helper ---------------------------------------------------
 
-    public NodeId BrowseMethod(NodeId objectId, string methodBrowseName, uint fallbackConstant = 0)
+    public async Task<NodeId> BrowseMethodAsync(NodeId objectId, string methodBrowseName, uint fallbackConstant = 0)
     {
         // Tier 1: exact browse by name
-        var m = BrowseChild(objectId, methodBrowseName, nodeClassMask: NodeClass.Method);
-        if (!m.IsNullNodeId()) return m;
+        var m = await BrowseChildAsync(
+            objectId, methodBrowseName, nodeClassMask: NodeClass.Method).ConfigureAwait(false);
+        if (!m.IsNull) return m;
 
         // Tier 2: enumerate all Method children, case-insensitive match
-        var methods = DiscoverMethodsUnder(objectId);
+        var methods = await DiscoverMethodsUnderAsync(objectId).ConfigureAwait(false);
         if (methods.TryGetValue(methodBrowseName, out var found)) return found;
 
         // Tier 3: spec constant fallback (not server-verified)
@@ -550,18 +593,32 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
     {
         _session.KeepAlive -= OnKeepAlive;
 
-        using var cleanupCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8));
-        await Task.WhenAny(
-            Task.Run(() =>
+        var cleanupTask = Task.Run(async () =>
+        {
+            try
             {
-                EventSubscriber?.Dispose();
-                ResultManagement?.Dispose();
-                AssetManagement?.Dispose();
+                if (EventSubscriber is not null)
+                    await EventSubscriber.DisposeAsync().ConfigureAwait(false);
+                if (ResultManagement is not null)
+                    await ResultManagement.DisposeAsync().ConfigureAwait(false);
+                if (AssetManagement is not null)
+                    await AssetManagement.DisposeAsync().ConfigureAwait(false);
                 JoiningProcessManagement?.Dispose();
                 JointManagement?.Dispose();
-            }),
-            Task.Delay(Timeout.Infinite, cleanupCts.Token)
-        ).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Subscription cleanup warning");
+            }
+        });
+        try
+        {
+            await cleanupTask.WaitAsync(TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            _log.LogWarning(ex, "Subscription cleanup exceeded the 8 second shutdown timeout");
+        }
 
         try
         {

@@ -50,27 +50,27 @@ public class IjtJsonSerializerTests
     }
 
     [Fact]
-    public void PrintResult_NullResult_DoesNotThrow()
+    public async Task PrintResult_NullResult_DoesNotThrow()
     {
-        var ex = Record.Exception(() => IjtJsonSerializer.PrintResult(null));
+        var ex = await Record.ExceptionAsync(async () => IjtJsonSerializer.PrintResult(null));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintResult_ValidResultDataType_DoesNotThrow()
+    public async Task PrintResult_ValidResultDataType_DoesNotThrow()
     {
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "PRINT-TEST" }
         };
-        var ex = Record.Exception(() => IjtJsonSerializer.PrintResult(rd));
+        var ex = await Record.ExceptionAsync(async () => IjtJsonSerializer.PrintResult(rd));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintMethodOutputs_EmptyOutputs_DoesNotThrow()
+    public async Task PrintMethodOutputs_EmptyOutputs_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtJsonSerializer.PrintMethodOutputs("TestMethod", new List<object>()));
         Assert.Null(ex);
     }
@@ -152,9 +152,9 @@ public class IjtJsonSerializerTests
     }
 
     [Fact]
-    public void Print_AnyValue_DoesNotThrow()
+    public async Task Print_AnyValue_DoesNotThrow()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtJsonSerializer.Print("Label", new NodeId(1u, 0)));
         Assert.Null(ex);
     }
@@ -169,7 +169,7 @@ public class IjtJsonSerializerTests
     }
 
     [Fact]
-    public void PrintResult_WithJoiningResultMetaDataType_DoesNotThrow()
+    public async Task PrintResult_WithJoiningResultMetaDataType_DoesNotThrow()
     {
         var rd = new ResultDataType
         {
@@ -181,73 +181,73 @@ public class IjtJsonSerializerTests
                 Classification = 1,
             }
         };
-        var ex = Record.Exception(() => IjtJsonSerializer.PrintResult(rd));
+        var ex = await Record.ExceptionAsync(async () => IjtJsonSerializer.PrintResult(rd));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintMethodOutputs_WithResultDataType_DoesNotThrow()
+    public async Task PrintMethodOutputs_WithResultDataType_DoesNotThrow()
     {
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "PM-TEST" }
         };
         var outputs = new List<object> { rd };
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtJsonSerializer.PrintMethodOutputs("TestMethod", outputs));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintNamedOutputs_WithNonResultOutput_UsesGenericPrint()
+    public async Task PrintNamedOutputs_WithNonResultOutput_UsesGenericPrint()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtJsonSerializer.PrintNamedOutputs("TestMethod", new List<object> { "raw-output" }));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintMethodOutputs_WithExtensionObjectWrappingResult_DoesNotThrow()
+    public async Task PrintMethodOutputs_WithExtensionObjectWrappingResult_DoesNotThrow()
     {
         var rd = new ResultDataType
         {
             ResultMetaData = new ResultMetaDataType { ResultId = "EO-PM" }
         };
         var outputs = new List<object> { new ExtensionObject(rd) };
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtJsonSerializer.PrintMethodOutputs("EO-Method", outputs));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintResult_WithNonResultDataType_UsesGenericPrint()
+    public async Task PrintResult_WithNonResultDataType_UsesGenericPrint()
     {
-        var ex = Record.Exception(() => IjtJsonSerializer.PrintResult("just-a-string"));
+        var ex = await Record.ExceptionAsync(async () => IjtJsonSerializer.PrintResult("just-a-string"));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintMethodOutputs_WithStringOutput_UsesGenericPrint()
+    public async Task PrintMethodOutputs_WithStringOutput_UsesGenericPrint()
     {
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtJsonSerializer.PrintMethodOutputs("Test", new List<object> { "raw-string-output" }));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintResult_WithResultContent_PrintsItems()
+    public async Task PrintResult_WithResultContent_PrintsItems()
     {
         var rd = new ResultDataType
         {
             ResultContent = new Variant[] { new Opc.Ua.Variant("content-item") }
         };
-        var ex = Record.Exception(() => IjtJsonSerializer.PrintResult(rd));
+        var ex = await Record.ExceptionAsync(async () => IjtJsonSerializer.PrintResult(rd));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintJoiningSystemEvent_WithBasicArgs_DoesNotThrow()
+    public async Task PrintJoiningSystemEvent_WithBasicArgs_DoesNotThrow()
     {
         var args = new IJT_CSharp_Client.Client.EventSubscriber.JoiningSystemEventArgs
         {
@@ -256,12 +256,12 @@ public class IjtJsonSerializerTests
             JoiningTechnology = "Tightening",
             EventTime = DateTime.UtcNow,
         };
-        var ex = Record.Exception(() => IjtJsonSerializer.PrintJoiningSystemEvent(args));
+        var ex = await Record.ExceptionAsync(async () => IjtJsonSerializer.PrintJoiningSystemEvent(args));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintJoiningSystemEvent_WithManyFields_PrintsExtraFields()
+    public async Task PrintJoiningSystemEvent_WithManyFields_PrintsExtraFields()
     {
         var allFields = Enumerable.Range(1, 8)
             .Select(i => new KeyValuePair<string, object?>($"key{i}", $"val{i}"))
@@ -271,12 +271,12 @@ public class IjtJsonSerializerTests
             EventCode = "E002",
             AllFields = allFields,
         };
-        var ex = Record.Exception(() => IjtJsonSerializer.PrintJoiningSystemEvent(args));
+        var ex = await Record.ExceptionAsync(async () => IjtJsonSerializer.PrintJoiningSystemEvent(args));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintResult_WithAssociatedEntities_PrintsEntities()
+    public async Task PrintResult_WithAssociatedEntities_PrintsEntities()
     {
         var rd = new ResultDataType
         {
@@ -289,12 +289,12 @@ public class IjtJsonSerializerTests
                 },
             }
         };
-        var ex = Record.Exception(() => IjtJsonSerializer.PrintResult(rd));
+        var ex = await Record.ExceptionAsync(async () => IjtJsonSerializer.PrintResult(rd));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintResult_WithResultCounters_PrintsCounters()
+    public async Task PrintResult_WithResultCounters_PrintsCounters()
     {
         var rd = new ResultDataType
         {
@@ -307,7 +307,7 @@ public class IjtJsonSerializerTests
                 },
             }
         };
-        var ex = Record.Exception(() => IjtJsonSerializer.PrintResult(rd));
+        var ex = await Record.ExceptionAsync(async () => IjtJsonSerializer.PrintResult(rd));
         Assert.Null(ex);
     }
 
@@ -340,7 +340,7 @@ public class IjtJsonSerializerTests
     // ── ExtendedMetaData coverage ─────────────────────────────────────────────
 
     [Fact]
-    public void PrintResult_WithExtendedMetaData_PrintsData()
+    public async Task PrintResult_WithExtendedMetaData_PrintsData()
     {
         var rd = new ResultDataType
         {
@@ -357,7 +357,7 @@ public class IjtJsonSerializerTests
                 },
             }
         };
-        var ex = Record.Exception(() => IjtJsonSerializer.PrintResult(rd));
+        var ex = await Record.ExceptionAsync(async () => IjtJsonSerializer.PrintResult(rd));
         Assert.Null(ex);
     }
 
@@ -443,28 +443,28 @@ public class IjtJsonSerializerTests
     }
 
     [Fact]
-    public void JsonConverter_ExtensionObjectRead_ThrowsNotSupported()
+    public async Task JsonConverter_ExtensionObjectRead_ThrowsNotSupported()
     {
         var opts = GetSerializerOpts();
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             System.Text.Json.JsonSerializer.Deserialize<ExtensionObject>("{}", opts));
         Assert.NotNull(ex);
     }
 
     [Fact]
-    public void JsonConverter_VariantRead_ThrowsNotSupported()
+    public async Task JsonConverter_VariantRead_ThrowsNotSupported()
     {
         var opts = GetSerializerOpts();
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             System.Text.Json.JsonSerializer.Deserialize<Variant>("null", opts));
         Assert.NotNull(ex);
     }
 
     [Fact]
-    public void JsonConverter_EUInformationRead_ThrowsNotSupported()
+    public async Task JsonConverter_EUInformationRead_ThrowsNotSupported()
     {
         var opts = GetSerializerOpts();
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             System.Text.Json.JsonSerializer.Deserialize<EUInformation>("{}", opts));
         Assert.NotNull(ex);
     }
@@ -548,13 +548,13 @@ public class IjtJsonSerializerTests
     [Fact]
     public void CountItems_VariantWrappingArray_UnwrapsAndCounts()
     {
-        var inner = new object[] { "x", "y" };
-        var variant = new Variant(inner);
+        var inner = new[] { "x", "y" };
+        var variant = Variant.From(inner);
         Assert.Equal(2, IjtJsonSerializer.CountItems(variant));
     }
 
     [Fact]
-    public void PrintNamedOutputs_WithResultDataTypeOutput_CallsPrintResult()
+    public async Task PrintNamedOutputs_WithResultDataTypeOutput_CallsPrintResult()
     {
         var rd = new ResultDataType
         {
@@ -563,14 +563,14 @@ public class IjtJsonSerializerTests
         var outputs = new List<object> { rd };
 
         // PrintNamedOutputs calls PrintResult(val) when output is ResultDataType — line 185
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtJsonSerializer.PrintNamedOutputs("Test", outputs, "ResultData"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void PrintNamedOutputs_WithExtensionObjectWrappingResultDataType_CallsPrintResult()
+    public async Task PrintNamedOutputs_WithExtensionObjectWrappingResultDataType_CallsPrintResult()
     {
         var rd = new ResultDataType
         {
@@ -579,7 +579,7 @@ public class IjtJsonSerializerTests
         var eo = new ExtensionObject(rd);
         var outputs = new List<object> { eo };
 
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtJsonSerializer.PrintNamedOutputs("Test", outputs, "ResultData"));
 
         Assert.Null(ex);

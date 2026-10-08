@@ -35,46 +35,46 @@ public sealed class SimulationManagement : IDisposable
 
     // -- Node lookup -----------------------------------------------------------
 
-    private NodeId GetSimulationsNode()
+    private async Task<NodeId> GetSimulationsNodeAsync()
     {
-        if (!_simulationsNodeId.IsNullNodeId())
+        if (!_simulationsNodeId.IsNull)
             return _simulationsNodeId;
 
-        var node = _js.BrowseChild(_js.NodeId, "Simulations");
-        if (node.IsNullNodeId())
+        var node = await _js.BrowseChildAsync(_js.NodeId, "Simulations");
+        if (node.IsNull)
             _log.LogWarning("WARN Simulations node not found under JoiningSystem.");
         _simulationsNodeId = node;
         return _simulationsNodeId;
     }
 
-    private NodeId GetSimulateResultsNode()
+    private async Task<NodeId> GetSimulateResultsNodeAsync()
     {
-        if (!_simulateResultsNodeId.IsNullNodeId())
+        if (!_simulateResultsNodeId.IsNull)
             return _simulateResultsNodeId;
 
-        var simsNode = GetSimulationsNode();
-        if (simsNode.IsNullNodeId()) return (_simulateResultsNodeId = NodeId.Null);
+        var simsNode = await GetSimulationsNodeAsync();
+        if (simsNode.IsNull) return (_simulateResultsNodeId = NodeId.Null);
 
-        var node = _js.BrowseChild(simsNode, "SimulateResults");
-        if (node.IsNullNodeId())
+        var node = await _js.BrowseChildAsync(simsNode, "SimulateResults");
+        if (node.IsNull)
             _log.LogWarning("WARN SimulateResults node not found under Simulations.");
         _simulateResultsNodeId = node;
         return _simulateResultsNodeId;
     }
 
-    private NodeId GetSimulateEventsNode()
+    private async Task<NodeId> GetSimulateEventsNodeAsync()
     {
-        if (!_simulateEventsNodeId.IsNullNodeId())
+        if (!_simulateEventsNodeId.IsNull)
             return _simulateEventsNodeId;
 
-        var simsNode = GetSimulationsNode();
-        if (simsNode.IsNullNodeId()) return (_simulateEventsNodeId = NodeId.Null);
+        var simsNode = await GetSimulationsNodeAsync();
+        if (simsNode.IsNull) return (_simulateEventsNodeId = NodeId.Null);
 
         // Try both possible browse names the server may use
-        var node = _js.BrowseChild(simsNode, "SimulateEventsAndConditions");
-        if (node.IsNullNodeId())
-            node = _js.BrowseChild(simsNode, "SimulateEvents");
-        if (node.IsNullNodeId())
+        var node = await _js.BrowseChildAsync(simsNode, "SimulateEventsAndConditions");
+        if (node.IsNull)
+            node = await _js.BrowseChildAsync(simsNode, "SimulateEvents");
+        if (node.IsNull)
             _log.LogWarning("WARN SimulateEventsAndConditions node not found under Simulations.");
         _simulateEventsNodeId = node;
         return _simulateEventsNodeId;
@@ -92,15 +92,15 @@ public sealed class SimulationManagement : IDisposable
     /// Values out of range default to type 0.
     /// </param>
     /// <param name="includeTraces">When true, trace data is included in the result payload.</param>
-    public void SimulateSingleResult(uint resultType = 0, bool includeTraces = false)
+    public async Task SimulateSingleResultAsync(uint resultType = 0, bool includeTraces = false)
     {
         _log.LogInformation("\n-- SimulateSingleResult (type={Type}, traces={Traces}) --",
             resultType, includeTraces);
 
-        var objectId = GetSimulateResultsNode();
-        var methodId = _js.BrowseMethod(objectId, "SimulateSingleResult");
+        var objectId = await GetSimulateResultsNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, "SimulateSingleResult");
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR Simulations/SimulateResults node or SimulateSingleResult method not found.");
             return;
@@ -108,7 +108,7 @@ public sealed class SimulationManagement : IDisposable
 
         try
         {
-            _js.CallMethod(objectId, methodId, resultType, includeTraces);
+            await _js.CallMethodAsync(objectId, methodId, resultType, includeTraces);
             _log.LogInformation("OK SimulateSingleResult fired (type={Type}, includeTraces={Traces}). " +
                 "Result will arrive via ResultReady event subscription.", resultType, includeTraces);
         }
@@ -119,7 +119,7 @@ public sealed class SimulationManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateSingleResult));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateSingleResultAsync));
         }
     }
 
@@ -133,17 +133,17 @@ public sealed class SimulationManagement : IDisposable
     /// <param name="numChildren">Number of child results (default 3).</param>
     /// <param name="includeTraces">When true, traces included in child results.</param>
     /// <param name="sendAsReferences">When true, child results sent as references instead of inline.</param>
-    public void SimulateBatchOrSyncResult(byte classification = 3, uint numChildren = 3,
+    public async Task SimulateBatchOrSyncResultAsync(byte classification = 3, uint numChildren = 3,
         bool includeTraces = false, bool sendAsReferences = false)
     {
         _log.LogInformation(
             "\n-- SimulateBatchOrSyncResult (class={Class}, children={N}, traces={T}, refs={R}) --",
             classification, numChildren, includeTraces, sendAsReferences);
 
-        var objectId = GetSimulateResultsNode();
-        var methodId = _js.BrowseMethod(objectId, "SimulateBatch_Or_Sync_Result");
+        var objectId = await GetSimulateResultsNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, "SimulateBatch_Or_Sync_Result");
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR Simulations/SimulateResults node or SimulateBatch_Or_Sync_Result method not found.");
             return;
@@ -151,7 +151,7 @@ public sealed class SimulationManagement : IDisposable
 
         try
         {
-            _js.CallMethod(objectId, methodId, classification, numChildren, includeTraces, sendAsReferences);
+            await _js.CallMethodAsync(objectId, methodId, classification, numChildren, includeTraces, sendAsReferences);
             _log.LogInformation("OK SimulateBatch_Or_Sync_Result fired (classification={Class}).",
                 classification == 2 ? "SYNC" : "BATCH");
         }
@@ -162,7 +162,7 @@ public sealed class SimulationManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateBatchOrSyncResult));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateBatchOrSyncResultAsync));
         }
     }
 
@@ -173,14 +173,14 @@ public sealed class SimulationManagement : IDisposable
     /// REAL implementation: fires a job result.
     /// </summary>
     /// <param name="sendAsReferences">When true, child results sent as references.</param>
-    public void SimulateJobResult(bool sendAsReferences = false)
+    public async Task SimulateJobResultAsync(bool sendAsReferences = false)
     {
         _log.LogInformation("\n-- SimulateJobResult (sendAsRefs={Refs}) --", sendAsReferences);
 
-        var objectId = GetSimulateResultsNode();
-        var methodId = _js.BrowseMethod(objectId, "SimulateJobResult");
+        var objectId = await GetSimulateResultsNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, "SimulateJobResult");
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR Simulations/SimulateResults node or SimulateJobResult method not found.");
             return;
@@ -188,7 +188,7 @@ public sealed class SimulationManagement : IDisposable
 
         try
         {
-            _js.CallMethod(objectId, methodId, sendAsReferences);
+            await _js.CallMethodAsync(objectId, methodId, sendAsReferences);
             _log.LogInformation("OK SimulateJobResult fired (sendAsReferences={Refs}).", sendAsReferences);
         }
         catch (Opc.Ua.ServiceResultException srex)
@@ -198,7 +198,7 @@ public sealed class SimulationManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateJobResult));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateJobResultAsync));
         }
     }
 
@@ -215,7 +215,7 @@ public sealed class SimulationManagement : IDisposable
     /// <param name="toSeq">Ending sequence number (must be &gt;= fromSeq+5).</param>
     /// <param name="minDurationMs">Minimum delay between results in ms (must be &gt;= 100).</param>
     /// <param name="updateResultVariables">When true, updates ResultManagement result variables.</param>
-    public void SimulateBulkResults(uint resultType = 0, bool includeTraces = false,
+    public async Task SimulateBulkResultsAsync(uint resultType = 0, bool includeTraces = false,
         ulong fromSeq = 1, ulong toSeq = 10, long minDurationMs = 500, bool updateResultVariables = true)
     {
         _log.LogInformation(
@@ -233,10 +233,10 @@ public sealed class SimulationManagement : IDisposable
             return;
         }
 
-        var objectId = GetSimulateResultsNode();
-        var methodId = _js.BrowseMethod(objectId, "SimulateBulkResults");
+        var objectId = await GetSimulateResultsNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, "SimulateBulkResults");
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR Simulations/SimulateResults node or SimulateBulkResults method not found.");
             return;
@@ -244,7 +244,7 @@ public sealed class SimulationManagement : IDisposable
 
         try
         {
-            _js.CallMethod(objectId, methodId,
+            await _js.CallMethodAsync(objectId, methodId,
                 resultType, includeTraces, fromSeq, toSeq, minDurationMs, updateResultVariables);
             _log.LogInformation("OK SimulateBulkResults started on server: {Count} results, ~{Delay}ms each.",
                 toSeq - fromSeq + 1, minDurationMs);
@@ -256,7 +256,7 @@ public sealed class SimulationManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateBulkResults));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateBulkResultsAsync));
         }
     }
 
@@ -271,14 +271,14 @@ public sealed class SimulationManagement : IDisposable
     /// 1=TOOL_CONNECTED, 6=TOOL_STARTED, 13=TOOL_NOT_AVAILABLE_ERROR,
     /// 29=PROGRAM_SELECTED, 31=EXECUTION_STARTED, 38=RECEIVED_IDENTIFIER.
     /// </param>
-    public void SimulateEvent(uint eventType = 1)
+    public async Task SimulateEventAsync(uint eventType = 1)
     {
         _log.LogInformation("\n-- SimulateEvents (eventType={Type}) --", eventType);
 
-        var objectId = GetSimulateEventsNode();
-        var methodId = _js.BrowseMethod(objectId, "SimulateEvents");
+        var objectId = await GetSimulateEventsNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, "SimulateEvents");
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR SimulateEventsAndConditions node or SimulateEvents method not found.");
             return;
@@ -286,7 +286,7 @@ public sealed class SimulationManagement : IDisposable
 
         try
         {
-            _js.CallMethod(objectId, methodId, eventType);
+            await _js.CallMethodAsync(objectId, methodId, eventType);
             _log.LogInformation("OK SimulateEvents fired (eventType={Type}).", eventType);
         }
         catch (Opc.Ua.ServiceResultException srex)
@@ -296,7 +296,7 @@ public sealed class SimulationManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateEvent));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateEventAsync));
         }
     }
 
@@ -309,7 +309,7 @@ public sealed class SimulationManagement : IDisposable
     /// </summary>
     /// <param name="eventType">Event type code (1–60). See <see cref="SimulateEvent"/> for codes.</param>
     /// <param name="count">Number of events to fire (1–1000).</param>
-    public void SimulateBulkEvents(uint eventType = 1, uint count = 10)
+    public async Task SimulateBulkEventsAsync(uint eventType = 1, uint count = 10)
     {
         _log.LogInformation("\n-- SimulateBulkEvents (eventType={Type}, count={Count}) --", eventType, count);
 
@@ -319,10 +319,10 @@ public sealed class SimulationManagement : IDisposable
             return;
         }
 
-        var objectId = GetSimulateEventsNode();
-        var methodId = _js.BrowseMethod(objectId, "SimulateBulkEvents");
+        var objectId = await GetSimulateEventsNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, "SimulateBulkEvents");
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR SimulateEventsAndConditions node or SimulateBulkEvents method not found.");
             return;
@@ -330,7 +330,7 @@ public sealed class SimulationManagement : IDisposable
 
         try
         {
-            _js.CallMethod(objectId, methodId, eventType, count);
+            await _js.CallMethodAsync(objectId, methodId, eventType, count);
             _log.LogInformation("OK SimulateBulkEvents fired ({Count} events of type {Type}).", count, eventType);
         }
         catch (Opc.Ua.ServiceResultException srex)
@@ -340,7 +340,7 @@ public sealed class SimulationManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateBulkEvents));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SimulateBulkEventsAsync));
         }
     }
 

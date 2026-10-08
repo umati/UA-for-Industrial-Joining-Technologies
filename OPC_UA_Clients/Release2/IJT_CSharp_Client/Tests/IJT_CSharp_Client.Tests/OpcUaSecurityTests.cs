@@ -66,7 +66,7 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
 
-        var endpoints = DiscoverEndpoints();
+        var endpoints = await DiscoverEndpointsAsync().ConfigureAwait(false);
         foreach (var deprecatedPolicy in DeprecatedSecurityPolicies)
         {
             Assert.DoesNotContain(
@@ -300,9 +300,9 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
 
     private static async Task AssertBenignFlowAsync(JoiningSystem session, CancellationToken ct)
     {
-        Assert.False(session.NodeId.IsNullNodeId(), "JoiningSystem node must be discovered.");
+        Assert.False(session.NodeId.IsNull, "JoiningSystem node must be discovered.");
         var ex = await Record.ExceptionAsync(() =>
-            Task.Run(() => session.AssetManagement.GetIdentifiers(string.Empty), ct)).ConfigureAwait(false);
+            Task.Run(async () => await session.AssetManagement.GetIdentifiersAsync(string.Empty), ct)).ConfigureAwait(false);
         Assert.Null(ex);
     }
 
@@ -345,7 +345,7 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
             token!.SecurityPolicyUri);
     }
 
-    private List<EndpointDescription> DiscoverEndpoints()
+    private async Task<List<EndpointDescription>> DiscoverEndpointsAsync()
     {
         var appConfig = new ApplicationConfiguration(DefaultTelemetry.Create(_ => { }))
         {
@@ -354,11 +354,11 @@ public sealed class OpcUaSecurityTests(OpcUaServerFixture fixture)
             TransportQuotas = new TransportQuotas { OperationTimeout = 15_000 },
             ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60_000 },
         };
-        using var discoveryClient = DiscoveryClient.Create(
+        using var discoveryClient = await DiscoveryClient.CreateAsync(
             appConfig,
             new Uri(_fixture.ServerUrl),
-            EndpointConfiguration.Create(appConfig));
-        return discoveryClient.GetEndpoints(default).ToList();
+            EndpointConfiguration.Create(appConfig)).ConfigureAwait(false);
+        return (await discoveryClient.GetEndpointsAsync(default, CancellationToken.None).ConfigureAwait(false)).ToList();
     }
 
     private async Task AssertConnectFailsWithAnyStatusAsync(

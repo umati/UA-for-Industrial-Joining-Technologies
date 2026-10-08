@@ -198,7 +198,7 @@ public class IjtEventFormatterTests
     }
 
     [Fact]
-    public void FormatJoiningSystemEvent_WithReportedValue_IntValue_DoesNotThrow()
+    public async Task FormatJoiningSystemEvent_WithReportedValue_IntValue_DoesNotThrow()
     {
         var rv = new[]
         {
@@ -209,7 +209,7 @@ public class IjtEventFormatterTests
             }
         };
 
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtEventFormatter.FormatJoiningSystemEvent(
                 "C001", "Counter event", "Tightening",
                 DateTime.UtcNow, reportedValues: rv));
@@ -218,7 +218,7 @@ public class IjtEventFormatterTests
     }
 
     [Fact]
-    public void FormatJoiningSystemEvent_WithReportedValue_FloatValue_DoesNotThrow()
+    public async Task FormatJoiningSystemEvent_WithReportedValue_FloatValue_DoesNotThrow()
     {
         var rv = new[]
         {
@@ -229,7 +229,7 @@ public class IjtEventFormatterTests
             }
         };
 
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtEventFormatter.FormatJoiningSystemEvent(
                 "P001", "Pressure event", "Tightening",
                 DateTime.UtcNow, reportedValues: rv));
@@ -238,7 +238,7 @@ public class IjtEventFormatterTests
     }
 
     [Fact]
-    public void FormatJoiningSystemEvent_WithReportedValue_LongValue_DoesNotThrow()
+    public async Task FormatJoiningSystemEvent_WithReportedValue_LongValue_DoesNotThrow()
     {
         var rv = new[]
         {
@@ -249,7 +249,7 @@ public class IjtEventFormatterTests
             }
         };
 
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
             IjtEventFormatter.FormatJoiningSystemEvent(
                 "L001", "Long event", "Tightening",
                 DateTime.UtcNow, reportedValues: rv));

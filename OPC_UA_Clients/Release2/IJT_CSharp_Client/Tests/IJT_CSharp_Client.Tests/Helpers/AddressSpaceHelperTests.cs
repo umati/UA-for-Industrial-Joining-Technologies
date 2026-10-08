@@ -1,6 +1,4 @@
 #nullable enable
-#pragma warning disable CS0618 // OPC UA sync methods are obsolete but still functional
-
 using IJT_CSharp_Client.Helpers;
 using IJTBase;
 using Moq;
@@ -26,9 +24,7 @@ public sealed class AddressSpaceHelperTests
     private static Mock<ISession> SessionWithBrowseResult(ReferenceDescriptionCollection? refs)
     {
         var mock = new Mock<ISession>();
-#pragma warning disable CS0618
-        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.GlobalContext);
-#pragma warning restore CS0618
+        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.CreateEmpty(DefaultTelemetry.Create(_ => { })));
         mock.Setup(s => s.OperationLimits).Returns(new OperationLimits());
         mock.Setup(s => s.ServerCapabilities).Returns(new ServerCapabilities());
 
@@ -61,7 +57,7 @@ public sealed class AddressSpaceHelperTests
             .Returns(new ValueTask<ReadResponse>(new ReadResponse
             {
                 ResponseHeader = new ResponseHeader(),
-                Results = new[] { new DataValue(StatusCodes.BadNodeIdUnknown) }
+                Results = new[] { DataValue.FromStatusCode(StatusCodes.BadNodeIdUnknown) }
             }));
 
         return mock;
@@ -84,28 +80,28 @@ public sealed class AddressSpaceHelperTests
         return mock;
     }
 
-    // ── BrowseChildren ────────────────────────────────────────────────────────
+    // ── BrowseChildrenAsync ────────────────────────────────────────────────────────
 
     [Fact]
-    public void BrowseChildren_WhenBrowseReturnsNullRefs_ReturnsEmptyCollection()
+    public async Task BrowseChildren_WhenBrowseReturnsNullRefs_ReturnsEmptyCollection()
     {
         var mock = SessionWithBrowseResult(null);
 
-        var refs = AddressSpaceHelper.BrowseChildren(mock.Object, new NodeId(1u, 0));
+        var refs = await AddressSpaceHelper.BrowseChildrenAsync(mock.Object, new NodeId(1u, 0));
 
         Assert.NotNull(refs);
         Assert.Empty(refs);
     }
 
     [Fact]
-    public void BrowseChildren_WhenBrowseReturnsRefs_ReturnsAll()
+    public async Task BrowseChildren_WhenBrowseReturnsRefs_ReturnsAll()
     {
         var rd = new ReferenceDescription
         {
             BrowseName = new QualifiedName("TestNode", 1),
             NodeId = new ExpandedNodeId(new NodeId(42u, 1)),
         };
-        var result = AddressSpaceHelper.BrowseChildren(
+        var result = await AddressSpaceHelper.BrowseChildrenAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             new NodeId(1u, 0));
 
@@ -113,10 +109,10 @@ public sealed class AddressSpaceHelperTests
         Assert.Equal("TestNode", result[0].BrowseName.Name);
     }
 
-    // ── FindChild ─────────────────────────────────────────────────────────────
+    // ── FindChildAsync ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public void FindChild_WhenMatchFound_ReturnsNodeId()
+    public async Task FindChild_WhenMatchFound_ReturnsNodeId()
     {
         var childId = new NodeId(55u, 2);
         var rd = new ReferenceDescription
@@ -124,7 +120,7 @@ public sealed class AddressSpaceHelperTests
             BrowseName = new QualifiedName("AssetManagement", 2),
             NodeId = new ExpandedNodeId(childId),
         };
-        var result = AddressSpaceHelper.FindChild(
+        var result = await AddressSpaceHelper.FindChildAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             new NodeId(1u, 0),
             "AssetManagement");
@@ -133,18 +129,18 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void FindChild_WhenNoMatch_ReturnsNullNodeId()
+    public async Task FindChild_WhenNoMatch_ReturnsNullNodeId()
     {
-        var result = AddressSpaceHelper.FindChild(
+        var result = await AddressSpaceHelper.FindChildAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object,
             new NodeId(1u, 0),
             "NonExistent");
 
-        Assert.True(result.IsNullNodeId());
+        Assert.True(result.IsNull);
     }
 
     [Fact]
-    public void FindChild_IsCaseInsensitive()
+    public async Task FindChild_IsCaseInsensitive()
     {
         var childId = new NodeId(56u, 2);
         var rd = new ReferenceDescription
@@ -152,7 +148,7 @@ public sealed class AddressSpaceHelperTests
             BrowseName = new QualifiedName("assetmanagement", 2),
             NodeId = new ExpandedNodeId(childId),
         };
-        var result = AddressSpaceHelper.FindChild(
+        var result = await AddressSpaceHelper.FindChildAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             new NodeId(1u, 0),
             "AssetManagement");
@@ -160,21 +156,21 @@ public sealed class AddressSpaceHelperTests
         Assert.Equal(childId, result);
     }
 
-    // ── ResolvePath ───────────────────────────────────────────────────────────
+    // ── ResolvePathAsync ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void ResolvePath_WhenSegmentNotFound_ReturnsNullNodeId()
+    public async Task ResolvePath_WhenSegmentNotFound_ReturnsNullNodeId()
     {
-        var result = AddressSpaceHelper.ResolvePath(
+        var result = await AddressSpaceHelper.ResolvePathAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object,
             new NodeId(1u, 0),
             "Missing.Path");
 
-        Assert.True(result.IsNullNodeId());
+        Assert.True(result.IsNull);
     }
 
     [Fact]
-    public void ResolvePath_WhenSingleSegmentFound_ReturnsChildNode()
+    public async Task ResolvePath_WhenSingleSegmentFound_ReturnsChildNode()
     {
         var childId = new NodeId(100u, 2);
         var rd = new ReferenceDescription
@@ -182,7 +178,7 @@ public sealed class AddressSpaceHelperTests
             BrowseName = new QualifiedName("AssetManagement", 2),
             NodeId = new ExpandedNodeId(childId),
         };
-        var result = AddressSpaceHelper.ResolvePath(
+        var result = await AddressSpaceHelper.ResolvePathAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             new NodeId(1u, 0),
             "AssetManagement");
@@ -190,12 +186,12 @@ public sealed class AddressSpaceHelperTests
         Assert.Equal(childId, result);
     }
 
-    // ── ReadValue ─────────────────────────────────────────────────────────────
+    // ── ReadValueAsync ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ReadValue_WhenStatusIsGood_ReturnsValue()
+    public async Task ReadValue_WhenStatusIsGood_ReturnsValue()
     {
-        var result = AddressSpaceHelper.ReadValue(
+        var result = await AddressSpaceHelper.ReadValueAsync(
             SessionWithReadResult(new DataValue(new Variant("hello"), StatusCodes.Good)).Object,
             new NodeId(99u, 1));
 
@@ -203,9 +199,9 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void ReadValue_WhenStatusIsBad_ReturnsNull()
+    public async Task ReadValue_WhenStatusIsBad_ReturnsNull()
     {
-        var result = AddressSpaceHelper.ReadValue(
+        var result = await AddressSpaceHelper.ReadValueAsync(
             SessionWithReadResult(new DataValue(new Variant("ignored"), StatusCodes.Bad)).Object,
             new NodeId(99u, 1));
 
@@ -213,7 +209,7 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void ReadValue_WhenServiceThrows_ReturnsNull()
+    public async Task ReadValue_WhenServiceThrows_ReturnsNull()
     {
         var mock = new Mock<ISession>();
         mock.Setup(s => s.ReadAsync(
@@ -224,17 +220,17 @@ public sealed class AddressSpaceHelperTests
                 It.IsAny<CancellationToken>()))
             .Throws(new ServiceResultException(StatusCodes.BadNodeIdUnknown));
 
-        var result = AddressSpaceHelper.ReadValue(mock.Object, new NodeId(99u, 1));
+        var result = await AddressSpaceHelper.ReadValueAsync(mock.Object, new NodeId(99u, 1));
 
         Assert.Null(result);
     }
 
-    // ── ReadValue<T> ──────────────────────────────────────────────────────────
+    // ── ReadValueAsync<T> ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void ReadValueT_WhenValueMatchesType_ReturnsTyped()
+    public async Task ReadValueT_WhenValueMatchesType_ReturnsTyped()
     {
-        var result = AddressSpaceHelper.ReadValue<string>(
+        var result = await AddressSpaceHelper.ReadValueAsync<string>(
             SessionWithReadResult(new DataValue(new Variant("typed-string"), StatusCodes.Good)).Object,
             new NodeId(100u, 1));
 
@@ -242,9 +238,9 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void ReadValueT_WhenValueIsWrongType_ReturnsDefault()
+    public async Task ReadValueT_WhenValueIsWrongType_ReturnsDefault()
     {
-        var result = AddressSpaceHelper.ReadValue<int>(
+        var result = await AddressSpaceHelper.ReadValueAsync<int>(
             SessionWithReadResult(new DataValue(new Variant("not-an-int"), StatusCodes.Good)).Object,
             new NodeId(101u, 1));
 
@@ -254,14 +250,14 @@ public sealed class AddressSpaceHelperTests
     // ── InvalidateCache ───────────────────────────────────────────────────────
 
     [Fact]
-    public void InvalidateCache_DoesNotThrow()
+    public async Task InvalidateCache_DoesNotThrow()
     {
-        var ex = Record.Exception(() => new AddressSpaceHelper().InvalidateCache());
+        var ex = await Record.ExceptionAsync(async () => new AddressSpaceHelper().InvalidateCache());
         Assert.Null(ex);
     }
 
     [Fact]
-    public void InvalidateCache_AllowsSubsequentBrowse()
+    public async Task InvalidateCache_AllowsSubsequentBrowse()
     {
         var childId = new NodeId(88u, 2);
         var rd = new ReferenceDescription
@@ -272,30 +268,30 @@ public sealed class AddressSpaceHelperTests
         var helper = new AddressSpaceHelper();
         var mock = SessionWithBrowseResult(new ReferenceDescriptionCollection { rd });
 
-        var found = helper.FindChildAsync(mock.Object, new NodeId(1u, 1), "ResultManagement");
+        var found = await helper.FindChildAsync(mock.Object, new NodeId(1u, 1), "ResultManagement");
         Assert.Equal(childId, found);
 
         helper.InvalidateCache();
-        var ex = Record.Exception(() => helper.InvalidateCache());
+        var ex = await Record.ExceptionAsync(async () => helper.InvalidateCache());
         Assert.Null(ex);
     }
 
     // ── GetOrFindManagementNodeAsync ──────────────────────────────────────────
 
     [Fact]
-    public void GetOrFindManagementNodeAsync_WhenBrowseReturnsEmpty_ReturnsNullNodeId()
+    public async Task GetOrFindManagementNodeAsync_WhenBrowseReturnsEmpty_ReturnsNullNodeId()
     {
         var helper = new AddressSpaceHelper();
         var session = SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object;
 
-        var result = helper.GetOrFindManagementNodeAsync(
+        var result = await helper.GetOrFindManagementNodeAsync(
             session, new NodeId(1u, 1), "ResultManagement");
 
-        Assert.True(result.IsNullNodeId());
+        Assert.True(result.IsNull);
     }
 
     [Fact]
-    public void GetOrFindManagementNodeAsync_SecondCallWithSameName_UsesCachedValue()
+    public async Task GetOrFindManagementNodeAsync_SecondCallWithSameName_UsesCachedValue()
     {
         var childId = new NodeId(77u, 2);
         var rd = new ReferenceDescription
@@ -307,8 +303,8 @@ public sealed class AddressSpaceHelperTests
         var helper = new AddressSpaceHelper();
         var jsId = new NodeId(1u, 1);
 
-        var first = helper.GetOrFindManagementNodeAsync(mock.Object, jsId, "ResultManagement");
-        var second = helper.GetOrFindManagementNodeAsync(mock.Object, jsId, "ResultManagement");
+        var first = await helper.GetOrFindManagementNodeAsync(mock.Object, jsId, "ResultManagement");
+        var second = await helper.GetOrFindManagementNodeAsync(mock.Object, jsId, "ResultManagement");
 
         Assert.Equal(first, second);
         Assert.Equal(childId, first);
@@ -323,7 +319,7 @@ public sealed class AddressSpaceHelperTests
     // ── DiscoverAssetInstancesAsync ───────────────────────────────────────────
 
     [Fact]
-    public void DiscoverAssetInstancesAsync_SkipsPlaceholderNodes()
+    public async Task DiscoverAssetInstancesAsync_SkipsPlaceholderNodes()
     {
         var realNode = new ReferenceDescription
         {
@@ -339,7 +335,7 @@ public sealed class AddressSpaceHelperTests
         var refs = new ReferenceDescriptionCollection { realNode, placeholder };
         var helper = new AddressSpaceHelper();
 
-        var result = helper.DiscoverAssetInstancesAsync(
+        var result = await helper.DiscoverAssetInstancesAsync(
             SessionWithBrowseResult(refs).Object, new NodeId(1u, 0));
 
         Assert.Single(result);
@@ -347,19 +343,19 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void DiscoverAssetInstancesAsync_WhenEmpty_ReturnsEmptyList()
+    public async Task DiscoverAssetInstancesAsync_WhenEmpty_ReturnsEmptyList()
     {
-        var result = new AddressSpaceHelper().DiscoverAssetInstancesAsync(
+        var result = await new AddressSpaceHelper().DiscoverAssetInstancesAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object,
             new NodeId(1u, 0));
 
         Assert.Empty(result);
     }
 
-    // ── FindByTypeDefinition ──────────────────────────────────────────────────
+    // ── FindByTypeDefinitionAsync ──────────────────────────────────────────────────
 
     [Fact]
-    public void FindByTypeDefinition_WhenMatchFound_ReturnsNodeId()
+    public async Task FindByTypeDefinition_WhenMatchFound_ReturnsNodeId()
     {
         var childId = new NodeId(300u, 2);
         var rd = new ReferenceDescription
@@ -368,7 +364,7 @@ public sealed class AddressSpaceHelperTests
             NodeId = new ExpandedNodeId(childId),
             TypeDefinition = new ExpandedNodeId(1005u, 2),
         };
-        var result = AddressSpaceHelper.FindByTypeDefinition(
+        var result = await AddressSpaceHelper.FindByTypeDefinitionAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             Opc.Ua.ObjectIds.ObjectsFolder,
             1005u);
@@ -377,7 +373,7 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void FindByTypeDefinition_WhenNoMatch_ReturnsNullNodeId()
+    public async Task FindByTypeDefinition_WhenNoMatch_ReturnsNullNodeId()
     {
         var rd = new ReferenceDescription
         {
@@ -385,18 +381,18 @@ public sealed class AddressSpaceHelperTests
             NodeId = new ExpandedNodeId(new NodeId(400u, 2)),
             TypeDefinition = new ExpandedNodeId(9999u, 2),
         };
-        var result = AddressSpaceHelper.FindByTypeDefinition(
+        var result = await AddressSpaceHelper.FindByTypeDefinitionAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             Opc.Ua.ObjectIds.ObjectsFolder,
             1005u);
 
-        Assert.True(result.IsNullNodeId());
+        Assert.True(result.IsNull);
     }
 
     // ── FindChildAsync and FindMethodNodeAsync ────────────────────────────────
 
     [Fact]
-    public void FindChildAsync_WhenMatchFound_ReturnsNodeId()
+    public async Task FindChildAsync_WhenMatchFound_ReturnsNodeId()
     {
         var childId = new NodeId(500u, 2);
         var rd = new ReferenceDescription
@@ -404,7 +400,7 @@ public sealed class AddressSpaceHelperTests
             BrowseName = new QualifiedName("MethodSet", 2),
             NodeId = new ExpandedNodeId(childId),
         };
-        var result = new AddressSpaceHelper().FindChildAsync(
+        var result = await new AddressSpaceHelper().FindChildAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             new NodeId(1u, 0),
             "MethodSet");
@@ -413,7 +409,7 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void FindChildAsync_WithNsFilter_ReturnsOnlyMatchingNamespace()
+    public async Task FindChildAsync_WithNsFilter_ReturnsOnlyMatchingNamespace()
     {
         var correctId = new NodeId(501u, 2);
         var wrongNs = new ReferenceDescription
@@ -426,7 +422,7 @@ public sealed class AddressSpaceHelperTests
             BrowseName = new QualifiedName("MethodSet", 2),
             NodeId = new ExpandedNodeId(correctId),
         };
-        var result = new AddressSpaceHelper().FindChildAsync(
+        var result = await new AddressSpaceHelper().FindChildAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { wrongNs, correct }).Object,
             new NodeId(1u, 0),
             "MethodSet",
@@ -436,7 +432,7 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void FindMethodNodeAsync_WhenMethodFound_ReturnsNodeId()
+    public async Task FindMethodNodeAsync_WhenMethodFound_ReturnsNodeId()
     {
         var methodId = new NodeId(600u, 2);
         var rd = new ReferenceDescription
@@ -445,7 +441,7 @@ public sealed class AddressSpaceHelperTests
             NodeId = new ExpandedNodeId(methodId),
             NodeClass = NodeClass.Method,
         };
-        var result = new AddressSpaceHelper().FindMethodNodeAsync(
+        var result = await new AddressSpaceHelper().FindMethodNodeAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             new NodeId(1u, 0),
             "GetLatestResult");
@@ -454,20 +450,20 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void FindMethodNodeAsync_WhenNotFound_ReturnsNullNodeId()
+    public async Task FindMethodNodeAsync_WhenNotFound_ReturnsNullNodeId()
     {
-        var result = new AddressSpaceHelper().FindMethodNodeAsync(
+        var result = await new AddressSpaceHelper().FindMethodNodeAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object,
             new NodeId(1u, 0),
             "NonExistentMethod");
 
-        Assert.True(result.IsNullNodeId());
+        Assert.True(result.IsNull);
     }
 
     // ── FindJoiningSystemAsync ────────────────────────────────────────────────
 
     [Fact]
-    public void FindJoiningSystemAsync_WhenTypeDefMatchAtTopLevel_ReturnsNodeId()
+    public async Task FindJoiningSystemAsync_WhenTypeDefMatchAtTopLevel_ReturnsNodeId()
     {
         var nodeId = new NodeId(1001u, 2);
         var rd = new ReferenceDescription
@@ -477,14 +473,14 @@ public sealed class AddressSpaceHelperTests
             TypeDefinition = new ExpandedNodeId(IJTBase.ObjectTypes.JoiningSystemType, 2),
         };
         var helper = new AddressSpaceHelper();
-        var result = helper.FindJoiningSystemAsync(
+        var result = await helper.FindJoiningSystemAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object, 2);
 
         Assert.Equal(nodeId, result);
     }
 
     [Fact]
-    public void FindJoiningSystemAsync_SecondCall_HitsCache()
+    public async Task FindJoiningSystemAsync_SecondCall_HitsCache()
     {
         var nodeId = new NodeId(1001u, 2);
         var rd = new ReferenceDescription
@@ -496,8 +492,8 @@ public sealed class AddressSpaceHelperTests
         var mock = SessionWithBrowseResult(new ReferenceDescriptionCollection { rd });
         var helper = new AddressSpaceHelper();
 
-        var first = helper.FindJoiningSystemAsync(mock.Object, 2);
-        var second = helper.FindJoiningSystemAsync(mock.Object, 2); // cache hit
+        var first = await helper.FindJoiningSystemAsync(mock.Object, 2);
+        var second = await helper.FindJoiningSystemAsync(mock.Object, 2); // cache hit
 
         Assert.Equal(first, second);
         // Browse called exactly once (second call uses cache)
@@ -508,7 +504,7 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void FindJoiningSystemAsync_WhenNoMatchAtTopLevel_UsesFallbackNode()
+    public async Task FindJoiningSystemAsync_WhenNoMatchAtTopLevel_UsesFallbackNode()
     {
         var nodeId = new NodeId(999u, 2);
         var rd = new ReferenceDescription
@@ -518,7 +514,7 @@ public sealed class AddressSpaceHelperTests
             TypeDefinition = new ExpandedNodeId(9999u, 2),   // wrong type
         };
         var helper = new AddressSpaceHelper();
-        var result = helper.FindJoiningSystemAsync(
+        var result = await helper.FindJoiningSystemAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object, 2);
 
         // Should fall back to first non-Server node
@@ -526,7 +522,7 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void FindJoiningSystemAsync_WhenAllServerObjects_ReturnsNullNodeId()
+    public async Task FindJoiningSystemAsync_WhenAllServerObjects_ReturnsNullNodeId()
     {
         var rd = new ReferenceDescription
         {
@@ -535,14 +531,14 @@ public sealed class AddressSpaceHelperTests
             TypeDefinition = new ExpandedNodeId(9999u, 2),
         };
         var helper = new AddressSpaceHelper();
-        var result = helper.FindJoiningSystemAsync(
+        var result = await helper.FindJoiningSystemAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object, 2);
 
-        Assert.True(result.IsNullNodeId());
+        Assert.True(result.IsNull);
     }
 
     [Fact]
-    public void FindJoiningSystemAsync_WhenTypeDefMatchViaNumericId_ReturnsNode()
+    public async Task FindJoiningSystemAsync_WhenTypeDefMatchViaNumericId_ReturnsNode()
     {
         var nodeId = new NodeId(1002u, 2);
         var rd = new ReferenceDescription
@@ -552,26 +548,26 @@ public sealed class AddressSpaceHelperTests
             TypeDefinition = new ExpandedNodeId(IJTBase.ObjectTypes.JoiningSystemType, 5),
         };
         var helper = new AddressSpaceHelper();
-        var result = helper.FindJoiningSystemAsync(
+        var result = await helper.FindJoiningSystemAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object, 2);
 
         Assert.Equal(nodeId, result);
     }
 
     [Fact]
-    public void FindJoiningSystemAsync_WhenBrowseReturnsEmpty_ReturnsNullNodeId()
+    public async Task FindJoiningSystemAsync_WhenBrowseReturnsEmpty_ReturnsNullNodeId()
     {
         var helper = new AddressSpaceHelper();
-        var result = helper.FindJoiningSystemAsync(
+        var result = await helper.FindJoiningSystemAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object, 2);
 
-        Assert.True(result.IsNullNodeId());
+        Assert.True(result.IsNull);
     }
 
     // ── GetIdentificationNodeAsync ────────────────────────────────────────────
 
     [Fact]
-    public void GetIdentificationNodeAsync_WhenDiNamespaceMatch_ReturnsNode()
+    public async Task GetIdentificationNodeAsync_WhenDiNamespaceMatch_ReturnsNode()
     {
         var identId = new NodeId(700u, 4);  // ns=4 == diNsIndex
         var rd = new ReferenceDescription
@@ -580,7 +576,7 @@ public sealed class AddressSpaceHelperTests
             NodeId = new ExpandedNodeId(identId),
         };
         var helper = new AddressSpaceHelper();
-        var result = helper.GetIdentificationNodeAsync(
+        var result = await helper.GetIdentificationNodeAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             new NodeId(1u, 0),
             diNsIndex: 4,
@@ -590,7 +586,7 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void GetIdentificationNodeAsync_WhenAnyNamespaceMatch_ReturnsFallback()
+    public async Task GetIdentificationNodeAsync_WhenAnyNamespaceMatch_ReturnsFallback()
     {
         var identId = new NodeId(701u, 3);  // ns=3, not diNsIndex=4
         var rd = new ReferenceDescription
@@ -599,7 +595,7 @@ public sealed class AddressSpaceHelperTests
             NodeId = new ExpandedNodeId(identId),
         };
         var helper = new AddressSpaceHelper();
-        var result = helper.GetIdentificationNodeAsync(
+        var result = await helper.GetIdentificationNodeAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             new NodeId(1u, 0),
             diNsIndex: 4,
@@ -609,7 +605,7 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void GetIdentificationNodeAsync_WhenNoMatch_ReturnsNullNodeId()
+    public async Task GetIdentificationNodeAsync_WhenNoMatch_ReturnsNullNodeId()
     {
         var rd = new ReferenceDescription
         {
@@ -617,21 +613,21 @@ public sealed class AddressSpaceHelperTests
             NodeId = new ExpandedNodeId(new NodeId(702u, 2)),
         };
         var helper = new AddressSpaceHelper();
-        var result = helper.GetIdentificationNodeAsync(
+        var result = await helper.GetIdentificationNodeAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { rd }).Object,
             new NodeId(1u, 0),
             diNsIndex: 4,
             ijtNsIndex: 2);
 
-        Assert.True(result.IsNullNodeId());
+        Assert.True(result.IsNull);
     }
 
-    // ── EnumerateAssets ───────────────────────────────────────────────────────
+    // ── EnumerateAssetsAsync ───────────────────────────────────────────────────────
 
     [Fact]
-    public void EnumerateAssets_WhenPathNotFound_ReturnsEmpty()
+    public async Task EnumerateAssets_WhenPathNotFound_ReturnsEmpty()
     {
-        var result = AddressSpaceHelper.EnumerateAssets(
+        var result = await AddressSpaceHelper.EnumerateAssetsAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object,
             new NodeId(1u, 0),
             "Controllers");
@@ -640,9 +636,9 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void EnumerateAssets_WhenBrowseReturnsEmpty_IsEmpty()
+    public async Task EnumerateAssets_WhenBrowseReturnsEmpty_IsEmpty()
     {
-        var simpleResult = AddressSpaceHelper.EnumerateAssets(
+        var simpleResult = await AddressSpaceHelper.EnumerateAssetsAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object,
             new NodeId(1u, 0),
             "Controllers");
@@ -650,10 +646,10 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void EnumerateAssets_WhenPathResolved_ReturnsNonPlaceholderAssets()
+    public async Task EnumerateAssets_WhenPathResolved_ReturnsNonPlaceholderAssets()
     {
         // Build a collection with all path segments AND asset children
-        // so ResolvePath resolves each segment from the same Browse result
+        // so ResolvePathAsync resolves each segment from the same Browse result
         var allRefs = new ReferenceDescriptionCollection
         {
             new ReferenceDescription
@@ -683,7 +679,7 @@ public sealed class AddressSpaceHelperTests
             },
         };
 
-        var result = AddressSpaceHelper.EnumerateAssets(
+        var result = await AddressSpaceHelper.EnumerateAssetsAsync(
             SessionWithBrowseResult(allRefs).Object,
             new NodeId(1u, 0),
             "Controllers");
@@ -693,12 +689,12 @@ public sealed class AddressSpaceHelperTests
         Assert.DoesNotContain(result, r => r.Item1.StartsWith('<'));
     }
 
-    // ── ReadAssetIdentification ───────────────────────────────────────────────
+    // ── ReadAssetIdentificationAsync ───────────────────────────────────────────────
 
     [Fact]
-    public void ReadAssetIdentification_WhenNoIdNode_ReturnsDefaultMessage()
+    public async Task ReadAssetIdentification_WhenNoIdNode_ReturnsDefaultMessage()
     {
-        var result = AddressSpaceHelper.ReadAssetIdentification(
+        var result = await AddressSpaceHelper.ReadAssetIdentificationAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection()).Object,
             new NodeId(1u, 0));
 
@@ -706,7 +702,7 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
-    public void ReadAssetIdentification_WhenIdNodeFound_ReturnsFormattedString()
+    public async Task ReadAssetIdentification_WhenIdNodeFound_ReturnsFormattedString()
     {
         var idNodeId = new NodeId(900u, 2);
         var idRef = new ReferenceDescription
@@ -714,21 +710,21 @@ public sealed class AddressSpaceHelperTests
             BrowseName = new QualifiedName("Identification", 2),
             NodeId = new ExpandedNodeId(idNodeId),
         };
-        // With Browse returning idRef for all calls, FindChild("Identification") returns idNodeId
-        // Then FindChild("Manufacturer"), FindChild("SerialNumber"), FindChild("Description")
+        // With Browse returning idRef for all calls, FindChildAsync("Identification") returns idNodeId
+        // Then FindChildAsync("Manufacturer"), FindChildAsync("SerialNumber"), FindChildAsync("Description")
         // all return idNodeId because Browse still returns idRef for those too.
-        // ReadValue for each will fail (no Read mock) → returns null.
-        var result = AddressSpaceHelper.ReadAssetIdentification(
+        // ReadValueAsync for each will fail (no Read mock) → returns null.
+        var result = await AddressSpaceHelper.ReadAssetIdentificationAsync(
             SessionWithBrowseResult(new ReferenceDescriptionCollection { idRef }).Object,
             new NodeId(1u, 0));
 
         Assert.Contains("Manufacturer=", result);
     }
 
-    // ── ReadValue exception paths ─────────────────────────────────────────────
+    // ── ReadValueAsync exception paths ─────────────────────────────────────────────
 
     [Fact]
-    public void ReadValue_WhenInvalidCastException_ReturnsNull()
+    public async Task ReadValue_WhenInvalidCastException_ReturnsNull()
     {
         var mock = new Mock<ISession>();
         mock.Setup(s => s.ReadAsync(
@@ -739,30 +735,30 @@ public sealed class AddressSpaceHelperTests
                 It.IsAny<CancellationToken>()))
             .Throws(new InvalidCastException());
 
-        var result = AddressSpaceHelper.ReadValue(mock.Object, new NodeId(1u, 0));
+        var result = await AddressSpaceHelper.ReadValueAsync(mock.Object, new NodeId(1u, 0));
         Assert.Null(result);
     }
 
     [Fact]
-    public void ReadValueT_WhenConvertThrowsInvalidCast_ReturnsDefault()
+    public async Task ReadValueT_WhenConvertThrowsInvalidCast_ReturnsDefault()
     {
         var mock = SessionWithReadResult(new DataValue(new Variant(new NodeId(1u, 0)), StatusCodes.Good));
 
-        var result = AddressSpaceHelper.ReadValue<int>(mock.Object, new NodeId(1u, 0));
+        var result = await AddressSpaceHelper.ReadValueAsync<int>(mock.Object, new NodeId(1u, 0));
         Assert.Equal(0, result);
     }
 
     [Fact]
-    public void ReadValueT_WhenConvertThrowsOverflow_ReturnsDefault()
+    public async Task ReadValueT_WhenConvertThrowsOverflow_ReturnsDefault()
     {
         var mock = SessionWithReadResult(new DataValue(new Variant(long.MaxValue), StatusCodes.Good));
 
-        var result = AddressSpaceHelper.ReadValue<byte>(mock.Object, new NodeId(1u, 0));
+        var result = await AddressSpaceHelper.ReadValueAsync<byte>(mock.Object, new NodeId(1u, 0));
         Assert.Equal(0, result);
     }
 
     [Fact]
-    public void FindJoiningSystemAsync_WhenNestedUnderFolderObject_DiscoversSuccessfully()
+    public async Task FindJoiningSystemAsync_WhenNestedUnderFolderObject_DiscoversSuccessfully()
     {
         // Test second-level browse: Objects/ApplicationRoot/JoiningSystem1
         var joiningSystemId = new NodeId(9999u, 4);
@@ -797,9 +793,7 @@ public sealed class AddressSpaceHelperTests
 
         // Mock that returns different results for different Browse calls
         var mock = new Mock<ISession>();
-#pragma warning disable CS0618
-        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.GlobalContext);
-#pragma warning restore CS0618
+        mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.CreateEmpty(DefaultTelemetry.Create(_ => { })));
         mock.Setup(s => s.OperationLimits).Returns(new OperationLimits());
         mock.Setup(s => s.ServerCapabilities).Returns(new ServerCapabilities());
         var callCount = 0;
@@ -828,7 +822,7 @@ public sealed class AddressSpaceHelperTests
             });
 
         var helper = new AddressSpaceHelper();
-        var result = helper.FindJoiningSystemAsync(mock.Object, 4);
+        var result = await helper.FindJoiningSystemAsync(mock.Object, 4);
 
         Assert.Equal(joiningSystemId, result);
     }

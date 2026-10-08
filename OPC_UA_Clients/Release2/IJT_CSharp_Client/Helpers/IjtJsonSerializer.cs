@@ -51,19 +51,24 @@ public static class IjtJsonSerializer
         // Unwrap ExtensionObject transparently
         if (value is ExtensionObject eo)
         {
-            if (eo.Body is null)
+            var body = ExtensionObjectHelper.GetBody(eo);
+            if (body is null)
                 return $"\"(empty ExtensionObject, TypeId={eo.TypeId})\"";
-            return Serialize(eo.Body);
+            return Serialize(body);
         }
 
         // Unwrap Variant
         if (value is Variant v)
-            return v.Value is null ? "null" : Serialize(v.Value);
+        {
+            var boxedValue = v.AsBoxedObject(Variant.BoxingBehavior.Legacy);
+            return boxedValue is null ? "null" : Serialize(boxedValue);
+        }
 
         // Unwrap ExtensionObject arrays
         if (value is ExtensionObject[] eoArr)
         {
-            var items = eoArr.Select(x => x.Body ?? (object)$"(empty, TypeId={x.TypeId})").ToArray();
+            var items = eoArr.Select(x =>
+                ExtensionObjectHelper.GetBody(x) ?? (object)$"(empty, TypeId={x.TypeId})").ToArray();
             return JsonSerializer.Serialize(items, items.GetType(), _opts);
         }
 
@@ -129,7 +134,9 @@ public static class IjtJsonSerializer
     public static int CountItems(object? raw)
     {
         if (raw is null) return -1;
-        var val = raw is Variant v ? v.Value : raw;
+        var val = raw is Variant v
+            ? v.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+            : raw;
         return val switch
         {
             ExtensionObject[] arr => arr.Length,
@@ -153,9 +160,11 @@ public static class IjtJsonSerializer
         _log.LogInformation("-- {Method} --", methodName);
         for (int i = 0; i < outputs.Count; i++)
         {
-            var val = outputs[i] is Variant vt ? vt.Value : outputs[i];
+            var val = outputs[i] is Variant vt
+                ? vt.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : outputs[i];
             if (val is ResultDataType ||
-                (val is ExtensionObject eo && eo.Body is ResultDataType))
+                (val is ExtensionObject eo && ExtensionObjectHelper.TryDecode<ResultDataType>(eo) is not null))
                 PrintResult(val);
             else
                 Print($"output[{i}]", outputs[i]);
@@ -180,8 +189,11 @@ public static class IjtJsonSerializer
             var label = i < labels.Length && !string.IsNullOrWhiteSpace(labels[i])
                 ? labels[i]
                 : $"output[{i}]";
-            var val = outputs[i] is Variant vt ? vt.Value : outputs[i];
-            if (val is ResultDataType || (val is ExtensionObject eo && eo.Body is ResultDataType))
+            var val = outputs[i] is Variant vt
+                ? vt.AsBoxedObject(Variant.BoxingBehavior.Legacy)
+                : outputs[i];
+            if (val is ResultDataType ||
+                (val is ExtensionObject eo && ExtensionObjectHelper.TryDecode<ResultDataType>(eo) is not null))
                 PrintResult(val);
             else
                 Print(label, outputs[i]);
@@ -196,8 +208,11 @@ public static class IjtJsonSerializer
     {
         if (result is null) { _log.LogInformation("(null result)"); return; }
 
-        var value = result is ExtensionObject eo ? eo.Body ?? result : result;
-        value = value is Variant v ? v.Value ?? value : value;
+        var value = result is ExtensionObject eo
+            ? ExtensionObjectHelper.GetBody(eo) ?? result
+            : result;
+        if (value is Variant v)
+            value = v.AsBoxedObject(Variant.BoxingBehavior.Legacy) ?? value;
 
         if (value is ResultDataType rd)
         {
@@ -346,10 +361,16 @@ internal sealed class ExtensionObjectConverter : JsonConverter<ExtensionObject>
         => throw new NotSupportedException("ExtensionObject deserialization not supported.");
     public override void Write(Utf8JsonWriter w, ExtensionObject v, JsonSerializerOptions o)
     {
-#pragma warning disable CS0618
-        if (v.Body is null) { w.WriteNullValue(); return; }
-        JsonSerializer.Serialize(w, v.Body, v.Body.GetType(), o);
-#pragma warning restore CS0618
+        var body = ExtensionObjectHelper.GetBody(v);
+        if (body is null)
+        {
+            JsonSerializer.Serialize(
+                w,
+                new { TypeId = v.TypeId.ToString(), Encoding = v.Encoding.ToString(), BodyUnavailable = true },
+                o);
+            return;
+        }
+        JsonSerializer.Serialize(w, body, body.GetType(), o);
     }
 }
 
@@ -359,8 +380,9 @@ internal sealed class VariantConverter : JsonConverter<Variant>
         => throw new NotSupportedException("Variant deserialization not supported.");
     public override void Write(Utf8JsonWriter w, Variant v, JsonSerializerOptions o)
     {
-        if (v.Value is null) { w.WriteNullValue(); return; }
-        JsonSerializer.Serialize(w, v.Value, v.Value.GetType(), o);
+        var boxedValue = v.AsBoxedObject(Variant.BoxingBehavior.Legacy);
+        if (boxedValue is null) { w.WriteNullValue(); return; }
+        JsonSerializer.Serialize(w, boxedValue, boxedValue.GetType(), o);
     }
 }
 

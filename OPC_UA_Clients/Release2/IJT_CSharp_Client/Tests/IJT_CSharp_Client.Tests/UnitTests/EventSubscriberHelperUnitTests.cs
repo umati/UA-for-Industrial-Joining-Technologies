@@ -441,13 +441,13 @@ public sealed class EventSubscriberHelperUnitTests
     }
 
     [Fact]
-    public void ProcessResultEvent_NoHandlerAttached_DoesNotThrow()
+    public async Task ProcessResultEvent_NoHandlerAttached_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
         // No handler attached
 
-        var ex = Record.Exception(() => sut.ProcessResultEvent(new VariantCollection()));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessResultEvent(new VariantCollection()));
         Assert.Null(ex);
     }
 
@@ -535,12 +535,12 @@ public sealed class EventSubscriberHelperUnitTests
     }
 
     [Fact]
-    public void ProcessJoiningSystemEvent_NoHandlerAttached_DoesNotThrow()
+    public async Task ProcessJoiningSystemEvent_NoHandlerAttached_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
 
-        var ex = Record.Exception(() => sut.ProcessJoiningSystemEvent(new VariantCollection()));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessJoiningSystemEvent(new VariantCollection()));
         Assert.Null(ex);
     }
 
@@ -687,7 +687,7 @@ public sealed class EventSubscriberHelperUnitTests
     // ── ProcessResultEvent error handling ─────────────────────────────────────
 
     [Fact]
-    public void ProcessResultEvent_WithServiceResultException_DoesNotThrow()
+    public async Task ProcessResultEvent_WithServiceResultException_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
@@ -703,13 +703,13 @@ public sealed class EventSubscriberHelperUnitTests
             new Variant(DateTime.UtcNow),
         });
 
-        var ex = Record.Exception(() => sut.ProcessResultEvent(fields));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessResultEvent(fields));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ProcessResultEvent_WithUnexpectedException_DoesNotThrow()
+    public async Task ProcessResultEvent_WithUnexpectedException_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
@@ -722,13 +722,13 @@ public sealed class EventSubscriberHelperUnitTests
             new Variant("event-id"),
         });
 
-        var ex = Record.Exception(() => sut.ProcessResultEvent(fields));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessResultEvent(fields));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ProcessJoiningSystemEvent_WithServiceResultException_DoesNotThrow()
+    public async Task ProcessJoiningSystemEvent_WithServiceResultException_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
@@ -738,13 +738,13 @@ public sealed class EventSubscriberHelperUnitTests
 
         var fields = new VariantCollection(new[] { new Variant("event-id") });
 
-        var ex = Record.Exception(() => sut.ProcessJoiningSystemEvent(fields));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessJoiningSystemEvent(fields));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ProcessJoiningSystemEvent_WithUnexpectedException_DoesNotThrow()
+    public async Task ProcessJoiningSystemEvent_WithUnexpectedException_DoesNotThrow()
     {
         var session = CreateSessionMock();
         var sut = new EventSubscriber(session.Object);
@@ -754,7 +754,7 @@ public sealed class EventSubscriberHelperUnitTests
 
         var fields = new VariantCollection(new[] { new Variant("event-id") });
 
-        var ex = Record.Exception(() => sut.ProcessJoiningSystemEvent(fields));
+        var ex = await Record.ExceptionAsync(async () => sut.ProcessJoiningSystemEvent(fields));
 
         Assert.Null(ex);
     }

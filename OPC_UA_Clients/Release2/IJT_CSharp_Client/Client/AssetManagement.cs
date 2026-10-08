@@ -14,7 +14,7 @@ namespace IJT_CSharp_Client.Client;
 /// EnableAsset, SendIdentifiers, SendTextIdentifiers, ResetIdentifiers,
 /// GetIdentifiers, and subscribing to all asset variables.
 /// </summary>
-public sealed class AssetManagement : IDisposable
+public sealed class AssetManagement : IAsyncDisposable
 {
     private readonly ILogger<AssetManagement> _log = IjtLog.For<AssetManagement>();
     private readonly IJoiningSystem _js;
@@ -41,16 +41,16 @@ public sealed class AssetManagement : IDisposable
     /// Finds MethodSet node: JoiningSystem -> AssetManagement -> MethodSet.
     /// Falls back to the type-definition Object NodeId if browse fails.
     /// </summary>
-    private NodeId GetMethodSetNode()
+    private async Task<NodeId> GetMethodSetNodeAsync()
     {
-        if (!_methodSetNodeId.IsNullNodeId())
+        if (!_methodSetNodeId.IsNull)
             return _methodSetNodeId;
 
-        var assetMgmt = _js.BrowseChild(_js.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
-        if (!assetMgmt.IsNullNodeId())
+        var assetMgmt = await _js.BrowseChildAsync(_js.NodeId, IJTBase.BrowseNames.AssetManagement);
+        if (!assetMgmt.IsNull)
         {
-            var methodSet = _js.BrowseChild(assetMgmt, UAModel.IJTBase.BrowseNames.MethodSet);
-            if (!methodSet.IsNullNodeId())
+            var methodSet = await _js.BrowseChildAsync(assetMgmt, IJTBase.BrowseNames.MethodSet);
+            if (!methodSet.IsNull)
             {
                 _methodSetNodeId = methodSet;
                 return _methodSetNodeId;
@@ -59,7 +59,7 @@ public sealed class AssetManagement : IDisposable
 
         // Fallback: type-definition NodeId
         _methodSetNodeId = _js.IjtBaseObjectId(
-            UAModel.IJTBase.Objects.JoiningSystemType_AssetManagement_MethodSet);
+            IJTBase.Objects.JoiningSystemType_AssetManagement_MethodSet);
         _log.LogWarning("WARN AssetManagement/MethodSet fallback to type NodeId.");
         return _methodSetNodeId;
     }
@@ -70,16 +70,16 @@ public sealed class AssetManagement : IDisposable
     /// Calls <c>AssetManagement/MethodSet/EnableAsset</c> (NodeId 7076).
     /// Input: ProductInstanceUri (string), Enable (bool).
     /// </summary>
-    public void EnableAsset(string productInstanceUri, bool enable)
+    public async Task EnableAssetAsync(string productInstanceUri, bool enable)
     {
         _log.LogInformation("\n-- EnableAsset ({Uri}, {Enable}) ----------------------",
             productInstanceUri, enable);
 
-        var objectId = GetMethodSetNode();
-        var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.EnableAsset,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset);
+        var objectId = await GetMethodSetNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, IJTBase.BrowseNames.EnableAsset,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_EnableAsset);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR MethodSet node or EnableAsset method not found.");
             return;
@@ -87,7 +87,7 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, enable);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, enable);
             _log.LogInformation("OK EnableAsset called.");
             IjtJsonSerializer.PrintNamedOutputs("EnableAsset", outputs, "Status", "StatusMessage");
         }
@@ -98,7 +98,7 @@ public sealed class AssetManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(EnableAsset));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(EnableAssetAsync));
         }
     }
 
@@ -108,13 +108,13 @@ public sealed class AssetManagement : IDisposable
     /// Calls <c>AssetManagement/MethodSet/SendIdentifiers</c> (NodeId 7085).
     /// Input: ProductInstanceUri (string), array of <see cref="EntityDataType"/> wrapped as ExtensionObjects.
     /// </summary>
-    public void SendIdentifiers(IList<EntityDataType> entities, string productInstanceUri = "")
+    public async Task SendIdentifiersAsync(IList<EntityDataType> entities, string productInstanceUri = "")
     {
         _log.LogInformation("\n-- SendIdentifiers ({Count} entities) -------------", entities.Count);
 
-        var objectId = GetMethodSetNode();
+        var objectId = await GetMethodSetNodeAsync();
 
-        if (objectId.IsNullNodeId())
+        if (objectId.IsNull)
         {
             _log.LogError("ERROR MethodSet node or SendIdentifiers method not found.");
             return;
@@ -122,15 +122,15 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var methodId = _js.BrowseMethod(objectId, "SendIdentifiers",
-                UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers);
-            if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+            var methodId = await _js.BrowseMethodAsync(objectId, "SendIdentifiers",
+                IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendIdentifiers);
+            if (objectId.IsNull || methodId.IsNull)
             {
                 _log.LogError("ERROR MethodSet node or SendIdentifiers method not found.");
                 return;
             }
             var extObjects = entities.Select(e => new ExtensionObject(e)).ToArray();
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, (object)extObjects);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, (object)extObjects);
             _log.LogInformation("OK SendIdentifiers called ({Count} entities).", extObjects.Length);
             IjtJsonSerializer.PrintNamedOutputs("SendIdentifiers", outputs, "Status", "StatusMessage");
         }
@@ -141,7 +141,7 @@ public sealed class AssetManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SendIdentifiers));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SendIdentifiersAsync));
         }
     }
 
@@ -151,15 +151,15 @@ public sealed class AssetManagement : IDisposable
     /// Calls <c>AssetManagement/MethodSet/SendTextIdentifiers</c> (NodeId 7086).
     /// Input: ProductInstanceUri (string), identifiers (string[]).
     /// </summary>
-    public void SendTextIdentifiers(string productInstanceUri, string[] identifiers)
+    public async Task SendTextIdentifiersAsync(string productInstanceUri, string[] identifiers)
     {
         _log.LogInformation("\n-- SendTextIdentifiers ({Uri}) --------------------", productInstanceUri);
 
-        var objectId = GetMethodSetNode();
-        var methodId = _js.BrowseMethod(objectId, "SendTextIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers);
+        var objectId = await GetMethodSetNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, "SendTextIdentifiers",
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SendTextIdentifiers);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR MethodSet node or SendTextIdentifiers method not found.");
             return;
@@ -167,7 +167,7 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, identifiers);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, identifiers);
             _log.LogInformation("OK SendTextIdentifiers called.");
             IjtJsonSerializer.PrintNamedOutputs("SendTextIdentifiers", outputs, "Status", "StatusMessage");
         }
@@ -178,7 +178,7 @@ public sealed class AssetManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SendTextIdentifiers));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SendTextIdentifiersAsync));
         }
     }
 
@@ -188,15 +188,15 @@ public sealed class AssetManagement : IDisposable
     /// Calls <c>AssetManagement/MethodSet/ResetIdentifiers</c> (NodeId 7083).
     /// Input: ProductInstanceUri (string).
     /// </summary>
-    public void ResetIdentifiers(string productInstanceUri)
+    public async Task ResetIdentifiersAsync(string productInstanceUri)
     {
         _log.LogInformation("\n-- ResetIdentifiers ({Uri}) ----------------------", productInstanceUri);
 
-        var objectId = GetMethodSetNode();
-        var methodId = _js.BrowseMethod(objectId, "ResetIdentifiers",
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers);
+        var objectId = await GetMethodSetNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, "ResetIdentifiers",
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_ResetIdentifiers);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR MethodSet node or ResetIdentifiers method not found.");
             return;
@@ -204,7 +204,7 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, Array.Empty<string>(), true, false);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, Array.Empty<string>(), true, false);
             _log.LogInformation("OK ResetIdentifiers called.");
             IjtJsonSerializer.PrintNamedOutputs("ResetIdentifiers", outputs, "Status", "StatusMessage");
         }
@@ -215,7 +215,7 @@ public sealed class AssetManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(ResetIdentifiers));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(ResetIdentifiersAsync));
         }
     }
 
@@ -225,15 +225,15 @@ public sealed class AssetManagement : IDisposable
     /// Calls <c>AssetManagement/MethodSet/GetIdentifiers</c> (NodeId 7081).
     /// Input: ProductInstanceUri (string). Output: array of current identifiers.
     /// </summary>
-    public void GetIdentifiers(string productInstanceUri)
+    public async Task GetIdentifiersAsync(string productInstanceUri)
     {
         _log.LogInformation("\n-- GetIdentifiers ({Uri}) ------------------------", productInstanceUri);
 
-        var objectId = GetMethodSetNode();
-        var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetIdentifiers,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers);
+        var objectId = await GetMethodSetNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, IJTBase.BrowseNames.GetIdentifiers,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIdentifiers);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR MethodSet node or GetIdentifiers method not found.");
             return;
@@ -241,7 +241,7 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, Array.Empty<string>());
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, Array.Empty<string>());
 
             // Write full identifier list to file; show count + status on console
             IjtFileLogger.WriteIdentifiers(
@@ -262,7 +262,7 @@ public sealed class AssetManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetIdentifiers));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetIdentifiersAsync));
         }
     }
 
@@ -284,7 +284,7 @@ public sealed class AssetManagement : IDisposable
     ///
     /// Does nothing if already subscribed.
     /// </summary>
-    public void SubscribeAssetVariables()
+    public async Task SubscribeAssetVariablesAsync()
     {
         if (_assetVarSubscription != null)
         {
@@ -294,16 +294,16 @@ public sealed class AssetManagement : IDisposable
 
         _log.LogInformation("\n-- Subscribing to all Asset variables ----");
 
-        var assetMgmtNode = _js.BrowseChild(
-            _js.NodeId, UAModel.IJTBase.BrowseNames.AssetManagement);
-        if (assetMgmtNode.IsNullNodeId())
+        var assetMgmtNode = await _js.BrowseChildAsync(
+            _js.NodeId, IJTBase.BrowseNames.AssetManagement);
+        if (assetMgmtNode.IsNull)
         {
             _log.LogError("ERROR AssetManagement node not found.");
             return;
         }
 
-        var assetsNode = _js.BrowseChild(assetMgmtNode, UAModel.IJTBase.BrowseNames.Assets);
-        if (assetsNode.IsNullNodeId())
+        var assetsNode = await _js.BrowseChildAsync(assetMgmtNode, IJTBase.BrowseNames.Assets);
+        if (assetsNode.IsNull)
         {
             _log.LogError("ERROR Assets node not found.");
             return;
@@ -318,7 +318,7 @@ public sealed class AssetManagement : IDisposable
         int count = 0;
 
         // Browse all category folders under Assets (Controllers, Tools, Servos, …)
-        var categoryRefs = _js.BrowseChildren(assetsNode, (uint)NodeClass.Object);
+        var categoryRefs = await _js.BrowseChildrenAsync(assetsNode, (uint)NodeClass.Object);
         foreach (var catRef in categoryRefs ?? [])
         {
             var catName = catRef.BrowseName.Name;
@@ -327,7 +327,7 @@ public sealed class AssetManagement : IDisposable
             var catNodeId = (NodeId)catRef.NodeId;
 
             // Browse asset instances within the category folder
-            var instanceRefs = _js.BrowseChildren(catNodeId, (uint)NodeClass.Object);
+            var instanceRefs = await _js.BrowseChildrenAsync(catNodeId, (uint)NodeClass.Object);
             foreach (var instRef in instanceRefs ?? [])
             {
                 var browseName = instRef.BrowseName.Name;
@@ -343,8 +343,8 @@ public sealed class AssetManagement : IDisposable
                 // Ensure a value store exists for this asset before any callbacks fire
                 _assetValues.GetOrAdd(assetKey, _ => new ConcurrentDictionary<string, object?>());
 
-                count += SubscribeAllVariables(
-                    _assetVarSubscription, instNodeId, assetKey, path: "");
+                count += await SubscribeAllVariablesAsync(
+                    _assetVarSubscription, instNodeId, assetKey, path: "").ConfigureAwait(false);
 
                 _log.LogInformation("  Asset: {Category}/{Name} — subscribed",
                     catName, displayName);
@@ -360,7 +360,7 @@ public sealed class AssetManagement : IDisposable
         }
 
         _js.Session.AddSubscription(_assetVarSubscription);
-        _assetVarSubscription.Create();
+        await _assetVarSubscription.CreateAsync().ConfigureAwait(false);
         _log.LogInformation("OK Subscribed to {Count} asset variable(s) across {Assets} asset(s).",
             count, _assetValues.Count);
     }
@@ -370,14 +370,14 @@ public sealed class AssetManagement : IDisposable
     /// Variable child. Object children are recursed into (max depth 8).
     /// MethodSet nodes are skipped — they contain only Methods, not data.
     /// </summary>
-    private int SubscribeAllVariables(
+    private async Task<int> SubscribeAllVariablesAsync(
         Subscription sub, NodeId nodeId, string assetKey, string path, int depth = 0)
     {
         const int MaxDepth = 8;
         if (depth > MaxDepth) return 0;
 
-        var children = _js.BrowseChildren(nodeId,
-            (uint)(NodeClass.Variable | NodeClass.Object));
+        var children = await _js.BrowseChildrenAsync(
+            nodeId, (uint)(NodeClass.Variable | NodeClass.Object)).ConfigureAwait(false);
 
         if (children == null || children.Count == 0) return 0;
 
@@ -409,7 +409,8 @@ public sealed class AssetManagement : IDisposable
                 {
                     foreach (var v in mi.DequeueValues())
                     {
-                        _assetValues[capturedKey][capturedPath] = v.Value;
+                        _assetValues[capturedKey][capturedPath] =
+                            v.WrappedValue.AsBoxedObject(Variant.BoxingBehavior.Legacy);
                         FlushAssetJson(capturedKey);
                     }
                 };
@@ -419,7 +420,8 @@ public sealed class AssetManagement : IDisposable
             }
             else if (child.NodeClass == NodeClass.Object)
             {
-                added += SubscribeAllVariables(sub, childNodeId, assetKey, childPath, depth + 1);
+                added += await SubscribeAllVariablesAsync(
+                    sub, childNodeId, assetKey, childPath, depth + 1).ConfigureAwait(false);
             }
         }
 
@@ -473,13 +475,14 @@ public sealed class AssetManagement : IDisposable
     }
 
     /// <summary>Stops the asset variable data-change subscription if active.</summary>
-    public void StopAssetVariableSubscription()
+    public async Task StopAssetVariableSubscriptionAsync()
     {
-        if (_assetVarSubscription == null) return;
+        var subscription = _assetVarSubscription;
+        if (subscription == null) return;
+        _assetVarSubscription = null;
         try
         {
-            _assetVarSubscription.Delete(silent: true);
-            _js.Session.RemoveSubscription(_assetVarSubscription);
+            await subscription.DeleteAsync(silent: true).ConfigureAwait(false);
         }
         catch (Opc.Ua.ServiceResultException srex)
         {
@@ -490,10 +493,17 @@ public sealed class AssetManagement : IDisposable
         {
             _log.LogWarning(ex, "WARN Asset subscription stop warning");
         }
+        try
+        {
+            await _js.Session.RemoveSubscriptionAsync(subscription).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "WARN Removing the asset subscription from the session failed");
+        }
         finally
         {
-            _assetVarSubscription?.Dispose();
-            _assetVarSubscription = null;
+            subscription.Dispose();
             _assetValues.Clear();
             _log.LogInformation("OK Asset variable subscription stopped.");
         }
@@ -507,16 +517,16 @@ public sealed class AssetManagement : IDisposable
     /// </summary>
     /// <param name="productInstanceUri">Target asset URI.</param>
     /// <param name="dateTime">Date/time to set on the device. Defaults to UtcNow.</param>
-    public void SetTime(string productInstanceUri, DateTime? dateTime = null)
+    public async Task SetTimeAsync(string productInstanceUri, DateTime? dateTime = null)
     {
         _log.LogInformation("\n-- SetTime ({Uri}, {Time}) --------------------------",
             productInstanceUri, (dateTime ?? DateTime.UtcNow).ToString("o"));
 
-        var objectId = GetMethodSetNode();
-        var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.SetTime,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SetTime);
+        var objectId = await GetMethodSetNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, IJTBase.BrowseNames.SetTime,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SetTime);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR MethodSet node or SetTime method not found.");
             return;
@@ -524,7 +534,7 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, dateTime ?? DateTime.UtcNow);
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, dateTime ?? DateTime.UtcNow);
             IjtJsonSerializer.PrintNamedOutputs("SetTime", outputs, "Status", "StatusMessage");
         }
         catch (Opc.Ua.ServiceResultException srex)
@@ -534,7 +544,7 @@ public sealed class AssetManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SetTime));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SetTimeAsync));
         }
     }
 
@@ -547,15 +557,15 @@ public sealed class AssetManagement : IDisposable
     /// </summary>
     /// <param name="productInstanceUri">Target asset URI.</param>
     /// <param name="signalIds">Optional signal IDs to filter by (empty array = return all).</param>
-    public void GetIOSignals(string productInstanceUri, string[]? signalIds = null)
+    public async Task GetIOSignalsAsync(string productInstanceUri, string[]? signalIds = null)
     {
         _log.LogInformation("\n-- GetIOSignals ({Uri}) --------------------------", productInstanceUri);
 
-        var objectId = GetMethodSetNode();
-        var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.GetIOSignals,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIOSignals);
+        var objectId = await GetMethodSetNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, IJTBase.BrowseNames.GetIOSignals,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_GetIOSignals);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR MethodSet node or GetIOSignals method not found.");
             return;
@@ -563,7 +573,7 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri, (object)(signalIds ?? Array.Empty<string>()));
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri, (object)(signalIds ?? Array.Empty<string>()));
             if (outputs.Count == 0)
             { _log.LogWarning("WARN GetIOSignals returned no outputs."); return; }
             IjtFileLogger.WriteIOSignals(IjtJsonSerializer.FormatOutput("IOSignals", outputs[0]));
@@ -581,7 +591,7 @@ public sealed class AssetManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetIOSignals));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(GetIOSignalsAsync));
         }
     }
 
@@ -593,15 +603,15 @@ public sealed class AssetManagement : IDisposable
     /// </summary>
     /// <param name="productInstanceUri">Target asset URI.</param>
     /// <param name="signals">Signals to set. Each must have SignalId and Value populated.</param>
-    public void SetIOSignals(string productInstanceUri, IList<SignalDataType> signals)
+    public async Task SetIOSignalsAsync(string productInstanceUri, IList<SignalDataType> signals)
     {
         _log.LogInformation("\n-- SetIOSignals ({Uri}, {Count} signals) ----------", productInstanceUri, signals.Count);
 
-        var objectId = GetMethodSetNode();
-        var methodId = _js.BrowseMethod(objectId, UAModel.IJTBase.BrowseNames.SetIOSignals,
-            UAModel.IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SetIOSignals);
+        var objectId = await GetMethodSetNodeAsync();
+        var methodId = await _js.BrowseMethodAsync(objectId, IJTBase.BrowseNames.SetIOSignals,
+            IJTBase.Methods.JoiningSystemType_AssetManagement_MethodSet_SetIOSignals);
 
-        if (objectId.IsNullNodeId() || methodId.IsNullNodeId())
+        if (objectId.IsNull || methodId.IsNull)
         {
             _log.LogError("ERROR MethodSet node or SetIOSignals method not found.");
             return;
@@ -609,7 +619,7 @@ public sealed class AssetManagement : IDisposable
 
         try
         {
-            var outputs = _js.CallMethod(objectId, methodId, productInstanceUri,
+            var outputs = await _js.CallMethodAsync(objectId, methodId, productInstanceUri,
                 (object)signals.Select(s => new ExtensionObject(s)).ToArray());
 
             // outputs[0] = Int32[] per-signal status codes — potentially large; log to file.
@@ -628,14 +638,14 @@ public sealed class AssetManagement : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SetIOSignals));
+            _log.LogError(ex, "ERROR Unexpected error in {Method}", nameof(SetIOSignalsAsync));
         }
     }
 
     /// <inheritdoc/>
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        StopAssetVariableSubscription();
+        await StopAssetVariableSubscriptionAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
     }
 }
