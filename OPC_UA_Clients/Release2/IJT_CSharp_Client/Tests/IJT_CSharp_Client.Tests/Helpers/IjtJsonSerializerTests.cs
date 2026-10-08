@@ -584,4 +584,27 @@ public class IjtJsonSerializerTests
 
         Assert.Null(ex);
     }
+
+    [Fact]
+    public void CountItems_WithICollection_ReturnsCount()
+    {
+        var list = new List<string> { "a", "b", "c" };
+        Assert.Equal(3, IjtJsonSerializer.CountItems(list));
+    }
+
+    [Fact]
+    public void PrintResult_WithVariant_DoesNotThrow()
+    {
+        var v = new Variant("test-variant-result");
+        var ex = Record.Exception(() => IjtJsonSerializer.PrintResult(v));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Serialize_WithNestedEmptyExtensionObject_UsesExtensionObjectConverter()
+    {
+        var wrapper = new { Extension = new ExtensionObject() };
+        var json = IjtJsonSerializer.Serialize(wrapper);
+        Assert.Contains("BodyUnavailable", json);
+    }
 }

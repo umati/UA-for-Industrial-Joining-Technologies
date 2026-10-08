@@ -758,4 +758,73 @@ public sealed class DomainResultEventTests
             }
         };
     }
+
+    [Fact]
+    public void MapEvent_WhenDecodedResultNull_DecodesFromRawResultVariant()
+    {
+        var rd = new ResultDataType
+        {
+            ResultMetaData = new ResultMetaDataType { ResultId = "RAW_VARIANT_ID" }
+        };
+        var rawVariant = new Variant(new ExtensionObject(rd));
+        var fieldMap = new Dictionary<string, object?>
+        {
+            ["Result"] = rawVariant,
+            ["EventId"] = "evt-id",
+            ["Time"] = DateTimeOffset.UtcNow
+        };
+
+        var notification = DomainResultMapper.MapEvent(fieldMap, decodedResult: null);
+        Assert.NotNull(notification);
+        Assert.Equal("RAW_VARIANT_ID", notification.Result?.ResultId);
+    }
+
+    [Fact]
+    public void ToSdkNeutral_ConvertsSpecialTypes_DefensiveHandling()
+    {
+        // StatusCode conversion
+        var sc = StatusCodes.BadCertificateHostNameInvalid;
+        var scNeutral = DomainResultMapper.ToSdkNeutral(sc) as IDictionary<string, object?>;
+        Assert.NotNull(scNeutral);
+        Assert.True(scNeutral.ContainsKey("Code"));
+        Assert.True(scNeutral.ContainsKey("Name"));
+
+        // ReadOnlyMemory<byte> conversion
+        ReadOnlyMemory<byte> rom = new byte[] { 1, 2, 3, 4 };
+        var romList = DomainResultMapper.ToSdkNeutral(rom) as IList<object?>;
+        Assert.NotNull(romList);
+        Assert.Equal(4, romList.Count);
+
+        // Object with property that throws
+        var propThrower = new ThrowingPropertyObject();
+        var propDict = DomainResultMapper.ToSdkNeutral(propThrower) as IDictionary<string, object?>;
+        Assert.NotNull(propDict);
+        Assert.True(propDict.ContainsKey("FaultyProp"));
+
+        // Enumerable item that throws
+        var enumWithFault = new object[] { new ThrowingPropertyObject() };
+        var enumList = DomainResultMapper.ToSdkNeutral(enumWithFault) as IList<object?>;
+        Assert.NotNull(enumList);
+        Assert.Single(enumList);
+    }
+
+    [Fact]
+    public void MapEvent_WithStringTimestamp_ParsesSuccessfully()
+    {
+        var fieldMap = new Dictionary<string, object?>
+        {
+            ["Time"] = "2026-10-08T12:00:00Z",
+            ["EventType"] = "CustomEventType"
+        };
+        var notification = DomainResultMapper.MapEvent(fieldMap);
+        Assert.NotNull(notification);
+        Assert.Equal(2026, notification.EventTime.Year);
+        Assert.Equal("CustomEventType", notification.EventTypeName);
+    }
+
+    private sealed class ThrowingPropertyObject
+    {
+        public string Normal => "value";
+        public string FaultyProp => throw new InvalidOperationException("Property getter failure");
+    }
 }

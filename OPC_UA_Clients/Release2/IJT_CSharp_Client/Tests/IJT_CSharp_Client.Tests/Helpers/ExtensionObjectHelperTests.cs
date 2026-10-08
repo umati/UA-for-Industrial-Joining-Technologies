@@ -291,4 +291,30 @@ public sealed class ExtensionObjectHelperTests
             }));
         Assert.Null(ex);
     }
+
+    [Fact]
+    public void GetBody_WithBinaryJsonXmlAndNull_ReturnsExpectedBody()
+    {
+        // 1. Binary ByteString
+        var rawBytes = new byte[] { 1, 2, 3, 4 };
+        var binaryEo = new ExtensionObject(new ExpandedNodeId(100), new ByteString(rawBytes));
+        var binaryBody = ExtensionObjectHelper.GetBody(binaryEo) as byte[];
+        Assert.NotNull(binaryBody);
+        Assert.Equal(rawBytes, binaryBody);
+
+        // 2. JSON string
+        var jsonEo = new ExtensionObject(new ExpandedNodeId(100), "{\"test\": 123}");
+        var jsonBody = ExtensionObjectHelper.GetBody(jsonEo) as string;
+        Assert.NotNull(jsonBody);
+        Assert.Equal("{\"test\": 123}", jsonBody);
+
+        // 3. Empty/null body
+        var emptyEo = new ExtensionObject();
+        var nullBody = ExtensionObjectHelper.GetBody(emptyEo);
+        Assert.Null(nullBody);
+
+        // 4. Serialization of ExtensionObject with null body
+        var serialized = IjtJsonSerializer.Serialize(emptyEo);
+        Assert.Contains("empty ExtensionObject", serialized);
+    }
 }

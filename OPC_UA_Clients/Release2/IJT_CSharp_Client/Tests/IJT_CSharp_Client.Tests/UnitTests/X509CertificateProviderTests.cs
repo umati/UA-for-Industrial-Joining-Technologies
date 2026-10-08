@@ -128,4 +128,12 @@ public sealed class X509CertificateProviderTests
         var sut = new X509CertificateProvider("AB", () => null!);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => sut.TryGetPrivateKeyCertificate("AB"));
     }
+
+    [Fact]
+    public void Dispose_IsNoOpAndDoesNotThrow()
+    {
+        using var cert = NewCert();
+        var sut = new X509CertificateProvider(cert.Thumbprint, () => NewCertCopy(cert));
+        sut.Dispose();
+    }
 }

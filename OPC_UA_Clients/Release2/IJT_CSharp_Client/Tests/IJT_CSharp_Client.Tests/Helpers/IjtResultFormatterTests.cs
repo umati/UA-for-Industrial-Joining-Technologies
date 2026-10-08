@@ -762,4 +762,71 @@ public class IjtResultFormatterTests
 
         Assert.Contains("(none)", result);
     }
+
+    [Fact]
+    public void FormatResult_DomainResultEnvelope_ChildResultsAndTraceEdgeCases_Formatted()
+    {
+        var childResult = new IJT_CSharp_Client.Domain.Events.DomainResultEnvelope
+        {
+            ResultId = "CHILD-001",
+            ContentItems = new List<IJT_CSharp_Client.Domain.Events.DomainResultContentItem>
+            {
+                new IJT_CSharp_Client.Domain.Events.DomainValueContentItem("ChildDetail")
+            }
+        };
+
+        var emptyValuesChannel = new IJT_CSharp_Client.Domain.Events.DomainTraceChannel(
+            "ChannelA", "Sensor1", 1, "Nm", Array.Empty<double>());
+
+        var stepTrace1 = new IJT_CSharp_Client.Domain.Events.DomainStepTrace(
+            "ST-1", "SR-1", 0, 1.0, 0.0, new[] { emptyValuesChannel });
+        var stepTrace2 = new IJT_CSharp_Client.Domain.Events.DomainStepTrace(
+            "ST-2", "SR-2", 0, 1.0, 0.0, Array.Empty<IJT_CSharp_Client.Domain.Events.DomainTraceChannel>());
+
+        var trace = new IJT_CSharp_Client.Domain.Events.DomainTraceData(
+            "TR-1", "RES-1", new[] { stepTrace1, stepTrace2 });
+
+        var singlePayload = new IJT_CSharp_Client.Domain.Events.DomainSingleResultPayload
+        {
+            FailureReason = 5,
+            Trace = trace
+        };
+
+        var envelope = new IJT_CSharp_Client.Domain.Events.DomainResultEnvelope
+        {
+            ResultId = "PARENT-001",
+            ContentItems = new List<IJT_CSharp_Client.Domain.Events.DomainResultContentItem>
+            {
+                new IJT_CSharp_Client.Domain.Events.DomainChildResultContentItem(childResult),
+                new IJT_CSharp_Client.Domain.Events.DomainJoiningResultContentItem(singlePayload)
+            }
+        };
+
+        var formatted = IjtResultFormatter.FormatResult(envelope, DateTime.UtcNow);
+
+        Assert.Contains("CHILD-001", formatted);
+        Assert.Contains("ChildDetail", formatted);
+        Assert.Contains("FailureReason            5", formatted);
+        Assert.Contains("StepTraces               (2)", formatted);
+        Assert.Contains("Values: (none)", formatted);
+        Assert.Contains("Channels              (none)", formatted);
+
+        // Also test trace with empty StepTraces
+        var emptyStepTracesTrace = new IJT_CSharp_Client.Domain.Events.DomainTraceData(
+            "TR-EMPTY", "RES-1", Array.Empty<IJT_CSharp_Client.Domain.Events.DomainStepTrace>());
+        var emptyTracePayload = new IJT_CSharp_Client.Domain.Events.DomainSingleResultPayload
+        {
+            Trace = emptyStepTracesTrace
+        };
+        var emptyTraceEnvelope = new IJT_CSharp_Client.Domain.Events.DomainResultEnvelope
+        {
+            ResultId = "TRACE-EMPTY",
+            ContentItems = new List<IJT_CSharp_Client.Domain.Events.DomainResultContentItem>
+            {
+                new IJT_CSharp_Client.Domain.Events.DomainJoiningResultContentItem(emptyTracePayload)
+            }
+        };
+        var emptyTraceFormatted = IjtResultFormatter.FormatResult(emptyTraceEnvelope, DateTime.UtcNow);
+        Assert.Contains("StepTraces               (none)", emptyTraceFormatted);
+    }
 }

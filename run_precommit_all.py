@@ -776,8 +776,13 @@ def _run_csharp_nuget_audit(
                 _emit_audit_output(completed, output)
                 audit_log.error("[security] C# Client: invalid or incomplete audit report: %s", exc)
                 return 1
+            num_projects = len(report.get("projects", []))
             elapsed = time.monotonic() - t0
-            audit_log.info("[security] C# Client: NuGet audit passed (%.2fs)", elapsed)
+            audit_log.info(
+                "[security] C# Client: NuGet audit passed across %d projects (%.2fs)",
+                num_projects,
+                elapsed,
+            )
             return 0
 
         _emit_audit_output(completed, output)
@@ -927,21 +932,90 @@ def _run_all_audits_concurrently(
             results_by_label[label] = res
 
     results = [results_by_label[label] for label, _fn in tasks]
+    return _render_results(results)
+
+
+def _render_results(results: list[AuditResult]) -> list[AuditResult]:
+    """Render audit results with pre-commit styled status badges, durations, and diagnostics."""
     for res in results:
-        if res.output:
+        now = time.strftime("%H:%M:%S")
+        status_word = "Skipped" if res.skipped else ("Passed" if res.returncode == 0 else "Failed")
+        display_label = res.label
+        offline_unvalidated = False
+        if res.label == "C# Client":
+            if res.skipped:
+                display_label = "C# Client (.NET NuGet - skipped)"
+            elif res.returncode == 0:
+                m = re.search(r"across (\d+) projects", res.output)
+                if m:
+                    display_label = (
+                        f"C# Client (.NET NuGet - {m.group(1)} projects, 0 vulnerabilities)"
+                    )
+                else:
+                    display_label = "C# Client (.NET NuGet - 0 vulnerabilities)"
+        elif res.label == "npm audits":
+            if res.skipped:
+                display_label = "npm package locks (skipped)"
+            elif res.returncode == 0:
+                offline_unvalidated = "offline mode allows continuing" in (res.output or "")
+                scanned_projects = [
+                    short_name
+                    for label_name, short_name in (
+                        ("Node Client", "Node"),
+                        ("Web Client", "Web"),
+                        ("Envelope", "Envelope"),
+                    )
+                    if f"[security] {label_name}: npm audit" in (res.output or "")
+                ]
+                proj_str = ", ".join(scanned_projects) if scanned_projects else "Node, Web"
+                if offline_unvalidated:
+                    status_word = "Not Validated"
+                    display_label = f"npm package locks ({proj_str} - not validated)"
+                else:
+                    display_label = f"npm package locks ({proj_str} - 0 vulnerabilities)"
+
+        use_color = (
+            sys.stdout.isatty()
+            or os.getenv("GITHUB_ACTIONS") == "true"
+            or bool(os.getenv("COLORTERM"))
+            or bool(os.getenv("TERM"))
+        ) and (os.getenv("NO_COLOR") is None)
+        if use_color:
+            if status_word == "Passed":
+                color_code = "\x1b[42m"
+            elif status_word == "Failed":
+                color_code = "\x1b[41m"
+            elif status_word == "Skipped":
+                color_code = "\x1b[46;30m"
+            else:
+                color_code = "\x1b[43;30m"
+            colored_status = f"{color_code}{status_word}\x1b[0m"
+        else:
+            colored_status = status_word
+
+        # [security] prefix is 2 chars shorter than [pre-commit], so 81 aligns the status
+        # badge to the exact column 95 matching pre-commit's 79-column hook output.
+        dots_count = max(1, 81 - len(display_label) - len(status_word))
+        dots = "." * dots_count
+        duration_str = f" ({res.duration:.2f}s)" if res.duration > 0 else ""
+        sys.stdout.write(f"{now} [security] {display_label}{dots}{colored_status}{duration_str}\n")
+        sys.stdout.flush()
+
+        if res.returncode != 0:
+            if res.output:
+                for line in res.output.strip().splitlines():
+                    sys.stdout.write(f"    [{res.label}] {line}\n")
+            if res.error:
+                sys.stdout.write(f"    [security ERROR] {res.label}: {res.error}\n")
+            sys.stdout.flush()
+        elif res.error and res.skipped:
+            sys.stdout.write(f"    [security SKIP] {res.label}: {res.error}\n")
+            sys.stdout.flush()
+        elif offline_unvalidated:
             for line in res.output.strip().splitlines():
-                print(f"[{res.label}] {line}", flush=True)
-        if res.error:
-            (log.warning if res.skipped else log.error)("[security] %s: %s", res.label, res.error)
-        stages = ", ".join(f"{name}={seconds:.2f}s" for name, seconds in res.stages.items())
-        log.info(
-            "[security] %s: %s in %.2fs (exit code %d)%s",
-            res.label,
-            "NOT VALIDATED" if res.skipped else ("PASS" if res.returncode == 0 else "FAIL"),
-            res.duration,
-            res.returncode,
-            f"; {stages}" if stages else "",
-        )
+                if "offline mode allows continuing" in line or "WARNING" in line:
+                    sys.stdout.write(f"    [security WARNING] {line.strip()}\n")
+            sys.stdout.flush()
     return results
 
 

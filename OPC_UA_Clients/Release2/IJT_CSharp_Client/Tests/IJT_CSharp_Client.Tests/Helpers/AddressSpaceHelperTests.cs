@@ -740,6 +740,22 @@ public sealed class AddressSpaceHelperTests
     }
 
     [Fact]
+    public async Task ReadValue_WhenNullReferenceException_ReturnsNull()
+    {
+        var mock = new Mock<ISession>();
+        mock.Setup(s => s.ReadAsync(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<double>(),
+                It.IsAny<TimestampsToReturn>(),
+                It.IsAny<ArrayOf<ReadValueId>>(),
+                It.IsAny<CancellationToken>()))
+            .Throws(new NullReferenceException());
+
+        var result = await AddressSpaceHelper.ReadValueAsync(mock.Object, new NodeId(1u, 0));
+        Assert.Null(result);
+    }
+
+    [Fact]
     public async Task ReadValueT_WhenConvertThrowsInvalidCast_ReturnsDefault()
     {
         var mock = SessionWithReadResult(new DataValue(new Variant(new NodeId(1u, 0)), StatusCodes.Good));

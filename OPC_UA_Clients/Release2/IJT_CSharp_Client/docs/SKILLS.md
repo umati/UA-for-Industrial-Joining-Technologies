@@ -105,10 +105,12 @@ IJT_CSharp_Client/
         │   └── EventSubscriberHelperUnitTests.cs
         ├── Client/
         │   ├── AssetManagementTests.cs
-        │   ├── ResultManagementTests.cs
-        │   ├── JoiningProcessManagementTests.cs
         │   ├── EventSubscriberTests.cs
-        │   └── MenuDispatchTests.cs
+        │   ├── JoiningProcessManagementTests.cs
+        │   ├── MenuDispatchTests.cs
+        │   ├── OpcUaSessionConnectorTests.cs            # Session connector, PKI configuration, and timeout tests
+        │   ├── ResultManagementTests.cs
+        │   └── SimulationManagementTests.cs
         ├── Helpers/                                 # Formatter + serializer tests
         ├── Configuration/                           # ClientConfig env-var tests
         ├── LiveIntegrationTests.cs                  # Live tests (skip without server)

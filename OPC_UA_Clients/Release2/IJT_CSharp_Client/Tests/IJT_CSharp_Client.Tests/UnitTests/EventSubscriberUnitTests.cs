@@ -213,6 +213,21 @@ public sealed class EventSubscriberUnitTests
     }
 
     [Fact]
+    public async Task Unsubscribe_WhenRemoveSubscriptionThrows_LogsAndClearsSubscription()
+    {
+        var session = MockSessionBuilder.Create();
+        session.Setup(s => s.Session).Returns(
+            MockSessionBuilder.CreateThrowingSession(new InvalidOperationException("remove failed")));
+        await using var sub = new EventSubscriber(session.Object);
+        SetEventSubscription(sub, new Subscription(DefaultTelemetry.Create(_ => { })));
+
+        var ex = await Record.ExceptionAsync(async () => await sub.UnsubscribeAsync());
+
+        Assert.Null(ex);
+        Assert.False(sub.IsSubscribed);
+    }
+
+    [Fact]
     public async Task NotificationHandlers_ProcessQueuedEvents()
     {
         var session = MockSessionBuilder.Create();
@@ -220,8 +235,8 @@ public sealed class EventSubscriberUnitTests
         var telemetry = DefaultTelemetry.Create(_ => { });
         var resultItem = new MonitoredItem(telemetry) { NodeClass = NodeClass.Object };
         var systemItem = new MonitoredItem(telemetry) { NodeClass = NodeClass.Object };
-        resultItem.SaveValueInCache(new EventFieldList { EventFields = [] });
-        systemItem.SaveValueInCache(new EventFieldList { EventFields = [] });
+        resultItem.SaveValueInCache(new EventFieldList { EventFields = [Variant.From("res-1")] });
+        systemItem.SaveValueInCache(new EventFieldList { EventFields = [Variant.From("sys-1")] });
 
         var resultHandler = typeof(EventSubscriber).GetMethod(
             "OnResultEventNotification",

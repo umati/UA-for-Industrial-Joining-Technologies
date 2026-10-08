@@ -696,12 +696,13 @@ def test_audit_output_is_buffered_and_ordered(tmp_path, monkeypatch, capsys):
     text = capsys.readouterr().out
     assert len(results) == 7
     assert all(r.returncode == 0 for r in results)
-    assert text.splitlines() == [
-        "[C# Client] nuget output",
-        "[npm audits] npm output",
-        *[f"[Python client lock ({cd.name})] {cd.name} output" for cd in clients],
-        "[Python requirements] requirements output",
-    ]
+    lines = text.splitlines()
+    assert len(lines) == 7
+    assert all("[security]" in line and "Passed" in line for line in lines)
+    assert any("C# Client" in line for line in lines)
+    assert any("npm package locks" in line for line in lines)
+    assert all(any(cd.name in line for line in lines) for cd in clients)
+    assert any("Python requirements" in line for line in lines)
     assert sorted(completed) == ["npm", "nuget", "requirements"]
 
 
@@ -814,3 +815,52 @@ def test_npm_findings_are_buffered_without_interleaving(tmp_path, monkeypatch, c
     assert module._run_npm_lock_audit(tmp_path, "fixture", output=output) == 1
     assert "High vulnerability" in "".join(output)
     assert capsys.readouterr().out == ""
+
+
+def test_npm_audit_offline_unvalidated_reports_warning_and_not_validated(capsys):
+    module = _load_module()
+    raw_output = (
+        "INFO: [security] Node Client: npm audit passed (1.20s)\n"
+        "WARNING: [security] Web Client: npm audit registry endpoint unreachable/timed out "
+        "(offline or restricted network); offline mode allows continuing.\n"
+    )
+    result = module.AuditResult("npm audits", 0, duration=2.5, output=raw_output)
+    module._render_results([result])
+    out = capsys.readouterr().out
+    assert "npm package locks (Node, Web - not validated)" in out
+    assert "Not Validated" in out
+    assert "[security WARNING]" in out
+    assert "offline mode allows continuing" in out
+
+
+def test_npm_audit_names_only_scanned_projects(capsys):
+    module = _load_module()
+    # Scenario 1: Envelope checkout absent, only Node & Web scanned
+    raw_output = (
+        "INFO: [security] Node Client: npm audit passed (1.20s)\n"
+        "INFO: [security] Web Client: npm audit passed (1.40s)\n"
+        "INFO: [security] Envelope: optional checkout absent\n"
+    )
+    result = module.AuditResult("npm audits", 0, duration=2.6, output=raw_output)
+    module._render_results([result])
+    out = capsys.readouterr().out
+    assert "npm package locks (Node, Web - 0 vulnerabilities)" in out
+    assert "Passed" in out
+    assert "Envelope" not in out
+
+
+def test_npm_audit_skipped_does_not_claim_zero_vulnerabilities(capsys):
+    module = _load_module()
+    result = module.AuditResult(
+        "npm audits",
+        0,
+        duration=0.0,
+        error="npm unavailable; skipped",
+        skipped=True,
+    )
+    module._render_results([result])
+    out = capsys.readouterr().out
+    assert "npm package locks (skipped)" in out
+    assert "Skipped" in out
+    assert "0 vulnerabilities" not in out
+    assert "[security SKIP]" in out

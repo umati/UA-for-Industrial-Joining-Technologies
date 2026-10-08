@@ -679,4 +679,44 @@ public sealed class ResultManagementUnitTests
         Assert.Null(await Record.ExceptionAsync(() => rm.StopResultVariableSubscriptionAsync()));
         Assert.False(rm.IsResultVarSubscribed);
     }
+
+    [Fact]
+    public async Task OnMonitoredItemNotification_WhenEventHandlerThrows_DoesNotThrow()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ijt-rm-eventhandler-" + Guid.NewGuid().ToString("N"));
+        using var scope = IjtFileLogger.PushBaseLogDirOverride(root);
+        try
+        {
+            var session = MockSessionBuilder.Create();
+            await using var rm = new ResultManagement(session.Object);
+
+            rm.OnResultVariableChanged += (_, _) =>
+                throw new InvalidOperationException("Faulty user event listener");
+
+            var item = new MonitoredItem(DefaultTelemetry.Create(_ => { })) { NodeClass = NodeClass.Variable };
+            item.SaveValueInCache(new MonitoredItemNotification
+            {
+                Value = new DataValue(
+                    Variant.From(new ExtensionObject(new MachineryResult.ResultDataType
+                    {
+                        ResultMetaData = new MachineryResult.ResultMetaDataType
+                        {
+                            ResultId = "FAULTY-LISTENER-RESULT",
+                        },
+                    })),
+                    StatusCodes.Good),
+            });
+            var handler = typeof(ResultManagement).GetMethod(
+                "OnMonitoredItemNotification",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            var ex = Record.Exception(() => handler!.Invoke(rm, [item, null]));
+            Assert.Null(ex);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
 }

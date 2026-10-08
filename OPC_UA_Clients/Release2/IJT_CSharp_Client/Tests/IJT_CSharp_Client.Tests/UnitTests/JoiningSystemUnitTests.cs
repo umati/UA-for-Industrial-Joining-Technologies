@@ -1703,4 +1703,180 @@ public sealed class JoiningSystemUnitTests
         Assert.Null(ex);
         mockSession.Verify(s => s.Dispose(), Times.Once);
     }
+
+    [Fact]
+    public void ManagementProperties_ExposeReceiversAndClients()
+    {
+        var mockSession = CreateMockSession(connected: true);
+        var sut = CreateSession(mockSession.Object);
+
+        Assert.NotNull(sut.ResultEvents);
+        Assert.NotNull(sut.ResultVariable);
+        Assert.NotNull(sut.ResultMethods);
+        Assert.NotNull(sut.JoiningProcessManagement);
+        Assert.NotNull(sut.JointManagement);
+        Assert.NotNull(sut.SimulationManagement);
+    }
+
+    [Fact]
+    public void ConnectionHooks_ImplicitConversions_RoundTripSuccessfully()
+    {
+        var hooks = new JoiningSystem.ConnectionHooks(
+            (_, _) => Task.CompletedTask,
+            (_, _, _) => Task.CompletedTask,
+            (_, _, _, _) => Task.FromResult(new EndpointDescription()),
+            (_, _, _, _, _) => Task.FromResult(new Mock<ISession>().Object));
+
+        OpcUaSessionConnector.ConnectionHooks connectorHooks = hooks;
+        Assert.NotNull(connectorHooks);
+        Assert.Same(hooks.ValidateApplicationConfigAsync, connectorHooks.ValidateApplicationConfigAsync);
+        Assert.Same(hooks.EnsureApplicationCertificateAsync, connectorHooks.EnsureApplicationCertificateAsync);
+        Assert.Same(hooks.SelectEndpointDescriptionAsync, connectorHooks.SelectEndpointDescriptionAsync);
+        Assert.Same(hooks.CreateSessionAsync, connectorHooks.CreateSessionAsync);
+
+        JoiningSystem.ConnectionHooks back = connectorHooks;
+        Assert.NotNull(back);
+        Assert.Same(connectorHooks.ValidateApplicationConfigAsync, back.ValidateApplicationConfigAsync);
+        Assert.Same(connectorHooks.EnsureApplicationCertificateAsync, back.EnsureApplicationCertificateAsync);
+        Assert.Same(connectorHooks.SelectEndpointDescriptionAsync, back.SelectEndpointDescriptionAsync);
+        Assert.Same(connectorHooks.CreateSessionAsync, back.CreateSessionAsync);
+    }
+
+    [Fact]
+    public async Task CallMethod_AllSupportedVariantTypes_ConvertsCorrectly()
+    {
+        ArrayOf<CallMethodRequest>? capturedRequests = null;
+        var mockSession = CreateMockSession();
+        mockSession.Setup(s => s.CallAsync(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<RequestHeader, ArrayOf<CallMethodRequest>, CancellationToken>((_, reqs, _) => capturedRequests = reqs)
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                Results = new ArrayOf<CallMethodResult>(new[]
+                {
+                    new CallMethodResult
+                    {
+                        StatusCode = StatusCodes.Good,
+                        OutputArguments = new ArrayOf<Variant>(new[] { Variant.From("output") })
+                    }
+                })
+            }));
+
+        var sut = CreateSession(mockSession.Object);
+        var objId = new NodeId(1, 2);
+        var methId = new NodeId(2, 2);
+        var expectedDt = new DateTime(2026, 10, 8, 12, 0, 0, DateTimeKind.Utc);
+        var expectedGuid = Guid.NewGuid();
+        var rawExtObj = new ExtensionObject();
+        var rawExtObjArray = new ExtensionObject[] { new() };
+        var rawDataType = new ResultDataType();
+
+        var args = new object[]
+        {
+            null!,
+            Variant.From(42),
+            true,
+            (sbyte)1,
+            (byte)2,
+            (short)3,
+            (ushort)4,
+            5,
+            (uint)6,
+            (long)7,
+            (ulong)8,
+            1.5f,
+            2.5d,
+            "hello",
+            expectedDt,
+            expectedGuid,
+            new byte[] { 1, 2 },
+            rawExtObj,
+            rawExtObjArray,
+            new string[] { "a", "b" },
+            rawDataType
+        };
+
+        var results = await sut.CallMethodAsync(objId, methId, args);
+        Assert.Single(results);
+        Assert.Equal("output", results[0]);
+
+        Assert.True(capturedRequests.HasValue);
+        Assert.Equal(1, capturedRequests.Value.Count);
+        var req = capturedRequests.Value[0];
+        Assert.Equal(objId, req.ObjectId);
+        Assert.Equal(methId, req.MethodId);
+        Assert.Equal(args.Length, req.InputArguments.Count);
+
+        Assert.True(req.InputArguments[0].IsNull);
+        Assert.Equal(42, req.InputArguments[1].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal(true, req.InputArguments[2].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal((sbyte)1, req.InputArguments[3].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal((byte)2, req.InputArguments[4].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal((short)3, req.InputArguments[5].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal((ushort)4, req.InputArguments[6].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal(5, req.InputArguments[7].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal((uint)6, req.InputArguments[8].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal(7L, req.InputArguments[9].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal(8UL, req.InputArguments[10].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal(1.5f, req.InputArguments[11].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal(2.5d, req.InputArguments[12].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.Equal("hello", req.InputArguments[13].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        var boxedDt = req.InputArguments[14].AsBoxedObject(Variant.BoxingBehavior.Legacy);
+        DateTime actualDt = boxedDt switch
+        {
+            Opc.Ua.DateTimeUtc utc => (DateTime)utc,
+            DateTime dt => dt,
+            _ => throw new InvalidOperationException($"Unexpected boxed DateTime type: {boxedDt?.GetType()}")
+        };
+        Assert.Equal(expectedDt, actualDt.ToUniversalTime());
+        Assert.Equal(expectedGuid.ToString(), req.InputArguments[15].AsBoxedObject(Variant.BoxingBehavior.Legacy)?.ToString());
+        var boxedBytes = req.InputArguments[16].AsBoxedObject(Variant.BoxingBehavior.Legacy);
+        byte[] actualBytes = boxedBytes switch
+        {
+            Opc.Ua.ByteString bs => bs.ToArray(),
+            byte[] b => b,
+            _ => throw new InvalidOperationException($"Unexpected boxed byte[] type: {boxedBytes?.GetType()}")
+        };
+        Assert.Equal(new byte[] { 1, 2 }, actualBytes);
+        Assert.Equal(rawExtObj, (ExtensionObject)req.InputArguments[17].AsBoxedObject(Variant.BoxingBehavior.Legacy)!);
+        Assert.Equal(rawExtObjArray, (ExtensionObject[])req.InputArguments[18].AsBoxedObject(Variant.BoxingBehavior.Legacy)!);
+        Assert.Equal(new string[] { "a", "b" }, (string[])req.InputArguments[19].AsBoxedObject(Variant.BoxingBehavior.Legacy)!);
+        var lastExtObj = Assert.IsType<ExtensionObject>(req.InputArguments[20].AsBoxedObject(Variant.BoxingBehavior.Legacy));
+        Assert.NotNull(ExtensionObjectHelper.GetBody(lastExtObj));
+    }
+
+    [Fact]
+    public async Task CallMethod_UnsupportedVariantType_ThrowsArgumentException()
+    {
+        var mockSession = CreateMockSession();
+        var sut = CreateSession(mockSession.Object);
+        var objId = new NodeId(1, 2);
+        var methId = new NodeId(2, 2);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            sut.CallMethodAsync(objId, methId, new System.Text.StringBuilder("unsupported")));
+    }
+
+    [Fact]
+    public async Task CallMethod_EmptyResultsInResponse_ReturnsEmptyList()
+    {
+        var mockSession = CreateMockSession();
+        mockSession.Setup(s => s.CallAsync(
+                It.IsAny<RequestHeader>(),
+                It.IsAny<ArrayOf<CallMethodRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask<CallResponse>(new CallResponse
+            {
+                Results = new ArrayOf<CallMethodResult>()
+            }));
+
+        var sut = CreateSession(mockSession.Object);
+        var objId = new NodeId(1, 2);
+        var methId = new NodeId(2, 2);
+
+        var results = await sut.CallMethodAsync(objId, methId);
+        Assert.Empty(results);
+    }
 }
