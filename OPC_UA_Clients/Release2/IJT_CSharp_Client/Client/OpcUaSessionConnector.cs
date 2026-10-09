@@ -30,6 +30,10 @@ internal static class OpcUaSessionConnector
     private static readonly ConcurrentDictionary<string, EndpointDescription> EndpointDiscoveryCache = new();
     private static readonly ITelemetryContext Telemetry = DefaultTelemetry.Create(_ => { });
 
+    internal static AsyncLocal<Func<ApplicationConfiguration, ClientConfig, CancellationToken, Task<IReadOnlyList<EndpointDescription>>>?> EndpointDiscoveryHandlerForTesting { get; } = new();
+    internal static AsyncLocal<Func<ApplicationConfiguration, string, bool, int, CancellationToken, Task<EndpointDescription?>>?> SelectEndpointAsyncHandlerForTesting { get; } = new();
+    internal static AsyncLocal<Func<ApplicationInstance, CancellationToken, Task<bool>>?> CheckCertificateHandlerForTesting { get; } = new();
+
     public static ApplicationConfiguration BuildApplicationConfig(ClientConfig config)
     {
         var pkiRoot = string.IsNullOrWhiteSpace(config.PkiRootPath)
@@ -123,7 +127,10 @@ internal static class OpcUaSessionConnector
         ILogger log,
         CancellationToken ct)
     {
-        var endpoints = await DiscoverEndpointsAsync(appConfig, config, ct).ConfigureAwait(false);
+        var discoveryHandler = EndpointDiscoveryHandlerForTesting.Value;
+        var endpoints = discoveryHandler is not null
+            ? await discoveryHandler(appConfig, config, ct).ConfigureAwait(false)
+            : await DiscoverEndpointsAsync(appConfig, config, ct).ConfigureAwait(false);
         return SelectEndpointDescription(config, () => endpoints, log);
     }
 
@@ -173,7 +180,11 @@ internal static class OpcUaSessionConnector
             return (await discoveryClient.GetEndpointsAsync(default, ct).ConfigureAwait(false)).ToList();
         }
 
-        var endpoint = await CoreClientUtils.SelectEndpointAsync(
+        var selectHandler = SelectEndpointAsyncHandlerForTesting.Value;
+        var endpoint = selectHandler is not null
+            ? await selectHandler(
+                appConfig, config.ServerUrl, config.UseSecurityPolicyForEndpointDiscovery, EndpointDiscoveryTimeoutMs, ct).ConfigureAwait(false)
+            : await CoreClientUtils.SelectEndpointAsync(
                 appConfig,
                 config.ServerUrl,
                 useSecurity: config.UseSecurityPolicyForEndpointDiscovery,
@@ -235,7 +246,10 @@ internal static class OpcUaSessionConnector
             ApplicationType = ApplicationType.Client,
             ApplicationConfiguration = appConfig,
         };
-        var ok = await app.CheckApplicationInstanceCertificatesAsync(false, null, ct).ConfigureAwait(false);
+        var checkHandler = CheckCertificateHandlerForTesting.Value;
+        var ok = checkHandler is not null
+            ? await checkHandler(app, ct).ConfigureAwait(false)
+            : await app.CheckApplicationInstanceCertificatesAsync(false, null, ct).ConfigureAwait(false);
         if (!ok)
             throw new InvalidOperationException("OPC UA application certificate is required for secure endpoints but could not be created or validated.");
     }

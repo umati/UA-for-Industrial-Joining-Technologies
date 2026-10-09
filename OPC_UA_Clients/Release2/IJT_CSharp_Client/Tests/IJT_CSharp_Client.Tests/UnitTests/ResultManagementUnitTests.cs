@@ -681,6 +681,50 @@ public sealed class ResultManagementUnitTests
     }
 
     [Fact]
+    public async Task StopResultVariableSubscription_WhenDeleteThrowsServiceResultException_HandlesGracefully()
+    {
+        var session = MockSessionBuilder.Create();
+        await using var rm = new ResultManagement(session.Object);
+        SetResultVarSubscription(rm, CreateThrowingSubscription(new ServiceResultException(StatusCodes.BadSessionClosed)));
+
+        Assert.Null(await Record.ExceptionAsync(() => rm.StopResultVariableSubscriptionAsync()));
+        Assert.False(rm.IsResultVarSubscribed);
+    }
+
+    [Fact]
+    public async Task StopResultVariableSubscription_WhenDeleteThrowsGenericException_HandlesGracefully()
+    {
+        var session = MockSessionBuilder.Create();
+        await using var rm = new ResultManagement(session.Object);
+        SetResultVarSubscription(rm, CreateThrowingSubscription(new InvalidOperationException("delete failed")));
+
+        Assert.Null(await Record.ExceptionAsync(() => rm.StopResultVariableSubscriptionAsync()));
+        Assert.False(rm.IsResultVarSubscribed);
+    }
+
+    [Fact]
+    public async Task PrintResultOutputs_ViaReflection_InvokesMethod()
+    {
+        var session = MockSessionBuilder.Create();
+        await using var rm = new ResultManagement(session.Object);
+        var method = typeof(ResultManagement).GetMethod("PrintResultOutputs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(method);
+        method.Invoke(rm, [new List<object> { "out1" }]);
+    }
+
+    private static Subscription CreateThrowingSubscription(Exception ex)
+    {
+        var sub = new Subscription(DefaultTelemetry.Create(_ => { }));
+        var idField = typeof(Subscription).GetField("<Id>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        idField!.SetValue(sub, 1u);
+        var sessionSetter = typeof(Subscription).GetProperty(nameof(Subscription.Session))!
+            .GetSetMethod(nonPublic: true)!;
+        sessionSetter.Invoke(sub, [MockSessionBuilder.CreateThrowingSession(ex)]);
+        return sub;
+    }
+
+
+    [Fact]
     public async Task OnMonitoredItemNotification_WhenEventHandlerThrows_DoesNotThrow()
     {
         var root = Path.Combine(Path.GetTempPath(), "ijt-rm-eventhandler-" + Guid.NewGuid().ToString("N"));

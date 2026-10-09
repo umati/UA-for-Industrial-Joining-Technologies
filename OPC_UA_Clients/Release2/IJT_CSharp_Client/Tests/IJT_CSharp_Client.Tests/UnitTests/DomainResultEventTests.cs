@@ -827,4 +827,56 @@ public sealed class DomainResultEventTests
         public string Normal => "value";
         public string FaultyProp => throw new InvalidOperationException("Property getter failure");
     }
+
+    private enum BigEnum : ulong
+    {
+        Max = ulong.MaxValue
+    }
+
+    private sealed class ArrayOfDummy<T>
+    {
+        // No ToArray method
+    }
+
+    [Fact]
+    public void ToSdkNeutral_WithBigEnumInEnumerable_CatchesItemException()
+    {
+        var items = new object[] { BigEnum.Max };
+        var list = DomainResultMapper.ToSdkNeutral(items) as IList<object?>;
+        Assert.NotNull(list);
+        Assert.Single(list);
+        var errDict = list[0] as IDictionary<string, object?>;
+        Assert.NotNull(errDict);
+        Assert.True(errDict.ContainsKey("$error"));
+    }
+
+    [Fact]
+    public void ToSdkNeutral_WithArrayOfWithoutToArray_ReturnsEmptyList()
+    {
+        var obj = new ArrayOfDummy<int>();
+        var list = DomainResultMapper.ToSdkNeutral(obj) as IList<object?>;
+        Assert.NotNull(list);
+        Assert.Empty(list);
+    }
+
+    [Fact]
+    public void ToSdkNeutral_WithReadOnlyMemory_ReturnsList()
+    {
+        var memory = new ReadOnlyMemory<int>([10, 20, 30]);
+        var list = DomainResultMapper.ToSdkNeutral(memory) as IList<object?>;
+        Assert.NotNull(list);
+        Assert.Equal(3, list.Count);
+        Assert.Equal(10, list[0]);
+        Assert.Equal(20, list[1]);
+        Assert.Equal(30, list[2]);
+    }
+
+    [Fact]
+    public void ToSdkNeutral_WithReadOnlyMemoryEmpty_ReturnsEmptyList()
+    {
+        var memory = ReadOnlyMemory<string>.Empty;
+        var list = DomainResultMapper.ToSdkNeutral(memory) as IList<object?>;
+        Assert.NotNull(list);
+        Assert.Empty(list);
+    }
 }

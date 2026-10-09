@@ -384,4 +384,160 @@ public sealed class OpcUaSessionConnectorTests
         // Does not throw and returns immediately because channel is not secure
         await OpcUaSessionConnector.EnsureApplicationCertificateAsync(config, appConfig, CancellationToken.None);
     }
+
+    [Fact]
+    public async Task DiscoverEndpointsAsync_RequiresExact_WithCanceledToken_ThrowsOperationCanceledException()
+    {
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://127.0.0.1:4840",
+            SecurityPolicyUri = SecurityPolicies.Basic256Sha256,
+            MessageSecurityMode = MessageSecurityMode.SignAndEncrypt,
+        };
+        var appConfig = OpcUaSessionConnector.BuildApplicationConfig(config);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            OpcUaSessionConnector.DiscoverEndpointsAsync(appConfig, config, cts.Token));
+    }
+
+    [Fact]
+    public async Task DiscoverEndpointsAsync_Insecure_WithCanceledToken_ThrowsOperationCanceledException()
+    {
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://127.0.0.1:4840",
+            SecurityPolicyUri = SecurityPolicies.None,
+            MessageSecurityMode = MessageSecurityMode.None,
+            UseSecurityPolicyForEndpointDiscovery = false,
+        };
+        var appConfig = OpcUaSessionConnector.BuildApplicationConfig(config);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            OpcUaSessionConnector.DiscoverEndpointsAsync(appConfig, config, cts.Token));
+    }
+
+    [Fact]
+    public async Task SelectEndpointDescriptionAsync_WithCanceledToken_ThrowsOperationCanceledException()
+    {
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://127.0.0.1:4840",
+            SecurityPolicyUri = SecurityPolicies.None,
+            MessageSecurityMode = MessageSecurityMode.None,
+            UseSecurityPolicyForEndpointDiscovery = false,
+        };
+        var appConfig = OpcUaSessionConnector.BuildApplicationConfig(config);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            OpcUaSessionConnector.SelectEndpointDescriptionAsync(appConfig, config, NullLogger.Instance, cts.Token));
+    }
+
+    [Fact]
+    public async Task SelectEndpointDescriptionAsync_WithDiscoveryHandler_ReturnsSelectedEndpoint()
+    {
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://127.0.0.1:4840",
+            SecurityPolicyUri = SecurityPolicies.None,
+            MessageSecurityMode = MessageSecurityMode.None,
+            UseSecurityPolicyForEndpointDiscovery = false,
+        };
+        var appConfig = OpcUaSessionConnector.BuildApplicationConfig(config);
+        var expectedEndpoint = new EndpointDescription
+        {
+            EndpointUrl = config.ServerUrl,
+            SecurityPolicyUri = SecurityPolicies.None,
+            SecurityMode = MessageSecurityMode.None,
+        };
+
+        try
+        {
+            OpcUaSessionConnector.EndpointDiscoveryHandlerForTesting.Value = (_, _, _) =>
+                Task.FromResult<IReadOnlyList<EndpointDescription>>([expectedEndpoint]);
+
+            var selected = await OpcUaSessionConnector.SelectEndpointDescriptionAsync(
+                appConfig, config, NullLogger.Instance, CancellationToken.None);
+
+            Assert.Same(expectedEndpoint, selected);
+        }
+        finally
+        {
+            OpcUaSessionConnector.EndpointDiscoveryHandlerForTesting.Value = null;
+        }
+    }
+
+    [Fact]
+    public async Task DiscoverEndpointsAsync_WithSelectEndpointHook_ReturnsEndpoints()
+    {
+        var config = new ClientConfig
+        {
+            ServerUrl = "opc.tcp://127.0.0.1:4840",
+            SecurityPolicyUri = null,
+            MessageSecurityMode = null,
+            UseSecurityPolicyForEndpointDiscovery = false,
+        };
+        var appConfig = OpcUaSessionConnector.BuildApplicationConfig(config);
+        var expectedEndpoint = new EndpointDescription
+        {
+            EndpointUrl = config.ServerUrl,
+            SecurityPolicyUri = SecurityPolicies.None,
+            SecurityMode = MessageSecurityMode.None,
+        };
+
+        try
+        {
+            // Case 1: Hook returns expectedEndpoint -> [expectedEndpoint]
+            OpcUaSessionConnector.SelectEndpointAsyncHandlerForTesting.Value = (_, _, _, _, _) =>
+                Task.FromResult<EndpointDescription?>(expectedEndpoint);
+
+            var endpoints = await OpcUaSessionConnector.DiscoverEndpointsAsync(
+                appConfig, config, CancellationToken.None);
+
+            Assert.Single(endpoints);
+            Assert.Same(expectedEndpoint, endpoints[0]);
+
+            // Case 2: Hook returns null -> empty list []
+            OpcUaSessionConnector.SelectEndpointAsyncHandlerForTesting.Value = (_, _, _, _, _) =>
+                Task.FromResult<EndpointDescription?>(null);
+
+            var empty = await OpcUaSessionConnector.DiscoverEndpointsAsync(
+                appConfig, config, CancellationToken.None);
+
+            Assert.Empty(empty);
+        }
+        finally
+        {
+            OpcUaSessionConnector.SelectEndpointAsyncHandlerForTesting.Value = null;
+        }
+    }
+
+    [Fact]
+    public async Task EnsureApplicationCertificateAsync_WhenValidationFails_ThrowsInvalidOperationException()
+    {
+        var config = new ClientConfig
+        {
+            SecurityPolicyUri = SecurityPolicies.Basic256Sha256,
+            MessageSecurityMode = MessageSecurityMode.SignAndEncrypt,
+        };
+        var appConfig = OpcUaSessionConnector.BuildApplicationConfig(config);
+
+        try
+        {
+            OpcUaSessionConnector.CheckCertificateHandlerForTesting.Value = (_, _) => Task.FromResult(false);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                OpcUaSessionConnector.EnsureApplicationCertificateAsync(
+                    config, appConfig, CancellationToken.None));
+        }
+        finally
+        {
+            OpcUaSessionConnector.CheckCertificateHandlerForTesting.Value = null;
+        }
+    }
 }

@@ -1006,16 +1006,19 @@ async def test_worker_event_loop_periodic_flush_triggered():
             await orig_sleep(0.005)
 
         with patch("src.engine.client_pool.asyncio.sleep", side_effect=fast_sleep):
-            await _worker_event_loop(
-                worker_id=0,
-                endpoints=["opc.tcp://test:40451"],
-                out_queue=out_q,
-                stop_event=stop_event,
-                connect_concurrency=1,
-                sub_period_ms=50,
-                mode="passive",
-                burst_trigger_count=0,
-                max_retries=1,
+            await asyncio.wait_for(
+                _worker_event_loop(
+                    worker_id=0,
+                    endpoints=["opc.tcp://test:40451"],
+                    out_queue=out_q,
+                    stop_event=stop_event,
+                    connect_concurrency=1,
+                    sub_period_ms=50,
+                    mode="passive",
+                    burst_trigger_count=0,
+                    max_retries=1,
+                ),
+                timeout=5.0,
             )
 
         assert any(
@@ -2447,3 +2450,25 @@ async def test_worker_stopped_early_reports_fewer_rounds():
     msgs = [c.args[0] for c in out_q.put.call_args_list]
     assert next(m for m in msgs if m["type"] == "TRIGGERS_DONE")["rounds_fired"] == 0
     assert next(m for m in msgs if m["type"] == "DONE")["trigger_rounds_fired"] == 0
+
+
+def test_process_queue_msg_invalid_endpoint_stats():
+    pool = OpcUaClientPool(endpoints=["opc.tcp://ep1:40001"])
+    msg = {
+        "type": "BATCH",
+        "endpoint_stats": {
+            123: {"triggers_sent": 1},
+            "opc.tcp://ep1:40001": "not-a-dict",
+        },
+    }
+    pool._process_queue_msg(msg)
+    assert pool.endpoint_stats == {}
+
+
+def test_mark_unmatched_before_first_call_ignores_non_valid():
+    pool = OpcUaClientPool(endpoints=["opc.tcp://ep1:40001"])
+    samples = [
+        LatencySample(sample_id=1, endpoint="opc.tcp://ep1:40001", integrity_status="INCOMPLETE"),
+    ]
+    pool._mark_unmatched_before_first_call(samples)
+    assert samples[0].integrity_status == "INCOMPLETE"

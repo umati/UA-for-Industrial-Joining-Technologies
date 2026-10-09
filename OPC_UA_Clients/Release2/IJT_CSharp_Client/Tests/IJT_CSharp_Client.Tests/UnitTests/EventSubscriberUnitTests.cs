@@ -228,6 +228,26 @@ public sealed class EventSubscriberUnitTests
     }
 
     [Fact]
+    public async Task Unsubscribe_WhenDeleteSubscriptionThrows_LogsAndClearsSubscription()
+    {
+        var session = MockSessionBuilder.Create();
+        await using var sub = new EventSubscriber(session.Object);
+        var throwingSub = new Subscription(DefaultTelemetry.Create(_ => { }));
+        var idField = typeof(Subscription).GetField("<Id>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        idField!.SetValue(throwingSub, 1u);
+        var sessionSetter = typeof(Subscription).GetProperty(nameof(Subscription.Session))!
+            .GetSetMethod(nonPublic: true)!;
+        sessionSetter.Invoke(throwingSub, [MockSessionBuilder.CreateThrowingSession(new InvalidOperationException("delete failed"))]);
+        SetEventSubscription(sub, throwingSub);
+
+        var ex = await Record.ExceptionAsync(async () => await sub.UnsubscribeAsync());
+
+        Assert.Null(ex);
+        Assert.False(sub.IsSubscribed);
+    }
+
+
+    [Fact]
     public async Task NotificationHandlers_ProcessQueuedEvents()
     {
         var session = MockSessionBuilder.Create();

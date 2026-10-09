@@ -247,6 +247,7 @@ filter.WhereClause = BuildOfTypeClause(resultReadyTypeId);     // ResultReadyEve
 |----------|--------|
 | Browse exception tests in unit tier | `ISession.Browse` synchronous overload is an extension method, so Moq cannot intercept it. Browse-exception guards are covered through live integration tests. |
 | Joint test data | Use `JointDataType.Create()` when constructing joints with optional fields. Include a `PROGRAM` associated entity when test data needs program context. |
+| Test seams & concurrency isolation | Internal test hooks (`EndpointDiscoveryHandlerForTesting`, `SelectEndpointAsyncHandlerForTesting`, `CheckCertificateHandlerForTesting`, `ShutdownTimeoutOverrideForTesting`, `DirectConsoleModeForTesting`) use `AsyncLocal<T>` to scope overrides strictly to the ambient async execution context, reducing cross-test interference between independent execution contexts. |
 
 ---
 

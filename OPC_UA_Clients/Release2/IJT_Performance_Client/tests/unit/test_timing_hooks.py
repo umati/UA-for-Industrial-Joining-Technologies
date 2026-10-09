@@ -144,3 +144,44 @@ async def test_loop_lag_monitor_measures_blocking():
 
 def test_loop_lag_monitor_snapshot_without_ticks():
     assert LoopLagMonitor().snapshot() == {"max_ms": 0.0, "mean_ms": 0.0, "ticks": 0}
+
+
+def test_self_test_import_error(monkeypatch):
+    import builtins
+
+    orig_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if "asyncua.client.ua_client" in name:
+            raise ImportError("Simulated import error")
+        return orig_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    reason = timing_hooks._self_test()
+    assert reason is not None and "Simulated import error" in reason
+
+
+def test_self_test_missing_targets(monkeypatch):
+    monkeypatch.setattr(UASocketProtocol, "_call_callback", None, raising=False)
+    assert "asyncua hook targets missing" in (timing_hooks._self_test() or "")
+
+
+def test_self_test_publish_loop_missing(monkeypatch):
+    monkeypatch.delattr(UaSession, "_publish_loop", raising=False)
+    assert "asyncua hook targets missing" in (timing_hooks._self_test() or "")
+
+
+def test_self_test_publish_signature_changed(monkeypatch):
+    monkeypatch.setattr(UaSession, "publish", lambda self: None)
+    assert "UaSession.publish signature changed" in (timing_hooks._self_test() or "")
+
+
+def test_self_test_missing_publish_encoding_id(monkeypatch):
+    monkeypatch.delattr(ua.ObjectIds, "PublishResponse_Encoding_DefaultBinary", raising=False)
+    assert "PublishResponse encoding id not available" in (timing_hooks._self_test() or "")
+
+
+def test_install_timing_hooks_when_already_wrapped(monkeypatch):
+    monkeypatch.setattr(timing_hooks, "_status", None)
+    status = install_timing_hooks()
+    assert status.installed is True

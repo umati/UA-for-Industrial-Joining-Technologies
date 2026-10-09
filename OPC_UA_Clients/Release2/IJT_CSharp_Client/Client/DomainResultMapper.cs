@@ -415,20 +415,16 @@ internal static class DomainResultMapper
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ReadOnlyMemory<>))
         {
             var toArrayMethod = type.GetMethod("ToArray");
-            if (toArrayMethod is not null)
+            var arr = toArrayMethod?.Invoke(obj, null) as System.Collections.IEnumerable;
+            var list = new List<object?>();
+            if (arr is not null)
             {
-                var arr = toArrayMethod.Invoke(obj, null) as System.Collections.IEnumerable;
-                if (arr is not null)
+                foreach (var item in arr)
                 {
-                    var list = new List<object?>();
-                    foreach (var item in arr)
-                    {
-                        list.Add(ToSdkNeutral(item, visited));
-                    }
-                    return list;
+                    list.Add(ToSdkNeutral(item, visited));
                 }
             }
-            return new List<object?>();
+            return list;
         }
 
         if (obj is ExtensionObject eo)

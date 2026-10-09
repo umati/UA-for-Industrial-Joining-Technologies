@@ -109,3 +109,105 @@ def test_print_console_report_excludes_invalid_results_from_statistics(capsys):
     assert "11.0ms" in out
     assert "999.0" not in out
     assert "BENCHMARK INTEGRITY AUDIT (1 issues detected)" in out
+
+
+def test_enable_ansi_windows():
+    from unittest.mock import MagicMock, patch
+
+    from src.reporters.console import _enable_ansi_windows
+
+    # Call on the real system (safe on Windows, Linux, and macOS)
+    res = _enable_ansi_windows()
+    assert isinstance(res, bool)
+
+    # 1. Test missing windll (Linux/macOS behavior)
+    with patch.dict("sys.modules", {"ctypes": MagicMock(spec=[])}):
+        assert _enable_ansi_windows() is False
+
+    # 2. Test kernel32 error path
+    mock_bad = MagicMock()
+    mock_bad.kernel32.GetConsoleMode.side_effect = RuntimeError("mock error")
+    with patch("ctypes.windll", mock_bad, create=True):
+        assert _enable_ansi_windows() is False
+
+    # 3. Test kernel32 success path
+    mock_good = MagicMock()
+    mock_good.kernel32.GetConsoleMode.return_value = 1
+    with patch("ctypes.windll", mock_good, create=True):
+        assert _enable_ansi_windows() is True
+
+
+def test_safe_print_branches(capsys, monkeypatch):
+    import sys
+    from unittest.mock import MagicMock
+
+    from src.reporters.console import _safe_print
+
+    _safe_print("test regular print")
+    out = capsys.readouterr().out
+    assert "test regular print" in out
+
+    # Test reconfigure branch when encoding is not utf-8
+    mock_stdout = MagicMock()
+    mock_stdout.encoding = "cp1252"
+    mock_stdout.reconfigure = MagicMock()
+    monkeypatch.setattr(sys, "stdout", mock_stdout)
+    _safe_print("test reconfigure")
+    mock_stdout.reconfigure.assert_called_once_with(encoding="utf-8")
+
+    # Test reconfigure exception
+    mock_stdout.reconfigure.side_effect = RuntimeError("cannot reconfigure")
+    _safe_print("test reconfigure exception")
+
+
+def test_safe_print_unicode_encode_error(capsys, monkeypatch):
+    from src.reporters.console import _safe_print
+
+    calls = []
+    real_print = print
+
+    def failing_print(text=""):
+        if not calls:
+            calls.append(1)
+            raise UnicodeEncodeError("ascii", text, 0, 1, "test")
+        real_print(text)
+
+    monkeypatch.setattr("builtins.print", failing_print)
+    _safe_print("unicode chars: üñîçødé")
+    out = capsys.readouterr().out
+    assert "unicode chars" in out
+
+
+def test_print_console_report_more_than_ten_problematic_endpoints(capsys):
+    verdict = DiagnosticVerdict(
+        primary_bottleneck="TEST", headline="h", explanation="e", recommendation="r", metrics_summary={}, warnings=[]
+    )
+    samples = [
+        LatencySample(sample_id=i, endpoint=f"opc.tcp://server{i}:4840", integrity_status="INCOMPLETE")
+        for i in range(12)
+    ]
+    print_console_report(samples, verdict, "FleetWithManyIssues")
+    out = capsys.readouterr().out
+    assert "Showing 10 of 12 affected endpoints" in out
+
+
+def test_print_console_report_uncolonized_guide_and_notes(capsys, monkeypatch):
+    verdict = DiagnosticVerdict(
+        primary_bottleneck="TEST", headline="h", explanation="e", recommendation="r", metrics_summary={}, warnings=[]
+    )
+    sample = LatencySample(
+        sample_id=1,
+        endpoint="opc.tcp://localhost:40451",
+        network_transport_time_ms=10.0,
+        server_processing_time_ms=12.0,
+        total_result_transfer_time_ms=22.0,
+    )
+    monkeypatch.setattr("src.reporters.console.metric_guide", lambda rows: ["NoColonGuideText"])
+    monkeypatch.setattr("src.reporters.console.report_notes", lambda valid, timing: ["NoColonNoteText"])
+
+    print_console_report([sample], verdict, "Uncolonized")
+    out = capsys.readouterr().out
+    assert "General Guidance" in out
+    assert "NoColonGuideText" in out
+    assert "Operational Note" in out
+    assert "NoColonNoteText" in out

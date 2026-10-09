@@ -111,11 +111,15 @@ public static class IjtLog
             }
         }
 
+        internal static System.Threading.AsyncLocal<bool> DirectConsoleModeForTesting { get; } = new();
+
+        private static bool IsOutputRedirected => !DirectConsoleModeForTesting.Value && Console.IsOutputRedirected;
+
         private static void EnsureNewLineBoundary()
         {
             try
             {
-                if (!Console.IsOutputRedirected && Console.CursorLeft > 0)
+                if (!IsOutputRedirected && Console.CursorLeft > 0)
                 {
                     Console.WriteLine();
                 }
@@ -128,7 +132,7 @@ public static class IjtLog
 
         private static void WriteWithColor(string line, LogLevel logLevel)
         {
-            if (Console.IsOutputRedirected)
+            if (IsOutputRedirected)
             {
                 Console.WriteLine(line);
                 return;

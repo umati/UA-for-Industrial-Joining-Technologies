@@ -1,6 +1,5 @@
 #nullable enable
 
-using System.Collections.Concurrent;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -69,7 +68,6 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     private const int KeepAliveIntervalMs = 5_000;
     private const int EndpointDiscoveryTimeoutMs = 15_000;
-    private static readonly ConcurrentDictionary<string, EndpointDescription> EndpointDiscoveryCache = new(StringComparer.Ordinal);
 
     private readonly ISession _session;
     private readonly ILogger<JoiningSystem> _log = IjtLog.For<JoiningSystem>();
@@ -228,6 +226,9 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
 
     internal static void ClearEndpointDiscoveryCacheForTesting()
         => OpcUaSessionConnector.ClearEndpointDiscoveryCacheForTesting();
+
+    internal static AsyncLocal<TimeSpan?> ShutdownTimeoutOverrideForTesting { get; } = new();
+    private static TimeSpan ShutdownTimeout => ShutdownTimeoutOverrideForTesting.Value ?? TimeSpan.FromSeconds(8);
 
     internal static Task EnsureApplicationCertificateForTestingAsync(
         ClientConfig config,
@@ -613,7 +614,7 @@ public sealed class JoiningSystem : IJoiningSystem, IAsyncDisposable
         });
         try
         {
-            await cleanupTask.WaitAsync(TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+            await cleanupTask.WaitAsync(ShutdownTimeout).ConfigureAwait(false);
         }
         catch (TimeoutException ex)
         {

@@ -298,4 +298,35 @@ public sealed class IjtLogTests
         Assert.Null(InvokeConsoleLoggerHelper<ConsoleColor?>("ColorFor", LogLevel.Debug));
         Assert.Null(InvokeConsoleLoggerHelper<ConsoleColor?>("ColorFor", LogLevel.Trace));
     }
+
+    [Fact]
+    public void Logger_WithDirectConsoleMode_ExercisesColorAndBoundaryBranches()
+    {
+        var prop = ConsoleLoggerType.GetProperty("DirectConsoleModeForTesting",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(prop);
+        var asyncLocal = (System.Threading.AsyncLocal<bool>)prop.GetValue(null)!;
+        try
+        {
+            asyncLocal.Value = true;
+            var logger = NewConsoleLogger(LogLevel.Trace);
+            logger.LogWarning("Testing warning direct console color");
+            logger.LogError("Testing error direct console color");
+            logger.LogCritical("Testing critical direct console color");
+            logger.LogInformation("Testing info direct console color");
+
+            var ensureNewLine = ConsoleLoggerType.GetMethod("EnsureNewLineBoundary",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            ensureNewLine?.Invoke(null, null);
+
+            var writeWithColor = ConsoleLoggerType.GetMethod("WriteWithColor",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            writeWithColor?.Invoke(null, ["Test warning", LogLevel.Warning]);
+            writeWithColor?.Invoke(null, ["Test info", LogLevel.Information]);
+        }
+        finally
+        {
+            asyncLocal.Value = false;
+        }
+    }
 }

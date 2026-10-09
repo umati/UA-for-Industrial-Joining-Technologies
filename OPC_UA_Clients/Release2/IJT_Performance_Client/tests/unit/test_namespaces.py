@@ -102,3 +102,17 @@ async def test_read_namespace_metadata_missing_values_are_none():
 
     client.get_node.return_value = MagicMock(get_children=AsyncMock(side_effect=RuntimeError("BadNodeIdUnknown")))
     assert await read_namespace_metadata(client, NS_IJT_BASE) == {"version": None, "publication_date": None}
+
+
+@pytest.mark.asyncio
+async def test_read_namespace_metadata_child_uri_error():
+    from src.namespaces import NS_IJT_BASE, read_namespace_metadata
+
+    broken_child = MagicMock()
+    broken_child.get_child = AsyncMock(side_effect=RuntimeError("uri inaccessible"))
+    valid_child = _ns_child(NS_IJT_BASE, version="1.0.0")
+
+    client = MagicMock()
+    client.get_node.return_value = MagicMock(get_children=AsyncMock(return_value=[broken_child, valid_child]))
+    result = await read_namespace_metadata(client, NS_IJT_BASE)
+    assert result["version"] == "1.0.0"

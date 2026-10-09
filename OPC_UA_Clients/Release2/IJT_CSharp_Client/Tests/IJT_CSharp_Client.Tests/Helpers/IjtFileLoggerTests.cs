@@ -348,6 +348,32 @@ public class IjtFileLoggerTests : IDisposable
     }
 
     [Fact]
+    public void ClearSessionLogs_WhenReadOnlyFile_HandlesUnauthorizedAccessException()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "ijt-test-ro-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var resultsDir = Path.Combine(tempDir, "results");
+        Directory.CreateDirectory(resultsDir);
+        var roFile = Path.Combine(resultsDir, "readonly.txt");
+        File.WriteAllText(roFile, "data");
+        File.SetAttributes(roFile, FileAttributes.ReadOnly);
+        try
+        {
+            using (IjtFileLogger.PushBaseLogDirOverride(tempDir))
+            {
+                var ex = Record.Exception(() => IjtFileLogger.ClearSessionLogs());
+                Assert.Null(ex);
+            }
+        }
+        finally
+        {
+            File.SetAttributes(roFile, FileAttributes.Normal);
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+
+    [Fact]
     public void ClearSessionLogs_WhenTimestampedFileIsLocked_LeavesDirectoryIntact()
     {
         IjtFileLogger.WriteResultTimestamped("locked-result");

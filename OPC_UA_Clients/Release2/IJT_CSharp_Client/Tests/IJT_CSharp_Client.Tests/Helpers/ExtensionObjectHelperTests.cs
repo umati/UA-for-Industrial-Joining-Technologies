@@ -316,5 +316,12 @@ public sealed class ExtensionObjectHelperTests
         // 4. Serialization of ExtensionObject with null body
         var serialized = IjtJsonSerializer.Serialize(emptyEo);
         Assert.Contains("empty ExtensionObject", serialized);
+
+        // 5. XmlElement body
+        var opcXml = Opc.Ua.XmlElement.From("<TestNode/>");
+        var xmlEo = new ExtensionObject(new ExpandedNodeId(100), opcXml);
+        var xmlBody = ExtensionObjectHelper.GetBody(xmlEo);
+        Assert.NotNull(xmlBody);
+        Assert.Equal(opcXml, xmlBody);
     }
 }

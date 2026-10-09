@@ -553,6 +553,42 @@ public sealed class AssetManagementUnitTests
         Assert.False(am.IsAssetVarSubscribed);
     }
 
+    [Fact]
+    public async Task StopAssetVariableSubscription_WhenDeleteThrowsServiceResultException_HandlesGracefully()
+    {
+        var session = MockSessionBuilder.Create();
+        await using var am = new AssetManagement(session.Object);
+        SetAssetVarSubscription(am, CreateThrowingSubscription(new ServiceResultException(StatusCodes.BadSessionClosed)));
+
+        await am.StopAssetVariableSubscriptionAsync();
+
+        Assert.False(am.IsAssetVarSubscribed);
+    }
+
+    [Fact]
+    public async Task StopAssetVariableSubscription_WhenDeleteThrowsGenericException_HandlesGracefully()
+    {
+        var session = MockSessionBuilder.Create();
+        await using var am = new AssetManagement(session.Object);
+        SetAssetVarSubscription(am, CreateThrowingSubscription(new InvalidOperationException("delete failed")));
+
+        await am.StopAssetVariableSubscriptionAsync();
+
+        Assert.False(am.IsAssetVarSubscribed);
+    }
+
+    private static Subscription CreateThrowingSubscription(Exception ex)
+    {
+        var sub = new Subscription(DefaultTelemetry.Create(_ => { }));
+        var idField = typeof(Subscription).GetField("<Id>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        idField!.SetValue(sub, 1u);
+        var sessionSetter = typeof(Subscription).GetProperty(nameof(Subscription.Session))!
+            .GetSetMethod(nonPublic: true)!;
+        sessionSetter.Invoke(sub, [MockSessionBuilder.CreateThrowingSession(ex)]);
+        return sub;
+    }
+
+
     // ── SubscribeAssetVariablesAsync — full hierarchy (covers loop bodies + SubscribeAllVariables) ──
 
     /// <summary>

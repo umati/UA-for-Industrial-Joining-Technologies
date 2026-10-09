@@ -358,3 +358,44 @@ def test_reports_hide_rows_that_only_repeat_total_and_show_loop_lag(capsys):
     assert "rows hidden" not in split_md
     assert "Network Transport Latency" in split_md
     assert "Server Processing Duration" in split_md
+
+
+def test_summary_line():
+    from src.reporters._metrics import summary_line
+
+    s = _wire_sample(1, 0.0)
+    s.timing_source = "wire"
+    line = summary_line([s], 1)
+    assert "Results received: 1" in line
+    assert "Wire timing: 1/1" in line
+    assert "Distinct servers: 1" in line
+
+
+def test_markdown_report_wire_timing_large_fleet_and_problematic_endpoints(monkeypatch):
+    verdict = DiagnosticVerdict("NONE", "Healthy", "Explanation", "Recommendation", {}, [])
+    # 12 servers with valid samples (wire timing) -> tests wire_count > 0 and num_servers > 10
+    samples = []
+    for i in range(12):
+        s = _wire_sample(i, float(i))
+        s.timing_source = "wire"
+        s.endpoint = f"opc.tcp://srv{i}:4840"
+        samples.append(s)
+
+    # Also 12 problematic endpoints
+    for i in range(12):
+        bad = LatencySample(sample_id=100 + i, endpoint=f"opc.tcp://bad{i}:4840", integrity_status="INCOMPLETE")
+        samples.append(bad)
+
+    monkeypatch.setattr("src.reporters.markdown.metric_guide", lambda rows: ["NoColonGuide"])
+    monkeypatch.setattr("src.reporters.markdown.report_notes", lambda valid, timing: ["NoColonNote"])
+
+    md = generate_markdown_report(samples, verdict, "LargeFleet")
+    assert "Wire Timing Status" in md
+    assert "verified" in md
+    assert "Top 5 Slowest of 24 Servers" in md
+    assert "Showing top 5 slowest endpoints" in md
+    assert "Showing 10 of 12 affected endpoints" in md
+    assert "General Guidance" in md
+    assert "NoColonGuide" in md
+    assert "Operational Note" in md
+    assert "NoColonNote" in md

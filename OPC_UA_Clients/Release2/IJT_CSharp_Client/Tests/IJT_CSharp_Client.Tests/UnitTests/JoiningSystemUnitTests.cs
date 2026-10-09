@@ -1705,6 +1705,34 @@ public sealed class JoiningSystemUnitTests
     }
 
     [Fact]
+    public async Task DisposeAsync_WhenCleanupTimesOut_LogsWarningAndProceeds()
+    {
+        var mockSession = CreateMockSession(connected: false);
+        var tcs = new TaskCompletionSource<bool>();
+        mockSession.Setup(s => s.RemoveSubscriptionAsync(It.IsAny<Subscription>()))
+            .Returns(tcs.Task);
+
+        var sut = CreateSession(mockSession.Object);
+        var field = typeof(ResultManagement).GetField(
+            "_resultVarSubscription",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        field!.SetValue(sut.ResultManagement, new Subscription(DefaultTelemetry.Create(_ => { })));
+
+        JoiningSystem.ShutdownTimeoutOverrideForTesting.Value = TimeSpan.FromMilliseconds(5);
+        try
+        {
+            var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync().ConfigureAwait(false));
+            Assert.Null(ex);
+            mockSession.Verify(s => s.Dispose(), Times.Once);
+        }
+        finally
+        {
+            JoiningSystem.ShutdownTimeoutOverrideForTesting.Value = null;
+            tcs.TrySetResult(true);
+        }
+    }
+
+    [Fact]
     public void ManagementProperties_ExposeReceiversAndClients()
     {
         var mockSession = CreateMockSession(connected: true);
