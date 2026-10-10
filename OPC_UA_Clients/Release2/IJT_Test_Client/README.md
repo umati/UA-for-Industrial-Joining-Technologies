@@ -72,6 +72,9 @@ python run_all_tests.py --phase1   # static checks and unit tests; no server nee
 python run_all_tests.py --phase2   # specification tests; simulator or configured server
 ```
 
+Some specification tests apply only to the IJT simulator and are skipped for
+other servers; see [regression contracts](docs/SKILLS.md#result-trace-and-stateful-regression-contracts).
+
 ## Integration
 
 Using pip or integrating specification tests into your own validation system?

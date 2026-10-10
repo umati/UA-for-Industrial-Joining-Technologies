@@ -289,7 +289,7 @@ async def test_disconnect_asset_method_present_in_method_set(asset_management, n
 
 @pytest.mark.requires_cu(CU.DISCONNECT_ASSET)
 async def test_disable_asset_then_enable_asset_restores_state(opcua_client, tools_instances, ns_indices):
-    """EnableAsset(false) then EnableAsset(true) round-trip must not raise an error."""
+    """Observe disable/enable effects and restore the Tool's original Enabled value."""
     _require_disable_asset_opt_in()
     ns_di = ns_indices.get(NS_DI)
     ns_ijt = ns_indices.get(NS_IJT_BASE)
@@ -308,6 +308,16 @@ async def test_disable_asset_then_enable_asset_restores_state(opcua_client, tool
     if enable_node is None:
         pytest.skip("EnableAsset: Not Supported — skipping round-trip test")
 
+    enabled_node = await find_child_by_browse_name(tool_node, BN.ENABLED, ns_ijt)
+    if enabled_node is None:
+        parameters = await find_child_by_browse_name(tool_node, BN.PARAMETERS, ns_ijt)
+        if parameters is not None:
+            enabled_node = await find_child_by_browse_name(parameters, BN.ENABLED, ns_ijt)
+    if enabled_node is None:
+        pytest.skip("Tool Enabled value is not exposed; cannot observe or restore its state")
+    original_enabled = await enabled_node.read_value()
+    assert isinstance(original_enabled, bool), "Tool Enabled must be Boolean before mutation"
+
     try:
         disable_result = await find_and_call_method(
             ms,
@@ -323,7 +333,8 @@ async def test_disable_asset_then_enable_asset_restores_state(opcua_client, tool
             if "BadNotSupported" in err_str or "BadMethodInvalid" in err_str:
                 pytest.skip(f"EnableAsset(false) returned '{err_str}' — not supported on this server")
             pytest.fail(f"EnableAsset(false) failed: {err_str}")
-    finally:
+        assert await enabled_node.read_value() is False, "EnableAsset(false) did not disable the Tool"
+
         enable_result = await find_and_call_method(
             ms,
             BN.ENABLE_ASSET,
@@ -335,7 +346,21 @@ async def test_disable_asset_then_enable_asset_restores_state(opcua_client, tool
         )
         if not enable_result.success:
             err_str = str(enable_result.error) if enable_result.error else "unknown error"
-            pytest.fail(f"EnableAsset(true) failed while restoring the persistent Tool state: {err_str}")
+            pytest.fail(f"EnableAsset(true) failed: {err_str}")
+        assert await enabled_node.read_value() is True, "EnableAsset(true) did not enable the Tool"
+    finally:
+        restore_result = await find_and_call_method(
+            ms,
+            BN.ENABLE_ASSET,
+            ns_ijt,
+            piu_arg,
+            ua.Variant(original_enabled, ua.VariantType.Boolean),
+            timeout=_METHOD_TIMEOUT,
+            target_server_authorized=True,
+        )
+        if not restore_result.success:
+            pytest.fail(f"Failed to restore original Tool Enabled state: {restore_result.error}")
+        assert await enabled_node.read_value() is original_enabled, "Original Tool Enabled state was not restored"
 
 
 # ─── enable_tool ──────────────────────────────────────────────────────────────

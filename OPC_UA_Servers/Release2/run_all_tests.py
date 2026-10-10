@@ -14,7 +14,7 @@ Phase 1 (static — always runs):
   8.  pip-audit           — tests/requirements.txt CVE scan  (skipped if not installed)
   9.  docker validate     — docker compose config --quiet  (skipped if Docker offline)
   10. trivy               — container image scan  (skipped if trivy absent)
-  11. packages check      — require Windows/Linux ZIPs with required JSON files
+  11. packages check      — require Windows/Linux ZIPs with required JSON files, no hidden files
 
 Phase 2 (live smoke test — needs a running OPC UA server):
   - Auto-detect/launch server (in order):
@@ -855,6 +855,18 @@ def _check_binaries(results: list) -> None:
         try:
             with zipfile.ZipFile(path) as zf:
                 entries = set(zf.namelist())
+                hidden = sorted(
+                    e for e in entries if any(p.startswith(".") for p in e.split("/") if p)
+                )
+                if hidden:
+                    _record(
+                        results,
+                        1,
+                        label,
+                        False,
+                        f"FAIL ({path.name} contains hidden build files: {', '.join(hidden)})",
+                    )
+                    return
                 expected_root = path.stem
                 for json_name in (
                     "server_configuration.json",

@@ -225,19 +225,18 @@ async def test_step_trace_has_required_fields(subscription_client, result_trigge
         step_traces = _unwrap_sequence(getattr(td, "StepTraces", None) or [])
         if not step_traces:
             continue
-        first_step = step_traces[0]
-        for field_name in ("StepTraceId", "StepResultId", "NumberOfTracePoints"):
-            val = getattr(first_step, field_name, None)
-            if val is None:
-                failures.append(f"ResultContent[{result_idx}].Trace.StepTraces[0].{field_name} is absent")
+        for step_idx, step in enumerate(step_traces):
+            location = f"ResultContent[{result_idx}].Trace.StepTraces[{step_idx}]"
+            for field_name in ("StepTraceId", "StepResultId", "NumberOfTracePoints"):
+                val = getattr(step, field_name, None)
+                if val is None:
+                    failures.append(f"{location}.{field_name} is absent")
 
-        step_content = getattr(first_step, "StepTraceContent", None)
-        if step_content is None:
-            failures.append(f"ResultContent[{result_idx}].Trace.StepTraces[0].StepTraceContent is absent")
-        elif not isinstance(step_content, (list, tuple)) or len(step_content) == 0:
-            failures.append(
-                f"ResultContent[{result_idx}].Trace.StepTraces[0].StepTraceContent must be a non-empty list"
-            )
+            step_content = getattr(step, "StepTraceContent", None)
+            if step_content is None:
+                failures.append(f"{location}.StepTraceContent is absent")
+            elif not isinstance(step_content, (list, tuple)) or len(step_content) == 0:
+                failures.append(f"{location}.StepTraceContent must be a non-empty list")
 
     assert not failures, "StepTraceDataType required fields missing:\n  " + "\n  ".join(failures)
 
@@ -432,20 +431,26 @@ async def test_step_trace_content_values_length_matches_number_of_trace_points(
         for step_idx, step in enumerate(step_traces):
             num_points = getattr(step, "NumberOfTracePoints", None)
             if num_points is None:
-                continue
-            try:
-                num_points_int = int(num_points)
-            except (TypeError, ValueError):
                 failures.append(
-                    f"ResultContent[{result_idx}].Trace.StepTraces[{step_idx}]"
-                    f".NumberOfTracePoints is not numeric: {num_points!r}"
+                    f"ResultContent[{result_idx}].Trace.StepTraces[{step_idx}].NumberOfTracePoints is absent"
                 )
                 continue
+            if isinstance(num_points, bool) or not isinstance(num_points, int) or not 0 <= num_points <= 0xFFFFFFFF:
+                failures.append(
+                    f"ResultContent[{result_idx}].Trace.StepTraces[{step_idx}]"
+                    f".NumberOfTracePoints is not a UInt32: {num_points!r}"
+                )
+                continue
+            num_points_int = num_points
 
             step_content = _unwrap_sequence(getattr(step, "StepTraceContent", None) or [])
             for content_idx, tc_element in enumerate(step_content):
                 values = getattr(tc_element, "Values", None)
-                if values is None:
+                if not isinstance(values, (list, tuple)):
+                    failures.append(
+                        f"ResultContent[{result_idx}].Trace.StepTraces[{step_idx}]"
+                        f".StepTraceContent[{content_idx}].Values is absent or not an array"
+                    )
                     continue
                 actual_len = len(values)
                 if actual_len != num_points_int:

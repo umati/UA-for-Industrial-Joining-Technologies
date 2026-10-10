@@ -48,6 +48,7 @@ import os
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from asyncua import ua
 
 from helpers.cu_registry import CU
@@ -55,7 +56,7 @@ from helpers.event_collector import EventCollector
 from helpers.event_validator import assert_result_ready_event_valid
 from helpers.method_caller import call_method, find_and_call_method
 from helpers.method_signature import JOINING_PROCESS_METHOD_INPUTS, assert_input_argument_names
-from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_OPC_UA, IJTTypes
+from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_OPC_UA, IJTTypes, JoiningProcessClassification
 from helpers.node_discovery import (
     find_child_by_browse_name,
     find_joining_system,
@@ -307,6 +308,58 @@ async def _select_first_joining_process(client, ns_indices, jpm_node, pi_uri: st
             status=str(status_code),
         )
     return jp_arg
+
+
+def _batch_process_entry(entries):
+    for entry in entries:
+        entry = getattr(entry, "Value", entry)
+        metadata = getattr(entry, "JoiningProcessMetaData", entry)
+        classification = getattr(metadata, "Classification", None)
+        classification = getattr(classification, "Value", classification)
+        if classification == JoiningProcessClassification.BATCH.value:
+            return entry
+    pytest.fail("Simulator GetJoiningProcessList did not expose a Batch for counter/size tests")
+
+
+async def _set_simulator_counter_baseline(jpm, ns_ijt, pi_uri, jp_arg, *, counter: int, size: int):
+    for method, value in (
+        (BN.SET_JOINING_PROCESS_COUNTER, 0),
+        (BN.SET_JOINING_PROCESS_SIZE, size),
+        (BN.SET_JOINING_PROCESS_COUNTER, counter),
+    ):
+        result = await find_and_call_method(
+            jpm,
+            method,
+            ns_ijt,
+            _piu_arg(pi_uri),
+            jp_arg,
+            ua.Variant(value, ua.VariantType.UInt32),
+            timeout=15.0,
+        )
+        assert result.success, f"Simulator counter setup/cleanup {method} failed: {result.error}"
+        assert _method_status_code(result.output_list) == 0, (
+            f"Simulator counter setup/cleanup {method} rejected: {result.output_list}"
+        )
+
+
+@pytest_asyncio.fixture
+async def simulator_counter_process(opcua_client, ns_indices, result_trigger):
+    if not result_trigger.is_simulator:
+        yield None
+        return
+    ns_ijt = _require_ns_ijt(ns_indices)
+    jpm = await _get_jpm(opcua_client, ns_ijt)
+    pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
+    listed = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(pi_uri), timeout=15.0)
+    assert listed.success, f"Simulator process discovery failed: {listed.error}"
+    jp_arg = _jp_identification_from_entry(_batch_process_entry(_unwrap_method_array_output(listed.output_list)))
+    assert jp_arg is not None, "JoiningProcessIdentificationDataType was not loaded"
+    # Isolated simulator tests start with room to increment and a nonzero decrement seed.
+    try:
+        await _set_simulator_counter_baseline(jpm, ns_ijt, pi_uri, jp_arg, counter=3, size=10)
+        yield jp_arg
+    finally:
+        await _set_simulator_counter_baseline(jpm, ns_ijt, pi_uri, jp_arg, counter=0, size=5)
 
 
 async def _select_counter_parent_if_configured(jpm_node, ns_ijt: int, pi_uri: str) -> None:
@@ -966,7 +1019,7 @@ async def test_reset_joining_process_method_present_if_exists(joining_process_ma
 
 
 @pytest.mark.requires_cu(CU.RESET_JOINING_PROCESS)
-async def test_reset_joining_process_callable_if_present(opcua_client, ns_indices):
+async def test_reset_joining_process_callable_if_present(opcua_client, ns_indices, simulator_counter_process):
     """
     ResetJoiningProcess must be callable without an unexpected server error when present.
     """
@@ -976,7 +1029,9 @@ async def test_reset_joining_process_callable_if_present(opcua_client, ns_indice
     if method_node is None:
         pytest.skip(f"Optional method '{BN.RESET_JOINING_PROCESS}': Not Supported — skipping")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
-    jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
+    jp_arg = simulator_counter_process or await _first_joining_process_identification_arg(
+        opcua_client, ns_indices, jpm, pi_uri
+    )
     call_result = await call_method(
         jpm,
         method_node,
@@ -1018,7 +1073,7 @@ async def test_increment_counter_method_present_if_exists(joining_process_manage
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
-async def test_increment_counter_callable_if_present(opcua_client, ns_indices):
+async def test_increment_counter_callable_if_present(opcua_client, ns_indices, simulator_counter_process):
     """
     IncrementJoiningProcessCounter must be callable without an unexpected error
     when present.
@@ -1029,7 +1084,9 @@ async def test_increment_counter_callable_if_present(opcua_client, ns_indices):
     if method_node is None:
         pytest.skip(f"Optional method '{BN.INCREMENT_JOINING_PROCESS_COUNTER}': Not Supported — skipping")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
-    jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
+    jp_arg = simulator_counter_process or await _first_joining_process_identification_arg(
+        opcua_client, ns_indices, jpm, pi_uri
+    )
     call_result = await call_method(
         jpm,
         method_node,
@@ -1047,7 +1104,7 @@ async def test_increment_counter_callable_if_present(opcua_client, ns_indices):
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
-async def test_increment_counter_with_product_instance_uri(opcua_client, ns_indices):
+async def test_increment_counter_with_product_instance_uri(opcua_client, ns_indices, simulator_counter_process):
     """
     IncrementJoiningProcessCounter called with the tool's ProductInstanceUri must
     succeed or return an accepted status code.
@@ -1062,7 +1119,9 @@ async def test_increment_counter_with_product_instance_uri(opcua_client, ns_indi
     if method_node is None:
         pytest.skip(f"Optional method '{BN.INCREMENT_JOINING_PROCESS_COUNTER}': Not Supported — skipping")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
-    jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
+    jp_arg = simulator_counter_process or await _first_joining_process_identification_arg(
+        opcua_client, ns_indices, jpm, pi_uri
+    )
     call_result = await call_method(
         jpm,
         method_node,
@@ -1100,7 +1159,7 @@ async def test_decrement_counter_method_present_if_exists(joining_process_manage
 
 
 @pytest.mark.requires_cu(CU.DECREMENT_JOINING_PROCESS_COUNTER)
-async def test_decrement_counter_callable_if_present(opcua_client, ns_indices):
+async def test_decrement_counter_callable_if_present(opcua_client, ns_indices, simulator_counter_process):
     """
     DecrementJoiningProcessCounter must be callable without an unexpected error
     when present.
@@ -1111,7 +1170,9 @@ async def test_decrement_counter_callable_if_present(opcua_client, ns_indices):
     if method_node is None:
         pytest.skip(f"Optional method '{BN.DECREMENT_JOINING_PROCESS_COUNTER}': Not Supported — skipping")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
-    jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
+    jp_arg = simulator_counter_process or await _first_joining_process_identification_arg(
+        opcua_client, ns_indices, jpm, pi_uri
+    )
     call_result = await call_method(
         jpm,
         method_node,
@@ -1129,7 +1190,7 @@ async def test_decrement_counter_callable_if_present(opcua_client, ns_indices):
 
 
 @pytest.mark.requires_cu(CU.DECREMENT_JOINING_PROCESS_COUNTER)
-async def test_decrement_counter_with_product_instance_uri(opcua_client, ns_indices):
+async def test_decrement_counter_with_product_instance_uri(opcua_client, ns_indices, simulator_counter_process):
     """
     DecrementJoiningProcessCounter called with the tool's ProductInstanceUri must
     succeed or return an accepted status code.
@@ -1143,7 +1204,9 @@ async def test_decrement_counter_with_product_instance_uri(opcua_client, ns_indi
     if method_node is None:
         pytest.skip(f"Optional method '{BN.DECREMENT_JOINING_PROCESS_COUNTER}': Not Supported — skipping")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
-    jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
+    jp_arg = simulator_counter_process or await _first_joining_process_identification_arg(
+        opcua_client, ns_indices, jpm, pi_uri
+    )
     call_result = await call_method(
         jpm,
         method_node,
@@ -1164,7 +1227,7 @@ async def test_decrement_counter_with_product_instance_uri(opcua_client, ns_indi
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER, CU.DECREMENT_JOINING_PROCESS_COUNTER)
-async def test_increment_then_decrement_counter_is_balanced(opcua_client, ns_indices):
+async def test_increment_then_decrement_counter_is_balanced(opcua_client, ns_indices, simulator_counter_process):
     """
     IncrementJoiningProcessCounter followed by DecrementJoiningProcessCounter (both with
     the tool's ProductInstanceUri) must both succeed, demonstrating the counter can be
@@ -1181,7 +1244,9 @@ async def test_increment_then_decrement_counter_is_balanced(opcua_client, ns_ind
         pytest.skip("Both IncrementJoiningProcessCounter and DecrementJoiningProcessCounter are required for this test")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     await _select_counter_parent_if_configured(jpm, ns_ijt, pi_uri)
-    jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
+    jp_arg = simulator_counter_process or await _first_joining_process_identification_arg(
+        opcua_client, ns_indices, jpm, pi_uri
+    )
 
     inc_result = await call_method(
         jpm,
@@ -1339,7 +1404,7 @@ async def test_set_joining_process_counter_method_present_if_exists(joining_proc
 
 
 @pytest.mark.requires_cu(CU.SET_JOINING_PROCESS_COUNTER)
-async def test_set_joining_process_counter_callable_if_present(opcua_client, ns_indices):
+async def test_set_joining_process_counter_callable_if_present(opcua_client, ns_indices, simulator_counter_process):
     """
     SetJoiningProcessCounter, if present, must be callable.
 
@@ -1373,7 +1438,7 @@ async def test_set_joining_process_counter_callable_if_present(opcua_client, ns_
     if method_node is None:
         pytest.skip("Optional method 'SetJoiningProcessCounter': Not Supported — skipping")
     pi_uri = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di or 0, ns_app)
-    jp_arg = _jp_identification_arg()
+    jp_arg = simulator_counter_process or _jp_identification_arg()
     if jp_arg is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot build counter arguments")
     call_result = await call_method(
@@ -1930,7 +1995,7 @@ async def test_reset_joining_process_server_remains_functional(opcua_client, res
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
-async def test_increment_counter_multiple_sequential_calls(opcua_client, ns_indices):
+async def test_increment_counter_multiple_sequential_calls(opcua_client, ns_indices, simulator_counter_process):
     """
     Three sequential calls to IncrementJoiningProcessCounter must each succeed
     (or return a known status code) without the server entering an error state.
@@ -1941,7 +2006,9 @@ async def test_increment_counter_multiple_sequential_calls(opcua_client, ns_indi
     if method_node is None:
         pytest.skip(f"Optional method '{BN.INCREMENT_JOINING_PROCESS_COUNTER}': Not Supported — skipping")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
-    jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
+    jp_arg = simulator_counter_process or await _first_joining_process_identification_arg(
+        opcua_client, ns_indices, jpm, pi_uri
+    )
     for call_num in range(3):
         result = await call_method(
             jpm,
@@ -1965,7 +2032,7 @@ async def test_increment_counter_multiple_sequential_calls(opcua_client, ns_indi
 
 
 @pytest.mark.requires_cu(CU.DECREMENT_JOINING_PROCESS_COUNTER)
-async def test_decrement_counter_after_increment_if_present(opcua_client, ns_indices):
+async def test_decrement_counter_after_increment_if_present(opcua_client, ns_indices, simulator_counter_process):
     """
     DecrementJoiningProcessCounter called after IncrementJoiningProcessCounter
     must return Good (or a known status), confirming the counter can decrease.
@@ -1977,7 +2044,9 @@ async def test_decrement_counter_after_increment_if_present(opcua_client, ns_ind
     if decr_node is None:
         pytest.skip(f"Optional method '{BN.DECREMENT_JOINING_PROCESS_COUNTER}': Not Supported — skipping")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
-    jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
+    jp_arg = simulator_counter_process or await _first_joining_process_identification_arg(
+        opcua_client, ns_indices, jpm, pi_uri
+    )
     if incr_node is not None:
         await call_method(
             jpm,
@@ -2010,7 +2079,7 @@ async def test_decrement_counter_after_increment_if_present(opcua_client, ns_ind
 
 
 @pytest.mark.requires_cu(CU.SET_JOINING_PROCESS_SIZE)
-async def test_set_joining_process_size_callable_with_valid_count(opcua_client, ns_indices):
+async def test_set_joining_process_size_callable_with_valid_count(opcua_client, ns_indices, simulator_counter_process):
     """
     SetJoiningProcessSize called with a positive batch size must return Good
     or a state-related status when no program is currently selected.
@@ -2021,7 +2090,9 @@ async def test_set_joining_process_size_callable_with_valid_count(opcua_client, 
     if method_node is None:
         pytest.skip(f"Optional method '{BN.SET_JOINING_PROCESS_SIZE}': Not Supported — skipping")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
-    jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
+    jp_arg = simulator_counter_process or await _first_joining_process_identification_arg(
+        opcua_client, ns_indices, jpm, pi_uri
+    )
     call_result = await call_method(
         jpm,
         method_node,
@@ -2598,7 +2669,9 @@ async def test_get_joining_process_with_empty_id_returns_error(opcua_client, ns_
 
 
 @pytest.mark.requires_cu(CU.SET_JOINING_PROCESS_COUNTER)
-async def test_set_joining_process_counter_with_zero_value_resets_counter(opcua_client, ns_indices):
+async def test_set_joining_process_counter_with_zero_value_resets_counter(
+    opcua_client, ns_indices, simulator_counter_process
+):
     """SetJoiningProcessCounter(0) must succeed or return BadNotSupported."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
@@ -2608,7 +2681,7 @@ async def test_set_joining_process_counter_with_zero_value_resets_counter(opcua_
     ns_di_idx = ns_indices.get(NS_DI)
     ns_app_idx = ns_indices.get(NS_APP)
     pi_uri = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di_idx, ns_app_idx)
-    jp = _make_jp_identification()
+    jp = simulator_counter_process.Value if simulator_counter_process is not None else _make_jp_identification()
     if jp is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — load_data_type_definitions() may have failed")
     try:

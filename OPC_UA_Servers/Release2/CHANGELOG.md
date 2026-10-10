@@ -1,5 +1,16 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-10-10
+
+1. Updated the Windows and Linux simulator packages to the 1.17.0 version series.
+2. Improved joining process counter methods. Set, increment, decrement and reset now update the counter of the targeted joining process and keep count and size consistent.
+3. Counter changes and resets now create intervention results with counter values that match the joining process state.
+4. Improved result publication so the latest result and its history are published consistently, and errors in nested result copies are reported instead of ignored.
+5. Improved trace data consistency by using deterministic trace point indexes in simulated joining results.
+6. Hardened UserName sign-in. User names and passwords are now compared using every byte, so a hidden null character cannot match a shorter configured value.
+7. Improved validation of simulator data and user identity files. Invalid field types, non-finite numbers and malformed unsigned values are now rejected with clear log messages.
+8. Multiple bug fixes and optimizations.
+
 ## 2026-10-06
 
 1. Updated the Windows and Linux simulator packages to the 1.16.0 version series.

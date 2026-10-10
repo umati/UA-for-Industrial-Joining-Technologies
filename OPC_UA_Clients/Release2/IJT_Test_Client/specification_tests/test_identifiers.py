@@ -85,13 +85,17 @@ async def _run_approved_reset_all(result_trigger) -> bool:
     return True
 
 
-async def _send_structured_identifier(ms, ns_ijt: int, product_instance_uri: str, identifier: str):
+async def _send_structured_identifier(
+    ms, ns_ijt: int, product_instance_uri: str, identifier: str, *, input_is_external: bool = True
+):
+    entity = _make_external_entity(identifier)
+    entity.IsExternal = input_is_external
     return await find_and_call_method(
         ms,
         BN.SEND_IDENTIFIERS,
         ns_ijt,
         ua.Variant(product_instance_uri, ua.VariantType.String),
-        ua.Variant([_make_external_entity(identifier)], ua.VariantType.ExtensionObject),  # EntityList
+        ua.Variant([entity], ua.VariantType.ExtensionObject),  # EntityList
         timeout=_METHOD_TIMEOUT,
     )
 
@@ -473,16 +477,18 @@ async def test_send_identifiers_then_get_identifiers_round_trip(opcua_client, re
 
 
 @pytest.mark.requires_cu(CU.SEND_IDENTIFIERS)
+@pytest.mark.parametrize("input_is_external", [True, False], ids=["external-input", "internal-input"])
 async def test_after_send_identifiers_result_has_is_external_true(
-    subscription_client, opcua_client, result_trigger, ns_indices
+    subscription_client, opcua_client, result_trigger, ns_indices, input_is_external
 ):
     """Entities sent via SendIdentifiers must appear as IsExternal=True in results.
 
     Sequence:
-      1. ResetIdentifiers — clear any previous identifiers.
-      2. SendIdentifiers with a unique structured external EntityDataType.
-      3. Trigger one tightening result and collect via ResultReady event.
-      4. Inspect AssociatedEntities for the same entry with IsExternal=True.
+      1. SendIdentifiers with a unique structured EntityDataType and either input flag.
+      2. Trigger one tightening result and collect via ResultReady event.
+      3. Inspect AssociatedEntities for the same entry with IsExternal=True.
+
+    Receipt from a client makes the identifier external regardless of its input flag.
 
     The test is skipped when:
       - SendIdentifiers encoding fails (asyncua limitation).
@@ -500,7 +506,9 @@ async def test_after_send_identifiers_result_has_is_external_true(
 
     test_id = _make_test_vin()
     try:
-        send_result = await _send_structured_identifier(ms, ns_ijt, product_instance_uri, test_id)
+        send_result = await _send_structured_identifier(
+            ms, ns_ijt, product_instance_uri, test_id, input_is_external=input_is_external
+        )
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"Cannot encode SendIdentifiers EntityDataType input — skipping functional test: {exc}")
 
@@ -526,7 +534,9 @@ async def test_after_send_identifiers_result_has_is_external_true(
     if not associated:
         pytest.skip("No AssociatedEntities in latest result — server may clear identifiers before result generation")
 
-    external_found = any(getattr(e, "IsExternal", False) and _contains_identifier(e, test_id) for e in associated)
+    external_found = any(
+        getattr(e, "IsExternal", False) is True and _contains_identifier(e, test_id) for e in associated
+    )
     if not external_found and (
         not getattr(result_trigger, "is_simulator", True)
         or bool(os.environ.get("OPCUA_TARGET_SERVER_PROFILE"))
@@ -636,6 +646,194 @@ async def test_reset_identifiers_clears_send_text_identifiers_legacy_path(
         pytest.skip("ResetIdentifiers failed — cannot verify legacy clear behaviour")
 
     await _assert_identifier_absent_after_reset(subscription_client, result_trigger, ns_indices, test_id)
+
+
+# ─── simulator reset precedence ──────────────────────────────────────────────
+
+
+@pytest.mark.simulation
+@pytest.mark.parametrize("explicit_list", [True, False], ids=["explicit-list", "empty-list"])
+@pytest.mark.parametrize(("reset_all", "reset_latest"), [(False, False), (True, False), (False, True), (True, True)])
+async def test_simulator_reset_identifier_modes(
+    opcua_client, result_trigger, ns_indices, explicit_list, reset_all, reset_latest
+):
+    """Verify Table 90 precedence and the simulator's last-stored external latest policy."""
+    if not result_trigger.is_simulator:
+        pytest.skip("Identifier replacement and state cleanup require the isolated simulator")
+    ns_di = ns_indices.get(NS_DI)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_di is None or ns_ijt is None:
+        pytest.skip("Required namespaces not registered on server")
+
+    ns_app = ns_indices.get(NS_APP)
+    _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_app)
+    product_instance_uri = await _read_required_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_app)
+    first_id = _make_test_vin()
+    latest_id = _make_test_vin()
+    piu_argument = ua.Variant(product_instance_uri, ua.VariantType.String)
+
+    try:
+        sent = await find_and_call_method(
+            ms,
+            BN.SEND_TEXT_IDENTIFIERS,
+            ns_ijt,
+            piu_argument,
+            _identifier_list_arg(f"VIN:{first_id}", f"ORDER:{latest_id}"),
+            timeout=_METHOD_TIMEOUT,
+        )
+        assert sent.success, f"Simulator identifier setup failed: {sent.error}"
+        before = await find_and_call_method(
+            ms,
+            BN.GET_IDENTIFIERS,
+            ns_ijt,
+            piu_argument,
+            _identifier_list_arg(),
+            timeout=_METHOD_TIMEOUT,
+        )
+        assert before.success, f"GetIdentifiers before reset failed: {before.error}"
+        assert _contains_identifier(before.output_list, first_id), "First identifier missing before reset"
+        assert _contains_identifier(before.output_list, latest_id), "Latest identifier missing before reset"
+
+        reset = await find_and_call_method(
+            ms,
+            BN.RESET_IDENTIFIERS,
+            ns_ijt,
+            piu_argument,
+            _identifier_list_arg("VIN") if explicit_list else _identifier_list_arg(),
+            ua.Variant(reset_all, ua.VariantType.Boolean),
+            ua.Variant(reset_latest, ua.VariantType.Boolean),
+            timeout=_METHOD_TIMEOUT,
+        )
+        assert reset.success, f"ResetIdentifiers failed: {reset.error}"
+        after = await find_and_call_method(
+            ms,
+            BN.GET_IDENTIFIERS,
+            ns_ijt,
+            piu_argument,
+            _identifier_list_arg(),
+            timeout=_METHOD_TIMEOUT,
+        )
+        assert after.success, f"GetIdentifiers after reset failed: {after.error}"
+        expected_first = not explicit_list and not reset_all
+        expected_latest = explicit_list or not (reset_all or reset_latest)
+        assert _contains_identifier(after.output_list, first_id) == expected_first, (
+            f"First identifier presence must be {expected_first} after reset"
+        )
+        assert _contains_identifier(after.output_list, latest_id) == expected_latest, (
+            f"Latest identifier presence must be {expected_latest} after reset"
+        )
+    finally:
+        cleanup = await find_and_call_method(
+            ms,
+            BN.RESET_IDENTIFIERS,
+            ns_ijt,
+            piu_argument,
+            _identifier_list_arg("VIN", "ORDER"),
+            ua.Variant(False, ua.VariantType.Boolean),
+            ua.Variant(False, ua.VariantType.Boolean),
+            timeout=_METHOD_TIMEOUT,
+        )
+        assert cleanup.success, f"Simulator identifier cleanup failed: {cleanup.error}"
+
+
+@pytest.mark.simulation
+@pytest.mark.parametrize("structured", [False, True], ids=["text-input", "structured-input"])
+async def test_simulator_get_identifiers_exact_name_filtering(opcua_client, result_trigger, ns_indices, structured):
+    """Verify decoded fields, simulator name/ID/token aliases, trimming and exact matching."""
+    if not result_trigger.is_simulator:
+        pytest.skip("Identifier replacement and state cleanup require the isolated simulator")
+    ns_di = ns_indices.get(NS_DI)
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_di is None or ns_ijt is None:
+        pytest.skip("Required namespaces not registered on server")
+
+    ns_app = ns_indices.get(NS_APP)
+    _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_app)
+    product_instance_uri = await _read_required_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_app)
+    piu_argument = ua.Variant(product_instance_uri, ua.VariantType.String)
+    expected_ids = {"VIN": _make_test_vin(), "ORDER": _make_test_vin()}
+    expected_origins = {
+        name: f"origin-{identifier}" if structured else f"{name}:{identifier}"
+        for name, identifier in expected_ids.items()
+    }
+    input_entities = []
+    for name, identifier in expected_ids.items():
+        entity = _make_external_entity(identifier)
+        entity.Name = name
+        entity.Description = f"Structured {name}" if structured else "Vehicle Identification Number"
+        entity.EntityOriginId = expected_origins[name]
+        entity.IsExternal = False
+        input_entities.append(entity)
+    expected_descriptions = {entity.Name: entity.Description for entity in input_entities}
+    expected_types = {entity.Name: entity.EntityType for entity in input_entities}
+    queries = [
+        ((), {"VIN", "ORDER"}),
+        (("VIN",), {"VIN"}),
+        (("ORDER", "VIN"), {"VIN", "ORDER"}),
+        (("VIN", "VIN"), {"VIN"}),
+        (("UNKNOWN_IDENTIFIER",), set()),
+        (("UNKNOWN_IDENTIFIER", "ORDER"), {"ORDER"}),
+        ((expected_ids["VIN"],), {"VIN"}),
+        ((expected_origins["ORDER"],), {"ORDER"}),
+        ((" \tVIN \t",), {"VIN"}),
+        ((f" \t{expected_ids['ORDER']} \t",), {"ORDER"}),
+        ((f" \t{expected_origins['VIN']} \t",), {"VIN"}),
+        (("VIN", expected_ids["VIN"], expected_origins["VIN"]), {"VIN"}),
+        (("vin",), set()),
+        (("VIN_PREFIX", expected_ids["VIN"][:-1]), set()),
+    ]
+    identifier_argument = (
+        ua.Variant(input_entities, ua.VariantType.ExtensionObject)
+        if structured
+        else _identifier_list_arg(*(f"{name}:{identifier}" for name, identifier in expected_ids.items()))
+    )
+    try:
+        sent = await find_and_call_method(
+            ms,
+            BN.SEND_IDENTIFIERS if structured else BN.SEND_TEXT_IDENTIFIERS,
+            ns_ijt,
+            piu_argument,
+            identifier_argument,
+            timeout=_METHOD_TIMEOUT,
+        )
+        assert sent.success, f"Simulator identifier setup failed: {sent.error}"
+        for requested_names, expected_names in queries:
+            received = await find_and_call_method(
+                ms,
+                BN.GET_IDENTIFIERS,
+                ns_ijt,
+                piu_argument,
+                _identifier_list_arg(*requested_names),
+                timeout=_METHOD_TIMEOUT,
+            )
+            assert received.success, f"GetIdentifiers failed for {requested_names}: {received.error}"
+            outputs = received.output_list
+            assert isinstance(outputs, list) and len(outputs) == 3, "Expected EntityList, Status and StatusMessage"
+            assert outputs[1] == 0, f"GetIdentifiers business status must be zero: {outputs[1]}"
+            entities = outputs[0]
+            assert isinstance(entities, list), "EntityList must decode as an array, including empty matches"
+            assert len(entities) == len(expected_names), f"Unexpected entity count for {requested_names}"
+            assert {entity.Name for entity in entities} == expected_names, (
+                f"Unexpected entity names for {requested_names}"
+            )
+            for entity in entities:
+                assert entity.EntityId == expected_ids[entity.Name], "Identifier field changed during filtering"
+                assert entity.EntityOriginId == expected_origins[entity.Name], "Identifier origin changed"
+                assert entity.Description == expected_descriptions[entity.Name], "Identifier description changed"
+                assert entity.EntityType == expected_types[entity.Name], "Identifier type changed"
+                assert entity.IsExternal is True, "Received identifier must be external"
+    finally:
+        cleanup = await find_and_call_method(
+            ms,
+            BN.RESET_IDENTIFIERS,
+            ns_ijt,
+            piu_argument,
+            _identifier_list_arg(*expected_ids),
+            ua.Variant(False, ua.VariantType.Boolean),
+            ua.Variant(False, ua.VariantType.Boolean),
+            timeout=_METHOD_TIMEOUT,
+        )
+        assert cleanup.success, f"Simulator identifier cleanup failed: {cleanup.error}"
 
 
 # ─── send_identifiers — negative ──────────────────────────────────────────────

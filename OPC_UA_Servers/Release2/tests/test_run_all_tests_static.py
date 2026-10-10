@@ -226,6 +226,26 @@ def test_check_binaries_accepts_required_json_files(
     assert "required JSON files present" in results[-1][3]
 
 
+def test_check_binaries_rejects_hidden_build_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    linux_zip = tmp_path / "OPC_UA_IJT_Server_Simulator_Linux.zip"
+    windows_zip = tmp_path / "OPC_UA_IJT_Server_Simulator.zip"
+    _write_package(linux_zip)
+    _write_package(windows_zip)
+    with zipfile.ZipFile(windows_zip, "a") as zf:
+        zf.writestr(f"{windows_zip.stem}/.validation-build.json", "{}")
+    monkeypatch.setattr(runner, "_LINUX_ZIP", linux_zip)
+    monkeypatch.setattr(runner, "_WINDOWS_ZIP", windows_zip)
+
+    results: list[tuple] = []
+    runner._check_binaries(results)
+
+    assert results[-1][2] is False
+    assert ".validation-build.json" in results[-1][3]
+
+
 def test_check_binaries_rejects_missing_user_identity_json(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

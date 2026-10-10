@@ -889,14 +889,23 @@ class TestEnableAsset:
 class TestJoiningProcess:
     pytestmark = pytest.mark.asyncio(loop_scope="module")
 
-    async def _jp(self, c, pi: str):
+    async def _jp(self, c, pi: str, *, batch_only: bool = False):
         try:
             output = await _call(c, _JP, f"{_JP}/GetJoiningProcessList", _v(pi, ua.VariantType.String))
         except (OSError, ua.UaStatusCodeError) as exc:
             pytest.fail(f"GetJoiningProcessList must build JoiningProcessIdentification, got {exc}")
         programs = _method_items(output)
+        if batch_only:
+            programs = [
+                entry
+                for entry in programs
+                if getattr(
+                    getattr(getattr(entry, "Value", entry), "JoiningProcessMetaData", entry), "Classification", None
+                )
+                == 4
+            ]
         if not programs:
-            pytest.fail("GetJoiningProcessList must return at least one program")
+            pytest.fail("GetJoiningProcessList must return an applicable process")
         process_id = _joining_process_id_from_entry(programs[0])
         if not process_id:
             pytest.fail("First joining process must have a usable JoiningProcessId")
@@ -950,8 +959,22 @@ class TestJoiningProcess:
     async def test_increment_decrement_counter(self, ijt_session):
         c, *_ = ijt_session
         pi = await _required_pi_uri(c)
-        jp = await self._jp(c, pi)
+        jp = await self._jp(c, pi, batch_only=True)
+        jp_arg = ua.Variant(jp, ua.VariantType.ExtensionObject)
+
+        async def set_counter(value: int):
+            output = await _call(
+                c,
+                _JP,
+                f"{_JP}/SetJoiningProcessCounter",
+                _v(pi, ua.VariantType.String),
+                jp_arg,
+                _v(value, ua.VariantType.UInt32),
+            )
+            assert isinstance(output, list) and output[0] == 0, f"Counter setup/cleanup rejected: {output}"
+
         try:
+            await set_counter(0)
             await _call(
                 c,
                 _JP,
@@ -970,6 +993,8 @@ class TestJoiningProcess:
             )
         except (OSError, ua.UaStatusCodeError) as exc:
             pytest.fail(f"JoiningProcess counter update must return method results, got {exc}")
+        finally:
+            await set_counter(0)
 
     async def test_start_selected_joining(self, ijt_session):
         c, *_ = ijt_session
@@ -1086,7 +1111,7 @@ class TestJointManagement:
                 f"{_JT}/SelectJoint",
                 _v(pi, ua.VariantType.String),
                 _v(joint_id, ua.VariantType.String),
-                _v("", ua.VariantType.String),           # JointOriginId (optional, empty)
+                _v("", ua.VariantType.String),  # JointOriginId (optional, empty)
             )
             assert result is not None
             assert isinstance(result, list), f"SelectJoint must return output argument list, got {type(result)!r}"
@@ -1327,7 +1352,9 @@ class TestResultPayloadDeepValidation:
         assert int(meta.AssemblyType) == 1, f"AssemblyType must be ASSEMBLED(1), got {meta.AssemblyType}"
         assert int(meta.Classification) == 1, f"Classification must be SINGLE_RESULT(1), got {meta.Classification}"
         assert int(meta.ResultEvaluation) == 1, f"ResultEvaluation must be OK(1), got {meta.ResultEvaluation}"
-        assert int(meta.ResultEvaluationCode) == 0, f"ResultEvaluationCode must be 0(OK), got {meta.ResultEvaluationCode}"
+        assert int(meta.ResultEvaluationCode) == 0, (
+            f"ResultEvaluationCode must be 0(OK), got {meta.ResultEvaluationCode}"
+        )
         assert meta.IsPartial is False, "IsPartial must be False for a complete result"
         tech = getattr(meta.JoiningTechnology, "Text", str(meta.JoiningTechnology)) or ""
         assert "Tightening" in tech, f"JoiningTechnology must contain 'Tightening', got: {tech!r}"
@@ -1345,9 +1372,7 @@ class TestResultPayloadDeepValidation:
         assert events, "No event received"
 
         content = events[-1].Result.ResultContent or []
-        assert len(content) == 1, (
-            f"ONE_STEP_OK with traces must have exactly 1 ResultContent item, got {len(content)}"
-        )
+        assert len(content) == 1, f"ONE_STEP_OK with traces must have exactly 1 ResultContent item, got {len(content)}"
         # asyncua may wrap the struct in a Variant — unwrap if needed
         joining_result = getattr(content[0], "Value", content[0])
         steps = joining_result.StepResults
@@ -1408,9 +1433,7 @@ class TestResultPayloadDeepValidation:
                 *[_v(rtype, ua.VariantType.UInt32), _v(True, ua.VariantType.Boolean)],
             )
             assert events, f"SimulateSingleResult(type={rtype}): no event"
-            assert _meta(events).IsSimulated is True, (
-                f"type={rtype}: IsSimulated must be True for all Simulate* calls"
-            )
+            assert _meta(events).IsSimulated is True, f"type={rtype}: IsSimulated must be True for all Simulate* calls"
 
     async def test_bulk_result_metadata_with_all_booleans_true(self, ijt_session):
         """SimulateBulkResults(type=1, traces=True, UpdateResultVariables=True): metadata must be valid.
@@ -1427,11 +1450,11 @@ class TestResultPayloadDeepValidation:
                     c,
                     _SIM_R,
                     f"{_SIM_R}/SimulateBulkResults",
-                    _v(1, ua.VariantType.UInt32),   # ResultType=ONE_STEP_OK
+                    _v(1, ua.VariantType.UInt32),  # ResultType=ONE_STEP_OK
                     _v(True, ua.VariantType.Boolean),  # IncludeTraces=True
-                    _v(1, ua.VariantType.UInt64),   # FromSequenceNumber=1
-                    _v(5, ua.VariantType.UInt64),   # ToSequenceNumber=5
-                    _v(50, ua.VariantType.Int64),   # DelayBetweenResults=50ms
+                    _v(1, ua.VariantType.UInt64),  # FromSequenceNumber=1
+                    _v(5, ua.VariantType.UInt64),  # ToSequenceNumber=5
+                    _v(50, ua.VariantType.Int64),  # DelayBetweenResults=50ms
                     _v(True, ua.VariantType.Boolean),  # UpdateResultVariables=True
                 )
                 break

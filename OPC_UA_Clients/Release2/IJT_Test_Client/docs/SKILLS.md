@@ -116,13 +116,39 @@ simulator set is not required. Non-Good values are not treated as valid samples.
 | **Simulate path** | SimulateSingleResult etc. live under `Simulations/SimulateResults/` — NOT under ResultManagement |
 | **GetLatestResult needs Timeout** | Signature is `GetLatestResult(Timeout: Int32)` — pass `ua.Variant(5000, ua.VariantType.Int32)` |
 | **include_traces = True** | All SimulateSingleResult calls should pass `True` for include_traces |
-| **send_as_refs = True** | SimulateBatch_Or_Sync_Result and SimulateJobResult booleans should be `True` |
+| **Choose result packaging explicitly** | `send_as_refs=True` requests reference stubs; `False` requests inline children. Combined-result tests exercise both modes; do not force reference mode in every call. |
 | **ResultState values** | Machinery Result NodeSet uses `1=Completed`, `2=Processing`, `3=Aborted`, `4=Failed`; do not use stale `1=Processing`, `2=Completed` mappings |
 | **node.session not node.server** | asyncua 1.2+ renamed the attribute — use `node.session` |
 | **Annotate empty accumulators** | `check_untyped_defs = true`; dynamic OPC UA lists such as `all_values = []` need explicit types, usually `list[Any]` |
 | **Bandit `nosec` IDs only** | Keep `# nosec Bxxx` comments to valid Bandit IDs only; put explanations on a separate comment line to avoid `Test in comment` warnings |
 
 ---
+
+## Result, Trace and Stateful Regression Contracts
+
+These checks distinguish vendor-neutral specification assertions from the
+simulator's generated-data contract; passing simulator regressions is not a
+claim that a physical Controller has been validated.
+
+| Test module | Contract |
+|---|---|
+| `specification_tests/test_consolidated_results.py` | Capability-gated checks inspect decoded child metadata and classification-dependent content in inline and reference modes. Simulator-only cases additionally require exact Batch/Sync child counts, unique IDs, final state/counters and inline parent links; Batch reference progression checks stable parent/child IDs, growing snapshots and full-child event closure. |
+| `specification_tests/test_identifiers.py` | Simulator-only reset-mode and exact filtering regressions exercise isolated generated state, structured identifier fields and cleanup. Name/ID/token aliases and the last-stored external latest policy are simulator behavior, not universal vendor requirements. |
+| `specification_tests/test_asset_operations.py` | The existing opt-in disable/enable test reads the original Boolean Enabled state, observes both transitions and restores the original value in `finally`. Without an observable Enabled node it skips before mutation, rather than assuming the Tool originally enabled. |
+| `specification_tests/test_result_trace_data.py` | Required fields are checked on every step trace. Point counts must be UInt32 values, not coerced strings or Booleans; Values must be arrays with lengths matching NumberOfTracePoints. |
+
+Choose `send_as_refs` to match the assertion: inline children carry full payloads,
+while reference stubs carry metadata and empty content. Exact generated counts,
+counter values and partial-event sequences belong only in simulator-gated tests.
+Keep generic optional-capability checks separate, retain mutation opt-ins and
+target-server authorization, and treat cleanup failures as test failures.
+
+Positive simulator counter/reset/size checks use an exposed Batch, not the first
+entry from GetJoiningProcessList (which may be a Program). Their function-scoped
+fixture sets counter 3/size 10 to allow both directions and three increments,
+then returns the isolated simulator to counter 0/size 5. This is explicit test
+baseline cleanup, not preservation of arbitrary preexisting state. The fixture
+does not initialize or reset a target server; target manifest policy is retained.
 
 ## Server & Environment
 

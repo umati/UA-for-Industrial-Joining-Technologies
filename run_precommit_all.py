@@ -26,15 +26,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
+# Suppress __pycache__ for this process and every hook/tool child (matches the test runners).
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+sys.dont_write_bytecode = True
+
 # Add scripts/ to path for dependency_helpers
 if str(Path(__file__).parent / "scripts") not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 
-from dependency_helpers import (
+# Imports must follow the bytecode switch above so scripts/ never gets __pycache__.
+from dependency_helpers import (  # noqa: E402
     ensure_python_package,
     find_cmd,
 )
-from tool_bootstrap import ensure_requirements_environment, ensure_uv
+from tool_bootstrap import ensure_requirements_environment, ensure_uv  # noqa: E402
 
 log = logging.getLogger(__name__)
 logging.basicConfig(

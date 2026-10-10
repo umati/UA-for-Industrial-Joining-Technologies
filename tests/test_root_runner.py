@@ -3,11 +3,13 @@ from __future__ import annotations
 import importlib.util
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tomllib
+import zipfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -38,6 +40,41 @@ def setup_function() -> None:
 
 def teardown_function() -> None:
     _runner._server_smoke_requirements_ready = False
+
+
+def _write_simulator_zip(path: Path, marker: str) -> None:
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("Sim/opcua_ijt_demo_application.exe", marker)
+
+
+def test_prepare_native_simulator_extracts_newer_zip_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(_runner, "IS_WINDOWS", True)
+    target = tmp_path / "Sim"
+    target.mkdir()
+    (target / "stale.txt").write_text("old")
+    archive = tmp_path / "sim.zip"
+    _write_simulator_zip(archive, "new")
+    os.utime(target, (1, 1))
+
+    _runner._prepare_native_simulator(archive, target)
+
+    assert (target / "opcua_ijt_demo_application.exe").read_text() == "new"
+    assert not (target / "stale.txt").exists()
+    assert [p.name for p in tmp_path.iterdir() if ".extract-" in p.name] == []
+
+
+def test_prepare_native_simulator_keeps_up_to_date_folder(tmp_path, monkeypatch):
+    monkeypatch.setattr(_runner, "IS_WINDOWS", True)
+    archive = tmp_path / "sim.zip"
+    _write_simulator_zip(archive, "new")
+    target = tmp_path / "Sim"
+    target.mkdir()
+    (target / "keep.txt").write_text("current")
+
+    _runner._prepare_native_simulator(archive, target)
+
+    assert (target / "keep.txt").exists()
+    assert not (target / "opcua_ijt_demo_application.exe").exists()
 
 
 def test_source_scan_prunes_generated_state_but_keeps_project_sources(tmp_path, monkeypatch):

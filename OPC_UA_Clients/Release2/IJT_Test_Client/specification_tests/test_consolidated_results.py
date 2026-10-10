@@ -1,6 +1,11 @@
 """
 specification tests for Consolidated and Combined Results — OPC 40450-1 IJT Base.
 
+Capability-gated conformance checks apply to simulator and target-server triggers.
+Tests marked simulation additionally check the simulator's generated-data contract;
+their exact counts, counter choices and snapshot sequence are not universal server requirements.
+Annex F describes informative examples, not mandatory event-by-event sequencing.
+
 Covered conformance units:
 
     sync_result
@@ -102,6 +107,8 @@ _COUNTER_TYPE_BATCH_SIZE: int = 2  # batch size counter
 _COUNTER_TYPE_BATCH_COUNT: int = 3  # completed batch count counter
 _COUNTER_TYPE_CHANNEL_NUMBER: int = 6  # channel number counter
 _COUNTER_TYPE_SPINDLE_NUMBER: int = 7  # spindle number counter
+_COUNTER_TYPE_TOTAL_SPINDLES: int = 9  # total number of spindles counter
+_ENTITY_TYPE_PARENT: int = 40  # EntityTypeEnumeration.PARENT_TYPE
 
 # Default number of sub-results requested in combined result triggers
 _DEFAULT_CHILD_COUNT: int = 3
@@ -872,6 +879,78 @@ async def test_combined_result_sub_result_count_matches_requested(subscription_c
 # ─── consolidated_result_with_references ───
 
 
+@pytest.mark.simulation
+@pytest.mark.parametrize("classification", [ResultClassification.BATCH_RESULT, ResultClassification.SYNC_RESULT])
+@pytest.mark.parametrize("send_as_refs", [False, True], ids=["inline", "references"])
+@pytest.mark.parametrize("num_children", [1, _DEFAULT_CHILD_COUNT], ids=["one-child", "three-children"])
+async def test_simulator_combined_child_packaging(
+    subscription_client, result_trigger, ns_indices, classification, send_as_refs, num_children
+):
+    """Check exact simulator packaging, beyond generic optional-CU assertions."""
+    if not result_trigger.is_simulator:
+        pytest.skip("Exact generated-child contract requires the simulator")
+    result_data = await _get_combined(
+        subscription_client,
+        result_trigger,
+        ns_indices,
+        classification,
+        num_children=num_children,
+        send_as_refs=send_as_refs,
+    )
+    assert result_data is not None, "Simulator did not deliver a complete combined result"
+    ConsolidatedResultValidator().validate(result_data).assert_no_failures()
+    assert _get_classification(result_data) == classification, "Parent classification does not match trigger"
+    metadata = getattr(result_data, "ResultMetaData", None)
+    assert getattr(metadata, "IsPartial", None) is False, "Final simulator result must explicitly be non-partial"
+    assert getattr(metadata, "ResultState", None) == 1, "Final simulator result must be COMPLETED"
+    expected_types = (
+        {_COUNTER_TYPE_BATCH_COUNT, _COUNTER_TYPE_BATCH_SIZE}
+        if classification == ResultClassification.BATCH_RESULT
+        else {_COUNTER_TYPE_SPINDLE_NUMBER, _COUNTER_TYPE_TOTAL_SPINDLES}
+    )
+    counters = _get_result_counters(result_data)
+    assert len(counters) == len(expected_types), "Final simulator result must contain both expected counters"
+    assert {_counter_type(counter) for counter in counters} == expected_types, (
+        "Final simulator counter types do not match its classification"
+    )
+    for counter in counters:
+        assert _counter_value(counter) == num_children, (
+            f"Final counter type {_counter_type(counter)} does not match requested child count"
+        )
+    parent_id = _result_id_from_result_or_reference(result_data)
+    assert parent_id, "Generated parent ResultId is missing"
+    content = getattr(result_data, "ResultContent", None)
+    assert isinstance(content, (list, tuple)), "Parent ResultContent is not decoded"
+    assert len(content) == num_children, "Generated child count does not match request"
+    child_ids = set()
+    for index, wrapped in enumerate(content):
+        child = _unwrap_sub_result(wrapped)
+        assert child is not None, f"Child[{index}] is not decoded"
+        child_id = _result_id_from_result_or_reference(child)
+        assert child_id and child_id != parent_id, f"Child[{index}] must identify a distinct result"
+        assert child_id not in child_ids, f"Child[{index}] repeats a ResultId"
+        child_ids.add(child_id)
+        assert _get_classification(child) == ResultClassification.SINGLE_RESULT, (
+            f"Child[{index}] is not a SINGLE_RESULT"
+        )
+        child_content = getattr(child, "ResultContent", None)
+        assert isinstance(child_content, (list, tuple)), f"Child[{index}] ResultContent is not decoded"
+        if send_as_refs:
+            assert len(child_content) == 0, f"Reference child[{index}] unexpectedly includes a payload"
+        else:
+            assert len(child_content) == 1, f"Inline child[{index}] must contain one joining result"
+            payload = _unwrap_sub_result(child_content[0])
+            assert getattr(payload, "OverallResultValues", None), f"Inline child[{index}] lacks measured values"
+            assert getattr(payload, "StepResults", None), f"Inline child[{index}] lacks step results"
+            metadata = getattr(child, "ResultMetaData", None)
+            entities = getattr(metadata, "AssociatedEntities", None) or []
+            assert any(
+                int(getattr(entity, "EntityType", -1)) == _ENTITY_TYPE_PARENT
+                and getattr(entity, "EntityId", None) == parent_id
+                for entity in entities
+            ), f"Inline child[{index}] lacks its parent result link"
+
+
 @pytest.mark.requires_cu(CU.CONSOLIDATED_RESULT_WITH_REFERENCES)
 async def test_references_mode_produces_non_empty_reference_list(subscription_client, result_trigger, ns_indices):
     """The Server supports Consolidated Results where ResultContent of sub-results is reported as empty; only ResultId and Classification are included per sub-result reference."""
@@ -891,6 +970,60 @@ async def test_references_mode_produces_non_empty_reference_list(subscription_cl
 
 
 # ─── partial_consolidated_result ───
+
+
+@pytest.mark.simulation
+@pytest.mark.parametrize("num_children", [1, _DEFAULT_CHILD_COUNT], ids=["one-child", "three-children"])
+async def test_simulator_batch_reference_progression(subscription_client, result_trigger, ns_indices, num_children):
+    """Check each generated batch snapshot and closure of its child references."""
+    if not result_trigger.is_simulator:
+        pytest.skip("Exact generated-batch progression requires the simulator")
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=True) as collector:
+        outcome = await result_trigger.trigger_batch_or_sync(
+            classification=ResultClassification.BATCH_RESULT,
+            num_children=num_children,
+            include_traces=False,
+            send_as_refs=True,
+        )
+        assert outcome.triggered, "Simulator batch trigger failed"
+        progression = await collector.collect_progression(
+            ResultClassification.BATCH_RESULT, require_partials=num_children > 1
+        )
+    assert progression.is_complete and not progression.timed_out, "Batch progression or reference closure incomplete"
+    assert len(progression.partial_results) == num_children - 1, "Unexpected number of partial batch snapshots"
+    parent_id = _result_id_from_result_or_reference(progression.final_result)
+    assert parent_id, "Final batch ResultId is missing"
+    previous_ids: list[str] = []
+    snapshots = (*progression.partial_results, progression.final_result)
+    for count, snapshot in enumerate(snapshots, start=1):
+        assert _result_id_from_result_or_reference(snapshot) == parent_id, "Batch ResultId changed during processing"
+        metadata = getattr(snapshot, "ResultMetaData", None)
+        assert getattr(metadata, "IsPartial", None) is (count < num_children), "Incorrect partial flag"
+        assert getattr(metadata, "ResultState", None) == (2 if count < num_children else 1), (
+            "Batch must transition from PROCESSING to COMPLETED"
+        )
+        content = getattr(snapshot, "ResultContent", None)
+        assert isinstance(content, (list, tuple)) and len(content) == count, "Batch references did not grow by one"
+        ids = [_result_id_from_result_or_reference(child) for child in content]
+        assert all(ids) and len(set(ids)) == count, "Batch contains missing or duplicate child IDs"
+        assert ids[:-1] == previous_ids, "Earlier child references changed during processing"
+        previous_ids = ids
+        counters = _get_result_counters(snapshot)
+        assert len(counters) == 2, "Batch snapshot must contain count and size counters"
+        values = {_counter_type(counter): _counter_value(counter) for counter in counters}
+        assert values == {_COUNTER_TYPE_BATCH_COUNT: count, _COUNTER_TYPE_BATCH_SIZE: num_children}, (
+            "Batch snapshot counters do not match its progression"
+        )
+    children = [
+        child for child in progression.child_results if _get_classification(child) == ResultClassification.SINGLE_RESULT
+    ]
+    assert len(children) == num_children, "Expected exactly one full event per referenced child"
+    assert {_result_id_from_result_or_reference(child) for child in children} == set(previous_ids), (
+        "Full child events do not match final batch references"
+    )
+    for child in children:
+        content = getattr(child, "ResultContent", None)
+        assert isinstance(content, (list, tuple)) and len(content) == 1, "Referenced child event lacks full content"
 
 
 @pytest.mark.requires_cu(CU.PARTIAL_CONSOLIDATED_RESULT)
@@ -1667,31 +1800,6 @@ async def test_self_contained_consolidated_classification_is_combined_type(
 
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
-async def test_self_contained_sub_result_classifications_not_same_as_parent(
-    subscription_client, result_trigger, ns_indices
-):
-    """Inline sub-results must not carry the same Classification as the parent combined result."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
-    )
-    if result_data is None:
-        pytest.skip("Could not retrieve self-contained batch result")
-
-    parent_cls = _get_classification(result_data)
-    rc = getattr(result_data, "ResultContent", None)
-    if not isinstance(rc, (list, tuple)) or len(rc) == 0:
-        pytest.skip("No inline sub-results to compare classifications")
-
-    for idx, sub in enumerate(rc):
-        sub_cls = _get_classification(sub)
-        if sub_cls is None:
-            continue
-        assert sub_cls != parent_cls, (
-            f"Sub-result[{idx}] Classification={sub_cls!r} must not equal parent Classification={parent_cls!r}"
-        )
-
-
-@pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
 async def test_self_contained_sub_result_ids_are_all_unique(subscription_client, result_trigger, ns_indices):
     """All sub-result ResultIds within a self-contained BATCH_RESULT must be unique."""
     result_data = await _get_combined(
@@ -1765,42 +1873,37 @@ async def test_self_contained_parent_evaluation_consistent_with_sub_results(
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
 @pytest.mark.negative
+@pytest.mark.parametrize("classification", [ResultClassification.BATCH_RESULT, ResultClassification.SYNC_RESULT])
 async def test_self_contained_sub_results_have_non_empty_result_content(
-    subscription_client, result_trigger, ns_indices
+    subscription_client, result_trigger, ns_indices, classification
 ):
-    """In CU33 mode each inline sub-result must carry its full content (non-None result data)."""
+    """OPC 40450-1 Section 10.1 and the self-contained CU require child envelopes with content."""
     result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
+        subscription_client, result_trigger, ns_indices, classification, send_as_refs=False
     )
     if result_data is None:
-        pytest.skip("Could not retrieve self-contained batch result")
+        pytest.skip("No complete self-contained result available from the configured trigger")
 
-    # Skip if wrong classification (timing race)
-    _check_classification_or_skip(result_data, ResultClassification.BATCH_RESULT, "BATCH (sub-results content)")
-
+    assert _get_classification(result_data) == classification, "Received classification does not match request"
     rc = getattr(result_data, "ResultContent", None)
-    if not isinstance(rc, (list, tuple)) or len(rc) == 0:
-        pytest.skip("No inline sub-results to inspect")
+    assert isinstance(rc, (list, tuple)) and rc, "Self-contained combined result must contain child results"
 
     for idx, sub in enumerate(rc):
-        assert sub is not None, (
-            f"Sub-result[{idx}] in self-contained BATCH_RESULT must not be None — "
-            "CU33 requires full content in each sub-result"
-        )
         unwrapped = _unwrap_sub_result(sub)
-        if unwrapped is None:
-            pytest.skip(
-                f"Sub-result[{idx}] is a ua.Variant that could not be unwrapped — "
-                "asyncua ExtensionObject deserialization limitation; "
-                "load_data_type_definitions must be called before this test"
-            )
+        assert unwrapped is not None, f"Sub-result[{idx}] could not be decoded as a child result"
         meta = getattr(unwrapped, "ResultMetaData", None)
-        if meta is None:
-            pytest.skip(
-                f"Sub-result[{idx}] in self-contained BATCH_RESULT has no ResultMetaData — "
-                "CU33 requires full content; "
-                "server may be returning reference-mode results or simulator deviation"
-            )
+        assert meta is not None, f"Sub-result[{idx}] lacks ResultMetaData"
+        assert _result_id_from_result_or_reference(unwrapped), f"Sub-result[{idx}] lacks ResultId"
+        child_classification = _get_classification(unwrapped)
+        assert child_classification in ResultClassification.VALID_VALUES, (
+            f"Sub-result[{idx}] has missing or invalid Classification"
+        )
+        child_content = getattr(unwrapped, "ResultContent", None)
+        if child_classification == ResultClassification.INTERVENTION_RESULT and child_content is None:
+            continue
+        assert isinstance(child_content, (list, tuple)), f"Sub-result[{idx}] ResultContent is not decoded"
+        if child_classification != ResultClassification.INTERVENTION_RESULT:
+            assert child_content, f"Sub-result[{idx}] is a reference stub rather than self-contained content"
 
 
 # ─── consolidated_result_with_references (additional) ───
@@ -1828,27 +1931,31 @@ async def test_references_mode_classification_is_combined_type(subscription_clie
 
 
 @pytest.mark.requires_cu(CU.CONSOLIDATED_RESULT_WITH_REFERENCES)
-async def test_references_mode_sub_result_classification_not_same_as_parent(
-    subscription_client, result_trigger, ns_indices
+@pytest.mark.parametrize("classification", [ResultClassification.BATCH_RESULT, ResultClassification.SYNC_RESULT])
+async def test_references_mode_child_stubs_have_required_metadata_and_empty_content(
+    subscription_client, result_trigger, ns_indices, classification
 ):
-    """In references mode, each referenced sub-result Classification must differ from the parent."""
+    """CU reference packaging requires child envelopes with ID, classification and empty content."""
     result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=True
+        subscription_client, result_trigger, ns_indices, classification, send_as_refs=True
     )
     if result_data is None:
-        pytest.skip("Could not retrieve reference-mode batch result")
+        pytest.skip("No complete reference-mode result available from the configured trigger")
 
-    parent_cls = _get_classification(result_data)
-    refs = _reference_mode_sub_results(result_data)
-    if not refs:
-        pytest.skip("No reference-mode sub-result summaries found in References or ResultContent")
-
-    for idx, ref in enumerate(refs):
-        sub_cls = _get_classification(ref)
-        if sub_cls is None:
-            continue
-        assert sub_cls != parent_cls, (
-            f"References[{idx}] Classification={sub_cls!r} must not equal parent Classification={parent_cls!r}"
+    assert _get_classification(result_data) == classification, "Received classification does not match request"
+    content = getattr(result_data, "ResultContent", None)
+    assert isinstance(content, (list, tuple)) and content, "Reference-mode parent must contain child stubs"
+    for idx, wrapped in enumerate(content):
+        child = _unwrap_sub_result(wrapped)
+        assert child is not None, f"Child stub[{idx}] could not be decoded"
+        assert getattr(child, "ResultMetaData", None) is not None, f"Child stub[{idx}] lacks ResultMetaData"
+        assert _result_id_from_result_or_reference(child), f"Child stub[{idx}] lacks ResultId"
+        assert _get_classification(child) in ResultClassification.VALID_VALUES, (
+            f"Child stub[{idx}] has missing or invalid Classification"
+        )
+        child_content = getattr(child, "ResultContent", None)
+        assert isinstance(child_content, (list, tuple)) and len(child_content) == 0, (
+            f"Child stub[{idx}] must have an empty ResultContent array"
         )
 
 
@@ -1990,46 +2097,13 @@ async def test_no_single_result_has_is_partial_true(opcua_client, result_trigger
 
 
 @pytest.mark.requires_cu(CU.RESULT_CONTENT)
-async def test_single_result_content_has_joining_result_attributes(subscription_client, result_trigger, ns_indices):
-    """Sub-results from a BATCH_RESULT (SINGLE_RESULT type) must resemble JoiningResultDataType."""
+@pytest.mark.parametrize("classification", [ResultClassification.BATCH_RESULT, ResultClassification.SYNC_RESULT])
+async def test_consolidated_sub_result_type_matches_its_classification(
+    subscription_client, result_trigger, ns_indices, classification
+):
+    """Check the documented direct SINGLE_RESULT payload shape when full children are available."""
     result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
-    )
-    if result_data is None:
-        pytest.skip("Could not retrieve batch result for single-result content check")
-
-    rc = getattr(result_data, "ResultContent", None)
-    if not isinstance(rc, (list, tuple)) or len(rc) == 0:
-        pytest.skip("ResultContent absent or empty")
-
-    for idx, sub in enumerate(rc):
-        cls_int = _get_classification(sub)
-        if cls_int is not None and cls_int != ResultClassification.SINGLE_RESULT:
-            continue
-        sub = _unwrap_sub_result(sub)
-        if sub is None:
-            pytest.skip(
-                f"Sub-result[{idx}] is a ua.Variant that could not be unwrapped — "
-                "asyncua ExtensionObject deserialization limitation when type definitions "
-                "are not loaded; SINGLE_RESULT content structure cannot be verified"
-            )
-        has_joining_attrs = any(_iter_joining_result_payloads(sub))
-        if not has_joining_attrs:
-            pytest.skip(
-                f"Sub-result[{idx}] (SINGLE_RESULT) does not have JoiningResultDataType "
-                f"payload in ResultContent — type {type(sub).__name__!r}; "
-                "may be asyncua deserialization gap or simulator extension"
-            )
-        return
-
-    pytest.skip("No SINGLE_RESULT sub-results found in ResultContent")
-
-
-@pytest.mark.requires_cu(CU.RESULT_CONTENT)
-async def test_consolidated_sub_result_type_matches_its_classification(subscription_client, result_trigger, ns_indices):
-    """SINGLE_RESULT sub-results in an inline BATCH_RESULT must carry JoiningResultDataType structure."""
-    result_data = await _get_combined(
-        subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
+        subscription_client, result_trigger, ns_indices, classification, send_as_refs=False
     )
     if result_data is None:
         pytest.skip("Could not retrieve batch result")
@@ -2038,14 +2112,29 @@ async def test_consolidated_sub_result_type_matches_its_classification(subscript
     if not isinstance(rc, (list, tuple)) or len(rc) == 0:
         pytest.skip("No inline sub-results available")
 
-    for idx, sub in enumerate(rc):
+    checked = 0
+    for idx, wrapped in enumerate(rc):
+        sub = _unwrap_sub_result(wrapped)
         cls_int = _get_classification(sub)
         if cls_int != ResultClassification.SINGLE_RESULT:
             continue
-        has_joining_attrs = any(_iter_joining_result_payloads(sub))
-        assert has_joining_attrs, (
-            f"Sub-result[{idx}] has Classification=SINGLE_RESULT but lacks JoiningResultDataType payload"
+        content = getattr(sub, "ResultContent", None)
+        if isinstance(content, (list, tuple)) and len(content) == 0:
+            continue
+        assert isinstance(content, (list, tuple)) and len(content) == 1, (
+            f"SINGLE_RESULT child[{idx}] must carry one direct JoiningResultDataType payload"
         )
+        payload = _unwrap_sub_result(content[0])
+        assert payload is not None and not hasattr(payload, "ResultMetaData"), (
+            f"SINGLE_RESULT child[{idx}] contains an envelope instead of a joining payload"
+        )
+        values = getattr(payload, "OverallResultValues", None)
+        assert isinstance(values, (list, tuple)), (
+            f"SINGLE_RESULT child[{idx}] lacks the required OverallResultValues array"
+        )
+        checked += 1
+    if checked == 0:
+        pytest.skip("No full SINGLE_RESULT children available; reference stubs do not carry payloads")
 
 
 @pytest.mark.requires_cu(CU.RESULT_CONTENT)

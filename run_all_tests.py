@@ -85,6 +85,7 @@ import subprocess
 import sys
 import threading
 import time
+import zipfile
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -2703,6 +2704,42 @@ def run_phase1_performance(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:
     return results
 
 
+def _prepare_native_simulator(
+    archive: Path | None = None,
+    target: Path | None = None,
+) -> None:
+    """Extract the Windows simulator package once, before parallel suites start.
+
+    Several sub-runners extract the ZIP on demand and replace the folder when the
+    ZIP is newer. Doing that concurrently makes suites miss the executable, so the
+    root runner refreshes it serially and atomically (extract to a sibling, then swap).
+    """
+    if not IS_WINDOWS:
+        return
+    archive = archive or (SERVER_DIR / "OPC_UA_IJT_Server_Simulator.zip")
+    target = target or _NATIVE_BINARY_WIN.parent
+    if not archive.is_file():
+        return
+    if target.is_dir() and target.stat().st_mtime >= archive.stat().st_mtime:
+        return
+    staging = target.with_name(f"{target.name}.extract-{os.getpid()}")
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
+    try:
+        with zipfile.ZipFile(archive) as zf:
+            zf.extractall(staging)
+        extracted = staging / target.name
+        if not extracted.is_dir():
+            raise RuntimeError(f"{archive.name} has no top-level {target.name}/ folder")
+        shutil.rmtree(target, ignore_errors=True)
+        extracted.replace(target)
+        log.info("Prepared native simulator from %s", archive.name)
+    except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
+        log.warning("Could not prepare native simulator from %s: %s", archive.name, exc)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
 def run_phase2(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:
     """Run Phase 2 suites in parallel.
 
@@ -2733,6 +2770,7 @@ def run_phase2(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:
     )
     results: list[SuiteResult] = []
     WEB_CLIENT_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    _prepare_native_simulator()
 
     with ThreadPoolExecutor(max_workers=len(suites), thread_name_prefix="phase2") as ex:
         future_to_key = {ex.submit(spec.runner): key for key, spec in suites.items()}
