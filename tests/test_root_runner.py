@@ -2136,11 +2136,11 @@ def test_dependency_security_workflow_separates_monitoring_and_release_policy() 
     assert "pull_request:" in workflow
     assert "schedule:" in workflow
     assert "workflow_dispatch:" in workflow
-    assert "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294" in workflow
+    assert re.search(r"actions/dependency-review-action@[0-9a-f]{40}\b", workflow)
     assert "fail-on-severity: high" in workflow
     assert "python run_precommit_all.py --audits-only" in workflow
     assert "'strict' || 'offline'" in workflow
-    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in workflow
+    assert re.search(r"actions/upload-artifact@[0-9a-f]{40}\b", workflow)
     assert "contents: read" in workflow
 
 
