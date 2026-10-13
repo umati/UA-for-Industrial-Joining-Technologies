@@ -13,7 +13,10 @@ prepare dependencies automatically; manual dependency management is optional.
 | Reuse source code in your own application | Install the needed dependencies and account for the client's source files, configuration, assets, and shared modules. Dependency installation alone does not make a client portable. |
 | Change dependencies | Update the client's `pyproject.toml`, regenerate `uv.lock`, and validate the affected client. See [Development](DEVELOPMENT.md). |
 
-Python 3.14+ is required. The Web Client also needs Node.js 24.15+ for its frontend.
+The client minimum requirement is Python 3.14, and Python 3.14.x is the maintained
+runtime. Newer interpreters require separate compatibility verification; see the
+[Python runtime update policy](DEVELOPMENT.md#python-runtime-update-policy).
+The Web Client also needs Node.js 24.15+ for its frontend.
 Docker and .NET are separate prerequisites only for the components/checks that
 use them. Git is needed for repository checks and commit hooks.
 

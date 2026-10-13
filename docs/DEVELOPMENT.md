@@ -47,7 +47,9 @@ node --version  # Should be v24.15.0 or newer for the Web and Node clients
 
 ### Python Runtime
 
-The project uses Python 3.14 as the baseline runtime for server simulations, testing, and automation scripts.
+The project uses Python 3.14.x as the maintained runtime for Python clients,
+testing, and automation scripts. Keep normal development, required CI, and
+Python container images on this line until a coordinated migration is approved.
 
 **Configuration:** `.python-version` (project root)
 - Contains `3.14`
@@ -61,8 +63,48 @@ The project uses Python 3.14 as the baseline runtime for server simulations, tes
 
 **Checking your version:**
 ```bash
-python --version  # Should be 3.14.x or newer
+python --version  # Should be 3.14.x
 ```
+
+#### Python runtime update policy
+
+`renovate.json` restricts the `python` dependency from the Docker datasource
+(used by both the pyenv manager for `.python-version` and Docker image managers)
+to 3.14, and separately restricts the Python component
+of `nikolaik/python-nodejs` tags to 3.14. These rules apply repository-wide,
+not just to one Dockerfile. Python 3.14 patch updates and Docker digest
+refreshes remain eligible for review; Python package updates and lockfile
+maintenance remain enabled. Package releases must still work with Python 3.14.
+
+Client manifests retain `requires-python = ">=3.14"`: this is the minimum
+interpreter requirement, not certification of newer Python versions. Python
+3.15 is released and stable, but IJT compatibility with its locked dependencies,
+including asyncua 2.1.0, must be established before changing the maintained runtime.
+Newer interpreters may be evaluated separately without changing required CI.
+
+After this policy is published to the default branch, Renovate applies it on
+its next repository run. Do not merge an existing 3.15 runtime PR such as
+[#616](https://github.com/umati/UA-for-Industrial-Joining-Technologies/pull/616);
+close it as deferred if Renovate has not already removed it. The rules, rather
+than closing an individual PR, prevent subsequent unsupported runtime proposals.
+
+For a future migration:
+
+1. Verify the locked runtime and development dependencies on the proposed Python
+   version, including Windows/Linux wheels and targeted OPC UA connection,
+   subscription, reconnect, security, and shutdown behavior.
+2. Update both runtime rules in `renovate.json`, `.python-version`, Python Docker
+   tags/digests, browser image version assertions, and any explicit workflow
+   version pins together. Coordinate separately owned plugin runtime pins rather
+   than editing a submodule implicitly.
+3. Regenerate affected locks as needed and rebuild the browser CI image with its
+   offline wheelhouse. Refresh the reviewed image pin using the existing image
+   publication procedure; do not hand-edit provenance.
+4. Update runtime documentation and policy tests. Raise client `requires-python`
+   floors only if intentionally dropping 3.14 support; keep Ruff's documented
+   target-version workaround separate from the runtime decision.
+5. Complete the normal CI and live validation gates before adopting the new
+   runtime. A calendar date or upstream stable release alone does not lift the hold.
 
 **Installing Python 3.14:**
 - Using **pyenv** (recommended):
@@ -82,7 +124,7 @@ python --version  # Should be 3.14.x or newer
 
 Before starting development, ensure you have:
 
-1. **Python 3.14+** installed and on your PATH (with `pip` and `venv`)
+1. **Python 3.14.x** installed and on your PATH (with `pip` and `venv`)
 2. **Node.js 24.15+** installed and on your PATH (with `npm`)
 3. **Git** installed and on your PATH (required for pre-commit hooks and repo-level checks)
 4. A code editor (VS Code, JetBrains IDEs, etc.)

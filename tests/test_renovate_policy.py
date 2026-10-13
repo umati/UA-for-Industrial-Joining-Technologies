@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
+import pytest
 import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -101,6 +103,56 @@ def test_renovate_keeps_python_package_updates_enabled() -> None:
         assert (release2 / client_name / "uv.lock").is_file(), (
             f"{client_name} must have its own uv.lock"
         )
+
+
+@pytest.mark.parametrize(
+    ("package", "allowed", "blocked"),
+    [
+        (
+            "python",
+            ["3.14", "3.14.6", "3.14-slim-bookworm", "3.14.6-slim-bookworm"],
+            ["3.13", "3.15", "3.15-slim-bookworm", "3.140", "4.0"],
+        ),
+        (
+            "nikolaik/python-nodejs",
+            ["python3.14-nodejs24", "python3.14.6-nodejs24", "python3.14-nodejs26"],
+            ["python3.13-nodejs24", "python3.15-nodejs24", "python3.140-nodejs24"],
+        ),
+    ],
+)
+def test_renovate_holds_python_runtime_without_freezing_updates(
+    package: str, allowed: list[str], blocked: list[str]
+) -> None:
+    """Runtime holds allow maintained tags without disabling dependency/digest updates."""
+    rules = [
+        rule
+        for rule in _rules()
+        if package in rule.get("matchPackageNames", []) and "allowedVersions" in rule
+    ]
+    assert len(rules) == 1
+    rule = rules[0]
+    assert rule["matchDatasources"] == ["docker"]
+    assert rule.get("enabled", True) is True
+    assert "matchUpdateTypes" not in rule
+    assert rule["automerge"] is False
+    expression = rule["allowedVersions"]
+    assert expression.startswith("/") and expression.endswith("/")
+    pattern = re.compile(expression[1:-1])
+    assert all(pattern.search(version) for version in allowed)
+    assert not any(pattern.search(version) for version in blocked)
+
+
+def test_python_runtime_pins_match_maintained_line() -> None:
+    """Runtime files and both Python images must remain aligned with the hold."""
+    assert (_REPO_ROOT / ".python-version").read_text(encoding="utf-8").strip() == "3.14"
+    browser = (_REPO_ROOT / ".github" / "docker" / "ijt-browser-ci" / "Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    web = (_REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    assert re.search(r"^FROM python:3\.14(?:[.-])", browser, re.MULTILINE)
+    assert re.search(r"^FROM nikolaik/python-nodejs:python3\.14-nodejs", web, re.MULTILINE)
 
 
 def test_renovate_batches_python_dev_tools_weekly() -> None:

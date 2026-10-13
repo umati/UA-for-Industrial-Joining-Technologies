@@ -30,6 +30,20 @@
   },
   "packageRules": [
     {
+      "description": "Retain Python 3.14 across runtime version files and official Docker images until a coordinated IJT compatibility migration. Allow 3.14 patches and existing Docker digest refreshes; do not restrict PyPI dependency updates. See docs/DEVELOPMENT.md.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["python"],
+      "allowedVersions": "/^3\\.14(?:[.-]|$)/",
+      "automerge": false
+    },
+    {
+      "description": "Retain the Python 3.14 component of the combined Web Client image without imposing a new Node.js version restriction. Lift this hold with the official Python runtime rule during a coordinated migration.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["nikolaik/python-nodejs"],
+      "allowedVersions": "/^python3\\.14(?:\\.\\d+)?-nodejs/",
+      "automerge": false
+    },
+    {
       "description": "Group uv CLI, workflow steps, and Docker image updates together into a single atomic toolchain update so CI runners, bootstrap scripts, and container images remain strictly synchronized to the same uv release.",
       "matchPackageNames": ["uv", "ghcr.io/astral-sh/uv"],
       "groupName": "uv toolchain",

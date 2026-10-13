@@ -6,7 +6,7 @@ Thank you for your interest in contributing to the VDMA OPC UA Industrial Joinin
 
 ### Runtime Requirements
 
-- **Python 3.14** or newer (with `pip` and `venv`)
+- **Python 3.14.x** for maintained development and CI (with `pip` and `venv`)
 - **Node.js 24.15** or newer (with `npm`)
 - **Git** (available on system PATH)
 
@@ -14,6 +14,11 @@ Central version files:
 
 - `.nvmrc` for Node.js
 - `.python-version` for Python
+
+Python runtime updates are held to the 3.14 line by Renovate; dependency updates
+remain enabled. The client minimum requirement `>=3.14` does not certify newer
+interpreters. See [Python runtime update policy](DEVELOPMENT.md#python-runtime-update-policy)
+for the hold and coordinated migration procedure.
 
 ### Optional Tools (Auto-Skipped if Missing)
 
