@@ -24,6 +24,7 @@ from helpers.target_server_readiness import (
     check_endpoint_configured,
     check_endpoint_reachable,
     check_joining_process_configured,
+    check_live_process_selectors,
     check_result_trigger_mode,
     check_start_selected_joining_methods_allowed,
     check_state_changing_methods_policy,
@@ -79,6 +80,87 @@ class TestPreflightReport:
     def test_empty_report_all_passed(self):
         r = PreflightReport()
         assert r.all_passed is True
+
+
+class TestLiveProcessSelectors:
+    def _profile(self, *, match_by="joining_process_id", **selector):
+        return build_execution_profile(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "match_by": match_by,
+                        **selector,
+                    }
+                },
+            }
+        )
+
+    def test_id_selector_requires_one_live_match(self):
+        profile = self._profile(joining_process_id="process-1")
+        checks = check_live_process_selectors(
+            profile,
+            [
+                {"id": "process-1", "origin_id": "origin-1", "selection_name": "Program_1"},
+                {"id": "process-2", "origin_id": "origin-2", "selection_name": "Program_2"},
+            ],
+        )
+
+        assert len(checks) == 1
+        assert checks[0].outcome == OUTCOME_PASSED
+        assert checks[0].evidence["match_by"] == "joining_process_id"
+        assert checks[0].evidence["match_count"] == 1
+
+    @pytest.mark.parametrize(
+        "processes",
+        [
+            [],
+            [
+                {"id": "process-1", "origin_id": "origin-1", "selection_name": "Program_1"},
+                {"id": "process-1", "origin_id": "origin-2", "selection_name": "Program_2"},
+            ],
+        ],
+    )
+    def test_missing_or_ambiguous_selector_blocks(self, processes):
+        profile = self._profile(joining_process_id="process-1")
+        check = check_live_process_selectors(profile, processes)[0]
+
+        assert check.outcome == OUTCOME_BLOCKED
+        assert check.evidence["match_count"] in {0, 2}
+
+    def test_selection_name_is_explicit_and_has_no_id_fallback(self):
+        profile = self._profile(match_by="selection_name", selection_name="Sequence_1")
+        check = check_live_process_selectors(
+            profile,
+            [{"id": "process-1", "origin_id": "origin-1", "selection_name": "Sequence_1"}],
+        )[0]
+
+        assert check.outcome == OUTCOME_PASSED
+        assert check.evidence["match_by"] == "selection_name"
+
+    def test_counter_parent_process_selector_is_included(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "extension_fields": {
+                        "counter_parent_process": {
+                            "match_by": "selection_name",
+                            "selection_name": "Parent_1",
+                        }
+                    }
+                },
+            }
+        )
+        checks = check_live_process_selectors(
+            profile,
+            [{"id": "parent-id", "origin_id": "parent-origin", "selection_name": "Parent_1"}],
+        )
+
+        assert len(checks) == 1
+        assert checks[0].check_name == "live_selector:cu_execution.intervention.parent_process"
+        assert checks[0].outcome == OUTCOME_PASSED
 
     def test_add_passed_check(self):
         r = PreflightReport()

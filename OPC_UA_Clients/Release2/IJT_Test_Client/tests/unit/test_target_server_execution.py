@@ -19,6 +19,7 @@ import pytest
 from helpers import target_server_execution as tse
 from helpers.namespaces import JoiningProcessClassification
 from helpers.target_server_cu_config import (
+    OUTCOME_BLOCKED,
     OUTCOME_PASSED,
     build_default_profile,
     build_execution_profile,
@@ -116,6 +117,18 @@ class TestExcludedCusAndOverrides:
         assert updated.selection.tool.product_instance_uri == "urn:tool:99"
         assert updated.selection.joining_process.joining_process_id == "PROG99"
         assert updated.selection.joining_process.joining_process_origin_id == "ORIGIN99"
+        assert updated.selection.joining_process.match_by == "joining_process_id"
+
+    def test_origin_only_runtime_override_selects_origin_as_match_key(self):
+        updated = tse.apply_runtime_overrides(
+            build_execution_profile({"schema_version": 1}),
+            joining_process_origin_id="ORIGIN-1",
+        )
+
+        selector = updated.selection.joining_process
+        assert selector.policy == "exact_match"
+        assert selector.match_by == "joining_process_origin_id"
+        assert selector.joining_process_origin_id == "ORIGIN-1"
 
 
 class TestBuildSpecTestEnvDirect:
@@ -369,6 +382,104 @@ class TestRunPreflightDirect:
         assert rc == 0
         summary = (tmp_path / "target-server-cu-summary.txt").read_text(encoding="utf-8")
         assert "PASSED" in summary
+
+    def test_exact_selector_is_checked_against_live_process_list(self, tmp_path, monkeypatch):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://reachable-host:1"},
+                "triggers": {"result": {"mode": "simulate_methods"}},
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "process-1",
+                    }
+                },
+            }
+        )
+        monkeypatch.setattr(
+            tse,
+            "check_endpoint_reachable",
+            lambda endpoint, **kw: ReadinessOutcome(outcome=OUTCOME_PASSED, check_name="endpoint_reachable"),
+        )
+
+        async def discover(*args, **kwargs):
+            return {
+                "processes": [
+                    {"id": "process-1", "origin_id": "origin-1", "selection_name": "Program_1"},
+                    {"id": "process-2", "origin_id": "origin-2", "selection_name": "Program_2"},
+                ]
+            }
+
+        monkeypatch.setattr(tse, "async_discover_target_server", discover)
+        assert tse.run_preflight(profile, tmp_path) == 0
+        report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
+        checks = report["preflight"]["checks"]
+        assert any(
+            check["check_name"].startswith("live_selector:") and check["outcome"] == OUTCOME_PASSED for check in checks
+        )
+
+    def test_live_selector_mismatch_blocks_preflight(self, tmp_path, monkeypatch):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://reachable-host:1"},
+                "triggers": {"result": {"mode": "simulate_methods"}},
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "stale-id",
+                    }
+                },
+            }
+        )
+        monkeypatch.setattr(
+            tse,
+            "check_endpoint_reachable",
+            lambda endpoint, **kw: ReadinessOutcome(outcome=OUTCOME_PASSED, check_name="endpoint_reachable"),
+        )
+
+        async def discover(*args, **kwargs):
+            return {"processes": [{"id": "current-id"}]}
+
+        monkeypatch.setattr(tse, "async_discover_target_server", discover)
+        assert tse.run_preflight(profile, tmp_path) == 1
+        report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
+        assert any(
+            check["check_name"].startswith("live_selector:") and check["outcome"] == OUTCOME_BLOCKED
+            for check in report["preflight"]["checks"]
+        )
+
+    def test_selector_preflight_discovery_failure_blocks_without_running_tests(self, tmp_path, monkeypatch):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://reachable-host:1"},
+                "triggers": {"result": {"mode": "simulate_methods"}},
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "joining_process_id": "process-1",
+                    }
+                },
+            }
+        )
+        monkeypatch.setattr(
+            tse,
+            "check_endpoint_reachable",
+            lambda endpoint, **kw: ReadinessOutcome(outcome=OUTCOME_PASSED, check_name="endpoint_reachable"),
+        )
+
+        async def discover(*args, **kwargs):
+            raise RuntimeError("secure session rejected")
+
+        monkeypatch.setattr(tse, "async_discover_target_server", discover)
+        assert tse.run_preflight(profile, tmp_path) == 1
+        report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
+        assert any(
+            check["check_name"] == "live_process_selector_discovery" and check["outcome"] == OUTCOME_BLOCKED
+            for check in report["preflight"]["checks"]
+        )
 
     def test_manual_required_is_non_blocking(self, tmp_path, monkeypatch):
         profile = build_execution_profile(
@@ -633,6 +744,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         )
         assert updated.selection.joining_processes["job"].joining_process_id == "New_Job_1"
         assert updated.selection.joining_processes["batch"].joining_process_id == "New_Batch_1"
+        assert updated.selection.joining_processes["job"].match_by == "joining_process_id"
 
     def test_excluded_cus_with_configured_classifications(self):
         excluded = tse._excluded_cus_for_result_scope(

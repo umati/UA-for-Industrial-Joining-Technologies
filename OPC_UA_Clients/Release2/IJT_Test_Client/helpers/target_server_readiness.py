@@ -50,6 +50,7 @@ from helpers.canonical_outcomes import (
     canonical_for_legacy_outcome,
     reason_category,
 )
+from helpers.process_selectors import matching_processes, selection_names, selector_value
 from helpers.target_server_cu_config import (
     OUTCOME_BLOCKED,
     OUTCOME_CLAIM_MISMATCH,
@@ -526,6 +527,99 @@ def check_start_selected_joining_methods_allowed(profile: TargetServerCuProfile)
         )
     required = ["SelectJoiningProcess", "StartSelectedJoining"]
     return check_state_changing_methods_policy(profile, required)
+
+
+def has_live_process_selector_checks(profile: TargetServerCuProfile) -> bool:
+    """Whether the profile pins any joining process that should be checked live."""
+    selections = [profile.selection.joining_process, *profile.selection.joining_processes.values()]
+    parent_selector = profile.cu_execution.extension_fields.get("counter_parent_process")
+    parent_is_configured = isinstance(parent_selector, Mapping) and any(
+        parent_selector.get(field_name)
+        for field_name in ("joining_process_id", "joining_process_origin_id", "selection_name")
+    )
+    return (
+        any(selection.policy == "exact_match" for selection in selections)
+        or bool(profile.cu_execution.counter_effects)
+        or parent_is_configured
+    )
+
+
+def check_live_process_selectors(profile: TargetServerCuProfile, processes: list[Any]) -> list[ReadinessOutcome]:
+    """Compare every configured exact selector with the freshly advertised process list."""
+    checks: list[ReadinessOutcome] = []
+    selectors = [
+        (f"selection.joining_processes.{classification}", selector)
+        for classification, selector in profile.selection.joining_processes.items()
+        if selector.policy == "exact_match"
+    ]
+    if profile.selection.joining_process.policy == "exact_match":
+        selectors.append(("selection.joining_process", profile.selection.joining_process))
+    selectors.extend(
+        (f"cu_execution.counter_effects[{index}]", effect)
+        for index, effect in enumerate(profile.cu_execution.counter_effects)
+    )
+    parent_process = profile.cu_execution.extension_fields.get("counter_parent_process")
+    if isinstance(parent_process, Mapping) and any(
+        parent_process.get(field_name)
+        for field_name in ("joining_process_id", "joining_process_origin_id", "selection_name")
+    ):
+        selectors.append(("cu_execution.intervention.parent_process", parent_process))
+
+    for label, selector in selectors:
+        match_by = (
+            selector.get("match_by", "joining_process_id") if isinstance(selector, Mapping) else selector.match_by
+        )
+        configured_value = selector_value(selector, match_by)
+        check_name = f"live_selector:{label}"
+        if not configured_value:
+            checks.append(
+                ReadinessOutcome(
+                    outcome=OUTCOME_CONFIGURATION_ERROR,
+                    reason_code="configuration_invalid",
+                    detail=f"{label} selects '{match_by}' but has no configured value.",
+                    check_name=check_name,
+                    evidence={"match_by": match_by},
+                )
+            )
+            continue
+
+        matches = matching_processes(processes, selector, match_by)
+        identities = []
+        for process in matches:
+            getter = (
+                process.get if isinstance(process, Mapping) else lambda key, default="": getattr(process, key, default)
+            )
+            identities.append(
+                {
+                    "joining_process_id": str(getter("id", "") or getter("JoiningProcessId", "")),
+                    "joining_process_origin_id": str(getter("origin_id", "") or getter("JoiningProcessOriginId", "")),
+                    "selection_names": sorted(selection_names(process)),
+                }
+            )
+        if len(matches) == 1:
+            outcome = OUTCOME_PASSED
+            detail = f"{label} matched exactly one advertised process by {match_by}."
+        else:
+            outcome = OUTCOME_BLOCKED
+            detail = (
+                f"{label} matched {len(matches)} advertised processes by {match_by}; "
+                "exactly one is required. No selection or method call was made."
+            )
+        checks.append(
+            ReadinessOutcome(
+                outcome=outcome,
+                reason_code="" if outcome == OUTCOME_PASSED else REASON_NO_PROCESS_CONFIGURED,
+                detail=detail,
+                check_name=check_name,
+                evidence={
+                    "match_by": match_by,
+                    "configured_value": configured_value,
+                    "match_count": len(matches),
+                    "matches": identities,
+                },
+            )
+        )
+    return checks
 
 
 # ---------------------------------------------------------------------------

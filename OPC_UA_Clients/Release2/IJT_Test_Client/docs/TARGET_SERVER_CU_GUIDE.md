@@ -96,6 +96,10 @@ python run_all_tests.py \
 Optional runtime overrides are also available through environment variables:
 `OPCUA_SERVER_URL`, `OPCUA_TOOL_PRODUCT_INSTANCE_URI`, `OPCUA_JOINING_PROCESS_ID`, `OPCUA_JOINING_PROCESS_ORIGIN_ID`, and `OPCUA_CAPABILITIES_FILE` (which now names a `*.sut.yaml` manifest).
 
+When an exact process selector is configured, `--preflight-only` also reads
+`GetJoiningProcessList` and requires exactly one live match. This check is
+read-only: it does not select a process or invoke a joining method.
+
 ### Creating a local manifest
 
 Create a local manifest when the controller's workflow or claimed CUs differ from the committed example. Copy one file - there is no companion file to keep in sync:
@@ -123,18 +127,31 @@ Then update `controller.sut.yaml`:
 | `capability_claims.active_profile` / `supported_facets` / `cu_overrides` | The controller's authoritative CU claims |
 | `workflows.tool_selector.product_instance_uri` | Leave empty for runtime Tool discovery; otherwise enter the Tool PIU |
 | `workflows.process_selector.policy` | `first_compatible` is the schema default; committed presets may use `first_ready`. Non-exact policies order direct Classification matches first, then bounded Job candidates for Batch or Sync evidence. `all_compatible` exercises every ordered candidate; the other policies stop after the first proof. A result-specific `exact_match` may intentionally cross process Classification, but the requested completed result is always the capability proof. |
-| `workflows.process_selector.joining_process_id` | Default/fallback Process ID returned by `GetJoiningProcessList` |
-| `workflows.process_selector.joining_process_origin_id` | Stable origin fallback if the controller regenerates the primary ID |
-| `workflows.process_selector.selection_name` | Final fallback when neither configured ID is advertised |
+| `workflows.process_selector.joining_process_id` | Advertised Process ID used for exact matching by default; no automatic identifier fallback |
+| `workflows.process_selector.joining_process_origin_id` | Advertised origin ID used when explicitly selected by `match_by` or included by `identifier_strategy` |
+| `workflows.process_selector.selection_name` | Advertised SelectionName used only by an explicitly configured matching or payload strategy |
 | `workflows.process_selectors_by_classification.<classification>` | Optional per-classification selectors (`single`, `job`, `batch`, `sync`) |
 | `workflows.max_start_invocations` | Maximum accepted StartSelectedJoining invocations before stopping (default: 6) |
 | `workflows.consecutive_start_delay_seconds` | Pacing delay in seconds between consecutive starts (default: 0.25s) |
-| `workflows.process_selector.identifier_strategy` | Strategy for populating JoiningProcessIdentificationDataType (`id_only`, `id_with_origin`, `id_with_selection_name`, `all_available`) |
+| `workflows.process_selector.identifier_strategy` | Strategy for populating JoiningProcessIdentificationDataType (`id_only` by default, `id_with_origin`, `id_with_selection_name`, `all_available`, `selection_name_only`) |
 | `workflows.expected_results.classification` | Final result layer, such as `single`, `batch`, or `job` |
 | `workflows.expected_results.intermediate_classifications` | Earlier layers, such as `[single, batch, intervention]` |
 | `triggers.result.mode` | `start_selected_joining`, `manual_trigger`, `observe_only`, or `none` |
 | `timeouts.*` | Separate budgets for passive observation, active results, whole workflow, operator action, and single method calls |
 | `scoring.mode` | `strict_profile` (strict claimed scope, default), `diagnostic`, or `acceptance` |
+
+Specification-test client fixtures use a 30-second connection-health probe interval
+and deadline, independently of the 120-second request timeout. This avoids asyncua's
+default one-second health probe disconnecting a busy controller during datatype
+loading or other traffic. A failed probe still disconnects the client; joining
+commands are not automatically reconnected or retried.
+
+Profile and endpoint runs reject forwarded pytest arguments after `--`, rather
+than silently ignoring selectors and running the full specification suite.
+Use direct pytest with the target runtime environment for targeted diagnostics.
+Discovery preserves transport, session and timeout errors instead of reporting
+missing nodes. A failed GetLatestResult call or absent result after a successful
+trigger is reported as a retrieval failure, not a missing SequenceNumber.
 
 An `external` manifest that still contains `<placeholder>` values in an *operational* field
 fails fast before any server is contacted. Descriptive prose (`name`, `description`) is not
@@ -207,11 +224,31 @@ Every Target Server run generates structured evidence artifacts in the output di
 ### Generic JoiningProcess abstraction
 The IJT information model uses `JoiningProcess` as the generic process abstraction. A controller can use it for a program, batch, job, sequence, application recipe, or another technology-specific process. Shared test client logic never encodes vendor-specific vocabulary.
 
-### Process Selection Precedence
-When selecting a process, the runner evaluates selectors in this deterministic order:
-1. `JoiningProcessId` (primary selector from `GetJoiningProcessList`)
-2. `JoiningProcessOriginId` (stable fallback when a controller regenerates primary IDs)
-3. `SelectionName` (optional server-specific fallback)
+### Process Selection
+Exact matching uses one explicit criterion, configured by `match_by`:
+`joining_process_id` (the default), `joining_process_origin_id`, or
+`selection_name`. The selected field must have a value, and exactly one
+advertised process must match. The runner never falls back to another field
+when the configured value is stale or absent. `identifier_strategy` is separate:
+it controls which identifiers are sent in the `SelectJoiningProcess` payload
+after a process has been matched.
+
+`identifier_strategy: selection_name_only` is an explicit compatibility option:
+send only the selected process's advertised SelectionName, with empty
+JoiningProcessId and JoiningProcessOriginId. No vendor-specific token is constructed.
+An explicit `selection_name` must be advertised by that process; otherwise exactly
+one advertised name is required. Before selection, a fresh process-list read must
+confirm that the name identifies exactly one process. Missing or ambiguous names
+block execution. The portable default remains `id_only`; there is no automatic
+retry with another payload strategy.
+
+For ordinary result testing, use `first_compatible` when the operator has approved
+any compatible advertised process for execution. Candidates follow server-returned
+order and commands use their current IDs with `id_only`. Availability and
+classification are not physical safety checks: preparing the tool/controller and
+approving the candidate recipes are operator prerequisites. Use `exact_match`
+with a reviewed ID to restrict testing to a specific process; counter mutations
+continue to require exact selection.
 
 For workflows exercising both single tightening programs (for SingleResult) and multi-operation Jobs/Batches:
 ```yaml
@@ -219,9 +256,11 @@ selection:
   joining_processes:
     single:
       policy: exact_match
+      match_by: joining_process_id
       joining_process_id: "<program-id>"
     job:
       policy: exact_match
+      match_by: joining_process_id
       joining_process_id: "<job-id>"
     batch:
       policy: first_compatible
@@ -261,7 +300,7 @@ Result classification describes the evidence emitted by the workflow, not the ve
 ### Transactional physical workflows
 
 - Identifier workflows generate one run-unique value, verify it through `GetIdentifiers`, selectively reset only that value, verify absence, and retry selective cleanup in `finally`. `ResetAll` remains prohibited.
-- Counter-effect scenarios are explicit entries under `execution_policy.counter_effects`. Every physical mutation requires `process_policy: exact_match` and one current reviewed JoiningProcessId; broad discovery policies are rejected. A completed `InterventionResult` is mandatory. When an affected classification is configured, one loss-aware subscription must also observe a partial or final Batch/Sync/Job update that explicitly references that InterventionResult; the counter action does not imply that the parent has reached its final boundary.
+- Counter-effect scenarios are explicit entries under `execution_policy.counter_effects`. Every physical mutation requires `process_policy: exact_match` and exactly one current process matched by `match_by` (JoiningProcessId by default, with explicit OriginId or SelectionName alternatives); broad discovery policies and implicit fallbacks are rejected. Read-only preflight performs this uniqueness check before any automated test. A completed `InterventionResult` is mandatory. When an affected classification is configured, one loss-aware subscription must also observe a partial or final Batch/Sync/Job update that explicitly references that InterventionResult; the counter action does not imply that the parent has reached its final boundary.
 - `triggers.event.mode: workflow_actions` maps an event CU to one approved physical cause. Select-process events use one `SelectJoiningProcess`; asset-enable-state events use `EnableAsset` and always finish with `EnableAsset(true)`.
 - Identifier events and Conditions should remain unclaimed when the controller firmware provides no safe deterministic cause.
 

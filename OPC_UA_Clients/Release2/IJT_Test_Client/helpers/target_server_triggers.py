@@ -68,6 +68,7 @@ from helpers.namespaces import (
     parse_joining_process_classification,
     result_classification_value,
 )
+from helpers.process_selectors import matching_processes, selection_names
 from helpers.target_server_cu_config import TargetServerCuProfile
 from helpers.trigger import (
     EventTrigger,
@@ -901,21 +902,14 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         jpm_node = await self._get_joining_process_management()
         piu = await self._resolve_tool_piu()
         processes = await self._get_joining_process_list(jpm_node, piu) if jpm_node is not None else []
-        candidates = [
-            process
-            for process in processes
-            if self._process_field(
-                process,
-                "JoiningProcessId",
-                "JoiningProcessIdentification",
-                "Id",
-            ).lower()
-            == effect.joining_process_id.lower()
-        ]
-        if not candidates:
+        candidates = matching_processes(processes, effect)
+        if len(candidates) != 1:
             return TargetServerTriggerOutcome(
                 triggered=False,
-                skip_reason="No current process matched the configured counter-effect scenario.",
+                skip_reason=(
+                    f"Counter-effect selector '{effect.match_by}' matched "
+                    f"{len(candidates)} current processes; exactly one is required."
+                ),
                 method=effect.method,
                 trigger_mode="counter_effect",
                 product_instance_uri=piu,
@@ -928,7 +922,13 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             "JoiningProcessIdentification",
             "Id",
         )
-        if not await self._select_joining_process(jpm_node, process, piu):
+        if not await self._select_joining_process(
+            jpm_node,
+            process,
+            piu,
+            identifier_strategy=effect.identifier_strategy,
+            selection_name=effect.selection_name,
+        ):
             return TargetServerTriggerOutcome(
                 triggered=False,
                 skip_reason=f"SelectJoiningProcess failed for counter candidate '{process_id}'.",
@@ -937,7 +937,11 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 product_instance_uri=piu,
                 joining_process_id=process_id,
             )
-        identification = self._make_process_identification(process)
+        identification = self._make_process_identification(
+            process,
+            identifier_strategy=effect.identifier_strategy,
+            selection_name=effect.selection_name,
+        )
         if identification is None:
             return TargetServerTriggerOutcome(
                 triggered=False,
@@ -1105,14 +1109,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
     @staticmethod
     def _selection_names(process: Any) -> set[str]:
         """Return SelectionName entity IDs advertised by a process."""
-        names: set[str] = set()
-        entities = getattr(process, "AssociatedEntities", None) or ()
-        for entity in entities:
-            if getattr(entity, "Name", None) == "SelectionName":
-                entity_id = getattr(entity, "EntityId", None)
-                if entity_id is not None and str(entity_id):
-                    names.add(str(entity_id))
-        return names
+        return selection_names(process)
 
     def _normalize_classification(self, classification: str | int | None) -> str:
         """Normalize integer or string classification to a canonical profile key."""
@@ -1159,6 +1156,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
 
                 candidate = JoiningProcessSelectionConfig(
                     policy="exact_match",
+                    match_by=str(cpp.get("match_by", "joining_process_id")),
                     joining_process_id=str(cpp.get("joining_process_id", "")),
                     joining_process_origin_id=str(cpp.get("joining_process_origin_id", "")),
                     selection_name=str(cpp.get("selection_name", "")),
@@ -1177,12 +1175,8 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
 
     @staticmethod
     def _selection_has_selector(selection: Any) -> bool:
-        """Return True when an exact_match selection carries at least one selector."""
-        return bool(
-            getattr(selection, "joining_process_id", "")
-            or getattr(selection, "joining_process_origin_id", "")
-            or getattr(selection, "selection_name", "")
-        )
+        """Return True when an exact_match selection configures its selected criterion."""
+        return bool(getattr(selection, selection.match_by, ""))
 
     def _choose_joining_processes(
         self,
@@ -1213,54 +1207,21 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 )
                 return []
 
-            selectors = (
-                (
-                    selection.joining_process_id,
-                    lambda process: self._process_field(
-                        process,
-                        "JoiningProcessId",
-                        "JoiningProcessIdentification",
-                        "Id",
-                    ),
-                ),
-                (
-                    selection.joining_process_origin_id,
-                    lambda process: self._process_field(
-                        process,
-                        "JoiningProcessOriginId",
-                        "JoiningProcessIdentificationOrigin",
-                    ),
-                ),
-            )
-            for configured_value, read_value in selectors:
-                if not configured_value:
-                    continue
-                matches = [
-                    process
-                    for process in processes
-                    if read_value(process).strip().lower() == configured_value.strip().lower()
-                ]
-                if matches:
-                    return self._validate_exact_candidates(
-                        matches,
-                        norm_key,
-                        matches_requested_classification,
-                    )
-            if selection.selection_name:
-                matches = [
-                    process
-                    for process in processes
-                    if any(
-                        selection.selection_name.strip().lower() == name.strip().lower()
-                        for name in self._selection_names(process)
-                    )
-                ]
-                return self._validate_exact_candidates(
-                    matches,
-                    norm_key,
-                    matches_requested_classification,
+            if not self._selection_has_selector(selection):
+                logger.warning(
+                    "Joining process selection policy is 'exact_match' but match_by='%s' has no configured value",
+                    selection.match_by,
                 )
-            return []
+                return []
+            matches = matching_processes(processes, selection)
+            if len(matches) > 1:
+                logger.warning(
+                    "Exact joining-process selector '%s' matched %d processes; refusing ambiguous selection",
+                    selection.match_by,
+                    len(matches),
+                )
+                return []
+            return self._validate_exact_candidates(matches, norm_key, matches_requested_classification)
 
         if not norm_key or norm_key == "intervention":
             return list(processes) if selection.policy == "all_compatible" else [processes[0]]
@@ -1436,7 +1397,14 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
         return "; ".join(descriptions)
 
-    def _make_process_identification(self, process: Any, classification: str | int | None = None) -> Any:
+    def _make_process_identification(
+        self,
+        process: Any,
+        classification: str | int | None = None,
+        *,
+        identifier_strategy: str | None = None,
+        selection_name: str | None = None,
+    ) -> Any:
         """Build the IJT process identifier required by controller methods.
 
         JoiningProcessId is the preferred default. Optional secondary identifiers are
@@ -1457,7 +1425,29 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             "Id",
         )
         selection, _ = self._get_selection_for_classification(classification)
-        strategy = getattr(selection, "identifier_strategy", "id_only")
+        strategy = identifier_strategy or getattr(selection, "identifier_strategy", "id_only")
+        if strategy == "selection_name_only":
+            advertised_names = self._selection_names(process)
+            configured_name = selection.selection_name if selection_name is None else selection_name
+            if configured_name:
+                if configured_name not in advertised_names:
+                    logger.error(
+                        "Configured SelectionName '%s' is not advertised by the selected process", configured_name
+                    )
+                    return None
+                resolved_name = configured_name
+            elif len(advertised_names) == 1:
+                resolved_name = next(iter(advertised_names))
+            else:
+                logger.error(
+                    "selection_name_only requires one advertised SelectionName or an explicit advertised name; found %d",
+                    len(advertised_names),
+                )
+                return None
+            identification.JoiningProcessId = ""
+            identification.JoiningProcessOriginId = ""
+            identification.SelectionName = resolved_name
+            return identification
         identification.JoiningProcessOriginId = (
             self._process_field(
                 process,
@@ -1469,14 +1459,21 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         )
         advertised_names = sorted(self._selection_names(process))
         identification.SelectionName = (
-            selection.selection_name or (advertised_names[0] if advertised_names else "")
+            selection_name or selection.selection_name or (advertised_names[0] if advertised_names else "")
             if strategy in {"id_with_selection_name", "all_available"}
             else ""
         )
         return identification
 
     async def _select_joining_process(
-        self, jpm_node: Any, process: Any, piu: str, classification: str | int | None = None
+        self,
+        jpm_node: Any,
+        process: Any,
+        piu: str,
+        classification: str | int | None = None,
+        *,
+        identifier_strategy: str | None = None,
+        selection_name: str | None = None,
     ) -> bool:
         """Call SelectJoiningProcess and return True on success."""
         from asyncua import ua
@@ -1484,10 +1481,39 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         from helpers.method_caller import find_and_call_method
         from helpers.namespaces import BN
 
-        identification = self._make_process_identification(process, classification=classification)
+        identification = self._make_process_identification(
+            process,
+            classification=classification,
+            identifier_strategy=identifier_strategy,
+            selection_name=selection_name,
+        )
         if identification is None:
             return False
 
+        selection, _ = self._get_selection_for_classification(classification)
+        strategy = identifier_strategy or selection.identifier_strategy
+        if strategy == "selection_name_only":
+            processes = await self._get_joining_process_list(jpm_node, piu)
+            matches = matching_processes(processes, {"selection_name": identification.SelectionName}, "selection_name")
+            if len(matches) != 1:
+                logger.error(
+                    "selection_name_only matched %d current processes; refusing missing or ambiguous command target",
+                    len(matches),
+                )
+                return False
+            selected_id = self._process_field(process, "JoiningProcessId", "JoiningProcessIdentification", "Id")
+            current_id = self._process_field(matches[0], "JoiningProcessId", "JoiningProcessIdentification", "Id")
+            if current_id != selected_id:
+                logger.error("SelectionName now identifies a different process; refusing changed command target")
+                return False
+
+        logger.info(
+            "Selecting process id='%s', classification='%s', policy='%s', identifier_strategy='%s'",
+            self._process_field(process, "JoiningProcessId", "JoiningProcessIdentification", "Id"),
+            _process_classification(process),
+            selection.policy,
+            strategy,
+        )
         result = await find_and_call_method(
             jpm_node,
             BN.SELECT_JOINING_PROCESS,

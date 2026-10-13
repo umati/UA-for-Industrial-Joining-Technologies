@@ -26,7 +26,7 @@ Usage:
   python run_all_tests.py --no-auto-install-tools  # do not auto-install missing quality tools
   python run_all_tests.py --verbose          # verbose pytest output
   python run_all_tests.py --no-server-check  # skip pre-test server check
-  python run_all_tests.py -- -k some_test    # forward extra pytest selectors after `--`
+  python run_all_tests.py -- -k some_test    # simulator path only; target runs reject forwarded args
   python run_all_tests.py --help
 
 Stable subcommands (recommended for regular use):
@@ -1781,7 +1781,7 @@ def _step_target_run(plan: RunPlan, *, excel_mode: str = "always", excel_out: st
     _log(f"  Output dir:    {output_dir}")
 
     if plan.preflight_only:
-        rc = run_preflight(plan.profile, output_dir)
+        rc = run_preflight(plan.profile, output_dir, interactive_prompts=plan.interactive_prompts)
     else:
         rc = run_automated(
             plan.profile,

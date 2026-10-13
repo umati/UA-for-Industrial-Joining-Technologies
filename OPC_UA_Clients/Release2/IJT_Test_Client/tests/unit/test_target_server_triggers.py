@@ -706,6 +706,132 @@ class TestPhysicalWorkflowSafety:
         collector.collect_evidence.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_counter_effect_can_match_selection_name_and_pass_it_to_method(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "IncrementJoiningProcessCounter"],
+                    },
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "match_by": "selection_name",
+                            "selection_name": "SequenceIndex_1",
+                            "identifier_strategy": "id_with_selection_name",
+                        }
+                    ],
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            profile,
+            ns_ijt=2,
+            subscription_client=MagicMock(),
+        )
+        process = SimpleNamespace(
+            JoiningProcessId="Current-Job-1",
+            AssociatedEntities=[SimpleNamespace(Name="SelectionName", EntityId="SequenceIndex_1")],
+        )
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        trigger._get_joining_process_list = AsyncMock(return_value=[process])
+        trigger._select_joining_process = AsyncMock(return_value=True)
+        trigger._make_process_identification = MagicMock(return_value=MagicMock())
+
+        collector = MagicMock()
+        collector.__aenter__ = AsyncMock(return_value=collector)
+        collector.__aexit__ = AsyncMock(return_value=None)
+        capture = ResultEventCapture(
+            all_results=(
+                SimpleNamespace(
+                    ResultMetaData=SimpleNamespace(
+                        Classification=ResultClassification.INTERVENTION_RESULT,
+                        ResultId="intervention-1",
+                        IsPartial=False,
+                        ResultState=1,
+                    ),
+                    ResultContent=[],
+                    References=[],
+                ),
+            )
+        )
+        collector.collect_evidence = AsyncMock(return_value=capture)
+
+        with (
+            patch("helpers.result_collector.ResultCollector", return_value=collector),
+            patch(
+                "helpers.method_caller.find_and_call_method",
+                new=AsyncMock(return_value=MethodCallResult(success=True)),
+            ),
+        ):
+            outcome = await trigger.trigger_counter_effect()
+
+        assert outcome.triggered is True
+        trigger._select_joining_process.assert_awaited_once_with(
+            trigger._get_joining_process_management.return_value,
+            process,
+            "Tool-1",
+            identifier_strategy="id_with_selection_name",
+            selection_name="SequenceIndex_1",
+        )
+        trigger._make_process_identification.assert_called_once_with(
+            process,
+            identifier_strategy="id_with_selection_name",
+            selection_name="SequenceIndex_1",
+        )
+
+    @pytest.mark.asyncio
+    async def test_counter_effect_rejects_ambiguous_exact_selector_before_mutation(self):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "state_changing_methods": {
+                        "allowed_methods": ["SelectJoiningProcess", "IncrementJoiningProcessCounter"],
+                    },
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "match_by": "selection_name",
+                            "selection_name": "SequenceIndex_1",
+                        }
+                    ],
+                },
+            }
+        )
+        trigger = StartSelectedJoiningResultTrigger(
+            MagicMock(),
+            MagicMock(),
+            2,
+            profile,
+            ns_ijt=2,
+            subscription_client=MagicMock(),
+        )
+        matching_process = lambda process_id: SimpleNamespace(
+            JoiningProcessId=process_id,
+            AssociatedEntities=[SimpleNamespace(Name="SelectionName", EntityId="SequenceIndex_1")],
+        )
+        trigger._get_joining_process_management = AsyncMock(return_value=MagicMock())
+        trigger._resolve_tool_piu = AsyncMock(return_value="Tool-1")
+        trigger._get_joining_process_list = AsyncMock(
+            return_value=[matching_process("Job-1"), matching_process("Job-2")]
+        )
+        trigger._select_joining_process = AsyncMock()
+
+        outcome = await trigger.trigger_counter_effect()
+
+        assert outcome.triggered is False
+        assert "matched 2 current processes" in (outcome.skip_reason or "")
+        trigger._select_joining_process.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_counter_effect_rechecks_workflow_approval_at_runtime(self):
         profile = build_execution_profile(
             {
@@ -1008,7 +1134,7 @@ class TestPhysicalWorkflowSafety:
 
         assert outcome.triggered is False
         expected = {
-            "missing_process": "No current process matched",
+            "missing_process": "matched 0 current processes",
             "selection": "SelectJoiningProcess failed",
             "identification": "IdentificationDataType is unavailable",
             "method": "IncrementJoiningProcessCounter failed",
@@ -1553,7 +1679,7 @@ class TestStartSelectedJoiningResultTrigger:
 
         assert trigger._choose_joining_process([process]) is process
 
-    def test_exact_match_falls_back_to_origin_when_process_id_is_stale(self, mock_client, mock_joining_system):
+    def test_exact_match_does_not_fall_back_to_origin_when_process_id_is_stale(self, mock_client, mock_joining_system):
         profile = build_execution_profile(
             {
                 "schema_version": 1,
@@ -1573,7 +1699,7 @@ class TestStartSelectedJoiningResultTrigger:
             AssociatedEntities=[],
         )
 
-        assert trigger._choose_joining_process([process]) is process
+        assert trigger._choose_joining_process([process]) is None
 
     def test_name_only_exact_match_still_uses_advertised_selection_name(self, mock_client, mock_joining_system):
         profile = build_execution_profile(
@@ -1582,6 +1708,7 @@ class TestStartSelectedJoiningResultTrigger:
                 "selection": {
                     "joining_process": {
                         "policy": "exact_match",
+                        "match_by": "selection_name",
                         "selection_name": "ProgramIndex_2",
                     }
                 },
@@ -1590,10 +1717,10 @@ class TestStartSelectedJoiningResultTrigger:
         trigger = self._make_trigger(profile, mock_client, mock_joining_system)
         process = MagicMock(
             JoiningProcessId="PROCESS-1",
-            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="ProgramIndex_1")],
+            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="ProgramIndex_2")],
         )
 
-        assert trigger._choose_joining_process([process]) is None
+        assert trigger._choose_joining_process([process]) is process
 
     def test_process_selection_diagnostics_list_available_identifiers(self, profile, mock_client, mock_joining_system):
         trigger = self._make_trigger(profile, mock_client, mock_joining_system)
@@ -1701,6 +1828,78 @@ class TestStartSelectedJoiningResultTrigger:
         assert identification.JoiningProcessId == "PROCESS-1"
         assert identification.JoiningProcessOriginId == ""
         assert identification.SelectionName == "SequenceIndex_1"
+
+    @pytest.mark.parametrize(
+        ("names", "configured_name", "expected_name"),
+        [
+            (["Recipe-A"], "", "Recipe-A"),
+            (["Recipe-A", "Recipe-B"], "Recipe-B", "Recipe-B"),
+            ([], "", None),
+            (["Recipe-A", "Recipe-B"], "", None),
+            (["Recipe-A"], "Not-Advertised", None),
+        ],
+    )
+    def test_selection_name_only_payload(self, mock_client, mock_joining_system, names, configured_name, expected_name):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "selection": {
+                    "joining_process": {
+                        "identifier_strategy": "selection_name_only",
+                        "selection_name": configured_name,
+                    }
+                },
+            }
+        )
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        process = MagicMock(
+            JoiningProcessId="current-id",
+            JoiningProcessOriginId="origin-id",
+            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId=name) for name in names],
+        )
+        with patch("asyncua.ua.JoiningProcessIdentificationDataType", create=True, return_value=MagicMock()):
+            identification = trigger._make_process_identification(process)
+
+        if expected_name is None:
+            assert identification is None
+        else:
+            assert identification.JoiningProcessId == ""
+            assert identification.JoiningProcessOriginId == ""
+            assert identification.SelectionName == expected_name
+
+    @pytest.mark.parametrize(
+        ("match_count", "current_id", "expected"),
+        [(0, "current-id", False), (1, "current-id", True), (2, "current-id", False), (1, "changed-id", False)],
+    )
+    async def test_selection_name_only_checks_unique_live_target_before_call(
+        self, mock_client, mock_joining_system, match_count, current_id, expected
+    ):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "selection": {"joining_process": {"identifier_strategy": "selection_name_only"}},
+            }
+        )
+        trigger = self._make_trigger(profile, mock_client, mock_joining_system)
+        process = MagicMock(
+            JoiningProcessId="current-id",
+            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="Recipe-A")],
+        )
+        current_process = MagicMock(
+            JoiningProcessId=current_id,
+            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="Recipe-A")],
+        )
+        trigger._get_joining_process_list = AsyncMock(return_value=[current_process] * match_count)
+        trigger._resolve_ijt_namespace_index = AsyncMock(return_value=7)
+        call_method = AsyncMock(return_value=MagicMock(success=True, output_list=[]))
+        with (
+            patch("asyncua.ua.JoiningProcessIdentificationDataType", create=True, return_value=MagicMock()),
+            patch("helpers.method_caller.find_and_call_method", new=call_method),
+        ):
+            selected = await trigger._select_joining_process(MagicMock(), process, "tool-piu")
+
+        assert selected is expected
+        assert call_method.await_count == (1 if expected else 0)
 
     def test_process_classification_extraction_helpers(self):
         from helpers.target_server_triggers import _process_classification
@@ -2899,7 +3098,13 @@ class TestTargetServerTriggersExtendedBranches:
         profile_name = build_execution_profile(
             {
                 "schema_version": 1,
-                "selection": {"joining_process": {"policy": "exact_match", "selection_name": "MatchName"}},
+                "selection": {
+                    "joining_process": {
+                        "policy": "exact_match",
+                        "match_by": "selection_name",
+                        "selection_name": "MatchName",
+                    }
+                },
             }
         )
         t_name = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile_name)
@@ -3121,6 +3326,19 @@ class TestTargetServerTriggersExtendedBranches:
 
         assert trigger._choose_joining_process([program, job], classification="batch") is job
 
+    def test_first_compatible_single_uses_programs_in_server_returned_order(self):
+        profile = build_execution_profile({"schema_version": 1})
+        trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
+        job = MagicMock(JoiningProcessId="Job")
+        job.JoiningProcessMetaData.Classification = JoiningProcessClassification.JOB
+        first = MagicMock(JoiningProcessId="Current-Program-2")
+        first.JoiningProcessMetaData.Classification = JoiningProcessClassification.PROGRAM
+        second = MagicMock(JoiningProcessId="Current-Program-1")
+        second.JoiningProcessMetaData.Classification = JoiningProcessClassification.PROGRAM
+
+        assert trigger._choose_joining_processes([job, first, second], classification="single") == [first, second]
+        assert trigger._choose_joining_process([job, first, second], classification="single") is first
+
     def test_first_compatible_prefers_direct_batch_over_job(self):
         profile = build_execution_profile({"schema_version": 1})
         trigger = StartSelectedJoiningResultTrigger(MagicMock(), MagicMock(), 2, profile)
@@ -3193,7 +3411,14 @@ class TestTargetServerTriggersExtendedBranches:
         profile = build_execution_profile(
             {
                 "schema_version": 1,
-                "cu_execution": {"extension_fields": {"counter_parent_process": {"selection_name": "ParentOnlyName"}}},
+                "cu_execution": {
+                    "extension_fields": {
+                        "counter_parent_process": {
+                            "match_by": "selection_name",
+                            "selection_name": "ParentOnlyName",
+                        }
+                    }
+                },
                 "selection": {
                     "joining_process": {
                         "policy": "exact_match",

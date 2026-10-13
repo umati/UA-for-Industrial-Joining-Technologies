@@ -59,6 +59,7 @@ import yaml
 from helpers.target_server_cu_config import (
     VALID_CLEANUP_POLICIES,
     VALID_CONDITION_TRIGGER_MODES,
+    VALID_COUNTER_PROCESS_MATCH_FIELDS,
     VALID_EVENT_TRIGGER_MODES,
     VALID_EXECUTION_MODES,
     VALID_IDENTIFIER_STRATEGIES,
@@ -417,13 +418,26 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         default="first_compatible",
                         choices=VALID_JOINING_PROCESS_SELECTION_POLICIES,
                     ),
+                    FieldSpec(
+                        "match_by",
+                        "str",
+                        "Exact matching key used when policy is exact_match. JoiningProcessId is the portable default; "
+                        "SelectionName and JoiningProcessOriginId are explicit controller-specific alternatives. "
+                        "A match must identify exactly one current process.",
+                        default="joining_process_id",
+                        choices=VALID_COUNTER_PROCESS_MATCH_FIELDS,
+                    ),
                     FieldSpec("joining_process_id", "str", "Exact JoiningProcessId. Do not commit real IDs."),
                     FieldSpec(
                         "joining_process_origin_id",
                         "str",
-                        "Stable fallback when a controller regenerates its primary process ID.",
+                        "Exact JoiningProcessOriginId value when match_by selects it.",
                     ),
-                    FieldSpec("selection_name", "str", "Final controller-specific selection fallback."),
+                    FieldSpec(
+                        "selection_name",
+                        "str",
+                        "Exact controller-specific SelectionName value when match_by selects it.",
+                    ),
                     FieldSpec(
                         "identifier_strategy",
                         "str",
@@ -431,6 +445,8 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "id_only (default/portable, sends JoiningProcessId only with empty OriginId and SelectionName; recommended for generic profiles), "
                         "id_with_origin (sends JoiningProcessId and OriginId), "
                         "id_with_selection_name (sends JoiningProcessId and SelectionName, e.g. Atlas Copco SequenceIndex_1; use in local uncommitted manifests), "
+                        "selection_name_only (sends only an advertised SelectionName with empty ID and OriginId; "
+                        "requires a unique live target and never constructs vendor-specific names), "
                         "all_available (sends all three identifiers; use only when hardware evidence proves all are required).",
                         default="id_only",
                         choices=VALID_IDENTIFIER_STRATEGIES,
@@ -619,7 +635,9 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                 "Explicit counter-effect scenarios. Every entry has these fields: method is the OPC UA "
                 "BrowseName; count is a positive bounded change; process_policy must be exact_match because "
                 "physical counter mutations may affect only one explicitly reviewed process; "
-                "joining_process_id pins that current discovered process; "
+                "match_by selects one exact current-list key (joining_process_id by default, "
+                "or an explicitly configured joining_process_origin_id or selection_name); "
+                "identifier_strategy separately controls which identifiers are sent to the method; "
                 "expected_result_classification optionally requires a partial or final affected-result "
                 "update that explicitly references the completed InterventionResult; accepted values are "
                 "single, batch, sync, job, stitching, intervention, or text.",
@@ -690,12 +708,27 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         name="parent_process",
                         description=(
                             "Parent batch/job process some controllers require before counter or abort methods. "
-                            "Any one selector is enough."
+                            "match_by chooses the single exact key; the default is joining_process_id."
                         ),
                         fields=(
+                            FieldSpec(
+                                "match_by",
+                                "str",
+                                "Exact parent-process matching key.",
+                                default="joining_process_id",
+                                choices=VALID_COUNTER_PROCESS_MATCH_FIELDS,
+                            ),
                             FieldSpec("joining_process_id", "str", "Parent process ID."),
-                            FieldSpec("joining_process_origin_id", "str", "Parent process origin ID."),
-                            FieldSpec("selection_name", "str", "Parent process selection name."),
+                            FieldSpec(
+                                "joining_process_origin_id",
+                                "str",
+                                "Parent process origin ID when match_by selects it.",
+                            ),
+                            FieldSpec(
+                                "selection_name",
+                                "str",
+                                "Parent process selection name when match_by selects it.",
+                            ),
                         ),
                     ),
                 ),
@@ -1511,6 +1544,20 @@ def _validate_consistency(manifest: SutManifest) -> None:
                 f"execution_policy.identifier_workflows requires approved workflows: {missing_workflows}"
             )
 
+    parent_process = policy.get("intervention", {}).get("parent_process", {})
+    parent_match_by = parent_process.get("match_by", "joining_process_id")
+    if not isinstance(parent_match_by, str) or parent_match_by not in VALID_COUNTER_PROCESS_MATCH_FIELDS:
+        raise SutManifestError(
+            "execution_policy.intervention.parent_process.match_by must be one of "
+            f"{sorted(VALID_COUNTER_PROCESS_MATCH_FIELDS)}"
+        )
+    parent_selector_fields = ("joining_process_id", "joining_process_origin_id", "selection_name")
+    if any(parent_process.get(field_name) for field_name in parent_selector_fields):
+        if not parent_process.get(parent_match_by):
+            raise SutManifestError(
+                f"execution_policy.intervention.parent_process.{parent_match_by} is required when selected by match_by"
+            )
+
     counter_effects = policy["counter_effects"]
     destructive_workflows = {"remote_abort_job", "remote_reset_job"} & approved
     if destructive_workflows and not policy["risk_approvals"]["allow_destructive_methods"]:
@@ -1523,7 +1570,11 @@ def _validate_consistency(manifest: SutManifest) -> None:
         "method",
         "count",
         "process_policy",
+        "match_by",
         "joining_process_id",
+        "joining_process_origin_id",
+        "selection_name",
+        "identifier_strategy",
         "expected_result_classification",
     }
     for index, effect in enumerate(counter_effects):
@@ -1546,11 +1597,18 @@ def _validate_consistency(manifest: SutManifest) -> None:
         process_policy = effect.get("process_policy", "exact_match")
         if process_policy != "exact_match":
             raise SutManifestError(f"{path}.process_policy must be 'exact_match' for a physical counter mutation")
-        process_id = effect.get("joining_process_id", "")
-        if not isinstance(process_id, str):
-            raise SutManifestError(f"{path}.joining_process_id must be a string")
-        if not process_id:
-            raise SutManifestError(f"execution_policy.counter_effects[{index}].joining_process_id is required")
+        match_by = effect.get("match_by", "joining_process_id")
+        if not isinstance(match_by, str) or match_by not in VALID_COUNTER_PROCESS_MATCH_FIELDS:
+            raise SutManifestError(f"{path}.match_by must be one of {sorted(VALID_COUNTER_PROCESS_MATCH_FIELDS)}")
+        for field_name in ("joining_process_id", "joining_process_origin_id", "selection_name"):
+            value = effect.get(field_name, "")
+            if not isinstance(value, str):
+                raise SutManifestError(f"{path}.{field_name} must be a string")
+        if not effect.get(match_by):
+            raise SutManifestError(f"{path}.{match_by} is required when selected by match_by")
+        identifier_strategy = effect.get("identifier_strategy", "id_only")
+        if not isinstance(identifier_strategy, str) or identifier_strategy not in VALID_IDENTIFIER_STRATEGIES:
+            raise SutManifestError(f"{path}.identifier_strategy must be one of {sorted(VALID_IDENTIFIER_STRATEGIES)}")
         expected_classification = effect.get("expected_result_classification", "")
         if (
             not isinstance(expected_classification, str)

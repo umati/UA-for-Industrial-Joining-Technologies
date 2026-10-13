@@ -220,22 +220,30 @@ workflows:
     # Values: all_compatible, exact_match, first_available, first_compatible, first_ready
     policy: first_compatible
 
+    # Exact matching key used when policy is exact_match. JoiningProcessId is the portable default;
+    # SelectionName and JoiningProcessOriginId are explicit controller-specific alternatives. A match
+    # must identify exactly one current process.
+    # Values: joining_process_id, joining_process_origin_id, selection_name
+    match_by: joining_process_id
+
     # Exact JoiningProcessId. Do not commit real IDs.
     joining_process_id: ''
 
-    # Stable fallback when a controller regenerates its primary process ID.
+    # Exact JoiningProcessOriginId value when match_by selects it.
     joining_process_origin_id: ''
 
-    # Final controller-specific selection fallback.
+    # Exact controller-specific SelectionName value when match_by selects it.
     selection_name: ''
 
     # Strategy for populating JoiningProcessIdentificationDataType: id_only (default/portable, sends
     # JoiningProcessId only with empty OriginId and SelectionName; recommended for generic profiles),
     # id_with_origin (sends JoiningProcessId and OriginId), id_with_selection_name (sends
     # JoiningProcessId and SelectionName, e.g. Atlas Copco SequenceIndex_1; use in local uncommitted
-    # manifests), all_available (sends all three identifiers; use only when hardware evidence proves
-    # all are required).
-    # Values: all_available, id_only, id_with_origin, id_with_selection_name
+    # manifests), selection_name_only (sends only an advertised SelectionName with empty ID and
+    # OriginId; requires a unique live target and never constructs vendor-specific names),
+    # all_available (sends all three identifiers; use only when hardware evidence proves all are
+    # required).
+    # Values: all_available, id_only, id_with_origin, id_with_selection_name, selection_name_only
     identifier_strategy: id_only
 
     # Optional tags used to narrow process selection.
@@ -350,10 +358,12 @@ execution_policy:
 
   # Explicit counter-effect scenarios. Every entry has these fields: method is the OPC UA BrowseName;
   # count is a positive bounded change; process_policy must be exact_match because physical counter
-  # mutations may affect only one explicitly reviewed process; joining_process_id pins that current
-  # discovered process; expected_result_classification optionally requires a partial or final
-  # affected-result update that explicitly references the completed InterventionResult; accepted
-  # values are single, batch, sync, job, stitching, intervention, or text.
+  # mutations may affect only one explicitly reviewed process; match_by selects one exact current-list
+  # key (joining_process_id by default, or an explicitly configured joining_process_origin_id or
+  # selection_name); identifier_strategy separately controls which identifiers are sent to the method;
+  # expected_result_classification optionally requires a partial or final affected-result update that
+  # explicitly references the completed InterventionResult; accepted values are single, batch, sync,
+  # job, stitching, intervention, or text.
   counter_effects: []
 
   # Which state-changing OPC UA methods may be called on this SUT.
@@ -404,17 +414,21 @@ execution_policy:
     # Message recorded with the intervention.
     message: ''
 
-    # Parent batch/job process some controllers require before counter or abort methods. Any one
-    # selector is enough.
+    # Parent batch/job process some controllers require before counter or abort methods. match_by
+    # chooses the single exact key; the default is joining_process_id.
     parent_process:
+
+      # Exact parent-process matching key.
+      # Values: joining_process_id, joining_process_origin_id, selection_name
+      match_by: joining_process_id
 
       # Parent process ID.
       joining_process_id: ''
 
-      # Parent process origin ID.
+      # Parent process origin ID when match_by selects it.
       joining_process_origin_id: ''
 
-      # Parent process selection name.
+      # Parent process selection name when match_by selects it.
       selection_name: ''
 
   # Safety contract for structured and text identifier round trips.

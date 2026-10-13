@@ -37,6 +37,8 @@ from helpers.target_server_readiness import (
     PreflightReport,
     ReadinessOutcome,
     check_endpoint_reachable,
+    check_live_process_selectors,
+    has_live_process_selector_checks,
     run_config_preflight,
 )
 
@@ -192,7 +194,8 @@ def apply_runtime_overrides(
     if joining_process_id or joining_process_origin_id:
         process = replace(
             profile.selection.joining_process,
-            policy="exact_match" if joining_process_id else profile.selection.joining_process.policy,
+            policy="exact_match",
+            match_by="joining_process_id" if joining_process_id else "joining_process_origin_id",
             joining_process_id=joining_process_id or profile.selection.joining_process.joining_process_id,
             joining_process_origin_id=(
                 joining_process_origin_id or profile.selection.joining_process.joining_process_origin_id
@@ -212,7 +215,8 @@ def apply_runtime_overrides(
             base_jp = updated_jps.get(key, profile.selection.joining_process)
             updated_jps[key] = replace(
                 base_jp,
-                policy="exact_match" if ovr_id else base_jp.policy,
+                policy="exact_match",
+                match_by="joining_process_id" if ovr_id else "joining_process_origin_id",
                 joining_process_id=ovr_id or base_jp.joining_process_id,
                 joining_process_origin_id=ovr_origin or base_jp.joining_process_origin_id,
             )
@@ -1061,8 +1065,102 @@ def run_live_spec_tests(
 # ---------------------------------------------------------------------------
 
 
-def run_preflight(profile: TargetServerCuProfile, output_dir: Path) -> int:
-    """Run config + TCP preflight checks and produce an evidence report.
+def _add_live_process_selector_checks(
+    profile: TargetServerCuProfile,
+    report: PreflightReport,
+    *,
+    interactive_prompts: bool = False,
+) -> None:
+    """Read the advertised process list and verify every configured exact selector."""
+    if not has_live_process_selector_checks(profile):
+        return
+
+    import asyncio
+
+    from helpers.connection_security import ConnectionSecurity, connection_security_from_manifest_path
+
+    security = ConnectionSecurity(endpoint=profile.target.endpoint)
+    source_path = Path(profile.source_path)
+    if source_path.name.endswith(".sut.yaml") and source_path.is_file():
+        security = connection_security_from_manifest_path(source_path)
+
+    prompt = None
+    if interactive_prompts:
+        from getpass import getpass
+
+        from helpers.connection_security import Credentials
+
+        def prompt(connection: ConnectionSecurity) -> Credentials:
+            username = connection.username or input("OPC UA username: ")
+            return Credentials(username=username, password=getpass("OPC UA password: "))
+
+    try:
+        data = asyncio.run(
+            async_discover_target_server(
+                profile.target.endpoint,
+                timeout=15.0,
+                security=security,
+                prompt=prompt,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 - represent connection/discovery failure in preflight evidence
+        report.add(
+            ReadinessOutcome(
+                outcome=OUTCOME_BLOCKED,
+                reason_code="target_server_not_ready",
+                detail=f"Cannot read the current joining-process list for selector preflight: {type(exc).__name__}: {exc}",
+                check_name="live_process_selector_discovery",
+            )
+        )
+        return
+
+    if data.get("error"):
+        report.add(
+            ReadinessOutcome(
+                outcome=OUTCOME_BLOCKED,
+                reason_code="target_server_not_ready",
+                detail=f"Cannot read the current joining-process list for selector preflight: {data['error']}",
+                check_name="live_process_selector_discovery",
+            )
+        )
+        return
+
+    processes = data.get("processes", [])
+    report.discovery["live_process_selector_preflight"] = {
+        "process_count": len(processes),
+        "processes": processes,
+    }
+    for check in check_live_process_selectors(profile, processes):
+        report.add(check)
+
+
+def _automated_run_has_joining_process_workflow(profile: TargetServerCuProfile) -> bool:
+    """Whether automated execution may select or mutate a JoiningProcess."""
+    approved_workflows = set(profile.workflow_execution.approved_workflows)
+    workflow_actions = set(profile.triggers.event.actions.values())
+    return (
+        profile.triggers.result.mode == "start_selected_joining"
+        or bool(
+            approved_workflows
+            & {
+                "counter_intervention",
+                "remote_abort_job",
+                "remote_reset_job",
+                "remote_start_multi_operation_job",
+            }
+        )
+        or bool(workflow_actions)
+        or profile.cu_execution.identifier_workflows.enabled
+    )
+
+
+def run_preflight(
+    profile: TargetServerCuProfile,
+    output_dir: Path,
+    *,
+    interactive_prompts: bool = False,
+) -> int:
+    """Run config, TCP, and live exact-selector checks; produce an evidence report.
 
     Returns 0 when all checks pass or produce non-blocking outcomes,
     1 when blocking or configuration-error outcomes are found.
@@ -1073,6 +1171,8 @@ def run_preflight(profile: TargetServerCuProfile, output_dir: Path) -> int:
     # Add TCP reachability probe for configured endpoint
     tcp_check = check_endpoint_reachable(profile.target.endpoint)
     cfg_report.add(tcp_check)
+    if tcp_check.passed and not cfg_report.blocking_checks:
+        _add_live_process_selector_checks(profile, cfg_report, interactive_prompts=interactive_prompts)
 
     for check in cfg_report.checks:
         _print_check(check)
@@ -1176,6 +1276,8 @@ def run_automated(
     cfg_report = run_config_preflight(profile, allow_prompt=interactive_prompts or mode == "guided")
     tcp_check = check_endpoint_reachable(profile.target.endpoint)
     cfg_report.add(tcp_check)
+    if tcp_check.passed and not cfg_report.blocking_checks and _automated_run_has_joining_process_workflow(profile):
+        _add_live_process_selector_checks(profile, cfg_report, interactive_prompts=interactive_prompts)
 
     for check in cfg_report.checks:
         _print_check(check)

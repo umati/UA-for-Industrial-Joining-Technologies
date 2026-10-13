@@ -180,6 +180,8 @@ def test_adaptive_workflow_contracts_are_typed():
     assert profile.workflow_execution.evidence_reuse.enabled is True
     assert profile.cu_execution.identifier_workflows.allow_reset_all is False
     assert profile.cu_execution.counter_effects[0].expected_result_classification == "batch"
+    assert profile.cu_execution.counter_effects[0].match_by == "joining_process_id"
+    assert profile.cu_execution.counter_effects[0].identifier_strategy == "id_only"
 
 
 def test_all_compatible_is_not_valid_for_tool_selection():
@@ -225,6 +227,75 @@ def test_counter_effect_requires_process_id_at_typed_boundary():
                         {
                             "method": "IncrementJoiningProcessCounter",
                             "process_policy": "exact_match",
+                        }
+                    ]
+                },
+            }
+        )
+
+
+@pytest.mark.parametrize("strategy", ["id_with_selection_name", "selection_name_only"])
+def test_counter_effect_can_select_exact_selection_name_and_payload_strategy(strategy):
+    profile = build_execution_profile(
+        {
+            "schema_version": 1,
+            "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+            "cu_execution": {
+                "counter_effects": [
+                    {
+                        "method": "IncrementJoiningProcessCounter",
+                        "match_by": "selection_name",
+                        "selection_name": "SequenceIndex_1",
+                        "identifier_strategy": strategy,
+                    }
+                ]
+            },
+        }
+    )
+
+    effect = profile.cu_execution.counter_effects[0]
+    assert effect.match_by == "selection_name"
+    assert effect.selection_name == "SequenceIndex_1"
+    assert effect.identifier_strategy == strategy
+
+
+@pytest.mark.parametrize(
+    ("match_by", "selector_values", "message"),
+    [
+        ("joining_process_id", {}, "joining_process_id is required"),
+        ("selection_name", {}, "selection_name is required"),
+        ("unknown", {"joining_process_id": "job-1"}, "match_by"),
+    ],
+)
+def test_counter_effect_requires_the_selected_exact_selector(match_by, selector_values, message):
+    with pytest.raises(TargetServerConfigError, match=message):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "match_by": match_by,
+                            **selector_values,
+                        }
+                    ]
+                },
+            }
+        )
+
+
+def test_counter_effect_rejects_unknown_identifier_strategy():
+    with pytest.raises(TargetServerConfigError, match="identifier_strategy"):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "joining_process_id": "job-1",
+                            "identifier_strategy": "invalid_strategy",
                         }
                     ]
                 },

@@ -26,6 +26,27 @@ logger = logging.getLogger(__name__)
 _BROWSE_TIMEOUT = 15.0  # seconds — applies to all browse/reference calls
 
 
+def _handle_discovery_error(exc: Exception) -> None:
+    """Keep communication failures distinct from optional address-space absence."""
+    if isinstance(exc, (OSError, TimeoutError)):
+        raise exc
+    if isinstance(exc, ua.UaStatusCodeError) and exc.code in {
+        ua.StatusCodes.BadCommunicationError,
+        ua.StatusCodes.BadConnectionClosed,
+        ua.StatusCodes.BadNoCommunication,
+        ua.StatusCodes.BadNotConnected,
+        ua.StatusCodes.BadSecureChannelClosed,
+        ua.StatusCodes.BadSecureChannelIdInvalid,
+        ua.StatusCodes.BadServerNotConnected,
+        ua.StatusCodes.BadSessionClosed,
+        ua.StatusCodes.BadSessionIdInvalid,
+        ua.StatusCodes.BadShutdown,
+        ua.StatusCodes.BadTimeout,
+    }:
+        raise exc
+    logger.warning("Node discovery failed; optional lookup unavailable: %s", exc)
+
+
 def _ref_type_nodeid(ref_type_id: int) -> ua.NodeId:
     """Return a namespace-0 NodeId for a reference type id."""
     return ua.NodeId(ref_type_id, 0)
@@ -70,8 +91,9 @@ async def find_joining_system(client) -> UANode | None:
     objects = client.get_objects_node()
     try:
         refs = await _browse_refs(objects)
-    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
-        return None  # Objects node unreachable — server has non-standard address space
+    except Exception as exc:  # noqa: BLE001
+        _handle_discovery_error(exc)
+        return None
     children = [_node_from_ref(objects, r.NodeId) for r in refs]
     for child in children:
         type_def = await get_type_definition(child, ns_opc_ua)
@@ -81,7 +103,8 @@ async def find_joining_system(client) -> UANode | None:
     for child in children:
         try:
             sub_refs = await _browse_refs(child)
-        except Exception:  # nosec B112
+        except Exception as exc:  # noqa: BLE001
+            _handle_discovery_error(exc)
             # Deliberately continue to try the next child node.
             continue
         for sr in sub_refs:
@@ -102,8 +125,9 @@ async def find_child_by_browse_name(
     """
     try:
         refs = await _browse_refs(parent_node, timeout=timeout)
-    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
-        return None  # Parent node unreachable — caller receives None and skips
+    except Exception as exc:  # noqa: BLE001
+        _handle_discovery_error(exc)
+        return None
     for ref in refs:
         if ref.BrowseName.Name == name and ref.BrowseName.NamespaceIndex == ns_index:
             return _node_from_ref(parent_node, ref.NodeId)
@@ -144,8 +168,9 @@ async def browse_folder_instances(folder_node: UANode, timeout: float = _BROWSE_
     results: list[tuple[str, UANode]] = []
     try:
         refs = await _browse_refs(folder_node, timeout=timeout)
-    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
-        return results  # Folder unreachable — return whatever was collected so far
+    except Exception as exc:  # noqa: BLE001
+        _handle_discovery_error(exc)
+        return results
     for ref in refs:
         results.append(
             (
@@ -172,7 +197,7 @@ async def get_type_definition(node: UANode, ns_opc_ua: int = 0):
         if refs:
             return refs[0].NodeId
     except Exception as exc:
-        logger.debug("get_type_definition failed: %s", exc)
+        _handle_discovery_error(exc)
     return None
 
 
@@ -189,8 +214,9 @@ async def get_interface_types(node: UANode, ns_opc_ua: int = 0) -> list:
             nodeclassmask=ua.NodeClass.Unspecified,
         )
         return [ref.NodeId for ref in refs]
-    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
-        return []  # Node has no HasInterface references or is unreachable
+    except Exception as exc:  # noqa: BLE001
+        _handle_discovery_error(exc)
+        return []
 
 
 async def has_interface(node: UANode, ns_index: int, type_local_id: int, ns_opc_ua: int = 0) -> bool:
@@ -219,8 +245,9 @@ async def get_associated_assets(node: UANode, ns_opc_ua: int = 0) -> list:
             nodeclassmask=ua.NodeClass.Unspecified,
         )
         return [_node_from_ref(node, ref.NodeId) for ref in refs]
-    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
-        return []  # Node has no AssociatedWith references or is unreachable
+    except Exception as exc:  # noqa: BLE001
+        _handle_discovery_error(exc)
+        return []
 
 
 async def get_children_by_reference(node: UANode, ref_type_id: int, ns_opc_ua: int = 0) -> list:
@@ -236,8 +263,9 @@ async def get_children_by_reference(node: UANode, ref_type_id: int, ns_opc_ua: i
             nodeclassmask=ua.NodeClass.Unspecified,
         )
         return [_node_from_ref(node, ref.NodeId) for ref in refs]
-    except Exception:  # noqa: BLE001 — broad catch intentional: server may raise any asyncua error
-        return []  # Reference type not present on node or node is unreachable
+    except Exception as exc:  # noqa: BLE001
+        _handle_discovery_error(exc)
+        return []
 
 
 async def find_method_node(parent: UANode, method_browse_name: str, method_ns_index: int) -> UANode | None:
@@ -289,7 +317,8 @@ async def find_child_by_reference_type(
             ),
             timeout=timeout,
         )
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        _handle_discovery_error(exc)
         return None
     for ref in refs:
         if ref.BrowseName.Name == name and ref.BrowseName.NamespaceIndex == ns_index:
@@ -364,7 +393,8 @@ async def read_tool_product_instance_uri(client, ns_ijt: int, ns_di: int, ns_app
             return ""
         value = await asyncio.wait_for(pi_node.read_value(), timeout=_BROWSE_TIMEOUT)
         return str(value) if value is not None else ""
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        _handle_discovery_error(exc)
         return ""
 
 
@@ -412,5 +442,5 @@ async def read_tool_enabled(
             enabled = await asyncio.wait_for(enabled_node.read_value(), timeout=_BROWSE_TIMEOUT)
             return enabled if isinstance(enabled, bool) else None
     except Exception as exc:  # noqa: BLE001
-        logger.debug("Could not read Tool Parameters.Enabled: %s", exc)
+        _handle_discovery_error(exc)
     return None

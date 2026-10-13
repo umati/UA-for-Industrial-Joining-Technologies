@@ -34,6 +34,31 @@ def _parse(*argv: str):
     return _run_all_tests._build_parser().parse_args(list(argv))
 
 
+@pytest.mark.parametrize(
+    "forwarded",
+    [
+        ["specification_tests/test_result_access.py::test_get_latest_result_returns_handle_and_result_data"],
+        ["-k", "result_access"],
+        ["--log-file=diagnostic.log"],
+        ["--collect-only"],
+    ],
+)
+@pytest.mark.parametrize("target_flag", ["--profile", "--target-server-profile", "--endpoint"])
+def test_target_runs_reject_forwarded_pytest_arguments(tmp_path, target_flag, forwarded):
+    target = (
+        "opc.tcp://controller:40451"
+        if target_flag == "--endpoint"
+        else str(_write_profile(tmp_path, endpoint="opc.tcp://controller:40451"))
+    )
+    with pytest.raises(RunnerConfigError, match="Refusing to ignore test selectors"):
+        resolve_run_plan(_parse("--phase2", target_flag, target, "--", *forwarded), env={})
+
+
+def test_simulator_run_preserves_forwarded_pytest_arguments():
+    plan = resolve_run_plan(_parse("--phase2", "--", "-k", "result_access"), env={})
+    assert plan.pytest_args == ["--", "-k", "result_access"]
+
+
 @pytest.fixture
 def profiles_dir() -> Path:
     return _RUNNER_DIR / "target_server_cu_profiles"

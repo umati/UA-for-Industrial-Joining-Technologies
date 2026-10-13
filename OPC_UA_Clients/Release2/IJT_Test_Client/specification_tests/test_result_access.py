@@ -431,8 +431,7 @@ async def _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS, wall_
             timeout=wall_timeout,
         )
     except (ua.UaError, asyncio.TimeoutError) as exc:
-        logger.debug("GetLatestResult failed: %s", exc)
-        return None, None
+        pytest.fail(f"GetLatestResult failed before result data could be checked: {type(exc).__name__}: {exc}")
 
     if isinstance(raw, (list, tuple)):
         handle = raw[0] if len(raw) > 0 else None
@@ -446,8 +445,8 @@ async def _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS, wall_
 async def _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices):
     """Trigger MULTI_STEP_OK_RESULT and call GetLatestResult.
 
-    Returns (rm, handle, result_data). Skips when the trigger is unavailable
-    or when GetLatestResult returns no data.
+    Returns (rm, handle, result_data). Skips when the trigger is unavailable.
+    Fails explicitly when the triggered result cannot be retrieved.
     """
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -462,6 +461,8 @@ async def _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indice
 
     rm = await _get_result_management(opcua_client, ns_mr)
     handle, result_data = await _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS)
+    if result_data is None:
+        pytest.fail("GetLatestResult returned no result data after a successful trigger")
     return rm, handle, result_data
 
 

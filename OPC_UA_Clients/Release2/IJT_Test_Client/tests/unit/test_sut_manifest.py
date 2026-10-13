@@ -409,7 +409,9 @@ class TestClaimsAndWorkflows:
                             "method": "IncrementJoiningProcessCounter",
                             "count": 1,
                             "process_policy": "exact_match",
-                            "joining_process_id": "job-1",
+                            "match_by": "selection_name",
+                            "selection_name": "SequenceIndex_1",
+                            "identifier_strategy": "id_with_selection_name",
                             "expected_result_classification": "batch",
                         }
                     ],
@@ -422,7 +424,9 @@ class TestClaimsAndWorkflows:
         assert profile.workflow_execution.evidence_reuse.enabled is True
         assert profile.triggers.event.actions == {"select_process_event": "select_process_event"}
         assert profile.cu_execution.identifier_workflows.enabled is True
-        assert profile.cu_execution.counter_effects[0].joining_process_id == "job-1"
+        assert profile.cu_execution.counter_effects[0].joining_process_id == ""
+        assert profile.cu_execution.counter_effects[0].match_by == "selection_name"
+        assert profile.cu_execution.counter_effects[0].identifier_strategy == "id_with_selection_name"
 
     def test_workflow_event_action_must_be_approved(self):
         with pytest.raises(SutManifestError, match="unapproved workflows"):
@@ -476,6 +480,46 @@ class TestClaimsAndWorkflows:
             "joining_process_id": "job-1",
         }
         with pytest.raises(SutManifestError, match="counter_intervention"):
+            parse_sut_manifest(
+                _minimal(
+                    execution_policy={
+                        "state_changing_methods": {"allowed_methods": ["IncrementJoiningProcessCounter"]},
+                        "counter_effects": [effect],
+                    }
+                )
+            )
+
+    @pytest.mark.parametrize(
+        ("effect", "message"),
+        [
+            (
+                {
+                    "method": "IncrementJoiningProcessCounter",
+                    "match_by": "selection_name",
+                    "selection_name": "SequenceIndex_1",
+                    "identifier_strategy": "invalid_strategy",
+                },
+                "identifier_strategy",
+            ),
+            (
+                {
+                    "method": "IncrementJoiningProcessCounter",
+                    "match_by": "selection_name",
+                },
+                "selection_name is required",
+            ),
+            (
+                {
+                    "method": "IncrementJoiningProcessCounter",
+                    "match_by": "unknown",
+                    "joining_process_id": "job-1",
+                },
+                "match_by",
+            ),
+        ],
+    )
+    def test_counter_effect_validates_selector_and_identifier_strategy(self, effect, message):
+        with pytest.raises(SutManifestError, match=message):
             parse_sut_manifest(
                 _minimal(
                     execution_policy={

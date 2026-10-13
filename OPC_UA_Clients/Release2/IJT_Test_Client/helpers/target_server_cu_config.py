@@ -87,7 +87,10 @@ VALID_SELECTION_POLICIES: frozenset[str] = frozenset(
 )
 VALID_JOINING_PROCESS_SELECTION_POLICIES: frozenset[str] = VALID_SELECTION_POLICIES | {"all_compatible"}
 VALID_IDENTIFIER_STRATEGIES: frozenset[str] = frozenset(
-    {"id_only", "id_with_origin", "id_with_selection_name", "all_available"}
+    {"id_only", "id_with_origin", "id_with_selection_name", "selection_name_only", "all_available"}
+)
+VALID_COUNTER_PROCESS_MATCH_FIELDS: frozenset[str] = frozenset(
+    {"joining_process_id", "joining_process_origin_id", "selection_name"}
 )
 VALID_CLEANUP_POLICIES: frozenset[str] = frozenset({"best_effort_with_evidence", "strict_cleanup", "no_cleanup"})
 VALID_EVIDENCE_REUSE_SCOPES: frozenset[str] = frozenset({"current_run"})
@@ -320,6 +323,7 @@ class JoiningProcessSelectionConfig:
     """Joining process discovery and selection policy."""
 
     policy: str = "first_compatible"
+    match_by: str = "joining_process_id"
     joining_process_id: str = ""
     joining_process_origin_id: str = ""
     selection_name: str = ""
@@ -398,7 +402,11 @@ class CounterEffectConfig:
     method: str
     count: int = 1
     process_policy: str = "exact_match"
+    match_by: str = "joining_process_id"
     joining_process_id: str = ""
+    joining_process_origin_id: str = ""
+    selection_name: str = ""
+    identifier_strategy: str = "id_only"
     expected_result_classification: str = ""
 
 
@@ -666,15 +674,40 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
             raise TargetServerConfigError(
                 f"{item_context}: process_policy must be 'exact_match' for a physical counter mutation"
             )
+        match_by = require_enum(
+            item,
+            "match_by",
+            "joining_process_id",
+            VALID_COUNTER_PROCESS_MATCH_FIELDS,
+            item_context,
+        )
         process_id = require_str(item, "joining_process_id", item_context)
-        if not process_id:
-            raise TargetServerConfigError(f"{item_context}: joining_process_id is required")
+        process_origin_id = require_str(item, "joining_process_origin_id", item_context)
+        selection_name = require_str(item, "selection_name", item_context)
+        selector_values = {
+            "joining_process_id": process_id,
+            "joining_process_origin_id": process_origin_id,
+            "selection_name": selection_name,
+        }
+        if not selector_values[match_by]:
+            raise TargetServerConfigError(f"{item_context}: {match_by} is required when selected")
+        identifier_strategy = require_enum(
+            item,
+            "identifier_strategy",
+            "id_only",
+            VALID_IDENTIFIER_STRATEGIES,
+            item_context,
+        )
         counter_effects.append(
             CounterEffectConfig(
                 method=require_str(item, "method", item_context),
                 count=require_int(item, "count", 1, item_context, min_val=1),
                 process_policy=process_policy,
+                match_by=match_by,
                 joining_process_id=process_id,
+                joining_process_origin_id=process_origin_id,
+                selection_name=selection_name,
+                identifier_strategy=identifier_strategy,
                 expected_result_classification=expected,
             )
         )
@@ -743,6 +776,7 @@ def _parse_tool_selection(raw: dict, context: str) -> ToolSelectionConfig:
 
 def _parse_jp_selection(raw: dict, context: str) -> JoiningProcessSelectionConfig:
     policy = require_enum(raw, "policy", "first_compatible", VALID_JOINING_PROCESS_SELECTION_POLICIES, context)
+    match_by = require_enum(raw, "match_by", "joining_process_id", VALID_COUNTER_PROCESS_MATCH_FIELDS, context)
     jp_id = require_str(raw, "joining_process_id", context)
     jp_origin = require_str(raw, "joining_process_origin_id", context)
     sel_name = require_str(raw, "selection_name", context)
@@ -750,6 +784,7 @@ def _parse_jp_selection(raw: dict, context: str) -> JoiningProcessSelectionConfi
     tags = tuple(require_str_list(raw, "capability_tags", context))
     return JoiningProcessSelectionConfig(
         policy=policy,
+        match_by=match_by,
         joining_process_id=jp_id,
         joining_process_origin_id=jp_origin,
         selection_name=sel_name,

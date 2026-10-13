@@ -207,6 +207,15 @@ def resolve_run_plan(args: argparse.Namespace, *, env: Mapping[str, str] | None 
         profile_had_own_capabilities = False
 
     target_evidence_mode = profile is not None
+    pytest_args = list(getattr(args, "pytest_args", None) or [])
+    if pytest_args and pytest_args[0] == "--":
+        pytest_args = pytest_args[1:]
+    if target_evidence_mode and pytest_args:
+        raise RunnerConfigError(
+            "Forwarded pytest arguments are not supported by --profile/--endpoint target runs. "
+            "Refusing to ignore test selectors or start the full suite; use direct pytest "
+            "with the target runtime environment for a targeted diagnostic."
+        )
 
     # -- Endpoint precedence: CLI > non-placeholder profile file > OPCUA_SERVER_URL > unset --
     if endpoint_arg:

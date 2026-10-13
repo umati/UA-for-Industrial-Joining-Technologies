@@ -20,12 +20,37 @@ from asyncua import ua
 from helpers.target_server_cu_config import UINT64_MAX, RequestResultsConfig
 from specification_tests.test_result_access import (
     _assert_request_results_output,
+    _call_get_latest_result,
     _call_request_results,
     _extract_sequence_number,
     _get_request_results_args,
     _get_request_results_config,
     _RequestedResultBuffer,
+    _trigger_single_and_get_latest,
 )
+
+
+@pytest.mark.parametrize("exc", [TimeoutError(), ua.UaStatusCodeError(ua.StatusCodes.BadTimeout)])
+async def test_latest_result_failure_reports_retrieval_error(monkeypatch, exc):
+    monkeypatch.setattr(
+        "specification_tests.test_result_access.find_child_by_browse_name",
+        AsyncMock(return_value=SimpleNamespace(nodeid=ua.NodeId(1, 2))),
+    )
+    rm = SimpleNamespace(call_method=AsyncMock(side_effect=exc))
+    with pytest.raises(pytest.fail.Exception, match="failed before result data could be checked"):
+        await _call_get_latest_result(rm, 2)
+
+
+async def test_missing_triggered_result_does_not_report_missing_sequence_number(monkeypatch):
+    from helpers.namespaces import NS_MACH_RESULT
+
+    monkeypatch.setattr("specification_tests.test_result_access._get_result_management", AsyncMock())
+    monkeypatch.setattr(
+        "specification_tests.test_result_access._call_get_latest_result", AsyncMock(return_value=(None, None))
+    )
+    trigger = SimpleNamespace(trigger_single=AsyncMock(return_value=SimpleNamespace(triggered=True)))
+    with pytest.raises(pytest.fail.Exception, match="no result data after a successful trigger"):
+        await _trigger_single_and_get_latest(object(), trigger, {NS_MACH_RESULT: 2})
 
 
 class TestExtractSequenceNumber:

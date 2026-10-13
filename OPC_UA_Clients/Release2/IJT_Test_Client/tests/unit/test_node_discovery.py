@@ -95,6 +95,55 @@ class TestRefTypeNodeId:
         assert node_id.NamespaceIndex == 0
 
 
+@pytest.mark.parametrize(
+    "exc",
+    [
+        ConnectionError("client is disconnected"),
+        TimeoutError("browse timed out"),
+        ua.UaStatusCodeError(ua.StatusCodes.BadSessionClosed),
+        ua.UaStatusCodeError(ua.StatusCodes.BadConnectionClosed),
+    ],
+)
+@pytest.mark.parametrize(
+    "lookup",
+    [
+        lambda node: node_discovery.find_joining_system(FakeClient(node)),
+        lambda node: node_discovery.find_child_by_browse_name(node, "Results", 2),
+        lambda node: node_discovery.find_child_by_browse_name_any(node, "Results", [2, 3]),
+        lambda node: node_discovery.browse_folder_instances(node),
+        lambda node: node_discovery.get_type_definition(node),
+        lambda node: node_discovery.get_interface_types(node),
+        lambda node: node_discovery.get_associated_assets(node),
+        lambda node: node_discovery.get_children_by_reference(node, RefTypes.HAS_COMPONENT),
+        lambda node: node_discovery.find_child_by_reference_type(node, "Results", 2, RefTypes.HAS_COMPONENT),
+    ],
+)
+async def test_discovery_preserves_communication_failure(exc, lookup):
+    with pytest.raises(type(exc)) as caught:
+        await lookup(FakeNode(exc=exc))
+    assert caught.value is exc
+
+
+def test_optional_discovery_errors_are_logged(caplog):
+    node_discovery._handle_discovery_error(RuntimeError("unsupported lookup"))
+    assert "unsupported lookup" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "lookup",
+    [
+        lambda client: node_discovery.read_tool_product_instance_uri(client, 2, 3),
+        lambda client: node_discovery.read_tool_enabled(client, 2, 3, "urn:tool:1"),
+    ],
+)
+async def test_tool_discovery_preserves_communication_failure(monkeypatch, lookup):
+    exc = ConnectionError("client is disconnected")
+    monkeypatch.setattr(node_discovery, "find_joining_system", AsyncMock(side_effect=exc))
+    with pytest.raises(ConnectionError) as caught:
+        await lookup(object())
+    assert caught.value is exc
+
+
 class TestNodeFromRef:
     def test_returns_uanode_instance(self):
         mock_session = MagicMock()

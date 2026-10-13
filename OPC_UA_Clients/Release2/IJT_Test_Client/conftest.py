@@ -235,6 +235,7 @@ from helpers.node_discovery import (
 logger = logging.getLogger(__name__)
 SERVER_URL = os.environ.get("OPCUA_SERVER_URL", "opc.tcp://localhost:40451")
 _OPCUA_TIMEOUT_S = 120  # SimulateJobResult fires many results; 4 s default is too short
+_OPCUA_WATCHDOG_INTERVAL_S = 30  # asyncua also uses this as the health-probe deadline.
 
 
 @pytest.fixture(autouse=True)
@@ -391,7 +392,7 @@ async def session_client(managed_server):
     client for method calls or subscription tests (use opcua_client /
     subscription_client instead).
     """
-    client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
+    client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S, watchdog_intervall=_OPCUA_WATCHDOG_INTERVAL_S)
     try:
         await _connect_test_client(client, load_type_definitions=True)
     except Exception as exc:
@@ -740,7 +741,7 @@ async def opcua_client(session_client):
     Use subscription_client (module-scoped) for event subscription tests —
     subscriptions must remain isolated per test to avoid cross-test event noise.
     """
-    client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
+    client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S, watchdog_intervall=_OPCUA_WATCHDOG_INTERVAL_S)
     await _connect_test_client(
         client,
         load_type_definitions=bool(_target_server_profile_path()),
@@ -773,7 +774,7 @@ async def _module_subscription_client(session_client):
         yield None
         return
 
-    client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
+    client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S, watchdog_intervall=_OPCUA_WATCHDOG_INTERVAL_S)
     await _connect_test_client(client)
     yield client
     try:
@@ -795,7 +796,7 @@ async def subscription_client(session_client, _module_subscription_client):
         yield _module_subscription_client
         return
 
-    client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S)
+    client = Client(SERVER_URL, timeout=_OPCUA_TIMEOUT_S, watchdog_intervall=_OPCUA_WATCHDOG_INTERVAL_S)
     await _connect_test_client(client, load_type_definitions=True)
     yield client
     try:
