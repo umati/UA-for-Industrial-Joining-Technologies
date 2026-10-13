@@ -34,7 +34,7 @@ FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca92
 #   across glibc versions, so a binary linked on bookworm (glibc 2.36) runs on
 #   Noble (glibc 2.39).
 # ---------------------------------------------------------------------------
-FROM python:3.14-slim-bookworm@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83 AS python
+FROM python:3.15-slim-bookworm@sha256:122756f3fe72c4f5d3d71897888204ee85774bc79de952555b8a474e1d0a5d53 AS python
 
 # ---------------------------------------------------------------------------
 # Stage 3: Ubuntu 24.04 Noble final image (digest-pinned).
