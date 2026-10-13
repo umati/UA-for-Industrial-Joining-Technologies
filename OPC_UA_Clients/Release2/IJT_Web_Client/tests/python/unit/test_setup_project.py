@@ -79,103 +79,77 @@ def test_is_port_in_use_false_when_connection_refused(monkeypatch):
 # =============================================================================
 
 
-def test_extract_skipped_when_simulator_dir_exists(fs, monkeypatch):
-    sim_dir = Path("/fake/sim")
-    sim_dir.mkdir(parents=True)
-    monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
-    monkeypatch.setattr(sp, "SIMULATOR_ZIP", Path("/fake/sim.zip"))
-    sp._extract_simulator_zip_if_needed()
-
-
-def test_extract_skipped_when_zip_does_not_exist(fs, monkeypatch):
-    monkeypatch.setattr(sp, "SIMULATOR_DIR", Path("/fake/missing_dir"))
-    monkeypatch.setattr(sp, "SIMULATOR_ZIP", Path("/fake/nonexistent.zip"))
-    sp._extract_simulator_zip_if_needed()
-
-
-def test_extract_unzips_when_zip_exists_and_dir_missing(fs, monkeypatch):
-    base = Path("/fake")
-    base.mkdir(parents=True, exist_ok=True)
-    sim_dir = base / "Release2"
-    zip_path = base / "sim.zip"
-    with zipfile.ZipFile(zip_path, "w") as zf:
-        zf.writestr("opcua_ijt_demo_application.exe", "fake")
-    monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
+def test_extract_skipped_when_zip_does_not_exist(tmp_path, monkeypatch):
+    zip_path = tmp_path / "OPC_UA_IJT_Server_Simulator.zip"
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", tmp_path / "OPC_UA_IJT_Server_Simulator")
     monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
     sp._extract_simulator_zip_if_needed()
-    assert (base / "opcua_ijt_demo_application.exe").exists()
+    assert not (tmp_path / "OPC_UA_IJT_Server_Simulator").exists()
 
 
-def test_extract_logs_warning_on_bad_zip(fs, monkeypatch, caplog):
-    base = Path("/fake")
-    base.mkdir(parents=True, exist_ok=True)
-    zip_path = base / "corrupt.zip"
+def test_extract_unzips_when_zip_exists_and_dir_missing(tmp_path, monkeypatch):
+    zip_path = tmp_path / "OPC_UA_IJT_Server_Simulator.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe", "fake")
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", tmp_path / "OPC_UA_IJT_Server_Simulator")
+    monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
+    sp._extract_simulator_zip_if_needed()
+    assert (tmp_path / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe").exists()
+
+
+def test_extract_logs_warning_on_bad_zip(tmp_path, monkeypatch, caplog):
+    zip_path = tmp_path / "OPC_UA_IJT_Server_Simulator.zip"
     zip_path.write_bytes(b"not a zip")
-    monkeypatch.setattr(sp, "SIMULATOR_DIR", base / "missing_dir")
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", tmp_path / "OPC_UA_IJT_Server_Simulator")
     monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
     import logging
 
-    with caplog.at_level(logging.WARNING, logger="setup_project"):
+    with caplog.at_level(logging.WARNING):
         sp._extract_simulator_zip_if_needed()
-    assert any("Failed to extract" in r.message for r in caplog.records)
+    assert any("Could not prepare simulator package" in r.message for r in caplog.records)
 
 
-def test_extract_skipped_when_dir_is_newer_than_zip(fs, monkeypatch):
-    """Dir mtime > zip mtime → already up-to-date, no re-extraction."""
-    import os
-
-    base = Path("/fake")
-    sim_dir = base / "sim"
-    sim_dir.mkdir(parents=True)
-    zip_path = base / "sim.zip"
+def test_extract_skipped_when_stamp_matches_current_zip(tmp_path, monkeypatch):
+    """After a successful extract, a second ensure keeps local extras (stamp hit)."""
+    sim_dir = tmp_path / "OPC_UA_IJT_Server_Simulator"
+    zip_path = tmp_path / "OPC_UA_IJT_Server_Simulator.zip"
     with zipfile.ZipFile(zip_path, "w") as zf:
-        zf.writestr("opcua_ijt_demo_application.exe", "fake")
-    old_time = sim_dir.stat().st_mtime - 60
-    os.utime(zip_path, (old_time, old_time))
+        zf.writestr("OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe", "payload")
     monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
     monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
     sp._extract_simulator_zip_if_needed()
-    assert sim_dir.exists()  # old dir was NOT removed
+    (sim_dir / "keep.txt").write_text("extra", encoding="utf-8")
+    sp._extract_simulator_zip_if_needed()
+    assert (sim_dir / "keep.txt").read_text(encoding="utf-8") == "extra"
+    assert (sim_dir / "opcua_ijt_demo_application.exe").read_text(encoding="utf-8") == "payload"
 
 
-def test_extract_replaces_dir_when_zip_is_newer(fs, monkeypatch):
-    """Zip mtime > dir mtime → old dir removed, contents re-extracted."""
-    import os
-
-    base = Path("/fake")
-    sim_dir = base / "sim"
+def test_extract_replaces_incomplete_or_stale_package(tmp_path, monkeypatch):
+    """Missing binary / stamp mismatch → rename-aside swap for a fresh extract."""
+    sim_dir = tmp_path / "OPC_UA_IJT_Server_Simulator"
     sim_dir.mkdir(parents=True)
-    (sim_dir / "old_file.txt").write_text("stale")
-    zip_path = base / "sim.zip"
+    (sim_dir / "old_file.txt").write_text("stale", encoding="utf-8")
+    zip_path = tmp_path / "OPC_UA_IJT_Server_Simulator.zip"
     with zipfile.ZipFile(zip_path, "w") as zf:
-        zf.writestr("new_file.txt", "fresh")
-    future_time = sim_dir.stat().st_mtime + 60
-    os.utime(zip_path, (future_time, future_time))
+        zf.writestr("OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe", "fresh")
     monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
     monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
     sp._extract_simulator_zip_if_needed()
-    assert not sim_dir.exists()  # old dir was removed
-    assert (base / "new_file.txt").exists()  # new contents extracted
+    assert not (sim_dir / "old_file.txt").exists()
+    assert (sim_dir / "opcua_ijt_demo_application.exe").read_text(encoding="utf-8") == "fresh"
 
 
-def test_extract_replaces_dir_logs_info_for_newer_zip(fs, monkeypatch, caplog):
-    """Info message is emitted when a newer ZIP triggers a folder replacement."""
+def test_extract_logs_info_when_package_prepared(tmp_path, monkeypatch, caplog):
     import logging
-    import os
 
-    base = Path("/fake")
-    sim_dir = base / "sim"
-    sim_dir.mkdir(parents=True)
-    zip_path = base / "sim.zip"
+    zip_path = tmp_path / "OPC_UA_IJT_Server_Simulator.zip"
     with zipfile.ZipFile(zip_path, "w") as zf:
-        zf.writestr("dummy.txt", "x")
-    future_time = sim_dir.stat().st_mtime + 60
-    os.utime(zip_path, (future_time, future_time))
-    monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
+        zf.writestr("OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe", "x")
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", tmp_path / "OPC_UA_IJT_Server_Simulator")
     monkeypatch.setattr(sp, "SIMULATOR_ZIP", zip_path)
-    with caplog.at_level(logging.INFO, logger="setup_project"):
+    with caplog.at_level(logging.INFO):
         sp._extract_simulator_zip_if_needed()
-    assert any("Newer simulator ZIP" in r.message for r in caplog.records)
+    assert any("Prepared simulator package" in r.message for r in caplog.records)
 
 
 # =============================================================================
@@ -348,13 +322,15 @@ def test_sync_optional_private_submodules_preserves_git_credential_helpers(tmp_p
 # =============================================================================
 
 
-def test_find_simulator_returns_none_when_dir_missing(fs, monkeypatch):
-    monkeypatch.setattr(sp, "SIMULATOR_DIR", Path("/fake/nonexistent"))
+def test_find_simulator_returns_none_when_dir_missing(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPCUA_SIMULATOR_EXE", raising=False)
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", tmp_path / "nonexistent")
     assert sp._find_simulator_executable() is None
 
 
-def test_find_simulator_finds_direct_exe(fs, monkeypatch):
-    sim_dir = Path("/fake/sim")
+def test_find_simulator_finds_direct_exe(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPCUA_SIMULATOR_EXE", raising=False)
+    sim_dir = tmp_path / "sim"
     sim_dir.mkdir(parents=True)
     exe = sim_dir / sp.SIMULATOR_EXE_NAME
     exe.write_bytes(b"fake exe")
@@ -362,8 +338,9 @@ def test_find_simulator_finds_direct_exe(fs, monkeypatch):
     assert sp._find_simulator_executable() == exe
 
 
-def test_find_simulator_finds_nested_exe(fs, monkeypatch):
-    sim_dir = Path("/fake/sim")
+def test_find_simulator_finds_nested_exe(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPCUA_SIMULATOR_EXE", raising=False)
+    sim_dir = tmp_path / "sim"
     nested = sim_dir / "subdir"
     nested.mkdir(parents=True)
     exe = nested / sp.SIMULATOR_EXE_NAME
@@ -372,11 +349,21 @@ def test_find_simulator_finds_nested_exe(fs, monkeypatch):
     assert sp._find_simulator_executable() == exe
 
 
-def test_find_simulator_returns_none_when_no_exe(fs, monkeypatch):
-    sim_dir = Path("/fake/sim")
+def test_find_simulator_returns_none_when_no_exe(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPCUA_SIMULATOR_EXE", raising=False)
+    sim_dir = tmp_path / "sim"
     sim_dir.mkdir(parents=True)
     monkeypatch.setattr(sp, "SIMULATOR_DIR", sim_dir)
     assert sp._find_simulator_executable() is None
+
+
+def test_find_simulator_honours_opcua_simulator_exe(tmp_path, monkeypatch):
+    override = tmp_path / "override" / "sim.bin"
+    override.parent.mkdir(parents=True)
+    override.write_bytes(b"fake")
+    monkeypatch.setenv("OPCUA_SIMULATOR_EXE", str(override))
+    monkeypatch.setattr(sp, "SIMULATOR_DIR", tmp_path / "nonexistent")
+    assert sp._find_simulator_executable() == override
 
 
 # =============================================================================

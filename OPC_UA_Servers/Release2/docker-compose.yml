@@ -38,9 +38,7 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 6
-    # Resource limits — the simulator is lightweight
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
+    # Resource limits enforced by Compose v2 (`docker compose up`). Equivalent
+    # to the former Swarm-only deploy.resources.limits keys.
+    cpus: 1.0
+    mem_limit: 512m

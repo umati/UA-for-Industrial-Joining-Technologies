@@ -89,8 +89,55 @@ def _run(command: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return result
 
 
+def _assert_owned_environment_path(directory: Path, project: Path) -> Path:
+    """Refuse to delete paths outside the project or its `.state/tools` tree."""
+    resolved = directory.resolve()
+    project_root = project.resolve()
+    tools_root = (project_root / ".state" / "tools").resolve()
+    under_project = resolved == project_root or project_root in resolved.parents
+    under_tools = resolved == tools_root or tools_root in resolved.parents
+    if not (under_project or under_tools):
+        raise RuntimeError(
+            f"Refusing to modify virtual environment outside project tree: {resolved}"
+        )
+    return resolved
+
+
+def _environment_usable(python: Path) -> bool:
+    try:
+        result = subprocess.run(  # noqa: S603 - interpreter path from owned venv layout
+            [str(python), "-c", "pass"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
 def _create_environment(directory: Path, project: Path) -> Path:
     python = environment_python(directory)
+    cfg = directory / "pyvenv.cfg"
+    recreate_reason: str | None = None
+    if directory.exists() and python.is_file() and not cfg.is_file():
+        recreate_reason = "missing pyvenv.cfg"
+    elif (
+        directory.exists()
+        and python.is_file()
+        and cfg.is_file()
+        and not _environment_usable(python)
+    ):
+        recreate_reason = "interpreter probe failed"
+    if recreate_reason is not None:
+        owned = _assert_owned_environment_path(directory, project)
+        log.warning("Removing incomplete virtual environment at %s (%s)", owned, recreate_reason)
+        try:
+            shutil.rmtree(owned)
+        except OSError as exc:
+            raise RuntimeError(f"Could not remove incomplete virtual environment: {owned}") from exc
+        python = environment_python(directory)
     if not python.is_file():
         _run([sys.executable, "-m", "venv", str(directory)], project)
     return python

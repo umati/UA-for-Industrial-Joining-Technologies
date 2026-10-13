@@ -1312,49 +1312,31 @@ def test_websocket_backend_readiness_failure_terminates_owned_backend(monkeypatc
 
 
 def test_simulator_package_is_extracted_when_binary_is_missing(monkeypatch, tmp_path):
+    import zipfile
+
     runner = _load_runner()
     server_dir = tmp_path / "Release2"
     package = server_dir / "OPC_UA_IJT_Server_Simulator.zip"
     executable = server_dir / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe"
     package.parent.mkdir(parents=True)
-    package.write_text("zip placeholder", encoding="utf-8")
-    extracted = {}
-
-    class FakeZipFile:
-        def __init__(self, path):
-            extracted["path"] = path
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def extractall(self, destination):
-            extracted["destination"] = destination
-            executable.parent.mkdir(parents=True)
-            executable.write_text("exe", encoding="utf-8")
+    with zipfile.ZipFile(package, "w") as zf:
+        zf.writestr("OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe", "exe")
 
     monkeypatch.delenv("OPCUA_SIMULATOR_EXE", raising=False)
     monkeypatch.setattr(runner, "_SERVER_COMPOSE_DIR", server_dir)
     monkeypatch.setattr(runner, "_WELL_KNOWN_SIMULATOR_PATHS", [executable])
-    monkeypatch.setattr(runner, "_SIMULATOR_PACKAGE_ZIPS", [package])
-    monkeypatch.setattr(runner.zipfile, "ZipFile", FakeZipFile)
 
     assert runner._find_simulator_executable() == str(executable)
-    assert extracted == {"path": package, "destination": server_dir}
+    assert executable.is_file()
 
 
-def test_simulator_package_order_follows_host_platform():
+def test_simulator_well_known_order_follows_host_platform():
     runner = _load_runner()
 
-    first_package = runner._SIMULATOR_PACKAGE_ZIPS[0].name
     first_executable = runner._WELL_KNOWN_SIMULATOR_PATHS[0].name
     if runner.IS_WINDOWS:
-        assert first_package == "OPC_UA_IJT_Server_Simulator.zip"
         assert first_executable == "opcua_ijt_demo_application.exe"
     else:
-        assert first_package == "OPC_UA_IJT_Server_Simulator_Linux.zip"
         assert first_executable == "opcua_ijt_demo_application"
 
 
@@ -2455,6 +2437,52 @@ def test_docker_smoke_builds_web_image_from_repo_root():
     assert "cwd=_REPO_ROOT," in source
     assert '"--cache-from"' not in source
     assert 'ROOT / "docker-compose.smoke.yml"' in source
+    assert 'tmp" / "docker-cli.lock"' in source or "tmp' / 'docker-cli.lock'" in source
+    assert "_run_docker_cli_with_retry" in source
+    assert "preparation_lock" in source
+
+
+def test_docker_cli_lock_contention_detection():
+    runner = _load_runner()
+
+    assert runner._looks_like_docker_cli_lock_contention(
+        "ERROR: failed to build: failed to read metadata: open "
+        r"C:\Users\mohit\.docker\contexts\meta\abc\meta.json: "
+        "The process cannot access the file because it is being used by another process."
+    )
+    assert not runner._looks_like_docker_cli_lock_contention("ERROR: failed to solve: network timeout")
+
+
+def test_docker_cli_retry_on_windows_context_lock(monkeypatch):
+    runner = _load_runner()
+    calls: list[str] = []
+
+    def fake_captured(cmd, **kwargs):
+        calls.append(kwargs.get("label", ""))
+        if len(calls) == 1:
+            return (
+                1,
+                "ERROR: failed to read metadata: open "
+                r"C:\Users\x\.docker\contexts\meta\abc\meta.json: "
+                "The process cannot access the file because it is being used by another process.",
+            )
+        return 0, "ok\n"
+
+    monkeypatch.setattr(runner, "_run_captured", fake_captured)
+    monkeypatch.setattr(runner.time, "sleep", lambda _s: None)
+
+    rc = runner._run_docker_cli_with_retry(
+        ["docker", "build", "."],
+        cwd=runner.ROOT,
+        label="docker build (BuildKit)",
+        timeout=30,
+        attempts=3,
+    )
+
+    assert rc == 0
+    assert len(calls) == 2
+    assert calls[0] == "docker build (BuildKit)"
+    assert "retry 2/3" in calls[1]
 
 
 def test_joint_demo_uses_server_discovered_joint_ids():

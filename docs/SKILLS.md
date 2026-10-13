@@ -37,6 +37,13 @@ The three Python runners (Console, Web, Test) call `pre-commit install` automati
 For the simplest all-in-one pre-commit check before committing, run `python run_precommit_all.py` from the IJT repo root. It runs the root hooks and Envelope hooks (when present), then runs dependency vulnerability gates: `npm audit --omit=dev --package-lock-only --audit-level=high` for Node Client, Web Client, and Envelope lockfiles, `pip-audit` across IJT + Envelope Python requirement files and every Python client `uv.lock`, plus NuGet vulnerability audit for the C# Client (`dotnet list package --vulnerable --include-transitive`).
 `run_precommit_all.py` and the Node/Web Client `run_all_tests.py` runners enforce npm audit in **strict mode by default** (`IJT_NPM_AUDIT_MODE=strict`): registry timeout/connectivity errors fail the run, because vulnerability status is unknown. Their npm audit calls use a 15-second process limit plus bounded npm fetch settings, preventing an advisory-service outage from hanging a suite for 5–10 minutes. For explicitly offline local runs, set `IJT_NPM_AUDIT_MODE=offline` to allow continuing only on recognized npm registry connectivity failures. GitHub application/static lanes use the same availability policy so an external advisory-service outage is reported as infrastructure rather than a product defect; real high/critical findings and non-network tool errors still fail. The dependency-security workflow reviews pull-request dependency changes, monitors all ecosystems daily in offline mode, and provides manual strict release qualification.
 
+**Known unpatched dev advisory (`braces` via stylelint):** GHSA-vfj7-8cjw-p6xm has no
+patched `braces` release. It is a **devDependency** transitive (stylelint → micromatch →
+braces) on Web Client and Envelope. Production `npm audit --omit=dev` stays clean by
+design; do not force-pin a fake fixed version. Reopen remediation when upstream publishes
+`braces > 3.0.3` (or stylelint drops the vulnerable chain). Maintainer detail:
+Envelope [`SECURITY.md`](../OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope/SECURITY.md).
+
 ---
 
 ### Graceful Handling of Missing Optional Tools
@@ -378,16 +385,17 @@ UA-for-Industrial-Joining-Technologies/
 ## Sub-Project Summary
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
-- **Stack**: Python 3.14+, asyncua pinned via pyproject.toml / uv.lock, Node.js 24.15+, Vitest, ESLint, Docker
+- **Stack**: Python 3.14+, asyncua pinned via pyproject.toml / uv.lock, Node.js 24.15+, Vitest, ESLint, Docker (base digest-pinned)
 - **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), and split live suites for Python OPC UA, Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and Playwright regression. Each live/browser suite owns its own OPC UA/WS/UI ports; root Phase 2 runs Docker as a separate `web-client-docker-smoke` suite.
 - **One test command**: `python run_all_tests.py`
-- **Docker**: standalone smoke is healthy on HTTP:3000 + WS:8001; root Phase 2 isolates Docker smoke on HTTP:3008 + WS:8011
+- **Simulator**: `setup_project.py` / runner call shared `scripts/simulator_extract.py` (every present ZIP → own folder). Full clone or `OPCUA_SIMULATOR_EXE` / `OPCUA_SERVER_URL`.
+- **Docker**: `python run_docker_setup.py` → Compose v2 + `down -v` (fresh `node_modules` volume); healthcheck = HTTP + real WebSocket upgrade (`docker_healthcheck.py`); root Phase 2 isolates Docker smoke on HTTP:3008 + WS:8011
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md`
 
 ### IJT Console Client (`OPC_UA_Clients/Release2/IJT_Console_Client/`)
 - **Stack**: Python 3.14+, asyncua pinned via pyproject.toml / uv.lock
 - **Tests**: unit (`tests/unit/` — no server needed); live (`tests/live/` — calls `pytest.fail()` if server unreachable, no silent skips)
-- **One test command**: `python run_all_tests.py` (auto-launches server if needed)
+- **One test command**: `python run_all_tests.py` (auto-extracts present simulator ZIPs via `scripts/simulator_extract.py`, then auto-launches if needed)
 - **Entry point**: `python setup_client.py --url="opc.tcp://..."`
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Console_Client/docs/SKILLS.md`
 
@@ -395,7 +403,7 @@ UA-for-Industrial-Joining-Technologies/
 - **Stack**: Python 3.14+, asyncua pinned via pyproject.toml / uv.lock, pytest
 - **Purpose**: OPC UA IJT specification test suite — validates server behavior against OPC 40450-1 / 40451-1 without implying formal certification
 - **Tests**: specification tests (`specification_tests/` — require running OPC UA server); unit (`tests/unit/` — pure-logic helper coverage, no server needed)
-- **One test command**: `python run_all_tests.py` (auto-launches server if needed)
+- **One test command**: `python run_all_tests.py` (shared simulator extract + auto-launch when binary/ZIP present)
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Test_Client/docs/SKILLS.md`
 
 ### IJT Performance Client (`OPC_UA_Clients/Release2/IJT_Performance_Client/`)

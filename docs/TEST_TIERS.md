@@ -212,9 +212,14 @@ run their live/integration tests in parallel without port conflicts.
 
 > **Root runner Phase 2:** The root-level `run_all_tests.py` runs server smoke,
 > client live suites, and dedicated Docker smoke suites **simultaneously** via `ThreadPoolExecutor` — not sequentially.
+> Before Phase 2 starts, the root runner calls `scripts/simulator_extract.py` so every
+> **present** simulator ZIP under `OPC_UA_Servers/Release2/` is extracted with a
+> locked staging → rename-aside swap
+> into its own folder (Windows and Linux packages never overwrite each other).
 > The server smoke suite validates the native/default server package on port 40451.
 > When Docker is running, the Linux package smoke suite also builds the server image
-> from `OPC_UA_IJT_Server_Simulator_Linux.zip` and validates it on port 40465.
+> from `OPC_UA_IJT_Server_Simulator_Linux.zip` (in-image BusyBox extract — no host unzip
+> before `docker build`) and validates it on port 40465.
 > Docker-dependent root suites are skipped when Docker is missing or the daemon
 > is not running.
 > Each client sub-runner auto-launches its own server on its dedicated port.

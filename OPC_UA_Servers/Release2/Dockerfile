@@ -29,12 +29,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Multi-stage build: stage 1 extracts the Linux simulator ZIP using minimal BusyBox.
-FROM busybox:stable-musl AS extractor
+# Base images digest-pinned; Renovate refreshes digests weekly (docker-digests group).
+FROM busybox:stable-musl@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213 AS extractor
 WORKDIR /tmp
 COPY OPC_UA_IJT_Server_Simulator_Linux.zip server.zip
 RUN unzip -q server.zip
 
-FROM ubuntu:26.04
+FROM ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
 
 WORKDIR /app
 
@@ -91,7 +92,9 @@ RUN printf '%s\n' \
 # ── Runtime ───────────────────────────────────────────────────────────────────
 EXPOSE 40451
 
-ENV RUNNING_IN_DOCKER=1 \
+# IS_DOCKER is informational here (no Python venv in this image). Client/CI
+# images use the same flag to mean "pre-isolated Python environment".
+ENV IS_DOCKER=true \
     OPCUA_HOSTNAME="" \
     OPCUA_SERVER_PORT="40451"
 

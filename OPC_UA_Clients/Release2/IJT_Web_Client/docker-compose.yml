@@ -3,7 +3,8 @@ services:
     build:
       context: ../../..
       dockerfile: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
-    image: ijt_web_client:latest
+    # Path-derived tag from run_docker_setup.py (COMPOSE_PROJECT_NAME + IJT_WEB_IMAGE).
+    image: ${IJT_WEB_IMAGE:-ijt_web_client:latest}
     # No container_name on purpose: Compose scopes generated container,
     # network, and volume names by project so parallel checkouts/runners do not
     # fight for one global Docker name.
@@ -12,19 +13,24 @@ services:
       - .:/app
       - node_modules:/app/node_modules
     ports:
-      - "${WEB_CLIENT_HTTP_PORT:-3000}:3000"
-      - "${WEB_CLIENT_WS_PORT:-8001}:8001"
+      - "${WEB_CLIENT_HTTP_PORT:-3000}:${HTTP_PORT:-3000}"
+      - "${WEB_CLIENT_WS_PORT:-8001}:${WS_PORT:-8001}"
     environment:
       IS_DOCKER: "true"
       IJT_OPCUA_HOST_REWRITE: "true"
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
-    # Override CMD for dev mode (setup + keep alive)
+      HTTP_PORT: "${HTTP_PORT:-3000}"
+      WS_PORT: "${WS_PORT:-8001}"
+      IJT_SETUP_ARGS: "${IJT_SETUP_ARGS:---force_full}"
+    # Override CMD for dev mode (setup + keep alive). IJT_SETUP_ARGS comes from
+    # run_docker_setup.py --setup-args (default --force_full).
     command: >
-      sh -c "python setup_project.py --force_full && tail -f /dev/null"
+      sh -c "python setup_project.py $${IJT_SETUP_ARGS} && tail -f /dev/null"
     restart: unless-stopped
+    # HTTP readiness + real WebSocket upgrade (docker_healthcheck.py).
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD", "python", "docker_healthcheck.py"]
       interval: 10s
       timeout: 10s
       start_period: 60s
@@ -35,14 +41,14 @@ services:
     build:
       context: ../../..
       dockerfile: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
-    image: ijt_web_client:latest
+    image: ${IJT_WEB_IMAGE:-ijt_web_client:latest}
     working_dir: /app
     environment:
       IS_DOCKER: "true"
       IJT_OPCUA_HOST_REWRITE: "true"
       PYTHONUNBUFFERED: "1"
       OPCUA_TEST_ENDPOINT: "opc.tcp://host.docker.internal:40451"
-      WS_TEST_URL: "ws://localhost:8001"
+      WS_TEST_URL: "ws://localhost:${WS_PORT:-8001}"
     command: ["python", "run_all_tests.py", "--all"]
     profiles:
       - test

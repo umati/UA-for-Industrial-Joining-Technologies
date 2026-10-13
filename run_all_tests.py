@@ -85,7 +85,6 @@ import subprocess
 import sys
 import threading
 import time
-import zipfile
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -96,7 +95,12 @@ from pathlib import Path
 if str(Path(__file__).parent / "scripts") not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 
-from tool_bootstrap import ensure_requirements_environment, ensure_uv, environment_python
+from tool_bootstrap import (
+    ensure_requirements_environment,
+    ensure_uv,
+    environment_python,
+    preparation_lock,
+)
 
 from reporting.timing_artifacts import local_runner_timing_payload, write_timing_bundle
 
@@ -328,12 +332,23 @@ WEB_CLIENT_E2E_FEATURES_TIMEOUT = _int_env("IJT_WEB_E2E_FEATURES_TIMEOUT", 1200)
 # in regression coverage does not silently exceed the default 600s budget.
 WEB_CLIENT_E2E_REGRESSION_TIMEOUT = _int_env("IJT_WEB_E2E_REGRESSION_TIMEOUT", 1800)
 _RUNNER_ENV_DIR = REPO_ROOT / "tmp" / "runner-env"
+# Shared with Web Client docker-smoke so parallel Phase 2 Docker suites do not
+# race Docker Desktop's contexts/meta/*.json on Windows.
+_DOCKER_CLI_LOCK = REPO_ROOT / "tmp" / "docker-cli.lock"
+_DOCKER_CLI_LOCK_TIMEOUT = DOCKER_BUILD_TIMEOUT + 300
 _SERVER_SMOKE_REQUIREMENTS_LOCK = threading.Lock()
 _server_smoke_requirements_ready = False
 
 
 def _pip_constraint_args() -> list[str]:
     return ["-c", str(PYTHON_CONSTRAINTS)] if PYTHON_CONSTRAINTS.exists() else []
+
+
+@contextlib.contextmanager
+def _docker_cli_exclusive():
+    """Serialize Docker CLI across parallel root-runner suites."""
+    with preparation_lock(_DOCKER_CLI_LOCK, timeout=_DOCKER_CLI_LOCK_TIMEOUT):
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -2084,6 +2099,43 @@ def _suite_server_linux_package_smoke() -> SuiteResult:
     port = OPCUA_SERVER_PORT_SERVER_DOCKER
     endpoint = f"opc.tcp://localhost:{port}"
 
+    try:
+        with _docker_cli_exclusive():
+            return _server_linux_package_smoke_under_lock(
+                name=name,
+                t0=t0,
+                docker=docker,
+                image=image,
+                container=container,
+                port=port,
+                endpoint=endpoint,
+                outputs=outputs,
+                notes=notes,
+            )
+    except RuntimeError as exc:
+        notes.append(f"docker CLI lock unavailable: {exc}")
+        return SuiteResult(
+            name,
+            False,
+            time.monotonic() - t0,
+            output="\n".join(outputs),
+            notes=notes,
+        )
+
+
+def _server_linux_package_smoke_under_lock(
+    *,
+    name: str,
+    t0: float,
+    docker: str,
+    image: str,
+    container: str,
+    port: int,
+    endpoint: str,
+    outputs: list[str],
+    notes: list[str],
+) -> SuiteResult:
+    """Docker build/run/smoke while holding the shared Docker CLI lock."""
     subprocess.run(
         [docker, "rm", "-f", container],
         cwd=str(SERVER_DIR),
@@ -2858,36 +2910,27 @@ def _prepare_native_simulator(
     archive: Path | None = None,
     target: Path | None = None,
 ) -> None:
-    """Extract the Windows simulator package once, before parallel suites start.
+    """Ensure simulator package folders exist before parallel suites start.
 
-    Several sub-runners extract the ZIP on demand and replace the folder when the
-    ZIP is newer. Doing that concurrently makes suites miss the executable, so the
-    root runner refreshes it serially and atomically (extract to a sibling, then swap).
+    Uses :mod:`simulator_extract` (staging → atomic swap). When *archive* /
+    *target* are omitted, every present ZIP under ``SERVER_DIR`` is prepared
+    (Windows and Linux packages keep separate trees). Passing explicit paths
+    keeps single-package behavior for callers and contract tests.
     """
-    if not IS_WINDOWS:
+    from simulator_extract import (
+        WINDOWS_ZIP_NAME,
+        ensure_present_simulator_packages,
+        ensure_simulator_package,
+    )
+
+    if archive is not None or target is not None:
+        ensure_simulator_package(
+            archive or (SERVER_DIR / WINDOWS_ZIP_NAME),
+            target or _NATIVE_BINARY_WIN.parent,
+            logger=log,
+        )
         return
-    archive = archive or (SERVER_DIR / "OPC_UA_IJT_Server_Simulator.zip")
-    target = target or _NATIVE_BINARY_WIN.parent
-    if not archive.is_file():
-        return
-    if target.is_dir() and target.stat().st_mtime >= archive.stat().st_mtime:
-        return
-    staging = target.with_name(f"{target.name}.extract-{os.getpid()}")
-    shutil.rmtree(staging, ignore_errors=True)
-    staging.mkdir(parents=True)
-    try:
-        with zipfile.ZipFile(archive) as zf:
-            zf.extractall(staging)
-        extracted = staging / target.name
-        if not extracted.is_dir():
-            raise RuntimeError(f"{archive.name} has no top-level {target.name}/ folder")
-        shutil.rmtree(target, ignore_errors=True)
-        extracted.replace(target)
-        log.info("Prepared native simulator from %s", archive.name)
-    except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
-        log.warning("Could not prepare native simulator from %s: %s", archive.name, exc)
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
+    ensure_present_simulator_packages(SERVER_DIR, logger=log)
 
 
 def run_phase2(suites: dict[str, SuiteSpec]) -> list[SuiteResult]:

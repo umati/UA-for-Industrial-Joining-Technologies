@@ -1,5 +1,6 @@
 # ── base: shared system + Python deps ────────────────────────────────────────
-FROM nikolaik/python-nodejs:python3.14-nodejs24 AS base
+# Base runtime digest-pinned; Renovate refreshes digests weekly (docker-digests group).
+FROM nikolaik/python-nodejs:python3.14-nodejs24@sha256:78c060cbf2e787be0c2e9086568206d62a90d43463a4ab24407a3ec735d0faa3 AS base
 
 # Install uv pinned by image digest
 COPY --from=ghcr.io/astral-sh/uv:0.13.0@sha256:cdc6093146eb3ff6a40107b38f008b789e050e77ad87865e381d9917da55a168 /uv /uvx /bin/
@@ -69,9 +70,13 @@ RUN groupadd --gid 1001 appgroup && \
 
 USER appuser
 
+ENV HTTP_PORT=3000 \
+    WS_PORT=8001
+
 EXPOSE 3000 8001
 
+# Healthy means HTTP UI is up and a real WebSocket upgrade succeeds.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:3000 || exit 1
+    CMD python docker_healthcheck.py || exit 1
 
 CMD ["python", "setup_project.py"]

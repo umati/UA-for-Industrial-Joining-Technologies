@@ -382,7 +382,7 @@ Always call `JoiningSystem.BrowseMethod(objectId, name, fallbackConstant)` — n
 |----------|---------|---------|
 | `OPCUA_SERVER_URL` | `opc.tcp://localhost:40451` | OPC UA server endpoint |
 | `OPCUA_SERVER_PORT` | `40451` | Alternative port-based server endpoint selection; test runner manages isolation automatically |
-| `OPCUA_SIMULATOR_EXE` | *(auto-discover)* | Explicit simulator binary path for fixture launch |
+| `OPCUA_SIMULATOR_EXE` | *(auto-discover)* | Explicit simulator binary path for fixture launch; otherwise runner calls shared `scripts/simulator_extract.py` then well-known paths |
 | `IJT_PHASE1_ONLY` | `false` | Set to `true` only for unit-test-only runs; Phase 2 explicitly passes `false` so stale shell state cannot suppress live server startup |
 | `IJT_CSHARP_CLEAN` | `false` | If `true/1/yes`, `run_all_tests.py` removes `bin/` and `obj/` before and after run |
 

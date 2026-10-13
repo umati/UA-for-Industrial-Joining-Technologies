@@ -51,6 +51,10 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
   strict mode by default (`IJT_NPM_AUDIT_MODE=strict`) across production runtime dependencies
   (`--omit=dev --audit-level=high`), so npm registry
   timeout/connectivity failures fail because vulnerability status is unknown.
+  Unpatched **dev**-only advisories (for example `braces` via stylelint, GHSA-vfj7-8cjw-p6xm)
+  may still appear on full audits; do not force-pin a fake fix. Owner/recheck/lockfile inventory:
+  Envelope [SECURITY.md](OPC_UA_Clients/Release2/IJT_Web_Client/src/javascripts/views/envelope/SECURITY.md)
+  at tip `337ead6` (2026-10-13).
   npm audit subprocesses are bounded to 15 seconds to prevent an unavailable advisory endpoint from
   hanging validation. `IJT_NPM_AUDIT_MODE=offline` exists only for
   explicitly offline/restricted local development. GitHub application/static lanes also use this

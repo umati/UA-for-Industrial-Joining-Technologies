@@ -65,7 +65,45 @@ def test_renovate_batches_docker_digest_updates_weekly() -> None:
     assert rule["schedule"] == ["before 7am on monday"]
     assert rule["minimumReleaseAge"] == "3 days"
     assert rule["automerge"] is False
-    assert "needs-manual-review" in rule["addLabels"]
+    assert "docker-digest" in rule["addLabels"]
+    assert "needs-manual-review" not in rule["addLabels"]
+
+
+def test_renovate_os_base_image_rule_excludes_digest_updates() -> None:
+    """Ubuntu/debian/alpine digest PRs must not inherit needs-manual-review via label merge."""
+    os_base_rules = [
+        rule
+        for rule in _rules()
+        if "docker" in rule.get("matchDatasources", [])
+        and any(
+            pattern in rule.get("matchPackagePatterns", [])
+            for pattern in ("^ubuntu$", "^debian$", "^alpine$")
+        )
+    ]
+    assert os_base_rules, "renovate.json must define an OS base-image review rule"
+    for rule in os_base_rules:
+        update_types = set(rule.get("matchUpdateTypes") or [])
+        assert "digest" not in update_types
+        assert update_types & {"major", "minor", "patch"}
+        assert "needs-manual-review" in rule.get("addLabels", [])
+
+
+def test_renovate_browser_ci_base_digest_args_have_custom_managers() -> None:
+    """ARG digests are the single Browser CI base source; Renovate must refresh them."""
+    managers = [
+        manager
+        for manager in _renovate().get("customManagers", [])
+        if any(
+            "ijt-browser-ci/Dockerfile" in pattern
+            for pattern in manager.get("managerFilePatterns", [])
+        )
+    ]
+    assert len(managers) >= 3
+    match_blobs = "\n".join(str(manager.get("matchStrings")) for manager in managers)
+    assert "BASE_NODE_DIGEST" in match_blobs
+    assert "BASE_PYTHON_DIGEST" in match_blobs
+    assert "BASE_UBUNTU_DIGEST" in match_blobs
+    assert all(manager.get("datasourceTemplate") == "docker" for manager in managers)
 
 
 def test_renovate_batches_playwright_updates_weekly() -> None:
@@ -151,8 +189,32 @@ def test_python_runtime_pins_match_maintained_line() -> None:
     web = (_REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "Dockerfile").read_text(
         encoding="utf-8"
     )
-    assert re.search(r"^FROM python:3\.14(?:[.-])", browser, re.MULTILINE)
-    assert re.search(r"^FROM nikolaik/python-nodejs:python3\.14-nodejs", web, re.MULTILINE)
+    assert re.search(r"^ARG BASE_PYTHON_DIGEST=sha256:[0-9a-f]{64}\s*$", browser, re.MULTILINE)
+    assert re.search(
+        r"^FROM python:3\.14(?:[.-]).*@\$\{BASE_PYTHON_DIGEST\}", browser, re.MULTILINE
+    )
+    assert re.search(
+        r"^FROM nikolaik/python-nodejs:python3\.14-nodejs\d+@sha256:[0-9a-f]{64}",
+        web,
+        re.MULTILINE,
+    )
+
+
+def test_product_dockerfiles_pin_base_image_digests() -> None:
+    """Web and Server product images pin bases like Browser CI (immutable rebuilds)."""
+    web = (_REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / "Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    server = (_REPO_ROOT / "OPC_UA_Servers" / "Release2" / "Dockerfile").read_text(encoding="utf-8")
+    assert re.search(
+        r"^FROM nikolaik/python-nodejs:python3\.14-nodejs\d+@sha256:[0-9a-f]{64}",
+        web,
+        re.MULTILINE,
+    )
+    assert re.search(r"^FROM busybox:stable-musl@sha256:[0-9a-f]{64}", server, re.MULTILINE)
+    assert re.search(r"^FROM ubuntu:26\.04@sha256:[0-9a-f]{64}", server, re.MULTILINE)
+    assert "IS_DOCKER=true" in server
+    assert "RUNNING_IN_DOCKER" not in server
 
 
 def test_renovate_batches_python_dev_tools_weekly() -> None:

@@ -12,17 +12,22 @@
 #     cache pre-warmed; intended to be invoked with --network=none.
 #   - Cache dirs under /opt/ijt-browser-ci are world-writable so non-root
 #     --user UID at runtime can read+write.
-#   - All base images are digest-pinned. Refresh procedure: re-pull tag,
-#     copy `Docker-Content-Digest` from the registry HEAD response, update
-#     the Node, Python, and Ubuntu `FROM` lines and metadata.json
-#     `base_digests`.
+#   - All base images are digest-pinned via ARG defaults below (single source).
+#     FROM, LABEL, and metadata.json all expand those ARGs so weekly Renovate
+#     digest PRs cannot drift the three surfaces apart. Refresh: re-pull tag,
+#     copy Docker-Content-Digest into the matching ARG default.
+
+# Single source of truth for base digests (Renovate regex customManagers).
+ARG BASE_NODE_DIGEST=sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+ARG BASE_PYTHON_DIGEST=sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83
+ARG BASE_UBUNTU_DIGEST=sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 
 # ---------------------------------------------------------------------------
 # Stage 1: Node 24 source stage (digest-pinned).
 #   node:24-bookworm-slim - manifest-list HEAD digest captured 2026-05-20
 #   (Renovate PR #394 superseded by this update).
 # ---------------------------------------------------------------------------
-FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS node
+FROM node:24-bookworm-slim@${BASE_NODE_DIGEST} AS node
 
 # ---------------------------------------------------------------------------
 # Stage 2: Python 3.14 source stage (digest-pinned).
@@ -34,7 +39,7 @@ FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca92
 #   across glibc versions, so a binary linked on bookworm (glibc 2.36) runs on
 #   Noble (glibc 2.39).
 # ---------------------------------------------------------------------------
-FROM python:3.14-slim-bookworm@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83 AS python
+FROM python:3.14-slim-bookworm@${BASE_PYTHON_DIGEST} AS python
 
 # ---------------------------------------------------------------------------
 # Stage 3: Ubuntu 24.04 Noble final image (digest-pinned).
@@ -43,7 +48,12 @@ FROM python:3.14-slim-bookworm@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a
 #   glibc 2.36 is too old. Python 3.14 is copied from the official python
 #   stage above (no third-party PPA, no source build).
 # ---------------------------------------------------------------------------
-FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+FROM ubuntu:24.04@${BASE_UBUNTU_DIGEST}
+
+# Re-declare global ARGs so RUN/LABEL in this stage can expand them.
+ARG BASE_NODE_DIGEST
+ARG BASE_PYTHON_DIGEST
+ARG BASE_UBUNTU_DIGEST
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin \
@@ -182,9 +192,9 @@ RUN python -c "import json,sys,subprocess; \
           'inputs_fingerprint':'${IMAGE_INPUTS_FINGERPRINT}',\
           'build_created':'${IMAGE_BUILD_CREATED}',\
           'base_digests':{\
-            'ubuntu':'sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b',\
-            'python':'sha256:eae5d4c3ba20e5f89782e37950bb4815460e8f27564fd25112c3d950cd5351c9',\
-            'node':'sha256:b809ce06df0b8f49f8a3015e23a38f47fabfa1052d4d6916655eaae0d9950ff9'},\
+            'ubuntu':'${BASE_UBUNTU_DIGEST}',\
+            'python':'${BASE_PYTHON_DIGEST}',\
+            'node':'${BASE_NODE_DIGEST}'},\
           'cache_paths':{\
             'pip_wheelhouse':'/opt/ijt-browser-ci/pip-wheelhouse',\
             'pip_cache':'/opt/ijt-browser-ci/pip-cache',\
@@ -209,6 +219,6 @@ LABEL org.opencontainers.image.title="ijt-browser-ci" \
       org.umati.ijt.node_version="24.x" \
       org.umati.ijt.playwright_version="${IMAGE_PLAYWRIGHT_VERSION}" \
       org.umati.ijt.inputs_fingerprint="${IMAGE_INPUTS_FINGERPRINT}" \
-      org.umati.ijt.base_ubuntu_digest="sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b" \
-      org.umati.ijt.base_python_digest="sha256:eae5d4c3ba20e5f89782e37950bb4815460e8f27564fd25112c3d950cd5351c9" \
-      org.umati.ijt.base_node_digest="sha256:b809ce06df0b8f49f8a3015e23a38f47fabfa1052d4d6916655eaae0d9950ff9"
+      org.umati.ijt.base_ubuntu_digest="${BASE_UBUNTU_DIGEST}" \
+      org.umati.ijt.base_python_digest="${BASE_PYTHON_DIGEST}" \
+      org.umati.ijt.base_node_digest="${BASE_NODE_DIGEST}"

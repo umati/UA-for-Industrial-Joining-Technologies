@@ -840,3 +840,43 @@ def test_browser_ci_dockerfile_derives_asyncua_runtime_constraint_from_wheel() -
         "package-lock.json'))['packages']['node_modules/@playwright/test']['version']" in dockerfile
     )
     assert 'org.umati.ijt.playwright_version="${IMAGE_PLAYWRIGHT_VERSION}"' in dockerfile
+
+
+def test_browser_ci_dockerfile_base_digests_use_single_arg_source() -> None:
+    """ARG defaults feed FROM, LABEL, and metadata so weekly digest PRs cannot drift."""
+    dockerfile = _IMAGE_DOCKERFILE.read_text(encoding="utf-8")
+    arg_digests = {
+        "node": re.search(
+            r"^ARG BASE_NODE_DIGEST=(sha256:[0-9a-f]{64})\s*$", dockerfile, re.MULTILINE
+        ),
+        "python": re.search(
+            r"^ARG BASE_PYTHON_DIGEST=(sha256:[0-9a-f]{64})\s*$", dockerfile, re.MULTILINE
+        ),
+        "ubuntu": re.search(
+            r"^ARG BASE_UBUNTU_DIGEST=(sha256:[0-9a-f]{64})\s*$", dockerfile, re.MULTILINE
+        ),
+    }
+    assert all(match for match in arg_digests.values()), (
+        "Browser CI base digests must be declared as ARG defaults"
+    )
+    assert "FROM node:24-bookworm-slim@${BASE_NODE_DIGEST}" in dockerfile
+    assert "FROM python:3.14-slim-bookworm@${BASE_PYTHON_DIGEST}" in dockerfile
+    assert "FROM ubuntu:24.04@${BASE_UBUNTU_DIGEST}" in dockerfile
+    assert "'ubuntu':'${BASE_UBUNTU_DIGEST}'" in dockerfile.replace(" ", "")
+    assert "'python':'${BASE_PYTHON_DIGEST}'" in dockerfile.replace(" ", "")
+    assert "'node':'${BASE_NODE_DIGEST}'" in dockerfile.replace(" ", "")
+    assert 'org.umati.ijt.base_ubuntu_digest="${BASE_UBUNTU_DIGEST}"' in dockerfile
+    assert 'org.umati.ijt.base_python_digest="${BASE_PYTHON_DIGEST}"' in dockerfile
+    assert 'org.umati.ijt.base_node_digest="${BASE_NODE_DIGEST}"' in dockerfile
+
+
+def test_browser_ci_pin_base_digests_describe_published_artifact(pin: dict) -> None:
+    """Pin base_digests are publish provenance; they may lag Dockerfile FROM until rebuild."""
+    pin_bases = pin.get("base_digests") or {}
+    assert set(pin_bases) == {"ubuntu", "python", "node"}
+    digest_re = re.compile(r"^sha256:[0-9a-f]{64}$")
+    for name, digest in pin_bases.items():
+        assert digest_re.match(digest), f"image-pin base_digests.{name} must be sha256:…64"
+    comment = str(pin.get("_comment") or "")
+    assert "published artifact" in comment
+    assert "Dockerfile FROM digests may advance" in comment

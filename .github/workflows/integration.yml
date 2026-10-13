@@ -192,11 +192,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Extract server ZIP (required for Docker COPY instructions)
-        working-directory: OPC_UA_Servers/Release2
-        run: |
-          unzip -q OPC_UA_IJT_Server_Simulator_Linux.zip
-          echo "Extracted: $(ls OPC_UA_IJT_Server_Simulator_Linux/)"
+      # Server Dockerfile copies the Linux ZIP and extracts it in a BusyBox stage;
+      # do not host-unzip before build (duplicate / outdated path).
 
       - name: Install hadolint (binary — avoids a Docker Hub pull)
         # Using the released binary instead of `docker run hadolint/hadolint`

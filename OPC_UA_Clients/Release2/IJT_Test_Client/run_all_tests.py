@@ -792,6 +792,17 @@ def _ensure_server(port: int = _OPCUA_SERVER_PORT) -> subprocess.Popen | None:
         return None
     exe = os.environ.get("OPCUA_SIMULATOR_EXE")
     if not exe:
+        try:
+            from simulator_extract import default_server_dir, ensure_present_simulator_packages
+        except ImportError as exc:
+            _log(
+                f"  [server] Shared simulator_extract unavailable ({exc}); "
+                "set OPCUA_SIMULATOR_EXE or use a full IJT clone for auto-extract"
+            )
+        else:
+            ready = ensure_present_simulator_packages(default_server_dir(_REPO_ROOT))
+            if not ready:
+                _log("  [server] No simulator package prepared from present ZIPs")
         for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
             if candidate.exists():
                 exe = str(candidate)

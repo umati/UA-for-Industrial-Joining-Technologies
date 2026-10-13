@@ -66,6 +66,9 @@ _TRX_SKIPPED_OUTCOMES = {"NotExecuted", "NotRunnable", "Skipped"}
 
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if _SCRIPTS_DIR.is_dir() and str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
 
 _SERVER_NATIVE_PORT = 40451  # server binary default — used for fallback pre-flight
 _OPCUA_SERVER_PORT = 40464  # dedicated port for C# client test isolation (copy-and-patch)
@@ -1052,6 +1055,21 @@ def _try_launch_simulator() -> subprocess.Popen | None:
     """
     exe: str | None = os.environ.get("OPCUA_SIMULATOR_EXE", "").strip() or None
     if not exe:
+        try:
+            from simulator_extract import default_server_dir, ensure_present_simulator_packages
+        except ImportError as exc:
+            print(
+                f"[PHASE 2] Shared simulator_extract unavailable ({exc}); "
+                "set OPCUA_SIMULATOR_EXE or use a full IJT clone for auto-extract",
+                file=sys.stderr,
+            )
+        else:
+            ready = ensure_present_simulator_packages(default_server_dir(_REPO_ROOT))
+            if not ready:
+                print(
+                    "[PHASE 2] No simulator package prepared from present ZIPs",
+                    file=sys.stderr,
+                )
         for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
             if candidate.exists():
                 exe = str(candidate)

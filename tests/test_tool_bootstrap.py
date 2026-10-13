@@ -20,6 +20,43 @@ def local_environment(monkeypatch):
     monkeypatch.delenv("IS_DOCKER", raising=False)
 
 
+def test_create_environment_recreates_when_pyvenv_cfg_missing(tmp_path, monkeypatch):
+    directory = tmp_path / "broken-venv"
+    python = bootstrap.environment_python(directory)
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+    assert not (directory / "pyvenv.cfg").exists()
+    calls: list[list[str]] = []
+
+    def run(command, project):
+        calls.append(list(command))
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "pyvenv.cfg").write_text("home = test\n", encoding="utf-8")
+        python_path = bootstrap.environment_python(directory)
+        python_path.parent.mkdir(parents=True, exist_ok=True)
+        python_path.write_text("", encoding="utf-8")
+        return __import__("subprocess").CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(bootstrap, "_run", run)
+    result = bootstrap._create_environment(directory, tmp_path)
+    assert result == bootstrap.environment_python(directory)
+    assert (directory / "pyvenv.cfg").is_file()
+    assert calls and calls[0][:3] == [sys.executable, "-m", "venv"]
+
+
+def test_create_environment_refuses_paths_outside_project(tmp_path, monkeypatch):
+    outside = tmp_path.parent / f"ijt-bootstrap-outside-{tmp_path.name}"
+    python = bootstrap.environment_python(outside)
+    python.parent.mkdir(parents=True, exist_ok=True)
+    python.write_text("", encoding="utf-8")
+    try:
+        with pytest.raises(RuntimeError, match="outside project tree"):
+            bootstrap._create_environment(outside, tmp_path)
+    finally:
+        if outside.exists():
+            bootstrap.shutil.rmtree(outside, ignore_errors=True)
+
+
 def test_reuses_reviewed_provisioned_uv_without_writes(tmp_path, monkeypatch):
     monkeypatch.setattr(bootstrap.shutil, "which", lambda tool: "provided-uv")
     monkeypatch.setattr(bootstrap, "_uv_usable", lambda executable: True)

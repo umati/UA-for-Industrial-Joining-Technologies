@@ -16,7 +16,6 @@ import socket
 import subprocess
 import time
 import webbrowser
-import zipfile
 from pathlib import Path
 from typing import IO, Any
 
@@ -98,9 +97,10 @@ IS_WINDOWS = os.name == "nt"
 REPO_ROOT = _detect_repo_root(PROJECT_DIR)
 PYTHON_LOCK = PROJECT_DIR / "uv.lock"
 PYTHON_CONSTRAINTS = PROJECT_DIR / "pyproject.toml"
-SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator"
-SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator.zip"
-SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe"
+_SIMULATOR_PACKAGE = "OPC_UA_IJT_Server_Simulator" if IS_WINDOWS else "OPC_UA_IJT_Server_Simulator_Linux"
+SIMULATOR_DIR = REPO_ROOT / "OPC_UA_Servers" / "Release2" / _SIMULATOR_PACKAGE
+SIMULATOR_ZIP = REPO_ROOT / "OPC_UA_Servers" / "Release2" / f"{_SIMULATOR_PACKAGE}.zip"
+SIMULATOR_EXE_NAME = "opcua_ijt_demo_application.exe" if IS_WINDOWS else "opcua_ijt_demo_application"
 SETUP_LOCK_FILE = STATE_DIR / "setup.lock"
 RUNTIME_STATE_FILE = STATE_DIR / "runtime_processes.json"
 DIRECT_RUNTIME_ENDPOINT = "opc.tcp://localhost:40451"
@@ -817,35 +817,36 @@ def _wait_for_endpoint_ready(
 
 
 def _extract_simulator_zip_if_needed() -> None:
-    if not SIMULATOR_ZIP.exists():
-        return
-    if SIMULATOR_DIR.exists():
-        zip_mtime = SIMULATOR_ZIP.stat().st_mtime
-        dir_mtime = SIMULATOR_DIR.stat().st_mtime
-        if zip_mtime <= dir_mtime:
-            return  # extracted folder is already up-to-date
-        log.info(
-            "Newer simulator ZIP detected (zip mtime=%.0f > dir mtime=%.0f). Removing old folder: %s",
-            zip_mtime,
-            dir_mtime,
-            SIMULATOR_DIR,
-        )
-        shutil.rmtree(SIMULATOR_DIR)
+    """Ensure present simulator ZIPs via shared locked extract (scripts/)."""
     try:
-        log.info("Extracting OPC UA simulator from ZIP: %s", SIMULATOR_ZIP)
-        with zipfile.ZipFile(SIMULATOR_ZIP, "r") as zf:
-            zf.extractall(SIMULATOR_ZIP.parent)
-    except Exception as e:
-        log.warning("Failed to extract simulator ZIP '%s': %s", SIMULATOR_ZIP, e)
+        from simulator_extract import ensure_present_simulator_packages
+    except ImportError:
+        log.info(
+            "Shared simulator_extract unavailable (full IJT clone provides scripts/). "
+            "Set OPCUA_SIMULATOR_EXE or OPCUA_SERVER_URL for live OPC UA without auto-extract."
+        )
+        return
+    ready = ensure_present_simulator_packages(SIMULATOR_ZIP.parent, logger=log)
+    if not ready:
+        log.info(
+            "No simulator package prepared from present ZIPs under %s",
+            SIMULATOR_ZIP.parent,
+        )
 
 
 def _find_simulator_executable() -> Path | None:
+    env_override = os.getenv("OPCUA_SIMULATOR_EXE")
+    if env_override:
+        override = Path(env_override)
+        if override.is_file():
+            return override
+        log.warning("OPCUA_SIMULATOR_EXE=%r is not a file; ignoring.", env_override)
     if not SIMULATOR_DIR.exists():
         return None
     direct = SIMULATOR_DIR / SIMULATOR_EXE_NAME
-    if direct.exists():
+    if direct.is_file():
         return direct
-    matches = list(SIMULATOR_DIR.rglob(SIMULATOR_EXE_NAME))
+    matches = [p for p in SIMULATOR_DIR.rglob(SIMULATOR_EXE_NAME) if p.is_file()]
     return matches[0] if matches else None
 
 

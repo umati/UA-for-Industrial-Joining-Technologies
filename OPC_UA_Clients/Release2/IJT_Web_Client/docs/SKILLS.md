@@ -578,11 +578,12 @@ and opens or closes the stable issue key
 `[Web Client Compatibility Smoke] windows-latest / msedge` from real red/green
 results.
 
-If the checked-in simulator binary directory is absent in CI, the runner
-extracts the Release 2 platform-specific simulator ZIP from
-`OPC_UA_Servers/Release2` before launching owned live-suite servers. Linux hosts
-prefer `OPC_UA_IJT_Server_Simulator_Linux.zip`; Windows hosts prefer
-`OPC_UA_IJT_Server_Simulator.zip`.
+If the checked-in simulator binary directory is absent, Web `setup_project.py`
+and `run_all_tests.py` call shared `scripts/simulator_extract.py` so every
+**present** Release 2 simulator ZIP is extracted (locked staging → rename-aside) into its own folder
+(`OPC_UA_IJT_Server_Simulator` / `OPC_UA_IJT_Server_Simulator_Linux`). Launch still
+prefers the platform binary. Full IJT clone required for auto-extract; otherwise
+set `OPCUA_SIMULATOR_EXE` / `OPCUA_SERVER_URL`.
 
 ### Browser Runtime WebSocket Config
 

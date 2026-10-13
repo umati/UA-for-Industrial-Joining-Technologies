@@ -13,5 +13,5 @@
     "python": "sha256:eae5d4c3ba20e5f89782e37950bb4815460e8f27564fd25112c3d950cd5351c9",
     "node": "sha256:b809ce06df0b8f49f8a3015e23a38f47fabfa1052d4d6916655eaae0d9950ff9"
   },
-  "_comment": "Single source of truth for the IJT Browser CI image consumed by integration.yml live-webclient-browser. IJT_BROWSER_CI_IMAGE is constructed at runtime as image@digest. Refresh procedure: the build-browser-ci-image workflow publishes a verified image, and a maintainer opens a normal reviewed PR updating this file when main should consume that digest. The workflow MUST fail fast if digest does not match ^sha256:[0-9a-f]{64}$."
+  "_comment": "Single source of truth for the IJT Browser CI image consumed by integration.yml live-webclient-browser. IJT_BROWSER_CI_IMAGE is constructed at runtime as image@digest. digest/inputs_fingerprint/image_*/base_digests describe the published artifact only — update them together via the build-browser-ci-image pin workflow after a verified publish. Dockerfile FROM digests may advance ahead of this pin until the next rebuild. The workflow MUST fail fast if digest does not match ^sha256:[0-9a-f]{64}$."
 }

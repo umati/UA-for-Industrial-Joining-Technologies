@@ -66,7 +66,6 @@ import sys
 import tempfile
 import threading
 import time
-import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -101,7 +100,7 @@ if str(_SHARED_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SHARED_SCRIPTS_DIR))
 
 from ijt_live_readiness import COMPOSE_WAIT_TIMEOUT_WARM_SECONDS  # noqa: E402
-from tool_bootstrap import ensure_uv  # noqa: E402
+from tool_bootstrap import ensure_uv, preparation_lock  # noqa: E402
 
 from tests.python._live_server_readiness import (  # noqa: E402
     MAX_SIMULATOR_LAUNCH_ATTEMPTS,
@@ -691,6 +690,48 @@ def _looks_like_transient_network_failure(output: str) -> bool:
             "timed out",
         )
     )
+
+
+def _looks_like_docker_cli_lock_contention(output: str) -> bool:
+    """True when Docker Desktop on Windows races contexts/meta/*.json."""
+    lowered = output.lower().replace("/", "\\")
+    return "being used by another process" in lowered and (
+        "meta.json" in lowered or "contexts\\meta" in lowered or "failed to read metadata" in lowered
+    )
+
+
+def _run_docker_cli_with_retry(
+    cmd: list,
+    *,
+    cwd: Path,
+    label: str,
+    env: dict | None = None,
+    timeout: int | None = 300,
+    attempts: int = 4,
+) -> int:
+    """Run a Docker CLI command; retry transient Windows context-file locks."""
+    last_rc = 1
+    for attempt in range(1, attempts + 1):
+        attempt_label = label if attempt == 1 else f"{label} (retry {attempt}/{attempts})"
+        rc, output = _run_captured(
+            cmd,
+            cwd=cwd,
+            label=attempt_label,
+            env=env,
+            timeout=timeout,
+        )
+        if output:
+            print(output, end="" if output.endswith("\n") else "\n")
+        if rc == 0:
+            return 0
+        last_rc = rc
+        if attempt < attempts and _looks_like_docker_cli_lock_contention(output):
+            delay = min(2.0 * attempt, 8.0)
+            _warn(f"Docker CLI lock contention on attempt {attempt}/{attempts}; retrying in {delay:.1f}s")
+            time.sleep(delay)
+            continue
+        return rc
+    return last_rc
 
 
 def _npm_audit_mode() -> str:
@@ -2334,13 +2375,8 @@ def _capture_compose_failure_logs(
 
 _WINDOWS_SIMULATOR_EXE = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe"
 _LINUX_SIMULATOR_EXE = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application"
-_WINDOWS_SIMULATOR_ZIP = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator.zip"
-_LINUX_SIMULATOR_ZIP = _SERVER_COMPOSE_DIR / "OPC_UA_IJT_Server_Simulator_Linux.zip"
 _WELL_KNOWN_SIMULATOR_PATHS: list[Path] = (
     [_WINDOWS_SIMULATOR_EXE, _LINUX_SIMULATOR_EXE] if IS_WINDOWS else [_LINUX_SIMULATOR_EXE, _WINDOWS_SIMULATOR_EXE]
-)
-_SIMULATOR_PACKAGE_ZIPS: list[Path] = (
-    [_WINDOWS_SIMULATOR_ZIP, _LINUX_SIMULATOR_ZIP] if IS_WINDOWS else [_LINUX_SIMULATOR_ZIP, _WINDOWS_SIMULATOR_ZIP]
 )
 # The OPC UA server port this client connects to.  Defined once here so every
 # reference below derives from it — change the port in one place only.
@@ -2797,22 +2833,22 @@ def _find_simulator_executable() -> str | None:
     exe = os.getenv("OPCUA_SIMULATOR_EXE")
     if exe:
         return exe
+    # Extract first (same order as root/other clients) so a stamp-stale or
+    # incomplete folder is refreshed before well-known path lookup.
+    try:
+        from simulator_extract import ensure_present_simulator_packages
+    except ImportError as exc:
+        _info(
+            f"[server] Shared simulator_extract unavailable ({exc}); "
+            "set OPCUA_SIMULATOR_EXE or use a full IJT clone for auto-extract"
+        )
+    else:
+        ready = ensure_present_simulator_packages(_SERVER_COMPOSE_DIR)
+        if not ready:
+            _info("[server] No simulator package prepared from present ZIPs")
     for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
         if candidate.exists():
             return str(candidate)
-    for package in _SIMULATOR_PACKAGE_ZIPS:
-        if not package.exists():
-            continue
-        _info(f"[server] Extracting simulator package: {package.name}")
-        try:
-            with zipfile.ZipFile(package) as archive:
-                archive.extractall(_SERVER_COMPOSE_DIR)
-        except (OSError, zipfile.BadZipFile) as exc:
-            _warn(f"[server] Could not extract {package.name}: {exc}")
-            continue
-        for candidate in _WELL_KNOWN_SIMULATOR_PATHS:
-            if candidate.exists():
-                return str(candidate)
     return None
 
 
@@ -3217,6 +3253,25 @@ def _stage_docker_smoke() -> StageResult:
             duration=time.monotonic() - t0,
             notes=[f"missing smoke compose file: {smoke_compose_file.name}"],
         )
+
+    # Shared with root-runner server-linux-package-smoke so parallel Phase 2
+    # Docker suites do not race Docker Desktop's contexts/meta/*.json on Windows.
+    docker_lock = _REPO_ROOT / "tmp" / "docker-cli.lock"
+    lock_timeout = float(_DOCKER_BUILD_TIMEOUT + COMPOSE_WAIT_TIMEOUT_WARM_SECONDS + 180)
+    try:
+        with preparation_lock(docker_lock, timeout=lock_timeout):
+            return _docker_smoke_under_lock(docker, smoke_compose_file, t0)
+    except RuntimeError as exc:
+        return StageResult(
+            "docker-smoke",
+            1,
+            duration=time.monotonic() - t0,
+            notes=[f"docker CLI lock unavailable: {exc}"],
+        )
+
+
+def _docker_smoke_under_lock(docker: str, smoke_compose_file: Path, t0: float) -> StageResult:
+    """Build/compose/readiness path executed while holding the shared Docker CLI lock."""
     compose_cmd = [docker, "compose", "-f", str(smoke_compose_file)]
     compose_project = _compose_project_name()
     compose_env = {"COMPOSE_PROJECT_NAME": compose_project}
@@ -3235,7 +3290,7 @@ def _stage_docker_smoke() -> StageResult:
         str(ROOT.relative_to(_REPO_ROOT) / "Dockerfile"),
         ".",
     ]
-    rc = _run(
+    rc = _run_docker_cli_with_retry(
         build_cmd,
         label="docker build (BuildKit)",
         cwd=_REPO_ROOT,
@@ -3265,7 +3320,7 @@ def _stage_docker_smoke() -> StageResult:
         "WEB_CLIENT_HTTP_PORT": str(http_port),
         "WEB_CLIENT_WS_PORT": str(ws_port),
     }
-    rc = _run(
+    rc = _run_docker_cli_with_retry(
         compose_cmd
         + [
             "up",
@@ -3279,6 +3334,7 @@ def _stage_docker_smoke() -> StageResult:
         # Outer subprocess timeout: see _start_opcua_docker_server above. We
         # bound the whole compose-up call to (--wait-timeout + 60s docker
         # slack) so a hung daemon or pull cannot freeze docker-smoke.
+        cwd=ROOT,
         env=compose_env,
         timeout=COMPOSE_WAIT_TIMEOUT_WARM_SECONDS + 60,
     )

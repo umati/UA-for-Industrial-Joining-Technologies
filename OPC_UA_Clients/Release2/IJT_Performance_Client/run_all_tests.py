@@ -17,7 +17,8 @@ Usage:
 Environment variables:
   SKIP_VENV_INSTALL     Set to "1" to skip pip install (deps already installed)
   OPCUA_SERVER_URL      Override server URL (default: opc.tcp://localhost:40485)
-  OPCUA_SIMULATOR_EXE   Path to opcua_ijt_demo_application(.exe)
+  OPCUA_SIMULATOR_EXE   Path to opcua_ijt_demo_application(.exe);
+                        else shared scripts/simulator_extract.py then well-known paths
 """
 
 from __future__ import annotations
@@ -49,6 +50,8 @@ from tool_bootstrap import ensure_uv
 
 # Key directory paths
 _HERE = Path(__file__).resolve().parent
+# _HERE is the client directory; parents[2] is the IJT repository root
+# (parents[3] would be above the clone — do not "align" with file-based parents[3]).
 _REPO_ROOT = _HERE.parents[2]
 _RESULTS_DIR = _HERE / "test-results"
 _DEFAULT_JUNIT = _RESULTS_DIR / "pytest.xml"
@@ -143,14 +146,26 @@ def _is_port_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
 
 def _find_simulator_exe() -> Path | None:
     """Locate the OPC UA simulator executable across Windows and Linux directories."""
+    env_override = os.environ.get("OPCUA_SIMULATOR_EXE")
+    if env_override:
+        override = Path(env_override)
+        if override.is_file():
+            return override
+    try:
+        from simulator_extract import default_server_dir, ensure_present_simulator_packages
+    except ImportError as exc:
+        _print_status(
+            f"  [server] Shared simulator_extract unavailable ({exc}); "
+            "set OPCUA_SIMULATOR_EXE or use a full IJT clone for auto-extract"
+        )
+    else:
+        ready = ensure_present_simulator_packages(default_server_dir(_REPO_ROOT))
+        if not ready:
+            _print_status("  [server] No simulator package prepared from present ZIPs")
     candidates = [
         _REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe",
         _REPO_ROOT / "OPC_UA_Servers" / "Release2" / "OPC_UA_IJT_Server_Simulator_Linux" / "opcua_ijt_demo_application",
     ]
-    env_override = os.environ.get("OPCUA_SIMULATOR_EXE")
-    if env_override:
-        candidates.insert(0, Path(env_override))
-
     for path in candidates:
         if path.is_file():
             return path

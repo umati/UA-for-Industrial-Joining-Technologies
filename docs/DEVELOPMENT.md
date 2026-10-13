@@ -165,7 +165,7 @@ When you run `python run_all_tests.py`, the repository handles the following wit
 | **Python Tooling** | Prepares uv under `.state/tools/` when needed; syncs root `.venv` from root `uv.lock` for locked CLIs (zizmor); no global pip installation |
 | **Node.js Packages** | Automatically runs `npm ci` when `node_modules` is missing |
 | **Playwright Browsers** | Automatically installs browser binaries (`playwright install chromium`) during E2E stages |
-| **OPC UA Server Simulators** | Automatically launches native/containerized simulator instances with dedicated port isolation |
+| **OPC UA Server Simulators** | Ensures present simulator ZIPs via `scripts/simulator_extract.py` (locked staging → rename-aside swap), then launches native/containerized instances with dedicated port isolation |
 | **Missing Optional Tools** | OS/binary scanners (Hadolint, Trivy, Actionlint, Semgrep, …) skip gracefully when absent; CI remains authoritative |
 
 **Lockfile Python tools (required):** The repository **root is a uv project**
@@ -428,39 +428,76 @@ View results: [GitHub Actions CI](https://github.com/umati/UA-for-Industrial-Joi
 
 ## Docker
 
-### Optional: Running Server in Docker
+**Prerequisites:** Docker Desktop (macOS/Windows) or Docker Engine (Linux) with Compose CLI v2 (`docker compose`).
 
-Docker enables isolated testing of the IJT server without affecting your local environment.
+Product and Browser CI images pin base layers by digest. Renovate opens a weekly
+`docker-digests` PR (no automerge, no sticky `needs-manual-review`); merge after
+green CI when you are ready. OS base *version* bumps (ubuntu/debian/alpine major/
+minor/patch) still get `needs-manual-review`. Browser CI `image-pin.json`
+`base_digests` describe the published artifact and may lag Dockerfile `FROM`
+digests until the next verified rebuild + pin PR. After a successful
+`build-browser-ci-image` workflow_dispatch/schedule publish, open/merge the
+reviewed pin PR so `digest` / fingerprint / `base_digests` move together.
 
-**Prerequisites:** Docker Desktop (macOS/Windows) or Docker Engine (Linux)
+### Server (`opcua-ijt-server`)
 
-**Build the server image:**
+Prefer Compose from `OPC_UA_Servers/Release2`:
+
 ```bash
 cd OPC_UA_Servers/Release2
-docker build -t ijt-server .
+docker compose up --build
 ```
 
-**Run the server:**
+Equivalent one-off:
+
 ```bash
-docker run -p 40451:40451 ijt-server
+docker build -t opcua-ijt-server .
+docker run --rm -p 40451:40451 opcua-ijt-server
 ```
 
-The server listens on `opc.tcp://localhost:40451` (accessible from your host machine).
+The Dockerfile copies `OPC_UA_IJT_Server_Simulator_Linux.zip` and extracts it in a
+BusyBox stage — do not host-unzip before `docker build`. The image sets
+`IS_DOCKER=true` (same convention as Web Client / CI).
 
-**Connect a client:**
+### Web Client
+
+From `OPC_UA_Clients/Release2/IJT_Web_Client`:
+
 ```bash
-# From another terminal on your host
-# Use any OPC UA client pointed at opc.tcp://localhost:40451
+python run_docker_setup.py          # docker compose (v2) when Docker is running
+python run_docker_setup.py --mode local
 ```
 
-**View server logs:**
-```bash
-docker logs <container-id>
-```
+Compose scopes container names by project (no global `container_name`).
+`run_docker_setup.py` uses Compose CLI v2 with a path-derived `COMPOSE_PROJECT_NAME`
+and image tag (parallel checkouts do not collide), `docker compose down -v
+--remove-orphans` so the named `node_modules` volume cannot retain stale installs,
+optional `--no-cache`, and forwards `--setup-args` into the container via
+`IJT_SETUP_ARGS`. Healthchecks run `docker_healthcheck.py`: HTTP on `HTTP_PORT`
+plus a real WebSocket upgrade on `WS_PORT`.
 
-### Docker Compose (if available)
+### Simulator ZIP extraction (host runners)
 
-Some components may provide `docker-compose.yml` for multi-service setups. Check the relevant component directory.
+Shared helper: `scripts/simulator_extract.py` (cross-process lock, unique staging,
+rename-aside swap, ZIP stamp + binary check, Unix exec-bit restore, member-path
+and size/count caps before extract). The root
+runner and Release 2 client runners ensure every **present** ZIP under
+`OPC_UA_Servers/Release2/` into its own folder (`OPC_UA_IJT_Server_Simulator` and
+`OPC_UA_IJT_Server_Simulator_Linux`). Auto-extract needs a full IJT clone (or set
+`OPCUA_SIMULATOR_EXE` / `OPCUA_SERVER_URL`). Pre-stamp folders that already contain
+the expected binary are **adopted in place** (stamp written, no rename-aside) so a
+running simulator is not torn out from under parallel live suites on upgrade.
+
+#### Hosted GHA vs local extract races
+
+Local Phase 2 can start several client runners that would otherwise extract the
+same ZIP concurrently. The shared helper serializes that with a cross-process
+lock, unique staging, and rename-aside swap. Hosted GitHub Actions often **does
+not** hit that race: many jobs pre-extract a single ZIP serially
+(`Expand-Archive` / `unzip`) or build the server image (in-container BusyBox
+extract) before live suites. Treat hosted green runs as evidence of *their*
+setup path, not proof that local parallel extract is safe without the shared
+helper.
 
 ## Troubleshooting
 

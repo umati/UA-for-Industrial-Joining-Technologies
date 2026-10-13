@@ -155,11 +155,14 @@ does not initialize or reset a target server; target manifest policy is retained
 ```
 Endpoint:       opc.tcp://localhost:40451   (override: OPCUA_SERVER_URL env var)
 Binary:         OPC_UA_Servers/Release2/OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe
+                (Linux: .../OPC_UA_IJT_Server_Simulator_Linux/opcua_ijt_demo_application)
+Extract:        shared scripts/simulator_extract.py — every present ZIP under Release2
+                is extracted (locked staging → rename-aside) into its own folder before auto-launch
 Python:         3.14+  (normal test venv at .venv_test/; local --ci-mode venv at .venv_ci/)
 Key packages:   asyncua (locked to 2.1.0 in uv.lock; keep Web/Test/Console/Performance aligned on the same released version), PyYAML>=6.0, pytest>=9.0.2, pytest-asyncio>=1.3.0, pytest-timeout>=2.4.0
 Run tests:      .venv_test/bin/python -m pytest -v          (Linux, normal mode)
                 .venv_test\Scripts\python -m pytest -v      (Windows, normal mode)
-Auto-launch:    set OPCUA_SIMULATOR_EXE=<path>  to auto-start server if not running
+Auto-launch:    well-known paths after extract; or set OPCUA_SIMULATOR_EXE=<path>
 ```
 
 Namespace indices resolve dynamically — always use the URI constants in `helpers/namespaces.py`:

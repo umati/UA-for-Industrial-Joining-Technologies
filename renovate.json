@@ -30,6 +30,42 @@
       ],
       "datasourceTemplate": "pypi",
       "depNameTemplate": "zizmor"
+    },
+    {
+      "customType": "regex",
+      "description": "Browser CI base digests via ARG defaults (FROM/LABEL/metadata expand the same ARG).",
+      "managerFilePatterns": ["/^\\.github/docker/ijt-browser-ci/Dockerfile$/"],
+      "matchStrings": [
+        "ARG BASE_NODE_DIGEST=(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "node",
+      "currentValueTemplate": "24-bookworm-slim",
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Browser CI Python base digest ARG.",
+      "managerFilePatterns": ["/^\\.github/docker/ijt-browser-ci/Dockerfile$/"],
+      "matchStrings": [
+        "ARG BASE_PYTHON_DIGEST=(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "python",
+      "currentValueTemplate": "3.14-slim-bookworm",
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Browser CI Ubuntu base digest ARG.",
+      "managerFilePatterns": ["/^\\.github/docker/ijt-browser-ci/Dockerfile$/"],
+      "matchStrings": [
+        "ARG BASE_UBUNTU_DIGEST=(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "ubuntu",
+      "currentValueTemplate": "24.04",
+      "versioningTemplate": "docker"
     }
   ],
   "lockFileMaintenance": {
@@ -112,7 +148,7 @@
       "enabled": false
     },
     {
-      "description": "Group Docker digest refreshes into one weekly reviewed PR. Digest churn is normal, but daily one-image PRs add CI load without improving safety.",
+      "description": "Group Docker digest refreshes into one weekly reviewed PR. Digest churn is normal, but daily one-image PRs add CI load without improving safety. No needs-manual-review label: digests stay visible as normal PRs for human merge after CI (no automerge).",
       "matchDatasources": ["docker"],
       "matchUpdateTypes": ["digest"],
       "groupName": "Docker image digest updates",
@@ -120,7 +156,7 @@
       "schedule": ["before 7am on monday"],
       "minimumReleaseAge": "3 days",
       "automerge": false,
-      "addLabels": ["dependencies", "docker-digest", "needs-manual-review"]
+      "addLabels": ["dependencies", "docker-digest"]
     },
     {
       "description": "Batch Playwright monorepo updates weekly so Browser CI image refreshes are deliberate and reuse the fingerprint-cache path instead of producing daily PR pressure.",
@@ -133,9 +169,10 @@
       "addLabels": ["dependencies", "playwright", "needs-manual-review"]
     },
     {
-      "description": "Docker OS base-image bumps (ubuntu, debian, alpine…) must pass CI before merging. They can break compiled binaries, rename packages, or change system defaults. Renovate creates the PR; a human merges after CI is green.",
+      "description": "Docker OS base-image version bumps (ubuntu, debian, alpine…) must pass CI before merging. Excludes digest-only updates so the weekly docker-digests group is not re-labeled needs-manual-review (Renovate merges addLabels across matching rules).",
       "matchDatasources": ["docker"],
       "matchPackagePatterns": ["^ubuntu$", "^debian$", "^alpine$"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
       "automerge": false,
       "addLabels": ["needs-manual-review", "docker-base-image"]
     },

@@ -48,7 +48,6 @@ def _write_simulator_zip(path: Path, marker: str) -> None:
 
 
 def test_prepare_native_simulator_extracts_newer_zip_once(tmp_path, monkeypatch):
-    monkeypatch.setattr(_runner, "IS_WINDOWS", True)
     target = tmp_path / "Sim"
     target.mkdir()
     (target / "stale.txt").write_text("old")
@@ -63,18 +62,42 @@ def test_prepare_native_simulator_extracts_newer_zip_once(tmp_path, monkeypatch)
     assert [p.name for p in tmp_path.iterdir() if ".extract-" in p.name] == []
 
 
-def test_prepare_native_simulator_keeps_up_to_date_folder(tmp_path, monkeypatch):
-    monkeypatch.setattr(_runner, "IS_WINDOWS", True)
+def test_prepare_native_simulator_keeps_stamp_current_folder(tmp_path, monkeypatch):
     archive = tmp_path / "sim.zip"
     _write_simulator_zip(archive, "new")
     target = tmp_path / "Sim"
-    target.mkdir()
+    _runner._prepare_native_simulator(archive, target)
     (target / "keep.txt").write_text("current")
 
     _runner._prepare_native_simulator(archive, target)
 
     assert (target / "keep.txt").exists()
-    assert not (target / "opcua_ijt_demo_application.exe").exists()
+    assert (target / "opcua_ijt_demo_application.exe").read_text() == "new"
+
+
+def test_performance_client_repo_root_is_ijt_clone() -> None:
+    """Perf uses `_HERE.parents[2]` (client dir), not file-based parents[3]."""
+    perf_runner = _runner.PERFORMANCE_DIR / "run_all_tests.py"
+    source = perf_runner.read_text(encoding="utf-8")
+    assert "_REPO_ROOT = _HERE.parents[2]" in source
+    assert "_HERE.parents[3]" not in source or "would be above the clone" in source
+    assert (_runner.PERFORMANCE_DIR.parents[2] / "scripts" / "simulator_extract.py").is_file()
+    assert _runner.PERFORMANCE_DIR.parents[2] == _runner.REPO_ROOT
+
+
+def test_prepare_native_simulator_default_prepares_present_zips(tmp_path, monkeypatch):
+    server = tmp_path / "OPC_UA_Servers" / "Release2"
+    server.mkdir(parents=True)
+    win_zip = server / "OPC_UA_IJT_Server_Simulator.zip"
+    with zipfile.ZipFile(win_zip, "w") as zf:
+        zf.writestr("OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe", "win")
+    monkeypatch.setattr(_runner, "SERVER_DIR", server)
+
+    _runner._prepare_native_simulator()
+
+    assert (
+        server / "OPC_UA_IJT_Server_Simulator" / "opcua_ijt_demo_application.exe"
+    ).read_text() == "win"
 
 
 def test_source_scan_prunes_generated_state_but_keeps_project_sources(tmp_path, monkeypatch):
@@ -2256,6 +2279,18 @@ def test_docker_linux_engine_skip_note_classifies_engine_modes(monkeypatch) -> N
     )
 
 
+def test_docker_suites_share_cli_lock_path() -> None:
+    """Parallel Phase 2 Docker suites must serialize on one lock file."""
+    root_source = (_runner.REPO_ROOT / "run_all_tests.py").read_text(encoding="utf-8")
+    web_source = (_runner.WEB_CLIENT_DIR / "run_all_tests.py").read_text(encoding="utf-8")
+
+    assert '_DOCKER_CLI_LOCK = REPO_ROOT / "tmp" / "docker-cli.lock"' in root_source
+    assert "_docker_cli_exclusive" in root_source
+    assert "with _docker_cli_exclusive()" in root_source
+    assert '_REPO_ROOT / "tmp" / "docker-cli.lock"' in web_source
+    assert "preparation_lock" in web_source
+
+
 def test_server_linux_package_smoke_uses_dedicated_docker_port(monkeypatch) -> None:
     class _ExistingPath:
         def __init__(self, name: str) -> None:
@@ -2512,6 +2547,10 @@ def test_optional_import_typing_guard_detects_forward_annotation_reimport(monkey
 
 def test_run_capture_forces_child_python_utf8(monkeypatch) -> None:
     captured: dict[str, str] = {}
+    # Host agents (and some local sandboxes) may pre-set PIP_CACHE_DIR /
+    # npm_config_cache; setdefault only fills when unset.
+    monkeypatch.delenv("PIP_CACHE_DIR", raising=False)
+    monkeypatch.delenv("npm_config_cache", raising=False)
 
     class _FakeProc:
         returncode = 0

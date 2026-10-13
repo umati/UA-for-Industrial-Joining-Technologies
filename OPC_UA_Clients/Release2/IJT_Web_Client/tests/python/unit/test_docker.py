@@ -117,6 +117,11 @@ class TestDockerfileInstructions:
         """HEALTHCHECK must be defined so Docker knows when the container is ready."""
         healthchecks = _get_instructions("HEALTHCHECK")
         assert len(healthchecks) >= 1, "No HEALTHCHECK instruction found — Docker cannot detect container readiness"
+        text = _DOCKERFILE.read_text(encoding="utf-8")
+        assert "HEALTHCHECK" in text
+        assert "docker_healthcheck.py" in text, "HEALTHCHECK must run docker_healthcheck.py (HTTP + WebSocket upgrade)"
+        assert (_PROJECT_ROOT / "docker_healthcheck.py").is_file()
+        assert "HTTP_PORT" in text and "WS_PORT" in text
 
     def test_multi_stage_build_has_test_and_production_stages(self):
         """Multi-stage build must have both 'test' and 'production' stages."""
@@ -248,6 +253,16 @@ class TestDockerCompose:
             assert env.get("IS_DOCKER") == "true"
             assert env.get("IJT_OPCUA_HOST_REWRITE") == "true"
 
+    def test_compose_healthcheck_uses_websocket_script(self):
+        """Compose healthcheck must run the real WebSocket upgrade probe."""
+        text = _COMPOSE_FILE.read_text(encoding="utf-8")
+        assert "docker_healthcheck.py" in text
+        assert "IJT_WEB_IMAGE" in text
+        assert "IJT_SETUP_ARGS" in text
+        assert "HTTP_PORT" in text and "WS_PORT" in text
+        smoke = _SMOKE_COMPOSE_FILE.read_text(encoding="utf-8")
+        assert "docker_healthcheck.py" in smoke
+
 
 class TestDockerSmokeCompose:
     @pytest.mark.skipif(
@@ -261,7 +276,7 @@ class TestDockerSmokeCompose:
         content = yaml.safe_load(_SMOKE_COMPOSE_FILE.read_text(encoding="utf-8"))
         service = content["services"]["ijt_web_client"]
 
-        assert service["image"] == "ijt_web_client:latest"
+        assert "ijt_web_client" in str(service["image"])
         assert "build" not in service
         assert "volumes" not in service
         assert "command" not in service
