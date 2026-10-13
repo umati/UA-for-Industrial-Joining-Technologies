@@ -1,7 +1,24 @@
-# Root pyproject.toml — monorepo-level tool configuration.
+# Root pyproject.toml — monorepo-level tool configuration + locked root toolchain.
 # Each sub-project (Console, Web, Test clients) has its own pyproject.toml
-# for project-specific settings. This file holds repo-root concerns only.
+# for project-specific settings. Root [dependency-groups] holds Python CLIs
+# required by run_all_tests.py (e.g. zizmor). Keep zizmor==X.Y.Z in lockstep
+# with .pre-commit-config.yaml zizmor-pre-commit rev vX.Y.Z (enforced by tests;
+# Renovate groups both surfaces).
 
+[project]
+name = "ijt-repo-root"
+version = "0.0.0"
+description = "IJT monorepo root — locked toolchain for the root test runner"
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "zizmor==1.30.1",  # lockstep with pre-commit rev + ci.yml zizmor-action version (see docs/DEVELOPMENT.md)
+]
+
+[tool.uv]
+package = false
 
 [tool.pytest.ini_options]
 # Root-level pytest is reserved for repo-root infrastructure tests under tests/.

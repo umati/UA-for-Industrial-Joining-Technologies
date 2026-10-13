@@ -47,11 +47,19 @@ required package tooling and public-project inputs must be available, or it fail
 It prepares pip-audit before starting workers and never installs it inside a worker.
 Envelope remains optional: an absent or uninitialized private checkout is ignored.
 
+**Root-locked CLIs (not optional installs):** `zizmor` syncs from root `uv.lock`
+into `.venv`. Provision failure, High/Critical findings, and tool/parse errors
+all **FAIL** (hard gate). Root `.venv` is runner-owned — do not install ad-hoc
+packages there. Authoritative procedure:
+[DEVELOPMENT.md](DEVELOPMENT.md#what-is-handled-automatically)
+([Adding a root-locked CLI](DEVELOPMENT.md#adding-a-root-locked-cli)).
+
 **Behavior:**
 - Missing Docker? → Skip Docker-dependent test suites; continue with available tests.
 - Missing .NET SDK? → Skip C# test suites; continue with Python/Node tests.
 - Missing npm? → Skip npm-dependent tests; continue with available tests.
-- Missing Python packages? → Auto-install on first run (no manual pip install needed).
+- Missing OS/binary scanners (hadolint, trivy, actionlint, …)? → Skip those checks; CI remains authoritative.
+- Missing Python packages for a client/root lockfile? → Auto-sync via `uv` on first run (no manual pip).
 
 For project test runners, exit code `0` means all available checks passed; inspect
 skip messages for unavailable optional tools. An explicitly requested root
@@ -105,24 +113,17 @@ Each Python project uses separate environments for runtime, tests, and container
 
 | Directory | Created by | Contents | Typical use |
 |-----------|-----------|----------|-------------|
-| `.venv` | `setup_client.py` / `setup_project.py` / Performance `run_fleet.py` | Runtime dependencies (`uv sync --locked --no-dev`) | Application runtime using the environment's Python |
-| `.venv_test` | `run_all_tests.py` (all Release2 Python clients, including Performance) | Runtime + dev dependencies (`uv sync --locked`) | Normal local test runs |
-| `.venv_ci` | `run_all_tests.py --ci-mode` (local only) | Runtime + dev dependencies (`uv sync --locked`) | Local CI-mode mirror without using system Python |
+| **Repo root** `.venv` | Root `run_all_tests.py` (`uv sync --locked --group dev`) | Root-locked CLIs from root `uv.lock` (e.g. `zizmor`) | Root runner GHA preflight; future root Python tooling |
+| Client `.venv` | `setup_client.py` / `setup_project.py` / Performance `run_fleet.py` | Runtime dependencies (`uv sync --locked --no-dev`) | Application runtime using the environment's Python |
+| Client `.venv_test` | Client `run_all_tests.py` (all Release2 Python clients, including Performance) | Runtime + dev dependencies (`uv sync --locked`) | Normal local test runs |
+| Client `.venv_ci` | Client `run_all_tests.py --ci-mode` (local only) | Runtime + dev dependencies (`uv sync --locked`) | Local CI-mode mirror without using system Python |
 | `/opt/ijt_venv` | Web Docker image build; setup reuses it | Locked runtime dependencies | Docker container runtime |
 
-> **WSL**: `bootstrap_wsl.sh` calls `setup_project.py` after OS provisioning — uses `.venv` like every other host.
+> **WSL**: `bootstrap_wsl.sh` calls `setup_project.py` after OS provisioning — uses client `.venv` like every other host.
 
-Use `.venv` for running the application, `.venv_test` for normal local tests, and `.venv_ci` for local `--ci-mode` runs. Do not mix them.
+Use client `.venv` for running the application, `.venv_test` for normal local tests, and `.venv_ci` for local `--ci-mode` runs. Do not mix them. Root `.venv` is only the monorepo-root toolchain (not a client runtime).
 
-Every Python client installs from its own `uv.lock`, using locked sync or a frozen
-export. Environment markers select dependencies for the current platform; verify
-supported platforms separately. Never edit a lock by hand; update dependencies in
-`pyproject.toml` and run `uv lock` in that client directory. There is no root uv
-workspace. Plain `uv sync` uses `.venv`; test runners explicitly target their test
-environments. Setup and test scripts prepare uv automatically when needed, under
-`.state/tools/`; no global Python changes or shell activation are required.
-Initial preparation needs package-index access or a supplied offline cache.
-CI/Docker must supply the reviewed version; bootstrap downloads are disabled there.
+Each Python **client** installs from its own `uv.lock`. The **repository root** is also a uv project (`pyproject.toml` + `uv.lock`) for root-runner CLIs — it is **not** a uv workspace that joins clients. Never edit a lock by hand; update the owning `pyproject.toml` and run `uv lock` in that directory (root or client). Client test runners target `.venv_test` / `.venv_ci`; plain client `uv sync` targets `.venv`. Setup and test scripts prepare uv under `.state/tools/` when needed; no global Python changes. Initial preparation needs package-index access or a supplied offline cache. CI/Docker must supply the reviewed uv version; bootstrap downloads are disabled there. Canonical package workflow: [Development — Python Packages](DEVELOPMENT.md#python-packages).
 
 Root audit tasks have a global two-worker limit. npm projects run sequentially
 within one task, continuing after failures. All four client locks include runtime
@@ -132,9 +133,9 @@ fallback. Remaining requirements still use resolution. Task output is buffered
 and results are printed in stable order with timings; required failures aggregate
 to a nonzero exit.
 
-The local root test runner uses `.state/tools/root-tests-py<major><minor>/`
-for root tooling and smoke-test packages. Root pre-commit uses its separate
-`precommit-py<major><minor>/` environment. CI/Docker use their supplied interpreter.
+The local root orchestrator uses `.state/tools/root-tests-py<major><minor>/`
+for root pytest/smoke packages (separate from root `.venv` / zizmor). Root
+pre-commit uses `precommit-py<major><minor>/`. CI/Docker use their supplied interpreter.
 
 Both `setup_*.py` and `run_all_tests.py` remove stale legacy directories (`venv/`, `venv_test/`, `env/`, `ENV/`, `.venv_backup/`) on startup. A fresh clone always starts clean automatically.
 
@@ -155,7 +156,11 @@ pytest OPC_UA_Clients/Release2/IJT_Web_Client/tests OPC_UA_Clients/Release2/IJT_
 
 Running multiple Python clients together in a single root `pytest` invocation causes `ImportPathMismatchError` because both trees have `tests/conftest.py`. The CI workflows and `run_all_tests.py` both enforce per-project `working-directory`.
 
-**For local full-suite runs**: Use each project's `run_all_tests.py` from its own directory, or the repo root orchestrator which delegates each runner with the correct `cwd`.
+**Repo-root infrastructure tests** live under `tests/` (root-tests interpreter under
+`.state/tools/`) — separate from client suites and from root `.venv` (locked CLIs
+such as zizmor). See [DEVELOPMENT.md](DEVELOPMENT.md).
+
+**For local full-suite runs**: Use each project's `run_all_tests.py` from its own directory, or the repo root orchestrator which delegates each runner with the correct `cwd` and syncs root `.venv` for zizmor before Phase 1a.
 The root orchestrator forces Python child runners to UTF-8 output so nested
 runner banners, skip reasons, and advisory tool messages render consistently on
 Windows terminals and captured logs.
@@ -257,7 +262,12 @@ All Python runner scripts (`run_all_tests.py`) use a `_StepResult` class with fo
 | `ok=False, warn=False` | **FAIL** | red | `failed` → suite FAIL | Real defect or gate violation |
 | `skipped=True` | **SKIP** | yellow | `skipped` | Tool not installed / Not Applicable |
 
-**Advisory tool rule**: Tools whose failures are inherently non-actionable on the local/CI environment (Semgrep SSL, pyright advisory, pip-audit network) must use `result.warn = True` or `skipped=True` — **never** `result.ok = False`. Setting `ok=False` converts an advisory observation into a suite-blocking failure. Actionable dependency findings are different: `pip-audit` findings with fix versions must fail the owning Python check; advisory-only findings may pass with an explicit note.
+**Exception — root-locked CLIs (zizmor):** After `uv sync --locked`, empty or
+unparseable output is **FAIL**, not SKIP/WARN. Missing install is also **FAIL**
+(provisioned from `uv.lock`, never an optional host tool). See
+[DEVELOPMENT.md](DEVELOPMENT.md#what-is-handled-automatically).
+
+**Advisory tool rule**: Tools whose failures are inherently non-actionable on the local/CI environment (Semgrep SSL, pyright advisory, pip-audit network) must use `result.warn = True` or `skipped=True` — **never** `result.ok = False`. Setting `ok=False` converts an advisory observation into a suite-blocking failure. Actionable dependency findings are different: `pip-audit` findings with fix versions must fail the owning Python check; advisory-only findings may pass with an explicit note. Root-locked zizmor is **not** advisory.
 
 **Semgrep preflight rule**: When a runner uses `--config=p/default`, the network preflight must probe `https://semgrep.dev/c/p/default`, not only `https://semgrep.dev/`. Use `requests` when available so the preflight follows the same certifi/TLS trust path as Semgrep and pip-audit. Keep `requests` optional inside the helper and annotate that import with `# type: ignore[import-untyped]` unless `types-requests` is a required dev dependency. Optional imports used by runner/report tooling are covered by the root optional-import typing guard, including untyped imports and forward-annotation/reimport patterns that mypy flags as `no-redef`. The root host can be reachable while the rule download path fails TLS/auth, which otherwise costs roughly 100 seconds and emits traceback noise before producing the same advisory WARN.
 
@@ -452,8 +462,8 @@ UA-for-Industrial-Joining-Technologies/
 | `csharp-unit` | dotnet restore (locked mode) + build (`-warnaserror`) + xUnit unit tests (`Category!=Live`, `--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
 | `csharp-vuln` | NuGet vulnerability scan (`--vulnerable --include-transitive`); fails on known CVEs |
 | `server-smoke-windows` | Windows native EXE smoke test (port 40451) |
-| `actionlint` | GitHub Actions syntax/static validation for workflow changes (configured in `.github/actionlint.yaml`) |
-| `zizmor` | GitHub Actions security audit with SARIF upload to Code Scanning; local root-runner parsing fails High/Critical findings from current zizmor v1 JSON output |
+| `actionlint` | GitHub Actions syntax/static validation for workflow changes (configured in `.github/actionlint.yaml`); local root runner SKIPs if the Go binary is absent |
+| `zizmor` | CI: SARIF upload (job does not fail on findings). Local: root `.venv` from `uv.lock`; FAIL on sync, High/Critical, or tool/parse errors. Detail: [DEVELOPMENT.md](DEVELOPMENT.md#what-is-handled-automatically) |
 | `pre-commit` | Runs `.pre-commit-config.yaml` on all files with npm-backed JS hooks skipped because dedicated JS jobs already own them |
 | `report` | Downloads all artifacts · writes summary table to Actions Summary with full pass · fail · skip counts · coverage/threshold cells from each client gate · failed-test detail (suite, test, message) and `::error` annotations parsed from the JUnit XML · skip-budget and coverage-threshold warnings · artifact sanity gate warns on missing XMLs |
 

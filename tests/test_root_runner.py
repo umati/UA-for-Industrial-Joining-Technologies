@@ -1111,29 +1111,621 @@ def test_zizmor_parseable_json_fails_on_high_regardless_of_rc() -> None:
     assert result.detail == "1 high/critical finding(s)"
 
 
-def test_zizmor_rc1_tool_error_is_skip() -> None:
-    result = _runner._parse_zizmor_output("", 1)
-    assert result.status == "SKIP"
-    assert result.detail == "zizmor error — skipping"
+def test_zizmor_rc1_tool_error_is_fail() -> None:
+    result = _runner._parse_zizmor_output("", 1, stderr="boom stderr detail")
+    assert result.status == "FAIL"
+    assert "exit 1" in result.detail
+    assert "boom stderr detail" in result.detail
 
 
-def test_zizmor_non_list_json_is_skip() -> None:
+def test_zizmor_non_list_json_is_fail() -> None:
     non_list_payload = '{"results":[{"determinations":{"severity":"High"}}]}'
     result = _runner._parse_zizmor_output(non_list_payload, 13)
-    assert result.status == "SKIP"
-    assert result.detail == "Could not parse output — zizmor version mismatch"
+    assert result.status == "FAIL"
+    assert "unparseable" in result.detail
 
 
-def test_zizmor_empty_stdout_with_findings_exit_is_zero_findings_pass() -> None:
+def test_zizmor_empty_stdout_with_findings_exit_is_fail() -> None:
     result = _runner._parse_zizmor_output("", 13)
-    assert result.status == "PASS"
-    assert result.detail == "0 finding(s), none high/critical"
+    assert result.status == "FAIL"
+    assert "empty stdout" in result.detail
+
+
+def test_zizmor_invalid_json_is_fail() -> None:
+    result = _runner._parse_zizmor_output("not-json", 2, stderr="parse blew up")
+    assert result.status == "FAIL"
+    assert "unparseable" in result.detail
+
+
+def test_zizmor_non_object_finding_is_fail() -> None:
+    result = _runner._parse_zizmor_output("[1, 2]", 0)
+    assert result.status == "FAIL"
+    assert "unparseable" in result.detail
+
+
+def test_zizmor_high_finding_wins_over_malformed_sibling() -> None:
+    payload = '[{"determinations":{"severity":"High"}}, 1]'
+    result = _runner._parse_zizmor_output(payload, 14)
+    assert result.status == "FAIL"
+    assert "high/critical" in result.detail
 
 
 def test_zizmor_clean_run_is_zero_findings_pass() -> None:
     result = _runner._parse_zizmor_output("", 0)
     assert result.status == "PASS"
     assert result.detail == "0 finding(s), none high/critical"
+
+
+def test_zizmor_parseable_empty_list_with_error_rc_is_fail() -> None:
+    result = _runner._parse_zizmor_output("[]", 1, stderr="online audit failed")
+    assert result.status == "FAIL"
+    assert "despite parseable output" in result.detail
+    assert "online audit failed" in result.detail
+
+
+def test_root_has_current_uv_lock_with_zizmor() -> None:
+    """Root is a uv project: uv.lock present, current, and pins zizmor for the runner."""
+    lock_file = _runner.REPO_ROOT / "uv.lock"
+    pyproject = _runner.REPO_ROOT / "pyproject.toml"
+    assert lock_file.is_file(), "repo root missing uv.lock"
+    assert pyproject.is_file()
+    pyproject_text = pyproject.read_text(encoding="utf-8")
+    pin = _runner.read_pyproject_dependency_pin(pyproject_text, _runner.ZIZMOR_PYPI_PACKAGE)
+    assert pin, "root pyproject must pin zizmor==X.Y.Z"
+    for tool in _runner.ROOT_REQUIRED_DEV_CLIS:
+        tool_pin = _runner.read_pyproject_dependency_pin(pyproject_text, tool)
+        assert tool_pin, f"root pyproject must pin {tool}==X.Y.Z for ROOT_REQUIRED_DEV_CLIS"
+    lock_data = tomllib.loads(lock_file.read_text(encoding="utf-8"))
+    zizmor_pkgs = [pkg for pkg in lock_data.get("package", []) if pkg.get("name") == "zizmor"]
+    assert zizmor_pkgs, "uv.lock missing zizmor package"
+    assert zizmor_pkgs[0].get("version") == pin, (
+        f"uv.lock zizmor version {zizmor_pkgs[0].get('version')} drifts from pin {pin}"
+    )
+    scripts_dir = _runner.REPO_ROOT / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    from tool_bootstrap import ensure_uv
+
+    uv = shutil.which("uv") or ensure_uv(_runner.REPO_ROOT)
+    proc = subprocess.run(
+        [uv, "lock", "--check"],
+        cwd=_runner.REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, f"root uv.lock out of date:\n{proc.stderr}"
+
+
+def test_zizmor_pypi_pin_matches_precommit_rev() -> None:
+    """Root zizmor==X.Y.Z must match .pre-commit-config.yaml zizmor-pre-commit rev vX.Y.Z."""
+    pyproject = (_runner.REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    precommit = (_runner.REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    pin = _runner.read_pyproject_dependency_pin(pyproject, _runner.ZIZMOR_PYPI_PACKAGE)
+    rev = _runner.read_precommit_github_rev(precommit, _runner.ZIZMOR_PRECOMMIT_GITHUB_REPO)
+    assert pin, "root pyproject.toml must contain zizmor==X.Y.Z"
+    assert rev, "pre-commit must pin zizmorcore/zizmor-pre-commit rev vX.Y.Z"
+    assert pin == rev, f"zizmor lockstep drift: pyproject=={pin} vs pre-commit v{rev}"
+
+
+def test_zizmor_ci_action_version_matches_pypi_pin() -> None:
+    """ci.yml zizmor-action `version:` input must match root zizmor==X.Y.Z."""
+    import yaml
+
+    pin = _runner.read_pyproject_dependency_pin(
+        (_runner.REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"),
+        _runner.ZIZMOR_PYPI_PACKAGE,
+    )
+    assert pin
+    ci = yaml.safe_load(
+        (_runner.REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    zizmor_job = ci["jobs"]["zizmor"]
+    versions = [
+        step.get("with", {}).get("version")
+        for step in zizmor_job["steps"]
+        if isinstance(step.get("uses"), str) and "zizmorcore/zizmor-action@" in step["uses"]
+    ]
+    assert versions, "ci.yml zizmor job must use zizmor-action with version:"
+    assert versions[0] == pin, f"CI zizmor-action version={versions[0]} drifts from root pin {pin}"
+
+
+def test_zizmor_precommit_hook_matches_severity_and_offline_policy() -> None:
+    import yaml
+
+    config = yaml.safe_load(
+        (_runner.REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    zizmor_repo = next(
+        repo
+        for repo in config["repos"]
+        if repo.get("repo") == "https://github.com/zizmorcore/zizmor-pre-commit"
+    )
+    hook = next(h for h in zizmor_repo["hooks"] if h["id"] == "zizmor")
+    assert "--min-severity=high" in hook["args"]
+    assert "--offline" in hook["args"]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ('    "zizmor==1.30.1",  # note\n', "1.30.1"),
+        ("dependencies = []\n", None),
+        ('dev = ["zizmor==1.30.1"]\n', None),  # must be its own quoted line
+        ('    "zizmor>=1.30.1",\n', None),
+        ('    "zizmor==1.30.1rc1",\n', None),
+    ],
+)
+def test_read_pyproject_dependency_pin_cases(text: str, expected: str | None) -> None:
+    assert _runner.read_pyproject_dependency_pin(text, "zizmor") == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "  - repo: https://github.com/zizmorcore/zizmor-pre-commit\n    rev: v1.30.1\n",
+            "1.30.1",
+        ),
+        (
+            "  - repo: https://github.com/zizmorcore/zizmor-pre-commit\n    rev: v1.30.1  # note\n",
+            "1.30.1",
+        ),
+        (
+            "# - repo: https://github.com/zizmorcore/zizmor-pre-commit\n"
+            "#   rev: v9.9.9\n"
+            "  - repo: https://github.com/other/tool\n  rev: v9.9.9\n",
+            None,
+        ),
+        (
+            "  - repo: https://github.com/zizmorcore/zizmor-pre-commit\n"
+            "    # comment\n    rev: v1.30.1\n",
+            None,
+        ),
+        (
+            "  - repo: https://github.com/zizmorcore/zizmor-pre-commit\n    rev: 1.30.1\n",
+            None,
+        ),
+        (
+            "  - repo: https://github.com/zizmorcore/zizmor-pre-commit\n"
+            "    rev: abcdef0123456789abcdef0123456789abcdef01\n",
+            None,
+        ),
+    ],
+)
+def test_read_precommit_github_rev_cases(text: str, expected: str | None) -> None:
+    assert _runner.read_precommit_github_rev(text, "zizmorcore/zizmor-pre-commit") == expected
+
+
+def test_root_venv_dir_is_repo_root_dotvenv() -> None:
+    assert _runner._root_venv_dir() == _runner.ROOT / ".venv"
+
+
+def test_root_cli_bin_and_missing_detection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    venv = tmp_path / ".venv"
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert _runner._root_cli_bin(venv, "zizmor") == venv / "Scripts" / "zizmor.exe"
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert _runner._root_cli_bin(venv, "zizmor") == venv / "bin" / "zizmor"
+    monkeypatch.setattr(_runner, "ROOT_CLI_EXECUTABLES", {"zizmor": "zizmor-cli"})
+    assert _runner._root_cli_bin(venv, "zizmor") == venv / "bin" / "zizmor-cli"
+    monkeypatch.setattr(_runner, "ROOT_CLI_EXECUTABLES", {})
+    monkeypatch.setattr(sys, "platform", "win32")
+    scripts = venv / "Scripts"
+    scripts.mkdir(parents=True)
+    assert _runner._missing_root_clis(venv, ("zizmor",)) == ["zizmor"]
+    tool = _runner._root_cli_bin(venv, "zizmor")
+    tool.write_text("", encoding="utf-8")
+    assert _runner._missing_root_clis(venv, ("zizmor",)) == []
+    assert _runner._zizmor_bin_in_venv(venv) == tool
+
+
+def test_ensure_root_venv_skip_install_requires_existing_cli(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    venv = tmp_path / ".venv"
+    monkeypatch.setattr(_runner, "_root_venv_dir", lambda: venv)
+    monkeypatch.setenv("SKIP_VENV_INSTALL", "1")
+    uv_calls: list[object] = []
+
+    def _uv_boom(*_a, **_k):  # noqa: ANN001
+        uv_calls.append(1)
+        raise AssertionError("uv must not run when CLI missing under SKIP_VENV_INSTALL")
+
+    monkeypatch.setattr(_runner, "ensure_uv", lambda _root: "uv")
+    monkeypatch.setattr(_runner.subprocess, "run", _uv_boom)
+    with pytest.raises(RuntimeError, match="SKIP_VENV_INSTALL=1"):
+        _runner._ensure_root_venv()
+    assert uv_calls == []
+
+    scripts = venv / ("Scripts" if sys.platform == "win32" else "bin")
+    scripts.mkdir(parents=True)
+    _runner._zizmor_bin_in_venv(venv).write_text("", encoding="utf-8")
+
+    class _CheckOk:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    def _run_check(cmd, **kwargs):  # noqa: ANN001
+        uv_calls.append(list(cmd))
+        assert "--check" in cmd
+        assert "--python" in cmd
+        return _CheckOk()
+
+    monkeypatch.setattr(_runner.subprocess, "run", _run_check)
+    assert _runner._ensure_root_venv() == venv
+    assert uv_calls and "--check" in uv_calls[-1]
+
+
+@pytest.mark.parametrize("skip_value", ["0", "true", "", None])
+def test_ensure_root_venv_non_one_skip_falls_through_to_sync(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, skip_value: str | None
+) -> None:
+    venv = tmp_path / ".venv"
+    scripts = venv / ("Scripts" if sys.platform == "win32" else "bin")
+    scripts.mkdir(parents=True)
+    _runner._zizmor_bin_in_venv(venv).write_text("", encoding="utf-8")
+    monkeypatch.setattr(_runner, "_root_venv_dir", lambda: venv)
+    if skip_value is None:
+        monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+    else:
+        monkeypatch.setenv("SKIP_VENV_INSTALL", skip_value)
+    monkeypatch.setattr(_runner, "ensure_uv", lambda _root: "uv")
+    seen: dict[str, object] = {}
+
+    class _Ok:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    def _run(cmd, **kwargs):  # noqa: ANN001
+        seen["cmd"] = list(cmd)
+        assert "--check" not in cmd
+        return _Ok()
+
+    monkeypatch.setattr(_runner.subprocess, "run", _run)
+    assert _runner._ensure_root_venv() == venv
+    assert seen["cmd"][:4] == ["uv", "sync", "--locked", "--group"]
+
+
+def test_ensure_root_venv_skip_install_fails_when_out_of_sync(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    venv = tmp_path / ".venv"
+    scripts = venv / ("Scripts" if sys.platform == "win32" else "bin")
+    scripts.mkdir(parents=True)
+    _runner._zizmor_bin_in_venv(venv).write_text("", encoding="utf-8")
+    monkeypatch.setattr(_runner, "_root_venv_dir", lambda: venv)
+    monkeypatch.setenv("SKIP_VENV_INSTALL", "1")
+    monkeypatch.setattr(_runner, "ensure_uv", lambda _root: "uv")
+
+    class _Drift:
+        returncode = 1
+        stderr = "Would update zizmor"
+        stdout = ""
+
+    monkeypatch.setattr(_runner.subprocess, "run", lambda *a, **k: _Drift())
+    with pytest.raises(RuntimeError, match="out of sync"):
+        _runner._ensure_root_venv()
+
+
+def test_ensure_root_venv_sync_failure_and_missing_cli_after_sync(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    venv = tmp_path / ".venv"
+    monkeypatch.setattr(_runner, "_root_venv_dir", lambda: venv)
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+    monkeypatch.setattr(_runner, "ensure_uv", lambda _root: "uv")
+
+    class _Failed:
+        returncode = 7
+        stderr = ("x" * 600) + "network down at end"
+        stdout = ""
+
+    monkeypatch.setattr(_runner.subprocess, "run", lambda *a, **k: _Failed())
+    with pytest.raises(RuntimeError, match="exit 7") as exc_info:
+        _runner._ensure_root_venv()
+    # Prefer the trailing actionable uv error (detail[-500:]), not the head.
+    assert "network down at end" in str(exc_info.value)
+    assert str(exc_info.value).count("x") <= 500
+
+    class _Ok:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    monkeypatch.setattr(_runner.subprocess, "run", lambda *a, **k: _Ok())
+    with pytest.raises(RuntimeError, match="missing after uv sync"):
+        _runner._ensure_root_venv()
+
+
+def test_ensure_root_venv_sync_timeout(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    venv = tmp_path / ".venv"
+    monkeypatch.setattr(_runner, "_root_venv_dir", lambda: venv)
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+    monkeypatch.setattr(_runner, "ensure_uv", lambda _root: "uv")
+
+    def _timeout(*_a, **_k):  # noqa: ANN001
+        raise subprocess.TimeoutExpired(cmd="uv", timeout=1)
+
+    monkeypatch.setattr(_runner.subprocess, "run", _timeout)
+    with pytest.raises(RuntimeError, match="timed out"):
+        _runner._ensure_root_venv()
+
+
+def test_ensure_root_venv_sync_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    venv = tmp_path / ".venv"
+    scripts = venv / ("Scripts" if sys.platform == "win32" else "bin")
+    scripts.mkdir(parents=True)
+    _runner._zizmor_bin_in_venv(venv).write_text("", encoding="utf-8")
+    monkeypatch.setattr(_runner, "_root_venv_dir", lambda: venv)
+    monkeypatch.delenv("SKIP_VENV_INSTALL", raising=False)
+    monkeypatch.setenv("UV_FROZEN", "1")
+    monkeypatch.setenv("UV_OFFLINE", "1")
+    monkeypatch.setenv("UV_NO_SYNC", "1")
+    monkeypatch.setattr(_runner, "ensure_uv", lambda _root: "uv")
+
+    seen: dict[str, object] = {}
+
+    class _Ok:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    def _run(cmd, **kwargs):  # noqa: ANN001
+        seen["cmd"] = list(cmd)
+        seen["cwd"] = kwargs.get("cwd")
+        seen["env"] = kwargs.get("env")
+        seen["timeout"] = kwargs.get("timeout")
+        return _Ok()
+
+    monkeypatch.setattr(_runner.subprocess, "run", _run)
+    assert _runner._ensure_root_venv() == venv
+    assert seen["cmd"][:4] == ["uv", "sync", "--locked", "--group"]
+    assert seen["cmd"][4] == _runner._ROOT_UV_DEV_GROUP
+    assert "--python" in seen["cmd"]
+    assert seen["cmd"][seen["cmd"].index("--python") + 1] == sys.executable
+    assert seen["cwd"] == str(_runner.ROOT)
+    env = seen["env"]
+    assert isinstance(env, dict)
+    assert env["UV_PROJECT_ENVIRONMENT"] == str(venv.resolve())
+    assert "UV_FROZEN" not in env
+    assert "UV_OFFLINE" not in env
+    assert "UV_NO_SYNC" not in env
+    assert seen["timeout"] == _runner.ROOT_VENV_SYNC_TIMEOUT
+
+
+def test_ensure_root_venv_ignores_path_zizmor(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Host PATH zizmor must never satisfy SKIP_VENV_INSTALL or provision."""
+    venv = tmp_path / ".venv"
+    fake_path = tmp_path / "path-bin"
+    fake_path.mkdir()
+    path_zizmor = fake_path / ("zizmor.exe" if sys.platform == "win32" else "zizmor")
+    path_zizmor.write_text("", encoding="utf-8")
+    monkeypatch.setenv("PATH", str(fake_path) + os.pathsep + os.environ.get("PATH", ""))
+    monkeypatch.setattr(_runner, "_root_venv_dir", lambda: venv)
+    monkeypatch.setenv("SKIP_VENV_INSTALL", "1")
+    monkeypatch.setattr(
+        shutil, "which", lambda name: str(path_zizmor) if name == "zizmor" else None
+    )
+    with pytest.raises(RuntimeError, match="missing required CLI"):
+        _runner._ensure_root_venv()
+
+
+def test_check_zizmor_fails_when_root_venv_ensure_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def _boom() -> Path:
+        raise RuntimeError("uv sync failed for root .venv")
+
+    monkeypatch.setattr(_runner, "_ensure_root_venv", _boom)
+    result = _runner._check_zizmor(tmp_path)
+    assert result.status == "FAIL"
+    assert "uv sync failed" in result.detail
+
+
+def test_check_zizmor_fails_on_oserror_running_binary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    venv = tmp_path / ".venv"
+    monkeypatch.setattr(_runner, "_ensure_root_venv", lambda: venv)
+    monkeypatch.setattr(_runner, "_zizmor_bin_in_venv", lambda _v: tmp_path / "missing-zizmor")
+
+    def _boom(*_a, **_k):  # noqa: ANN001
+        raise OSError("WinError 2 file not found")
+
+    monkeypatch.setattr(_runner.subprocess, "run", _boom)
+    result = _runner._check_zizmor(tmp_path)
+    assert result.status == "FAIL"
+    assert "file not found" in result.detail.lower() or "WinError" in result.detail
+
+
+def test_check_zizmor_fails_on_timeout(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    venv = tmp_path / ".venv"
+    monkeypatch.setattr(_runner, "_ensure_root_venv", lambda: venv)
+    monkeypatch.setattr(_runner, "_zizmor_bin_in_venv", lambda _v: tmp_path / "zizmor")
+
+    def _timeout(*_a, **_k):  # noqa: ANN001
+        raise subprocess.TimeoutExpired(cmd="zizmor", timeout=1)
+
+    monkeypatch.setattr(_runner.subprocess, "run", _timeout)
+    result = _runner._check_zizmor(tmp_path)
+    assert result.status == "FAIL"
+    assert "timed out" in result.detail
+
+
+def test_check_zizmor_runs_venv_binary_and_writes_artifact(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    venv = tmp_path / ".venv"
+    scripts = venv / ("Scripts" if sys.platform == "win32" else "bin")
+    scripts.mkdir(parents=True)
+    fake_bin = _runner._zizmor_bin_in_venv(venv)
+    fake_bin.write_text("", encoding="utf-8")
+    monkeypatch.setattr(_runner, "_ensure_root_venv", lambda: venv)
+
+    class _Proc:
+        returncode = 0
+        stdout = '[{"determinations":{"severity":"Medium"}}]'
+        stderr = "note: offline"
+
+    def _run(cmd, **kwargs):  # noqa: ANN001
+        assert cmd[0] == str(fake_bin)
+        assert "--format" in cmd and "json" in cmd
+        assert "--offline" in cmd
+        assert "--no-progress" in cmd
+        assert str(_runner.ROOT / ".github" / "workflows") in cmd
+        assert kwargs.get("cwd") == str(_runner.ROOT)
+        assert kwargs.get("encoding") == "utf-8"
+        assert kwargs.get("timeout") == _runner.ZIZMOR_TIMEOUT
+        return _Proc()
+
+    monkeypatch.setattr(_runner.subprocess, "run", _run)
+    result = _runner._check_zizmor(tmp_path)
+    assert result.status == "PASS"
+    assert (tmp_path / "zizmor.json").read_text(encoding="utf-8") == _Proc.stdout
+    assert (tmp_path / "zizmor.stderr.txt").read_text(encoding="utf-8") == "note: offline"
+
+
+def test_check_zizmor_empty_stdout_tool_error_is_fail(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    venv = tmp_path / ".venv"
+    monkeypatch.setattr(_runner, "_ensure_root_venv", lambda: venv)
+    monkeypatch.setattr(_runner, "_zizmor_bin_in_venv", lambda _v: tmp_path / "zizmor")
+
+    class _Proc:
+        returncode = 2
+        stdout = ""
+        stderr = "internal panic"
+
+    monkeypatch.setattr(_runner.subprocess, "run", lambda *a, **k: _Proc())
+    result = _runner._check_zizmor(tmp_path)
+    assert result.status == "FAIL"
+    assert (tmp_path / "zizmor.json").read_text(encoding="utf-8") == ""
+    assert "internal panic" in result.detail
+
+
+def test_check_zizmor_surfaces_high_findings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    venv = tmp_path / ".venv"
+    monkeypatch.setattr(_runner, "_ensure_root_venv", lambda: venv)
+    monkeypatch.setattr(_runner, "_zizmor_bin_in_venv", lambda _v: tmp_path / "zizmor")
+
+    class _Proc:
+        returncode = 13
+        stdout = '[{"determinations":{"severity":"High"}}]'
+        stderr = ""
+
+    monkeypatch.setattr(_runner.subprocess, "run", lambda *a, **k: _Proc())
+    result = _runner._check_zizmor(tmp_path)
+    assert result.status == "FAIL"
+    assert "high/critical" in result.detail
+
+
+def test_run_gha_checks_zizmor_fail_and_skip_propagation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    results_dir = tmp_path / "test-results"
+    monkeypatch.setattr(_runner, "ROOT", tmp_path)
+
+    def _pass(name: str) -> _runner.StepResult:
+        return _runner.StepResult(name, "PASS", "ok")
+
+    monkeypatch.setattr(
+        _runner, "_check_optional_import_typing", lambda: _pass("Optional Import Typing Guard")
+    )
+    monkeypatch.setattr(_runner, "_check_actionlint", lambda _d: _pass("GHA Actionlint"))
+    monkeypatch.setattr(_runner, "_check_action_versions", lambda: _pass("GHA Version Guard"))
+    monkeypatch.setattr(
+        _runner,
+        "_check_zizmor",
+        lambda _d: _runner.StepResult("GHA Zizmor (Security)", "FAIL", "high"),
+    )
+    monkeypatch.setattr(_runner, "_print_step_result", lambda _r: None)
+    failed = _runner._run_gha_checks()
+    zizmor_fail = next(s for s in failed if s.name == "GHA Zizmor (Security)")
+    assert zizmor_fail.ok is False
+    assert zizmor_fail.skipped is False
+
+    monkeypatch.setattr(
+        _runner,
+        "_check_zizmor",
+        lambda _d: _runner.StepResult("GHA Zizmor (Security)", "SKIP", "n/a"),
+    )
+    skipped = _runner._run_gha_checks()
+    zizmor_skip = next(s for s in skipped if s.name == "GHA Zizmor (Security)")
+    assert zizmor_skip.ok is False
+    assert zizmor_skip.skipped is True
+    assert results_dir.is_dir() or (tmp_path / "test-results").is_dir()
+
+
+def test_check_python_locks_script_includes_repo_root() -> None:
+    script = (_runner.REPO_ROOT / "scripts" / "check_python_locks.py").read_text(encoding="utf-8")
+    assert re.search(r"for cwd in\s*\(\s*root\s*,", script), (
+        "check_python_locks.py must uv lock --check the repo root first"
+    )
+    assert "OPC_UA_Clients" in script
+
+
+def test_check_python_locks_main_checks_root_first_and_propagates_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scripts_dir = _runner.REPO_ROOT / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    import check_python_locks as locks
+
+    calls: list[Path] = []
+
+    def _run(cmd, **kwargs):  # noqa: ANN001
+        calls.append(Path(kwargs["cwd"]))
+
+        class _Proc:
+            returncode = 1 if len(calls) == 1 else 0
+
+        return _Proc()
+
+    monkeypatch.setattr(locks, "ensure_uv", lambda _root: "uv")
+    monkeypatch.setattr(locks.subprocess, "run", _run)
+    assert locks.main() == 1
+    assert calls[0] == _runner.REPO_ROOT
+    assert len(calls) == 5
+
+
+def test_python_locks_and_workflow_guard_trigger_on_root_pyproject() -> None:
+    """Root zizmor pin / lock / Renovate edits must fire lock + lockstep guards locally."""
+    import yaml
+
+    config = yaml.safe_load(
+        (_runner.REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    local_hooks = next(repo for repo in config["repos"] if repo["repo"] == "local")["hooks"]
+    locks = next(hook for hook in local_hooks if hook["id"] == "python-locks-current")
+    assert locks["name"] == "Python locks up to date"
+    assert "^pyproject\\.toml$" in locks["files"]
+    assert "^uv\\.lock$" in locks["files"]
+    assert re.search(locks["files"], "pyproject.toml")
+    assert re.search(locks["files"], "uv.lock")
+    guard = next(hook for hook in local_hooks if hook["id"] == "workflow-policy-guard")
+    assert "^pyproject\\.toml$" in guard["files"]
+    assert "^renovate\\.json$" in guard["files"]
+    assert "^tests/test_renovate_policy\\.py$" in guard["files"]
+    assert "tests/test_renovate_policy.py" in guard["args"]
+
+
+def test_development_md_root_locked_cli_heading_matches_runner_pointer() -> None:
+    """Runner comment must keep pointing at a real DEVELOPMENT.md heading."""
+    runner = (_runner.REPO_ROOT / "run_all_tests.py").read_text(encoding="utf-8")
+    docs = (_runner.REPO_ROOT / "docs" / "DEVELOPMENT.md").read_text(encoding="utf-8")
+    assert 'docs/DEVELOPMENT.md ("Adding a root-locked CLI")' in runner
+    assert re.search(r"^#### Adding a root-locked CLI\s*$", docs, re.MULTILINE)
 
 
 def test_connection_manager_session_id_uses_web_crypto_only() -> None:

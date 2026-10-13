@@ -24,10 +24,18 @@ for the hold and coordinated migration procedure.
 
 - **.NET SDK 10+** for the C# client
 - **Docker** for containerized server testing
+- **OS/binary scanners** (hadolint, trivy, actionlint, …) when not on your PATH
 
-Setup/test launchers prepare Python tooling in isolated environments; no manual
-uv or global pip installation is required. First preparation needs package-index
-access or a supplied offline cache. CI/Docker use provisioned tools.
+Setup and test launchers install Python tools for you — you do **not** need to
+`pip install` them globally. First run needs network (or an offline cache).
+CI uses its own provisioned tools.
+
+**Note:** `python run_all_tests.py` provisions pinned `zizmor` automatically. If
+**install/sync fails**, findings are High/Critical, or the tool returns
+empty/unparseable output, treat that as a real failure (not “optional tool
+missing”). Details:
+[What is Handled Automatically](DEVELOPMENT.md#what-is-handled-automatically).
+
 For pip deployment and source reuse, see the
 [Python Client Integration Guide](PYTHON_CLIENT_INTEGRATION.md).
 
@@ -62,9 +70,9 @@ from npm registry connectivity mode.
 python run_all_tests.py
 ```
 
-The local root runner prepares its own `.state/tools/` Python environment.
-Inspect skipped/incomplete results before treating the run as complete
-qualification. An explicitly requested `--suite` fails if it cannot run.
+Inspect the summary for skipped suites (e.g. Docker or .NET missing). An
+explicitly requested `--suite` fails if it cannot run. More detail:
+[Development — Testing](DEVELOPMENT.md#testing).
 
 ## Development Guidelines
 

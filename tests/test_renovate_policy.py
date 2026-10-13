@@ -169,6 +169,61 @@ def test_renovate_batches_python_dev_tools_weekly() -> None:
     assert "^pytest" in package_patterns
 
 
+def test_renovate_groups_zizmor_pypi_and_precommit() -> None:
+    """Root PyPI zizmor, pre-commit hook, and ci.yml version must bump together."""
+    renovate = _renovate()
+    assert ":enablePreCommit" in renovate.get("extends", []), (
+        "zizmor-lockstep needs Renovate pre-commit manager (:enablePreCommit); "
+        "it is disabled by default"
+    )
+    precommit_limits = [
+        rule
+        for rule in _rules()
+        if "pre-commit" in rule.get("matchManagers", []) and rule.get("enabled") is False
+    ]
+    assert precommit_limits, "must limit Renovate pre-commit updates (avoid SHA/frozen hook noise)"
+    assert any(
+        "!zizmorcore/zizmor-pre-commit" in rule.get("matchPackageNames", [])
+        for rule in precommit_limits
+    ), "zizmor-pre-commit must remain enabled under the pre-commit manager (negation match)"
+    assert all("excludePackageNames" not in rule for rule in precommit_limits), (
+        "use matchPackageNames negation, not deprecated excludePackageNames"
+    )
+
+    zizmor_ci_managers = [
+        mgr
+        for mgr in renovate.get("customManagers", [])
+        if mgr.get("depNameTemplate") == "zizmor"
+        and any("ci\\.yml" in pat for pat in mgr.get("managerFilePatterns", []))
+    ]
+    assert zizmor_ci_managers, (
+        "renovate.json must regex-manage ci.yml zizmor-action version: (depName zizmor)"
+    )
+    assert zizmor_ci_managers[0].get("datasourceTemplate") == "pypi"
+
+    rules = [rule for rule in _rules() if rule.get("groupSlug") == "zizmor-lockstep"]
+    assert rules, "renovate.json must define a zizmor-lockstep grouping rule"
+    rule = rules[0]
+    assert rule["schedule"] == ["before 7am on monday"]
+    assert rule["minimumReleaseAge"] == "3 days"
+    assert rule["automerge"] is False
+    matched = set(rule.get("matchPackageNames", []))
+    assert {"zizmor", "zizmorcore/zizmor-pre-commit"}.issubset(matched)
+    # Keep GHA zizmor-action *package* out of this group (Dependabot owns action SHAs).
+    # The version *input* joins via regex customManager depName=zizmor.
+    assert "zizmorcore/zizmor-action" not in matched
+    assert "zizmor-action" not in matched
+    other_zizmor_groups = [
+        r
+        for r in _rules()
+        if r.get("groupSlug") not in (None, "zizmor-lockstep")
+        and "zizmor" in r.get("matchPackageNames", [])
+    ]
+    assert not other_zizmor_groups, (
+        f"zizmor must not join other Renovate groups: {other_zizmor_groups}"
+    )
+
+
 def test_no_legacy_requirements_in_release2_python_clients() -> None:
     """Release 2 Python clients must use pyproject.toml + uv.lock without legacy requirements."""
     release2 = _REPO_ROOT / "OPC_UA_Clients" / "Release2"

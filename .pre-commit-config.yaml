@@ -14,7 +14,8 @@
 # DETECTOR/BLOCKERS — do not modify files; they exit non-zero when a
 # violation is found and require manual intervention before committing.
 # Hooks in this category: check-merge-conflict, check-yaml, check-toml,
-# check-json, debug-statements, bandit.
+# check-json, debug-statements, bandit, zizmor, python-locks-current,
+# workflow-policy-guard.
 # For bandit: fix the finding or add a justified # nosec comment, then re-commit.
 
 # Global exclusion: auto-generated output from UA-ModelCompiler.
@@ -250,21 +251,21 @@ repos:
       # baseline assertions, extracted summary snapshot/contract tests).
       # pass_filenames: false — the tests read workflow paths from
       # `_runner.REPO_ROOT / .github / workflows / ...` themselves.
-      # Client lock check (uv lock --check): fails when a client pyproject.toml changed without updating its uv.lock.
+      # Lock check (uv lock --check): root + Release2 clients when pyproject/lock/.python-version change.
       - id: python-locks-current
-        name: Python client locks up to date
+        name: Python locks up to date
         language: system
         entry: python scripts/check_python_locks.py
         pass_filenames: false
-        files: '(^\.python-version$|^OPC_UA_Clients/Release2/[^/]+/(pyproject\.toml|uv\.lock)$)'
+        files: '(^\.python-version$|^pyproject\.toml$|^uv\.lock$|^OPC_UA_Clients/Release2/[^/]+/(pyproject\.toml|uv\.lock)$)'
 
       - id: workflow-policy-guard
         name: Workflow policy guard (root runner)
         language: system
         entry: python
-        args: ['scripts/precommit_pytest_hook.py', 'tests/test_root_runner.py', 'tests/test_image_pin.py', 'tests/reporting', '-q']
+        args: ['scripts/precommit_pytest_hook.py', 'tests/test_root_runner.py', 'tests/test_renovate_policy.py', 'tests/test_image_pin.py', 'tests/reporting', '-q']
         pass_filenames: false
-        files: '(^\.pre-commit-config\.yaml$|^\.github/workflows/.*\.ya?ml$|^\.github/docker/ijt-browser-ci/.*$|^\.github/scripts/update_browser_ci_image_pin\.py$|^reporting/.*\.py$|^tests/requirements\.txt$|^uv\.lock$|^run_precommit_all\.py$|^OPC_UA_Clients/Release2/[^/]+/(pyproject\.toml|run_all_tests\.py|setup_[a-z]+\.py|Dockerfile)$|^tests/reporting/.*$|^tests/test_image_pin\.py$|^tests/test_root_runner\.py$|^tests/baselines/integration-test-counts\.json$)'
+        files: '(^\.pre-commit-config\.yaml$|^\.github/workflows/.*\.ya?ml$|^\.github/docker/ijt-browser-ci/.*$|^\.github/scripts/update_browser_ci_image_pin\.py$|^reporting/.*\.py$|^tests/requirements\.txt$|^pyproject\.toml$|^uv\.lock$|^renovate\.json$|^run_precommit_all\.py$|^OPC_UA_Clients/Release2/[^/]+/(pyproject\.toml|run_all_tests\.py|setup_[a-z]+\.py|Dockerfile)$|^tests/reporting/.*$|^tests/test_image_pin\.py$|^tests/test_root_runner\.py$|^tests/test_renovate_policy\.py$|^tests/baselines/integration-test-counts\.json$)'
 
       # Lightweight static guard for optional imports that are known to trip
       # mypy when packages are installed without stubs. Full mypy stays in
@@ -302,10 +303,15 @@ repos:
   # Without this clamp, the upstream pre-commit defaults would fail on any
   # finding (including Note/Low/Medium), making the local gate strictly
   # stricter than CI — the exact local-vs-CI drift this repo avoids.
-  # When updating: keep `rev` here, the severity threshold here, and the
-  # parser in `run_all_tests.py` in lockstep so all three layers agree.
+  # Version pins (CLI semver X.Y.Z) — keep aligned; see docs/DEVELOPMENT.md:
+  #   1. rev here (vX.Y.Z)  +  2. root pyproject zizmor==X.Y.Z / uv.lock
+  #   3. ci.yml zizmor-action `version: "X.Y.Z"` (regex customManager)
+  #      → Renovate group zizmor-lockstep (all three)
+  # Severity policy: --min-severity=high here mirrors
+  # run_all_tests.py:_parse_zizmor_output High/Critical FAIL.
+  # The zizmor-action *action* SHA remains Dependabot-owned (wrapper ≠ CLI pin).
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.30.0
+    rev: v1.30.1
     hooks:
       - id: zizmor
-        args: ['--min-severity=high', '--no-progress']
+        args: ['--min-severity=high', '--no-progress', '--offline']

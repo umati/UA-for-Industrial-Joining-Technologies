@@ -70,13 +70,10 @@ We aim to acknowledge reports within **5 business days** and provide a fix or mi
   tooling without bootstrap downloads. Pip-based deployments should use the
   locked exports described in the [integration guide](docs/PYTHON_CLIENT_INTEGRATION.md);
   fresh resolution from project metadata does not enforce uv-specific constraints.
-- GitHub Actions workflow files are audited by [zizmor](https://woodruffw.github.io/zizmor/)
-  in the CI workflow when `.github/workflows/` changes, or on manual dispatch. Findings are
-  uploaded as SARIF to GitHub Code Scanning (Security → Code scanning alerts). High/Critical
-  findings fail the local root-runner gate; repository branch protection or Code Scanning
-  check-failure settings are required if new Code Scanning alerts should also block merges.
-  The GitHub Actions zizmor job is skipped on fork PRs where `security-events: write` is
-  unavailable.
-- The CI `pre-commit` job runs the repository hook set on all files. The local and CI
-  zizmor hooks use the same High/Critical severity policy as the root runner so local
-  checks do not become stricter than CI.
+- GitHub Actions workflows are audited with [zizmor](https://woodruffw.github.io/zizmor/).
+  The dedicated CI `zizmor` job uploads SARIF only (it does not fail on findings).
+  The CI `pre-commit` job runs the zizmor hook and **does** fail on High findings.
+  Locally, `python run_all_tests.py` fails on High/Critical findings and on
+  provision or tool/parse errors for the locked CLI. Do not global-`pip install`
+  zizmor — the repo pins and provisions it. Maintainer detail:
+  [Development](docs/DEVELOPMENT.md#what-is-handled-automatically).

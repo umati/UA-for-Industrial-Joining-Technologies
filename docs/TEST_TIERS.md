@@ -138,7 +138,7 @@ fails with `pytest.fail()` (loud, never silent). This applies to:
 | Console live joint workflows | fail on missing tool identity | `ProductInstanceUri` is required for live method coverage. Tests browse the server tool list, call `GetJointList(ProductInstanceUri)`, and fail loudly if no usable `JointId` is exposed. |
 | Test Client specification tests (optional/supplementary result APIs) | presence or skip/fail-by-design checks | `GetResultIdListFiltered` is optional/profile-dependent and is checked by node presence/Executable; `ReleaseResultHandle`, `AcknowledgeResults`, and `RequestUnacknowledgedResults` may be absent or return Bad-status in the simulator profile |
 | Test Client asset sub-type folders (controllers, tools, etc.) | pass | All asset category folders are required in the current server configuration; tests assert presence and fail on missing nodes |
-| `zizmor` job | promoted to ci | SARIF upload to Code Scanning (Security → Code scanning alerts). Skipped on fork PRs. The CI job runs with workflow-file changes, but Code Scanning alert merge-blocking still depends on repo branch-protection / Code Scanning check-failure settings. The local root runner parses current zizmor v1 finding exit codes (`13` and `14`) plus any parseable JSON findings output, and fails High/Critical findings instead of treating tool-version exit-code drift as a silent skip. |
+| `zizmor` job | promoted to ci | CI uploads SARIF (job itself does not fail on findings; branch protection / Code Scanning policy may). Locally, root runner syncs pinned zizmor from `uv.lock` into `.venv`: FAIL on sync failure, High/Critical findings, or tool/parse errors. See [DEVELOPMENT.md](DEVELOPMENT.md#what-is-handled-automatically). |
 
 ---
 

@@ -11,15 +11,22 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     uv = ensure_uv(root)
     failed = False
-    for client in (
-        "IJT_Console_Client",
-        "IJT_Performance_Client",
-        "IJT_Test_Client",
-        "IJT_Web_Client",
+    # Root toolchain lock (zizmor, …) plus each Release2 Python client.
+    for cwd in (
+        root,
+        *(
+            root / "OPC_UA_Clients" / "Release2" / client
+            for client in (
+                "IJT_Console_Client",
+                "IJT_Performance_Client",
+                "IJT_Test_Client",
+                "IJT_Web_Client",
+            )
+        ),
     ):
         result = subprocess.run(  # noqa: S603 - fixed lock-check arguments
             [uv, "lock", "--check"],
-            cwd=root / "OPC_UA_Clients" / "Release2" / client,
+            cwd=cwd,
             check=False,
         )
         failed = failed or result.returncode != 0

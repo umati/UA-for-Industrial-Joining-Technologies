@@ -96,7 +96,7 @@ from pathlib import Path
 if str(Path(__file__).parent / "scripts") not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 
-from tool_bootstrap import ensure_requirements_environment, environment_python
+from tool_bootstrap import ensure_requirements_environment, ensure_uv, environment_python
 
 from reporting.timing_artifacts import local_runner_timing_payload, write_timing_bundle
 
@@ -318,6 +318,8 @@ IS_CI = bool(os.getenv("CI"))
 
 SUITE_TIMEOUT = _int_env("IJT_SUITE_TIMEOUT", 600)  # 10 min default
 DOCKER_BUILD_TIMEOUT = _int_env("IJT_DOCKER_BUILD_TIMEOUT", 1200)
+ROOT_VENV_SYNC_TIMEOUT = _int_env("IJT_ROOT_VENV_SYNC_TIMEOUT", 600)
+ZIZMOR_TIMEOUT = _int_env("IJT_ZIZMOR_TIMEOUT", 300)
 WEB_CLIENT_E2E_FEATURES_TIMEOUT = _int_env("IJT_WEB_E2E_FEATURES_TIMEOUT", 1200)
 # Web Client Playwright regression suite owns its budget independently of the
 # generic SUITE_TIMEOUT: it boots an OPC UA server, a WebSocket bridge, the UI
@@ -1297,85 +1299,233 @@ def _check_action_versions() -> StepResult:
     return StepResult("GHA Version Guard", "PASS", detail)
 
 
-def _parse_zizmor_output(stdout: str, returncode: int) -> StepResult:
-    """Parse zizmor JSON stdout and return a StepResult. Pure function — no I/O or subprocess."""
+def _parse_zizmor_output(stdout: str, returncode: int, *, stderr: str = "") -> StepResult:
+    """Parse zizmor JSON stdout. High/Critical → FAIL; tool/parse errors → FAIL.
+
+    Locked provisioned zizmor is a hard gate: empty/unparseable output is never SKIP.
+    Known finding exit codes are 13/14; any other nonzero exit is a tool error.
+    """
     finding_exit_codes = {13, 14}
+    err_tail = (stderr or "").strip()[-500:]
+
+    def _tool_fail(reason: str) -> StepResult:
+        detail = reason if not err_tail else f"{reason}: {err_tail}"
+        return StepResult("GHA Zizmor (Security)", "FAIL", detail)
+
     if not stdout.strip():
-        if returncode == 0 or returncode in finding_exit_codes:
+        if returncode == 0:
             return StepResult("GHA Zizmor (Security)", "PASS", "0 finding(s), none high/critical")
-        return StepResult("GHA Zizmor (Security)", "SKIP", "zizmor error — skipping")
+        return _tool_fail(f"zizmor error (exit {returncode}) with empty stdout")
     try:
         data = json.loads(stdout)
         if not isinstance(data, list):
-            return StepResult(
-                "GHA Zizmor (Security)", "SKIP", "Could not parse output — zizmor version mismatch"
-            )
-        findings = data
-        high = []
-        for finding in findings:
-            severity = str(finding.get("determinations", {}).get("severity", "")).lower()
+            return _tool_fail(f"unparseable zizmor output (exit {returncode}) — expected JSON list")
+        high: list[object] = []
+        malformed = 0
+        for finding in data:
+            if not isinstance(finding, dict):
+                malformed += 1
+                continue
+            try:
+                severity = str(finding.get("determinations", {}).get("severity", "")).lower()
+            except Exception:
+                malformed += 1
+                continue
             if severity in ("high", "critical"):
                 high.append(finding)
         if high:
             return StepResult(
                 "GHA Zizmor (Security)", "FAIL", f"{len(high)} high/critical finding(s)"
             )
+        if malformed:
+            return _tool_fail("unparseable zizmor finding entry — expected objects")
+        if returncode not in ({0} | finding_exit_codes):
+            return _tool_fail(f"zizmor error (exit {returncode}) despite parseable output")
         return StepResult(
-            "GHA Zizmor (Security)", "PASS", f"{len(findings)} finding(s), none high/critical"
+            "GHA Zizmor (Security)", "PASS", f"{len(data)} finding(s), none high/critical"
         )
-    except Exception:
-        return StepResult(
-            "GHA Zizmor (Security)", "SKIP", "Could not parse output — zizmor version mismatch"
-        )
+    except Exception as exc:
+        return _tool_fail(f"unparseable zizmor output (exit {returncode}): {exc}")
 
 
-def _find_zizmor() -> str | None:
-    found = shutil.which("zizmor")
-    if found:
-        return found
-    binary_name = "zizmor.exe" if sys.platform == "win32" else "zizmor"
-    script_subdir = "Scripts" if sys.platform == "win32" else "bin"
-    user_scheme = "nt_user" if sys.platform == "win32" else "posix_user"
-    candidates: list[Path] = [
-        # In a virtual environment or root install, executable parent often houses scripts
-        Path(sys.executable).parent / binary_name,
-        Path(sys.executable).parent / script_subdir / binary_name,
-        Path(sys.prefix) / script_subdir / binary_name,
-        Path(sys.exec_prefix) / script_subdir / binary_name,
+# Root uv project: locked Python CLIs for the root runner (not optional host PATH tools).
+# Add future root CLIs: see docs/DEVELOPMENT.md ("Adding a root-locked CLI").
+# Root `.venv` is owned by this sync — do not install ad-hoc packages into it.
+_ROOT_VENV_NAME = ".venv"
+_ROOT_UV_DEV_GROUP = "dev"
+ROOT_REQUIRED_DEV_CLIS: tuple[str, ...] = ("zizmor",)
+# Optional override when the console-script name differs from the package/tool id.
+ROOT_CLI_EXECUTABLES: dict[str, str] = {}
+ZIZMOR_PYPI_PACKAGE = "zizmor"
+ZIZMOR_PRECOMMIT_GITHUB_REPO = "zizmorcore/zizmor-pre-commit"
+_UV_ENV_OVERRIDE_KEYS = ("UV_FROZEN", "UV_NO_SYNC", "UV_OFFLINE")
+
+
+def _root_venv_dir() -> Path:
+    """Repo-root uv project environment (future: .venv_test if root gains a test/runtime split)."""
+    return ROOT / _ROOT_VENV_NAME
+
+
+def _root_cli_bin(venv: Path, tool: str) -> Path:
+    """Return the platform path for a console-script installed into *venv*."""
+    exe_name = ROOT_CLI_EXECUTABLES.get(tool, tool)
+    binary = f"{exe_name}.exe" if sys.platform == "win32" else exe_name
+    scripts = "Scripts" if sys.platform == "win32" else "bin"
+    return venv / scripts / binary
+
+
+def _zizmor_bin_in_venv(venv: Path) -> Path:
+    return _root_cli_bin(venv, ZIZMOR_PYPI_PACKAGE)
+
+
+def read_pyproject_dependency_pin(pyproject_text: str, package: str) -> str | None:
+    """Return X.Y.Z from a quoted ``package==X.Y.Z`` line in pyproject text, or None."""
+    pattern = re.compile(rf'(?m)^\s*"{re.escape(package)}==(\d+\.\d+\.\d+)"\s*,?\s*(?:#.*)?$')
+    match = pattern.search(pyproject_text)
+    return match.group(1) if match else None
+
+
+def read_precommit_github_rev(precommit_text: str, github_repo: str) -> str | None:
+    """Return X.Y.Z from ``repo: https://github.com/{github_repo}`` + ``rev: vX.Y.Z``."""
+    pattern = re.compile(
+        rf"(?m)^\s*-?\s*repo:\s*https://github\.com/{re.escape(github_repo)}\s*\r?\n"
+        rf"\s*rev:\s*v(\d+\.\d+\.\d+)\s*(?:#.*)?$"
+    )
+    match = pattern.search(precommit_text)
+    return match.group(1) if match else None
+
+
+def _missing_root_clis(venv: Path, tools: tuple[str, ...] = ROOT_REQUIRED_DEV_CLIS) -> list[str]:
+    return [tool for tool in tools if not _root_cli_bin(venv, tool).is_file()]
+
+
+def _root_uv_sync_env(venv: Path) -> dict[str, str]:
+    """Build env for root ``uv sync``: pin project env, drop conflicting UV_* overrides."""
+    env = os.environ.copy()
+    for key in _UV_ENV_OVERRIDE_KEYS:
+        env.pop(key, None)
+    env["UV_PROJECT_ENVIRONMENT"] = str(venv.resolve())
+    return env
+
+
+def _root_uv_sync_cmd(uv: str, *, check_only: bool = False) -> list[str]:
+    cmd = [
+        uv,
+        "sync",
+        "--locked",
+        "--group",
+        _ROOT_UV_DEV_GROUP,
+        "--python",
+        sys.executable,
     ]
-    with contextlib.suppress(Exception):
-        import sysconfig
+    if check_only:
+        cmd.append("--check")
+    return cmd
 
-        scripts_dir = sysconfig.get_path("scripts")
-        if scripts_dir:
-            candidates.append(Path(scripts_dir) / binary_name)
-        user_scripts = sysconfig.get_path("scripts", scheme=user_scheme)
-        if user_scripts:
-            candidates.append(Path(user_scripts) / binary_name)
-    for candidate in candidates:
-        if candidate.is_file():
-            _prepend_to_path(str(candidate.parent))
-            return str(candidate)
-    return None
+
+def _uv_sync_detail(completed: subprocess.CompletedProcess[str]) -> str:
+    return (completed.stderr or completed.stdout or "").strip()[-500:]
+
+
+def _verify_root_venv_locked(venv: Path) -> None:
+    """FAIL closed when SKIP_VENV_INSTALL=1 but root ``.venv`` drifts from ``uv.lock``."""
+    uv = ensure_uv(ROOT)
+    completed = subprocess.run(  # noqa: S603
+        _root_uv_sync_cmd(uv, check_only=True),
+        cwd=str(ROOT),
+        env=_root_uv_sync_env(venv),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+        timeout=ROOT_VENV_SYNC_TIMEOUT,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            "SKIP_VENV_INSTALL=1 but root "
+            f"{_ROOT_VENV_NAME} is out of sync with uv.lock "
+            f"(exit {completed.returncode}): {_uv_sync_detail(completed)}"
+        )
+
+
+def _ensure_root_venv() -> Path:
+    """Sync root ``uv.lock`` into ``ROOT/.venv`` (required for root-locked CLIs).
+
+    Raises RuntimeError when sync fails or SKIP_VENV_INSTALL=1 and the env is
+    incomplete / out of lockstep. Does not consult the global PATH.
+    """
+    venv = _root_venv_dir()
+    if os.getenv("SKIP_VENV_INSTALL") == "1":
+        missing = _missing_root_clis(venv)
+        if missing:
+            raise RuntimeError(
+                "SKIP_VENV_INSTALL=1 but root "
+                f"{_ROOT_VENV_NAME} is missing required CLI(s): {', '.join(missing)} — "
+                "re-run without SKIP_VENV_INSTALL so uv can sync from uv.lock"
+            )
+        _verify_root_venv_locked(venv)
+        return venv
+    uv = ensure_uv(ROOT)
+    cmd = _root_uv_sync_cmd(uv)
+    log.info("Synchronizing root %s with uv (group=%s)...", _ROOT_VENV_NAME, _ROOT_UV_DEV_GROUP)
+    try:
+        completed = subprocess.run(  # noqa: S603
+            cmd,
+            cwd=str(ROOT),
+            env=_root_uv_sync_env(venv),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=ROOT_VENV_SYNC_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"uv sync --locked timed out after {ROOT_VENV_SYNC_TIMEOUT}s for root {_ROOT_VENV_NAME}"
+        ) from exc
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"uv sync --locked --group {_ROOT_UV_DEV_GROUP} failed for root "
+            f"{_ROOT_VENV_NAME} (exit {completed.returncode}): {_uv_sync_detail(completed)}"
+        )
+    missing = _missing_root_clis(venv)
+    if missing:
+        raise RuntimeError(
+            f"required root CLI(s) missing after uv sync in {venv}: {', '.join(missing)}"
+        )
+    return venv
 
 
 def _check_zizmor(results_dir: Path) -> StepResult:
-    """Security audit GitHub Actions workflows with zizmor."""
-    zizmor_bin = _find_zizmor()
-    if not zizmor_bin:
-        return StepResult(
-            "GHA Zizmor (Security)", "SKIP", "Install: cargo install zizmor  OR  pip install zizmor"
+    """Security audit GitHub Actions workflows with locked root zizmor (FAIL if unprovisioned)."""
+    try:
+        venv = _ensure_root_venv()
+        zizmor_bin = str(_zizmor_bin_in_venv(venv))
+        workflows_dir = ROOT / ".github/workflows"
+        result = subprocess.run(  # noqa: S603
+            [zizmor_bin, "--format", "json", "--offline", "--no-progress", str(workflows_dir)],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=ZIZMOR_TIMEOUT,
         )
-    workflows_dir = ROOT / ".github/workflows"
-    result = subprocess.run(
-        [zizmor_bin, "--format", "json", str(workflows_dir)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    out_file = results_dir / "zizmor.json"
-    out_file.write_text(result.stdout or "[]", encoding="utf-8")
-    return _parse_zizmor_output(result.stdout, result.returncode)
+    except subprocess.TimeoutExpired:
+        return StepResult(
+            "GHA Zizmor (Security)",
+            "FAIL",
+            f"zizmor timed out after {ZIZMOR_TIMEOUT}s",
+        )
+    except (RuntimeError, OSError) as exc:
+        return StepResult("GHA Zizmor (Security)", "FAIL", str(exc))
+    (results_dir / "zizmor.json").write_text(result.stdout or "", encoding="utf-8")
+    if result.stderr:
+        (results_dir / "zizmor.stderr.txt").write_text(result.stderr, encoding="utf-8")
+    return _parse_zizmor_output(result.stdout or "", result.returncode, stderr=result.stderr or "")
 
 
 def _check_optional_import_typing() -> StepResult:
@@ -2803,7 +2953,7 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
         │  GHA / Repo Checks                                               │
         ├──────────────────────┬────────┬──────────┬──────────────────────┤
         │ GHA actionlint       │  PASS  │     0.0s │ 3 workflow(s) valid  │
-        │ GHA zizmor           │  SKIP  │     0.0s │ zizmor unavailable   │
+        │ GHA zizmor           │  PASS  │     0.2s │ 0 finding(s), none high/critical │
         ├──────────────────────┴────────┴──────────┴──────────────────────┤
         │  Phase 1a — Unit & Static                                        │
         ├──────────────────────┬────────┬──────────┬──────────────────────┤

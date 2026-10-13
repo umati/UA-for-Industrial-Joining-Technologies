@@ -943,7 +943,7 @@ def main() -> None:
         ),
         "- **Related Security Checks**",
         "  - CI Infrastructure runs zizmor for GitHub Actions workflow security.",
-        "  - Pre-commit Hooks runs detect-secrets for committed secret detection.",
+        "  - Pre-commit Hooks runs zizmor (High+) for workflow security on every PR.",
         "  - Security — CodeQL runs semantic code analysis.",
         "",
         "| 🚦 | Component | Security Scan | Dependency Audit |",

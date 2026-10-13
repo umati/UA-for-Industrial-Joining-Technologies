@@ -1,7 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":enablePreCommit"
   ],
   "dependencyDashboard": true,
   "timezone": "Europe/Stockholm",
@@ -19,6 +20,16 @@
       "matchStrings": ["uses: astral-sh/setup-uv@[^\\n]+(?:\\n\\s+[^\\n]+)*?\\n\\s+version: \"(?<currentValue>[^\"]+)\""],
       "datasourceTemplate": "pypi",
       "depNameTemplate": "uv"
+    },
+    {
+      "customType": "regex",
+      "description": "Keep ci.yml zizmor-action version input in lockstep with PyPI zizmor (same depName joins zizmor-lockstep).",
+      "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
+      "matchStrings": [
+        "uses: zizmorcore/zizmor-action@[^\\n]+(?:\\n\\s+[^\\n]+)*?\\n\\s+version: \"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "zizmor"
     }
   ],
   "lockFileMaintenance": {
@@ -79,6 +90,22 @@
       "minimumReleaseAge": "3 days",
       "automerge": false,
       "addLabels": ["dependencies", "python", "needs-manual-review"]
+    },
+    {
+      "description": "pre-commit manager is opt-in (:enablePreCommit). Limit it to zizmor-pre-commit only — other hooks often use SHA/frozen pins and stay manual.",
+      "matchManagers": ["pre-commit"],
+      "matchPackageNames": ["!zizmorcore/zizmor-pre-commit"],
+      "enabled": false
+    },
+    {
+      "description": "Keep root-runner PyPI zizmor, pre-commit zizmor-pre-commit, and ci.yml zizmor-action version input on the same semver. GHA zizmor-action *SHA* stays on Dependabot.",
+      "matchPackageNames": ["zizmor", "zizmorcore/zizmor-pre-commit"],
+      "groupName": "zizmor CLI + pre-commit",
+      "groupSlug": "zizmor-lockstep",
+      "schedule": ["before 7am on monday"],
+      "minimumReleaseAge": "3 days",
+      "automerge": false,
+      "addLabels": ["dependencies", "toolchain", "needs-manual-review"]
     },
     {
       "matchManagers": ["github-actions"],

@@ -162,17 +162,65 @@ When you run `python run_all_tests.py`, the repository handles the following wit
 | Component | Automated Behavior |
 |-----------|--------------------|
 | **Python Virtual Environments** | Automatically creates `.venv_test/` in each client directory and installs required packages |
-| **Python Tooling** | Prepares uv and isolated root tooling under `.state/tools/`; no global pip installation |
+| **Python Tooling** | Prepares uv under `.state/tools/` when needed; syncs root `.venv` from root `uv.lock` for locked CLIs (zizmor); no global pip installation |
 | **Node.js Packages** | Automatically runs `npm ci` when `node_modules` is missing |
 | **Playwright Browsers** | Automatically installs browser binaries (`playwright install chromium`) during E2E stages |
 | **OPC UA Server Simulators** | Automatically launches native/containerized simulator instances with dedicated port isolation |
-| **Missing Optional Tools** | Dotnet, Docker, Hadolint, Semgrep, Actionlint, and Git-dependent scans skip gracefully |
+| **Missing Optional Tools** | OS/binary scanners (Hadolint, Trivy, Actionlint, Semgrep, …) skip gracefully when absent; CI remains authoritative |
 
-Project runners install required Python quality tools into their project test
-virtual environments. A user-level installation of a CLI such as
-`detect-secrets` is also suitable for ad-hoc scans; add its Python `Scripts`
-directory to `PATH` if the command is not found. It does not replace the
-version used by the project runner.
+**Lockfile Python tools (required):** The repository **root is a uv project**
+(`pyproject.toml` + `uv.lock`) for root-runner CLIs; it is **not** a uv workspace
+that joins clients — each client keeps its own lock. Client and root dependencies
+are installed with `uv sync --locked`. If sync fails, the runner **FAIL**s — do
+not `pip install` those tools into global Python.
+
+For **zizmor** (workflow security), keep the same CLI version `X.Y.Z` on these
+**version pins** (contract tests enforce all three):
+1. root `pyproject.toml` (`zizmor==X.Y.Z`) + `uv.lock` — Renovate `zizmor-lockstep`
+2. `.pre-commit-config.yaml` (`rev: vX.Y.Z`) — same group (`:enablePreCommit`;
+   other pre-commit hooks stay disabled in Renovate)
+3. `.github/workflows/ci.yml` zizmor-action `version: "X.Y.Z"` — same group via
+   a Renovate regex customManager (depName `zizmor`). The action *SHA* stays on
+   Dependabot. Contract tests still enforce (1)–(3).
+
+Local runner behavior: sync/provision failure **FAIL**s; High/Critical findings
+**FAIL**; empty/unparseable tool output **FAIL**s (locked CLI is a hard gate).
+Root `.venv` is **owned by** `uv sync --locked` — do not install ad-hoc packages
+into it (exact sync removes them). Prefer the separate
+`.state/tools/root-tests-py…/` env for pytest. Windows ARM64 has no published
+zizmor wheel today — sync falls back to sdist/Rust and will FAIL without a
+toolchain.
+
+The pre-commit zizmor hook uses pre-commit’s own cached environment (from
+`zizmor-pre-commit`), not root `.venv`. Both local runner and pre-commit pass
+`--offline`. CI’s `zizmor-action` uploads SARIF and does not fail the job by
+itself — Code Scanning / branch protection decide merge impact. The CI
+`pre-commit` job still runs the zizmor hook and fails on High findings.
+
+`SKIP_VENV_INSTALL=1` is for Docker/provisioned images that already have the
+env: the root runner still requires root CLIs present **and**
+`uv sync --locked --check` clean (no silent stale binary). Root GHA preflight
+(`_check_zizmor`) runs on local full / `--phase1` orchestrator paths, not on
+`--suite`-only Docker jobs.
+
+**OS/binary scanners** (hadolint, trivy, actionlint, …) stay optional locally;
+CI remains authoritative until a pinned bootstrap exists.
+
+#### Adding a root-locked CLI
+
+When you need another **Python** CLI at the repo root (same pattern as zizmor):
+
+1. Add `"toolname==X.Y.Z"` under root `[dependency-groups] dev` in `pyproject.toml`.
+2. Append `"toolname"` to `ROOT_REQUIRED_DEV_CLIS` in `run_all_tests.py`.
+3. From the repository root, run `uv lock` and commit `uv.lock`.
+4. Call the tool from the root runner via `_root_cli_bin(venv, "toolname")` after
+   `_ensure_root_venv()` (do not use the system PATH).
+5. If a pre-commit or CI pin must match, add the same lockstep as zizmor and a
+   small contract test.
+
+Project runners still install their own quality tools into each client’s
+`.venv_test`. A personal `detect-secrets` (or similar) on your PATH is fine for
+ad-hoc scans; it does not replace the version the project runner uses.
 
 ## Package Management
 
@@ -200,21 +248,28 @@ npm ci --legacy-peer-deps
 ### Python Packages
 
 **Manifest files:**
+- `pyproject.toml` + `uv.lock` at the **repository root** – Root-locked toolchain for `run_all_tests.py` (e.g. zizmor in `[dependency-groups] dev`); syncs into root `.venv`
 - `OPC_UA_Clients/Release2/<client>/pyproject.toml` – Independent per-client PEP 621 project configuration and dependencies
 - `OPC_UA_Clients/Release2/<client>/uv.lock` – Deterministic, cross-platform lockfile generated by uv; never edit by hand
 
-**Python client dependency workflow:**
+**Python dependency workflow (client or root):**
 ```bash
+# Root toolchain (zizmor, …):
+uv sync --locked --group dev     # from repository root → .venv
+
+# Client:
 cd OPC_UA_Clients/Release2/<client>
 uv sync --locked                 # synchronize virtual environment from lockfile
 uv lock                          # re-resolve and update uv.lock after pyproject.toml edits
 uv lock --upgrade                # upgrade dependencies to latest allowed versions
 ```
-Setup scripts and runners install from each client's lock into their dedicated
-environment, using uv sync or a frozen export. Plain `uv sync` targets `.venv`;
-use `run_all_tests.py` to manage `.venv_test` or local `.venv_ci` automatically.
-The `python-locks-current` pre-commit hook validates that all client locks remain up to date,
-and `run_precommit_all.py` audits every client lock.
+Setup scripts and runners install from each project's lock into their dedicated
+environment, using uv sync or a frozen export. Plain `uv sync` at a client targets
+`.venv`; use that client's `run_all_tests.py` to manage `.venv_test` or local
+`.venv_ci` automatically. The root runner syncs root `.venv` before the zizmor
+preflight. The `python-locks-current` hook / `scripts/check_python_locks.py`
+validates root and client `uv.lock` files; `run_precommit_all.py` audits client
+locks for CVEs.
 
 **Enforcement:** `requires-python` field enforces minimum Python version
 ```toml
@@ -225,10 +280,10 @@ requires-python = ">=3.14"
 Setup and test scripts prepare the reviewed uv version automatically in an
 isolated `.state/tools/` environment when needed. Only Python and Node.js need
 manual installation for ordinary Python/Web development. Direct uv maintenance
-commands require an installed uv or the managed executable. The repository root is
-not a uv project or workspace; run uv dependency commands in the affected client.
-Use `uv sync --locked --no-dev` for runtime-only installation. For development
-checks, use the client's `python run_all_tests.py --phase1` (Web:
+commands require an installed uv or the managed executable. Run client uv commands
+in the affected client directory; run root toolchain commands at the repository
+root. Use `uv sync --locked --no-dev` for client runtime-only installation. For
+development checks, use the client's `python run_all_tests.py --phase1` (Web:
 `--phase1-python`) rather than mixing test tools into the runtime environment.
 
 For pip-managed deployments, locked exports, and source-layout requirements, see
@@ -252,12 +307,16 @@ This runs:
 **Exit codes:**
 - `0` – All available tests passed
 - `1` – Test failures (fix required)
-- Tests for unavailable tools (Docker, .NET) skip gracefully
+- Suites that need Docker / .NET skip gracefully when those host tools are absent
+- Zizmor: **FAIL** if provision fails, findings are High/Critical, or output is
+  empty/unparseable after a locked sync (no soft SKIP for tool errors)
 
 An explicitly selected root `--suite` must run; a skipped selected suite fails.
-Local root runs prepare an isolated `.state/tools/root-tests-py<major><minor>/`
-interpreter, so root tooling and smoke-test packages do not modify global Python.
-CI/Docker retain their provisioned interpreter.
+Local root runs prepare two distinct environments (neither touches global Python):
+- **Root `.venv`** — `uv sync --locked --group dev` from root `uv.lock` (zizmor and future root CLIs)
+- **`.state/tools/root-tests-py<major><minor>/`** — interpreter for root pytest / smoke packages
+
+CI/Docker retain their provisioned interpreter for hosted jobs.
 
 **Pre-commit validation** (hooks and dependency audits):
 ```bash
@@ -318,8 +377,9 @@ git diff --check
 git diff --cached --check
 ```
 
-Inspect the summaries, not just the exit codes: unavailable optional tools can
-skip project suites. For Python environment changes, also run
+Inspect the summaries, not just the exit codes: Docker / .NET / binary scanners can
+skip project suites. A GHA Zizmor **FAIL** (sync failed, High/Critical findings, or
+tool/parse error) is a real failure. For Python environment changes, also run
 `python .\run_all_tests.py --phase1 --ci-mode` to exercise the local CI environments.
 With Docker running, verify the Web production image using
 `python .\run_all_tests.py --suite web-client-docker-smoke` if the full run did not
@@ -334,10 +394,10 @@ can use `--private-modules require` with the root test runner to require its che
 After publishing, check GitHub Actions and the first hosted Renovate dependency
 PR separately; local validation does not prove hosted lockfile regeneration.
 
-The pytest example uses the root tooling interpreter prepared by the root runner
-with Python 3.14. Adjust `py314` for your Python version; on POSIX use
-`.state/tools/root-tests-py314/bin/python`. A bare `python -m pytest` does not
-automatically use that environment.
+The pytest example uses the root-tests interpreter under `.state/tools/` (not root
+`.venv`, which holds locked CLIs such as zizmor). Adjust `py314` for your Python
+version; on POSIX use `.state/tools/root-tests-py314/bin/python`. A bare
+`python -m pytest` does not automatically use that environment.
 
 Tool preparation uses dedicated environments, not the user's global Python.
 Root pre-commit tooling lives under `.state/tools/precommit-py<major><minor>/`;
