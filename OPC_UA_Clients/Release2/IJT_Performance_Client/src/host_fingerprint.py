@@ -6,6 +6,7 @@ import hashlib
 import os
 import platform
 import socket
+import sys
 import uuid
 from typing import Any
 
@@ -52,7 +53,8 @@ def collect_host_fingerprint(*, include_network: bool = False, redact: bool = Tr
 
 def _total_ram_bytes() -> int | None:
     try:
-        if platform.system() == "Windows":
+        # sys.platform narrows for mypy (platform.system() does not expose windll).
+        if sys.platform == "win32":
             import ctypes
 
             class MEMORYSTATUSEX(ctypes.Structure):
@@ -72,17 +74,18 @@ def _total_ram_bytes() -> int | None:
             stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
             if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
                 return int(stat.ullTotalPhys)
-        else:
-            # POSIX: /proc/meminfo or sysconf
-            try:
-                sysconf = getattr(os, "sysconf", None)
-                if sysconf is not None:
-                    pages = sysconf("SC_PHYS_PAGES")
-                    page_size = sysconf("SC_PAGE_SIZE")
-                    if isinstance(pages, int) and isinstance(page_size, int) and pages > 0:
-                        return pages * page_size
-            except (ValueError, OSError, AttributeError):
-                pass
+            return None
+
+        # POSIX: sysconf when available
+        try:
+            sysconf = getattr(os, "sysconf", None)
+            if sysconf is not None:
+                pages = sysconf("SC_PHYS_PAGES")
+                page_size = sysconf("SC_PAGE_SIZE")
+                if isinstance(pages, int) and isinstance(page_size, int) and pages > 0:
+                    return pages * page_size
+        except (ValueError, OSError, AttributeError):
+            pass
     except Exception:
         return None
     return None
