@@ -1,0 +1,25 @@
+# ==============================================================================
+# Single Server Result Transfer Time & Latency Benchmark Profile
+# ==============================================================================
+schema_version: 1
+name: "Single Server Baseline"
+description: "Measures timing breakdown and result transfer time on a single OPC UA controller"
+
+fleet:
+  lifecycle: external
+  endpoints:
+    - "opc.tcp://localhost:40451"
+
+execution:
+  mode: both
+  duration_seconds: 15.0
+  target_sample_count: 20
+  burst_trigger_count: 5
+
+engine:
+  max_worker_processes: 1
+  connect_concurrency: 5
+  sub_period_ms: 100
+
+thresholds:
+  warn_p90_ms: 100.0

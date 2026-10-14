@@ -1,0 +1,31 @@
+# Producer-only: launch simulators, publish inventory, do not run the benchmark client.
+# Example:
+#   python run_fleet.py --role serve-fleet --advertise-host <LAN-IP> --profile profiles/serve_fleet.yaml --servers 10
+# Then copy test-results/fleet-inventory.json to the client host (or share the path).
+# Note: http_* below is loopback-only by default — remote clients should use the file, not this HTTP.
+schema_version: 2
+name: "Serve Fleet Inventory"
+description: "Start local simulators and expose endpoint inventory for a remote client-only run"
+
+role: serve-fleet
+
+claim:
+  intended: capacity
+
+inventory:
+  write_file: true
+  path: test-results/fleet-inventory.json
+  http: true
+  http_host: 127.0.0.1
+  http_port: 8765
+  ttl_seconds: 7200  # keep long enough for remote client setup; raise if needed
+
+report:
+  host_fingerprint: true
+  redact: true
+
+fleet:
+  lifecycle: auto_simulator
+  # run_fleet --advertise-host rewrites the host in published inventory URLs
+  url_template: "opc.tcp://127.0.0.1:{port}"
+  port_range: [40001, 40050]

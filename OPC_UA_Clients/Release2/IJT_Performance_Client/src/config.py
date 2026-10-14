@@ -19,8 +19,13 @@ import yaml
 
 VALID_MODES = {"passive", "active_burst", "both"}
 VALID_LIFECYCLES = {"external", "auto_simulator", "production"}
+VALID_ROLES = {"colocated", "serve-fleet", "client-only"}
+VALID_CLAIM_INTENDED = {"auto", "capacity", "split_path"}
 
-ALLOWED_TOP_KEYS = {"schema_version", "name", "description", "fleet", "execution", "engine", "thresholds", "meta"}
+ALLOWED_TOP_KEYS_V1 = {"schema_version", "name", "description", "fleet", "execution", "engine", "thresholds", "meta"}
+ALLOWED_TOP_KEYS_V2 = ALLOWED_TOP_KEYS_V1 | {"role", "claim", "inventory", "gates", "report"}
+ALLOWED_TOP_KEYS = ALLOWED_TOP_KEYS_V2  # reject unknown; schema_version gates which extras are meaningful
+
 ALLOWED_FLEET_KEYS = {"lifecycle", "endpoints", "url_template", "port_range"}
 ALLOWED_EXECUTION_KEYS = {
     "mode",
@@ -42,6 +47,24 @@ ALLOWED_ENGINE_KEYS = {
 }
 ALLOWED_THRESHOLDS_KEYS = {"warn_p90_ms", "fail_p90_ms", "fail_p90_client_ready_ms"}
 ALLOWED_META_KEYS = {"name", "description", "lifecycle"}
+ALLOWED_CLAIM_KEYS = {"intended"}
+ALLOWED_INVENTORY_KEYS = {
+    "write_file",
+    "path",
+    "http",
+    "http_host",
+    "http_port",
+    "http_token",
+    "source",
+    "ttl_seconds",
+}
+ALLOWED_GATES_KEYS = {
+    "min_coverage",
+    "max_disconnects",
+    "fail_on_delivery_p90_ms",
+    "fail_on_client_ready_p90_ms",
+}
+ALLOWED_REPORT_KEYS = {"host_fingerprint", "include_network", "redact"}
 
 ENDPOINT_RE = re.compile(r"^opc\.tcp://(?P<host>[a-zA-Z0-9_\-\.]+):(?P<port>[0-9]{1,5})(?P<path>/.*)?$")
 
@@ -80,6 +103,26 @@ class OpcUaPoolConfig:
     skip_clock_skew: bool = False  # If True, bypasses Cristian's RTT clock skew probes (e.g. on localhost)
     clock_tolerance_ms: float = 1000.0  # Clock-health warning tolerance (plus RTT/2); never fails the gate
     settle_timeout_seconds: float = 5.0  # Max wait after the last trigger round for results to arrive
+    # --- schema v2 / modular plan fields (defaults preserve colocated Profile A) ---
+    schema_version: int = 1
+    role: str = "colocated"  # colocated | serve-fleet | client-only
+    claim_intended: str = "auto"  # auto | capacity | split_path
+    # v1 default False preserves legacy side-effect-free runs; v2 profiles set write_file: true
+    inventory_write_file: bool = False
+    inventory_path: str = "test-results/fleet-inventory.json"
+    inventory_http: bool = False
+    inventory_http_host: str = "127.0.0.1"
+    inventory_http_port: int = 8765
+    inventory_http_token: str | None = None
+    inventory_source: str | None = None  # file path or URL for client-only
+    inventory_ttl_seconds: int = 3600
+    report_host_fingerprint: bool = True
+    report_include_network: bool = False
+    report_redact: bool = True
+    min_coverage: float | None = None
+    max_disconnects: int | None = None
+    # Fields explicitly set by the loaded YAML (for accurate effective-config provenance)
+    explicit_profile_fields: frozenset[str] = field(default_factory=frozenset, repr=False, compare=False)
 
     def validate(self) -> None:
         """Strict validation of all configuration parameters before execution."""
@@ -134,8 +177,35 @@ class OpcUaPoolConfig:
                 raise ValueError(f"{key} must be a finite positive number, got {value}")
 
         # Validate endpoints
-        if not self.endpoints:
+        if self.schema_version not in (1, 2):
+            raise ValueError(
+                f"Unsupported schema_version {self.schema_version}. Supported: 1 (legacy), 2 (modular roles/claims)."
+            )
+
+        if self.role not in VALID_ROLES:
+            raise ValueError(f"Invalid role '{self.role}'. Must be one of: {sorted(VALID_ROLES)}")
+
+        if self.claim_intended not in VALID_CLAIM_INTENDED:
+            raise ValueError(
+                f"Invalid claim.intended '{self.claim_intended}'. Must be one of: {sorted(VALID_CLAIM_INTENDED)}"
+            )
+
+        if self.role == "client-only" and not self.endpoints and not self.inventory_source:
+            raise ValueError("role=client-only requires inventory.source or endpoints")
+
+        if self.role != "client-only" and not self.endpoints:
             raise ValueError("No endpoints configured. At least one endpoint is required.")
+
+        if self.inventory_ttl_seconds <= 0:
+            raise ValueError(f"inventory.ttl_seconds must be positive, got {self.inventory_ttl_seconds}")
+
+        if self.min_coverage is not None and (
+            not math.isfinite(self.min_coverage) or not 0.0 <= self.min_coverage <= 1.0
+        ):
+            raise ValueError(f"min_coverage must be in [0, 1], got {self.min_coverage}")
+
+        if self.max_disconnects is not None and self.max_disconnects < 0:
+            raise ValueError(f"max_disconnects cannot be negative, got {self.max_disconnects}")
 
         seen_endpoints = set()
         for idx, ep in enumerate(self.endpoints):
@@ -167,6 +237,21 @@ def _validate_section_keys(section_dict: dict[str, Any], allowed_keys: set[str],
 
 
 _ROOT_PROFILES_DIR = Path(__file__).resolve().parents[1] / "profiles"
+_PKG_PROFILES_DIR = Path(__file__).resolve().parent / "profiles"
+
+_PACKAGED_PROFILE_BASELINES = frozenset(
+    {"work_pc_colocated.yaml", "serve_fleet.yaml", "client_only.yaml", "single_server.yaml", "multi_server_fleet.yaml"}
+)
+
+
+def verify_packaged_profiles(required: frozenset[str] | None = None) -> list[str]:
+    """Return basenames missing from src/profiles (wheel package data)."""
+    need = required or _PACKAGED_PROFILE_BASELINES
+    missing: list[str] = []
+    for name in sorted(need):
+        if not (_PKG_PROFILES_DIR / name).is_file():
+            missing.append(name)
+    return missing
 
 
 def load_config(file_path: str | Path) -> OpcUaPoolConfig:
@@ -188,6 +273,10 @@ def load_config(file_path: str | Path) -> OpcUaPoolConfig:
         source = _ROOT_PROFILES_DIR / path
     elif (_ROOT_PROFILES_DIR / path.name).is_file():
         source = _ROOT_PROFILES_DIR / path.name
+    elif (_PKG_PROFILES_DIR / path).is_file():
+        source = _PKG_PROFILES_DIR / path
+    elif (_PKG_PROFILES_DIR / path.name).is_file():
+        source = _PKG_PROFILES_DIR / path.name
     else:
         # 3. Check installed package resources
         bundled = None
@@ -217,31 +306,56 @@ def load_config(file_path: str | Path) -> OpcUaPoolConfig:
     if not isinstance(data, dict):
         raise ValueError(f"Configuration file must contain a YAML mapping, got {type(data).__name__}")
 
-    # Top-level key validation
+    raw_schema = data.get("schema_version", 1)
+    try:
+        schema_version = int(raw_schema)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"schema_version must be an integer, got {raw_schema!r}") from exc
+    if schema_version not in (1, 2):
+        raise ValueError(f"Unsupported schema_version {schema_version}. This client supports 1 and 2 only.")
+
+    allowed_top = ALLOWED_TOP_KEYS_V1 if schema_version == 1 else ALLOWED_TOP_KEYS_V2
+    # v1 profiles must not contain v2-only sections
     for key in data:
-        if key not in ALLOWED_TOP_KEYS:
-            raise ValueError(f"Unknown configuration key: '{key}'. Allowed: {sorted(ALLOWED_TOP_KEYS)}")
+        if key not in allowed_top:
+            if schema_version == 1 and key in ALLOWED_TOP_KEYS_V2 - ALLOWED_TOP_KEYS_V1:
+                raise ValueError(f"Key '{key}' requires schema_version: 2 (profile declares schema_version: 1).")
+            raise ValueError(f"Unknown configuration key: '{key}'. Allowed: {sorted(allowed_top)}")
 
     config = OpcUaPoolConfig()
+    explicit: set[str] = set()
+    config.schema_version = schema_version
+    if "schema_version" in data:
+        explicit.add("schema_version")
+
+    def _set(name: str, value: Any) -> None:
+        setattr(config, name, value)
+        explicit.add(name)
 
     # Meta section (optional alias for name/description/lifecycle)
     if "meta" in data:
         meta_sec = data["meta"]
         if isinstance(meta_sec, dict):
             _validate_section_keys(meta_sec, ALLOWED_META_KEYS, "meta")
-            config.name = meta_sec.get("name", config.name)
-            config.description = meta_sec.get("description", config.description)
-            config.lifecycle = meta_sec.get("lifecycle", config.lifecycle)
+            if "name" in meta_sec:
+                _set("name", meta_sec["name"])
+            if "description" in meta_sec:
+                _set("description", meta_sec["description"])
+            if "lifecycle" in meta_sec:
+                _set("lifecycle", meta_sec["lifecycle"])
 
-    config.name = data.get("name", config.name)
-    config.description = data.get("description", config.description)
+    if "name" in data:
+        _set("name", data["name"])
+    if "description" in data:
+        _set("description", data["description"])
 
     # Fleet section
     if "fleet" in data:
         fleet_sec = data["fleet"]
         if isinstance(fleet_sec, dict):
             _validate_section_keys(fleet_sec, ALLOWED_FLEET_KEYS, "fleet")
-            config.lifecycle = fleet_sec.get("lifecycle", config.lifecycle)
+            if "lifecycle" in fleet_sec:
+                _set("lifecycle", fleet_sec["lifecycle"])
 
             endpoints = list(fleet_sec.get("endpoints", []))
             url_template = fleet_sec.get("url_template")
@@ -260,26 +374,28 @@ def load_config(file_path: str | Path) -> OpcUaPoolConfig:
                 for p in range(start_p, end_p + 1):
                     endpoints.append(url_template.format(port=p))
 
-            config.endpoints = endpoints
+            if endpoints or "endpoints" in fleet_sec or (url_template and port_range):
+                _set("endpoints", endpoints)
 
     # Execution section
     if "execution" in data:
         exec_sec = data["execution"]
         if isinstance(exec_sec, dict):
             _validate_section_keys(exec_sec, ALLOWED_EXECUTION_KEYS, "execution")
-            config.mode = exec_sec.get("mode", config.mode)
+            if "mode" in exec_sec:
+                _set("mode", exec_sec["mode"])
             if "duration_seconds" in exec_sec:
-                config.duration_seconds = float(exec_sec["duration_seconds"])
+                _set("duration_seconds", float(exec_sec["duration_seconds"]))
             if "target_sample_count" in exec_sec:
-                config.target_sample_count = int(exec_sec["target_sample_count"])
+                _set("target_sample_count", int(exec_sec["target_sample_count"]))
             if "burst_trigger_count" in exec_sec:
-                config.burst_trigger_count = int(exec_sec["burst_trigger_count"])
+                _set("burst_trigger_count", int(exec_sec["burst_trigger_count"]))
             if "burst_delay_seconds" in exec_sec:
-                config.burst_delay_seconds = float(exec_sec["burst_delay_seconds"])
+                _set("burst_delay_seconds", float(exec_sec["burst_delay_seconds"]))
             if "require_full_coverage" in exec_sec:
-                config.require_full_coverage = bool(exec_sec["require_full_coverage"])
+                _set("require_full_coverage", bool(exec_sec["require_full_coverage"]))
             if "skip_clock_skew" in exec_sec:
-                config.skip_clock_skew = bool(exec_sec["skip_clock_skew"])
+                _set("skip_clock_skew", bool(exec_sec["skip_clock_skew"]))
 
     # Engine section
     if "engine" in data:
@@ -287,19 +403,19 @@ def load_config(file_path: str | Path) -> OpcUaPoolConfig:
         if isinstance(eng_sec, dict):
             _validate_section_keys(eng_sec, ALLOWED_ENGINE_KEYS, "engine")
             if "max_worker_processes" in eng_sec:
-                config.max_worker_processes = int(eng_sec["max_worker_processes"])
+                _set("max_worker_processes", int(eng_sec["max_worker_processes"]))
             if "burst_delay_seconds" in eng_sec:
-                config.burst_delay_seconds = float(eng_sec["burst_delay_seconds"])
+                _set("burst_delay_seconds", float(eng_sec["burst_delay_seconds"]))
             if "connect_concurrency" in eng_sec:
-                config.connect_concurrency = int(eng_sec["connect_concurrency"])
+                _set("connect_concurrency", int(eng_sec["connect_concurrency"]))
             if "sub_period_ms" in eng_sec:
-                config.sub_period_ms = int(eng_sec["sub_period_ms"])
+                _set("sub_period_ms", int(eng_sec["sub_period_ms"]))
             if "skip_clock_skew" in eng_sec:
-                config.skip_clock_skew = bool(eng_sec["skip_clock_skew"])
+                _set("skip_clock_skew", bool(eng_sec["skip_clock_skew"]))
             if "clock_tolerance_ms" in eng_sec:
-                config.clock_tolerance_ms = float(eng_sec["clock_tolerance_ms"])
+                _set("clock_tolerance_ms", float(eng_sec["clock_tolerance_ms"]))
             if "settle_timeout_seconds" in eng_sec:
-                config.settle_timeout_seconds = float(eng_sec["settle_timeout_seconds"])
+                _set("settle_timeout_seconds", float(eng_sec["settle_timeout_seconds"]))
 
     # Thresholds section
     if "thresholds" in data:
@@ -307,12 +423,61 @@ def load_config(file_path: str | Path) -> OpcUaPoolConfig:
         if isinstance(thresh_sec, dict):
             _validate_section_keys(thresh_sec, ALLOWED_THRESHOLDS_KEYS, "thresholds")
             if "warn_p90_ms" in thresh_sec:
-                config.warn_p90_ms = float(thresh_sec["warn_p90_ms"])
+                _set("warn_p90_ms", float(thresh_sec["warn_p90_ms"]))
             if "fail_p90_ms" in thresh_sec:
-                config.fail_p90_ms = float(thresh_sec["fail_p90_ms"])
+                _set("fail_p90_ms", float(thresh_sec["fail_p90_ms"]))
             if "fail_p90_client_ready_ms" in thresh_sec:
-                config.fail_p90_client_ready_ms = float(thresh_sec["fail_p90_client_ready_ms"])
+                _set("fail_p90_client_ready_ms", float(thresh_sec["fail_p90_client_ready_ms"]))
 
+    # --- schema v2 sections ---
+    if schema_version >= 2:
+        if "role" in data:
+            _set("role", str(data["role"]).strip())
+        if "claim" in data and isinstance(data["claim"], dict):
+            _validate_section_keys(data["claim"], ALLOWED_CLAIM_KEYS, "claim")
+            if "intended" in data["claim"]:
+                _set("claim_intended", str(data["claim"]["intended"]).strip().lower())
+        if "inventory" in data and isinstance(data["inventory"], dict):
+            inv = data["inventory"]
+            _validate_section_keys(inv, ALLOWED_INVENTORY_KEYS, "inventory")
+            if "write_file" in inv:
+                _set("inventory_write_file", bool(inv["write_file"]))
+            if "path" in inv:
+                _set("inventory_path", str(inv["path"]))
+            if "http" in inv:
+                _set("inventory_http", bool(inv["http"]))
+            if "http_host" in inv:
+                _set("inventory_http_host", str(inv["http_host"]))
+            if "http_port" in inv:
+                _set("inventory_http_port", int(inv["http_port"]))
+            if "http_token" in inv and inv["http_token"] is not None:
+                _set("inventory_http_token", str(inv["http_token"]))
+            if "source" in inv and inv["source"] is not None:
+                _set("inventory_source", str(inv["source"]))
+            if "ttl_seconds" in inv:
+                _set("inventory_ttl_seconds", int(inv["ttl_seconds"]))
+        if "gates" in data and isinstance(data["gates"], dict):
+            gates = data["gates"]
+            _validate_section_keys(gates, ALLOWED_GATES_KEYS, "gates")
+            if "min_coverage" in gates and gates["min_coverage"] is not None:
+                _set("min_coverage", float(gates["min_coverage"]))
+            if "max_disconnects" in gates and gates["max_disconnects"] is not None:
+                _set("max_disconnects", int(gates["max_disconnects"]))
+            if "fail_on_delivery_p90_ms" in gates and gates["fail_on_delivery_p90_ms"] is not None:
+                _set("fail_p90_ms", float(gates["fail_on_delivery_p90_ms"]))
+            if "fail_on_client_ready_p90_ms" in gates and gates["fail_on_client_ready_p90_ms"] is not None:
+                _set("fail_p90_client_ready_ms", float(gates["fail_on_client_ready_p90_ms"]))
+        if "report" in data and isinstance(data["report"], dict):
+            rep = data["report"]
+            _validate_section_keys(rep, ALLOWED_REPORT_KEYS, "report")
+            if "host_fingerprint" in rep:
+                _set("report_host_fingerprint", bool(rep["host_fingerprint"]))
+            if "include_network" in rep:
+                _set("report_include_network", bool(rep["include_network"]))
+            if "redact" in rep:
+                _set("report_redact", bool(rep["redact"]))
+
+    config.explicit_profile_fields = frozenset(explicit)
     # Perform strict validation
     config.validate()
     return config

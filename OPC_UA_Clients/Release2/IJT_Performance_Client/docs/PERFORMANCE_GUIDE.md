@@ -67,6 +67,26 @@ The handler timestamp above ($T_{\text{client}}$) includes time the result waits
 - The report also shows event-loop lag per worker (`loop_lag_max_ms`). High lag means the client host itself is saturated, so add workers or CPU before blaming the server.
 - A negative skew-corrected interval is clamped to 0 and flagged (`is_clamped_to_zero`). The unclamped value is kept in the `raw_*` field for audit.
 
+> **Timing honesty:** Delivery Time is **not** NIC wire time. It ends when the client stack reports the publish bytes (after reassembly/decryption and any publish wait). JSON exports include `timing_honesty` and `receive_timing_coverage` so downstream tools (including ToolsControl copy-only views) must not treat delivery as a hardware network probe.
+
+---
+
+## 2b. Claim profiles, roles, and fleet inventory
+
+| Claim | YAML `claim.intended` | Meaning |
+|-------|----------------------|---------|
+| **Profile A** | `capacity` or `auto` (colocated) | Throughput/latency under stated load on the configured topology. Does not prove plant network acquittal. |
+| **Profile B** | `split_path` (with evidence) | Bounded observed path from server event to client receive on **distinct hosts** (producer host id from consumed inventory is producer-asserted via content hash, not cryptographic proof), with a successful clock probe (`clock_rtt_ms` present), clock quality, and ≥95% receive-timing coverage over VALID samples. Still not global OPC UA proof. |
+| **UNPROVEN** | `split_path` without evidence | Fail-closed exit when B was required but host IDs, clock, or wire-timing coverage were insufficient. |
+
+**Roles:** `colocated` runs simulators + client (default `run_fleet.py`); `serve-fleet` publishes inventory only (use `--advertise-host <LAN-IP>` so remote clients get reachable URLs); `client-only` loads inventory and runs the client elsewhere.
+
+**Inventory:** Atomic JSON (`inventory.path`) lists endpoints and `producer_host_id`, with a `content_hash` and TTL (`inventory.ttl_seconds`). Optional loopback HTTP serves the same document (`preflight_http_port` before bind). `preflight_port_range` rejects ranges overlapping reserved live/CI ports (40451, 40461, 40463, 40465, 40485) and ports that already appear busy. Expired or hash-mismatched inventory is refused. Short TTL on `serve-fleet` (< 600 s) and low remaining TTL on `client-only` (< 300 s) emit warnings.
+
+**Config precedence:** CLI flags beat environment variables (`OPCUA_FLEET_ENDPOINTS`, `OPCUA_SERVER_URL`, `OPCUA_WORKERS`, …), which beat fields explicitly set in the YAML profile, which beat built-in defaults. Effective config in JSON reports shows `{value, source}` per field (secrets redacted).
+
+**Phases:** Use `run_all_tests.py --phase1` for unit tests; `--phase2` for live runs; fleet orchestration via `python run_fleet.py --profile profiles/work_pc_colocated.yaml`.
+
 ---
 
 ## 3. Concurrency Architecture and Process Sharding
@@ -335,10 +355,10 @@ python run_fleet.py --fail-p90 100 --fail-p90-client-ready 150   # Fail if 90%-u
 For an advanced 500-server load test targeting 25,000 results:
 
 ```bash
-python run_fleet.py --servers 500 -w 20 --samples-per-server 50 --settle-timeout 15 --fail-p90 300
+python run_fleet.py --servers 500 --start-port 41001 -w 20 --samples-per-server 50 --settle-timeout 15 --fail-p90 300
 ```
 
-This uses ports 40001-40500, 500 simulator processes, and 20 client workers.
+This uses ports 41001-41500 (avoids reserved live/CI ports), 500 simulator processes, and 20 client workers.
 Scale up from a smaller run and measure a baseline without limits first.
 The worker count and 300 ms gate are example host-specific settings, not a
 guaranteed capacity or production SLA. Add `--fail-p90-client-ready` separately

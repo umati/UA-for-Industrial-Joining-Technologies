@@ -1,0 +1,41 @@
+# Workstation colocated fleet (Profile A capacity claim).
+# Example: python run_fleet.py --profile profiles/work_pc_colocated.yaml --servers 10 -w 4
+schema_version: 2
+name: "Work PC Colocated Fleet"
+description: "Local simulators and client on one host; inventory for optional remote client"
+
+role: colocated
+
+claim:
+  intended: capacity
+
+inventory:
+  write_file: true
+  path: test-results/fleet-inventory.json
+  http: false
+  ttl_seconds: 3600
+
+report:
+  host_fingerprint: true
+  include_network: false
+  redact: true
+
+fleet:
+  lifecycle: auto_simulator
+  url_template: "opc.tcp://127.0.0.1:{port}"
+  port_range: [40001, 40050]
+
+execution:
+  mode: both
+  duration_seconds: 60.0
+  target_sample_count: 500
+  burst_trigger_count: 10
+  require_full_coverage: true
+
+engine:
+  max_worker_processes: 4
+  connect_concurrency: 10
+  sub_period_ms: 100
+
+thresholds:
+  warn_p90_ms: 200.0

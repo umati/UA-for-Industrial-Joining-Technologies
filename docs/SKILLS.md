@@ -409,9 +409,10 @@ UA-for-Industrial-Joining-Technologies/
 ### IJT Performance Client (`OPC_UA_Clients/Release2/IJT_Performance_Client/`)
 - **Stack**: Python 3.14+, asyncua == 2.1.0, pyyaml, pytest, pytest-asyncio
 - **Purpose**: Multi-controller latency and diagnostic benchmark client for controlled validation across 1 to 500+ endpoints. It reduces per-connection thread growth through process-sharded asyncio loops and computes result-transfer timing diagnostics ($T_{\text{end}} \to T_{\text{event}} \to T_{\text{client}}$). Scale conclusions require measured runs in the target environment.
-- **Execution**: CLI (`python -m ijt_performance_client --config profiles/single_server.yaml`) and importable Python SDK (`from ijt_performance_client import OpcUaClientPool`).
-- **Tests**: unit (`tests/unit/` — latency math, config validation, root-cause attribution); live (`tests/live/` — live controller benchmark on port 40485).
-- **Details**: read `OPC_UA_Clients/Release2/IJT_Performance_Client/README.md`
+- **Modular roles**: `colocated` (default, Profile A capacity), `serve-fleet` (publish inventory; `--advertise-host` for remote clients), `client-only` (consume inventory for Profile B evidence). Claim intended vs achieved; delivery is a receive-callback observation, **not** NIC wire time. Schema v1 profiles remain supported; v2 adds role/claim/inventory/gates/report. User-facing setup: client `README.md`; timing/claim depth: `docs/PERFORMANCE_GUIDE.md`.
+- **Execution**: CLI (`python -m ijt_performance_client --config profiles/single_server.yaml`), `python run_fleet.py --profile profiles/work_pc_colocated.yaml`, importable SDK (`from ijt_performance_client import OpcUaClientPool`).
+- **Tests**: unit (`tests/unit/` — latency math, config validation, root-cause attribution, claims/inventory); live (`tests/live/` — live controller benchmark on port 40485). One command: `python run_all_tests.py --phase1` (no server).
+- **Details**: read `OPC_UA_Clients/Release2/IJT_Performance_Client/README.md` and `docs/PERFORMANCE_GUIDE.md`
 
 ### IJT CSharp Client (`OPC_UA_Clients/Release2/IJT_CSharp_Client/`)
 - **Stack**: C# .NET 10+, OPC Foundation UA SDK, xUnit, Moq, coverlet

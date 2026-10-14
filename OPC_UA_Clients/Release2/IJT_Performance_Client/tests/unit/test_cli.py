@@ -443,31 +443,12 @@ def test_main_env_var_workers_fallback(monkeypatch, tmp_path):
         assert workers_passed == 6
 
 
-def test_main_env_var_workers_invalid_ignored(monkeypatch, tmp_path):
-    """Verify non-integer OPCUA_WORKERS is ignored gracefully."""
+def test_main_env_var_workers_invalid_fails(monkeypatch, tmp_path):
+    """Verify non-integer OPCUA_WORKERS fails closed via parser.error."""
     monkeypatch.setenv("OPCUA_WORKERS", "not-a-number")
 
-    mock_sample = LatencySample(
-        sample_id=1,
-        endpoint="opc.tcp://single:40451",
-        network_transport_time_ms=5.0,
-        total_result_transfer_time_ms=10.0,
-    )
-
-    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
-        mock_pool = MagicMock()
-        mock_pool_cls.return_value = mock_pool
-        mock_pool._num_workers_started = 1
-        mock_pool.collect_samples.return_value = [mock_sample]
-        mock_pool.verify_coverage.return_value = (True, "Coverage OK")
-        mock_pool.connected_endpoints = {"opc.tcp://single:40451"}
-        mock_pool.failed_endpoints = {}
-        mock_pool.worker_errors = []
-
-        exit_code = main(["--duration", "0.1", "--junit", str(tmp_path / "junit.xml")])
-        assert exit_code == 0
-        workers_passed = mock_pool_cls.call_args[1]["max_workers"]
-        assert workers_passed is None
+    with pytest.raises(SystemExit):
+        main(["--duration", "0.1", "--junit", str(tmp_path / "junit.xml")])
 
 
 def test_main_burst_delay_flag(tmp_path):
@@ -522,31 +503,12 @@ def test_main_env_var_burst_delay(monkeypatch, tmp_path):
         assert burst_delay_passed == 0.5
 
 
-def test_main_env_var_burst_delay_invalid_ignored(monkeypatch, tmp_path):
-    """Verify invalid OPCUA_BURST_DELAY env var falls back to default 1.0."""
+def test_main_env_var_burst_delay_invalid_fails(monkeypatch, tmp_path):
+    """Verify invalid OPCUA_BURST_DELAY env var fails closed."""
     monkeypatch.setenv("OPCUA_BURST_DELAY", "not-a-float")
 
-    mock_sample = LatencySample(
-        sample_id=1,
-        endpoint="opc.tcp://single:40451",
-        network_transport_time_ms=5.0,
-        total_result_transfer_time_ms=10.0,
-    )
-
-    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
-        mock_pool = MagicMock()
-        mock_pool_cls.return_value = mock_pool
-        mock_pool._num_workers_started = 1
-        mock_pool.collect_samples.return_value = [mock_sample]
-        mock_pool.verify_coverage.return_value = (True, "Coverage OK")
-        mock_pool.connected_endpoints = {"opc.tcp://single:40451"}
-        mock_pool.failed_endpoints = {}
-        mock_pool.worker_errors = []
-
-        exit_code = main(["--duration", "0.1", "--junit", str(tmp_path / "junit.xml")])
-        assert exit_code == 0
-        burst_delay_passed = mock_pool_cls.call_args[1]["burst_delay"]
-        assert burst_delay_passed == 1.0
+    with pytest.raises(SystemExit):
+        main(["--duration", "0.1", "--junit", str(tmp_path / "junit.xml")])
 
 
 def test_main_csv_report_export(tmp_path):
@@ -817,3 +779,106 @@ def test_main_settle_timeout_flag(tmp_path):
     with pytest.raises(SystemExit) as exc:
         main(["--duration", "0.1", "--settle-timeout", "-1", "--junit", str(tmp_path / "junit.xml")])
     assert exc.value.code == 2
+
+
+def test_main_serve_fleet_writes_inventory_and_exits(tmp_path, monkeypatch):
+    inv_path = tmp_path / "fleet-inventory.json"
+    monkeypatch.setattr("builtins.input", lambda: "")
+    code = main(
+        [
+            "--role",
+            "serve-fleet",
+            "--endpoints",
+            "opc.tcp://127.0.0.1:50011",
+            "--inventory-path",
+            str(inv_path),
+            "--junit",
+            str(tmp_path / "j.xml"),
+        ]
+    )
+    assert code == 0
+    assert inv_path.is_file()
+    data = inv_path.read_text(encoding="utf-8")
+    assert "50011" in data
+    assert '"role": "serve-fleet"' in data
+
+
+def test_main_serve_fleet_without_inventory_write_fails():
+    with pytest.raises(SystemExit) as exc:
+        main(["--role", "serve-fleet", "--endpoints", "opc.tcp://127.0.0.1:50012"])
+    assert exc.value.code == 2
+
+
+def test_main_client_only_loads_inventory(tmp_path):
+    from src.inventory import build_inventory, write_inventory_atomic
+
+    inv_path = write_inventory_atomic(
+        tmp_path / "inv.json",
+        build_inventory(["opc.tcp://192.168.1.20:4840"], ttl_seconds=3600, role="serve-fleet"),
+    )
+    sample = LatencySample(
+        sample_id=1,
+        endpoint="opc.tcp://192.168.1.20:4840",
+        delivery_time_ms=10.0,
+        clock_rtt_ms=5.0,
+    )
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
+        mock_pool = MagicMock()
+        mock_pool_cls.return_value = mock_pool
+        mock_pool._num_workers_started = 1
+        mock_pool.collect_samples.return_value = [sample]
+        mock_pool.stop.return_value = [sample]
+        mock_pool.verify_coverage.return_value = (True, "Coverage OK")
+        mock_pool.connected_endpoints = {"opc.tcp://192.168.1.20:4840"}
+        mock_pool.failed_endpoints = {}
+        mock_pool.worker_errors = []
+        code = main(
+            [
+                "--role",
+                "client-only",
+                "--inventory-source",
+                str(inv_path),
+                "--claim-intended",
+                "capacity",
+                "--junit",
+                str(tmp_path / "j.xml"),
+            ]
+        )
+    assert code == 0
+    assert mock_pool_cls.call_args[1]["endpoints"] == ["opc.tcp://192.168.1.20:4840"]
+
+
+def test_main_split_path_unproven_marks_junit_failure(tmp_path):
+    from src.inventory import build_inventory, write_inventory_atomic
+
+    inv_path = write_inventory_atomic(
+        tmp_path / "inv.json",
+        build_inventory(["opc.tcp://192.168.1.21:4840"], ttl_seconds=3600),
+    )
+    # No clock_rtt_ms → probe did not run → UNPROVEN for split_path
+    sample = LatencySample(sample_id=1, endpoint="opc.tcp://192.168.1.21:4840", delivery_time_ms=10.0)
+    junit = tmp_path / "junit.xml"
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
+        mock_pool = MagicMock()
+        mock_pool_cls.return_value = mock_pool
+        mock_pool._num_workers_started = 1
+        mock_pool.collect_samples.return_value = [sample]
+        mock_pool.stop.return_value = [sample]
+        mock_pool.verify_coverage.return_value = (True, "Coverage OK")
+        mock_pool.connected_endpoints = {"opc.tcp://192.168.1.21:4840"}
+        mock_pool.failed_endpoints = {}
+        mock_pool.worker_errors = []
+        code = main(
+            [
+                "--role",
+                "client-only",
+                "--inventory-source",
+                str(inv_path),
+                "--claim-intended",
+                "split_path",
+                "--junit",
+                str(junit),
+            ]
+        )
+    assert code == 1
+    assert "CLAIM FAILURE" in junit.read_text(encoding="utf-8")

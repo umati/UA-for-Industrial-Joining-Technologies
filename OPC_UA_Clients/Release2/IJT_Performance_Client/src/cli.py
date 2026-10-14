@@ -12,11 +12,23 @@ import os
 import sys
 import threading
 from pathlib import Path
+from typing import Any
 
 from . import __version__
+from .claim import resolve_claim
 from .config import OpcUaPoolConfig, is_loopback_endpoint, load_config
 from .diagnostics import evaluate_diagnostics
+from .effective_config import EffectiveConfigTracker, parse_env_float, parse_env_int
 from .engine import FleetIntegritySummary, OpcUaClientPool
+from .host_fingerprint import collect_host_fingerprint
+from .inventory import (
+    InventoryHttpServer,
+    build_inventory,
+    load_inventory,
+    preflight_http_port,
+    remaining_ttl_seconds,
+    write_inventory_atomic,
+)
 from .reporters import (
     export_csv_report,
     export_json_report,
@@ -24,6 +36,7 @@ from .reporters import (
     print_console_report,
     write_junit_xml,
 )
+from .reporters._metrics import wire_timing_count
 from .results import INTEGRITY_VALID
 
 logger = logging.getLogger("ijt_performance_client")
@@ -161,6 +174,49 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to export detailed sample-by-sample metrics CSV (without heavy trace curves)",
     )
     parser.add_argument(
+        "--role",
+        choices=["colocated", "serve-fleet", "client-only"],
+        help="Deployment role (colocated | serve-fleet | client-only)",
+    )
+    parser.add_argument(
+        "--claim-intended",
+        choices=["auto", "capacity", "split_path"],
+        help="Claim profile intent: auto, capacity (Profile A), or split_path (Profile B attempt)",
+    )
+    parser.add_argument(
+        "--inventory-source",
+        type=str,
+        help="Inventory file path or URL (required for client-only when endpoints are not set)",
+    )
+    parser.add_argument(
+        "--inventory-path",
+        type=str,
+        help="Path to write fleet inventory JSON (colocated / serve-fleet producers)",
+    )
+    parser.add_argument(
+        "--inventory-http",
+        action="store_true",
+        help="Serve inventory over loopback HTTP while the run is active",
+    )
+    parser.add_argument(
+        "--no-inventory-http",
+        action="store_true",
+        help="Disable inventory HTTP even when the profile enables it",
+    )
+    parser.add_argument(
+        "--inventory-http-port",
+        type=int,
+        help="TCP port for optional inventory HTTP server (default from profile or 8765)",
+    )
+    redact_group = parser.add_mutually_exclusive_group()
+    redact_group.add_argument("--redact", action="store_true", help="Redact host fingerprint network fields (default)")
+    redact_group.add_argument("--no-redact", action="store_true", help="Include raw hostname/IP in host fingerprint")
+    parser.add_argument(
+        "--include-network-fingerprint",
+        action="store_true",
+        help="Include network fields in host fingerprint (respects --redact unless --no-redact)",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -182,6 +238,192 @@ def _integrity_summary_json(fi: object) -> dict[str, object]:
     return {"evaluated": True, **data}
 
 
+def _compute_receive_timing_coverage(valid: list[Any], timing_summary: dict[str, Any]) -> float | None:
+    if not valid:
+        return None
+    wire_timed = timing_summary.get("wire_timed_valid")
+    if wire_timed is None:
+        wire_timed = wire_timing_count(valid)
+    else:
+        wire_timed = int(wire_timed)
+    return wire_timed / len(valid)
+
+
+def _resolve_configuration(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> tuple[OpcUaPoolConfig, EffectiveConfigTracker, str | None]:
+    """Apply CLI > env > profile > default precedence; return cfg, tracker, producer_host_id."""
+    tracker = EffectiveConfigTracker()
+    producer_host_id: str | None = None
+
+    if args.config:
+        cfg = load_config(args.config)
+        tracker.mark_many(sorted(cfg.explicit_profile_fields), "profile")
+    else:
+        cfg = OpcUaPoolConfig()
+
+    had_profile_endpoints = bool(args.config and "endpoints" in cfg.explicit_profile_fields)
+    endpoints_from_cli_or_env = False
+    if args.endpoints:
+        cfg.endpoints = [ep.strip() for ep in args.endpoints.split(",") if ep.strip()]
+        tracker.mark("endpoints", "cli")
+        endpoints_from_cli_or_env = True
+    elif os.environ.get("OPCUA_FLEET_ENDPOINTS"):
+        if had_profile_endpoints:
+            logger.warning(
+                "OPCUA_FLEET_ENDPOINTS overrides endpoints from profile %s (precedence: CLI > env > profile)",
+                args.config,
+            )
+        cfg.endpoints = [ep.strip() for ep in os.environ["OPCUA_FLEET_ENDPOINTS"].split(",") if ep.strip()]
+        tracker.mark("endpoints", "env")
+        endpoints_from_cli_or_env = True
+    elif os.environ.get("OPCUA_SERVER_URL"):
+        if had_profile_endpoints or (args.config and len(cfg.endpoints) > 1):
+            logger.warning(
+                "OPCUA_SERVER_URL overrides fleet endpoints from profile %s (precedence: CLI > env > profile)",
+                args.config,
+            )
+        cfg.endpoints = [os.environ["OPCUA_SERVER_URL"].strip()]
+        tracker.mark("endpoints", "env")
+        endpoints_from_cli_or_env = True
+
+    if args.duration is not None:
+        cfg.duration_seconds = args.duration
+        tracker.mark("duration_seconds", "cli")
+    if args.samples is not None:
+        cfg.target_sample_count = args.samples
+        tracker.mark("target_sample_count", "cli")
+    if args.burst is not None:
+        cfg.burst_trigger_count = args.burst
+        tracker.mark("burst_trigger_count", "cli")
+    if args.mode:
+        cfg.mode = args.mode
+        tracker.mark("mode", "cli")
+    if args.require_full_coverage:
+        cfg.require_full_coverage = True
+        tracker.mark("require_full_coverage", "cli")
+    if args.allow_partial_coverage:
+        cfg.require_full_coverage = False
+        tracker.mark("require_full_coverage", "cli")
+    if args.require_full_coverage and args.allow_partial_coverage:
+        parser.error("--require-full-coverage and --allow-partial-coverage are mutually exclusive")
+    if args.fail_p90 is not None:
+        cfg.fail_p90_ms = args.fail_p90
+        tracker.mark("fail_p90_ms", "cli")
+    if args.fail_p90_client_ready is not None:
+        cfg.fail_p90_client_ready_ms = args.fail_p90_client_ready
+        tracker.mark("fail_p90_client_ready_ms", "cli")
+    if args.workers is not None:
+        cfg.max_worker_processes = args.workers
+        tracker.mark("max_worker_processes", "cli")
+    elif os.environ.get("OPCUA_WORKERS"):
+        # CLI > env > profile: env must beat profile when -w is omitted
+        try:
+            cfg.max_worker_processes = parse_env_int("OPCUA_WORKERS", os.environ["OPCUA_WORKERS"])
+            tracker.mark("max_worker_processes", "env")
+        except ValueError as exc:
+            parser.error(str(exc))
+    if args.burst_delay is not None:
+        cfg.burst_delay_seconds = args.burst_delay
+        tracker.mark("burst_delay_seconds", "cli")
+    elif os.environ.get("OPCUA_BURST_DELAY"):
+        try:
+            cfg.burst_delay_seconds = parse_env_float("OPCUA_BURST_DELAY", os.environ["OPCUA_BURST_DELAY"])
+            tracker.mark("burst_delay_seconds", "env")
+        except ValueError as exc:
+            parser.error(str(exc))
+    if args.skip_clock_skew:
+        cfg.skip_clock_skew = True
+        tracker.mark("skip_clock_skew", "cli")
+    if args.clock_tolerance_ms is not None:
+        cfg.clock_tolerance_ms = args.clock_tolerance_ms
+        tracker.mark("clock_tolerance_ms", "cli")
+    if args.settle_timeout is not None:
+        cfg.settle_timeout_seconds = args.settle_timeout
+        tracker.mark("settle_timeout_seconds", "cli")
+
+    if args.role:
+        cfg.role = args.role
+        tracker.mark("role", "cli")
+    if args.claim_intended:
+        cfg.claim_intended = args.claim_intended
+        tracker.mark("claim_intended", "cli")
+    if args.inventory_source:
+        cfg.inventory_source = args.inventory_source
+        tracker.mark("inventory_source", "cli")
+    if args.inventory_path:
+        cfg.inventory_path = args.inventory_path
+        cfg.inventory_write_file = True
+        tracker.mark("inventory_path", "cli")
+        tracker.mark("inventory_write_file", "cli")
+    if args.inventory_http:
+        cfg.inventory_http = True
+        cfg.inventory_write_file = True
+        tracker.mark("inventory_http", "cli")
+        tracker.mark("inventory_write_file", "cli")
+    if args.no_inventory_http:
+        cfg.inventory_http = False
+        tracker.mark("inventory_http", "cli")
+    if args.inventory_http_port is not None:
+        cfg.inventory_http_port = args.inventory_http_port
+        tracker.mark("inventory_http_port", "cli")
+    if args.redact:
+        cfg.report_redact = True
+        tracker.mark("report_redact", "cli")
+    if args.no_redact:
+        cfg.report_redact = False
+        tracker.mark("report_redact", "cli")
+    if args.include_network_fingerprint:
+        cfg.report_include_network = True
+        tracker.mark("report_include_network", "cli")
+
+    inventory_source = cfg.inventory_source
+    if cfg.role == "client-only" and inventory_source:
+        try:
+            inv = load_inventory(inventory_source, token=cfg.inventory_http_token)
+        except (OSError, ValueError, FileNotFoundError, TypeError, KeyError) as exc:
+            parser.error(f"Failed to load inventory from {inventory_source}: {exc}")
+        remaining = remaining_ttl_seconds(inv)
+        if remaining is not None and remaining < 300:
+            logger.warning(
+                "Inventory TTL remaining is only %.0fs — refresh the producer inventory before a long client-only run",
+                remaining,
+            )
+        inv_endpoints = inv.endpoint_urls()
+        if not inv_endpoints:
+            parser.error(f"Inventory at {inventory_source} contains no endpoints")
+        if endpoints_from_cli_or_env:
+            logger.warning(
+                "CLI/env endpoints take precedence over inventory.source (precedence: CLI > env > inventory/profile); "
+                "producer_host_id from inventory is still used for claim evidence"
+            )
+        else:
+            cfg.endpoints = inv_endpoints
+            tracker.mark("endpoints", "inventory")
+        producer_host_id = inv.producer_host_id
+
+    if not cfg.endpoints:
+        if cfg.role == "client-only":
+            parser.error("role=client-only requires --inventory-source or inventory.source in the profile")
+        cfg.endpoints = ["opc.tcp://localhost:40451"]
+        tracker.mark("endpoints", "default")
+
+    if cfg.role == "serve-fleet" and not cfg.inventory_write_file:
+        parser.error(
+            "role=serve-fleet requires publishing inventory "
+            "(--inventory-path / --inventory-http, or inventory.write_file in the profile)"
+        )
+
+    try:
+        cfg.validate()
+    except ValueError as exc:
+        parser.error(str(exc))
+    if cfg.require_full_coverage is None:
+        cfg.require_full_coverage = len(cfg.endpoints) > 1
+
+    return cfg, tracker, producer_host_id
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -191,81 +433,67 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    # Filter verbose asyncua library logs unless verbose is requested
     if not args.verbose:
         logging.getLogger("asyncua").setLevel(logging.CRITICAL)
 
-    # 1. Load base configuration
-    if args.config:
-        cfg = load_config(args.config)
-    else:
-        cfg = OpcUaPoolConfig()
+    cfg, tracker, producer_host_id = _resolve_configuration(args, parser)
 
-    # 2. Apply CLI overrides
-    if args.endpoints:
-        cfg.endpoints = [ep.strip() for ep in args.endpoints.split(",") if ep.strip()]
-    elif not args.config:
-        env_fleet = os.environ.get("OPCUA_FLEET_ENDPOINTS")
-        env_single = os.environ.get("OPCUA_SERVER_URL")
-        if env_fleet:
-            cfg.endpoints = [ep.strip() for ep in env_fleet.split(",") if ep.strip()]
-        elif env_single:
-            cfg.endpoints = [env_single.strip()]
-    if args.duration is not None:
-        cfg.duration_seconds = args.duration
-    if args.samples is not None:
-        cfg.target_sample_count = args.samples
-    if args.burst is not None:
-        cfg.burst_trigger_count = args.burst
-    if args.mode:
-        cfg.mode = args.mode
-    if args.require_full_coverage:
-        cfg.require_full_coverage = True
-    if args.allow_partial_coverage:
-        cfg.require_full_coverage = False
-    if args.require_full_coverage and args.allow_partial_coverage:
-        parser.error("--require-full-coverage and --allow-partial-coverage are mutually exclusive")
-    if args.fail_p90 is not None:
-        cfg.fail_p90_ms = args.fail_p90
-    if args.fail_p90_client_ready is not None:
-        cfg.fail_p90_client_ready_ms = args.fail_p90_client_ready
-    if args.workers is not None:
-        cfg.max_worker_processes = args.workers
-    elif cfg.max_worker_processes is None:
-        env_workers = os.environ.get("OPCUA_WORKERS")
-        if env_workers:
+    logger.info(f"Loaded config: '{cfg.name}' targeting {len(cfg.endpoints)} endpoints (role={cfg.role})")
+
+    inventory_http: InventoryHttpServer | None = None
+    written_inventory_path: Path | None = None
+
+    if cfg.role in ("colocated", "serve-fleet") and cfg.inventory_write_file:
+        if cfg.role == "serve-fleet" and cfg.inventory_ttl_seconds < 600:
+            logger.warning(
+                "serve-fleet inventory TTL is %ss — remote client-only runs may expire while simulators stay up; "
+                "raise inventory.ttl_seconds (recommended >= 3600)",
+                cfg.inventory_ttl_seconds,
+            )
+        inv = build_inventory(
+            cfg.endpoints,
+            ttl_seconds=cfg.inventory_ttl_seconds,
+            role=cfg.role,
+            extras={"claim_intended": cfg.claim_intended},
+        )
+        # Producer id for colocated is local self-assertion — do not treat as topology proof
+        written_inventory_path = write_inventory_atomic(cfg.inventory_path, inv)
+        if cfg.inventory_http:
+            http_conflicts = preflight_http_port(cfg.inventory_http_port, cfg.inventory_http_host)
+            if http_conflicts:
+                for msg in http_conflicts:
+                    logger.error("%s", msg)
+                return 1
             try:
-                cfg.max_worker_processes = int(env_workers)
-            except ValueError:
+                inventory_http = InventoryHttpServer(
+                    inv,
+                    host=cfg.inventory_http_host,
+                    port=cfg.inventory_http_port,
+                    token=cfg.inventory_http_token,
+                )
+                inventory_http.start()
+            except (OSError, ValueError) as exc:
+                logger.error("Inventory HTTP failed to start: %s", exc)
+                return 1
+
+    if cfg.role == "serve-fleet":
+        logger.info(
+            "role=serve-fleet: inventory published%s; skipping benchmark client. "
+            "Prefer run_fleet.py --role serve-fleet when you also need simulator lifecycle.",
+            f" at {written_inventory_path}" if written_inventory_path else "",
+        )
+        if inventory_http is not None:
+            logger.info(
+                "Inventory HTTP listening on %s — press Enter to stop (or Ctrl+C).",
+                inventory_http.url,
+            )
+            try:
+                input()
+            except (KeyboardInterrupt, EOFError):
                 pass
-    if args.burst_delay is not None:
-        cfg.burst_delay_seconds = args.burst_delay
-    elif os.environ.get("OPCUA_BURST_DELAY"):
-        try:
-            cfg.burst_delay_seconds = float(os.environ["OPCUA_BURST_DELAY"])
-        except ValueError:
-            pass
-    if args.skip_clock_skew:
-        cfg.skip_clock_skew = True
-    if args.clock_tolerance_ms is not None:
-        cfg.clock_tolerance_ms = args.clock_tolerance_ms
-    if args.settle_timeout is not None:
-        cfg.settle_timeout_seconds = args.settle_timeout
+            inventory_http.stop()
+        return 0
 
-    if not cfg.endpoints:
-        cfg.endpoints = ["opc.tcp://localhost:40451"]
-
-    # Re-validate after overrides; report invalid values as usage errors (exit 2), not tracebacks.
-    try:
-        cfg.validate()
-    except ValueError as exc:
-        parser.error(str(exc))
-    if cfg.require_full_coverage is None:
-        cfg.require_full_coverage = len(cfg.endpoints) > 1
-
-    logger.info(f"Loaded config: '{cfg.name}' targeting {len(cfg.endpoints)} endpoints")
-
-    # 3. Instantiate and run OpcUaClientPool
     pool = OpcUaClientPool(
         endpoints=cfg.endpoints,
         max_workers=cfg.max_worker_processes,
@@ -288,12 +516,12 @@ def main(argv: list[str] | None = None) -> int:
             target_sample_count=cfg.target_sample_count,
         )
     finally:
-        # pool.stop drains in-flight batches and returns all collected samples
         shutdown_samples = pool.stop()
         if isinstance(shutdown_samples, list) and len(shutdown_samples) >= len(samples):
             samples = shutdown_samples
+        if inventory_http is not None:
+            inventory_http.stop()
 
-    # 4. Measure real runtime telemetry
     real_thread_count = threading.active_count()
     real_process_count = pool._num_workers_started
 
@@ -305,7 +533,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     logger.info(coverage_msg)
 
-    # 5. Run heuristic attribution diagnostics on VALID results only; invalid results carry no timing proof.
     valid = [s for s in samples if s.integrity_status == INTEGRITY_VALID]
 
     def _metric(name: str) -> list[float]:
@@ -315,6 +542,40 @@ def main(argv: list[str] | None = None) -> int:
     timing_summary = timing_fn() if callable(timing_fn) else {}
     if not isinstance(timing_summary, dict):
         timing_summary = {}
+
+    receive_timing_coverage = _compute_receive_timing_coverage(valid, timing_summary)
+    # Successful Cristian probe stores rtt_ms; default skew 0.0 alone is not evidence
+    clock_probe_ran = (
+        (not cfg.skip_clock_skew) and bool(valid) and any(getattr(s, "clock_rtt_ms", None) is not None for s in valid)
+    )
+    clock_quality_ok = clock_probe_ran and not any(getattr(s, "clock_warning", False) for s in valid)
+    # Producer host id from consumed inventory is producer-asserted (hash ≠ authenticated proof)
+    topology_verified = cfg.role == "client-only" and producer_host_id is not None
+
+    claim = resolve_claim(
+        intended=cfg.claim_intended,
+        endpoints=cfg.endpoints,
+        producer_host_id=producer_host_id,
+        topology_verified=topology_verified,
+        clock_quality_ok=clock_quality_ok,
+        clock_probe_ran=clock_probe_ran,
+        wire_timing_coverage=receive_timing_coverage,
+    )
+    if claim.achieved == "UNPROVEN":
+        logger.warning("CLAIM UNPROVEN: %s (intended=%s)", claim.reason, claim.intended)
+    else:
+        logger.info("Claim achieved: Profile %s (%s)", claim.profile_label, claim.reason)
+
+    host_fingerprint = (
+        collect_host_fingerprint(
+            include_network=cfg.report_include_network,
+            redact=cfg.report_redact,
+        )
+        if cfg.report_host_fingerprint
+        else None
+    )
+
+    effective_config = tracker.snapshot(cfg)
 
     all_endpoints_local = bool(cfg.endpoints) and all(is_loopback_endpoint(url) for url in cfg.endpoints)
     verdict = evaluate_diagnostics(
@@ -332,7 +593,6 @@ def main(argv: list[str] | None = None) -> int:
         all_endpoints_local=all_endpoints_local,
     )
 
-    # 6. Output reporting
     print_console_report(samples, verdict, cfg.name, timing=timing_summary)
 
     if args.markdown:
@@ -351,13 +611,48 @@ def main(argv: list[str] | None = None) -> int:
             )
     fail_msg = "; ".join(sla_breaches) or None
 
+    claim_fail = cfg.claim_intended == "split_path" and claim.achieved == "UNPROVEN"
+
+    gate_fail = False
+    if cfg.min_coverage is not None and samples:
+        ratio = len(valid) / max(len(samples), 1)
+        if ratio < cfg.min_coverage:
+            gate_fail = True
+            logger.error(
+                "GATE FAILURE: valid/sample coverage %.1f%% below min_coverage %.1f%%",
+                ratio * 100.0,
+                cfg.min_coverage * 100.0,
+            )
+    if cfg.max_disconnects is not None:
+        disconnects = int(getattr(pool, "burst_trigger_failures", 0) or 0)
+        failed_eps = pool.failed_endpoints if isinstance(pool.failed_endpoints, dict) else {}
+        disconnects += len(failed_eps)
+        if disconnects > cfg.max_disconnects:
+            gate_fail = True
+            logger.error(
+                "GATE FAILURE: disconnect/failure count %s exceeds max_disconnects %s",
+                disconnects,
+                cfg.max_disconnects,
+            )
+
+    junit_fail_parts = [
+        p
+        for p in (
+            fail_msg,
+            "CLAIM FAILURE: split_path intended but UNPROVEN" if claim_fail else None,
+            "GATE FAILURE: min_coverage or max_disconnects" if gate_fail else None,
+        )
+        if p
+    ]
+    junit_fail_msg = "; ".join(junit_fail_parts) or None
+
     if args.junit:
         write_junit_xml(
             output_path=args.junit,
             samples=samples,
             verdict=verdict,
             pool_name=cfg.name,
-            failed_threshold_msg=fail_msg,
+            failed_threshold_msg=junit_fail_msg,
             coverage_valid=coverage_valid,
             coverage_msg=coverage_msg,
             worker_errors=pool.worker_errors,
@@ -389,6 +684,14 @@ def main(argv: list[str] | None = None) -> int:
                 "teardown_errors": list(teardown_errs) if isinstance(teardown_errs, (list, tuple, set)) else [],
                 "integrity_summary": integrity_summary,
                 "timing": timing_summary,
+                "effective_config": effective_config,
+                "claim": claim.to_dict(),
+                "host_fingerprint": host_fingerprint,
+                "timing_honesty": verdict.timing_honesty_note,
+                "receive_timing_coverage": receive_timing_coverage,
+                "role": cfg.role,
+                "schema_version": cfg.schema_version,
+                "inventory_path": str(written_inventory_path) if written_inventory_path else None,
             },
         )
         logger.info(f"Wrote JSON metrics to {args.json}")
@@ -397,7 +700,7 @@ def main(argv: list[str] | None = None) -> int:
         export_csv_report(args.csv, samples)
         logger.info(f"Wrote detailed metrics CSV to {args.csv}")
 
-    if fail_msg or not coverage_valid or not samples:
+    if fail_msg or not coverage_valid or not samples or claim_fail or gate_fail:
         if fail_msg:
             logger.error(f"SLA BREACH: {fail_msg}")
             if all_endpoints_local:
@@ -408,6 +711,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
         if not coverage_valid:
             logger.error(f"COVERAGE FAILURE: {coverage_msg}")
+        if claim_fail:
+            logger.error("CLAIM FAILURE: split_path intended but achieved UNPROVEN — fail-closed exit")
         return 1
 
     return 0

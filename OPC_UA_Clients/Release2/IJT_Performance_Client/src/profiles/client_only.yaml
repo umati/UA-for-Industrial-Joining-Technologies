@@ -1,0 +1,36 @@
+# Remote benchmark client (Profile B attempt when inventory + clock/timing evidence succeed).
+# Example (after serve-fleet on another host, with inventory file copied here):
+#   python run_fleet.py --role client-only --inventory-source test-results/fleet-inventory.json --profile profiles/client_only.yaml
+# Override claim: --claim-intended capacity
+schema_version: 2
+name: "Client-Only Remote Fleet"
+description: "Consume producer inventory; does not start simulators on this host"
+
+role: client-only
+
+claim:
+  intended: split_path  # fails closed (exit 1) if B evidence is incomplete → UNPROVEN
+
+inventory:
+  # File path or http(s) URL from the producer (run_fleet --role serve-fleet)
+  # Prefer a shared/copied file for remote hosts; loopback HTTP is local-only
+  source: test-results/fleet-inventory.json
+
+report:
+  host_fingerprint: true
+  include_network: false
+  redact: true
+
+execution:
+  mode: both
+  duration_seconds: 60.0
+  target_sample_count: 500
+  burst_trigger_count: 10
+  require_full_coverage: true
+
+engine:
+  connect_concurrency: 10
+  sub_period_ms: 100
+
+thresholds:
+  warn_p90_ms: 200.0

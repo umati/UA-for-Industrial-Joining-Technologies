@@ -26,12 +26,109 @@ from ..results import compute_statistics
 class DiagnosticVerdict:
     """The heuristic diagnosis of the benchmark run."""
 
-    primary_bottleneck: str  # Short classification (e.g. SERVER_PROCESSING_DURATION)
+    primary_bottleneck: str  # Short classification (e.g. SERVER_PROCESSING_DURATION) — keep stable for TC aliases
     headline: str  # Clear 1-line summary
     explanation: str  # Detailed technical explanation with evidence
     recommendation: str  # Concrete next steps to guide engineering investigation
     metrics_summary: dict[str, float]  # Key P90 and mean numbers
     warnings: list[str]  # Environmental alerts (clock drift, thread explosion)
+    # Richer bottleneck map (Phase 2) — additive; does not rename primary_bottleneck
+    observed_slow_stage: str = ""
+    cause_family: str = ""
+    confidence: str = "medium"  # high | medium | low | insufficient_evidence
+    resource_limit: str = "RESOURCE_TELEMETRY_MISSING"  # CONFIRMED | SUSPECTED | MISSING
+    missing_evidence: list[str] | None = None
+    competing_explanations: list[str] | None = None
+    disproof_hint: str = ""
+    timing_honesty_note: str = (
+        "delivery_time_ms is measured from operation end to the client protocol receive callback "
+        "(after reassembly/decryption); it is not NIC wire time and may include publish wait and "
+        "pre-callback client scheduling."
+    )
+
+
+def _enrich_verdict(
+    verdict: DiagnosticVerdict,
+    *,
+    has_wire_timing: bool,
+    all_endpoints_local: bool,
+    valid_count: int,
+) -> DiagnosticVerdict:
+    """Attach Phase-2 bottleneck-map fields without changing primary_bottleneck strings."""
+    missing: list[str] = []
+    if valid_count == 0:
+        missing.append("no_valid_samples")
+    if not has_wire_timing:
+        missing.append("receive_decode_timing_unavailable")
+    bottleneck = verdict.primary_bottleneck
+    stage_map = {
+        "NO_DATA": ("none", "incomplete_coverage", "insufficient_evidence", "RESOURCE_TELEMETRY_MISSING"),
+        "NONE (OPC UA PIPELINE HEALTHY)": (
+            "none",
+            "none",
+            "medium" if has_wire_timing else "low",
+            "RESOURCE_TELEMETRY_MISSING",
+        ),
+        "SERVER_PROCESSING_DURATION": (
+            "server_processing",
+            "server",
+            "medium",
+            "RESOURCE_TELEMETRY_MISSING",
+        ),
+        "CLIENT_PROCESSING": (
+            "client_decode_or_dispatch",
+            "client_busy",
+            "high" if has_wire_timing else "medium",
+            "RESOURCE_LIMIT_SUSPECTED" if all_endpoints_local else "RESOURCE_TELEMETRY_MISSING",
+        ),
+        "LOCAL_HOST_CPU": (
+            "colocated_host",
+            "local_cpu",
+            "medium",
+            "RESOURCE_LIMIT_SUSPECTED",
+        ),
+        "NETWORK_OR_TRANSPORT": (
+            "server_event_to_client_receive_observation",
+            "network_or_path",
+            "low" if all_endpoints_local else "medium",
+            "RESOURCE_TELEMETRY_MISSING",
+        ),
+        "APPLICATION_OR_MIXED": ("mixed", "application_or_mixed", "low", "RESOURCE_TELEMETRY_MISSING"),
+    }
+    stage, family, confidence, resource = stage_map.get(
+        bottleneck, ("unknown", "unknown", "low", "RESOURCE_TELEMETRY_MISSING")
+    )
+    if not has_wire_timing and bottleneck == "NONE (OPC UA PIPELINE HEALTHY)":
+        confidence = "insufficient_evidence"
+        missing.append("healthy_without_receive_timing")
+
+    disproof = {
+        "CLIENT_PROCESSING": "Halve endpoints or raise -w; if delivery P90 drops with decode/dispatch, client load was dominant.",
+        "LOCAL_HOST_CPU": "Move simulators to another host (Profile B attempt); if delivery P90 falls sharply, colocated CPU was the story.",
+        "NETWORK_OR_TRANSPORT": (
+            "Do not treat as NIC proof. Re-run with server-host telemetry and verified split hosts; "
+            "if server CPU is saturated, prefer server/resource over path."
+        ),
+        "SERVER_PROCESSING_DURATION": "Inspect controller/server publish path; compare server_processing vs receive observation.",
+        "NO_DATA": "Verify subscriptions, triggers, and coverage before diagnosing latency.",
+        "NONE (OPC UA PIPELINE HEALTHY)": "Increase load or duration; confirm receive-timing coverage stays high.",
+        "APPLICATION_OR_MIXED": "Compare per-server rows and worker loop lag; isolate one endpoint.",
+    }.get(bottleneck, "Change one variable (N, workers, topology) and compare the same stages.")
+
+    competing = []
+    if all_endpoints_local and bottleneck == "NETWORK_OR_TRANSPORT":
+        competing.append("Mis-attributed path delay on loopback — prefer LOCAL_HOST_CPU / CLIENT_PROCESSING")
+    if all_endpoints_local:
+        competing.append("Server publish wait and client loop lag share this host")
+
+    verdict.observed_slow_stage = stage
+    verdict.cause_family = family
+    verdict.confidence = confidence
+    verdict.resource_limit = resource
+    verdict.missing_evidence = missing
+    verdict.competing_explanations = competing
+    verdict.disproof_hint = disproof
+    return verdict
 
 
 def evaluate_diagnostics(
@@ -98,52 +195,69 @@ def evaluate_diagnostics(
         "measured_processes": float(measured_process_count or 0),
     }
 
+    has_wire_timing = stats_decode["count"] > 0
+    valid_count = int(stats_total["count"])
+
+    def _finish(verdict: DiagnosticVerdict) -> DiagnosticVerdict:
+        return _enrich_verdict(
+            verdict,
+            has_wire_timing=has_wire_timing,
+            all_endpoints_local=all_endpoints_local,
+            valid_count=valid_count,
+        )
+
     # If no samples were collected
     if stats_total["count"] == 0:
-        return DiagnosticVerdict(
-            primary_bottleneck="NO_DATA",
-            headline="Zero Result Samples Collected",
-            explanation="No result events were received during the measurement window.",
-            recommendation="Verify server event generation, subscription filters, and tool triggers.",
-            metrics_summary=metrics,
-            warnings=warnings,
+        return _finish(
+            DiagnosticVerdict(
+                primary_bottleneck="NO_DATA",
+                headline="Zero Result Samples Collected",
+                explanation="No result events were received during the measurement window.",
+                recommendation="Verify server event generation, subscription filters, and tool triggers.",
+                metrics_summary=metrics,
+                warnings=warnings,
+            )
         )
 
     # --- Heuristic Rule 1: Pipeline is fast and healthy ---
     if p90_total < 100.0 and p90_transport < 50.0:
-        return DiagnosticVerdict(
-            primary_bottleneck="NONE (OPC UA PIPELINE HEALTHY)",
-            headline="OPC UA Result Pipeline is Healthy and Responsive",
-            explanation=(
-                f"90% of results had a Total Result Transfer Time under {p90_total:.1f}ms "
-                f"and a network transport time under {p90_transport:.1f}ms. "
-                "Event delivery is performing within expected industrial cycle targets."
-            ),
-            recommendation="System meets normal manufacturing latency guidelines (< 100ms).",
-            metrics_summary=metrics,
-            warnings=warnings,
+        return _finish(
+            DiagnosticVerdict(
+                primary_bottleneck="NONE (OPC UA PIPELINE HEALTHY)",
+                headline="OPC UA Result Pipeline is Healthy and Responsive",
+                explanation=(
+                    f"90% of results had a Total Result Transfer Time under {p90_total:.1f}ms "
+                    f"and a network transport time under {p90_transport:.1f}ms. "
+                    "Event delivery is performing within expected industrial cycle targets. "
+                    "This is not a global OPC UA acquittal."
+                ),
+                recommendation="System meets normal manufacturing latency guidelines (< 100ms).",
+                metrics_summary=metrics,
+                warnings=warnings,
+            )
         )
 
     # --- Heuristic Rule 2: Server processing duration dominant ---
     if p90_server > 200.0 and p90_transport < 100.0:
         pct_server = (p90_server / p90_total) * 100.0 if p90_total > 0 else 0.0
-        return DiagnosticVerdict(
-            primary_bottleneck="SERVER_PROCESSING_DURATION",
-            headline="Elevated Server Processing Duration Before Event Emission",
-            explanation=(
-                f"Server processing duration accounts for ~{pct_server:.0f}% of total result transfer time "
-                f"(90% under: server {p90_server:.1f}ms vs network transport {p90_transport:.1f}ms). "
-                "The delay occurs inside the controller/server between joining operation completion and result event emission."
-            ),
-            recommendation=(
-                "Investigate controller firmware result generation, payload assembly, step curve evaluation, or CPU load. "
-                "Network transport is responsive once the event is emitted."
-            ),
-            metrics_summary=metrics,
-            warnings=warnings,
+        return _finish(
+            DiagnosticVerdict(
+                primary_bottleneck="SERVER_PROCESSING_DURATION",
+                headline="Elevated Server Processing Duration Before Event Emission",
+                explanation=(
+                    f"Server processing duration accounts for ~{pct_server:.0f}% of total result transfer time "
+                    f"(90% under: server {p90_server:.1f}ms vs network transport {p90_transport:.1f}ms). "
+                    "The delay occurs inside the controller/server between joining operation completion and result event emission."
+                ),
+                recommendation=(
+                    "Investigate controller firmware result generation, payload assembly, step curve evaluation, or CPU load. "
+                    "Network transport is responsive once the event is emitted."
+                ),
+                metrics_summary=metrics,
+                warnings=warnings,
+            )
         )
 
-    has_wire_timing = stats_decode["count"] > 0
     lag_max = float(loop_lag_max_ms or 0.0)
     local_note = (
         " All servers run on this machine, so they compete with the client for CPU." if all_endpoints_local else ""
@@ -158,69 +272,82 @@ def evaluate_diagnostics(
         and p90_client_side > 100.0
         and (p90_client_side >= p90_transport / 3.0 or lag_max >= p90_client_side)
     ):
-        return DiagnosticVerdict(
-            primary_bottleneck="CLIENT_PROCESSING",
-            headline="Client Too Busy: Decoding or Waiting to Handle Results",
-            explanation=(
-                f"90% under: client decode {stats_decode['p90']:.1f}ms and dispatch delay "
-                f"{stats_dispatch['p90']:.1f}ms, out of {p90_transport:.1f}ms from server event to handler; "
-                f"worst client busy delay (loop lag) {lag_max:.1f}ms. "
-                "Results waited while the client was decoding or busy, which also delays the measured delivery time."
-                + local_note
-            ),
-            recommendation=(
-                "Run fewer servers per machine or move the simulators to another host; single-machine fleet runs "
-                "measure this machine's CPU, not the network."
-                if all_endpoints_local
-                else "Reduce endpoints per worker (--workers), and check client CPU load and the client busy delay (loop lag)."
-            ),
-            metrics_summary=metrics,
-            warnings=warnings,
+        return _finish(
+            DiagnosticVerdict(
+                primary_bottleneck="CLIENT_PROCESSING",
+                headline="Client Too Busy: Decoding or Waiting to Handle Results",
+                explanation=(
+                    f"90% under: client decode {stats_decode['p90']:.1f}ms and dispatch delay "
+                    f"{stats_dispatch['p90']:.1f}ms, out of {p90_transport:.1f}ms from server event to handler; "
+                    f"worst client busy delay (loop lag) {lag_max:.1f}ms. "
+                    "Results waited while the client was decoding or busy, which also delays the measured delivery time."
+                    + local_note
+                ),
+                recommendation=(
+                    "Run fewer servers per machine or move the simulators to another host; single-machine fleet runs "
+                    "measure this machine's CPU, not the network."
+                    if all_endpoints_local
+                    else "Reduce endpoints per worker (--workers), and check client CPU load and the client busy delay (loop lag)."
+                ),
+                metrics_summary=metrics,
+                warnings=warnings,
+            )
         )
 
     # --- Heuristic Rule 4: Loopback-only run - there is no physical network to blame ---
     if all_endpoints_local:
-        return DiagnosticVerdict(
-            primary_bottleneck="LOCAL_HOST_CPU",
-            headline="Client and Servers Share This Machine",
-            explanation=(
-                f"90% under: delivery {stats_delivery['p90']:.1f}ms, total {p90_total:.1f}ms; worst client busy "
-                f"delay (loop lag) {lag_max:.1f}ms. Every endpoint is local, so the delay comes from server "
-                "publishing and CPU contention between servers and client, not from a network."
-            ),
-            recommendation=(
-                "Run fewer servers per machine or move the simulators to another host for network-realistic numbers."
-            ),
-            metrics_summary=metrics,
-            warnings=warnings,
+        return _finish(
+            DiagnosticVerdict(
+                primary_bottleneck="LOCAL_HOST_CPU",
+                headline="Client and Servers Share This Machine",
+                explanation=(
+                    f"90% under: delivery {stats_delivery['p90']:.1f}ms, total {p90_total:.1f}ms; worst client busy "
+                    f"delay (loop lag) {lag_max:.1f}ms. Every endpoint is local, so the delay comes from server "
+                    "publishing and CPU contention between servers and client, not from a network."
+                ),
+                recommendation=(
+                    "Run fewer servers per machine or move the simulators to another host for network-realistic numbers."
+                ),
+                metrics_summary=metrics,
+                warnings=warnings,
+            )
         )
 
     # --- Heuristic Rule 5: Transport / Socket buffer delay dominant ---
     # With wire timing, delivery excludes client decode/dispatch, so it is the better network indicator.
+    # Honesty: still an observation to the receive callback, not NIC wire time.
     use_delivery = has_wire_timing and stats_delivery["count"] > 0
     p90_network = stats_delivery["p90"] if use_delivery else p90_transport
     if p90_network > 300.0:
-        return DiagnosticVerdict(
-            primary_bottleneck="NETWORK_OR_TRANSPORT",
-            headline="Network Transport / Socket Buffer Delay",
-            explanation=(
-                f"90% under: {'delivery' if use_delivery else 'network transport'} "
-                f"{p90_network:.1f}ms out of {p90_total:.1f}ms total. "
-                "Packets experienced transit delays, switch queueing, or OS socket buffering."
-            ),
-            recommendation="Inspect physical network switch bandwidth, socket buffer limits, or MTU fragmentation.",
-            metrics_summary=metrics,
-            warnings=warnings,
+        return _finish(
+            DiagnosticVerdict(
+                primary_bottleneck="NETWORK_OR_TRANSPORT",
+                headline="Elevated Server-Event-to-Client-Receive Observation",
+                explanation=(
+                    f"90% under: {'delivery observation' if use_delivery else 'network transport observation'} "
+                    f"{p90_network:.1f}ms out of {p90_total:.1f}ms total. "
+                    "This interval includes path transit plus publish scheduling and pre-callback client effects; "
+                    "it is not a NIC wire measurement."
+                ),
+                recommendation=(
+                    "Collect server-host telemetry and verified split-host evidence before concluding network root cause. "
+                    "Inspect switch bandwidth, socket buffers, or MTU only as one hypothesis."
+                ),
+                metrics_summary=metrics,
+                warnings=warnings,
+            )
         )
 
     # --- Heuristic Rule 6: Mixed or general delay ---
-    return DiagnosticVerdict(
-        primary_bottleneck="APPLICATION_OR_MIXED",
-        headline="Mixed Pipeline Latency Observed",
-        explanation=(
-            f"90% under: total {p90_total:.1f}ms (network transport {p90_transport:.1f}ms, server {p90_server:.1f}ms)."
-        ),
-        recommendation="Review client decoding time, client busy delay (loop lag), and individual controller performance logs.",
-        metrics_summary=metrics,
-        warnings=warnings,
+    return _finish(
+        DiagnosticVerdict(
+            primary_bottleneck="APPLICATION_OR_MIXED",
+            headline="Mixed Pipeline Latency Observed",
+            explanation=(
+                f"90% under: total {p90_total:.1f}ms (network transport {p90_transport:.1f}ms, server {p90_server:.1f}ms)."
+            ),
+            recommendation="Review client decoding time, client busy delay (loop lag), and individual controller performance logs.",
+            metrics_summary=metrics,
+            warnings=warnings,
+        )
     )

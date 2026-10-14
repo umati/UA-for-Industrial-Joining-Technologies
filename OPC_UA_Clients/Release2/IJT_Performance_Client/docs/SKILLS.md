@@ -84,7 +84,29 @@ The RTT feeds a clock-health check: an event whose skew-corrected `Time` is earl
 
 ---
 
-## 4. Reusability Guide
+## 4. Modular architecture (roles, claims, inventory)
+
+Schema v2 YAML adds deployment roles without changing the core `OpcUaClientPool` engine:
+
+| Module | Responsibility |
+|--------|----------------|
+| `src/host_fingerprint.py` | Privacy-aware host id and telemetry for JSON reports |
+| `src/claim.py` | Intended vs achieved claim (Profile **A** capacity vs Profile **B** split-path) |
+| `src/inventory.py` | Versioned fleet inventory (atomic file I/O, optional loopback HTTP, port preflight) |
+| `src/effective_config.py` | `{value, source}` echo for CLI > env > profile > default |
+| `src/config.py` | `OpcUaPoolConfig` + strict YAML loader (`schema_version` 1 or 2) |
+
+**Claim profiles:** **A** (`capacity`) documents colocated throughput; **B** (`split_path`) requires distinct producer/client host IDs from consumed inventory, a successful clock probe (`clock_rtt_ms` on samples — skew `0.0` alone is not enough), acceptable clock health, and high receive-timing coverage — never inferred from URL hostnames alone. Topology evidence for B requires `client-only` consumption of producer inventory (self-written colocated inventory is not independent; inventory `content_hash` detects tampering but is not a signature). **UNPROVEN** with `split_path` intended fails closed (exit 1; also reflected in JUnit).
+
+**Inventory:** Producers (`colocated`, `serve-fleet`) write `test-results/fleet-inventory.json` (configurable) with `content_hash` + TTL. Consumers (`client-only`) load by path or URL (bearer token refused over plaintext HTTP). Reserved CI/live ports and busy ports are blocked in `preflight_port_range` / `preflight_http_port` before bind. `run_fleet.py` builds client argv via one helper for colocated and client-only to avoid flag drift.
+
+**Effective config:** `load_config` records `explicit_profile_fields`; the CLI tracker marks only those as `profile` (not every dataclass default). Precedence: CLI > env > profile > default. Env endpoint overrides while `-c` is set log a warning.
+
+**Timing honesty:** `delivery_time_ms` and attribution `timing_honesty_note` state that delivery is a protocol callback observation, not NIC wire time.
+
+---
+
+## 5. Reusability Guide
 
 ### Running via CLI
 
@@ -112,8 +134,16 @@ python run_fleet.py --servers 100 -w 8 --burst-delay 5.0
 # Integrity and pass/fail options
 python run_fleet.py --settle-timeout 15 --fail-p90 100 --fail-p90-client-ready 150
 
+# Modular roles (schema v2 profiles) — also listed in README for operators
+python run_fleet.py --servers 5 -w 2 --samples-per-server 3   # smoke
+python run_fleet.py --profile profiles/work_pc_colocated.yaml
+python run_fleet.py --role serve-fleet --advertise-host 192.168.1.10 --profile profiles/serve_fleet.yaml --servers 10
+python run_fleet.py --role client-only --inventory-source test-results/fleet-inventory.json --profile profiles/client_only.yaml
+python run_fleet.py --servers 100 --start-port 41001 -w 8 --samples-per-server 10
+
 # Test suite runner with automated fleet orchestration
-python run_all_tests.py --phase2 --fleet 50 -w 8
+python run_all_tests.py --phase1
+python run_all_tests.py --phase2 --fleet 25 -w 4
 
 # Custom endpoints
 python main.py -e "opc.tcp://10.0.1.11:40451,opc.tcp://10.0.1.12:40451" -d 30 -s 100
@@ -144,5 +174,5 @@ pool.stop()
 
 ---
 
-## 5. Authoritative References
+## 6. Authoritative References
 - [Performance & Benchmarking Guide](PERFORMANCE_GUIDE.md)

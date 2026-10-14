@@ -81,6 +81,9 @@ class LatencySample:
     decoded_time: datetime | None = None
     timing_source: str = TIMING_SOURCE_HANDLER
     clock_skew_ms: float = 0.0
+    # RTT of the Cristian probe for this endpoint. None = probe skipped or failed.
+    # Claim Profile B must require clock_rtt_ms is not None — do not treat skew 0.0 as proof.
+    clock_rtt_ms: float | None = None
 
     # Result verification & audit attributes (proves real results without storing raw arrays)
     result_id: str | None = None
@@ -363,6 +366,7 @@ def extract_sample_from_event(
         bytes_received_time=bytes_received,
         decoded_time=decoded,
         clock_skew_ms=clock_skew_ms,
+        clock_rtt_ms=clock_rtt_ms,
         integrity_status=INTEGRITY_INCOMPLETE,
     )
     sample.event_time = _safe_getattr(event, "Time", None)

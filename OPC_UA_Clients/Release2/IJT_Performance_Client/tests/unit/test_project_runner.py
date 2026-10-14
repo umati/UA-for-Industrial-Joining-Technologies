@@ -213,28 +213,85 @@ def test_validate_fleet_args():
         fail_p90=None,
         fail_p90_client_ready=None,
     )
-    assert validate(base_args) is None
-    assert "Invalid --servers" in (validate(argparse.Namespace(**{**vars(base_args), "servers": 0})) or "")
+    assert validate(base_args, role="colocated") is None
+    assert "Invalid --servers" in (
+        validate(argparse.Namespace(**{**vars(base_args), "servers": 0}), role="colocated") or ""
+    )
     assert "Invalid --samples-per-server" in (
-        validate(argparse.Namespace(**{**vars(base_args), "samples_per_server": 0})) or ""
+        validate(argparse.Namespace(**{**vars(base_args), "samples_per_server": 0}), role="colocated") or ""
     )
     # Legal upper port bound: 65535 with 1 server is valid
-    assert validate(argparse.Namespace(**{**vars(base_args), "start_port": 65535, "servers": 1})) is None
+    colo = "colocated"
+    assert validate(argparse.Namespace(**{**vars(base_args), "start_port": 65535, "servers": 1}), role=colo) is None
     assert "Invalid port range" in (
-        validate(argparse.Namespace(**{**vars(base_args), "start_port": 65535, "servers": 2})) or ""
+        validate(argparse.Namespace(**{**vars(base_args), "start_port": 65535, "servers": 2}), role=colo) or ""
     )
-    assert "Invalid --burst-delay" in (validate(argparse.Namespace(**{**vars(base_args), "burst_delay": -0.1})) or "")
-    assert "Invalid --workers" in (validate(argparse.Namespace(**{**vars(base_args), "workers": 0})) or "")
-    assert "Invalid --workers" in (validate(argparse.Namespace(**{**vars(base_args), "workers": 33})) or "")
-    assert "Invalid --duration" in (validate(argparse.Namespace(**{**vars(base_args), "duration": 0.0})) or "")
-    assert validate(argparse.Namespace(**{**vars(base_args), "settle_timeout": 0.0})) is None
+    assert "Invalid --burst-delay" in (
+        validate(argparse.Namespace(**{**vars(base_args), "burst_delay": -0.1}), role=colo) or ""
+    )
+    assert "Invalid --workers" in (validate(argparse.Namespace(**{**vars(base_args), "workers": 0}), role=colo) or "")
+    assert "Invalid --workers" in (validate(argparse.Namespace(**{**vars(base_args), "workers": 33}), role=colo) or "")
+    assert "Invalid --duration" in (
+        validate(argparse.Namespace(**{**vars(base_args), "duration": 0.0}), role=colo) or ""
+    )
+    assert validate(argparse.Namespace(**{**vars(base_args), "settle_timeout": 0.0}), role=colo) is None
     assert "Invalid --settle-timeout" in (
-        validate(argparse.Namespace(**{**vars(base_args), "settle_timeout": -1.0})) or ""
+        validate(argparse.Namespace(**{**vars(base_args), "settle_timeout": -1.0}), role=colo) or ""
     )
-    assert "Invalid --fail-p90:" in (validate(argparse.Namespace(**{**vars(base_args), "fail_p90": 0.0})) or "")
+    assert "Invalid --fail-p90:" in (
+        validate(argparse.Namespace(**{**vars(base_args), "fail_p90": 0.0}), role=colo) or ""
+    )
     assert "Invalid --fail-p90-client-ready" in (
-        validate(argparse.Namespace(**{**vars(base_args), "fail_p90_client_ready": float("nan")})) or ""
+        validate(argparse.Namespace(**{**vars(base_args), "fail_p90_client_ready": float("nan")}), role=colo) or ""
     )
+
+
+def test_build_client_cli_args_shared_for_client_only_and_colocated():
+    import argparse
+
+    from src.config import OpcUaPoolConfig
+
+    fleet_module = _load_module("ijt_performance_run_fleet_cli_args", CLIENT_ROOT / "run_fleet.py")
+    build = fleet_module._build_client_cli_args
+    base = argparse.Namespace(
+        samples_per_server=3,
+        burst_delay=0.5,
+        profile=None,
+        workers=4,
+        settle_timeout=7.0,
+        fail_p90=100.0,
+        fail_p90_client_ready=None,
+        verbose=True,
+        duration=30.0,
+        inventory_source="test-results/fleet-inventory.json",
+    )
+    client_cfg = OpcUaPoolConfig(
+        endpoints=[],
+        role="client-only",
+        inventory_source="test-results/fleet-inventory.json",
+        claim_intended="split_path",
+    )
+    client_args = build(base, client_cfg, duration=30.0, total_samples=150)
+    assert "--role" in client_args and "client-only" in client_args
+    assert "--inventory-source" in client_args
+    assert "-s" in client_args and "150" in client_args
+    assert "--settle-timeout" in client_args and "7.0" in client_args
+    assert "-w" in client_args and "4" in client_args
+    assert "--fail-p90" in client_args
+    assert "-v" in client_args
+
+    colo_cfg = OpcUaPoolConfig(endpoints=["opc.tcp://127.0.0.1:40001"], role="colocated")
+    colo_args = build(
+        base,
+        colo_cfg,
+        endpoints_str="opc.tcp://127.0.0.1:40001",
+        duration=40.0,
+        total_samples=30,
+    )
+    assert "--role" in colo_args and "colocated" in colo_args
+    assert "-e" in colo_args
+    assert "--skip-clock-skew" in colo_args
+    assert "--settle-timeout" in colo_args
 
 
 def test_fleet_status_lines_carry_log_style_timestamps(capsys) -> None:

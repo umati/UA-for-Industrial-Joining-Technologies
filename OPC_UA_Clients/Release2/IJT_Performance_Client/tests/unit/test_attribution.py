@@ -106,6 +106,10 @@ def test_client_processing_rule_needs_wire_timing():
     verdict = evaluate_diagnostics(**common, client_decode_latencies=[150.0] * 10, dispatch_delays=[100.0] * 10)
     assert verdict.primary_bottleneck == "CLIENT_PROCESSING"
     assert verdict.metrics_summary["client_decode_p90_ms"] == pytest.approx(150.0)
+    assert verdict.observed_slow_stage == "client_decode_or_dispatch"
+    assert verdict.cause_family == "client_busy"
+    assert verdict.timing_honesty_note
+    assert "not NIC wire time" in verdict.timing_honesty_note
 
     # Without wire timing the client-side rule cannot fire
     assert evaluate_diagnostics(**common).primary_bottleneck != "CLIENT_PROCESSING"

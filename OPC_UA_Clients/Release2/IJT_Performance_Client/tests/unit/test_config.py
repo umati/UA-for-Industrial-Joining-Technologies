@@ -482,3 +482,39 @@ def test_is_loopback_endpoint(url, local):
     from src.config import is_loopback_endpoint
 
     assert is_loopback_endpoint(url) is local
+
+
+def test_load_schema_v2_work_pc_colocated_profile():
+    cfg = load_config("work_pc_colocated.yaml")
+    assert cfg.schema_version == 2
+    assert cfg.role == "colocated"
+    assert cfg.claim_intended == "capacity"
+    assert cfg.inventory_write_file is True
+    assert cfg.report_redact is True
+    assert "role" in cfg.explicit_profile_fields
+    assert "inventory_write_file" in cfg.explicit_profile_fields
+    # Defaults not present in YAML must not be marked explicit
+    assert "settle_timeout_seconds" not in cfg.explicit_profile_fields
+
+
+def test_config_rejects_non_positive_inventory_ttl():
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"], inventory_ttl_seconds=0)
+    with pytest.raises(ValueError, match="ttl_seconds must be positive"):
+        cfg.validate()
+
+
+def test_schema_v1_rejects_v2_only_keys(tmp_path):
+    bad = tmp_path / "v1_with_role.yaml"
+    bad.write_text(
+        "schema_version: 1\nrole: colocated\nfleet:\n  endpoints:\n    - opc.tcp://localhost:40451\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="requires schema_version: 2"):
+        load_config(bad)
+
+
+def test_verify_packaged_profiles():
+    from src.config import verify_packaged_profiles
+
+    missing = verify_packaged_profiles()
+    assert missing == []
