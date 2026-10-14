@@ -99,6 +99,7 @@ from tool_bootstrap import (
     ensure_requirements_environment,
     ensure_uv,
     environment_python,
+    import_simulator_extract,
     preparation_lock,
 )
 
@@ -2917,11 +2918,15 @@ def _prepare_native_simulator(
     (Windows and Linux packages keep separate trees). Passing explicit paths
     keeps single-package behavior for callers and contract tests.
     """
-    from simulator_extract import (
-        WINDOWS_ZIP_NAME,
-        ensure_present_simulator_packages,
-        ensure_simulator_package,
-    )
+    extract = import_simulator_extract(Path(__file__).resolve().parent / "scripts")
+    if extract is None:
+        raise RuntimeError(
+            "scripts/simulator_extract.py is missing; a full IJT clone is required "
+            "to prepare the native OPC UA simulator."
+        )
+    WINDOWS_ZIP_NAME = extract.WINDOWS_ZIP_NAME
+    ensure_present_simulator_packages = extract.ensure_present_simulator_packages
+    ensure_simulator_package = extract.ensure_simulator_package
 
     if archive is not None or target is not None:
         ensure_simulator_package(

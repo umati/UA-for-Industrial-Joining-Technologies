@@ -46,7 +46,7 @@ for _parent in Path(__file__).resolve().parents:
     if (_parent / "scripts" / "tool_bootstrap.py").is_file():
         sys.path.insert(0, str(_parent / "scripts"))
         break
-from tool_bootstrap import ensure_uv
+from tool_bootstrap import ensure_uv, import_simulator_extract
 
 # Key directory paths
 _HERE = Path(__file__).resolve().parent
@@ -151,15 +151,14 @@ def _find_simulator_exe() -> Path | None:
         override = Path(env_override)
         if override.is_file():
             return override
-    try:
-        from simulator_extract import default_server_dir, ensure_present_simulator_packages
-    except ImportError as exc:
+    extract = import_simulator_extract(_REPO_ROOT / "scripts")
+    if extract is None:
         _print_status(
-            f"  [server] Shared simulator_extract unavailable ({exc}); "
+            "  [server] Shared simulator_extract unavailable (scripts/simulator_extract.py absent); "
             "set OPCUA_SIMULATOR_EXE or use a full IJT clone for auto-extract"
         )
     else:
-        ready = ensure_present_simulator_packages(default_server_dir(_REPO_ROOT))
+        ready = extract.ensure_present_simulator_packages(extract.default_server_dir(_REPO_ROOT))
         if not ready:
             _print_status("  [server] No simulator package prepared from present ZIPs")
     candidates = [

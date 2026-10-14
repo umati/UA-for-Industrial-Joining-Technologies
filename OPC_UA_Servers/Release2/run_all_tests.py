@@ -4,8 +4,9 @@ run_all_tests.py — OPC UA Server Simulator test runner
 =======================================================
 
 Phase 1 (static — always runs):
-  1.  hadolint            — Dockerfile lint  (skipped if not installed)
-  2.  docker-compose.yml  — yamllint + stdlib YAML parse + service check
+  1.  hadolint            — Dockerfile lint  (pinned binary via scripts/ensure_hadolint.py,
+                            shared .hadolint.yaml; CI fails instead of skipping)
+  2.  docker-compose.yml  — yamllint (pinned, Web .yamllint.yml) + stdlib YAML parse + service check
   3.  shellcheck          — *.sh files  (skipped if none found / shellcheck absent)
   4.  server_configuration.json — stdlib JSON + required-key check
   5.  simulated_data.json / user_identity_configuration.json — stdlib JSON
@@ -267,25 +268,69 @@ def _is_docker_running() -> bool:
 # ---------------------------------------------------------------------------
 
 
+_SHARED_HADOLINT_CONFIG = _REPO_ROOT / ".hadolint.yaml"
+_SHARED_YAMLLINT_CONFIG = (
+    _REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_Web_Client" / ".yamllint.yml"
+)
+
+
+def _strict_lint_environment() -> bool:
+    """Hosted CI must fail (not skip) when a required linter cannot be provisioned.
+
+    App/server containers are not the hadolint/compose-tooling environment; packaging
+    contracts for images live in dedicated Docker CI jobs and pre-commit.
+    """
+    if os.getenv("IS_DOCKER", "").strip().lower() in {"1", "true", "yes"}:
+        return False
+    if Path("/.dockerenv").is_file():
+        return False
+    return os.getenv("GITHUB_ACTIONS") == "true"
+
+
 def _check_hadolint(results: list) -> None:
     label = "Dockerfile (hadolint)"
-    if not _cmd_available("hadolint"):
-        _record(
-            results,
-            1,
-            label,
-            True,
-            "SKIP (hadolint not installed — brew install hadolint / scoop install hadolint)",
-            optional=True,
-        )
-        return
+    strict = _strict_lint_environment()
     dockerfile = PROJ_DIR / "Dockerfile"
     if not dockerfile.exists():
-        _record(results, 1, label, True, "SKIP (Dockerfile not found)")
+        detail = "FAIL (Dockerfile not found)" if strict else "SKIP (Dockerfile not found)"
+        _record(results, 1, label, not strict, detail)
+        return
+    if not _SHARED_HADOLINT_CONFIG.is_file():
+        if strict:
+            _record(
+                results, 1, label, False, f"FAIL (shared config missing: {_SHARED_HADOLINT_CONFIG})"
+            )
+        else:
+            _record(
+                results,
+                1,
+                label,
+                True,
+                f"SKIP (shared config missing: {_SHARED_HADOLINT_CONFIG})",
+                optional=True,
+            )
+        return
+    # Pinned, SHA-256-verified binary shared with Web Client lint, pre-commit, and CI.
+    try:
+        from ensure_hadolint import ensure_hadolint  # noqa: PLC0415 — needs scripts/ on sys.path
+
+        hadolint = str(ensure_hadolint(_REPO_ROOT))
+    except (ImportError, RuntimeError) as exc:
+        if strict:
+            _record(results, 1, label, False, f"FAIL (hadolint unavailable: {exc})")
+        else:
+            _record(
+                results,
+                1,
+                label,
+                True,
+                f"SKIP (hadolint unavailable — {exc})",
+                optional=True,
+            )
         return
 
     r = subprocess.run(
-        ["hadolint", "--format", "json", str(dockerfile)],
+        [hadolint, "--config", str(_SHARED_HADOLINT_CONFIG), "--format", "json", str(dockerfile)],
         capture_output=True,
         text=True,
         check=False,
@@ -296,7 +341,8 @@ def _check_hadolint(results: list) -> None:
     try:
         issues = json.loads(r.stdout or "[]")
     except json.JSONDecodeError:
-        issues = []
+        _record(results, 1, label, False, f"FAIL (hadolint output not JSON, exit {r.returncode})")
+        return
 
     errors = sum(1 for i in issues if i.get("level") == "error")
     warnings = sum(1 for i in issues if i.get("level") == "warning")
@@ -305,6 +351,31 @@ def _check_hadolint(results: list) -> None:
         _record(results, 1, label, False, f"FAIL ({errors} error(s), {warnings} warning(s))")
     else:
         _record(results, 1, label, True, f"PASS ({errors} errors, {warnings} warnings)")
+
+
+def _yamllint_command() -> tuple[list[str] | None, str]:
+    """Return ``(command, reason)`` for yamllint pinned at ``tool_bootstrap.YAMLLINT_VERSION``."""
+    try:
+        from importlib import metadata  # noqa: PLC0415
+
+        from tool_bootstrap import (  # noqa: PLC0415
+            YAMLLINT_VERSION,
+            ensure_requirements_environment,
+        )
+
+        with contextlib.suppress(metadata.PackageNotFoundError):
+            if metadata.version("yamllint") == YAMLLINT_VERSION:
+                return [sys.executable, "-m", "yamllint"], ""
+        python = ensure_requirements_environment(
+            _REPO_ROOT,
+            [],
+            ["yamllint"],
+            name="yamllint",
+            packages=[f"yamllint=={YAMLLINT_VERSION}"],
+        )
+        return [str(python), "-m", "yamllint"], ""
+    except (ImportError, RuntimeError, OSError) as exc:
+        return None, str(exc).splitlines()[0] if str(exc) else type(exc).__name__
 
 
 def _check_docker_compose(results: list) -> None:
@@ -331,20 +402,26 @@ def _check_docker_compose(results: list) -> None:
         _record(results, 1, label, False, f"FAIL (YAML parse error: {exc})")
         return
 
-    # optional yamllint
-    if _cmd_available("yamllint"):
-        yl = subprocess.run(
-            ["yamllint", "-f", "parsable", str(path)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if yl.returncode != 0:
-            _record(results, 1, label, False, f"FAIL (yamllint)\n{yl.stdout}".rstrip())
-            return
-        _record(results, 1, label, True, f"PASS ({stdlib_detail}, yamllint clean)")
-    else:
-        _record(results, 1, label, True, f"PASS ({stdlib_detail})")
+    # yamllint: same pinned version and explicit -c as the Web Client runner and pre-commit.
+    yamllint_cmd, unavailable = _yamllint_command()
+    if yamllint_cmd is None:
+        if _strict_lint_environment():
+            _record(results, 1, label, False, f"FAIL (yamllint unavailable: {unavailable})")
+        else:
+            _record(
+                results, 1, label, True, f"PASS ({stdlib_detail}; yamllint skipped: {unavailable})"
+            )
+        return
+    yl = subprocess.run(
+        [*yamllint_cmd, "-c", str(_SHARED_YAMLLINT_CONFIG), "-f", "parsable", str(path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if yl.returncode != 0:
+        _record(results, 1, label, False, f"FAIL (yamllint)\n{yl.stdout}{yl.stderr}".rstrip())
+        return
+    _record(results, 1, label, True, f"PASS ({stdlib_detail}, yamllint clean)")
 
 
 def _check_shellcheck(results: list) -> None:

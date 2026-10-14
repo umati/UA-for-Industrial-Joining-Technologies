@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import errno
 import hashlib
+import importlib
 import logging
 import os
 import shutil
@@ -16,8 +17,53 @@ from pathlib import Path
 
 # renovate: datasource=pypi depName=uv
 UV_VERSION = "0.13.0"
+# Shared yamllint pin: Web Client dev group (pyproject/uv.lock), .pre-commit-config.yaml rev,
+# and the Server runner's bootstrap venv all use this exact version
+# (tests/test_shared_lint_tooling.py keeps them in lockstep).
+# renovate: datasource=pypi depName=yamllint
+YAMLLINT_VERSION = "1.38.0"
 BOOTSTRAP_TIMEOUT = 180.0
 log = logging.getLogger(__name__)
+
+_DOCKERENV_MARKER = Path("/.dockerenv")
+_DOCKER_TRUTHY = frozenset({"1", "true", "yes"})
+
+
+def running_in_docker() -> bool:
+    """True inside a container: ``IS_DOCKER`` truthy (1/true/yes) or ``/.dockerenv`` exists."""
+    if os.environ.get("IS_DOCKER", "").strip().lower() in _DOCKER_TRUTHY:
+        return True
+    try:
+        return _DOCKERENV_MARKER.is_file()
+    except OSError:
+        return False
+
+
+def import_simulator_extract(scripts_dir: Path):
+    """Import ``simulator_extract`` from *scripts_dir* under the shared-script policy.
+
+    This policy lives here (not in ``simulator_extract`` itself) because the
+    caller cannot import ``simulator_extract`` to learn whether it may be absent.
+
+    * Host, ``scripts/simulator_extract.py`` absent (partial checkout): return ``None``
+      so callers soft-skip auto-extract.
+    * Docker (:func:`running_in_docker`), file absent: raise ``RuntimeError``; the
+      image must ship the module (Dockerfile ``base`` stage COPY + root ``.dockerignore``
+      allowlist), so a missing file is a packaging bug, never a skip.
+    * File present but the import fails: re-raise (never mask a broken module).
+    """
+    scripts_dir = Path(scripts_dir)
+    module_file = scripts_dir / "simulator_extract.py"
+    if not module_file.is_file():
+        if running_in_docker():
+            raise RuntimeError(
+                f"{module_file} is missing inside Docker; the image must COPY "
+                "scripts/simulator_extract.py (and root .dockerignore must allowlist it)."
+            )
+        return None
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    return importlib.import_module("simulator_extract")
 
 
 def environment_python(directory: Path) -> Path:

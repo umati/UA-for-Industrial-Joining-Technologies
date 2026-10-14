@@ -14,6 +14,7 @@ and verify that key instructions are present and correct:
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 from pathlib import Path
 
@@ -23,9 +24,10 @@ _YAML_AVAILABLE = importlib.util.find_spec("yaml") is not None
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _DOCKERFILE = _PROJECT_ROOT / "Dockerfile"
-_DOCKERIGNORE = _PROJECT_ROOT / ".dockerignore"
 _COMPOSE_FILE = _PROJECT_ROOT / "docker-compose.yml"
 _SMOKE_COMPOSE_FILE = _PROJECT_ROOT / "docker-compose.smoke.yml"
+# Image-side location of the shared helpers COPYed from the repo-root ``scripts/``.
+_IMAGE_SCRIPTS_DIR = Path("/app/scripts")
 
 
 # ---------------------------------------------------------------------------
@@ -39,14 +41,52 @@ def _dockerfile_lines() -> list[str]:
     return _DOCKERFILE.read_text(encoding="utf-8").splitlines()
 
 
-def _dockerignore_lines() -> list[str]:
-    if not _DOCKERIGNORE.exists():
-        pytest.fail(f".dockerignore not found at {_DOCKERIGNORE}")
+def _repo_root() -> Path | None:
+    """Repo root on the host; ``None`` inside the image (no repo above /app)."""
+    for parent in _PROJECT_ROOT.parents:
+        if (
+            (parent / ".dockerignore").is_file()
+            and (parent / "scripts" / "tool_bootstrap.py").is_file()
+            and (parent / "OPC_UA_Clients").is_dir()
+        ):
+            return parent
+    return None
+
+
+def _root_dockerignore() -> Path | None:
+    """The ONLY .dockerignore for this build (context = repo root).
+
+    ``IJT_ROOT_DOCKERIGNORE`` overrides discovery (e.g. a copy mounted into an image).
+    """
+    override = os.environ.get("IJT_ROOT_DOCKERIGNORE")
+    if override:
+        path = Path(override)
+        assert path.is_file(), f"IJT_ROOT_DOCKERIGNORE={override!r} is not a file"
+        return path
+    root = _repo_root()
+    return root / ".dockerignore" if root else None
+
+
+def _dockerignore_lines(path: Path) -> list[str]:
     return [
         line.strip()
-        for line in _DOCKERIGNORE.read_text(encoding="utf-8").splitlines()
+        for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.strip().startswith("#")
     ]
+
+
+def _dockerfile_copy_scripts_sources() -> set[str]:
+    """Every ``scripts/*`` source named by a Dockerfile ``COPY`` (continuations joined)."""
+    text = _DOCKERFILE.read_text(encoding="utf-8")
+    joined = re.sub(r"\\[ \t]*\r?\n", " ", text)
+    sources: set[str] = set()
+    for line in joined.splitlines():
+        stripped = line.strip()
+        if not re.match(r"^COPY\b", stripped, re.IGNORECASE):
+            continue
+        tokens = [t for t in stripped.split()[1:] if not t.startswith("--")]
+        sources.update(t for t in tokens[:-1] if t.startswith("scripts/"))
+    return sources
 
 
 def _get_instructions(keyword: str) -> list[str]:
@@ -152,26 +192,62 @@ class TestDockerfileInstructions:
             "scripts/opcua_session_policy.py",
             "scripts/opcua_session_policy_loader.py",
             "scripts/tool_bootstrap.py",
+            "scripts/simulator_extract.py",
         }:
             assert filename in text
             assert text.index(filename) < test_stage
 
 
-class TestDockerIgnore:
+class TestDockerBuildContext:
+    """The build context is the repo root, so the ROOT ``.dockerignore`` governs it.
+
+    There is deliberately no Web Client ``.dockerignore`` (it would be dead: BuildKit only
+    reads ``<context>/.dockerignore`` or ``<Dockerfile>.dockerignore``).
+    """
+
+    def test_every_copied_script_is_allowlisted_in_root_dockerignore(self):
+        """Each ``COPY scripts/<file>`` needs a ``!scripts/<file>`` allowlist line (root file)."""
+        sources = _dockerfile_copy_scripts_sources()
+        assert sources, "Dockerfile no longer COPYs any scripts/* helpers; update this contract"
+        assert "scripts/simulator_extract.py" in sources
+        ignore_path = _root_dockerignore()
+        assert ignore_path is not None, (
+            "root .dockerignore must be discoverable on the host and via IJT_ROOT_DOCKERIGNORE in the test image"
+        )
+        lines = _dockerignore_lines(ignore_path)
+        assert "!scripts/" in lines and "scripts/*" in lines
+        missing = sorted(s for s in sources if f"!{s}" not in lines)
+        assert not missing, (
+            f"Dockerfile COPYs {missing} but {ignore_path} has no matching '!' allowlist line; "
+            "the build would fail with 'not found'."
+        )
+        delivered = sorted(s for s in sources if not (_IMAGE_SCRIPTS_DIR / Path(s).name).is_file())
+        if os.environ.get("IS_DOCKER", "").strip().lower() in {"1", "true", "yes"}:
+            assert not delivered, f"COPYed scripts missing from image: {delivered}"
+
     def test_local_runtime_directories_are_excluded_from_build_context(self):
         """Local virtualenvs and generated test output must stay out of Docker context."""
-        ignored = set(_dockerignore_lines())
+        ignore_path = _root_dockerignore()
+        assert ignore_path is not None, (
+            "root .dockerignore must be discoverable on the host and via IJT_ROOT_DOCKERIGNORE in the test image"
+        )
+        ignored = set(_dockerignore_lines(ignore_path))
         for pattern in {
-            ".venv/",
-            ".venv_test/",
-            ".venv_ci/",
-            "venv/",
-            "venv_test/",
-            "node_modules/",
-            "test-results/",
-            "tmp/",
+            "**/.venv/",
+            "**/.venv_test/",
+            "**/.venv_ci/",
+            "**/venv/",
+            "**/venv_test/",
+            "**/node_modules/",
+            "**/test-results/",
+            "**/tmp/",
         }:
             assert pattern in ignored
+
+    def test_no_dead_web_client_dockerignore(self):
+        """A Web Client .dockerignore / Dockerfile.dockerignore would silently be ignored or shadow root."""
+        assert not (_PROJECT_ROOT / ".dockerignore").exists()
+        assert not (_PROJECT_ROOT / "Dockerfile.dockerignore").exists()
 
 
 # ===========================================================================
@@ -263,6 +339,23 @@ class TestDockerCompose:
         smoke = _SMOKE_COMPOSE_FILE.read_text(encoding="utf-8")
         assert "docker_healthcheck.py" in smoke
 
+    @pytest.mark.skipif(
+        not _YAML_AVAILABLE,
+        reason="PyYAML not installed — skipping docker-compose YAML parsing",
+    )
+    def test_dev_compose_remounts_shared_scripts_after_project_bind_mount(self):
+        """``.:/app`` hides the image's /app/scripts; dev compose must re-mount repo scripts/ after it."""
+        import yaml
+
+        content = yaml.safe_load(_COMPOSE_FILE.read_text(encoding="utf-8"))
+        volumes = [str(v) for v in content["services"]["ijt_web_client"]["volumes"]]
+        assert ".:/app" in volumes
+        assert "../../../scripts:/app/scripts:ro" in volumes
+        assert volumes.index("../../../scripts:/app/scripts:ro") > volumes.index(".:/app")
+        assert "hides the image's /app/scripts" in _COMPOSE_FILE.read_text(encoding="utf-8"), (
+            "document why the scripts mount exists"
+        )
+
 
 class TestDockerSmokeCompose:
     @pytest.mark.skipif(
@@ -279,4 +372,6 @@ class TestDockerSmokeCompose:
         assert "ijt_web_client" in str(service["image"])
         assert "build" not in service
         assert "volumes" not in service
+        assert "volumes" not in content
         assert "command" not in service
+        assert "/app/scripts" not in _SMOKE_COMPOSE_FILE.read_text(encoding="utf-8")

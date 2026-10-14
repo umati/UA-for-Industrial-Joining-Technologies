@@ -175,8 +175,8 @@ Pyright resolves application imports through `src/` and shared readiness imports
 | `prettier` | JS formatting |
 | `npm audit` | CVE scan of JS production runtime dependencies |
 | `depcheck` | Unused JS dependencies |
-| `hadolint` | Dockerfile lint |
-| `yamllint` | YAML validation |
+| `hadolint` | Dockerfile lint (pinned binary via `scripts/ensure_hadolint.py`, shared `.hadolint.yaml`; fails on hosted CI hosts) |
+| `yamllint` | YAML validation (pinned dev dependency, explicit `-c .yamllint.yml`; fails on hosted CI hosts) |
 
 ---
 
@@ -204,8 +204,12 @@ subscription). Browser WebSocket closure cancels in-flight connect/retry work,
 and failed or cancelled attempts disconnect both sessions before retrying with
 fresh clients. Explicit endpoint termination is cancellation-safe so WebSocket
 closure cannot interrupt it between unsubscribe and session disconnect.
-Flattened Web Docker images must copy both shared session-policy modules into
-`/app/scripts`; keep their root `.dockerignore` allowlist entries in sync.
+Flattened Web Docker images must copy both shared session-policy modules, `tool_bootstrap.py`,
+and `simulator_extract.py` into `/app/scripts`; every `COPY scripts/<file>` needs a matching
+`!scripts/<file>` line in the ROOT `.dockerignore` (the only ignore file for this repo-root
+context — never add a Web Client `.dockerignore`). Runners load `simulator_extract` only via
+`tool_bootstrap.import_simulator_extract` (host soft-skip, Docker hard-fail). The dev
+`docker-compose.yml` re-mounts `../../../scripts:/app/scripts:ro` after `.:/app`.
 
 The shared adapter preserves generated `Annotated[..., "AllowSubtypes"]`
 metadata, uses Variant encoding only for abstract numeric subtype fields such as
@@ -717,7 +721,7 @@ the only representation of an endpoint.
 9. **Never** use positional result-header selectors in Playwright; use `data-ijt-result-control`.
 10. **Never** assert raw arrays for backend WS `namespaces` / `browse`; assert `data.namespaces` / `data.nodes`.
 11. **Never** send empty numeric simulator method arguments from the Web UI; define a valid default or require user input before calling.
-12. **Never** include local virtualenvs or generated test artifacts in Docker build context; keep `.venv/`, `.venv_test/`, `.venv_ci/`, `node_modules/`, `test-results/`, and `tmp/` ignored by `.dockerignore`.
+12. **Never** include local virtualenvs or generated test artifacts in Docker build context; keep `.venv/`, `.venv_test/`, `.venv_ci/`, `node_modules/`, `test-results/`, and `tmp/` ignored by the ROOT `.dockerignore` (there is no Web Client `.dockerignore`).
 13. **Never** reintroduce a broad root Web Client live suite; add or adjust the narrow live/browser suite that owns the affected test type and service lifecycle.
 14. **Never** add a hard-coded `404` or `requestfailed` assertion for a URL that belongs to an optional private module (e.g. the company-specific `envelope/` submodule). Add the path prefix to `OPTIONAL_PRIVATE_MODULE_PATHS` in `tests/e2e/smoke.spec.mjs` instead.
 15. **Never** use `waitForTimeout` + a one-shot assertion to wait for OPC UA async result propagation in E2E tests — use `expect.poll()` with an explicit timeout so the test retries until the value stabilises.

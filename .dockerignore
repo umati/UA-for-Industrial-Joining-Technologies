@@ -2,6 +2,10 @@
 # the repo root as build context.
 *
 
+# Vendored into the Web Client *test* stage so in-image contracts can assert the
+# same allowlist the build used (IJT_ROOT_DOCKERIGNORE).
+!.dockerignore
+
 !.github/
 .github/*
 !.github/docker/
@@ -14,13 +18,19 @@ OPC_UA_Clients/*
 OPC_UA_Clients/Release2/*
 !OPC_UA_Clients/Release2/IJT_Web_Client/**
 
-# Allow shared runtime tooling and session policy in the Web Client base image,
-# plus readiness support in its test stage.
+# Allow shared runtime tooling and session policy in the Web Client base image
+# (opcua_session_policy*, tool_bootstrap, simulator_extract), plus readiness
+# support in its test stage (ijt_live_readiness). Every `COPY scripts/<file>` in
+# the Web Client Dockerfile MUST have a matching `!scripts/<file>` line here;
+# tests/test_docker_context_contract.py and the Web unit test_docker.py enforce
+# this. This root file is the ONLY .dockerignore for that build (context is the
+# repo root; a Dockerfile-specific <Dockerfile>.dockerignore is deliberately absent).
 !scripts/
 scripts/*
 !scripts/ijt_live_readiness.py
 !scripts/opcua_session_policy.py
 !scripts/opcua_session_policy_loader.py
+!scripts/simulator_extract.py
 !scripts/tool_bootstrap.py
 
 **/__pycache__/
@@ -35,6 +45,8 @@ scripts/*
 **/.state/
 **/tmp/
 **/test-results/
+**/.env
+**/.env.*
 **/.pytest_cache/
 **/.ruff_cache/
 **/.mypy_cache/

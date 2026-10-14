@@ -121,6 +121,13 @@ jobs:
         with:
           version: "0.13.0"
 
+      - name: Install hadolint (pinned binary — avoids a Docker Hub pull)
+        # Single shared pin + SHA-256 in scripts/ensure_hadolint.py (also used by the
+        # runners and pre-commit). CI must not soft-skip Dockerfile lint when the
+        # Web Client infra-lint stage runs in Phase 1; this also warms the cache the
+        # runner reuses (<repo>/.state/tools).
+        run: python "$GITHUB_WORKSPACE/scripts/ensure_hadolint.py" --link /usr/local/bin/hadolint
+
       - name: Run Web Client Python Phase 1 runner
         id: web_python_runner
         continue-on-error: true
@@ -422,9 +429,29 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
+      - name: Build test image (target test)
+        # Build context MUST be the repo root: the Dockerfile COPYs scripts/* from the
+        # root, and the ROOT .dockerignore allowlist governs what is sent. (The job's
+        # default working-directory is the Web Client dir, so pass the workspace
+        # explicitly; this is a plain `run` step — the single docker/build-push-action
+        # below remains the production smoke build.) A missing allowlist entry fails
+        # right here at the COPY with "not found".
+        run: |
+          docker buildx build --target test --load \
+            --file Dockerfile --tag ijt_web_client:test "$GITHUB_WORKSPACE"
+
+      - name: Run in-image Docker contracts
+        # Proves the image really ships /app/scripts/* (incl. simulator_extract.py) and
+        # that it imports under the Docker hard-fail policy, before the production build.
+        run: |
+          docker run --rm -e IS_DOCKER=true ijt_web_client:test \
+            python -m pytest tests/python/unit/test_docker.py \
+              tests/python/unit/test_docker_image_layout.py -v --tb=short
+
       - name: Build Docker Image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
+          # Workspace-relative (repo root) — NOT the job working-directory; see test image step.
           context: .
           file: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
           tags: ijt_web_client:latest
@@ -1144,6 +1171,9 @@ jobs:
           python -m pip install --upgrade "pre-commit==4.5.1"
           python -m pip install -r "${{ github.workspace }}/tests/requirements.txt"
 
+      - name: Install hadolint (pinned binary for pre-commit hadolint hook)
+        run: python "$GITHUB_WORKSPACE/scripts/ensure_hadolint.py" --link /usr/local/bin/hadolint
+
       - name: Run pre-commit on all files
         run: pre-commit run --all-files --show-diff-on-failure --color=always
 
@@ -1209,13 +1239,16 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   all-required:
     name: "All checks passed"
-    needs: [web-client-python, web-client-js, console-client, performance-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor, pre-commit]
+    needs: [changes, web-client-python, web-client-js, console-client, performance-client, node-client, docker-smoke, csharp-unit, csharp-vuln, test-client, server-smoke-windows, actionlint, zizmor, pre-commit]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed (skipped = success)
         env:
+          # `changes` gates every lane: if it fails, lanes are skipped (= success below),
+          # so its own result must be part of the aggregate.
           RESULTS: >-
+            ${{ needs.changes.result }}
             ${{ needs.web-client-python.result }}
             ${{ needs.web-client-js.result }}
             ${{ needs.console-client.result }}

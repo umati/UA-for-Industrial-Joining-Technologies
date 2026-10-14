@@ -14,7 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY scripts/opcua_session_policy.py \
      scripts/opcua_session_policy_loader.py \
-     scripts/tool_bootstrap.py /app/scripts/
+     scripts/tool_bootstrap.py \
+     scripts/simulator_extract.py /app/scripts/
 
 ENV IS_DOCKER=true \
     PYTHONUNBUFFERED=1 \
@@ -47,6 +48,10 @@ RUN uv sync --locked && \
 # scripts/ijt_live_readiness.py and the target matches the helper's Docker
 # fallback path at /app/scripts/ijt_live_readiness.py.
 COPY scripts/ijt_live_readiness.py /app/scripts/ijt_live_readiness.py
+
+# Root .dockerignore for in-image allowlist contracts (see test_docker.py).
+COPY .dockerignore /tmp/ijt-build-contract/.dockerignore
+ENV IJT_ROOT_DOCKERIGNORE=/tmp/ijt-build-contract/.dockerignore
 
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/. .
 

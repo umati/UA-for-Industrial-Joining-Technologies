@@ -241,3 +241,170 @@ def test_audit_system_tools_policy(tmp_path, monkeypatch, strict):
     results = module._run_all_audits_concurrently(strict=strict)
     assert [r.returncode for r in results] == [int(strict), int(strict), 0]
     assert [r.skipped for r in results] == [not strict, not strict, False]
+
+
+# --- running_in_docker / import_simulator_extract policy -------------------------------------
+
+
+@pytest.fixture
+def isolated_simulator_extract_import(monkeypatch):
+    """Restore sys.path / sys.modules so throw-away ``simulator_extract`` stubs never leak."""
+    saved_path = list(sys.path)
+    saved_module = sys.modules.pop("simulator_extract", None)
+    monkeypatch.setattr(bootstrap, "_DOCKERENV_MARKER", Path("/nonexistent-ijt/.dockerenv"))
+    yield
+    sys.path[:] = saved_path
+    sys.modules.pop("simulator_extract", None)
+    if saved_module is not None:
+        sys.modules["simulator_extract"] = saved_module
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "Yes", " yes "])
+def test_running_in_docker_accepts_truthy_is_docker(monkeypatch, value):
+    monkeypatch.setattr(bootstrap, "_DOCKERENV_MARKER", Path("/nonexistent-ijt/.dockerenv"))
+    monkeypatch.setenv("IS_DOCKER", value)
+    assert bootstrap.running_in_docker() is True
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no", "maybe"])
+def test_running_in_docker_rejects_other_is_docker_values(monkeypatch, value):
+    monkeypatch.setattr(bootstrap, "_DOCKERENV_MARKER", Path("/nonexistent-ijt/.dockerenv"))
+    monkeypatch.setenv("IS_DOCKER", value)
+    assert bootstrap.running_in_docker() is False
+
+
+def test_running_in_docker_detects_dockerenv_marker(tmp_path, monkeypatch):
+    marker = tmp_path / ".dockerenv"
+    monkeypatch.setattr(bootstrap, "_DOCKERENV_MARKER", marker)
+    assert bootstrap.running_in_docker() is False
+    marker.write_text("", encoding="utf-8")
+    assert bootstrap.running_in_docker() is True
+
+
+def test_import_simulator_extract_soft_skips_on_host_when_absent(
+    tmp_path, isolated_simulator_extract_import
+):
+    assert bootstrap.import_simulator_extract(tmp_path) is None
+
+
+@pytest.mark.parametrize("via", ["env", "dockerenv"])
+def test_import_simulator_extract_fails_hard_in_docker_when_absent(
+    tmp_path, monkeypatch, isolated_simulator_extract_import, via
+):
+    if via == "env":
+        monkeypatch.setenv("IS_DOCKER", "true")
+    else:
+        marker = tmp_path / "dockerenv-marker"
+        marker.write_text("", encoding="utf-8")
+        monkeypatch.setattr(bootstrap, "_DOCKERENV_MARKER", marker)
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    with pytest.raises(RuntimeError, match=r"simulator_extract\.py is missing inside Docker"):
+        bootstrap.import_simulator_extract(scripts)
+
+
+def test_import_simulator_extract_imports_real_module_and_prepends_path(
+    isolated_simulator_extract_import,
+):
+    scripts = Path(__file__).resolve().parents[1] / "scripts"
+    module = bootstrap.import_simulator_extract(scripts)
+    assert module is not None and module.__name__ == "simulator_extract"
+    assert Path(module.__file__).resolve() == scripts / "simulator_extract.py"
+    assert str(scripts) in sys.path
+
+
+@pytest.mark.parametrize("docker", [False, True])
+def test_import_simulator_extract_reraises_when_present_but_broken(
+    tmp_path, monkeypatch, isolated_simulator_extract_import, docker
+):
+    if docker:
+        monkeypatch.setenv("IS_DOCKER", "true")
+    (tmp_path / "simulator_extract.py").write_text(
+        "import module_that_does_not_exist_ijt\n", encoding="utf-8"
+    )
+    with pytest.raises(ImportError, match="module_that_does_not_exist_ijt"):
+        bootstrap.import_simulator_extract(tmp_path)
+
+
+def _repo_python_files():
+    root = Path(__file__).resolve().parents[1]
+    skip = {
+        ".git",
+        ".venv",
+        ".venv_test",
+        ".venv_ci",
+        "venv",
+        "node_modules",
+        ".state",
+        "__pycache__",
+        "tmp",
+    }
+    for path in root.rglob("*.py"):
+        relative = path.relative_to(root)
+        if skip.intersection(relative.parts):
+            continue
+        if relative.parts[0] == "tests" or "tests" in relative.parts:
+            continue
+        yield path
+
+
+def _imports_simulator_extract(tree):
+    import ast
+
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.ImportFrom)
+            and (node.module or "").split(".")[0] == "simulator_extract"
+        ):
+            yield node
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] == "simulator_extract":
+                    yield node
+
+
+def test_production_code_never_imports_simulator_extract_directly():
+    """Runners must use ``import_simulator_extract`` (host soft-skip, Docker hard-fail)."""
+    import ast
+
+    offenders = []
+    for path in _repo_python_files():
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if "simulator_extract" not in source:
+            continue  # also skips generated sources that are not valid Python
+        tree = ast.parse(source, filename=str(path))
+        if any(_imports_simulator_extract(tree)):
+            offenders.append(str(path.relative_to(Path(__file__).resolve().parents[1])))
+    assert not offenders, (
+        f"direct simulator_extract import (use import_simulator_extract): {offenders}"
+    )
+
+
+def test_all_simulator_extract_runners_use_the_policy_helper():
+    import ast
+
+    root = Path(__file__).resolve().parents[1]
+    clients = root / "OPC_UA_Clients" / "Release2"
+    runners = [
+        root / "run_all_tests.py",
+        clients / "IJT_Web_Client" / "run_all_tests.py",
+        clients / "IJT_Web_Client" / "setup_project.py",
+        clients / "IJT_Test_Client" / "run_all_tests.py",
+        clients / "IJT_Performance_Client" / "run_all_tests.py",
+        clients / "IJT_Console_Client" / "run_all_tests.py",
+        clients / "IJT_CSharp_Client" / "run_all_tests.py",
+    ]
+    for runner in runners:
+        tree = ast.parse(runner.read_text(encoding="utf-8"), filename=str(runner))
+        called = any(
+            isinstance(node, ast.Call)
+            and (
+                (isinstance(node.func, ast.Name) and node.func.id == "import_simulator_extract")
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "import_simulator_extract"
+                )
+            )
+            for node in ast.walk(tree)
+        )
+        assert called, f"{runner} must call tool_bootstrap.import_simulator_extract"

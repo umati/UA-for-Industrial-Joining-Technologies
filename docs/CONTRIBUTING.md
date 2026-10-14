@@ -24,7 +24,7 @@ for the hold and coordinated migration procedure.
 
 - **.NET SDK 10+** for the C# client
 - **Docker** for containerized server testing
-- **OS/binary scanners** (hadolint, trivy, actionlint, …) when not on your PATH
+- **OS/binary scanners** (trivy, actionlint, …) when not on your PATH (hadolint is auto-downloaded and verified)
 
 Setup and test launchers install Python tools for you — you do **not** need to
 `pip install` them globally. First run needs network (or an offline cache).

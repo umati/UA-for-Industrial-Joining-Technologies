@@ -195,20 +195,17 @@ jobs:
       # Server Dockerfile copies the Linux ZIP and extracts it in a BusyBox stage;
       # do not host-unzip before build (duplicate / outdated path).
 
-      - name: Install hadolint (binary — avoids a Docker Hub pull)
+      - name: Install hadolint (pinned binary — avoids a Docker Hub pull)
         # Using the released binary instead of `docker run hadolint/hadolint`
         # saves one unauthenticated Docker Hub pull (and avoids rate-limit risk).
-        # SHA-256 is taken from the official hadolint v2.12.0 release checksums file.
-        run: |
-          wget -qO /usr/local/bin/hadolint \
-            https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
-          echo "56de6d5e5ec427e17b74fa48d51271c7fc0d61244bf5c90e828aab8362d55010  /usr/local/bin/hadolint" \
-            | sha256sum --check --strict -
-          chmod +x /usr/local/bin/hadolint
+        # Version + per-OS SHA-256 (from the official v2.12.0 release checksums) live in
+        # scripts/ensure_hadolint.py, shared with the runners, pre-commit, and ci.yml.
+        run: python3 "$GITHUB_WORKSPACE/scripts/ensure_hadolint.py" --link /usr/local/bin/hadolint
 
       - name: Lint Dockerfile (hadolint)
+        # Shared policy (DL3008/DL3009 ignores) is the repo-root .hadolint.yaml.
         run: |
-          hadolint --ignore DL3008 --ignore DL3009 OPC_UA_Servers/Release2/Dockerfile
+          hadolint --config .hadolint.yaml OPC_UA_Servers/Release2/Dockerfile
           echo "Dockerfile lint OK"
 
       - name: Log in to Docker Hub (optional — increases pull rate limit)

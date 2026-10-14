@@ -52,7 +52,7 @@ for _parent in Path(__file__).resolve().parents:
     if (_parent / "scripts" / "tool_bootstrap.py").is_file():
         sys.path.insert(0, str(_parent / "scripts"))
         break
-from tool_bootstrap import ensure_uv
+from tool_bootstrap import ensure_uv, import_simulator_extract
 
 # Ensure stdout/stderr use UTF-8 on Windows (cp1252 can't encode box-drawing chars)
 if hasattr(sys.stdout, "reconfigure"):
@@ -479,15 +479,14 @@ def _ensure_server(port: int = _OPCUA_SERVER_PORT) -> subprocess.Popen | None:
         return None
     exe = os.environ.get("OPCUA_SIMULATOR_EXE")
     if not exe:
-        try:
-            from simulator_extract import default_server_dir, ensure_present_simulator_packages
-        except ImportError as exc:
+        extract = import_simulator_extract(_REPO_ROOT / "scripts")
+        if extract is None:
             _log(
-                f"  [server] Shared simulator_extract unavailable ({exc}); "
+                "  [server] Shared simulator_extract unavailable (scripts/simulator_extract.py absent); "
                 "set OPCUA_SIMULATOR_EXE or use a full IJT clone for auto-extract"
             )
         else:
-            ready = ensure_present_simulator_packages(default_server_dir(_REPO_ROOT))
+            ready = extract.ensure_present_simulator_packages(extract.default_server_dir(_REPO_ROOT))
             if not ready:
                 _log("  [server] No simulator package prepared from present ZIPs")
         for candidate in _WELL_KNOWN_SIMULATOR_PATHS:

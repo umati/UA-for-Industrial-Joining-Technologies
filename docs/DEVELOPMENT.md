@@ -166,7 +166,8 @@ When you run `python run_all_tests.py`, the repository handles the following wit
 | **Node.js Packages** | Automatically runs `npm ci` when `node_modules` is missing |
 | **Playwright Browsers** | Automatically installs browser binaries (`playwright install chromium`) during E2E stages |
 | **OPC UA Server Simulators** | Ensures present simulator ZIPs via `scripts/simulator_extract.py` (locked staging → rename-aside swap), then launches native/containerized instances with dedicated port isolation |
-| **Missing Optional Tools** | OS/binary scanners (Hadolint, Trivy, Actionlint, Semgrep, …) skip gracefully when absent; CI remains authoritative |
+| **Hadolint** | Pinned binary auto-downloaded (SHA-256 verified) by `scripts/ensure_hadolint.py`; fails (not skips) on hosted CI hosts; soft-skips inside app containers |
+| **Missing Optional Tools** | OS/binary scanners (Trivy, Actionlint, Semgrep, …) skip gracefully when absent; CI remains authoritative |
 
 **Lockfile Python tools (required):** The repository **root is a uv project**
 (`pyproject.toml` + `uv.lock`) for root-runner CLIs; it is **not** a uv workspace
@@ -203,8 +204,30 @@ env: the root runner still requires root CLIs present **and**
 (`_check_zizmor`) runs on local full / `--phase1` orchestrator paths, not on
 `--suite`-only Docker jobs.
 
-**OS/binary scanners** (hadolint, trivy, actionlint, …) stay optional locally;
-CI remains authoritative until a pinned bootstrap exists.
+**hadolint and yamllint are pinned and never soft-skipped on hosted CI hosts**
+(pre-commit + phase1 runners). Inside app containers they soft-skip; Docker image
+packaging is gated by `docker-smoke` in-image contracts.
+`scripts/ensure_hadolint.py` downloads the pinned hadolint v2.12.0 binary for
+your OS/arch (SHA-256 verified, cached in `.state/tools/`) and the Web Client
+and Server runners, pre-commit, and CI all use it with the shared repo-root
+`.hadolint.yaml`. yamllint (`tool_bootstrap.YAMLLINT_VERSION`, also the
+pre-commit rev and Web `pyproject.toml` dev pin) always runs with the explicit
+`-c OPC_UA_Clients/Release2/IJT_Web_Client/.yamllint.yml`. Other OS/binary
+scanners (trivy, actionlint, …) stay optional locally; CI remains authoritative.
+
+**Docker build context.** The Web Client image builds from the repo root, so the
+ROOT `.dockerignore` is the only ignore file (no Web Client `.dockerignore` /
+`Dockerfile.dockerignore`). Every `COPY scripts/<file>` in the Dockerfile needs a
+`!scripts/<file>` allowlist line there (`tests/test_docker_context_contract.py`,
+`docker-context-contract` pre-commit hook; CI also builds `--target test` and
+runs the in-image contracts before the production smoke build). The dev
+`docker-compose.yml` re-mounts repo `scripts/` read-only at `/app/scripts`
+because `.:/app` would otherwise hide the image's copy.
+
+**Shared-script import policy.** Runners must load `scripts/simulator_extract.py`
+only via `tool_bootstrap.import_simulator_extract(scripts_dir)`: it returns
+`None` (soft skip) on a host checkout without the file, and raises in Docker
+(`IS_DOCKER` truthy or `/.dockerenv`) or when the file exists but fails to import.
 
 #### Adding a root-locked CLI
 

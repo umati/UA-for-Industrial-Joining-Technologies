@@ -70,6 +70,8 @@ _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 if _SCRIPTS_DIR.is_dir() and str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
+from tool_bootstrap import import_simulator_extract  # noqa: E402
+
 _SERVER_NATIVE_PORT = 40451  # server binary default — used for fallback pre-flight
 _OPCUA_SERVER_PORT = 40464  # dedicated port for C# client test isolation (copy-and-patch)
 _OPCUA_SECURITY_TARGETS = {
@@ -1055,16 +1057,17 @@ def _try_launch_simulator() -> subprocess.Popen | None:
     """
     exe: str | None = os.environ.get("OPCUA_SIMULATOR_EXE", "").strip() or None
     if not exe:
-        try:
-            from simulator_extract import default_server_dir, ensure_present_simulator_packages
-        except ImportError as exc:
+        extract = import_simulator_extract(_SCRIPTS_DIR)
+        if extract is None:
             print(
-                f"[PHASE 2] Shared simulator_extract unavailable ({exc}); "
+                "[PHASE 2] Shared simulator_extract unavailable (scripts/ absent); "
                 "set OPCUA_SIMULATOR_EXE or use a full IJT clone for auto-extract",
                 file=sys.stderr,
             )
         else:
-            ready = ensure_present_simulator_packages(default_server_dir(_REPO_ROOT))
+            ready = extract.ensure_present_simulator_packages(
+                extract.default_server_dir(_REPO_ROOT)
+            )
             if not ready:
                 print(
                     "[PHASE 2] No simulator package prepared from present ZIPs",

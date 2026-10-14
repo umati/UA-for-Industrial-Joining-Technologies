@@ -65,7 +65,7 @@ packages there. Authoritative procedure:
 - Missing Docker? → Skip Docker-dependent test suites; continue with available tests.
 - Missing .NET SDK? → Skip C# test suites; continue with Python/Node tests.
 - Missing npm? → Skip npm-dependent tests; continue with available tests.
-- Missing OS/binary scanners (hadolint, trivy, actionlint, …)? → Skip those checks; CI remains authoritative.
+- Missing OS/binary scanners (trivy, actionlint, …)? → Skip those checks; CI remains authoritative. hadolint is auto-downloaded (pinned, SHA-256) by `scripts/ensure_hadolint.py` and never soft-skipped on hosted CI hosts (containers soft-skip; image packaging is gated separately).
 - Missing Python packages for a client/root lockfile? → Auto-sync via `uv` on first run (no manual pip).
 
 For project test runners, exit code `0` means all available checks passed; inspect

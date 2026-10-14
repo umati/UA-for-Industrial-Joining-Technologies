@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import importlib.util
 import ipaddress
 import json
 import os
@@ -100,7 +101,12 @@ if str(_SHARED_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SHARED_SCRIPTS_DIR))
 
 from ijt_live_readiness import COMPOSE_WAIT_TIMEOUT_WARM_SECONDS  # noqa: E402
-from tool_bootstrap import ensure_uv, preparation_lock  # noqa: E402
+from tool_bootstrap import (  # noqa: E402
+    ensure_uv,
+    import_simulator_extract,
+    preparation_lock,
+    running_in_docker,
+)
 
 from tests.python._live_server_readiness import (  # noqa: E402
     MAX_SIMULATOR_LAUNCH_ATTEMPTS,
@@ -2291,39 +2297,90 @@ def _stage_infra_lint() -> StageResult:
     results_dir = _RESULTS_DIR
     overall_rc = 0
     notes: list[str] = []
+    # Hosted CI (phase1-python) must never soft-skip a missing linter/config/Dockerfile.
+    # Inside the Web image (ijt_tests / IS_DOCKER) those host tools are not shipped —
+    # Dockerfile packaging is gated by docker-smoke's in-image contracts + pre-commit.
+    strict = IS_GITHUB_ACTIONS and not running_in_docker()
 
-    hadolint = shutil.which("hadolint") or shutil.which("hadolint.exe")
+    def _unavailable(message: str) -> None:
+        nonlocal overall_rc
+        if strict:
+            _fail(f"{message} (required in CI)")
+            overall_rc = overall_rc or 1
+            notes.append(message)
+        else:
+            _skip(message)
+
+    # hadolint: pinned, SHA-256-verified binary (scripts/ensure_hadolint.py) with the
+    # shared repo-root .hadolint.yaml policy (same as pre-commit and the Server runner).
     dockerfile = ROOT / "Dockerfile"
-    if hadolint and dockerfile.exists():
-        results_dir.mkdir(parents=True, exist_ok=True)
-        rc = _run_to_file(
-            [hadolint, "Dockerfile", "--format", "json"],
-            results_dir / "hadolint.json",
-            label="hadolint Dockerfile",
-        )
-        if rc != 0:
-            overall_rc = rc
-    elif not hadolint:
-        _skip("hadolint not found — see https://github.com/hadolint/hadolint")
-        notes.append("hadolint not installed")
+    hadolint_config = _REPO_ROOT / ".hadolint.yaml"
+    if not dockerfile.is_file():
+        _unavailable("Dockerfile not found — cannot run hadolint")
+    elif not hadolint_config.is_file():
+        _unavailable(f"shared hadolint config not found: {hadolint_config}")
     else:
-        _skip("Dockerfile not found — skipping hadolint")
+        hadolint: str | None = None
+        try:
+            from ensure_hadolint import ensure_hadolint  # noqa: PLC0415 — scripts/ not shipped in the image
 
-    yamllint = shutil.which("yamllint") or shutil.which("yamllint.exe")
-    compose_yml = ROOT / "docker-compose.yml"
-    if yamllint and compose_yml.exists():
-        rc = _run([yamllint, "docker-compose.yml", "-f", "parsable"], label="yamllint docker-compose.yml")
-        if rc != 0:
-            overall_rc = rc
-    elif not yamllint:
-        _skip("yamllint not found — pip install yamllint")
-        notes.append("yamllint not installed")
+            hadolint = str(ensure_hadolint(_REPO_ROOT))
+        except (ImportError, RuntimeError) as exc:
+            _unavailable(f"hadolint unavailable: {exc}")
+        if hadolint:
+            results_dir.mkdir(parents=True, exist_ok=True)
+            rc = _run_to_file(
+                [hadolint, "--config", str(hadolint_config), "Dockerfile", "--format", "json"],
+                results_dir / "hadolint.json",
+                label="hadolint Dockerfile",
+            )
+            if rc != 0:
+                overall_rc = rc
+                notes.append("hadolint reported Dockerfile issues")
+
+    # yamllint: same pinned package + explicit -c as the pre-commit hook.
+    yamllint_config = ROOT / ".yamllint.yml"
+    compose_files = [
+        ROOT / "docker-compose.yml",
+        ROOT / "docker-compose.smoke.yml",
+    ]
+    if importlib.util.find_spec("yamllint") is not None:
+        yamllint_cmd: list[str] | None = [sys.executable, "-m", "yamllint"]
+    else:
+        yamllint_exe = shutil.which("yamllint") or shutil.which("yamllint.exe")
+        yamllint_cmd = [yamllint_exe] if yamllint_exe else None
+    if yamllint_cmd is None:
+        _unavailable("yamllint not found — uv sync (dev group pins yamllint)")
+    elif not yamllint_config.is_file():
+        _unavailable(f"yamllint config not found: {yamllint_config}")
+    else:
+        for compose_yml in compose_files:
+            if not compose_yml.is_file():
+                continue
+            rc = _run(
+                [*yamllint_cmd, "-c", str(yamllint_config), "-f", "parsable", compose_yml.name],
+                label=f"yamllint {compose_yml.name}",
+            )
+            if rc != 0:
+                overall_rc = rc
+                notes.append(f"yamllint failed for {compose_yml.name}")
 
     docker = shutil.which("docker") or shutil.which("docker.exe")
+    compose_yml = ROOT / "docker-compose.yml"
     if docker and compose_yml.exists():
         rc = _run([docker, "compose", "config", "--quiet"], label="docker compose config --quiet")
         if rc != 0:
             overall_rc = rc
+            notes.append("docker compose config failed")
+        smoke_compose = ROOT / "docker-compose.smoke.yml"
+        if smoke_compose.is_file():
+            rc = _run(
+                [docker, "compose", "-f", str(smoke_compose), "config", "--quiet"],
+                label="docker compose -f docker-compose.smoke.yml config --quiet",
+            )
+            if rc != 0:
+                overall_rc = rc
+                notes.append("docker compose smoke config failed")
     elif not docker:
         _skip("docker not found — skipping compose config validation")
 
@@ -2835,15 +2892,14 @@ def _find_simulator_executable() -> str | None:
         return exe
     # Extract first (same order as root/other clients) so a stamp-stale or
     # incomplete folder is refreshed before well-known path lookup.
-    try:
-        from simulator_extract import ensure_present_simulator_packages
-    except ImportError as exc:
+    extract = import_simulator_extract(_SHARED_SCRIPTS_DIR)
+    if extract is None:
         _info(
-            f"[server] Shared simulator_extract unavailable ({exc}); "
+            "[server] Shared simulator_extract unavailable (scripts/simulator_extract.py absent); "
             "set OPCUA_SIMULATOR_EXE or use a full IJT clone for auto-extract"
         )
     else:
-        ready = ensure_present_simulator_packages(_SERVER_COMPOSE_DIR)
+        ready = extract.ensure_present_simulator_packages(_SERVER_COMPOSE_DIR)
         if not ready:
             _info("[server] No simulator package prepared from present ZIPs")
     for candidate in _WELL_KNOWN_SIMULATOR_PATHS:

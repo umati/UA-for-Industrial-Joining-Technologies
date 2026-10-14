@@ -15,7 +15,7 @@
 # violation is found and require manual intervention before committing.
 # Hooks in this category: check-merge-conflict, check-yaml, check-toml,
 # check-json, debug-statements, bandit, zizmor, python-locks-current,
-# workflow-policy-guard.
+# workflow-policy-guard, yamllint, hadolint, docker-context-contract.
 # For bandit: fix the finding or add a justified # nosec comment, then re-commit.
 
 # Global exclusion: auto-generated output from UA-ModelCompiler.
@@ -91,6 +91,19 @@ repos:
       # except (A, B): clauses does not trigger with py313.
       - id: ruff-format
 
+  # yamllint — compose/config YAML, same pinned version and explicit config as CI and
+  # both run_all_tests.py runners (Web + Server). The explicit `-c` is required so the
+  # hook never silently falls back to yamllint's default 80-column rules.
+  # Version pin (X.Y.Z) — keep aligned (tests/test_shared_lint_tooling.py enforces):
+  #   1. rev here (vX.Y.Z)  2. Web Client pyproject dev group + uv.lock
+  #   3. scripts/tool_bootstrap.py YAMLLINT_VERSION
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: [-c, OPC_UA_Clients/Release2/IJT_Web_Client/.yamllint.yml]
+        files: '^(OPC_UA_Clients/Release2/IJT_Web_Client/(docker-compose(\.smoke)?\.yml|\.yamllint\.yml)|OPC_UA_Servers/Release2/docker-compose\.yml|\.hadolint\.yaml)$'
+
   # Bandit SAST — single repo-wide hook (Medium+ severity).
   #
   # Configuration is centralized in <repo-root>/pyproject.toml [tool.bandit]:
@@ -142,6 +155,26 @@ repos:
         language: system
         entry: python scripts/check_python_ast.py
         types: [python]
+
+      # hadolint — pinned, SHA-256-verified binary downloaded for this OS/arch by
+      # scripts/ensure_hadolint.py (cached under .state/tools), using the shared repo-root
+      # .hadolint.yaml. Hard-fails (no soft skip) — same policy as CI and the runners.
+      - id: hadolint
+        name: hadolint (Dockerfiles)
+        language: system
+        entry: python scripts/ensure_hadolint.py --
+        files: '^(OPC_UA_Clients/Release2/IJT_Web_Client|OPC_UA_Servers/Release2)/Dockerfile$'
+
+      # Docker build-context contract: every Dockerfile `COPY scripts/<file>` must be
+      # allowlisted in the ROOT .dockerignore (the only ignore file for repo-root contexts),
+      # no dead Web Client .dockerignore, and the shared lint pins/config stay in lockstep.
+      - id: docker-context-contract
+        name: Docker context contract
+        language: system
+        entry: python
+        args: ['scripts/precommit_pytest_hook.py', 'tests/test_docker_context_contract.py', 'tests/test_shared_lint_tooling.py', '-q']
+        pass_filenames: false
+        files: '(^\.dockerignore$|^\.hadolint\.yaml$|^\.pre-commit-config\.yaml$|(^|/)Dockerfile$|^OPC_UA_Clients/Release2/IJT_Web_Client/(docker-compose(\.smoke)?\.yml|\.yamllint\.yml|pyproject\.toml)$|^scripts/(simulator_extract|tool_bootstrap|ensure_hadolint|opcua_session_policy(_loader)?|ijt_live_readiness)\.py$|^tests/test_(docker_context_contract|shared_lint_tooling)\.py$|^\.github/workflows/(ci|integration)\.yml$)'
 
       - id: eslint-node-client
         name: ESLint (Node Client)

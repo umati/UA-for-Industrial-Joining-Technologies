@@ -3,7 +3,8 @@ services:
     build:
       context: ../../..
       dockerfile: OPC_UA_Clients/Release2/IJT_Web_Client/Dockerfile
-    # Path-derived tag from run_docker_setup.py (COMPOSE_PROJECT_NAME + IJT_WEB_IMAGE).
+    # Path-derived tag from run_docker_setup.py
+    # (COMPOSE_PROJECT_NAME + IJT_WEB_IMAGE).
     image: ${IJT_WEB_IMAGE:-ijt_web_client:latest}
     # No container_name on purpose: Compose scopes generated container,
     # network, and volume names by project so parallel checkouts/runners do not
@@ -11,6 +12,10 @@ services:
     working_dir: /app
     volumes:
       - .:/app
+      # The bind mount above hides the image's /app/scripts (shared helpers such as
+      # tool_bootstrap and simulator_extract are COPYed there from the repo root).
+      # Re-mount the repo-root scripts/ read-only so dev mode keeps them.
+      - ../../../scripts:/app/scripts:ro
       - node_modules:/app/node_modules
     ports:
       - "${WEB_CLIENT_HTTP_PORT:-3000}:${HTTP_PORT:-3000}"

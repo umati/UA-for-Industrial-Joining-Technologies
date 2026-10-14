@@ -19,11 +19,13 @@ import webbrowser
 from pathlib import Path
 from typing import IO, Any
 
+_SHARED_SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 for _parent in Path(__file__).resolve().parents:
     if (_parent / "scripts" / "tool_bootstrap.py").is_file():
-        sys.path.insert(0, str(_parent / "scripts"))
+        _SHARED_SCRIPTS_DIR = _parent / "scripts"
+        sys.path.insert(0, str(_SHARED_SCRIPTS_DIR))
         break
-from tool_bootstrap import ensure_uv
+from tool_bootstrap import ensure_uv, import_simulator_extract
 
 # Add src/ to path so "from python.xxx import" works regardless of cwd
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -818,15 +820,16 @@ def _wait_for_endpoint_ready(
 
 def _extract_simulator_zip_if_needed() -> None:
     """Ensure present simulator ZIPs via shared locked extract (scripts/)."""
-    try:
-        from simulator_extract import ensure_present_simulator_packages
-    except ImportError:
+    # Host soft-skips when scripts/simulator_extract.py is absent; Docker fails
+    # hard (the image must ship it). See tool_bootstrap.import_simulator_extract.
+    extract = import_simulator_extract(_SHARED_SCRIPTS_DIR)
+    if extract is None:
         log.info(
             "Shared simulator_extract unavailable (full IJT clone provides scripts/). "
             "Set OPCUA_SIMULATOR_EXE or OPCUA_SERVER_URL for live OPC UA without auto-extract."
         )
         return
-    ready = ensure_present_simulator_packages(SIMULATOR_ZIP.parent, logger=log)
+    ready = extract.ensure_present_simulator_packages(SIMULATOR_ZIP.parent, logger=log)
     if not ready:
         log.info(
             "No simulator package prepared from present ZIPs under %s",
