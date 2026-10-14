@@ -1084,15 +1084,17 @@ def _add_live_process_selector_checks(
     if source_path.name.endswith(".sut.yaml") and source_path.is_file():
         security = connection_security_from_manifest_path(source_path)
 
-    prompt = None
+    prompt: CredentialPrompt | None = None
     if interactive_prompts:
         from getpass import getpass
 
         from helpers.connection_security import Credentials
 
-        def prompt(connection: ConnectionSecurity) -> Credentials:
+        def _interactive_credential_prompt(connection: ConnectionSecurity) -> Credentials:
             username = connection.username or input("OPC UA username: ")
             return Credentials(username=username, password=getpass("OPC UA password: "))
+
+        prompt = _interactive_credential_prompt
 
     try:
         data = asyncio.run(
