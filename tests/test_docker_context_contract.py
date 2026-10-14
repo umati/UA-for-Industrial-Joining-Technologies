@@ -116,10 +116,11 @@ def test_ci_docker_smoke_builds_and_runs_test_target_before_production_smoke():
     steps = _ci_workflow()["jobs"]["docker-smoke"]["steps"]
     names = [step.get("name", "") for step in steps]
     build_test = names.index("Build test image (target test)")
-    run_contracts = names.index("Run in-image Docker contracts")
+    run_pytest = names.index("Run in-image Python unit tests")
+    run_vitest = names.index("Run in-image JS unit tests (vitest)")
     build_production = names.index("Build Docker Image")
     start_stack = names.index("Start Compose Stack")
-    assert build_test < run_contracts < build_production < start_stack
+    assert build_test < run_pytest < run_vitest < build_production < start_stack
 
     build_run = steps[build_test]["run"]
     assert "--target test" in build_run and "ijt_web_client:test" in build_run
@@ -127,11 +128,14 @@ def test_ci_docker_smoke_builds_and_runs_test_target_before_production_smoke():
         "context must be the repo root, not the job working-directory"
     )
 
-    contracts_run = steps[run_contracts]["run"]
-    assert "-e IS_DOCKER=true" in contracts_run
-    assert "tests/python/unit/test_docker.py" in contracts_run
-    assert "tests/python/unit/test_docker_image_layout.py" in contracts_run
-    assert (WEB_CLIENT_DIR / "tests" / "python" / "unit" / "test_docker_image_layout.py").is_file()
+    pytest_run = steps[run_pytest]["run"]
+    assert "-e IS_DOCKER=true" in pytest_run
+    assert "tests/python/unit/" in pytest_run
+    assert "not checkout_hygiene" in pytest_run
+
+    vitest_run = steps[run_vitest]["run"]
+    assert "vitest run" in vitest_run
+    assert "vitest.xml" in vitest_run
 
     # Production smoke build stays: repo-root context, exactly one build-push-action step.
     production = steps[build_production]
@@ -143,6 +147,44 @@ def test_ci_docker_smoke_builds_and_runs_test_target_before_production_smoke():
         )
         == 1
     )
+
+
+def test_docker_unit_pytest_and_vitest_lockstep_across_local_ci_and_system_tests():
+    """Local --docker-unit-only, CI docker-smoke, and System Tests webclient-docker stay aligned."""
+    import yaml
+
+    web_runner = (WEB_CLIENT_DIR / "run_all_tests.py").read_text(encoding="utf-8")
+    assert '_DOCKER_UNIT_PYTEST_PATH = "tests/python/unit/"' in web_runner
+    assert '_DOCKER_UNIT_PYTEST_MARKER = "not checkout_hygiene"' in web_runner
+    assert '"npx",' in web_runner and '"vitest",' in web_runner and '"run",' in web_runner
+
+    # Host npm scripts and in-image `npx vitest run` must both skip the private
+    # Envelope performance fixture (needs data/itbp.json; Phase 1b only).
+    vitest_cfg = (WEB_CLIENT_DIR / "vitest.config.mjs").read_text(encoding="utf-8")
+    assert "automatic-stepwise-performance.test.mjs" in vitest_cfg
+    pkg = (WEB_CLIENT_DIR / "package.json").read_text(encoding="utf-8")
+    assert "automatic-stepwise-performance.test.mjs" in pkg
+
+    ci_steps = _ci_workflow()["jobs"]["docker-smoke"]["steps"]
+    ci_by_name = {step.get("name", ""): step.get("run", "") for step in ci_steps}
+    assert "tests/python/unit/" in ci_by_name["Run in-image Python unit tests"]
+    assert "not checkout_hygiene" in ci_by_name["Run in-image Python unit tests"]
+    assert "vitest run" in ci_by_name["Run in-image JS unit tests (vitest)"]
+
+    integration = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(encoding="utf-8")
+    )
+    int_steps = integration["jobs"]["webclient-docker"]["steps"]
+    int_runs = "\n".join(
+        step.get("run", "") for step in int_steps if isinstance(step.get("run"), str)
+    )
+    assert "tests/python/unit/" in int_runs
+    assert "not checkout_hygiene" in int_runs
+    assert "vitest run" in int_runs
+
+    root_runner = (REPO_ROOT / "run_all_tests.py").read_text(encoding="utf-8")
+    assert '"web-client-docker-unit"' in root_runner
+    assert '["--docker-unit-only"]' in root_runner
 
 
 def test_ci_all_required_depends_on_and_aggregates_changes_result():

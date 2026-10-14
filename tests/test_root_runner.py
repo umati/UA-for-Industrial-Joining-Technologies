@@ -878,6 +878,7 @@ def test_suite_ids_match_naming_pattern() -> None:
                 "e2e",
                 "smoke",
                 "docker-smoke",
+                "docker-unit",
                 "opcua-security",
                 "compatibility-smoke",
                 "linux-package-smoke",
@@ -909,6 +910,11 @@ def test_suite_ids_match_naming_pattern() -> None:
         return component, tier, focus
 
     assert parse_suite_id("web-client-e2e-smoke") == ("web-client", "e2e", "smoke")
+    assert parse_suite_id("web-client-docker-unit") == (
+        "web-client",
+        "docker-unit",
+        "",
+    )
     assert parse_suite_id("web-client-docker-smoke") == (
         "web-client",
         "docker-smoke",
@@ -942,6 +948,7 @@ def test_suite_ids_match_naming_pattern() -> None:
         "performance",
         "e2e",
         "smoke",
+        "docker-unit",
         "docker-smoke",
         "opcua-security",
         "compatibility-smoke",
@@ -1002,6 +1009,7 @@ def test_suite_registry_has_no_duplicate_ids() -> None:
         "web-client-e2e-smoke",
         "web-client-e2e-features",
         "web-client-e2e-regression",
+        "web-client-docker-unit",
         "web-client-docker-smoke",
         "web-client-compatibility-smoke",
     }
@@ -2002,6 +2010,7 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
         _runner._suite_webclient_live_e2e_smoke(),
         _runner._suite_webclient_live_e2e_features(),
         _runner._suite_webclient_live_e2e_regression(),
+        _runner._suite_webclient_docker_unit(),
         _runner._suite_webclient_docker_smoke(),
     ]
 
@@ -2013,6 +2022,7 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
         "web-client-e2e-smoke",
         "web-client-e2e-features",
         "web-client-e2e-regression",
+        "web-client-docker-unit",
         "web-client-docker-smoke",
     }
     assert expected_suites <= set(_runner.phase2_specs())
@@ -2024,7 +2034,8 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
         ["--playwright-smoke-only"],
         ["--playwright-features-only"],
         ["--playwright-regression-only"],
-        ["--docker-only"],
+        ["--docker-unit-only"],
+        ["--docker-smoke-only"],
     ]
     assert calls[0]["extra_env"]["OPCUA_SERVER_PORT"] == str(_runner.OPCUA_SERVER_PORT_WEB_CLIENT)
     assert calls[0]["extra_env"]["IJT_WEB_TEST_RESULTS_DIR"] == str(
@@ -2045,17 +2056,21 @@ def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
         _runner.WEB_CLIENT_E2E_FEATURE_WORKERS
     )
     assert calls[4]["timeout"] == _runner.WEB_CLIENT_E2E_FEATURES_TIMEOUT
+    assert calls[5]["timeout"] == _runner.WEB_CLIENT_E2E_REGRESSION_TIMEOUT
     assert calls[6]["extra_env"]["IJT_WEB_TEST_RESULTS_DIR"] == str(
+        _runner.WEB_CLIENT_RESULTS_DIR / "docker-unit"
+    )
+    assert calls[6]["timeout"] == _runner.DOCKER_BUILD_TIMEOUT + 1200
+    assert calls[7]["extra_env"]["IJT_WEB_TEST_RESULTS_DIR"] == str(
         _runner.WEB_CLIENT_RESULTS_DIR / "docker-smoke"
     )
-    assert calls[6]["extra_env"]["WEB_CLIENT_HTTP_PORT"] == str(
+    assert calls[7]["extra_env"]["WEB_CLIENT_HTTP_PORT"] == str(
         _runner.WEB_CLIENT_UI_PORT_DOCKER_SMOKE
     )
-    assert calls[6]["extra_env"]["WEB_CLIENT_WS_PORT"] == str(
+    assert calls[7]["extra_env"]["WEB_CLIENT_WS_PORT"] == str(
         _runner.WEB_CLIENT_WS_PORT_DOCKER_SMOKE
     )
-    assert calls[5]["timeout"] == _runner.WEB_CLIENT_E2E_REGRESSION_TIMEOUT
-    assert calls[6]["timeout"] == _runner.DOCKER_BUILD_TIMEOUT + 180
+    assert calls[7]["timeout"] == _runner.DOCKER_BUILD_TIMEOUT + 180
 
 
 def test_webclient_compatibility_smoke_is_opt_in_suite(monkeypatch) -> None:

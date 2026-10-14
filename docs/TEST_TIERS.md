@@ -226,8 +226,12 @@ run their live/integration tests in parallel without port conflicts.
 > Web Client live validation is split by test type: direct Python OPC UA,
 > Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke,
 > Playwright features, and Playwright regression each run as separate root
-> suites with their own service ports. Web Client Docker build/readiness stays
-> in the separate `web-client-docker-smoke` suite.
+> suites with their own service ports. Web Client Docker coverage is split:
+> - `web-client-docker-unit` — build `--target test`, run **in-image** Python
+>   unit (`-m "not checkout_hygiene"`) **and** vitest (System Tests /
+>   `webclient-docker` + CI `docker-smoke` parity). Host Phase 1 cannot see
+>   vendored `/app/scripts/*` and must not be treated as Docker packaging proof.
+> - `web-client-docker-smoke` — production image compose HTTP/WS readiness only.
 > GitHub integration runs that same local root-runner suite matrix instead of
 > a separate raw pytest-only Web integration command. The non-browser Web live
 > suites stay on GitHub-hosted Windows runners. Every `web-client-e2e-*`

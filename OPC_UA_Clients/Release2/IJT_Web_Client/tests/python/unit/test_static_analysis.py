@@ -24,13 +24,25 @@ _SRC_PYTHON = _PROJECT_ROOT / "src" / "python"
 
 _SKIP_DIRS = {"__pycache__", "node_modules", ".git", ".state"}
 
-# Files vendored into the Docker test image from outside the Web Client tree.
-# These are owned and tested by their canonical location (repo-root
-# ``scripts/`` and ``tests/``) and must not be re-analyzed under the Web
-# Client's project-scoped static-analysis sweep. Outside Docker the
-# Web Client _PROJECT_ROOT does not contain ``scripts/ijt_live_readiness.py``
-# at all, so this exclusion is a no-op there.
-_VENDORED_PATHS: tuple[Path, ...] = (_PROJECT_ROOT / "scripts" / "ijt_live_readiness.py",)
+# Files vendored into the Docker test/base image from outside the Web Client
+# tree (Dockerfile COPY of repo-root ``scripts/*``). Owned and tested at their
+# canonical repo-root location; must not be re-analyzed under the Web Client's
+# project-scoped static-analysis sweep (e.g. ``YAMLLINT_VERSION`` in
+# ``tool_bootstrap`` is consumed by root/Server lockstep, not Web Client).
+# Outside Docker these paths are usually absent under Web Client ``scripts/``,
+# so the exclusion is a no-op on the host.
+_VENDORED_SHARED_SCRIPT_NAMES: frozenset[str] = frozenset(
+    {
+        "ijt_live_readiness.py",
+        "opcua_session_policy.py",
+        "opcua_session_policy_loader.py",
+        "simulator_extract.py",
+        "tool_bootstrap.py",
+    }
+)
+_VENDORED_PATHS: tuple[Path, ...] = tuple(
+    _PROJECT_ROOT / "scripts" / name for name in sorted(_VENDORED_SHARED_SCRIPT_NAMES)
+)
 
 
 def _all_py_files(root: Path) -> list[Path]:
@@ -41,6 +53,28 @@ def _all_py_files(root: Path) -> list[Path]:
         return part in _SKIP_DIRS or part.startswith(".venv") or part.startswith("venv")
 
     return [f for f in root.rglob("*.py") if not any(_skip(part) for part in f.parts) and f not in _VENDORED_PATHS]
+
+
+def test_vendored_shared_scripts_match_dockerfile_copy_inventory():
+    """Keep ``_VENDORED_SHARED_SCRIPT_NAMES`` lockstep with Dockerfile ``COPY scripts/*``."""
+    dockerfile = _PROJECT_ROOT / "Dockerfile"
+    text = dockerfile.read_text(encoding="utf-8")
+    joined = re.sub(r"\\[ \t]*\r?\n", " ", text)
+    copied: set[str] = set()
+    for line in joined.splitlines():
+        stripped = line.strip()
+        if not re.match(r"^COPY\b", stripped, re.IGNORECASE):
+            continue
+        tokens = [t for t in stripped.split()[1:] if not t.startswith("--")]
+        for token in tokens[:-1]:
+            if token.startswith("scripts/") and token.endswith(".py"):
+                copied.add(Path(token).name)
+    assert copied, "Dockerfile no longer COPYs scripts/*.py — update this contract"
+    assert copied == _VENDORED_SHARED_SCRIPT_NAMES, (
+        "Dockerfile COPY scripts inventory drifted from static-analysis vendored exclusion: "
+        f"only_in_dockerfile={sorted(copied - _VENDORED_SHARED_SCRIPT_NAMES)} "
+        f"only_in_exclusion={sorted(_VENDORED_SHARED_SCRIPT_NAMES - copied)}"
+    )
 
 
 def _tool_available(name: str) -> bool:

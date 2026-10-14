@@ -2555,9 +2555,9 @@ def _suite_webclient_live_e2e_regression() -> SuiteResult:
     )
 
 
-def _suite_webclient_docker_smoke() -> SuiteResult:
-    """Web Client container build/readiness smoke with an independent timeout."""
-    name = "web-client-docker-smoke"
+def _suite_webclient_docker_unit() -> SuiteResult:
+    """Web Client in-image pytest+vitest — System Tests ``webclient-docker`` parity."""
+    name = "web-client-docker-unit"
     docker = _find_cmd(["docker", "docker.exe"])
     if not docker:
         return SuiteResult(name, True, skipped=True, notes=["docker not in PATH"])
@@ -2570,8 +2570,34 @@ def _suite_webclient_docker_smoke() -> SuiteResult:
     return _delegate_to_runner(
         name=name,
         runner_dir=WEB_CLIENT_DIR,
-        phase_args=["--docker-only"],
-        label="webclient runner (docker-only)",
+        phase_args=["--docker-unit-only"],
+        label="webclient runner (docker-unit-only)",
+        extra_env={
+            "IJT_WEB_TEST_RESULTS_DIR": str(WEB_CLIENT_RESULTS_DIR / "docker-unit"),
+        },
+        timeout=DOCKER_BUILD_TIMEOUT + 1200,
+    )
+
+
+def _suite_webclient_docker_smoke() -> SuiteResult:
+    """Web Client container build/readiness smoke with an independent timeout."""
+    name = "web-client-docker-smoke"
+    docker = _find_cmd(["docker", "docker.exe"])
+    if not docker:
+        return SuiteResult(name, True, skipped=True, notes=["docker not in PATH"])
+    if not _docker_daemon_running(docker):
+        return SuiteResult(name, True, skipped=True, notes=["Docker daemon not running"])
+    linux_skip = _docker_linux_engine_skip_note(docker)
+    if linux_skip:
+        return SuiteResult(name, True, skipped=True, notes=[linux_skip])
+
+    # Smoke-only: unit is a separate suite (web-client-docker-unit) so packaging
+    # regressions fail independently of HTTP smoke in the root summary.
+    return _delegate_to_runner(
+        name=name,
+        runner_dir=WEB_CLIENT_DIR,
+        phase_args=["--docker-smoke-only"],
+        label="webclient runner (docker-smoke-only)",
         extra_env={
             "IJT_WEB_TEST_RESULTS_DIR": str(WEB_CLIENT_RESULTS_DIR / "docker-smoke"),
             "WEB_CLIENT_HTTP_PORT": str(WEB_CLIENT_UI_PORT_DOCKER_SMOKE),
@@ -2812,6 +2838,12 @@ SUITE_REGISTRY: dict[str, SuiteSpec] = {
         display_name="Web Client - Browser Regression Journey",
         group=SuiteGroup.PHASE2_WEB_LIVE,
         runner=_suite_webclient_live_e2e_regression,
+    ),
+    "web-client-docker-unit": SuiteSpec(
+        id="web-client-docker-unit",
+        display_name="Web Client - Docker In-Image Unit",
+        group=SuiteGroup.PHASE2_WEB_LIVE,
+        runner=_suite_webclient_docker_unit,
     ),
     "web-client-docker-smoke": SuiteSpec(
         id="web-client-docker-smoke",

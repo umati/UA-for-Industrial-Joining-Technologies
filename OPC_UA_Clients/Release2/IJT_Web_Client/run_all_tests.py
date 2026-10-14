@@ -20,8 +20,10 @@ Force flags (override auto-detection):
   --integration  force live OPC UA stage even if server unreachable
   --e2e          force Playwright E2E stage even if WS backend unreachable
   --all          force every optional stage
-  --docker-only  run only Docker smoke
-  --skip-docker  do not run Docker smoke
+  --docker-only  run Docker in-image unit + production smoke (System Tests parity)
+  --docker-unit-only  build --target test and run Python+JS unit inside the image
+  --docker-smoke-only  production image compose smoke only
+  --skip-docker  do not run Docker unit/smoke
   --python-opcua-only          root-runner target: direct OPC UA live tests
   --python-backend-only        root-runner target: WebSocket backend tests
   --python-lifecycle-only      root-runner target: WebSocket lifecycle tests
@@ -3288,9 +3290,145 @@ def _docker_skip_reason() -> str:
     return "Docker daemon not running — run: sudo systemctl start docker  (or: sudo service docker start)"
 
 
+# Keep lockstep with integration.yml webclient-docker and ci.yml docker-smoke
+# in-image steps (tests/test_docker_context_contract.py enforces).
+_DOCKER_UNIT_PYTEST_PATH = "tests/python/unit/"
+_DOCKER_UNIT_PYTEST_MARKER = "not checkout_hygiene"
+_DOCKER_UNIT_VITEST_CMD = (
+    "npx",
+    "vitest",
+    "run",
+    "--reporter=verbose",
+    "--reporter=junit",
+    "--outputFile.junit=/out/vitest.xml",
+)
+
+
+def _stage_docker_unit() -> StageResult:
+    """Build ``--target test`` and run Python + JS unit tests inside the image.
+
+    Mirrors System Tests ``webclient-docker`` (pytest + vitest) so host-only
+    ``web-client-static-*`` cannot green-pass packaging-only failures (e.g. unused
+    globals in vendored ``/app/scripts/*.py``).
+    """
+    _banner("STAGE 8a  Docker unit (build --target test + in-image pytest + vitest)")
+    t0 = time.monotonic()
+    _cleanup_caches(ROOT)
+    docker = shutil.which("docker") or shutil.which("docker.exe")
+    if not docker:
+        return StageResult("docker-unit", 0, skipped=True, notes=["docker not in PATH"])
+    linux_skip = _docker_linux_engine_skip_note(docker)
+    if linux_skip:
+        return StageResult("docker-unit", 0, skipped=True, notes=[linux_skip])
+
+    docker_lock = _REPO_ROOT / "tmp" / "docker-cli.lock"
+    lock_timeout = float(_DOCKER_BUILD_TIMEOUT + 1200)
+    try:
+        with preparation_lock(docker_lock, timeout=lock_timeout):
+            return _docker_unit_under_lock(docker, t0)
+    except RuntimeError as exc:
+        return StageResult(
+            "docker-unit",
+            1,
+            duration=time.monotonic() - t0,
+            notes=[f"docker CLI lock unavailable: {exc}"],
+        )
+
+
+def _docker_unit_under_lock(docker: str, t0: float) -> StageResult:
+    """Build/test-image path executed while holding the shared Docker CLI lock."""
+    image = "ijt_web_client:test"
+    dockerfile = ROOT.relative_to(_REPO_ROOT) / "Dockerfile"
+    build_env = {**os.environ, "DOCKER_BUILDKIT": "1"}
+    build_cmd = [
+        docker,
+        "build",
+        "--target",
+        "test",
+        "-t",
+        image,
+        "-f",
+        str(dockerfile),
+        ".",
+    ]
+    rc = _run_docker_cli_with_retry(
+        build_cmd,
+        label="docker build --target test (BuildKit)",
+        cwd=_REPO_ROOT,
+        env=build_env,
+        timeout=_DOCKER_BUILD_TIMEOUT,
+    )
+    if rc != 0:
+        return StageResult(
+            "docker-unit",
+            rc,
+            duration=time.monotonic() - t0,
+            notes=["docker build --target test failed"],
+        )
+
+    results_dir = _RESULTS_DIR / "docker-unit"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    out_mount = str(results_dir.resolve())
+    notes = [f"image={image}"]
+
+    # Match integration.yml / ci.yml webclient-docker pytest invocation.
+    run_pytest = [
+        docker,
+        "run",
+        "--rm",
+        "-e",
+        "IS_DOCKER=true",
+        "-v",
+        f"{out_mount}:/out",
+        image,
+        "python",
+        "-m",
+        "pytest",
+        _DOCKER_UNIT_PYTEST_PATH,
+        "-m",
+        _DOCKER_UNIT_PYTEST_MARKER,
+        "-q",
+        "--tb=short",
+        "--no-header",
+        "--junitxml=/out/pytest-unit.xml",
+    ]
+    rc = _run_docker_cli_with_retry(
+        run_pytest,
+        label="docker run pytest unit (test image)",
+        cwd=ROOT,
+        timeout=900,
+    )
+    notes.append("junit=pytest-unit.xml")
+    if rc != 0:
+        notes.append("in-image Python unit failed (System Tests / CI docker-smoke parity)")
+        return StageResult("docker-unit", rc, duration=time.monotonic() - t0, notes=notes)
+
+    run_vitest = [
+        docker,
+        "run",
+        "--rm",
+        "-e",
+        "IS_DOCKER=true",
+        "-v",
+        f"{out_mount}:/out",
+        image,
+        *_DOCKER_UNIT_VITEST_CMD,
+    ]
+    rc = _run_docker_cli_with_retry(
+        run_vitest,
+        label="docker run vitest (test image)",
+        cwd=ROOT,
+        timeout=900,
+    )
+    notes.append("junit=vitest.xml")
+    if rc != 0:
+        notes.append("in-image vitest failed (System Tests / CI docker-smoke parity)")
+    return StageResult("docker-unit", rc, duration=time.monotonic() - t0, notes=notes)
+
+
 def _stage_docker_smoke() -> StageResult:
     """Build the production image, start its immutable smoke stack, and verify readiness."""
-    _banner("STAGE 8  Docker smoke (build + compose up + readiness + down)")
+    _banner("STAGE 8b  Docker smoke (build + compose up + readiness + down)")
     t0 = time.monotonic()
     # Pytest on Windows can leave transient "pytest-cache-files-*" directories
     # that intermittently block Docker build context packing.
@@ -3520,6 +3658,7 @@ STAGES = [
     "playwright-regression",
     "playwright-compatibility-smoke",
     "playwright-e2e",
+    "docker-unit",
     "docker-smoke",
 ]
 
@@ -3537,6 +3676,10 @@ def _mode_name(args: argparse.Namespace, target_only: bool) -> str:
         return "performance-only"
     if args.phase2:
         return "phase2"
+    if args.docker_unit_only:
+        return "docker-unit-only"
+    if args.docker_smoke_only:
+        return "docker-smoke-only"
     if args.docker_only:
         return "docker-only"
     return "full"
@@ -3628,8 +3771,26 @@ def main() -> int:
         action="store_true",
         help="Defer JavaScript performance budgets to an external isolated runner",
     )
-    parser.add_argument("--docker-only", action="store_true", help="Docker smoke only — skip static/live/E2E stages")
-    parser.add_argument("--skip-docker", action="store_true", help="Skip Docker smoke even when Docker is available")
+    parser.add_argument(
+        "--docker-only",
+        action="store_true",
+        help="Docker in-image unit + production smoke only — skip static/live/E2E (System Tests parity)",
+    )
+    parser.add_argument(
+        "--docker-unit-only",
+        action="store_true",
+        help="Build --target test and run Python+JS unit inside the image only",
+    )
+    parser.add_argument(
+        "--docker-smoke-only",
+        action="store_true",
+        help="Production image compose smoke only (no in-image unit)",
+    )
+    parser.add_argument(
+        "--skip-docker",
+        action="store_true",
+        help="Skip Docker unit/smoke even when Docker is available",
+    )
     parser.add_argument("--python-opcua-only", action="store_true", help="Run only direct OPC UA Python live tests")
     parser.add_argument("--python-backend-only", action="store_true", help="Run only Python WebSocket backend tests")
     parser.add_argument(
@@ -3678,6 +3839,9 @@ def main() -> int:
     ]
     if sum(1 for flag in targeted_flags if flag) > 1:
         parser.error("choose only one targeted live-suite flag")
+    docker_mode_flags = [args.docker_only, args.docker_unit_only, args.docker_smoke_only]
+    if sum(1 for flag in docker_mode_flags if flag) > 1:
+        parser.error("choose only one of --docker-only / --docker-unit-only / --docker-smoke-only")
 
     if args.performance_only:
         conflicts = [
@@ -3691,6 +3855,8 @@ def main() -> int:
                 (args.phase1_js, "--phase1-js"),
                 (args.phase2, "--phase2"),
                 (args.docker_only, "--docker-only"),
+                (args.docker_unit_only, "--docker-unit-only"),
+                (args.docker_smoke_only, "--docker-smoke-only"),
                 (args.skip_performance, "--skip-performance"),
             )
             if enabled
@@ -3715,6 +3881,10 @@ def main() -> int:
             conflicts.append("--phase2")
         if args.docker_only:
             conflicts.append("--docker-only")
+        if args.docker_unit_only:
+            conflicts.append("--docker-unit-only")
+        if args.docker_smoke_only:
+            conflicts.append("--docker-smoke-only")
         if sum(1 for flag in phase1_lane_flags if flag) > 1:
             conflicts.append("--phase1-python/--phase1-js")
         if any(targeted_flags):
@@ -3741,7 +3911,7 @@ def main() -> int:
     run_e2e = args.e2e or args.all or args.phase2
     target_only = any(targeted_flags)
     mode = _mode_name(args, target_only)
-    skip_static = args.phase2 or args.docker_only or target_only
+    skip_static = args.phase2 or args.docker_only or args.docker_unit_only or args.docker_smoke_only or target_only
     phase1_only = args.phase1 or args.phase1_python or args.phase1_js
 
     python = Path(sys.executable)
@@ -3756,18 +3926,30 @@ def main() -> int:
 
     # Auto-detect optional stages when not explicitly requested
     # --phase1: force off all live/docker stages
+    run_docker_unit = False
+    run_docker_smoke = False
     if phase1_only:
         run_live = False
         run_e2e = False
-        run_docker = False
+    elif args.docker_unit_only:
+        run_live = False
+        run_e2e = False
+        run_docker_unit = not args.skip_docker
+    elif args.docker_smoke_only:
+        run_live = False
+        run_e2e = False
+        run_docker_smoke = not args.skip_docker
     elif args.docker_only:
         run_live = False
         run_e2e = False
-        run_docker = not args.skip_docker
+        run_docker_unit = not args.skip_docker
+        run_docker_smoke = not args.skip_docker
     else:
         run_live = run_live or opcua_up
         run_e2e = run_e2e or ws_up
         run_docker = (args.all or docker_up) and not args.skip_docker
+        run_docker_unit = run_docker
+        run_docker_smoke = run_docker
 
     _banner("IJT Web Client — Cross-Platform Test Runner")
     _info(f"Python  : {python}")
@@ -3937,7 +4119,8 @@ def main() -> int:
     _srv_port_open = False
     _srv_proc: subprocess.Popen | None = None
     try:
-        if not phase1_only and not args.docker_only:
+        docker_modes_only = args.docker_only or args.docker_unit_only or args.docker_smoke_only
+        if not phase1_only and not docker_modes_only:
             _srv_started, _srv_port_open, _srv_proc = _maybe_start_opcua_server()
             if run_live:
                 if _srv_port_open:
@@ -3974,7 +4157,7 @@ def main() -> int:
             _info("pyenv detected — multi-version testing available: pyenv local X.Y.Z && python run_all_tests.py")
 
         # ── Playwright (smoke always runs; E2E auto-detected or explicit) ─────────
-        if not phase1_only and not args.docker_only:
+        if not phase1_only and not docker_modes_only:
             pw_install = _stage_playwright_install()
             results.append(pw_install)
 
@@ -4019,10 +4202,16 @@ def main() -> int:
         if _srv_started:
             _stop_opcua_server(_srv_proc)
 
-    # ── Docker smoke (auto-detected; skipped if Docker unavailable) ───────────
-    if not phase1_only and run_docker:
+    # ── Docker unit + smoke (unit mirrors System Tests webclient-docker) ─────
+    if not phase1_only and run_docker_unit:
+        results.append(_stage_docker_unit())
+    elif not phase1_only and not args.docker_smoke_only:
+        _skip(f"docker-unit: {_docker_skip_reason()}")
+        results.append(StageResult("docker-unit", 0, skipped=True))
+
+    if not phase1_only and run_docker_smoke:
         results.append(_stage_docker_smoke())
-    elif not phase1_only:
+    elif not phase1_only and not args.docker_unit_only:
         _skip(f"docker-smoke: {_docker_skip_reason()}")
         results.append(StageResult("docker-smoke", 0, skipped=True))
 

@@ -17,6 +17,14 @@ export default defineConfig({
       'tests/js/unit/**/*.test.mjs',
       'src/javascripts/views/envelope/tests/unit/**/*.test.mjs'
     ],
+    // Requires private Envelope data/itbp.json; run only via
+    // `npm run test:unit:js:performance` (Phase 1b). Keep lockstep with
+    // package.json test:unit:js --exclude and Envelope vitest.config.mjs.
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'src/javascripts/views/envelope/tests/unit/automatic-stepwise-performance.test.mjs'
+    ],
     environment: 'node',
     silent: true,
     coverage: {

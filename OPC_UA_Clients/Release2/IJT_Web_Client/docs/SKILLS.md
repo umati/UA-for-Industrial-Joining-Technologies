@@ -149,7 +149,18 @@ python scripts/run_docker_tests.py
 
 # Docker live build+run test
 python scripts/run_docker_tests.py --live-docker
+
+# In-image unit (System Tests / CI docker-smoke parity) — NOT host Phase 1
+python run_all_tests.py --docker-unit-only
+
+# Production compose smoke only
+python run_all_tests.py --docker-smoke-only
 ```
+
+**Host vs Docker:** Phase 1 Python/JS unit runs on the host Web Client tree and
+does **not** see repo-root scripts vendored at `/app/scripts/` in the image.
+Use `--docker-unit-only` (or root suite `web-client-docker-unit`) before push
+whenever Dockerfile, root `.dockerignore`, or `scripts/` shared helpers change.
 
 For direct pytest commands, prepare the environment with the runner first. Use
 `.venv_test\Scripts\python.exe` on Windows or `.venv_test/bin/python` on Linux;
