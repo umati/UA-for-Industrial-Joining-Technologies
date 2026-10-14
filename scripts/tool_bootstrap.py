@@ -16,7 +16,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 # renovate: datasource=pypi depName=uv
-UV_VERSION = "0.13.0"
+UV_VERSION = "0.13.1"
 # Shared yamllint pin: Web Client dev group (pyproject/uv.lock), .pre-commit-config.yaml rev,
 # and the Server runner's bootstrap venv all use this exact version
 # (tests/test_shared_lint_tooling.py keeps them in lockstep).
