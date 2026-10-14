@@ -1991,6 +1991,29 @@ def test_csharp_security_x509_user_role_is_merged_after_tryadd() -> None:
     assert 'TryAdd("user1", User("user1", "password", ["SecurityAdmin"]' not in fixture
 
 
+def test_phase1_js_suites_forward_nested_vitest_worker_budget(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    def _fake_delegate_to_runner(**kwargs):
+        calls.append(kwargs)
+        return _runner.SuiteResult(kwargs["name"], True, 0.0)
+
+    monkeypatch.delenv("IJT_VITEST_MAX_WORKERS", raising=False)
+    monkeypatch.setattr(_runner, "_delegate_to_runner", _fake_delegate_to_runner)
+
+    assert _runner._suite_webclient_js_unit().ok
+    assert _runner._suite_node_unit().ok
+    assert len(calls) == 2
+    expected = str(_runner._default_vitest_max_workers())
+    assert calls[0]["extra_env"]["IJT_VITEST_MAX_WORKERS"] == expected
+    assert calls[1]["extra_env"]["IJT_VITEST_MAX_WORKERS"] == expected
+
+    calls.clear()
+    monkeypatch.setenv("IJT_VITEST_MAX_WORKERS", "3")
+    assert _runner._suite_webclient_js_unit().ok
+    assert calls[0]["extra_env"]["IJT_VITEST_MAX_WORKERS"] == "3"
+
+
 def test_webclient_live_suites_are_split_by_test_type(monkeypatch) -> None:
     calls: list[dict] = []
 

@@ -134,8 +134,9 @@ python run_all_tests.py
 # Python unit tests only (no server)
 python run_all_tests.py --phase1-python
 
-# JS unit only
+# JS unit only (vitest.config.mjs: 15s timeout, worker cap half-cores/max 8)
 npx vitest run
+# Under root parallel Phase 1a, root sets IJT_VITEST_MAX_WORKERS (cpu/4, max 8)
 
 # ESLint
 npx eslint src/javascripts config.js --config eslint.config.mjs --max-warnings 0
@@ -318,7 +319,10 @@ sim_node = client.get_node("ns=1;s=TighteningSystem/Simulations/SimulateResults"
   where a container must reach an OPC UA simulator running on the host
 - Production images omit developer-only npm packages; setup skips ESLint and neostandard version probes when `NODE_ENV=production`
 
-### Local smoke runner (`run_all_tests.py --docker-only`)
+### Local Docker runner (`--docker-only` / `--docker-unit-only` / `--docker-smoke-only`)
+- `--docker-unit-only` builds `--target test` and runs in-image pytest + vitest
+  (System Tests / CI parity). `--docker-smoke-only` is production compose
+  readiness only. `--docker-only` runs both.
 - `docker build` uses BuildKit's automatic local layer cache. Never add a bare
   `--cache-from ijt_web_client:latest`: BuildKit interprets it as a registry
   cache and may contact Docker Hub even when the image exists locally.
@@ -501,14 +505,19 @@ instead of guessing from wall-clock totals.
 Root Phase 2 invokes
 separate Web Client suites for Python OPC UA, Python WebSocket backend, Python
 WebSocket lifecycle, Playwright smoke, Playwright features, Playwright
-regression, and Docker smoke. Each live/browser suite owns its own OPC UA,
-WebSocket, and UI ports, and Docker smoke gets root-runner host ports 3008/8011
-plus a scoped Compose project, so failures are localized to one test type and
-service lifecycle.
-At the root-runner level, `web-client-docker-smoke` is prechecked like the server
+regression, Docker in-image unit (`web-client-docker-unit`), and production
+Docker smoke (`web-client-docker-smoke`). Each live/browser suite owns its own
+OPC UA, WebSocket, and UI ports; Docker smoke gets root-runner host ports
+3008/8011 plus a scoped Compose project, so failures are localized to one test
+type and service lifecycle.
+At the root-runner level, both Docker suites are prechecked like the server
 Docker smoke: missing Docker or a stopped daemon is reported as a skipped suite.
-Calling this Web runner directly with `--docker-only` remains an explicit Docker
-validation request and fails if Docker cannot run.
+Calling this Web runner directly with `--docker-only`, `--docker-unit-only`, or
+`--docker-smoke-only` remains an explicit Docker validation request and fails if
+Docker cannot run.
+Vitest defaults (see `vitest.config.mjs`): **15s** per-test / hook timeout;
+`maxWorkers` capped at half cores (max 8) standalone, or via
+`IJT_VITEST_MAX_WORKERS` when the root runner nests Phase 1a JS suites.
 The Playwright feature suite runs with `IJT_PLAYWRIGHT_FEATURE_WORKERS=4`
 locally and defaults to one feature worker per GitHub shard in CI. Each worker
 gets a dedicated WebSocket backend and OPC UA simulator by offsetting the base

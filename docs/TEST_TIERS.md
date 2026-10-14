@@ -283,7 +283,8 @@ run their live/integration tests in parallel without port conflicts.
 | Web Client Playwright features | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | `.venv_test` + Playwright | Feature specs with isolated backend/server worker pairs; CI shards default to one worker, local/manual runs keep the four-worker pool |
 | Web Client Playwright regression | OPC UA 40480 / WS 8010 / HTTP 3006 | `.venv_test` + Playwright | Regression spec with owned backend and UI ports |
 | Web Client — Browser Compatibility Smoke | OPC UA 40468 / WS 8004 / HTTP 3007 | `.venv_test` + Playwright + real browser channel | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
-| Web Client Docker smoke | Standalone HTTP 3000 / WS 8001; root runner HTTP 3008 / WS 8011 | Docker | Builds the Web Client production image through `--docker-only`; root runner gives it isolated host ports and a scoped Compose project so it can run alongside live/browser suites; root runner skips when Docker is unavailable |
+| Web Client Docker unit | Docker `--target test` (no host ports) | Docker | Root suite `web-client-docker-unit` / Web `--docker-unit-only`: in-image pytest + vitest (System Tests / CI `docker-smoke` parity); skips when Docker is unavailable |
+| Web Client Docker smoke | Standalone HTTP 3000 / WS 8001; root runner HTTP 3008 / WS 8011 | Docker | Builds the Web Client production image (`--docker-smoke-only` / root `web-client-docker-smoke`); root runner gives it isolated host ports and a scoped Compose project so it can run alongside live/browser suites; root runner skips when Docker is unavailable |
 | IJT_Node_Client    | **40451** (fixed) | N/A (Node) | **Release 1 legacy** — server port is hardcoded, dynamic isolation not supported |
 | Server smoke/native default | 40451  | —            | Built-in default (from `server_configuration.json`); root runner Phase 2 validates this package path |
 | Server Linux package smoke | 40465  | Docker       | Builds the Docker image from the Linux ZIP package and runs `smoke_test.py` |
@@ -292,7 +293,9 @@ The root runner runs Phase 1a and isolated Phase 1b to completion before startin
 Phase 2. The Release 1 Node Client is included only in Phase 1a (`--phase1`
 delegated runner), so the
 default root run does not overlap Node Client activity with `server-smoke` on
-port 40451.
+port 40451. Web/Node vitest under Phase 1a receive `IJT_VITEST_MAX_WORKERS`
+(default `max(1, min(8, cpu_count//4))`) plus a 15s per-test timeout so nested
+parallelism does not spawn one worker per file and flake on loaded hosts.
 
 Phase 1b is the private Envelope performance lane only; it is not a general Web
 Client workload label.

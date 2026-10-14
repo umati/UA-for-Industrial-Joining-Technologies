@@ -46,6 +46,10 @@ Environment variables (all optional):
                          so multiple shards can co-exist in the same artifact.
   IJT_PLAYWRIGHT_FEATURE_TIMEOUT
                          feature-suite inner timeout in seconds (default: 600)
+  IJT_VITEST_MAX_WORKERS
+                         Cap vitest workers (also honored by vitest.config.mjs).
+                         Root parallel Phase 1a sets a nested budget; standalone
+                         defaults to half cores (max 8) in vitest.config.mjs.
   IJT_DOCKER_TIMEOUT    seconds to wait for Docker HTTP readiness (default: 90)
   IJT_DOCKER_BUILD_TIMEOUT
                          seconds to wait for Docker image build (default: 1200)
@@ -1696,6 +1700,20 @@ def _stage_js_lint() -> StageResult:
     return StageResult("js-lint", overall_rc, duration=time.monotonic() - t0, notes=notes)
 
 
+def _vitest_max_workers_cli_args() -> list[str]:
+    """Pass ``--maxWorkers`` when ``IJT_VITEST_MAX_WORKERS`` is set (root Phase 1a)."""
+    raw = os.getenv("IJT_VITEST_MAX_WORKERS")
+    if raw is None or not raw.strip():
+        return []
+    try:
+        workers = int(raw.strip())
+    except ValueError:
+        return []
+    if workers < 1:
+        return []
+    return [f"--maxWorkers={workers}"]
+
+
 def _stage_js_unit() -> StageResult:
     _banner("STAGE 3  JavaScript unit tests (vitest)")
     t0 = time.monotonic()
@@ -1716,6 +1734,9 @@ def _stage_js_unit() -> StageResult:
     has_coverage = (ROOT / "node_modules" / "@vitest" / "coverage-v8").exists() or (
         ROOT / "node_modules" / "@vitest" / "coverage-istanbul"
     ).exists()
+    worker_args = _vitest_max_workers_cli_args()
+    if worker_args:
+        notes.append(worker_args[0])
 
     if npx and has_coverage:
         results_dir.mkdir(parents=True, exist_ok=True)
@@ -1734,13 +1755,17 @@ def _stage_js_unit() -> StageResult:
                 "--coverage.reporter=cobertura",
                 # "Lines : N%" — the gated metric; the root runner shows it in its summary
                 "--coverage.reporter=text-summary",
+                *worker_args,
             ],
             label="vitest --coverage",
         )
     else:
         if npx and not has_coverage:
             _skip("@vitest/coverage-v8 not installed — coverage skipped (npm install --save-dev @vitest/coverage-v8)")
-        rc = _run([npm, "run", "test:unit:js"], label="vitest")
+        cmd = [npm, "run", "test:unit:js"]
+        if worker_args:
+            cmd.extend(["--", *worker_args])
+        rc = _run(cmd, label="vitest")
     return StageResult("js-unit", rc, duration=time.monotonic() - t0, notes=notes)
 
 
@@ -3301,6 +3326,9 @@ _DOCKER_UNIT_VITEST_CMD = (
     "--reporter=verbose",
     "--reporter=junit",
     "--outputFile.junit=/out/vitest.xml",
+    # Image vitest.config.mjs also caps workers; keep an explicit ceiling for
+    # GHA hosts that otherwise spawn one worker per test file.
+    "--maxWorkers=4",
 )
 
 

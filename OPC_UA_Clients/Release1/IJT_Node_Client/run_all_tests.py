@@ -14,6 +14,7 @@ Phase 2 requires:
 
 Environment variables:
     SKIP_NPM_INSTALL=1   Skip `npm ci` (deps already installed)
+    IJT_VITEST_MAX_WORKERS  Cap vitest workers (root Phase 1a sets a nested budget)
 
 Flags:
     --no-audit           Skip npm audit (useful offline or slow networks)
@@ -440,6 +441,19 @@ def _step_npm_ci() -> StepResult:
     return StepResult(label, "PHASE 1", "PASS", "", dur)
 
 
+def _vitest_max_workers_cli_args() -> list[str]:
+    raw = os.getenv("IJT_VITEST_MAX_WORKERS")
+    if raw is None or not raw.strip():
+        return []
+    try:
+        workers = int(raw.strip())
+    except ValueError:
+        return []
+    if workers < 1:
+        return []
+    return [f"--maxWorkers={workers}"]
+
+
 def _step_vitest(results_dir: Path) -> StepResult:
     label = "Vitest (unit)"
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -459,6 +473,7 @@ def _step_vitest(results_dir: Path) -> StepResult:
             "--coverage.reporter=json",
             "--coverage.reporter=json-summary",
             f"--coverage.dir={coverage_dir}",
+            *_vitest_max_workers_cli_args(),
         ]
     )
     dur = time.monotonic() - t0

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 let traceDisplayConstructorPromise = null
 
@@ -125,49 +125,47 @@ function makeTrace ({ xAxisShift = 0, steps }) {
 }
 
 describe('TraceDisplay fullscreen x-axis zoom', () => {
+  // onTestFinished still runs after timeouts — try/finally alone does not.
+  beforeEach(() => {
+    const restore = installFakeDom()
+    onTestFinished(() => {
+      restore()
+    })
+  })
+
   it('zooms the expanded trace screen to the latest trace x-range', async () => {
-    const restoreDom = installFakeDom()
-    try {
-      const TraceDisplay = await loadTraceDisplayConstructor()
-      const olderTrace = makeTrace({
-        steps: [{ angle: [-200, 400], time: [0, 1] }]
-      })
-      const latestTrace = makeTrace({
-        xAxisShift: 100,
-        steps: [
-          { angle: [100, 110], time: [0, 1] },
-          { angle: [120, 150], time: [2, 3] }
-        ]
-      })
-      const traceDisplay = makeTraceDisplay(TraceDisplay, [olderTrace, latestTrace])
+    const TraceDisplay = await loadTraceDisplayConstructor()
+    const olderTrace = makeTrace({
+      steps: [{ angle: [-200, 400], time: [0, 1] }]
+    })
+    const latestTrace = makeTrace({
+      xAxisShift: 100,
+      steps: [
+        { angle: [100, 110], time: [0, 1] },
+        { angle: [120, 150], time: [2, 3] }
+      ]
+    })
+    const traceDisplay = makeTraceDisplay(TraceDisplay, [olderTrace, latestTrace])
 
-      traceDisplay.enterFullscreen()
+    traceDisplay.enterFullscreen()
 
-      expect(traceDisplay.zoomCalls).toEqual([{ minX: 0, maxX: 50 }])
-      expect(traceDisplay.canvasCoverLayer.classList.contains('is-trace-fullscreen')).toBe(true)
-    } finally {
-      restoreDom()
-    }
+    expect(traceDisplay.zoomCalls).toEqual([{ minX: 0, maxX: 50 }])
+    expect(traceDisplay.canvasCoverLayer.classList.contains('is-trace-fullscreen')).toBe(true)
   })
 
   it('includes time offsets when expanding a torque-over-time trace screen', async () => {
-    const restoreDom = installFakeDom()
-    try {
-      const TraceDisplay = await loadTraceDisplayConstructor()
-      const latestTrace = makeTrace({
-        xAxisShift: 10,
-        steps: [
-          { angle: [0, 1], time: [0, 5], startTimeOffset: '20' },
-          { angle: [2, 3], time: [0, 7], startTimeOffset: '30' }
-        ]
-      })
-      const traceDisplay = makeTraceDisplay(TraceDisplay, [latestTrace], 'time')
+    const TraceDisplay = await loadTraceDisplayConstructor()
+    const latestTrace = makeTrace({
+      xAxisShift: 10,
+      steps: [
+        { angle: [0, 1], time: [0, 5], startTimeOffset: '20' },
+        { angle: [2, 3], time: [0, 7], startTimeOffset: '30' }
+      ]
+    })
+    const traceDisplay = makeTraceDisplay(TraceDisplay, [latestTrace], 'time')
 
-      traceDisplay.enterFullscreen()
+    traceDisplay.enterFullscreen()
 
-      expect(traceDisplay.zoomCalls).toEqual([{ minX: 10, maxX: 27 }])
-    } finally {
-      restoreDom()
-    }
+    expect(traceDisplay.zoomCalls).toEqual([{ minX: 10, maxX: 27 }])
   })
 })

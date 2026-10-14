@@ -343,6 +343,7 @@ jobs:
       - name: JS Unit Tests
         id: vitest
         continue-on-error: true
+        # vitest.config.mjs caps workers (half cores, max 8) and uses a 15s testTimeout.
         run: npx vitest run --coverage --reporter=verbose --reporter=junit --outputFile.junit=test-results/vitest.xml
 
       - name: ESLint
@@ -462,7 +463,7 @@ jobs:
             -v "$GITHUB_WORKSPACE/OPC_UA_Clients/Release2/IJT_Web_Client/test-results/docker-unit:/out" \
             ijt_web_client:test \
             npx vitest run --reporter=verbose --reporter=junit \
-              --outputFile.junit=/out/vitest.xml
+              --outputFile.junit=/out/vitest.xml --maxWorkers=4
 
       - name: Build Docker Image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0

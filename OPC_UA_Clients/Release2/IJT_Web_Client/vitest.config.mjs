@@ -1,8 +1,28 @@
 import { defineConfig } from 'vitest/config'
+import { cpus } from 'node:os'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
+
+/**
+ * Cap vitest workers so unit runs stay stable under a loaded host
+ * (root Phase 1a already runs many suites in parallel).
+ *
+ * Override with IJT_VITEST_MAX_WORKERS (root runner sets a nested budget).
+ * Standalone default: half cores, max 8.
+ */
+function resolveMaxWorkers () {
+  const raw = process.env.IJT_VITEST_MAX_WORKERS
+  if (raw != null && raw.trim() !== '') {
+    const parsed = Number.parseInt(raw, 10)
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      return parsed
+    }
+  }
+  const count = cpus()?.length || 4
+  return Math.max(1, Math.min(8, Math.floor(count / 2)))
+}
 
 export default defineConfig({
   resolve: {
@@ -27,6 +47,10 @@ export default defineConfig({
     ],
     environment: 'node',
     silent: true,
+    // Absorb import/scheduling stalls under parallel monorepo load (not slow assertions).
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
+    maxWorkers: resolveMaxWorkers(),
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'cobertura'],

@@ -81,7 +81,7 @@ All models extend `IJTBaseModel` which auto-maps constructor parameters to insta
 # Full suite (lint + unit tests + coverage)
 python run_all_tests.py
 
-# Unit tests only
+# Unit tests only (vitest.config.mjs: 15s timeout, worker cap half-cores/max 8)
 npx vitest run
 
 # With coverage
@@ -89,6 +89,8 @@ npx vitest run --coverage
 
 # Verbose output
 npx vitest --reporter=verbose
+
+# Under root parallel Phase 1a, root sets IJT_VITEST_MAX_WORKERS (cpu/4, max 8)
 
 # E2E tests (Playwright — requires running server + installed browsers)
 node index.js &                          # start Node Client HTTP server on :3000
@@ -101,6 +103,9 @@ npx playwright show-report               # open HTML report after a run
 
 Unit tests live in `tests/js/unit/` and use Vitest with jsdom.
 E2E tests live in `tests/e2e/` and use Playwright (requires running server).
+Worker/timeout policy matches the Web Client: 15s `testTimeout` / `hookTimeout`,
+and `maxWorkers` capped so nested root Phase 1a runs do not spawn one worker per
+file on loaded hosts.
 Vitest enforces a 95% line-coverage threshold for the unit suite; the runner also
 reports an advisory 95% ratchet floor and a 100% aspirational goal.
 

@@ -370,7 +370,7 @@ jobs:
           docker run --rm \
             -v "${{ github.workspace }}/test-results:/out" \
             ijt-web-client:test-ci \
-            npx vitest run --reporter=verbose --reporter=junit --outputFile.junit=/out/vitest.xml
+            npx vitest run --reporter=verbose --reporter=junit --outputFile.junit=/out/vitest.xml --maxWorkers=4
 
       - name: Upload Web Client Docker results
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2

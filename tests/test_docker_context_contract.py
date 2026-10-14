@@ -136,6 +136,7 @@ def test_ci_docker_smoke_builds_and_runs_test_target_before_production_smoke():
     vitest_run = steps[run_vitest]["run"]
     assert "vitest run" in vitest_run
     assert "vitest.xml" in vitest_run
+    assert "--maxWorkers=4" in vitest_run
 
     # Production smoke build stays: repo-root context, exactly one build-push-action step.
     production = steps[build_production]
@@ -170,6 +171,7 @@ def test_docker_unit_pytest_and_vitest_lockstep_across_local_ci_and_system_tests
     assert "tests/python/unit/" in ci_by_name["Run in-image Python unit tests"]
     assert "not checkout_hygiene" in ci_by_name["Run in-image Python unit tests"]
     assert "vitest run" in ci_by_name["Run in-image JS unit tests (vitest)"]
+    assert "--maxWorkers=4" in ci_by_name["Run in-image JS unit tests (vitest)"]
 
     integration = yaml.safe_load(
         (REPO_ROOT / ".github" / "workflows" / "integration.yml").read_text(encoding="utf-8")
@@ -181,10 +183,12 @@ def test_docker_unit_pytest_and_vitest_lockstep_across_local_ci_and_system_tests
     assert "tests/python/unit/" in int_runs
     assert "not checkout_hygiene" in int_runs
     assert "vitest run" in int_runs
+    assert "--maxWorkers=4" in int_runs
 
     root_runner = (REPO_ROOT / "run_all_tests.py").read_text(encoding="utf-8")
     assert '"web-client-docker-unit"' in root_runner
     assert '["--docker-unit-only"]' in root_runner
+    assert "--maxWorkers=4" in web_runner
 
 
 def test_ci_all_required_depends_on_and_aggregates_changes_result():

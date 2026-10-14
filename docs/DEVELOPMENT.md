@@ -206,7 +206,9 @@ env: the root runner still requires root CLIs present **and**
 
 **hadolint and yamllint are pinned and never soft-skipped on hosted CI hosts**
 (pre-commit + phase1 runners). Inside app containers they soft-skip; Docker image
-packaging is gated by `docker-smoke` in-image contracts.
+packaging is gated by CI `docker-smoke` / System Tests `webclient-docker` /
+local `web-client-docker-unit` (full in-image pytest + vitest) before production
+compose smoke.
 `scripts/ensure_hadolint.py` downloads the pinned hadolint v2.12.0 binary for
 your OS/arch (SHA-256 verified, cached in `.state/tools/`) and the Web Client
 and Server runners, pre-commit, and CI all use it with the shared repo-root
@@ -220,7 +222,7 @@ ROOT `.dockerignore` is the only ignore file (no Web Client `.dockerignore` /
 `Dockerfile.dockerignore`). Every `COPY scripts/<file>` in the Dockerfile needs a
 `!scripts/<file>` allowlist line there (`tests/test_docker_context_contract.py`,
 `docker-context-contract` pre-commit hook; CI also builds `--target test` and
-runs the in-image contracts before the production smoke build). The dev
+runs full in-image pytest + vitest before the production smoke build). The dev
 `docker-compose.yml` re-mounts repo `scripts/` read-only at `/app/scripts`
 because `.:/app` would otherwise hide the image's copy.
 
@@ -301,11 +303,15 @@ requires-python = ">=3.14"
 ```
 
 Setup and test scripts prepare the reviewed uv version automatically in an
-isolated `.state/tools/` environment when needed. Only Python and Node.js need
-manual installation for ordinary Python/Web development. Direct uv maintenance
-commands require an installed uv or the managed executable. Run client uv commands
-in the affected client directory; run root toolchain commands at the repository
-root. Use `uv sync --locked --no-dev` for client runtime-only installation. For
+isolated `.state/tools/` environment when needed. The pin lives in
+`scripts/tool_bootstrap.py` (`UV_VERSION`) and is mirrored into GHA
+`astral-sh/setup-uv` steps and Docker `ghcr.io/astral-sh/uv:` digests by the
+Renovate **uv toolchain** group — do not hardcode a different version in docs or
+workflows. Only Python and Node.js need manual installation for ordinary
+Python/Web development. Direct uv maintenance commands require an installed uv
+or the managed executable. Run client uv commands in the affected client
+directory; run root toolchain commands at the repository root. Use
+`uv sync --locked --no-dev` for client runtime-only installation. For
 development checks, use the client's `python run_all_tests.py --phase1` (Web:
 `--phase1-python`) rather than mixing test tools into the runtime environment.
 
@@ -405,9 +411,10 @@ skip project suites. A GHA Zizmor **FAIL** (sync failed, High/Critical findings,
 tool/parse error) is a real failure. For Python environment changes, also run
 `python .\run_all_tests.py --phase1 --ci-mode` to exercise the local CI environments.
 With Docker running, verify the Web production image using
-`python .\run_all_tests.py --suite web-client-docker-smoke` if the full run did not
-already execute it successfully. Linux smoke requires Docker's Linux-container
-mode; native Windows checks do not replace Linux verification.
+`python .\run_all_tests.py --suite web-client-docker-unit` (in-image pytest+vitest)
+and `--suite web-client-docker-smoke` (production compose readiness) if the full
+run did not already execute them successfully. Linux smoke requires Docker's
+Linux-container mode; native Windows checks do not replace Linux verification.
 
 Hooks can fix files. Review those edits, then rerun validation until it passes
 without additional fixes. Review both staged and unstaged changes before manually

@@ -68,6 +68,10 @@ Environment variables:
                         independently because it bundles OPC UA server boot,
                         WebSocket bridge, UI dev server, and a full Playwright
                         regression project run.
+  IJT_VITEST_MAX_WORKERS
+                        Cap vitest workers for Web/Node JS unit suites under
+                        parallel Phase 1a (default: max(1, min(8, cpu_count//4))).
+                        Prevents one-worker-per-file storms on loaded hosts.
 """
 
 from __future__ import annotations
@@ -311,6 +315,22 @@ WEB_CLIENT_E2E_FEATURE_WORKERS = _int_env(
     1 if os.getenv("CI") else 4,
 )
 WEB_CLIENT_RESULTS_DIR = WEB_CLIENT_DIR / "test-results"
+
+
+def _default_vitest_max_workers() -> int:
+    """Nested Phase 1a budget: leave headroom for sibling static suites."""
+    cpus = os.cpu_count() or 4
+    return max(1, min(8, cpus // 4))
+
+
+def _vitest_nested_env() -> dict[str, str]:
+    """Env forwarded to Web/Node runners so vitest.config.mjs caps workers."""
+    return {
+        "IJT_VITEST_MAX_WORKERS": str(
+            _int_env("IJT_VITEST_MAX_WORKERS", _default_vitest_max_workers())
+        )
+    }
+
 
 # Release 1 / Node client — legacy default, unchanged for backward compatibility.
 # Smoke / utility suites also use this port: they specifically test the server's
@@ -1700,6 +1720,7 @@ def _suite_webclient_js_unit() -> SuiteResult:
         runner_dir=WEB_CLIENT_DIR,
         phase_args=["--phase1-js", "--skip-performance"],
         label="webclient runner (phase1-js)",
+        extra_env=_vitest_nested_env(),
     )
 
 
@@ -1749,6 +1770,7 @@ def _suite_node_unit() -> SuiteResult:
         runner_dir=NODE_CLIENT_DIR,
         phase_args=["--phase1"],
         label="node runner (phase1)",
+        extra_env=_vitest_nested_env(),
     )
 
 

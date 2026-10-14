@@ -669,6 +669,35 @@ def test_js_unit_stage_writes_ci_junit_and_cobertura_coverage(monkeypatch, tmp_p
     assert captured["calls"][1]["cmd"][:3] == [runner.shutil.which("npm"), "run", "test:unit:js:performance"]
 
 
+def test_js_unit_stage_forwards_vitest_max_workers_cli_flag(monkeypatch, tmp_path):
+    runner = _load_runner()
+    captured = {"calls": []}
+    original_exists = Path.exists
+
+    monkeypatch.setenv("IJT_VITEST_MAX_WORKERS", "4")
+    monkeypatch.setattr(runner, "_banner", lambda title: None)
+    monkeypatch.setattr(runner.shutil, "which", lambda name: name)
+    monkeypatch.setattr(runner, "_RESULTS_DIR", tmp_path / "test-results")
+
+    def fake_exists(self):
+        if "node_modules" in str(self):
+            return True
+        return original_exists(self)
+
+    def fake_run(cmd, **kwargs):
+        captured["calls"].append({"cmd": cmd, "label": kwargs.get("label")})
+        return 0
+
+    monkeypatch.setattr(Path, "exists", fake_exists)
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    result = runner._stage_js_unit()
+
+    assert result.rc == 0
+    assert "--maxWorkers=4" in captured["calls"][0]["cmd"]
+    assert "maxWorkers=4" in " ".join(result.notes)
+
+
 def test_js_unit_stage_skips_private_performance_file_when_submodule_is_absent(monkeypatch, tmp_path):
     runner = _load_runner()
     calls = []

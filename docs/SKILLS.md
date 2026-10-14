@@ -245,7 +245,7 @@ The C# runner treats 95% as the advisory line-coverage floor for the non-generat
 - Ratchet floor: `_COVERAGE_THRESHOLD = 95.0` in `IJT_Node_Client/run_all_tests.py` — WARN-only, advisory/non-gated. Aspirational goal: 100%.
 - Coverage reporters: `text-summary`, `cobertura` — the cobertura XML is parsed by the CI report job
 
-**Web Client JS (Vitest)**: Threshold enforced at 95% via `vitest.config.mjs` `thresholds.lines`. Reporters: `text`, `lcov`, `cobertura`.
+**Web Client JS (Vitest)**: Threshold enforced at 95% via `vitest.config.mjs` `thresholds.lines`. Reporters: `text`, `lcov`, `cobertura`. Config also sets a **15s** `testTimeout` / `hookTimeout` and caps `maxWorkers` (standalone: half cores, max 8; under root Phase 1a: `IJT_VITEST_MAX_WORKERS`, default `cpu_count//4` max 8) so nested parallel static suites do not spawn one worker per file on loaded hosts. Node Client Vitest uses the same worker/timeout policy.
 
 #### Coverage maintenance policy
 
@@ -386,10 +386,10 @@ UA-for-Industrial-Joining-Technologies/
 
 ### IJT Web Client (`OPC_UA_Clients/Release2/IJT_Web_Client/`)
 - **Stack**: Python 3.14+, asyncua pinned via pyproject.toml / uv.lock, Node.js 24.15+, Vitest, ESLint, Docker (base digest-pinned)
-- **Tests**: Python unit (`tests/python/unit/`), JS unit (`src/javascripts/`), and split live suites for Python OPC UA, Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and Playwright regression. Each live/browser suite owns its own OPC UA/WS/UI ports; root Phase 2 runs Docker as a separate `web-client-docker-smoke` suite.
+- **Tests**: Python unit (`tests/python/unit/`), JS unit (`tests/js/unit/` + Envelope unit tests via Vitest), and split live suites for Python OPC UA, Python WebSocket backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and Playwright regression. Each live/browser suite owns its own OPC UA/WS/UI ports; root Phase 2 splits Docker into `web-client-docker-unit` (in-image pytest+vitest) and `web-client-docker-smoke` (production compose readiness).
 - **One test command**: `python run_all_tests.py`
 - **Simulator**: `setup_project.py` / runner call shared `scripts/simulator_extract.py` (every present ZIP → own folder). Full clone or `OPCUA_SIMULATOR_EXE` / `OPCUA_SERVER_URL`.
-- **Docker**: `python run_docker_setup.py` → Compose v2 + `down -v` (fresh `node_modules` volume); healthcheck = HTTP + real WebSocket upgrade (`docker_healthcheck.py`); root Phase 2 isolates Docker smoke on HTTP:3008 + WS:8011
+- **Docker**: `python run_docker_setup.py` → Compose v2 + `down -v` (fresh `node_modules` volume); healthcheck = HTTP + real WebSocket upgrade (`docker_healthcheck.py`); root Phase 2 runs `web-client-docker-unit` then isolates production smoke on HTTP:3008 + WS:8011
 - **Details**: read `OPC_UA_Clients/Release2/IJT_Web_Client/docs/SKILLS.md`
 
 ### IJT Console Client (`OPC_UA_Clients/Release2/IJT_Console_Client/`)
@@ -465,7 +465,7 @@ UA-for-Industrial-Joining-Technologies/
 | `web-client-js` | Web Client JavaScript Phase 1 runner: Vitest, ESLint, stylelint, npm audit, and timing artifacts |
 | `console-client` | Python unit tests (`tests/unit/`), Bandit, Ruff, mypy |
 | `node-client` | JS unit tests, ESLint, npm audit |
-| `docker-smoke` | Web Client Docker image smoke/readiness check |
+| `docker-smoke` | Web Client Docker: in-image pytest+vitest, then production image compose smoke |
 | `test-client` | pytest unit tests (`tests/unit/`) + Bandit, Ruff, mypy |
 | `csharp-unit` | dotnet restore (locked mode) + build (`-warnaserror`) + xUnit unit tests (`Category!=Live`, `--blame-hang 60s`) + format check (`dotnet format --verify-no-changes`) |
 | `csharp-vuln` | NuGet vulnerability scan (`--vulnerable --include-transitive`); fails on known CVEs |
@@ -509,6 +509,7 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `web-client-e2e-features` | local root runner + `integration.yml` | OPC UA 40469–40472 / WS 8005–8008 / HTTP 3005 | Playwright feature specs with owned browser/backend/server workers; GitHub Integration uses two Browser Features shards with one Playwright worker per shard inside the owned `ijt-browser-ci` image under `docker run --network=none`; local runs keep the four-worker pool |
 | `web-client-e2e-regression` | local root runner + `integration.yml` | OPC UA 40480 / WS 8010 / HTTP 3006 | Playwright regression spec; GitHub Integration runs it inside the owned `ijt-browser-ci` image under `docker run --network=none` |
 | Web Client — Browser Compatibility Smoke | Web runner + `web-client-compatibility-smoke.yml` | OPC UA 40468 / WS 8004 / HTTP 3007 | Scheduled/manual smoke for audited browser file surfaces; current matrix runs `windows-latest` / `msedge` |
+| `web-client-docker-unit` | local root runner + CI `docker-smoke` / System Tests `webclient-docker` | Docker `--target test` | In-image pytest (`not checkout_hygiene`) + vitest; catches packaging-only failures host Phase 1 cannot see |
 | `web-client-docker-smoke` | local root runner | HTTP 3008 / WS 8011 | Web Client production Docker image/readiness smoke with isolated host ports and scoped Compose project |
 | `int-testclient` | `integration.yml` | **40462** | Windows native EXE |
 | `live-webclient` | `integration.yml` | **40463/40466/40467** | Windows native EXE for non-browser Web Client live suites |
@@ -516,13 +517,13 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `live-console` | `integration.yml` | **40461** | Windows native EXE |
 | `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
 
-Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation exercises the native/default server package path on port 40451. When Docker is running, it also runs `server-linux-package-smoke` on port 40465 to build the Docker image from the Linux ZIP package and smoke-test it, plus `web-client-docker-smoke` for the Web Client production image/readiness check. Root-runner Docker smoke uses isolated host ports 3008/8011 and a scoped Compose project so it can run beside other Web Client suites. If Docker is unavailable, the root runner marks those Docker suites skipped instead of launching child runners that would fail on Docker daemon startup. Set `IJT_DOCKER_BUILD_TIMEOUT` for cold image builds or `IJT_DOCKER_COMPOSE_WAIT_TIMEOUT` for slow first container startup.
+Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation exercises the native/default server package path on port 40451. When Docker is running, it also runs `server-linux-package-smoke` on port 40465 to build the Docker image from the Linux ZIP package and smoke-test it, plus `web-client-docker-unit` (in-image pytest+vitest) and `web-client-docker-smoke` (production image readiness). Root-runner Docker smoke uses isolated host ports 3008/8011 and a scoped Compose project so it can run beside other Web Client suites. If Docker is unavailable, the root runner marks those Docker suites skipped instead of launching child runners that would fail on Docker daemon startup. Set `IJT_DOCKER_BUILD_TIMEOUT` for cold image builds or `IJT_DOCKER_COMPOSE_WAIT_TIMEOUT` for slow first container startup.
 The root runner splits Web Client live/browser validation by test type instead
 of using one broad Web Client live suite. Python OPC UA, Python WebSocket
 backend, Python WebSocket lifecycle, Playwright smoke, Playwright features, and
 Playwright regression are separate suites with owned service ports. Docker
-validation remains `web-client-docker-smoke` with its own timeout when Docker is
-running.
+coverage is split into `web-client-docker-unit` and `web-client-docker-smoke`
+when Docker is running.
 The Playwright feature suite can parallelize across four owned backend/server
 pairs for local/manual validation. Worker 0 uses the base ports, and workers
 1–3 use the next contiguous ports, so browser workers never share a WebSocket
