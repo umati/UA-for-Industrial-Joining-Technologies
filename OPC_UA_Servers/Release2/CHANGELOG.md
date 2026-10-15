@@ -1,5 +1,15 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-10-15
+
+1. Updated the Windows and Linux simulator packages to the 1.18.0 version series.
+2. Improved `RequestResults` input validation. The method now rejects non-finite floating-point values (such as NaN or infinity) for duration arguments with an explicit `BadInvalidArgument` status, preventing unexpected server behavior.
+3. Fixed asset I/O signal handling. Asset monitoring and signal methods now cleanly handle null and empty signal arrays, preventing client deserialization errors on assets without configured digital I/O.
+4. Improved server startup and shutdown reliability. Network sockets and background tasks are now released immediately upon shutdown, preventing "port already in use" errors when test scripts rapidly restart the simulator.
+5. Improved event and condition catalog stability. Event type definitions and conditions remain consistent across multi-station simulation setups without dropped notifications or missing event fields.
+6. Enhanced result data integrity. Step results, counter updates, and trace metadata consistently preserve mandatory identifiers and timestamps during concurrent client queries.
+7. Multiple bug fixes, stability improvements, and packaging optimizations.
+
 ## 2026-10-10
 
 1. Updated the Windows and Linux simulator packages to the 1.17.0 version series.

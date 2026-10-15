@@ -286,6 +286,22 @@ execution and OPC UA comparisons use the integer result constants and the distin
 joining-process classification enum. These strings are never sent as OPC UA
 Classification values.
 
+The requested-result event test subscribes on the Server object to
+`RequestedResultEventType` before calling `RequestResults`. It requires an actual
+event whose `Result` payload carries a ResultId and SequenceNumber in
+`ResultMetaData`; a variable update alone cannot pass this event-access test. When
+the server also exposes the `Result/ResultMetaData/ResultId` and `.../SequenceNumber`
+sub-variable event fields, they must equal the payload values. Sequence-filtered
+responses must fall
+within the requested range. When testing against the simulator (`is_simulator=True`),
+the simulator replays results with synthetic ResultIds within the requested sequence
+window. On a Controller, strict ResultId correlation is mandatory: production results
+must be replayed with their freshly captured ResultId; simulated results (`IsSimulated=true`)
+may use a synthetic ResultId or skip if the controller only replays non-simulated stored
+results. Variable-access
+tests remain separate. This does not change configured ranges or busy retries,
+and does not prove controller retention or restart recovery.
+
 Result classification describes the evidence emitted by the workflow, not the vendor name of the process:
 - For a compound process that produces multiple result layers (Job, Batch, or Sync), configure `workflows.max_start_invocations` (default: 6) and `workflows.consecutive_start_delay_seconds` (default: 0.25s).
 - An exact result-specific selector may authorize a cross-classification candidate, but metadata never proves result capability. Success requires a correlated completed result with the requested result classification.

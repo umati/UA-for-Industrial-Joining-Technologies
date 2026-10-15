@@ -51,7 +51,8 @@ import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
-from helpers.namespaces import BN, NS_APP, NS_IJT_BASE, NS_MACH_RESULT, ResultType
+from helpers.event_collector import EventCollector
+from helpers.namespaces import BN, NS_APP, NS_IJT_BASE, NS_MACH_RESULT, IJTTypes, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
 from helpers.result_polling import extract_result_id, poll_until_result_id_changes
 from helpers.result_validator import assert_result_data_valid
@@ -172,8 +173,8 @@ def _get_request_results_config() -> RequestResultsConfig:
     return cfg
 
 
-def _extract_sequence_number(result_data: Any) -> int | None:
-    """Extract integer SequenceNumber from result data if present across live formats."""
+def _extract_result_meta_field(result_data: Any, field_names: tuple[str, ...]) -> Any:
+    """Return an unwrapped ResultMetaData field from result data across live formats."""
     if result_data is None:
         return None
 
@@ -199,29 +200,82 @@ def _extract_sequence_number(result_data: Any) -> int | None:
     if meta is None:
         meta = payload  # In case ResultMetaData itself was passed
 
-    seq = None
-    for field_name in ("SequenceNumber", "sequence_number", "Sequence_Number"):
+    field = None
+    for field_name in field_names:
         if hasattr(meta, field_name):
-            seq = getattr(meta, field_name)
+            field = getattr(meta, field_name)
             break
         if hasattr(meta, "get"):
             val = meta.get(field_name)
             if val is not None:
-                seq = val
+                field = val
                 break
 
     for _ in range(3):
-        if hasattr(seq, "Value"):
-            seq = seq.Value
-        elif hasattr(seq, "value"):
-            seq = seq.value
-        elif hasattr(seq, "Body"):
-            seq = seq.Body
+        if hasattr(field, "Value"):
+            field = field.Value
+        elif hasattr(field, "value"):
+            field = field.value
+        elif hasattr(field, "Body"):
+            field = field.Body
 
+    return field
+
+
+def _extract_sequence_number(result_data: Any) -> int | None:
+    """Extract integer SequenceNumber from result data if present across live formats."""
+    seq = _extract_result_meta_field(result_data, ("SequenceNumber", "sequence_number", "Sequence_Number"))
     if isinstance(seq, bool) or not isinstance(seq, int):
         return None
 
     return seq if 0 < seq <= UINT64_MAX else None
+
+
+def _extract_is_simulated(result_data: Any) -> bool | None:
+    """Extract ResultMetaData.IsSimulated; None when absent or not boolean."""
+    value = _extract_result_meta_field(result_data, ("IsSimulated", "is_simulated"))
+    return value if isinstance(value, bool) else None
+
+
+def _event_meta_subvariable(event: Any, field_name: str) -> Any:
+    """Return the Result/ResultMetaData/<field> event field asyncua selects from the ResultType
+    sub-variables, or None when the server's type model does not expose it."""
+    value = getattr(event, f"Result/ResultMetaData/{field_name}", None)
+    return value.Value if isinstance(value, ua.Variant) else value
+
+
+def _resolve_requested_event_correlation_policy(
+    result_trigger: Any,
+    result_data: Any,
+) -> tuple[str | None, bool]:
+    """Determine (expected_result_id, require_simulated_replay) for RequestedResultEvent verification.
+
+    Policy:
+    - Simulator (result_trigger.is_simulator is True):
+      The simulator replays events with synthetic ResultIds within the requested
+      sequence range. ResultId matching is not required (expected_result_id=None),
+      and require_simulated_replay is False because simulator results may not report
+      IsSimulated=True.
+    - Controller (result_trigger.is_simulator is False):
+      - If the triggered result was simulated (ResultMetaData.IsSimulated is True):
+        expected_result_id=None, require_simulated_replay=True (skips if only
+        non-simulated results are replayed).
+      - For real controller results (production):
+        Strict ResultId correlation is mandatory. Rejection of missing/empty IDs:
+        the triggered result MUST carry a non-empty ResultId.
+        expected_result_id=result_id, require_simulated_replay=False.
+    """
+    is_simulator = getattr(result_trigger, "is_simulator", False)
+    if is_simulator:
+        return None, False
+
+    triggered_is_simulated = _extract_is_simulated(result_data) is True
+    if triggered_is_simulated:
+        return None, True
+
+    expected_id = extract_result_id(result_data)
+    assert expected_id, "Triggered controller result has no ResultId for replay correlation"
+    return expected_id, False
 
 
 def _get_request_results_args(
@@ -264,10 +318,25 @@ async def _call_request_results(
         if before_attempt is not None:
             before_attempt()
         try:
-            return await asyncio.wait_for(
+            res = await asyncio.wait_for(
                 rm_node.call_method(rr_node.nodeid, *rr_args),
                 timeout=timeout_s,
             )
+            status_text = ""
+            if isinstance(res, (list, tuple)) and len(res) > 2:
+                msg = res[2]
+                status_text = str(getattr(msg, "Text", msg) or "").lower()
+            if attempt < max_retries - 1 and "already in progress" in status_text:
+                logger.info(
+                    "RequestResults returned busy/streaming status (%s); waiting %.1fs before retry %d/%d...",
+                    status_text,
+                    retry_delay_s,
+                    attempt + 1,
+                    max_retries,
+                )
+                await asyncio.sleep(retry_delay_s)
+                continue
+            return res
         except ua.UaError as exc:
             last_exc = exc
             exc_str = str(exc).lower()
@@ -310,6 +379,70 @@ async def _call_and_collect_requested_result(
             pytest.fail("RequestResults timed out")
         _assert_request_results_output(response, "RequestResults")
         return await buffer.collect_result(timeout_s)
+
+
+async def _collect_matching_requested_event(
+    collector: EventCollector,
+    event_type_id: ua.NodeId,
+    rr_args: tuple[ua.Variant, ...],
+    *,
+    expected_result_id: str | None,
+    timeout_s: float,
+    require_simulated_replay: bool = False,
+    expected_sequence: int | None = None,
+) -> Any:
+    """Require a requested event with coherent payload identity, not a variable update.
+
+    ``require_simulated_replay`` is set when a controller's triggered result was
+    simulated: a controller's RequestResults may only replay its stored non-simulated
+    results, in which case the test skips and requests a real joining trigger.
+
+    ``expected_sequence`` when provided requires the replayed event to match the
+    specific triggered sequence number, rejecting older replayed results (such as
+    N-1 when requesting an inclusive range) even on simulated targets where ResultId
+    correlation is synthetic.
+    """
+    deadline = asyncio.get_running_loop().time() + timeout_s
+    observed = []
+    non_simulated_replays = 0
+    while True:
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            break
+        events = await collector.collect(count=1, timeout_s=remaining)
+        if not events:
+            break
+        event = events[0]
+        result = getattr(event, "Result", None)
+        result_id = extract_result_id(result)
+        sequence = _extract_sequence_number(result)
+        observed.append((sequence, result_id))
+        if getattr(event, "EventType", None) != event_type_id:
+            continue
+        assert result_id and sequence is not None, "Requested event has no decoded payload identity"
+        event_result_id = _event_meta_subvariable(event, "ResultId")
+        if event_result_id is not None:
+            assert str(event_result_id) == result_id, "Requested event ResultId disagrees with its payload"
+        event_sequence = _event_meta_subvariable(event, "SequenceNumber")
+        if event_sequence is not None:
+            assert event_sequence == sequence, "Requested event sequence disagrees with its payload"
+        if rr_args[1].Value > 0 and not rr_args[0].Value <= sequence <= rr_args[1].Value:
+            continue
+        if expected_sequence is not None and sequence != expected_sequence:
+            continue
+        if expected_result_id is not None and result_id != expected_result_id:
+            continue
+        if require_simulated_replay and _extract_is_simulated(result) is not True:
+            non_simulated_replays += 1
+            continue
+        return event
+    if non_simulated_replays:
+        pytest.skip(
+            "Triggered result is simulated (IsSimulated=true) but RequestResults replayed only "
+            f"non-simulated results ({non_simulated_replays}); this server does not replay simulated "
+            "results. Use a real joining trigger to verify ResultId correlation."
+        )
+    pytest.fail(f"No matching RequestedResultEvent within {timeout_s}s; observed {observed!r}")
 
 
 # Default arguments for RequestResults: sequence_number strategy by default.
@@ -2014,7 +2147,7 @@ async def test_requested_result_variable_source_timestamp_is_set_after_request(
 async def test_request_results_event_received_with_required_fields(
     opcua_client, subscription_client, result_trigger, ns_indices
 ):
-    """RREA-1+RREA-2: RequestResults should populate RequestedResult variable or fire an event."""
+    """RREA-1+RREA-2: Require a requested event with consistent result identity."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
@@ -2029,19 +2162,25 @@ async def test_request_results_event_received_with_required_fields(
     if rr_node is None:
         pytest.fail("RequestResults method is missing although requested-result event access is enabled")
 
-    requested_var_node = await _find_requested_result_var(rm, ns_indices, ns_mr)
-    if requested_var_node is None:
-        _handle_missing_requested_result_variable(ns_indices)
-
     rr_args = _get_request_results_args(_data, single_result=True)
-    await _call_and_collect_requested_result(
-        rm,
-        rr_node,
-        rr_args,
-        subscription_client,
-        requested_var_node,
-        timeout_s=result_trigger.active_result_timeout_s,
-    )
+    expected_id, require_simulated = _resolve_requested_event_correlation_policy(result_trigger, _data)
+    event_type_id = ua.NodeId(IJTTypes.REQUESTED_RESULT_EVENT_TYPE, ns_ijt)
+    async with EventCollector(subscription_client) as collector:
+        await collector.subscribe(
+            subscription_client.nodes.server, subscription_client.get_node(event_type_id), _max_retries=1
+        )
+        response = await _call_request_results(rm, rr_node, rr_args, before_attempt=collector.discard_pending)
+        _assert_request_results_output(response, "RequestResults")
+        expected_sequence = _extract_sequence_number(_data)
+        await _collect_matching_requested_event(
+            collector,
+            event_type_id,
+            rr_args,
+            expected_result_id=expected_id,
+            timeout_s=result_trigger.active_result_timeout_s,
+            require_simulated_replay=require_simulated,
+            expected_sequence=expected_sequence,
+        )
 
 
 @pytest.mark.requires_cu(CU.REQUESTED_RESULT_EVENT_ACCESS)

@@ -141,3 +141,16 @@ def test_fetch_inventory_url_rejects_redirect(monkeypatch):
     monkeypatch.setattr("urllib.request.build_opener", fake_build_opener)
     with pytest.raises(URLError, match="redirect"):
         _fetch_inventory_url("https://example.invalid/inventory", token="secret")
+
+
+def test_port_appears_busy_when_socket_active():
+    import socket
+
+    from src.inventory import _port_appears_busy
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        port = sock.getsockname()[1]
+        assert _port_appears_busy(port) is True
+        assert preflight_http_port(port) == [f"Inventory HTTP port {port} on 127.0.0.1 appears already in use"]

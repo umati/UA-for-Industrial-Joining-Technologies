@@ -43,7 +43,9 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
-      'src/javascripts/views/envelope/tests/unit/automatic-stepwise-performance.test.mjs'
+      ...(process.argv.some((arg) => arg.includes('automatic-stepwise-performance'))
+        ? []
+        : ['src/javascripts/views/envelope/tests/unit/automatic-stepwise-performance.test.mjs'])
     ],
     environment: 'node',
     silent: true,

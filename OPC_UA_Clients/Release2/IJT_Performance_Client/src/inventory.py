@@ -218,19 +218,18 @@ def load_inventory(source: str | Path, *, token: str | None = None) -> FleetInve
 
 
 def _port_appears_busy(port: int) -> bool:
-    """Best-effort: connect to 127.0.0.1, then try exclusive bind on '' and 127.0.0.1 (no SO_REUSEADDR)."""
+    """Best-effort: connect to 127.0.0.1, then try exclusive bind on 127.0.0.1 (no SO_REUSEADDR)."""
     import socket
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.2)
         if sock.connect_ex(("127.0.0.1", port)) == 0:
             return True
-    for bind_host in ("", "127.0.0.1"):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            try:
-                sock.bind((bind_host, port))
-            except OSError:
-                return True
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            return True
     return False
 
 

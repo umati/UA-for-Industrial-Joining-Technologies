@@ -22,12 +22,222 @@ from specification_tests.test_result_access import (
     _assert_request_results_output,
     _call_get_latest_result,
     _call_request_results,
+    _collect_matching_requested_event,
+    _extract_is_simulated,
     _extract_sequence_number,
     _get_request_results_args,
     _get_request_results_config,
     _RequestedResultBuffer,
+    _resolve_requested_event_correlation_policy,
     _trigger_single_and_get_latest,
 )
+
+
+def _requested_event(sequence=42, result_id="EXPECTED", is_simulated=None, subvariables=True):
+    meta = SimpleNamespace(ResultId=result_id, SequenceNumber=sequence)
+    if is_simulated is not None:
+        meta.IsSimulated = is_simulated
+    event = SimpleNamespace(EventType=ua.NodeId(1035, 7), Result=SimpleNamespace(ResultMetaData=meta))
+    if subvariables:
+        # asyncua names ResultType sub-variable event fields by their browse path.
+        setattr(event, "Result/ResultMetaData/ResultId", result_id)
+        setattr(event, "Result/ResultMetaData/SequenceNumber", sequence)
+    return event
+
+
+def _single_result_args(sequence=42):
+    return _get_request_results_args(
+        SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=sequence)),
+        RequestResultsConfig(),
+        single_result=True,
+    )
+
+
+async def test_requested_event_skips_out_of_range_sequence():
+    collector = SimpleNamespace(
+        collect=AsyncMock(side_effect=[[_requested_event(99, "A")], [_requested_event(42, "B")]])
+    )
+    event = await _collect_matching_requested_event(
+        collector, ua.NodeId(1035, 7), _single_result_args(), expected_result_id=None, timeout_s=0.1
+    )
+    assert event.Result.ResultMetaData.SequenceNumber == 42
+    assert collector.collect.await_count == 2
+
+
+async def test_requested_event_rejects_previous_sequence_when_expected_sequence_specified():
+    """Regression test for Finding 4: Replay must not accept N-1 as proof of N.
+
+    When querying [41..42] for triggered sequence 42 with synthetic/simulated identity
+    (expected_result_id=None), sequence 41 (N-1) must be skipped, and sequence 42 (N)
+    must be matched and returned.
+    """
+    collector = SimpleNamespace(
+        collect=AsyncMock(
+            side_effect=[
+                [_requested_event(41, "SYNTHETIC_PREV")],
+                [_requested_event(42, "SYNTHETIC_TRIGGERED")],
+            ]
+        )
+    )
+    event = await _collect_matching_requested_event(
+        collector,
+        ua.NodeId(1035, 7),
+        _single_result_args(sequence=42),
+        expected_result_id=None,
+        timeout_s=0.1,
+        expected_sequence=42,
+    )
+    assert event.Result.ResultMetaData.SequenceNumber == 42
+    assert event.Result.ResultMetaData.ResultId == "SYNTHETIC_TRIGGERED"
+    assert collector.collect.await_count == 2
+
+
+async def test_requested_event_fails_when_only_previous_sequence_is_replayed():
+    """Regression test for Finding 4: If only N-1 arrives, the collector must fail rather than accept it."""
+    collector = SimpleNamespace(collect=AsyncMock(side_effect=[[_requested_event(41, "SYNTHETIC_PREV")], []]))
+    with pytest.raises(pytest.fail.Exception, match="No matching RequestedResultEvent"):
+        await _collect_matching_requested_event(
+            collector,
+            ua.NodeId(1035, 7),
+            _single_result_args(sequence=42),
+            expected_result_id=None,
+            timeout_s=0.1,
+            expected_sequence=42,
+        )
+
+
+async def test_requested_event_simulated_trigger_accepts_simulated_replay():
+    collector = SimpleNamespace(
+        collect=AsyncMock(side_effect=[[_requested_event(42, "REAL", False)], [_requested_event(42, "SYN", True)]])
+    )
+    event = await _collect_matching_requested_event(
+        collector,
+        ua.NodeId(1035, 7),
+        _single_result_args(),
+        expected_result_id=None,
+        timeout_s=0.1,
+        require_simulated_replay=True,
+    )
+    assert event.Result.ResultMetaData.ResultId == "SYN"
+
+
+async def test_requested_event_simulated_trigger_skips_when_only_real_results_replayed():
+    collector = SimpleNamespace(collect=AsyncMock(side_effect=[[_requested_event(42, "REAL", False)], []]))
+    with pytest.raises(pytest.skip.Exception, match="does not replay simulated results"):
+        await _collect_matching_requested_event(
+            collector,
+            ua.NodeId(1035, 7),
+            _single_result_args(),
+            expected_result_id=None,
+            timeout_s=0.1,
+            require_simulated_replay=True,
+        )
+
+
+@pytest.mark.parametrize(
+    ("meta", "expected"),
+    [({"IsSimulated": True}, True), ({"IsSimulated": False}, False), ({}, None), ({"IsSimulated": 1}, None)],
+)
+def test_extract_is_simulated(meta, expected):
+    assert _extract_is_simulated({"ResultMetaData": meta}) is expected
+    assert _extract_is_simulated(None) is None
+
+
+async def test_requested_event_skips_unrelated_identity_and_matches_controller_result():
+    collector = SimpleNamespace(collect=AsyncMock(side_effect=[[_requested_event(41, "OTHER")], [_requested_event()]]))
+    args = _get_request_results_args(
+        SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=42)), RequestResultsConfig(), single_result=True
+    )
+    event = await _collect_matching_requested_event(
+        collector, ua.NodeId(1035, 7), args, expected_result_id="EXPECTED", timeout_s=0.1
+    )
+    assert event.Result.ResultMetaData.ResultId == "EXPECTED"
+    assert collector.collect.await_count == 2
+
+
+@pytest.mark.parametrize("field", ["ResultId", "SequenceNumber"])
+async def test_requested_event_rejects_inconsistent_payload(field):
+    event = _requested_event()
+    setattr(event, f"Result/ResultMetaData/{field}", "WRONG" if field == "ResultId" else 41)
+    collector = SimpleNamespace(collect=AsyncMock(return_value=[event]))
+    with pytest.raises(AssertionError, match="disagrees"):
+        await _collect_matching_requested_event(
+            collector, ua.NodeId(1035, 7), _get_request_results_args(), expected_result_id=None, timeout_s=0.1
+        )
+
+
+async def test_requested_event_without_metadata_subvariables_matches_on_payload():
+    event = _requested_event(subvariables=False)
+    collector = SimpleNamespace(collect=AsyncMock(return_value=[event]))
+    assert (
+        await _collect_matching_requested_event(
+            collector, ua.NodeId(1035, 7), _get_request_results_args(), expected_result_id="EXPECTED", timeout_s=0.1
+        )
+        is event
+    )
+
+
+async def test_requested_event_missing_delivery_fails():
+    collector = SimpleNamespace(collect=AsyncMock(return_value=[]))
+    with pytest.raises(pytest.fail.Exception, match="No matching RequestedResultEvent"):
+        await _collect_matching_requested_event(
+            collector, ua.NodeId(1035, 7), _get_request_results_args(), expected_result_id=None, timeout_s=0.1
+        )
+
+
+async def test_requested_event_accepts_synthetic_identity_within_requested_range():
+    event = _requested_event(42, "SYNTHETIC")
+    collector = SimpleNamespace(collect=AsyncMock(return_value=[event]))
+    assert (
+        await _collect_matching_requested_event(
+            collector, ua.NodeId(1035, 7), _get_request_results_args(), expected_result_id=None, timeout_s=0.1
+        )
+        is event
+    )
+
+
+@pytest.mark.parametrize(
+    "meta",
+    [
+        {"ResultId": "TRIGGERED_UUID", "IsSimulated": False},
+        {"ResultId": "TRIGGERED_UUID", "IsSimulated": True},
+        {"ResultId": "TRIGGERED_UUID"},
+    ],
+)
+def test_resolve_requested_event_correlation_policy_simulator(meta):
+    """Simulator trigger accepts synthetic replay identity regardless of IsSimulated value."""
+    sim_trigger = SimpleNamespace(is_simulator=True)
+    payload = SimpleNamespace(ResultMetaData=SimpleNamespace(**meta))
+    expected_id, require_simulated = _resolve_requested_event_correlation_policy(sim_trigger, payload)
+    assert expected_id is None
+    assert require_simulated is False
+
+
+def test_resolve_requested_event_correlation_policy_controller_production():
+    """Controller production result requires strict ResultId correlation and rejects missing IDs."""
+    ctrl_trigger = SimpleNamespace(is_simulator=False)
+
+    payload_valid = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId="CTRL_RESULT_123", IsSimulated=False))
+    expected_id, require_simulated = _resolve_requested_event_correlation_policy(ctrl_trigger, payload_valid)
+    assert expected_id == "CTRL_RESULT_123"
+    assert require_simulated is False
+
+    payload_empty = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId="", IsSimulated=False))
+    with pytest.raises(AssertionError, match="Triggered controller result has no ResultId"):
+        _resolve_requested_event_correlation_policy(ctrl_trigger, payload_empty)
+
+    payload_none = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId=None, IsSimulated=False))
+    with pytest.raises(AssertionError, match="Triggered controller result has no ResultId"):
+        _resolve_requested_event_correlation_policy(ctrl_trigger, payload_none)
+
+
+def test_resolve_requested_event_correlation_policy_controller_simulated():
+    """Controller simulated result enables simulated replay check."""
+    ctrl_trigger = SimpleNamespace(is_simulator=False)
+    payload_sim = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId="SIM_RESULT_123", IsSimulated=True))
+    expected_id, require_simulated = _resolve_requested_event_correlation_policy(ctrl_trigger, payload_sim)
+    assert expected_id is None
+    assert require_simulated is True
 
 
 @pytest.mark.parametrize("exc", [TimeoutError(), ua.UaStatusCodeError(ua.StatusCodes.BadTimeout)])
