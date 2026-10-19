@@ -6,6 +6,7 @@
 2. Decoupled status-check macro double-evaluations across result simulation, method handlers, and common system data components.
 3. Added null-pointer guards and status checks across asset creation, result processing, and event notifications.
 4. Enhanced server thread teardown safety and connection lifecycle recovery.
+5. Aligned battery `Capacity` physical quantity metadata with the IJT Base specification (`OTHER`, numeric value `0`) while retaining `Ah` engineering units (`4279624`), and verified `NominalVoltage` engineering units in volts (`5655636`).
 
 ## 2026-10-15
 

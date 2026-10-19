@@ -8,6 +8,8 @@ Covers official asset-management conformance units:
     PhysicalQuantity (MultiStateDiscreteType) must in turn expose EnumStrings via
     HasProperty so that conformance validators can discover its enum labels.
     Battery Capacity must use engineering unit Ah (UNECE 4279624), not A (UNECE 4279632).
+    Battery Capacity uses PhysicalQuantity OTHER (value 0), because the IJT
+    enumeration has no electric-charge entry.
     Sensor MeasuredValue must be navigable under the Sensor's Parameters node
     (no doubled path in the NodeId).
 
@@ -53,6 +55,8 @@ pytestmark = [pytest.mark.live, pytest.mark.conformance]
 # UNECE unit codes verified against IJT Base spec and common_type_utilities_t.h
 _EU_AMPERE_HOUR_ID = 4279624  # Ah — electric charge / capacity
 _EU_AMPERE_ID = 4279632  # A  — electric current (wrong for battery capacity)
+_EU_VOLT_ID = 5655636  # V — volt
+_PHYSICAL_QUANTITY_OTHER = 0
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +124,7 @@ async def _assert_enum_strings_accessible(pq_node, variable_label):
         f"If PhysicalQuantity was wired via HasProperty to the variable, this node will "
         f"be unreachable through proper OPC UA reference traversal."
     )
+    return enum_strings
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +187,22 @@ async def test_battery_nominal_voltage_enum_strings_accessible(batteries_folder,
     await _assert_enum_strings_accessible(pq, f"Battery '{_name}' NominalVoltage")
 
 
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY)
+async def test_battery_nominal_voltage_engineering_unit_is_volt(batteries_folder, ns_indices):
+    """Battery NominalVoltage must publish EngineeringUnits with the UNECE volt UnitId."""
+    _name, voltage, ns_ijt = await _get_joining_variable_and_ns(batteries_folder, BN.NOMINAL_VOLTAGE, ns_indices)
+    eu_node = await find_child_by_browse_name(voltage, "EngineeringUnits", 0)
+    if eu_node is None:
+        eu_node = await find_child_by_browse_name(voltage, "EngineeringUnits", ns_ijt)
+    assert eu_node is not None, f"Battery '{_name}' NominalVoltage has no EngineeringUnits node"
+
+    eu_value = await eu_node.read_value()
+    unit_id = getattr(eu_value, "UnitId", None)
+    assert unit_id == _EU_VOLT_ID, (
+        f"Battery '{_name}' NominalVoltage.EngineeringUnits.UnitId = {unit_id}, expected {_EU_VOLT_ID} (V, volt)"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Battery — Capacity
 # ---------------------------------------------------------------------------
@@ -202,6 +223,25 @@ async def test_battery_capacity_enum_strings_accessible(batteries_folder, ns_ind
     await _assert_enum_strings_accessible(pq, f"Battery '{_name}' Capacity")
 
 
+@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY)
+async def test_battery_capacity_physical_quantity_is_other(batteries_folder, ns_indices):
+    """Battery Capacity must publish PhysicalQuantity OTHER (value 0)."""
+    _name, capacity, ns_ijt = await _get_joining_variable_and_ns(batteries_folder, BN.CAPACITY, ns_indices)
+    label = f"Battery '{_name}' Capacity"
+    pq = await _assert_physical_quantity_via_has_component(capacity, label, ns_ijt)
+
+    quantity = await pq.read_value()
+    assert int(quantity) == _PHYSICAL_QUANTITY_OTHER, (
+        f"{label}.PhysicalQuantity = {quantity!r}, expected OTHER ({_PHYSICAL_QUANTITY_OTHER}) for Ah-based capacity"
+    )
+
+    enum_strings = await _assert_enum_strings_accessible(pq, label)
+    labels = await enum_strings.read_value()
+    assert labels, f"{label}.PhysicalQuantity.EnumStrings is empty"
+    other_label = getattr(labels[_PHYSICAL_QUANTITY_OTHER], "Text", None)
+    assert other_label == "OTHER", f"{label}.PhysicalQuantity.EnumStrings[0] = {other_label!r}, expected 'OTHER'"
+
+
 @pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY, CU.ENGINEERING_UNITS)
 async def test_battery_capacity_engineering_unit_is_ampere_hour(batteries_folder, ns_indices):
     """
@@ -212,9 +252,8 @@ async def test_battery_capacity_engineering_unit_is_ampere_hour(batteries_folder
     UNECE 4279632) was used as the default EU for Capacity instead of CAPACITY_UNIT
     (Ah, UNECE 4279624). This test is the authoritative regression gate for that bug.
 
-    Note: PhysicalQuantity enum value CURRENT (6) is intentionally correct for Capacity —
-    IJT Base spec has no separate CHARGE enum entry; CURRENT is the designated category
-    for Ah-based battery capacity per spec design.
+    The PhysicalQuantity is tested separately and must be OTHER because the
+    IJT Base enumeration has no electric-charge entry.
     """
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None or batteries_folder is None:
@@ -237,8 +276,7 @@ async def test_battery_capacity_engineering_unit_is_ampere_hour(batteries_folder
     eu_node = await find_child_by_browse_name(capacity, "EngineeringUnits", 0)
     if eu_node is None:
         eu_node = await find_child_by_browse_name(capacity, "EngineeringUnits", ns_ijt)
-    if eu_node is None:
-        pytest.skip(f"Battery '{_name}' Capacity has no EngineeringUnits node — EU check skipped")
+    assert eu_node is not None, f"Battery '{_name}' Capacity has no EngineeringUnits node"
 
     eu_value = await eu_node.read_value()
     unit_id = getattr(eu_value, "UnitId", None)
