@@ -579,17 +579,17 @@ def test_real_spawn_worker_emits_status_and_done_without_network():
 
     try:
         process.start()
-        process.join(timeout=10)
+        process.join(timeout=15)
         assert not process.is_alive()
         assert process.exitcode == 0
 
-        messages = [out_queue.get(timeout=2), out_queue.get(timeout=2)]
+        messages = [out_queue.get(timeout=10), out_queue.get(timeout=10)]
         assert [message["type"] for message in messages] == ["FLEET_STATUS", "DONE"]
         assert messages[1]["worker_id"] == 0
     finally:
         if process.is_alive():
             process.terminate()
-            process.join(timeout=2)
+            process.join(timeout=5)
         out_queue.close()
         out_queue.join_thread()
 

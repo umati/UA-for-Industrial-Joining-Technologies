@@ -1,5 +1,12 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-10-19
+
+1. Updated the Windows and Linux simulator packages with server hardening and stability improvements.
+2. Decoupled status-check macro double-evaluations across result simulation, method handlers, and common system data components.
+3. Added null-pointer guards and status checks across asset creation, result processing, and event notifications.
+4. Enhanced server thread teardown safety and connection lifecycle recovery.
+
 ## 2026-10-15
 
 1. Updated the Windows and Linux simulator packages to the 1.18.0 version series.
