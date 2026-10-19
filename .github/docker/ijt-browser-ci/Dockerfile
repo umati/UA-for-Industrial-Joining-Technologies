@@ -18,7 +18,7 @@
 #     copy Docker-Content-Digest into the matching ARG default.
 
 # Single source of truth for base digests (Renovate regex customManagers).
-ARG BASE_NODE_DIGEST=sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+ARG BASE_NODE_DIGEST=sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
 ARG BASE_PYTHON_DIGEST=sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83
 ARG BASE_UBUNTU_DIGEST=sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 
