@@ -3,7 +3,7 @@
 FROM nikolaik/python-nodejs:python3.14-nodejs24@sha256:78c060cbf2e787be0c2e9086568206d62a90d43463a4ab24407a3ec735d0faa3 AS base
 
 # Install uv pinned by image digest
-COPY --from=ghcr.io/astral-sh/uv:0.13.3@sha256:bee0a2a458fd956c5df7b8b4c5fed2257b0af34866e3da7b51db0be3acb375d1 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4@sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential git curl ca-certificates && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+COPY .uv-version /app/.uv-version
 COPY scripts/opcua_session_policy.py \
      scripts/opcua_session_policy_loader.py \
      scripts/tool_bootstrap.py \

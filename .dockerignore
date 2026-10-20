@@ -25,6 +25,8 @@ OPC_UA_Clients/Release2/*
 # tests/test_docker_context_contract.py and the Web unit test_docker.py enforce
 # this. This root file is the ONLY .dockerignore for that build (context is the
 # repo root; a Dockerfile-specific <Dockerfile>.dockerignore is deliberately absent).
+# .uv-version is required wherever tool_bootstrap.py is copied (import-time pin).
+!.uv-version
 !scripts/
 scripts/*
 !scripts/ijt_live_readiness.py

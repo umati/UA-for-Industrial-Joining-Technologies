@@ -178,10 +178,10 @@ still depend on the repository's directory depth. Adding those files to an
 arbitrary directory or setting `PYTHONPATH` alone is not a verified standalone
 deployment recipe.
 
-Setup/test launchers also use `scripts/tool_bootstrap.py` and repository-level
-test configuration; live tests may need simulator assets. Performance's fleet
-launcher needs simulator assets as well. These are distinct from runtime
-Python dependencies.
+Setup/test launchers also use `scripts/tool_bootstrap.py` (uv pin from repo-root
+`.uv-version`) and repository-level test configuration; live tests may need
+simulator assets. Performance's fleet launcher needs simulator assets as well.
+These are distinct from runtime Python dependencies.
 
 When extracting code into another system, inventory the imports and non-Python
 assets, adapt layout-dependent imports deliberately, and test connection,

@@ -613,6 +613,7 @@ def test_web_docker_image_vendors_shared_runtime_helpers() -> None:
     dockerfile = _read(WEB_CLIENT_DOCKERFILE)
 
     for filename in (
+        ".uv-version",
         "scripts/opcua_session_policy.py",
         "scripts/opcua_session_policy_loader.py",
         "scripts/tool_bootstrap.py",

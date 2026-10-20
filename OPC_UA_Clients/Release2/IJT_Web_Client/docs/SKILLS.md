@@ -217,11 +217,13 @@ and failed or cancelled attempts disconnect both sessions before retrying with
 fresh clients. Explicit endpoint termination is cancellation-safe so WebSocket
 closure cannot interrupt it between unsubscribe and session disconnect.
 Flattened Web Docker images must copy both shared session-policy modules, `tool_bootstrap.py`,
-and `simulator_extract.py` into `/app/scripts`; every `COPY scripts/<file>` needs a matching
-`!scripts/<file>` line in the ROOT `.dockerignore` (the only ignore file for this repo-root
-context — never add a Web Client `.dockerignore`). Runners load `simulator_extract` only via
-`tool_bootstrap.import_simulator_extract` (host soft-skip, Docker hard-fail). The dev
-`docker-compose.yml` re-mounts `../../../scripts:/app/scripts:ro` after `.:/app`.
+and `simulator_extract.py` into `/app/scripts`, plus repo-root `.uv-version` to `/app/.uv-version`
+(import-time uv pin for `tool_bootstrap`); every `COPY scripts/<file>` needs a matching
+`!scripts/<file>` line in the ROOT `.dockerignore`, and `!.uv-version` must remain allowlisted
+(the only ignore file for this repo-root context — never add a Web Client `.dockerignore`).
+Runners load `simulator_extract` only via `tool_bootstrap.import_simulator_extract` (host
+soft-skip, Docker hard-fail). The dev `docker-compose.yml` re-mounts
+`../../../scripts:/app/scripts:ro` after `.:/app`.
 
 The shared adapter preserves generated `Annotated[..., "AllowSubtypes"]`
 metadata, uses Variant encoding only for abstract numeric subtype fields such as

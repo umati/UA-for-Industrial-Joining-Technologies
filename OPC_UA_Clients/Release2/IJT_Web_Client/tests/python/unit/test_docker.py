@@ -189,6 +189,7 @@ class TestDockerfileInstructions:
         text = _DOCKERFILE.read_text(encoding="utf-8")
         test_stage = text.index("FROM base AS test")
         for filename in {
+            ".uv-version",
             "scripts/opcua_session_policy.py",
             "scripts/opcua_session_policy_loader.py",
             "scripts/tool_bootstrap.py",

@@ -47,6 +47,8 @@ def test_bash_workflow_command_file_redirects_are_quoted() -> None:
 
 
 def test_runner_jobs_provision_pinned_uv_before_execution() -> None:
+    pin = (REPO_ROOT / ".uv-version").read_text(encoding="utf-8").strip()
+    assert pin == UV_VERSION
     for workflow_name, job_name, run_step in (
         ("integration.yml", "live-webclient", "Run Web Client local live suite"),
         ("integration.yml", "console-client-opcua-security", "Run Console OPC UA security tests"),
@@ -66,11 +68,27 @@ def test_runner_jobs_provision_pinned_uv_before_execution() -> None:
         setup_index = next(
             index
             for index, step in enumerate(steps)
-            if _is_sha_pinned_action(step.get("uses"), "astral-sh/setup-uv")
+            if step.get("uses") == "$/.github/actions/setup-uv-pypi"
         )
         run_index = next(index for index, step in enumerate(steps) if step.get("name") == run_step)
         assert setup_index < run_index
-        assert steps[setup_index]["with"]["version"] == UV_VERSION
+
+
+def test_workflows_never_use_astral_setup_uv() -> None:
+    """Fail hard if astral-sh/setup-uv returns (PyPI channel race)."""
+    offenders: list[str] = []
+    for workflow_path in sorted(_WORKFLOWS_DIR.glob("*.yml")):
+        for line_number, line in enumerate(
+            workflow_path.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            if "astral-sh/setup-uv" in line:
+                offenders.append(f"{workflow_path.name}:{line_number}")
+            if "./.github/actions/setup-uv-pypi" in line:
+                offenders.append(f"{workflow_path.name}:{line_number}:use $/ not ./")
+    assert not offenders, (
+        "Use $/.github/actions/setup-uv-pypi (PyPI pin from .uv-version), not "
+        "astral-sh/setup-uv or ./ local refs: " + ", ".join(offenders)
+    )
 
 
 def test_sha_pinned_workflow_actions_use_exact_version_comments() -> None:
