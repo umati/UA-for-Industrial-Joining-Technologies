@@ -6,6 +6,14 @@ OPC UA IJT Server Simulator for the Industrial Joining Technologies (IJT) compan
 
 - **Author:** Mohit Agarwal — mohit.agarwal@atlascopco.com
 
+## System Requirements
+
+The simulator packages are precompiled standalone 64-bit binaries:
+
+- **Windows (`OPC_UA_IJT_Server_Simulator.zip`):** Microsoft Visual C++ 2015–2022 Redistributable (x64) (or latest)
+- **Linux (`OPC_UA_IJT_Server_Simulator_Linux.zip`):** `glibc` 2.31 or newer (Ubuntu 20.04+, RHEL 8+, Debian 11+)
+- **Docker (`docker-compose.yml`):** Docker Engine 20.10+ with Compose V2
+
 ## Quick Start
 
 ### Option 1 — Windows

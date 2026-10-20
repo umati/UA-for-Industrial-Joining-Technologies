@@ -1,5 +1,14 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-10-20
+
+1. Updated the Windows and Linux simulator packages with joint hardening, method notification updates, and stability improvements.
+2. Hardened `JointDesign` data type conversion so empty optional vectors (`JointDesignContent`, `JointComponentIdList`) are treated as omitted fields rather than returning an error.
+3. Improved `SendJoint`, `DeleteJoint`, and `SelectJoint` methods to validate asset and process handler prerequisites before modifying catalog or selection state, eliminating premature mutation and destructive pseudo-rollback.
+4. Refined `DeselectJoint` to clear global fallback selection only when no product selections remain.
+5. Hardened `EnableAsset` to reject assets missing an `Enabled` variable with an explicit status, while logging post-update notification failures without failing completed state updates.
+6. Refined `SelectJoiningProcess` to commit selection before notification emission and log notification failures without failing the completed method.
+
 ## 2026-10-19
 
 1. Updated the Windows and Linux simulator packages with server hardening and stability improvements.
