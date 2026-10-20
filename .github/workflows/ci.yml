@@ -117,9 +117,7 @@ jobs:
         with:
           python-version-file: ".python-version"
 
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
-        with:
-          version: "0.13.1"
+      - uses: $/.github/actions/setup-uv-pypi
 
       - name: Install hadolint (pinned binary — avoids a Docker Hub pull)
         # Single shared pin + SHA-256 in scripts/ensure_hadolint.py (also used by the
@@ -237,9 +235,7 @@ jobs:
         with:
           python-version-file: ".python-version"
 
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
-        with:
-          version: "0.13.1"
+      - uses: $/.github/actions/setup-uv-pypi
 
       - name: Install Python Dependencies
         run: |
@@ -748,9 +744,7 @@ jobs:
         with:
           python-version-file: ".python-version"
 
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
-        with:
-          version: "0.13.1"
+      - uses: $/.github/actions/setup-uv-pypi
 
       - name: Install Python Dependencies
         run: |
@@ -848,9 +842,7 @@ jobs:
         with:
           python-version-file: ".python-version"
 
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
-        with:
-          version: "0.13.1"
+      - uses: $/.github/actions/setup-uv-pypi
 
       - name: Install Python Dependencies
         run: |
@@ -1179,9 +1171,7 @@ jobs:
         with:
           python-version-file: ".python-version"
 
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
-        with:
-          version: "0.13.1"
+      - uses: $/.github/actions/setup-uv-pypi
 
       - name: Install pre-commit and root test dependencies
         run: |

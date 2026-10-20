@@ -15,8 +15,6 @@ import time
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
-# renovate: datasource=pypi depName=uv
-UV_VERSION = "0.13.1"
 # Shared yamllint pin: Web Client dev group (pyproject/uv.lock), .pre-commit-config.yaml rev,
 # and the Server runner's bootstrap venv all use this exact version
 # (tests/test_shared_lint_tooling.py keeps them in lockstep).
@@ -27,6 +25,22 @@ log = logging.getLogger(__name__)
 
 _DOCKERENV_MARKER = Path("/.dockerenv")
 _DOCKER_TRUTHY = frozenset({"1", "true", "yes"})
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_UV_VERSION_FILE = _REPO_ROOT / ".uv-version"
+
+
+def _load_uv_version() -> str:
+    """Single pin from repo-root ``.uv-version`` (Renovate + CI + local bootstrap)."""
+    try:
+        text = _UV_VERSION_FILE.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise RuntimeError(f"Missing uv pin file: {_UV_VERSION_FILE}") from exc
+    if not text or any(ch.isspace() for ch in text):
+        raise RuntimeError(f"Invalid uv pin in {_UV_VERSION_FILE!s}: {text!r}")
+    return text
+
+
+UV_VERSION = _load_uv_version()
 
 
 def running_in_docker() -> bool:

@@ -220,9 +220,11 @@ scanners (trivy, actionlint, …) stay optional locally; CI remains authoritativ
 **Docker build context.** The Web Client image builds from the repo root, so the
 ROOT `.dockerignore` is the only ignore file (no Web Client `.dockerignore` /
 `Dockerfile.dockerignore`). Every `COPY scripts/<file>` in the Dockerfile needs a
-`!scripts/<file>` allowlist line there (`tests/test_docker_context_contract.py`,
-`docker-context-contract` pre-commit hook; CI also builds `--target test` and
-runs full in-image pytest + vitest before the production smoke build). The dev
+`!scripts/<file>` allowlist line there, and `COPY .uv-version` needs `!.uv-version`
+(`tests/test_docker_context_contract.py`, `docker-context-contract` pre-commit
+hook; CI also builds `--target test` and runs full in-image pytest + vitest
+before the production smoke build). The image vendors `.uv-version` next to
+`tool_bootstrap.py` because that module reads the pin at import time. The dev
 `docker-compose.yml` re-mounts repo `scripts/` read-only at `/app/scripts`
 because `.:/app` would otherwise hide the image's copy.
 
@@ -302,16 +304,25 @@ locks for CVEs.
 requires-python = ">=3.14"
 ```
 
-Setup and test scripts prepare the reviewed uv version automatically in an
-isolated `.state/tools/` environment when needed. The pin lives in
-`scripts/tool_bootstrap.py` (`UV_VERSION`) and is mirrored into GHA
-`astral-sh/setup-uv` steps and Docker `ghcr.io/astral-sh/uv:` digests by the
-Renovate **uv toolchain** group — do not hardcode a different version in docs or
-workflows. Only Python and Node.js need manual installation for ordinary
-Python/Web development. Direct uv maintenance commands require an installed uv
-or the managed executable. Run client uv commands in the affected client
-directory; run root toolchain commands at the repository root. Use
-`uv sync --locked --no-dev` for client runtime-only installation. For
+**uv pin (single source of truth).** Repo-root `.uv-version` holds one semver
+(for example `0.13.4`). Consumers:
+
+| Consumer | How it gets uv |
+|---|---|
+| Local setup / test launchers | `scripts/tool_bootstrap.py` reads `.uv-version` and installs `uv==…` from **PyPI** into `.state/tools/` when needed |
+| GitHub Actions | `$/.github/actions/setup-uv-pypi` installs the same pin from **PyPI** (after `actions/setup-python`) |
+| Web / Browser CI Docker images | Digest-pinned `COPY --from=ghcr.io/astral-sh/uv:<version>@sha256:…` kept in the Renovate **uv toolchain** group with `.uv-version` |
+
+Renovate updates `.uv-version` (PyPI) and the Docker digests together; **manual
+merge only** (no automerge, no minimum release age — CI uses the same PyPI
+channel Renovate watches). Workflows must use `$/.github/actions/setup-uv-pypi`
+(GitHub self-repo syntax; required by zizmor). Do **not** use
+`astral-sh/setup-uv` or paste version strings into workflow `with:` blocks —
+contract tests fail the PR if those return. Only Python and Node.js need manual
+installation for ordinary Python/Web development. Direct uv maintenance commands
+require an installed uv or the managed executable. Run client uv commands in the
+affected client directory; run root toolchain commands at the repository root.
+Use `uv sync --locked --no-dev` for client runtime-only installation. For
 development checks, use the client's `python run_all_tests.py --phase1` (Web:
 `--phase1-python`) rather than mixing test tools into the runtime environment.
 

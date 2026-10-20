@@ -298,23 +298,33 @@ def test_no_legacy_requirements_in_release2_python_clients() -> None:
     assert not legacy_files, f"Legacy requirements files found: {legacy_files}"
 
 
-def test_renovate_groups_uv_toolchain_and_covers_workflows() -> None:
-    """uv updates must be grouped as an atomic toolchain across CLI, workflows, and Docker."""
+def test_renovate_groups_uv_toolchain_via_uv_version_ssot() -> None:
+    """uv updates must be grouped: .uv-version (PyPI) + Docker digests; no workflow pins."""
     renovate_config = _renovate()
     custom_managers = renovate_config.get("customManagers", [])
-    workflow_mgr = [
+    uv_ssot = [
         mgr
         for mgr in custom_managers
-        if any(".github/workflows" in pat for pat in mgr.get("managerFilePatterns", []))
+        if mgr.get("depNameTemplate") == "uv"
+        and any(".uv-version" in pat for pat in mgr.get("managerFilePatterns", []))
     ]
-    assert workflow_mgr, "renovate.json must define a custom manager covering .github/workflows"
-    assert workflow_mgr[0].get("depNameTemplate") == "uv"
+    assert len(uv_ssot) == 1, "renovate.json must manage uv only via .uv-version"
+    assert uv_ssot[0].get("datasourceTemplate") == "pypi"
+    workflow_uv = [
+        mgr
+        for mgr in custom_managers
+        if mgr.get("depNameTemplate") == "uv"
+        and any(".github/workflows" in pat for pat in mgr.get("managerFilePatterns", []))
+    ]
+    assert not workflow_uv, "workflow uv version regex must be removed (SSoT is .uv-version)"
 
     toolchain_rules = [rule for rule in _rules() if rule.get("groupSlug") == "uv-toolchain"]
     assert toolchain_rules, "renovate.json must define a 'uv-toolchain' grouping rule"
     rule = toolchain_rules[0]
     matched = set(rule.get("matchPackageNames", []))
     assert {"uv", "ghcr.io/astral-sh/uv"}.issubset(matched)
+    assert rule.get("automerge") is False
+    assert "minimumReleaseAge" not in rule
 
 
 def test_renovate_holds_opc_foundation_major_updates() -> None:

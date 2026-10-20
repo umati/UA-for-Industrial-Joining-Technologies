@@ -377,10 +377,12 @@ The Web production Docker image uses `/opt/ijt_venv` so an `/app` bind mount can
 hide its runtime packages.
 
 Tool preparation is separate from client runtime/test packages:
-`.state/tools/` holds reviewed uv installations, root `root-tests-py<major><minor>`
-and `precommit-py<major><minor>` environments. CI/Docker use provisioned tools
-without bootstrap downloads. Missing prerequisites in an explicitly selected
-root `--suite` fail validation rather than producing a successful skip.
+`.state/tools/` holds reviewed uv installations (pin: repo-root `.uv-version`),
+root `root-tests-py<major><minor>` and `precommit-py<major><minor>` environments.
+CI installs that pin from PyPI via `$/.github/actions/setup-uv-pypi`; Docker images
+vendor matching `ghcr.io/astral-sh/uv` digests. Bootstrap downloads are disabled
+in those environments. Missing prerequisites in an explicitly selected root
+`--suite` fail validation rather than producing a successful skip.
 
 ### `OPCUA_SERVER_URL` Override
 

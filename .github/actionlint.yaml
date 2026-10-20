@@ -1,8 +1,15 @@
 # Configuration for actionlint
 # https://github.com/rhysd/actionlint/blob/main/docs/config.md
+#
+# GitHub's dedicated self-repository syntax ($/) is required by zizmor/self-repository
+# for local reusable workflows and composite actions. Upstream actionlint v1.7.x still
+# expects owner/repo@ref or ./path only, so those $/ refs are ignored here until
+# actionlint recognizes them natively.
 paths:
+  .github/workflows/**/*:
+    ignore:
+      - 'specifying action "\$\/\.github\/actions\/setup-uv-pypi" in invalid format because ref is missing'
   .github/workflows/integration.yml:
     ignore:
-      # GitHub's dedicated self-repository syntax ($/) is required by zizmor/self-repository.
-      # Upstream actionlint currently expects owner/repo or ./ only.
       - 'reusable workflow call "\$\/\.github\/workflows\/build-browser-ci-image\.yml" at "uses"'
+      - 'specifying action "\$\/\.github\/actions\/setup-uv-pypi" in invalid format because ref is missing'

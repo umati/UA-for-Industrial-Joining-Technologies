@@ -1,0 +1,27 @@
+name: Setup uv from PyPI
+description: Install the repo-pinned uv from PyPI (same channel Renovate watches).
+
+runs:
+  using: composite
+  steps:
+    - name: Install pinned uv from PyPI
+      shell: bash
+      run: |
+        set -euo pipefail
+        pin_file="${GITHUB_WORKSPACE}/.uv-version"
+        if [[ ! -f "${pin_file}" ]]; then
+          echo "Missing ${pin_file}" >&2
+          exit 1
+        fi
+        version="$(tr -d '[:space:]' < "${pin_file}")"
+        if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9._+-]*)?$ ]]; then
+          echo "Invalid .uv-version contents: '${version}'" >&2
+          exit 1
+        fi
+        python -m pip install --disable-pip-version-check --no-input "uv==${version}"
+        installed="$(uv --version | awk '{print $2}')"
+        if [[ "${installed}" != "${version}" ]]; then
+          echo "Expected uv ${version}, got ${installed}" >&2
+          exit 1
+        fi
+        echo "Installed uv ${installed} from PyPI"

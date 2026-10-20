@@ -14,6 +14,8 @@ Central version files:
 
 - `.nvmrc` for Node.js
 - `.python-version` for Python
+- `.uv-version` for the reviewed uv CLI (local bootstrap + CI install from PyPI;
+  Renovate **uv toolchain** group; see [Development — Python Packages](DEVELOPMENT.md#python-packages))
 
 Python runtime updates are held to the 3.14 line by Renovate; dependency updates
 remain enabled. The client minimum requirement `>=3.14` does not certify newer
