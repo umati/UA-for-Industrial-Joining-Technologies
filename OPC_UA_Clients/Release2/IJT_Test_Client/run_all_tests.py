@@ -1577,6 +1577,18 @@ def _summarize_skip_reason(message: str) -> str:
     return msg
 
 
+def _print_live_test_counts(cu_json_path: Path, junit_xml_path: Path | None) -> None:
+    """Print unique live test totals and per-CU coverage counts for the legacy Phase 2 path."""
+    from helpers.cu_test_counts import load_test_count_summary, render_console_lines
+
+    summary = load_test_count_summary(cu_json_path, junit_xml_path)
+    if summary is None:
+        return
+    _log("  Test counts (each test counted once; CU rows overlap):")
+    for line in render_console_lines(summary, indent="    "):
+        _log(line)
+
+
 def _print_skip_reason_summary(junit_xml_path: Path | None) -> None:
     """Parse a pytest JUnit XML and print a grouped skip-reason summary.
 
@@ -2399,10 +2411,12 @@ def main() -> int:
     _log(
         f"  Result: {overall}  passed={passed}  warned={warned}  failed={failed}  skipped={skipped}  (elapsed: {elapsed:.1f}s)"
     )
+    _log("  (Result counts runner steps above, not individual tests; live test and CU counts are reported separately.)")
     # Print skip-reason breakdown for the legacy simulator/plain-pytest Phase 2 path
     # (--profile/--endpoint runs report their own evidence summary instead).
     if run_target and not plan.target_evidence_mode:
         live_xml = Path(args.junit_xml) if args.junit_xml else _DEFAULT_JUNIT
+        _print_live_test_counts(_RESULTS_DIR / "cu-coverage-report.json", live_xml)
         _print_skip_reason_summary(live_xml)
     _log(_c(_ANSI_CYAN, "═" * 52))
     _log("")

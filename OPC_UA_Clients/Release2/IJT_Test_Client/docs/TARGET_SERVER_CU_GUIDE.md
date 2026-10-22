@@ -211,8 +211,8 @@ holds a secret value, and no credential is ever written to a log, report, or err
 Every Target Server run generates structured evidence artifacts in the output directory (default: `test-results/target-server-cu/`):
 
 - `target-server-cu-report.json` — machine-readable JSON evidence report with check details
-- `target-server-cu-summary.txt` — human-readable ASCII summary for console inspection
-- `target-server-cu-summary.md` — GitHub-compatible Markdown summary table
+- `target-server-cu-summary.txt` — human-readable ASCII summary for console inspection, including unique live test totals and per-CU test counts
+- `target-server-cu-summary.md` — GitHub-compatible Markdown summary table with a `Test Counts` section (unique totals plus a collapsed per-CU table). Per-CU rows overlap for multi-CU tests and must not be summed; see [test-results.md](test-results.md#test-counts-runner-steps-vs-live-tests-vs-cus)
 - `spec-tests.xml` — standard JUnit XML report for CI/CD integration
 - `cu-coverage-report.json` — run-scoped 123-CU classification report
 - `report-controller.xlsx` — automatically generated Excel traceability workbook, written inside the run's own output directory. It is copied elsewhere only when `--excel-out FILE` is explicitly passed. If the run completed but this workbook cannot be produced — for example because `spec-tests.xml` or `cu-coverage-report.json` is missing — the target run fails; only `--excel=never` and `--excel=on-success` decline it benignly.

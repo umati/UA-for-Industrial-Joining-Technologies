@@ -22,6 +22,14 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from helpers.cu_test_counts import (
+    TestCountSummary,
+    load_test_count_summary,
+    render_console_lines,
+    render_markdown_details,
+    render_markdown_overview_line,
+    render_text_lines,
+)
 from helpers.namespaces import result_classification_value
 from helpers.target_server_cu_config import (
     OUTCOME_BLOCKED,
@@ -268,6 +276,14 @@ def _write_evidence_report(
     return report_path
 
 
+def _spec_test_counts(extra: dict | None) -> TestCountSummary | None:
+    """Return per-CU/unique test counts for a completed live spec run, if its artifacts exist."""
+    spec_tests = (extra or {}).get("spec_tests")
+    if not isinstance(spec_tests, dict):
+        return None
+    return load_test_count_summary(spec_tests.get("cu_coverage_json"), spec_tests.get("junit_xml"))
+
+
 def _write_human_summary(
     output_dir: Path,
     profile: TargetServerCuProfile,
@@ -275,6 +291,7 @@ def _write_human_summary(
     mode: str,
     run_start: str,
     outcome_summary: str,
+    extra: dict | None = None,
 ) -> Path:
     """Write a plain-text human summary."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -290,6 +307,9 @@ def _write_human_summary(
         *preflight_report.summary_lines(),
         "",
     ]
+    test_counts = _spec_test_counts(extra)
+    if test_counts is not None:
+        lines.extend(render_text_lines(test_counts))
     summary_path = output_dir / "target-server-cu-summary.txt"
     summary_path.write_text("\n".join(lines), encoding="utf-8")
     return summary_path
@@ -368,6 +388,10 @@ def _write_markdown_summary(
                 f"- **JUnit XML:** `{spec_tests.get('junit_xml')}`",
             ]
         )
+        test_counts = _spec_test_counts(extra)
+        if test_counts is not None:
+            lines.extend(["", "## Test Counts", "", render_markdown_overview_line(test_counts), ""])
+            lines.extend(render_markdown_details(test_counts))
 
     excel_report = (extra or {}).get("excel_report")
     if excel_report:
@@ -1400,6 +1424,11 @@ def run_automated(
         else:
             outcome_summary = f"SPEC_TESTS_{spec_meta.get('status', 'UNKNOWN').upper()}"
             _log(f"\n  Live specification_tests: {spec_meta.get('status', 'unknown')}")
+        test_counts = _spec_test_counts(extra)
+        if test_counts is not None:
+            _log("  Test counts (each test counted once; CU rows overlap):")
+            for line in render_console_lines(test_counts, indent="    "):
+                _log(line)
     else:
         outcome_summary = "CLASSIFICATION_ONLY"
         _log("\n  Endpoint not configured — live specification_tests run skipped.")
@@ -1410,7 +1439,7 @@ def run_automated(
         outcome_summary = "MODEL_INVENTORY_FAILED"
 
     report_path = _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
-    summary_path = _write_human_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary)
+    summary_path = _write_human_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra)
     md_summary_path = _write_markdown_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra)
     if spec_meta and spec_meta.get("status") == "completed":
         excel_meta = _generate_excel_report(

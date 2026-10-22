@@ -30,8 +30,8 @@ test-results/target-server-cu/<profile-name>/latest/   ← symlink/junction to n
 | File | Format | Contents |
 |---|---|---|
 | `target-server-cu-report.json` | JSON | Machine-readable evidence: preflight, CU classification, outcome, model inventory |
-| `target-server-cu-summary.txt` | Text | Human-readable operator summary |
-| `target-server-cu-summary.md` | Markdown | GitHub-compatible Markdown summary table |
+| `target-server-cu-summary.txt` | Text | Human-readable operator summary, including unique live test totals and per-CU test counts |
+| `target-server-cu-summary.md` | Markdown | GitHub-compatible Markdown summary table with a `Test Counts` section |
 | `spec-tests.xml` | JUnit XML | Run-scoped specification-test outcomes |
 | `cu-coverage-report.json` | JSON | Run-scoped CU support/blocked/Not Supported classifications |
 | `report-controller.xlsx` | Excel | Controller workbook. Copied to `--excel-out FILE` only when explicitly passed |
@@ -240,6 +240,34 @@ renders separately. Server capability gaps stay in `CUs Needing Review` and are
 not repeated in grouped diagnostics. In Excel, `Supported with Notes` uses a
 light-green fill and `Not Supported` uses neutral gray so capability gaps are
 not presented as warnings.
+
+### Test counts: runner steps vs live tests vs CUs
+
+`run_all_tests.py` ends with `Result: PASS passed=N warned=M`. Those numbers
+count **runner steps** (lint, unit stage, live stage and so on), not individual
+tests. Test counts are reported separately from the same artifacts, by
+`helpers/cu_test_counts.py`:
+
+- **Live tests (unique)** come from the JUnit XML. Each test is counted once,
+  and these are the authoritative global totals. `failed` means an assertion
+  failure in the test body; `error` means a setup or teardown failure.
+- **CU-marked tests** come from `cu-coverage-report.json`. This total is a
+  subset of the unique live tests; tests with no CU marker are listed separately.
+- **Per-CU rows** come from `cu-coverage-report.json` `tests[]`. A test linked
+  to several CUs is counted in each CU row, so per-CU rows overlap and must
+  never be summed.
+- **CU categories** are counted over official CUs only. `exercised` means at
+  least one test passed, failed or errored; `skipped_only` means only skip-type
+  outcomes (not_supported, blocked, accepted_policy, environment, skipped);
+  `not_run` means only `untested` outcomes; `no_tests` means no linked tests.
+  A skip never counts as exercised.
+
+The console shows a compact block. `target-server-cu-summary.txt` and
+`target-server-cu-summary.md` contain the full per-CU breakdown, including
+skipped-only CUs and their grouped skip reasons. CI Integration's `summary.md`
+and the GitHub Actions step summary show the same overview line and a
+collapsed **Per-CU test counts** table inside the Overview section. All of
+these are built by the same renderer. JSON and JUnit schemas are unchanged.
 
 ---
 

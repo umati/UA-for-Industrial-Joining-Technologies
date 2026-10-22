@@ -46,6 +46,12 @@ if str(_PROJECT_ROOT) not in sys.path:
 # Shared report logic lives in helpers/*.py.
 # Markdown and Excel generators must use the same helpers to stay in sync.
 from helpers.cu_registry import cu_display_name  # noqa: E402
+from helpers.cu_test_counts import (  # noqa: E402
+    build_test_count_summary,
+    junit_totals_from_parsed,
+    render_markdown_details,
+    render_markdown_overview_line,
+)
 from helpers.git_info import short_git_sha as _short_git_sha  # noqa: E402
 from helpers.report_scoring import (
     ACTION_ITEM_LABEL_ORDER as _ACTION_ITEM_LABEL_ORDER,
@@ -1092,6 +1098,11 @@ def render_specification_test_summary(
             f"{_action_items_context(findings_count)} | {_informational_notes_context(findings_count)} |"
         )
         lines.append("")
+        test_counts = build_test_count_summary(cu_payload, junit_totals_from_parsed(data))
+        if test_counts is not None:
+            lines.append(render_markdown_overview_line(test_counts))
+            lines.append("")
+            lines.extend(render_markdown_details(test_counts))
 
     lines.extend(profile_lines)
 

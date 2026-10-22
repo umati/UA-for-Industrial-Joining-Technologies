@@ -348,6 +348,33 @@ def test_live_tests_respect_explicit_coverage_args():
 # ---------------------------------------------------------------------------
 
 
+def test_print_live_test_counts_logs_unique_and_cu_counts(tmp_path, monkeypatch):
+    cu_json = tmp_path / "cu-coverage-report.json"
+    cu_json.write_text(
+        json.dumps(
+            {
+                "summary": {"official_cu_count": 1, "extension_cus": []},
+                "by_cu": {"ALPHA": {}},
+                "tests": [{"nodeid": "t::a", "cus": ["ALPHA"], "outcome": "passed", "reason": ""}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    lines: list[str] = []
+    monkeypatch.setattr(_mod, "_log", lambda msg="", *a, **kw: lines.append(str(msg)))
+    _mod._print_live_test_counts(cu_json, None)
+    text = "\n".join(lines)
+    assert "Test counts (each test counted once; CU rows overlap):" in text
+    assert "exercised=1" in text
+
+
+def test_print_live_test_counts_is_silent_without_report(tmp_path, monkeypatch):
+    lines: list[str] = []
+    monkeypatch.setattr(_mod, "_log", lambda msg="", *a, **kw: lines.append(str(msg)))
+    _mod._print_live_test_counts(tmp_path / "missing.json", None)
+    assert lines == []
+
+
 def test_skip_summary_formats_cu_not_supported_reason():
     reason = (
         "Skipped: Conformance unit 'send_joining_process' is not listed as supported "

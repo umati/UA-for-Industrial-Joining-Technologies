@@ -218,9 +218,65 @@ class TestEvidenceWriters:
         assert "PASSED" in text
         assert profile.profile_name in text
 
+    @staticmethod
+    def _write_count_artifacts(tmp_path) -> dict:
+        cu_json = tmp_path / "cu-coverage-report.json"
+        cu_json.write_text(
+            json.dumps(
+                {
+                    "summary": {"official_cu_count": 2, "extension_cus": []},
+                    "by_cu": {"ALPHA": {}, "BETA": {}},
+                    "tests": [
+                        {"nodeid": "t::a", "cus": ["ALPHA", "BETA"], "outcome": "passed", "reason": ""},
+                        {
+                            "nodeid": "t::b",
+                            "cus": ["BETA"],
+                            "outcome": "blocked",
+                            "reason": "Skipped: External trigger required",
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        junit = tmp_path / "spec-tests.xml"
+        junit.write_text(
+            '<testsuites><testsuite><testcase classname="t" name="a"/>'
+            '<testcase classname="t" name="b"><skipped message="s"/></testcase>'
+            '<testcase classname="t" name="unmarked"/></testsuite></testsuites>',
+            encoding="utf-8",
+        )
+        return {"spec_tests": {"status": "completed", "junit_xml": str(junit), "cu_coverage_json": str(cu_json)}}
 
-# ---------------------------------------------------------------------------
-# _generate_excel_report
+    def test_write_human_summary_appends_unique_and_per_cu_test_counts(self, tmp_path):
+        profile = build_default_profile(endpoint="opc.tcp://x:1")
+        extra = self._write_count_artifacts(tmp_path)
+        path = tse._write_human_summary(tmp_path, profile, _preflight_report(), "automated", "t", "PASSED", extra)
+        text = path.read_text(encoding="utf-8")
+        assert "Live tests (unique): total=3 passed=2 failed=0 error=0 skipped=1" in text
+        assert "CU-marked tests: total=2 (no CU marker: 1)" in text
+        assert "CUs (2 official): exercised=2 skipped_only=0" in text
+        assert "CU test links: 3" in text
+
+    def test_write_human_summary_without_count_artifacts_is_unchanged(self, tmp_path):
+        profile = build_default_profile(endpoint="opc.tcp://x:1")
+        extra = {"spec_tests": {"status": "completed", "junit_xml": None, "cu_coverage_json": None}}
+        path = tse._write_human_summary(tmp_path, profile, _preflight_report(), "automated", "t", "PASSED", extra)
+        assert "Live tests" not in path.read_text(encoding="utf-8")
+
+    def test_write_markdown_summary_includes_test_counts_section(self, tmp_path):
+        profile = build_default_profile(endpoint="opc.tcp://x:1")
+        extra = self._write_count_artifacts(tmp_path)
+        path = tse._write_markdown_summary(
+            tmp_path, profile, _preflight_report(), "automated", "t", "SPEC_TESTS_PASSED", extra
+        )
+        text = path.read_text(encoding="utf-8")
+        assert "## Test Counts" in text
+        assert "**Live tests (unique):** 3 — 2 passed" in text
+        assert "**CU-marked:** 2 (1 without CU marker)" in text
+        assert "<summary><b>Per-CU test counts</b>" in text
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -481,6 +537,85 @@ class TestRunPreflightDirect:
             for check in report["preflight"]["checks"]
         )
 
+    @staticmethod
+    def _exact_selector_raw(result_mode: str = "simulate_methods") -> dict:
+        return {
+            "schema_version": 1,
+            "target": {"endpoint": "opc.tcp://reachable-host:1"},
+            "triggers": {"result": {"mode": result_mode}},
+            "selection": {"joining_process": {"policy": "exact_match", "joining_process_id": "process-1"}},
+        }
+
+    def test_selector_preflight_uses_manifest_security_and_interactive_prompt(self, tmp_path, monkeypatch):
+        import builtins
+        import getpass
+
+        from helpers import connection_security as cs
+
+        manifest = tmp_path / "controller.sut.yaml"
+        manifest.write_text("schema_version: 1\n", encoding="utf-8")
+        profile = build_execution_profile(self._exact_selector_raw(), source_path=str(manifest))
+        manifest_security = cs.ConnectionSecurity(endpoint="opc.tcp://reachable-host:1", username="")
+        monkeypatch.setattr(cs, "connection_security_from_manifest_path", lambda path: manifest_security)
+        monkeypatch.setattr(builtins, "input", lambda prompt="": "operator")
+        monkeypatch.setattr(getpass, "getpass", lambda prompt="": "s3cret")
+        seen: dict = {}
+
+        async def discover(endpoint, *, timeout, security, prompt):
+            seen["security"] = security
+            seen["credentials"] = prompt(security)
+            return {"processes": [{"id": "process-1"}]}
+
+        monkeypatch.setattr(tse, "async_discover_target_server", discover)
+        report = PreflightReport(profile_name="P", endpoint="opc.tcp://reachable-host:1")
+        tse._add_live_process_selector_checks(profile, report, interactive_prompts=True)
+
+        assert seen["security"] is manifest_security
+        assert seen["credentials"].username == "operator"
+        assert seen["credentials"].password == "s3cret"
+        assert any(
+            check.check_name.startswith("live_selector:") and check.outcome == OUTCOME_PASSED for check in report.checks
+        )
+
+    def test_selector_preflight_discovery_error_payload_blocks(self, tmp_path, monkeypatch):
+        profile = build_execution_profile(self._exact_selector_raw())
+
+        async def discover(*args, **kwargs):
+            return {"error": "BadUserAccessDenied"}
+
+        monkeypatch.setattr(tse, "async_discover_target_server", discover)
+        report = PreflightReport(profile_name="P", endpoint="opc.tcp://reachable-host:1")
+        tse._add_live_process_selector_checks(profile, report)
+
+        assert [check.check_name for check in report.checks] == ["live_process_selector_discovery"]
+        assert report.checks[0].outcome == OUTCOME_BLOCKED
+        assert "BadUserAccessDenied" in report.checks[0].detail
+
+    def test_automated_run_with_joining_workflow_blocks_on_stale_selector(self, tmp_path, monkeypatch):
+        raw = self._exact_selector_raw("start_selected_joining")
+        raw["cu_execution"] = {
+            "state_changing_methods": {"allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining"]}
+        }
+        profile = build_execution_profile(raw)
+        monkeypatch.setattr(
+            tse,
+            "check_endpoint_reachable",
+            lambda endpoint, **kw: ReadinessOutcome(outcome=OUTCOME_PASSED, check_name="endpoint_reachable"),
+        )
+
+        async def discover(*args, **kwargs):
+            return {"processes": [{"id": "current-id"}]}
+
+        def fail_if_called(*args, **kwargs):
+            raise AssertionError("spec tests must not run when the selector preflight blocks")
+
+        monkeypatch.setattr(tse, "async_discover_target_server", discover)
+        monkeypatch.setattr(tse, "run_live_spec_tests", fail_if_called)
+        assert tse.run_automated(profile, tmp_path, base_dir=tmp_path) == 1
+        report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
+        blocked = [c["check_name"] for c in report["preflight"]["checks"] if c["outcome"] == OUTCOME_BLOCKED]
+        assert blocked and all(name.startswith("live_selector:") for name in blocked)
+
     def test_manual_required_is_non_blocking(self, tmp_path, monkeypatch):
         profile = build_execution_profile(
             {
@@ -557,6 +692,24 @@ class TestRunAutomatedDirect:
         report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
         assert report["spec_tests"]["status"] == "skipped"
         assert report["spec_tests"]["reason"] == "spec_dir_not_found"
+
+    def test_completed_spec_run_logs_unique_and_cu_test_counts(self, tmp_path, monkeypatch, capsys):
+        self._mock_reachable(monkeypatch)
+        profile = self._reachable_profile()
+        extra = TestEvidenceWriters._write_count_artifacts(tmp_path)
+        monkeypatch.setattr(tse, "run_live_spec_tests", lambda *a, **kw: (0, dict(extra["spec_tests"])))
+        monkeypatch.setattr(
+            tse,
+            "_generate_excel_report",
+            lambda *a, **kw: {"status": tse.EXCEL_STATUS_GENERATED, "path": str(tmp_path / "report.xlsx")},
+        )
+        rc = tse.run_automated(profile, tmp_path, base_dir=tmp_path)
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "Test counts (each test counted once; CU rows overlap):" in out
+        assert "Live tests (unique): total=3 passed=2" in out
+        report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
+        assert "test_counts" not in report  # evidence JSON schema unchanged
 
     def test_manual_checks_automated_mode_warns_and_continues(self, tmp_path, monkeypatch, capsys):
         self._mock_reachable(monkeypatch)
