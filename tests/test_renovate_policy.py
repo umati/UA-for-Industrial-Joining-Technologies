@@ -342,3 +342,44 @@ def test_renovate_holds_opc_foundation_major_updates() -> None:
     assert rule.get("matchUpdateTypes") == ["major"], (
         "Only major updates must be held (1.x patches allowed)"
     )
+
+
+def test_renovate_enables_dual_channel_vulnerability_remediation() -> None:
+    """OSV + GitHub vulnerability alerts own security fixes ahead of routine bumps.
+
+    Product CI stays fail-closed on fixable CVEs. Remediations must open as dedicated
+    security PRs (skip schedule/age gates) so unrelated Renovate bumps are not the
+    first canary for newly published advisories. Manual merge only — no automerge.
+    """
+    renovate = _renovate()
+    assert renovate.get("osvVulnerabilityAlerts") is True, (
+        "osvVulnerabilityAlerts must be true so OSV advisories open fix PRs without "
+        "waiting for weekly lockfile maintenance or an unrelated package bump"
+    )
+    alerts = renovate.get("vulnerabilityAlerts")
+    assert isinstance(alerts, dict), "vulnerabilityAlerts object is required"
+    assert alerts.get("enabled", True) is True
+    assert alerts.get("vulnerabilityFixStrategy") == "lowest", (
+        "lowest keeps security PRs minimal (earliest fixed version); do not jump to latest"
+    )
+    assert alerts.get("automerge") is False, (
+        "Security remediations stay manual-merge for industrial/OPC UA review"
+    )
+    assert "minimumReleaseAge" not in alerts or alerts.get("minimumReleaseAge") in (
+        None,
+        "",
+    ), "vulnerabilityAlerts must not inherit a release-age gate"
+    assert "schedule" not in alerts or alerts.get("schedule") in (None, []), (
+        "vulnerabilityAlerts already skip repo schedule; do not reintroduce one"
+    )
+    labels = set(alerts.get("labels") or [])
+    assert {"security", "dependencies"}.issubset(labels)
+    # Separate concurrent budget so security PRs do not compete with routine bumps.
+    assert alerts.get("prConcurrentLimit") == 5
+    # Never disable Python package updates globally — that also blocks OSV/security fixes.
+    python_disabled = [
+        rule
+        for rule in _rules()
+        if rule.get("enabled") is False and "python" in rule.get("matchCategories", [])
+    ]
+    assert not python_disabled
