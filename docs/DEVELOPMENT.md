@@ -405,6 +405,28 @@ failure. The dependency-security workflow reviews dependency changes on pull
 requests, monitors all ecosystems daily in offline mode, and provides
 manual strict release qualification.
 
+#### Renovate security remediation lane
+
+Product CI and `run_precommit_all.py` stay **fail-closed** on fixable production
+CVEs (`npm audit --omit=dev --audit-level=high`, fixable `pip-audit` findings).
+That detection contract must not be softened so Renovate PRs look green.
+
+Remediation ownership is Renovate, not the next unrelated package bump:
+
+1. `osvVulnerabilityAlerts: true` opens fix PRs from the OSV database.
+2. `vulnerabilityAlerts` (GitHub Dependabot alerts + Dependency graph) opens the
+   matching GitHub advisory fixes. Keep Dependabot alerts enabled for the repo
+   and grant the Renovate app read access to Dependabot alerts.
+3. Security PRs use `vulnerabilityFixStrategy: lowest`, skip routine
+   schedule/age gates, carry `security` + `dependencies` labels, and stay
+   **manual merge** (`automerge: false`) with their own `prConcurrentLimit`.
+4. Prefer lockfile refresh within existing ranges for transitive npm fixes.
+   Exact `overrides` pins remain the escape hatch only when upstream has no
+   in-range fix (see npm override exact-pin rule).
+5. Daily dependency-security stays offline-tolerant for advisory-service
+   outages; product CI remains the hard gate. Merge security Renovate PRs
+   before routine bumps when both are open.
+
 ### Before Committing Dependency Changes
 
 From the repository root, run these commands sequentially:
