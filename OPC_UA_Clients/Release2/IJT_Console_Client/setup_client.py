@@ -528,21 +528,32 @@ def _install_python_packages() -> None:
     python = _python_in_venv()
 
     # Verify the installed asyncua satisfies the minimum version.
+    _dep_check_cmd = (
+        "import asyncua, sys; "
+        "from packaging.version import Version; "
+        "v = asyncua.__version__; "
+        "print(v); "
+        "sys.exit(0) if Version(v) >= Version('2.0.1') "
+        "else sys.exit('asyncua ' + v + ' is too old; need >= 2.0.1')"
+    )
     try:
         installed = subprocess.check_output(  # nosec B603
-            [str(python), "-c", "import asyncua; print(asyncua.__version__)"],
+            [str(python), "-c", _dep_check_cmd],
+            stderr=subprocess.STDOUT,
             text=True,
         ).strip()
         log.info("asyncua installed version: %s", installed)
-        from packaging.version import Version
-
-        if Version(installed) < Version("2.0.1"):
+    except subprocess.CalledProcessError as exc:
+        output = (exc.output or "").strip()
+        if "is too old" in output:
+            too_old_msg = [line for line in output.splitlines() if "is too old" in line]
+            msg = too_old_msg[0] if too_old_msg else output
             log.error(
-                "asyncua %s is too old for this workspace. Minimum required: 2.0.1. "
-                "Run setup_client.py --force_full for a clean reinstall.",
-                installed,
+                "%s. Run setup_client.py --force_full for a clean reinstall.",
+                msg,
             )
             sys.exit(1)
+        log.warning("Could not verify asyncua version: %s", exc)
     except Exception as exc:
         log.warning("Could not verify asyncua version: %s", exc)
 

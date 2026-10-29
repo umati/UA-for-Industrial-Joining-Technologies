@@ -1334,7 +1334,11 @@ class TestInstallPythonPackages:
         monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
         monkeypatch.setattr(sc, "PROJECT_DIR", rundir)
         monkeypatch.setattr(subprocess, "check_call", lambda args, **kw: None)
-        monkeypatch.setattr(subprocess, "check_output", lambda args, **kw: "1.1.0\n")
+
+        def too_old_output(args, **kw):
+            raise subprocess.CalledProcessError(1, args, output="asyncua 1.1.0 is too old; need >= 2.0.1")
+
+        monkeypatch.setattr(subprocess, "check_output", too_old_output)
         with pytest.raises(SystemExit) as exc_info:
             sc._install_python_packages()
         assert exc_info.value.code == 1
@@ -1354,6 +1358,58 @@ class TestInstallPythonPackages:
         with caplog.at_level(logging.WARNING, logger="setup_client"):
             sc._install_python_packages()  # must not raise
         assert any("asyncua" in r.message.lower() for r in caplog.records)
+
+
+# =============================================================================
+# Runtime-only Environment Version Check Regression
+# =============================================================================
+
+
+class TestRuntimeOnlyVersionCheckRegression:
+    """Regression tests proving a runtime-only environment (--no-dev) can run setup's version check."""
+
+    @pytest.fixture(autouse=True)
+    def managed_uv(self, monkeypatch):
+        monkeypatch.setattr(sc, "ensure_uv", lambda project: "managed-uv")
+
+    def test_runtime_dependencies_include_packaging(self):
+        """pyproject.toml runtime dependencies must include packaging so --no-dev installs it."""
+        import tomllib
+
+        pyproject_path = sc.PROJECT_DIR / "pyproject.toml"
+        assert pyproject_path.exists()
+        data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        runtime_deps = data.get("project", {}).get("dependencies", [])
+        assert any(dep.startswith("packaging") for dep in runtime_deps), (
+            "packaging must be in project.dependencies, not just dev dependencies"
+        )
+
+    def test_version_check_runs_inside_venv_without_host_packaging(self, fs, monkeypatch):
+        """The version check must execute in .venv without importing packaging in host Python."""
+        rundir = Path("/fake/rundir")
+        rundir.mkdir(parents=True)
+        monkeypatch.chdir(rundir)
+        monkeypatch.setattr(sc, "VENV_DIR", rundir / ".venv")
+        monkeypatch.setattr(sc, "PROJECT_DIR", rundir)
+        monkeypatch.setattr(subprocess, "check_call", lambda args, **kw: None)
+
+        called_cmd = []
+
+        def fake_check_output(cmd, **kw):
+            called_cmd.extend(cmd)
+            return "2.1.0\n"
+
+        monkeypatch.setattr(subprocess, "check_output", fake_check_output)
+
+        # Hide packaging from host Python sys.modules to prove host doesn't need packaging
+        monkeypatch.setitem(sys.modules, "packaging", None)
+        monkeypatch.setitem(sys.modules, "packaging.version", None)
+
+        sc._install_python_packages()
+        assert len(called_cmd) >= 3
+        assert called_cmd[1] == "-c"
+        assert "from packaging.version import Version" in called_cmd[2]
+        assert "asyncua" in called_cmd[2]
 
 
 # =============================================================================
