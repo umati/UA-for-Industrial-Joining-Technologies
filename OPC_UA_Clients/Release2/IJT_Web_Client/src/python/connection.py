@@ -52,6 +52,7 @@ from python.event_handler import EventHandler
 from python.ijt_logger import endpoint_logger, ijt_log
 from python.result_event_handler import ResultEventHandler
 from python.serialize_data import serialize_full_event, serialize_tuple, serialize_value
+from python.utils import calibrate_clock_skew
 
 _OPCUA_TIMEOUT_S = 60  # per-request timeout for long-running operations (method calls, reads)
 _OPCUA_TIMEOUT_SHORT_S = 15  # wall-clock limit for OPC UA session establishment (SecureChannel + Session handshake)
@@ -210,6 +211,7 @@ class Connection:
 
         self.handler_joining_event: EventHandler | None = None
         self.handler_result_event: ResultEventHandler | None = None
+        self.clock_skew_ms: float = 0.0
 
         # Initialised in connect() / subscribe() — declared here so pylint
         # does not flag W0201 (attribute-defined-outside-init).
@@ -328,6 +330,7 @@ class Connection:
 
                 await _load_ijt_type_definitions(self.client)
                 self.root = self.client.get_root_node()
+                self.clock_skew_ms = await calibrate_clock_skew(self.client)
 
                 # Connect the dedicated subscription client (separate OPC UA session).
                 # This eliminates concurrent-request issues when SimulateJobResult
@@ -555,7 +558,12 @@ class Connection:
         """
         try:
             self.handler_joining_event = self.handler_joining_event or EventHandler(self.websocket, self.server_url)
-            self.handler_result_event = self.handler_result_event or ResultEventHandler(self.websocket, self.server_url)
+            if self.handler_result_event is None:
+                self.handler_result_event = ResultEventHandler(
+                    self.websocket, self.server_url, skew_ms=self.clock_skew_ms
+                )
+            else:
+                self.handler_result_event.skew_ms = self.clock_skew_ms
 
             # Use the dedicated subscription client when available.  Fall back
             # to the method client only if subscription_client failed to connect.

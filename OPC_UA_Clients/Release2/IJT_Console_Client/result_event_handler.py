@@ -35,9 +35,10 @@ class ResultEventHandler:
     Must be instantiated from within an async context (e.g. inside subscribe_to_events).
     """
 
-    def __init__(self, server_url: str) -> None:
+    def __init__(self, server_url: str, skew_ms: float = 0.0) -> None:
         self.server_url = server_url
-        ijt_log.info("ResultEventHandler initialized.")
+        self.skew_ms = skew_ms
+        ijt_log.info(f"ResultEventHandler initialized (skew_ms={self.skew_ms:+.1f}).")
 
     async def process_event(self, event: ShortResultEvent):
         try:
@@ -50,7 +51,10 @@ class ResultEventHandler:
     async def event_notification(self, event: Any) -> None:
         try:
             client_received_time = datetime.now(pytz.utc)
-            event_id = await log_result_event_details(event, self.server_url, client_received_time)
+            if self.skew_ms:
+                event_id = await log_result_event_details(event, self.server_url, client_received_time, self.skew_ms)
+            else:
+                event_id = await log_result_event_details(event, self.server_url, client_received_time)
             filtered_event = ShortResultEvent(
                 EventType=str(event.EventType),
                 Result=event.Result,

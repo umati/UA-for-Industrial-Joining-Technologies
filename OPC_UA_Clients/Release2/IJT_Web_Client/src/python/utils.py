@@ -8,13 +8,13 @@ localized-text stringification, and optional result-file persistence.
 import json
 import re
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import aiofiles  # type: ignore[import-untyped]
 import pytz  # type: ignore[import-untyped]
-from asyncua import ua
+from asyncua import Client, ua
 
 from python.ijt_logger import ijt_log
 from python.serialize_data import serialize_full_event
@@ -47,6 +47,50 @@ def format_local_time(dt: datetime, timezone: str = "Europe/Stockholm") -> str:
     """
     local_tz = pytz.timezone(timezone)
     return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+
+async def calibrate_clock_skew(client: Client, num_probes: int = 3) -> float:
+    """Measure server-vs-client clock skew using Cristian's algorithm.
+
+    Returns estimated skew in milliseconds (server_time - client_midpoint).
+    Positive skew means server clock is ahead of client; negative means behind.
+    """
+    best_rtt: float = float("inf")
+    best_skew: float = 0.0
+
+    try:
+        server_time_node = client.get_node(ua.NodeId(2258, 0))  # type: ignore[arg-type] # ServerStatus.CurrentTime
+        for _ in range(max(1, num_probes)):
+            t_before = datetime.now(timezone.utc)
+            server_now = await server_time_node.read_value()
+            t_after = datetime.now(timezone.utc)
+
+            if not isinstance(server_now, datetime):
+                continue
+
+            if server_now.tzinfo is None:
+                server_now = server_now.replace(tzinfo=timezone.utc)
+            else:
+                server_now = server_now.astimezone(timezone.utc)
+
+            rtt_ms = (t_after - t_before).total_seconds() * 1000.0
+            if rtt_ms < best_rtt:
+                best_rtt = rtt_ms
+                client_midpoint = t_before + (t_after - t_before) / 2
+                best_skew = (server_now - client_midpoint).total_seconds() * 1000.0
+
+        if best_rtt != float("inf"):
+            if best_rtt > 50.0:
+                ijt_log.warning(
+                    f"Elevated RTT ({best_rtt:.1f} ms) during clock calibration with {getattr(client, 'server_url', 'server')}. "
+                    f"Clock skew uncertainty is ±{best_rtt / 2.0:.1f} ms."
+                )
+            ijt_log.info(f"Clock skew calibrated: {best_skew:+.1f} ms (RTT: {best_rtt:.1f} ms)")
+            return best_skew
+        return 0.0
+    except Exception as exc:
+        ijt_log.warning(f"Clock skew calibration failed for {getattr(client, 'server_url', 'server')}: {exc}")
+        return 0.0
 
 
 async def log_result_event_details(
@@ -119,6 +163,8 @@ async def log_result_event_details(
 
     if latency_ms is not None:
         ijt_log.info(f"{'*** Total Result Transfer Time (EndTime → Client)':<{label_width}} : {latency_ms:.3f} ms")
+        if abs(skew_ms) > 1.0:
+            ijt_log.info(f"{'    (Calibrated Clock Skew)':<{label_width}} : {skew_ms:+.1f} ms")
     else:
         ijt_log.info(f"{'*** Total Result Transfer Time (EndTime → Client)':<{label_width}} : Unavailable")
     ijt_log.info("-" * 80)

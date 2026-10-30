@@ -27,6 +27,7 @@ from event_types import get_event_types
 from ijt_logger import ijt_log
 from method_caller import OPCUAMethodCaller
 from result_event_handler import ResultEventHandler
+from utils import calibrate_clock_skew
 
 _session_policy = load_shared_session_policy(__file__)
 apply_session_policy = _session_policy.apply_session_policy
@@ -144,6 +145,7 @@ class OPCUAClient:
         self.handler_result_event = None
         self.handler_joining_event = None
         self.methods = OPCUAMethodCaller(self.client)
+        self.clock_skew_ms = 0.0
         self._lifecycle_lock = asyncio.Lock()
 
     def setup_client_metadata(self) -> None:
@@ -176,6 +178,7 @@ class OPCUAClient:
                 start_time = time.time()
                 await connect_opcua_client(self.client)  # type: ignore[arg-type]
                 await _load_ijt_type_definitions(self.client)  # type: ignore[arg-type]
+                self.clock_skew_ms = await calibrate_clock_skew(self.client)  # type: ignore[arg-type]
                 duration = time.time() - start_time
                 ijt_log.info(f"Connected to OPC UA server at {self.server_url} in {duration:.2f}s")
                 return
@@ -276,7 +279,10 @@ class OPCUAClient:
     async def subscribe_to_events(self):
         try:
             # Handlers are created here (async context) so asyncio.create_task() works.
-            self.handler_result_event = ResultEventHandler(self.server_url)
+            if self.handler_result_event is None:
+                self.handler_result_event = ResultEventHandler(self.server_url, skew_ms=self.clock_skew_ms)
+            else:
+                self.handler_result_event.skew_ms = self.clock_skew_ms
             self.handler_joining_event = EventHandler(None, self.server_url, self.client)
 
             root = self.client.get_root_node()  # type: ignore[union-attr]

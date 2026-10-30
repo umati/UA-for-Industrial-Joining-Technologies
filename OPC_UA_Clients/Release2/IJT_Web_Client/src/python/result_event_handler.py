@@ -50,7 +50,7 @@ class ResultEventHandler:
     and forwarded to the browser via the internal queue worker.
     """
 
-    def __init__(self, websocket: Any, server_url: str) -> None:
+    def __init__(self, websocket: Any, server_url: str, skew_ms: float = 0.0) -> None:
         """Initialise the handler and start the background queue-worker task.
 
         Args:
@@ -58,13 +58,15 @@ class ResultEventHandler:
                 to the browser.
             server_url: OPC UA server URL — included in every event message so
                 the front-end can route it to the correct connection view.
+            skew_ms: Optional calibrated relative clock drift in milliseconds.
         """
         self.websocket = websocket
         self.server_url = server_url
+        self.skew_ms = skew_ms
         self.queue: asyncio.Queue = asyncio.Queue(_QUEUE_SIZE)
         self.closed = False
         self._queue_task = asyncio.create_task(self.handle_queue())
-        ijt_log.info("ResultEventHandler initialized.")
+        ijt_log.info(f"ResultEventHandler initialized (skew_ms={self.skew_ms:+.1f}).")
 
     async def process_event(self, event_obj: Short):
         """Coroutine. Serialize and enqueue a result-event snapshot for WebSocket delivery.
@@ -99,7 +101,10 @@ class ResultEventHandler:
             return
         try:
             client_received_time = datetime.now(pytz.utc)
-            event_id = await log_result_event_details(event, self.server_url, client_received_time)
+            if self.skew_ms:
+                event_id = await log_result_event_details(event, self.server_url, client_received_time, self.skew_ms)
+            else:
+                event_id = await log_result_event_details(event, self.server_url, client_received_time)
             filtered_event = Short(
                 EventType=event.EventType,
                 Result=event.Result,
