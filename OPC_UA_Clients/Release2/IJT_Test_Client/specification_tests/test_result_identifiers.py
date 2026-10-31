@@ -315,12 +315,19 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
             "AssociatedEntities is empty after SendIdentifiers — server may not propagate identifiers to results"
         )
 
-    external_found = any(
-        getattr(e, "IsExternal", False) is True and _contains_identifier(e, test_id) for e in associated
-    )
-    assert external_found, (
+    matching_external = [
+        e for e in associated if getattr(e, "IsExternal", False) is True and _contains_identifier(e, test_id)
+    ]
+    assert matching_external, (
         f"No entity with IsExternal=True and identifier {test_id!r} found in AssociatedEntities after SendIdentifiers. "
         f"Entities present: {[getattr(e, 'EntityId', repr(e)) for e in associated]}"
+    )
+    # A structured identifier was sent with EntityType=VEHICLE; the server must not
+    # downgrade it (e.g. to UNDEFINED, which is only acceptable for untyped text identifiers).
+    received_types = [_entity_type_int(e) for e in matching_external]
+    assert all(t == _EntityType.VEHICLE for t in received_types), (
+        f"Structured identifier {test_id!r} was sent with EntityType={_EntityType.VEHICLE} (VEHICLE) "
+        f"but the result reported EntityType values {received_types}"
     )
 
 
@@ -328,7 +335,11 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
 async def test_external_identifier_entity_type_is_valid_external_type(subscription_client, result_trigger, ns_indices):
     """Every entity in AssociatedEntities where IsExternal=True must have an EntityType
     that corresponds to a recognised external entity kind (VEHICLE, PRODUCT, PART, JOINT,
-    ORDER, MODEL, or OTHER)."""
+    ORDER, MODEL, or OTHER), or UNDEFINED.
+
+    UNDEFINED is accepted because untyped text identifiers (SendTextIdentifiers) carry no
+    semantic type. Preservation of an explicitly supplied type is verified separately by
+    test_external_identifiers_sent_via_send_identifiers_appear_in_result."""
     result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
     _skip_if_no_result(result_data, result_trigger)
 
