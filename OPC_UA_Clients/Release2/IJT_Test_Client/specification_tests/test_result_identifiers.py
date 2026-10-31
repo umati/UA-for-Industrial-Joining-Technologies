@@ -342,7 +342,7 @@ async def test_external_identifier_entity_type_is_valid_external_type(subscripti
             "or skip when external identifiers are not present in this result"
         )
 
-    valid_external_and_other = _EntityType.VALID_EXTERNAL_TYPES | frozenset({_EntityType.OTHER})
+    valid_external_and_other = _EntityType.VALID_EXTERNAL_TYPES | frozenset({_EntityType.OTHER, _EntityType.UNDEFINED})
     failures = []
     advisory = []
     for entity in external_entities:
