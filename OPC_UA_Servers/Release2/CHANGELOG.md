@@ -1,5 +1,13 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-11-02
+
+1. Refreshed the Windows and Linux simulator packages using the updated build tools.
+2. Updated Windows builds to Visual Studio 2026 and fixed Linux builds with newer compilers and CMake.
+3. Linked the required OpenSSL support libraries statically in Linux builds to avoid additional runtime installations.
+4. Set Ubuntu 26.04 LTS as the supported Linux baseline; older distributions are no longer supported.
+5. Verified both packages through native Windows and Linux Docker smoke tests.
+
 ## 2026-10-20
 
 1. Updated the Windows and Linux simulator packages with joint hardening, method notification updates, and stability improvements.

@@ -2,15 +2,14 @@
 # OPC UA IJT Server Simulator — Docker Image (Linux native)
 #
 # The server is a Linux x64 ELF binary (statically linked C++ runtime):
-#   - Built with CMake/WSL2 toolset on Ubuntu 24.04, C++17, Release|x64
-#   - Requires glibc 2.38+ (built on Ubuntu 24.04 / glibc 2.39)
+#   - Upcoming builds use Ubuntu 26.04 WSL2, C++17, Release|x64
+#   - Current build host has glibc 2.43; audit each replacement ZIP's requirements
 #   - No Wine, no Xvfb, no DISPLAY needed
 #
 # Base image: ubuntu:26.04 (latest LTS)
-#   glibc is strictly backward-compatible; a binary built on 24.04/glibc-2.39
-#   runs correctly on 26.04/glibc-2.41. No binary rebuild is required for an
-#   OS base-image bump. Rebuild the binary from source only when moving to a
-#   newer compiler toolchain or to pick up new library features.
+#   The digest pins a particular runtime, not necessarily the build host's patch
+#   level. Smoke-test every replacement ZIP in this image; update the runtime if
+#   the binary requires newer glibc symbols or other libraries.
 #
 # Default port: 40451 — always used when launching normally.
 #

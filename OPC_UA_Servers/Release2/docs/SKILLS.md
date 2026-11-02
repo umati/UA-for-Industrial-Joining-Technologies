@@ -155,6 +155,6 @@ Full details: `OPC_UA_Servers/Release2/docs/opc-ua-server-context.md`
 | Platform | Requirement |
 |----------|-------------|
 | Windows | Visual C++ Runtime (VC-Redist) |
-| Linux | glibc ≥ 2.17 (Ubuntu 20.04+, Debian 10+, RHEL/CentOS 7+) |
+| Linux | x86-64 Ubuntu 26.04 LTS baseline for the current package; verify each replacement binary's glibc requirements and Docker runtime before publication |
 | Docker | Docker Engine + Compose plugin |
 | Smoke test | `pip install asyncua` (Python 3.14+) |

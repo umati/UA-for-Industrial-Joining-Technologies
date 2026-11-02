@@ -11,8 +11,18 @@ OPC UA IJT Server Simulator for the Industrial Joining Technologies (IJT) compan
 The simulator packages are precompiled standalone 64-bit binaries:
 
 - **Windows (`OPC_UA_IJT_Server_Simulator.zip`):** Microsoft Visual C++ 2015–2022 Redistributable (x64) (or latest)
-- **Linux (`OPC_UA_IJT_Server_Simulator_Linux.zip`):** `glibc` 2.31 or newer (Ubuntu 20.04+, RHEL 8+, Debian 11+)
+- **Linux (`OPC_UA_IJT_Server_Simulator_Linux.zip`):** x86-64 Ubuntu 26.04 LTS
+  is the supported build/runtime baseline for the current simulator package
+  (current build host: glibc 2.43). Older Linux distributions are not supported
+  by this baseline.
 - **Docker (`docker-compose.yml`):** Docker Engine 20.10+ with Compose V2
+
+The current packages passed native Windows and Linux Docker smoke tests.
+Each replacement Linux ZIP must still be checked for its actual glibc requirements and
+shared-library dependencies, and smoke-tested in the digest-pinned Docker runtime
+before publication. OpenSSL and its private dependencies are intended to be
+statically linked; end users should not need to install OpenSSL development tools.
+An Ubuntu image tag alone does not establish compatibility with a new binary.
 
 ## Quick Start
 
