@@ -84,6 +84,7 @@ from helpers.namespaces import (
     ResultEvaluation,
 )
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.opcua_status import require_server_rejection
 from helpers.result_collector import ResultCollector
 from helpers.result_validator import ConsolidatedResultValidator
 
@@ -1395,8 +1396,8 @@ async def test_batch_result_variable_is_not_writable(opcua_client, result_trigge
     try:
         await target.write_value(current_value)
         write_succeeded = True
-    except ua.UaError:
-        pass  # expected — node is not writable
+    except ua.UaError as exc:
+        require_server_rejection(exc, "Write result variable")
 
     assert not write_succeeded, "Result variable node must not be writable — Write should have raised ua.UaError"
 
@@ -2001,7 +2002,8 @@ async def test_references_mode_get_result_by_id_invalid_id_returns_error(opcua_c
             ),
             timeout=_COMBINED_WALL_TIMEOUT,
         )
-    except ua.UaError:
+    except ua.UaError as exc:
+        require_server_rejection(exc, "GetResultById(invalid ResultId, references mode)")
         return
     except asyncio.TimeoutError:
         pytest.skip("GetResultById timed out for invalid ID — cannot verify error behaviour")

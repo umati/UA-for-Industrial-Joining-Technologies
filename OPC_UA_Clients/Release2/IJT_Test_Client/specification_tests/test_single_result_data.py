@@ -33,6 +33,7 @@ from helpers.namespaces import (
     ResultType,
 )
 from helpers.node_discovery import find_child_by_browse_name, find_child_by_browse_name_any, find_joining_system
+from helpers.opcua_status import require_server_rejection
 from helpers.result_collector import ResultCollector
 from helpers.result_validator import (
     assert_result_data_valid,
@@ -1314,8 +1315,8 @@ async def test_result_additional_data_write_is_rejected(subscription_client, ns_
         pytest.fail(
             "Write to Results/Result/ResultMetaData node succeeded — expected Bad_NotWritable or Bad_UserAccessDenied"
         )
-    except ua.UaError:
-        pass  # Any UaError (Bad_NotWritable, Bad_UserAccessDenied, etc.) is the expected outcome
+    except ua.UaError as exc:
+        require_server_rejection(exc, "Write Results/Result/ResultMetaData")
 
 
 # ===========================================================================
@@ -1644,5 +1645,5 @@ async def test_monitored_item_with_invalid_event_filter_is_rejected(subscription
             "Server accepted invalid EventFilter without error; "
             "strict conformance requires Bad_MonitoredItemFilterInvalid"
         )
-    except ua.UaError:
-        pass  # Expected: server rejected the invalid filter
+    except ua.UaError as exc:
+        require_server_rejection(exc, "CreateMonitoredItems(invalid EventFilter)")

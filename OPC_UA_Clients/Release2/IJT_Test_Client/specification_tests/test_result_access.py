@@ -54,6 +54,7 @@ from helpers.cu_registry import CU
 from helpers.event_collector import EventCollector
 from helpers.namespaces import BN, NS_APP, NS_IJT_BASE, NS_MACH_RESULT, IJTTypes, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
+from helpers.opcua_status import require_server_rejection
 from helpers.result_polling import extract_result_id, poll_until_result_id_changes
 from helpers.result_validator import assert_result_data_valid
 from helpers.skip_reasons import skip_accepted_policy
@@ -844,8 +845,8 @@ async def test_get_result_by_id_with_nonexistent_id_returns_error(opcua_client, 
         if ns_indices.get(NS_APP) is not None:
             pytest.skip(f"{message}; known simulator gap")
         pytest.fail(message)
-    except ua.UaError:
-        pass  # Expected: server correctly rejected the unknown identifier
+    except ua.UaError as exc:
+        require_server_rejection(exc, "GetResultById(nonexistent ResultId)")
     except asyncio.TimeoutError:
         pytest.skip(
             "GetResultById with nonexistent identifier timed out — server may be slow to reject unknown identifiers"
@@ -1232,7 +1233,7 @@ async def test_request_unacknowledged_results_is_callable(opcua_client, result_t
 
 
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
-async def test_release_result_handle_succeeds_with_valid_handle(opcua_client, result_trigger, ns_indices):
+async def test_release_result_handle_is_absent_or_rejected(opcua_client, result_trigger, ns_indices):
     """ReleaseResultHandle must be absent or reject calls in this server profile."""
     ns_mr = ns_indices.get(NS_MACH_RESULT)
     if ns_mr is None:
@@ -1242,7 +1243,7 @@ async def test_release_result_handle_succeeds_with_valid_handle(opcua_client, re
 
     release_node = await find_child_by_browse_name(rm, BN.RELEASE_RESULT_HANDLE, ns_mr)
     if release_node is None:
-        return
+        pytest.skip("ReleaseResultHandle not exposed; method call was not exercised")
     handle_arg = handle if handle is not None else 0
 
     try:
@@ -1250,7 +1251,8 @@ async def test_release_result_handle_succeeds_with_valid_handle(opcua_client, re
             rm.call_method(release_node.nodeid, handle_arg),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
+    except ua.UaError as exc:
+        require_server_rejection(exc, "ReleaseResultHandle")
         return
     pytest.fail("ReleaseResultHandle unexpectedly returned Good on unsupported profile")
 
@@ -1459,8 +1461,8 @@ async def test_get_latest_result_with_negative_timeout_does_not_crash(opcua_clie
         logger.info(
             "GetLatestResult with negative timeout returned without UaError; server handles invalid timeout gracefully"
         )
-    except ua.UaError:
-        pass  # Expected: server correctly rejected the invalid timeout
+    except ua.UaError as exc:
+        require_server_rejection(exc, "GetLatestResult(negative timeout)")
     except asyncio.TimeoutError:
         pytest.fail(
             "GetLatestResult with negative timeout blocked indefinitely — "
@@ -1662,8 +1664,8 @@ async def test_get_result_by_id_with_empty_result_id_returns_error(opcua_client,
             "known simulator compliance gap; server does not validate empty identifiers. "
             "Verify against a spec-compliant server."
         )
-    except ua.UaError:
-        pass  # Expected: server correctly rejected the empty identifier
+    except ua.UaError as exc:
+        require_server_rejection(exc, "GetResultById(empty ResultId)")
     except asyncio.TimeoutError:
         pytest.skip("GetResultById with empty identifier timed out unexpectedly")
 
@@ -1833,8 +1835,8 @@ async def test_write_to_result_variable_is_rejected(result_management, ns_indice
             "Writing to Results/Result/ResultMetaData should have raised ua.UaError "
             "(BadNotWritable or BadUserAccessDenied) but succeeded unexpectedly"
         )
-    except ua.UaError:
-        pass  # Expected: server correctly rejected the write attempt
+    except ua.UaError as exc:
+        require_server_rejection(exc, "Write Results/Result/ResultMetaData")
 
 
 @pytest.mark.negative
@@ -1855,8 +1857,8 @@ async def test_read_fabricated_node_id_returns_bad_status(opcua_client, ns_indic
             "Reading a fabricated NodeId should have raised ua.UaError "
             "(BadNodeIdUnknown) but succeeded — server returned data for a non-existent node"
         )
-    except ua.UaError:
-        pass  # Expected: server correctly reported the unknown NodeId
+    except ua.UaError as exc:
+        require_server_rejection(exc, "Read fabricated NodeId")
 
 
 # ---------------------------------------------------------------------------
@@ -2022,8 +2024,8 @@ async def test_request_results_with_inverted_sequence_range_handled_gracefully(
                 pytest.fail("Server incorrectly accepted inverted sequence range (100 > 1) with Status=0")
         else:
             pytest.fail("Server accepted inverted sequence range without returning error Status")
-    except ua.UaError:
-        pass  # Server rejected with OPC UA error — expected
+    except ua.UaError as exc:
+        require_server_rejection(exc, "RequestResults(inverted range)")
     except asyncio.TimeoutError:
         pytest.fail("RequestResults timed out during negative inverted-range test")
 
@@ -2057,8 +2059,8 @@ async def test_request_results_with_no_pending_results_does_not_crash(opcua_clie
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        pass  # Acceptable — server may signal no results via error
+    except ua.UaError as exc:
+        require_server_rejection(exc, "RequestResults(no pending results)")
     except asyncio.TimeoutError:
         pytest.fail("RequestResults did not return within timeout when no results pending")
     else:
@@ -2233,8 +2235,8 @@ async def test_request_results_no_data_does_not_crash_server(opcua_client, ns_in
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        pass  # Acceptable — server may signal no results via error
+    except ua.UaError as exc:
+        require_server_rejection(exc, "RequestResults(no prior data)")
     except asyncio.TimeoutError:
         pytest.fail("RequestResults did not return within timeout when called with no prior data")
 
@@ -2348,8 +2350,8 @@ async def test_acknowledge_results_with_nonexistent_id_returns_error(opcua_clien
             ),
             timeout=_METHOD_WALL_TIMEOUT,
         )
-    except ua.UaError:
-        pass  # Acceptable when the server reports the domain error as service-level Bad.
+    except ua.UaError as exc:
+        require_server_rejection(exc, "AcknowledgeResults(nonexistent ResultId)")
     except asyncio.TimeoutError:
         pytest.fail("AcknowledgeResults timed out during negative test")
     else:
