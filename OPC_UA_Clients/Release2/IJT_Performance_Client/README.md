@@ -63,11 +63,11 @@ python run_fleet.py --profile profiles/work_pc_colocated.yaml --servers 10 -w 4
 
 ### Two machines (serve-fleet → client-only)
 
-On the **producer** (simulators). Replace `192.168.1.10` with this PC’s LAN IP. Leave the process running until the client finishes (press Enter to stop):
+On the **producer** (simulators). Replace `192.168.1.10` with this PC’s LAN IP. Leave the process running until the client finishes (stop with **Ctrl+C**, or use `--serve-for <seconds>`):
 
 ```bash
 python run_fleet.py --role serve-fleet --advertise-host 192.168.1.10 --profile profiles/serve_fleet.yaml --servers 10
-# Writes test-results/fleet-inventory.json (copy that file to the client PC, or share the folder)
+# Writes test-results/fleet-inventory.json (and a ready marker). Copy that file to the client PC, or share the folder.
 ```
 
 On the **consumer** (benchmark client only):
@@ -112,6 +112,10 @@ python run_fleet.py --settle-timeout 15 --fail-p90 100 --fail-p90-client-ready 1
 | `--advertise-host` | Host/IP written into inventory URLs (needed for remote clients) | `127.0.0.1` |
 | `--inventory-source` | File or URL for `client-only` | From profile |
 | `--claim-intended` | `auto`, `capacity` (Profile A), or `split_path` (Profile B attempt) | From profile / `auto` |
+| `--max-inflight N` | Max in-flight triggers per worker (`0` = unlimited) | **4** |
+| `--serve-for S` | `serve-fleet` only: exit after S seconds (instead of waiting for Ctrl+C) | Off |
+
+**Load defaults (production hardening):** request timeout 120 s / watchdog 30 s; requested session timeout 600000 ms; disconnected method sessions are retired (no reconnect this pass). Failed remote clock probes mark samples `INCOMPLETE` (excluded from VALID stats). Prefer `--max-inflight 4` (default) under heavy colocated load; use `0` only when you intentionally want the old unlimited gather. Listen-only controller work: profile `controller_observe.yaml`.
 
 ### Larger local load (example)
 
@@ -129,7 +133,9 @@ Full options: `python run_fleet.py --help`. Depth (timing model, integrity gate,
 
 ### Reports (`test-results/`)
 
-- `perf-fleet.md` — summary (Fastest, Average, 90% under, 99% under, Slowest), integrity, per-server table
+The console / Markdown FINAL SUMMARY is management-oriented: **Scale** (servers × results per server × total), **Result Latency**, **Assessment** (outcome is not always a problem), then **Detail**. Outcome is exactly one of **OK**, **INFORMATION**, or **ACTION NEEDED** (colocated `LOCAL_HOST_CPU` is INFORMATION, not a failure). **Results Used For Stats** means integrity-OK samples that feed the latency statistics. Plant comfort for OK vs INFORMATION is delivery P90 under **500 ms** when no `--fail-p90` is set. Glossary depth lives in [PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md).
+
+- `perf-fleet.md` — same story as the console summary (shareable; no emoji)
 - `perf-fleet.csv` — sample-level metrics (no heavy trace curves)
 - `perf-fleet.json` — machine-readable metrics + claim / effective config
 - `junit-fleet.xml` — CI gate

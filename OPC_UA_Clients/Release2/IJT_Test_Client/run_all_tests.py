@@ -1795,7 +1795,7 @@ def _step_target_run(plan: RunPlan, *, excel_mode: str = "always", excel_out: st
     # from different runs never overwrites each other.  A ``latest`` symlink
     # (or junction) is updated to point to the newest run.
     base_output = plan.output_dir or plan.profile.output_dir_path(base_dir=_HERE)
-    profile_name = Path(plan.profile.source_path).stem if plan.profile.source_path else "target"
+    profile_name = _filesystem_profile_name(plan.profile.source_path)
     output_dir = _make_unique_run_dir(base_output, profile_name)
 
     _log(f"  Endpoint:      {plan.endpoint or '<not set>'}  (source: {plan.endpoint_source})")
@@ -1974,6 +1974,28 @@ def _subcommand_init_profile(endpoint: str, output_path: str) -> int:
     return 0
 
 
+def _safe_dir_component(name: str) -> str:
+    """Return *name* with characters that are illegal in a Windows directory removed."""
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
+    return cleaned or "default"
+
+
+def _filesystem_profile_name(source_path: str | None) -> str:
+    """Return one legal directory name for a target-run evidence folder.
+
+    A real manifest contributes its filename stem. An ad-hoc ``--endpoint`` run
+    has no file; ``build_default_profile`` labels that case ``<default>`` (other
+    in-memory profiles use the same ``<...>`` form). Those labels are not
+    filenames, and ``<`` / ``>`` are illegal in a Windows directory name.
+    """
+    source = (source_path or "").strip()
+    if source and not (source.startswith("<") and source.endswith(">")):
+        name = Path(source).stem
+    else:
+        name = "default"
+    return _safe_dir_component(name)
+
+
 def _make_unique_run_dir(base_dir: Path, profile_name: str) -> Path:
     """Return a timestamped subdirectory under *base_dir* for one target run.
 
@@ -1983,6 +2005,7 @@ def _make_unique_run_dir(base_dir: Path, profile_name: str) -> Path:
     import datetime
 
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    profile_name = _safe_dir_component(profile_name)
     run_dir = base_dir / profile_name / stamp
     run_dir.mkdir(parents=True, exist_ok=True)
 

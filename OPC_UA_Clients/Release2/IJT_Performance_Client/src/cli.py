@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -88,6 +89,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--mode",
         choices=["passive", "active_burst", "both"],
         help="Execution mode",
+    )
+    parser.add_argument(
+        "--max-inflight",
+        type=int,
+        default=None,
+        metavar="N",
+        help="SimulateSingleResult calls in flight per worker (default: 4, 0 disables the cap)",
     )
     parser.add_argument(
         "--require-full-coverage",
@@ -299,6 +307,9 @@ def _resolve_configuration(
     if args.mode:
         cfg.mode = args.mode
         tracker.mark("mode", "cli")
+    if getattr(args, "max_inflight", None) is not None:
+        cfg.max_inflight_triggers = args.max_inflight
+        tracker.mark("max_inflight_triggers", "cli")
     if args.require_full_coverage:
         cfg.require_full_coverage = True
         tracker.mark("require_full_coverage", "cli")
@@ -484,12 +495,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         if inventory_http is not None:
             logger.info(
-                "Inventory HTTP listening on %s — press Enter to stop (or Ctrl+C).",
+                "Inventory HTTP listening on %s — Ctrl+C to stop.",
                 inventory_http.url,
             )
             try:
-                input()
-            except (KeyboardInterrupt, EOFError):
+                while True:
+                    time.sleep(0.5)
+            except KeyboardInterrupt:
                 pass
             inventory_http.stop()
         return 0
@@ -506,6 +518,8 @@ def main(argv: list[str] | None = None) -> int:
         verbose=bool(args.verbose),
         clock_tolerance_ms=cfg.clock_tolerance_ms,
         settle_timeout_s=cfg.settle_timeout_seconds,
+        max_inflight_triggers=cfg.max_inflight_triggers,
+        connection_security=cfg.connection_security,
     )
 
     samples = []
@@ -593,10 +607,18 @@ def main(argv: list[str] | None = None) -> int:
         all_endpoints_local=all_endpoints_local,
     )
 
-    print_console_report(samples, verdict, cfg.name, timing=timing_summary)
+    claim_fail = cfg.claim_intended == "split_path" and claim.achieved == "UNPROVEN"
+    report_kwargs = {
+        "timing": timing_summary,
+        "samples_per_endpoint": args.samples_per_endpoint,
+        "fail_p90_ms": cfg.fail_p90_ms,
+        "fail_p90_client_ready_ms": cfg.fail_p90_client_ready_ms,
+        "gate_failed": (not coverage_valid) or claim_fail,
+    }
+    print_console_report(samples, verdict, cfg.name, **report_kwargs)
 
     if args.markdown:
-        md_text = generate_markdown_report(samples, verdict, cfg.name, timing=timing_summary)
+        md_text = generate_markdown_report(samples, verdict, cfg.name, **report_kwargs)
         Path(args.markdown).write_text(md_text, encoding="utf-8")
         logger.info(f"Wrote Markdown summary to {args.markdown}")
 
@@ -610,8 +632,6 @@ def main(argv: list[str] | None = None) -> int:
                 f"{label} ({verdict.metrics_summary[key]:.1f}ms) exceeded SLA threshold ({limit:.1f}ms)"
             )
     fail_msg = "; ".join(sla_breaches) or None
-
-    claim_fail = cfg.claim_intended == "split_path" and claim.achieved == "UNPROVEN"
 
     gate_fail = False
     if cfg.min_coverage is not None and samples:

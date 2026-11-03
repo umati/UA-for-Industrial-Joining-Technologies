@@ -24,7 +24,9 @@ client-only = consume inventory (no local sims). See README.md.
 from __future__ import annotations
 
 import argparse
+import json
 import math
+import os
 import subprocess
 import sys
 import time
@@ -169,6 +171,31 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable debug logging",
     )
+    p.add_argument(
+        "--mode",
+        choices=["passive", "active_burst", "both"],
+        default=None,
+        help="Execution mode. Default for a simulator fleet is both. A profile that sets execution.mode wins when this is omitted.",
+    )
+    p.add_argument(
+        "--max-inflight",
+        type=int,
+        default=None,
+        metavar="N",
+        help="SimulateSingleResult calls in flight per worker (default: 4 from the client, 0 disables the cap)",
+    )
+    p.add_argument(
+        "--ready-file",
+        default=str(_RESULTS_DIR / "fleet-ready.json"),
+        help="serve-fleet writes this file once the simulators and inventory are up",
+    )
+    p.add_argument(
+        "--serve-for",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help="serve-fleet keeps simulators up for this many seconds, then stops. Default: until Ctrl+C",
+    )
     return p
 
 
@@ -201,7 +228,86 @@ def validate_fleet_args(
     for flag, value in (("--fail-p90", args.fail_p90), ("--fail-p90-client-ready", args.fail_p90_client_ready)):
         if value is not None and (not math.isfinite(value) or value <= 0.0):
             return f"Invalid {flag}: must be finite and > 0.0 (got {value})"
+    max_inflight = getattr(args, "max_inflight", None)
+    if max_inflight is not None and (
+        isinstance(max_inflight, bool) or not isinstance(max_inflight, int) or max_inflight < 0
+    ):
+        return f"Invalid --max-inflight: must be an integer >= 0 (got {max_inflight})"
+    serve_for = getattr(args, "serve_for", None)
+    if serve_for is not None and (not math.isfinite(serve_for) or serve_for <= 0.0):
+        return f"Invalid --serve-for: must be finite and > 0.0 (got {serve_for})"
     return None
+
+
+def measurement_window_seconds(
+    *,
+    servers: int,
+    samples_per_server: int,
+    burst_delay: float,
+    workers: int | None,
+    max_inflight: int,
+) -> float:
+    """Return a measurement window long enough for paced trigger rounds.
+
+    The historical allowance was 0.5 seconds per round on top of the burst delay,
+    which assumed every endpoint on a worker was triggered together. Each extra
+    in-flight wave adds another 0.5 seconds so the same command is not cut off.
+    """
+    if workers is None:
+        cpu_cnt = os.cpu_count() or 4
+        target_workers = max(servers if servers <= 4 else 4, (servers + 19) // 20)
+        workers = min(target_workers, min(cpu_cnt, 32), max(1, servers))
+    workers = max(1, min(workers, max(1, servers)))
+    per_worker = math.ceil(servers / workers)
+    cap = per_worker if max_inflight <= 0 else max(1, max_inflight)
+    waves = math.ceil(per_worker / cap)
+    per_round = burst_delay + 0.5 * waves
+    setup_buffer = max(30.0, servers * 0.06)
+    return max(60.0, samples_per_server * per_round + setup_buffer)
+
+
+def _execution_mode(args: argparse.Namespace, cfg) -> str:
+    """Simulator fleets stay on mode both unless the operator or the profile says otherwise."""
+    chosen = getattr(args, "mode", None)
+    if chosen:
+        return str(chosen)
+    if "mode" in getattr(cfg, "explicit_profile_fields", frozenset()):
+        return str(cfg.mode)
+    return "both"
+
+
+def _inflight_cap(args: argparse.Namespace, cfg) -> int:
+    chosen = getattr(args, "max_inflight", None)
+    if chosen is not None:
+        return int(chosen)
+    return int(getattr(cfg, "max_inflight_triggers", 4))
+
+
+def _worker_count(args: argparse.Namespace, cfg) -> int | None:
+    """Worker count the client pool will start. None means the pool's auto formula."""
+    chosen = getattr(args, "workers", None)
+    if chosen is not None:
+        return int(chosen)
+    env_raw = os.environ.get("OPCUA_WORKERS")
+    if env_raw:
+        try:
+            return int(env_raw)
+        except ValueError:
+            pass
+    pinned = getattr(cfg, "max_worker_processes", None)
+    if pinned is not None:
+        return int(pinned)
+    return None
+
+
+def _wait_for_stop(seconds: float | None) -> None:
+    """Block until Ctrl+C, or until *seconds* elapse. A closed stdin does not stop the fleet."""
+    deadline = None if seconds is None else time.monotonic() + seconds
+    try:
+        while deadline is None or time.monotonic() < deadline:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
 
 
 def _load_fleet_profile(args: argparse.Namespace):
@@ -243,7 +349,9 @@ def _build_client_cli_args(
         "--burst-delay",
         str(args.burst_delay),
         "--mode",
-        "both",
+        _execution_mode(args, cfg),
+        "--max-inflight",
+        str(_inflight_cap(args, cfg)),
         "--require-full-coverage",
         "--role",
         cfg.role,
@@ -370,9 +478,13 @@ def main() -> int:
         if args.duration is not None:
             duration = args.duration
         else:
-            estimated_burst_time = args.samples_per_server * (args.burst_delay + 0.5)
-            setup_buffer = max(30.0, n_endpoints * 0.06)
-            duration = max(60.0, estimated_burst_time + setup_buffer)
+            duration = measurement_window_seconds(
+                servers=n_endpoints,
+                samples_per_server=args.samples_per_server,
+                burst_delay=args.burst_delay,
+                workers=_worker_count(args, cfg),
+                max_inflight=_inflight_cap(args, cfg),
+            )
         return client_main(
             _build_client_cli_args(
                 args,
@@ -408,11 +520,16 @@ def main() -> int:
     if args.duration is not None:
         duration = args.duration
     else:
-        estimated_burst_time = args.samples_per_server * (args.burst_delay + 0.5)
-        setup_buffer = max(30.0, args.servers * 0.06)
-        duration = max(60.0, estimated_burst_time + setup_buffer)
+        duration = measurement_window_seconds(
+            servers=args.servers,
+            samples_per_server=args.samples_per_server,
+            burst_delay=args.burst_delay,
+            workers=_worker_count(args, cfg),
+            max_inflight=_inflight_cap(args, cfg),
+        )
 
-    workers_display = f"{args.workers} (explicit)" if args.workers is not None else "auto-scaled"
+    planned_workers = _worker_count(args, cfg)
+    workers_display = f"{planned_workers} (pinned)" if planned_workers is not None else "auto-scaled"
 
     print("\n" + "=" * 72)
     print(f"  IJT Performance Client — Fleet Benchmark ({args.servers} Servers, role={role})")
@@ -422,6 +539,8 @@ def main() -> int:
     print(f"  Burst delay:          {args.burst_delay}s between rounds")
     print(f"  Measurement window:   {duration:.1f}s")
     print(f"  Worker processes:     {workers_display}")
+    print(f"  Execution mode:       {_execution_mode(args, cfg)}")
+    print(f"  In-flight cap:        {_inflight_cap(args, cfg)} per worker (0 = no cap)")
     print(f"  Simulator binary:     {exe.name}")
     print("=" * 72 + "\n")
 
@@ -468,11 +587,28 @@ def main() -> int:
                 inventory_http.start()
                 _print_status(f"[fleet] Inventory HTTP: {inventory_http.url}")
             _print_status("\n[fleet] serve-fleet mode: simulators running; benchmark client not started.")
-            _print_status("[fleet] Press Enter to terminate all servers...")
-            try:
-                input()
-            except (KeyboardInterrupt, EOFError):
-                pass
+            ready_path = Path(args.ready_file)
+            ready_path.parent.mkdir(parents=True, exist_ok=True)
+            ready_path.write_text(
+                json.dumps(
+                    {
+                        "ready": True,
+                        "role": role,
+                        "endpoints": len(endpoints),
+                        "inventory": str(inv_path),
+                        "pid": os.getpid(),
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            _print_status(f"[fleet] Ready file: {ready_path}")
+            if args.serve_for is None:
+                _print_status("[fleet] Simulators stay up until Ctrl+C.")
+            else:
+                _print_status(f"[fleet] Simulators stay up for {args.serve_for:.1f}s (Ctrl+C stops earlier).")
+            _wait_for_stop(args.serve_for)
             return 0
 
         _print_status(
@@ -498,11 +634,8 @@ def main() -> int:
 
         if args.keep_running:
             _print_status("\n[fleet] Servers are still running for manual inspection.")
-            _print_status("[fleet] Press Enter to terminate all servers...")
-            try:
-                input()
-            except (KeyboardInterrupt, EOFError):
-                pass
+            _print_status("[fleet] Ctrl+C to terminate all servers...")
+            _wait_for_stop(None)
 
         return exit_code
 

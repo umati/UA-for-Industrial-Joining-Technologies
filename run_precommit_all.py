@@ -189,6 +189,8 @@ def _run_precommit_stream(cmd: list[str], cwd: Path) -> int:
     """Stream pre-commit output line by line with timestamps and per-hook durations."""
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    env.setdefault("PYTHONUTF8", "1")
     proc = subprocess.Popen(  # noqa: S603 - fixed internal command list
         cmd,
         cwd=cwd,
@@ -196,6 +198,8 @@ def _run_precommit_stream(cmd: list[str], cwd: Path) -> int:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         bufsize=1,
     )
     t_last = time.monotonic()

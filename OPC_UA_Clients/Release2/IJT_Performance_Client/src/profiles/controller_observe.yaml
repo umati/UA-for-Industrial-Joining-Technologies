@@ -1,0 +1,32 @@
+# Listen-only run against controllers. Does not call SimulateSingleResult or any other method.
+# Example:
+#   python run_fleet.py --role client-only --profile profiles/controller_observe.yaml --inventory-source endpoints.json
+# Add a connection: and authentication: block when the server is not anonymous.
+# Those fields match the IJT Test Client. The simulator fleet does not use this profile.
+schema_version: 2
+name: "Controller observe"
+description: "Subscribe to joining results. No method calls."
+
+role: client-only
+
+claim:
+  intended: split_path
+
+inventory:
+  source: test-results/fleet-inventory.json
+
+execution:
+  mode: passive
+  duration_seconds: 60.0
+  target_sample_count: 100
+  burst_trigger_count: 0
+  require_full_coverage: true
+
+engine:
+  connect_concurrency: 10
+  sub_period_ms: 100
+
+report:
+  host_fingerprint: true
+  include_network: false
+  redact: true

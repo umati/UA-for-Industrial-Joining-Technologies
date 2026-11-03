@@ -25,15 +25,20 @@ import asyncio
 import logging
 from dataclasses import fields
 from enum import Enum
-from typing import Annotated, get_args, get_origin, get_type_hints
+from typing import Annotated, Any, get_args, get_origin, get_type_hints
 
 from asyncua import Client
 from asyncua.ua import ua_binary, uatypes
 
 logger = logging.getLogger(__name__)
 
-# Standard 10-minute session timeout (600,000 ms) for long test stability
+# Standard 10-minute session timeout (600,000 ms) for long test stability.
+# The OPC UA session timeout is not the asyncua socket timeout. The library default
+# request timeout is 4 seconds and the watchdog is 1 second; a busy event loop
+# longer than that drops the session. Match the IJT Test Client: 120 s / 30 s.
 DEFAULT_REQUESTED_SESSION_TIMEOUT_MS = 600_000
+DEFAULT_CLIENT_TIMEOUT_S = 120.0
+DEFAULT_WATCHDOG_INTERVAL_S = 30.0
 DISCONNECT_SETTLE_DELAY_S = 0.2
 _TYPE_SERIALIZER_PATCHED_ATTR = "_ijt_number_serializer_patched"
 ASYNCUA_VERIFIED_VERSION = "2.1.0"
@@ -53,13 +58,46 @@ def verify_asyncua_version_compatibility() -> str:
 
 
 def apply_session_policy(client: Client, session_timeout_ms: int = DEFAULT_REQUESTED_SESSION_TIMEOUT_MS) -> Client:
-    """Configures safe session timeout parameters on a client before connecting."""
+    """Configures safe session, request, and watchdog timeouts on a client before connecting.
+
+    asyncua 2.1 accepts ``timeout`` / ``watchdog_intervall`` on the constructor, then keeps them
+    as ``uaclient._timeout`` and ``_watchdog_intervall``. Assigning public ``.timeout`` attributes
+    does not update those live fields, so this sets the real storage (and mirrors the constructor
+    names for test doubles).
+    """
     verify_asyncua_version_compatibility()
     target = getattr(client, "aio_obj", client)
     target.session_timeout = session_timeout_ms
     client.session_timeout = session_timeout_ms
+
+    ua_client = getattr(target, "uaclient", None)
+    if ua_client is not None:
+        setattr(ua_client, "_timeout", DEFAULT_CLIENT_TIMEOUT_S)
+    setattr(target, "_watchdog_intervall", DEFAULT_WATCHDOG_INTERVAL_S)
+    # Test doubles and wrappers may only expose the constructor parameter names.
+    setattr(client, "timeout", DEFAULT_CLIENT_TIMEOUT_S)
+    setattr(client, "watchdog_intervall", DEFAULT_WATCHDOG_INTERVAL_S)
+
     apply_asyncua_generated_type_compatibility_patch()
     return client
+
+
+def open_client(url: str, *, client_cls: Any = None) -> Client:
+    """Open one asyncua client with the load-test timeouts applied before connect.
+
+    ``client_cls`` lets a caller pass its own Client symbol (tests patch that symbol).
+    A double that only accepts the URL still receives the timeouts through ``apply_session_policy``.
+    """
+    factory = Client if client_cls is None else client_cls
+    try:
+        client = factory(
+            url,
+            timeout=DEFAULT_CLIENT_TIMEOUT_S,
+            watchdog_intervall=DEFAULT_WATCHDOG_INTERVAL_S,
+        )
+    except TypeError:
+        client = factory(url)
+    return apply_session_policy(client)
 
 
 def _is_subtyped_number(uatype: object) -> bool:

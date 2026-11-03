@@ -19,9 +19,13 @@ def test_print_console_report_empty(capsys):
     print_console_report([], verdict, "TestPool")
     captured = capsys.readouterr()
     assert "IJT PERFORMANCE & SCALE BENCHMARK REPORT: TestPool" in captured.out
-    assert "Results Received         : 0 total" in captured.out
+    assert "Servers Tested" in captured.out
+    assert "Results Per Server" in captured.out
+    assert "ACTION NEEDED" in captured.out
     assert "NO_DATA" in captured.out
     assert "Test warning" in captured.out
+    assert "Assessment" in captured.out
+    assert "FINDING" not in captured.out
 
 
 def test_print_console_report_with_samples(capsys):
@@ -30,7 +34,7 @@ def test_print_console_report_with_samples(capsys):
         headline="Healthy",
         explanation="All within limits",
         recommendation="None",
-        metrics_summary={"total_p90_ms": 22.0},
+        metrics_summary={"total_p90_ms": 22.0, "delivery_p90_ms": 18.0},
         warnings=[],
     )
     sample = LatencySample(
@@ -39,14 +43,22 @@ def test_print_console_report_with_samples(capsys):
         network_transport_time_ms=10.0,
         server_processing_time_ms=12.0,
         total_result_transfer_time_ms=22.0,
+        delivery_time_ms=18.0,
     )
-    print_console_report([sample], verdict, "TestPoolWithSamples")
+    print_console_report([sample], verdict, "TestPoolWithSamples", samples_per_endpoint=1)
     captured = capsys.readouterr()
     assert "IJT PERFORMANCE & SCALE BENCHMARK REPORT: TestPoolWithSamples" in captured.out
-    assert "Results Received         : 1 total" in captured.out
-    assert "Integrity Audit          : 1 valid (100.0% valid rate)" in captured.out
-    assert "HEALTHY" in captured.out
-    assert "22.0ms" in captured.out
+    assert "Results Per Server" in captured.out
+    assert "1 servers × 1 each" in captured.out or "1 each" in captured.out
+    assert "Results Used For Stats" in captured.out
+    assert "HEALTHY" in captured.out or "OK —" in captured.out
+    assert "Scale" in captured.out
+    assert "Result Latency" in captured.out
+    assert "Assessment" in captured.out
+    assert "HEADLINE LATENCY" not in captured.out
+    assert "Key Latency" not in captured.out
+    assert "FINDING" not in captured.out
+    assert "METRIC DEFINITIONS" not in captured.out
 
 
 def test_print_console_report_per_server(capsys):
@@ -76,15 +88,15 @@ def test_print_console_report_per_server(capsys):
             total_result_transfer_time_ms=None,
         ),
     ]
-    print_console_report(samples, verdict, "MultiServerFleet")
+    print_console_report(samples, verdict, "MultiServerFleet", samples_per_endpoint=1)
     captured = capsys.readouterr()
-    assert "PER-SERVER BREAKDOWN (2 Servers, VALID delivery time)" in captured.out
+    assert "Detail — Per Server (2 Servers)" in captured.out
     assert "opc.tcp://localhost:40001" in captured.out
     assert "opc.tcp://localhost:40002" in captured.out
     assert "+1.5 ms (server ahead)" in captured.out
     assert "18.5ms" in captured.out
     assert "N/A" in captured.out
-    assert "FLEET AGGREGATE SUMMARY (All Servers):" in captured.out
+    assert "Results Per Server" in captured.out
 
 
 def test_print_console_report_excludes_invalid_results_from_statistics(capsys):
@@ -103,12 +115,14 @@ def test_print_console_report_excludes_invalid_results_from_statistics(capsys):
     ]
     print_console_report(samples, verdict, "Mixed")
     out = capsys.readouterr().out
-    assert "Results Received         : 2 total" in out
-    assert "Integrity Audit          : 1 valid (50.0% valid rate)" in out
-    assert "Wire Timing Samples      : 1/1 verified (100.0%)" in out
-    assert "11.0ms" in out
+    assert "Total Results" in out
+    assert "Results Used For Stats" in out
+    assert "50.0%" in out
+    assert "Wire Timing" in out
+    assert "11.0" in out
     assert "999.0" not in out
-    assert "BENCHMARK INTEGRITY AUDIT (1 issues detected)" in out
+    assert "Integrity Audit (1 Issues)" in out
+    assert "ACTION NEEDED" in out
 
 
 def test_enable_ansi_windows():
@@ -116,21 +130,17 @@ def test_enable_ansi_windows():
 
     from src.reporters.console import _enable_ansi_windows
 
-    # Call on the real system (safe on Windows, Linux, and macOS)
     res = _enable_ansi_windows()
     assert isinstance(res, bool)
 
-    # 1. Test missing windll (Linux/macOS behavior)
     with patch.dict("sys.modules", {"ctypes": MagicMock(spec=[])}):
         assert _enable_ansi_windows() is False
 
-    # 2. Test kernel32 error path
     mock_bad = MagicMock()
     mock_bad.kernel32.GetConsoleMode.side_effect = RuntimeError("mock error")
     with patch("ctypes.windll", mock_bad, create=True):
         assert _enable_ansi_windows() is False
 
-    # 3. Test kernel32 success path
     mock_good = MagicMock()
     mock_good.kernel32.GetConsoleMode.return_value = 1
     with patch("ctypes.windll", mock_good, create=True):
@@ -147,7 +157,6 @@ def test_safe_print_branches(capsys, monkeypatch):
     out = capsys.readouterr().out
     assert "test regular print" in out
 
-    # Test reconfigure branch when encoding is not utf-8
     mock_stdout = MagicMock()
     mock_stdout.encoding = "cp1252"
     mock_stdout.reconfigure = MagicMock()
@@ -155,7 +164,6 @@ def test_safe_print_branches(capsys, monkeypatch):
     _safe_print("test reconfigure")
     mock_stdout.reconfigure.assert_called_once_with(encoding="utf-8")
 
-    # Test reconfigure exception
     mock_stdout.reconfigure.side_effect = RuntimeError("cannot reconfigure")
     _safe_print("test reconfigure exception")
 
@@ -191,23 +199,33 @@ def test_print_console_report_more_than_ten_problematic_endpoints(capsys):
     assert "Showing 10 of 12 affected endpoints" in out
 
 
-def test_print_console_report_uncolonized_guide_and_notes(capsys, monkeypatch):
+def test_local_host_cpu_is_information_not_action(capsys):
     verdict = DiagnosticVerdict(
-        primary_bottleneck="TEST", headline="h", explanation="e", recommendation="r", metrics_summary={}, warnings=[]
+        primary_bottleneck="LOCAL_HOST_CPU",
+        headline="Client and Servers Share This Machine",
+        explanation="colocated",
+        recommendation="Move simulators",
+        metrics_summary={"delivery_p90_ms": 113.0},
+        warnings=[],
     )
-    sample = LatencySample(
-        sample_id=1,
-        endpoint="opc.tcp://localhost:40451",
-        network_transport_time_ms=10.0,
-        server_processing_time_ms=12.0,
-        total_result_transfer_time_ms=22.0,
-    )
-    monkeypatch.setattr("src.reporters.console.metric_guide", lambda rows: ["NoColonGuideText"])
-    monkeypatch.setattr("src.reporters.console.report_notes", lambda valid, timing: ["NoColonNoteText"])
-
-    print_console_report([sample], verdict, "Uncolonized")
+    samples = [
+        LatencySample(
+            sample_id=i,
+            endpoint=f"opc.tcp://127.0.0.1:{41000 + (i % 3)}",
+            delivery_time_ms=113.0,
+            total_result_transfer_time_ms=128.0,
+            timing_source="wire",
+        )
+        for i in range(6)
+    ]
+    print_console_report(samples, verdict, "Colocated", samples_per_endpoint=2)
     out = capsys.readouterr().out
-    assert "General Guidance" in out
-    assert "NoColonGuideText" in out
-    assert "Operational Note" in out
-    assert "NoColonNoteText" in out
+    assert "INFORMATION" in out
+    assert "ACTION NEEDED" not in out
+    assert "ACTION REQUIRED" not in out
+    assert "Assessment" in out
+    assert "Results Per Server" in out
+    assert "2" in out
+    assert "3 servers × 2 each" in out
+    assert "METRIC DEFINITIONS" not in out
+    assert "FINDING" not in out

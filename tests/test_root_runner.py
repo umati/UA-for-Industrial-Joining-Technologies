@@ -2586,9 +2586,11 @@ def test_optional_import_typing_guard_detects_forward_annotation_reimport(monkey
 def test_run_capture_forces_child_python_utf8(monkeypatch) -> None:
     captured: dict[str, str] = {}
     # Host agents (and some local sandboxes) may pre-set PIP_CACHE_DIR /
-    # npm_config_cache; setdefault only fills when unset.
+    # npm_config_cache / PYTHONIOENCODING; setdefault only fills when unset.
     monkeypatch.delenv("PIP_CACHE_DIR", raising=False)
     monkeypatch.delenv("npm_config_cache", raising=False)
+    monkeypatch.delenv("PYTHONIOENCODING", raising=False)
+    monkeypatch.delenv("PYTHONUTF8", raising=False)
 
     class _FakeProc:
         returncode = 0

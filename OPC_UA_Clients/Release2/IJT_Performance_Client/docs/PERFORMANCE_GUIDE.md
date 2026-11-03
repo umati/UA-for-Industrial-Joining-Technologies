@@ -81,11 +81,24 @@ The handler timestamp above ($T_{\text{client}}$) includes time the result waits
 
 **Roles:** `colocated` runs simulators + client (default `run_fleet.py`); `serve-fleet` publishes inventory only (use `--advertise-host <LAN-IP>` so remote clients get reachable URLs); `client-only` loads inventory and runs the client elsewhere.
 
-**Inventory:** Atomic JSON (`inventory.path`) lists endpoints and `producer_host_id`, with a `content_hash` and TTL (`inventory.ttl_seconds`). Optional loopback HTTP serves the same document (`preflight_http_port` before bind). `preflight_port_range` rejects ranges overlapping reserved live/CI ports (40451, 40461, 40463, 40465, 40485) and ports that already appear busy. Expired or hash-mismatched inventory is refused. Short TTL on `serve-fleet` (< 600 s) and low remaining TTL on `client-only` (< 300 s) emit warnings.
+**Inventory:** Atomic JSON (`inventory.path`) lists endpoints and `producer_host_id`, with a `content_hash` and TTL (`inventory.ttl_seconds`). Optional loopback HTTP serves the same document (`preflight_http_port` before bind). `preflight_port_range` rejects ranges overlapping reserved live/CI ports (40451, 40461, 40463, 40465, 40485) and ports that already appear busy. Expired or hash-mismatched inventory is refused. Short TTL on `serve-fleet` (< 600 s) and low remaining TTL on `client-only` (< 300 s) emit warnings. `serve-fleet` writes a ready marker and waits for **Ctrl+C** or `--serve-for <seconds>` (stdin Enter/EOF is not the stop path).
 
 **Config precedence:** CLI flags beat environment variables (`OPCUA_FLEET_ENDPOINTS`, `OPCUA_SERVER_URL`, `OPCUA_WORKERS`, …), which beat fields explicitly set in the YAML profile, which beat built-in defaults. Effective config in JSON reports shows `{value, source}` per field (secrets redacted).
 
 **Phases:** Use `run_all_tests.py --phase1` for unit tests; `--phase2` for live runs; fleet orchestration via `python run_fleet.py --profile profiles/work_pc_colocated.yaml`.
+
+### Load and session policy (defaults)
+
+| Control | Default | Notes |
+|---|---|---|
+| `max_inflight_triggers` / `--max-inflight` | **4** per worker | `0` restores unlimited in-flight gather (older behavior) |
+| asyncua request timeout / watchdog | **120 s** / **30 s** | Applied to the library’s real timeout storage |
+| Requested OPC UA session timeout | **600000 ms** | Distinct from the request/socket timeout |
+| Disconnected method sessions | Retire | No automatic reconnect in the current pass |
+| Remote clock probe failure | Sample → `INCOMPLETE` | Excluded from VALID statistics; loopback / `--skip-clock-skew` still skip probing |
+| Connection security | Profile-validated | Unknown/invalid security keys fail closed; see `controller_observe.yaml` for listen-only |
+
+The auto measurement window grows with trigger waves and honors an explicit `-w` / `OPCUA_WORKERS` pin (not only auto-scaled worker math). Default colocated `run_fleet.py --servers N` remains execution mode **both**.
 
 ---
 
@@ -222,9 +235,24 @@ sequenceDiagram
 6. **Bypassing Calibration (`--skip-clock-skew`):**
    When client and server share an external high-precision time reference (e.g. IEEE 1588 PTP or localhost loopback testing), `--skip-clock-skew` bypasses Cristian's calibration probes and assumes zero offset ($\Delta t_{\text{skew}} = 0.0\text{ ms}$). This flag bypasses calibration; it does not verify or audit whether the underlying clocks are synchronized.
 
+7. **Failed remote probe → `INCOMPLETE`:**
+   When a probe is required (non-loopback and not skipped) and every attempt fails, samples from that endpoint are marked `INCOMPLETE` and are excluded from VALID statistics. Do not treat a missing probe as “skew = 0 with healthy VALID delivery.”
+
 ---
 
 ## 5. Interpreting Benchmark Reports and Diagnostics
+
+### Management summary outcomes (console and Markdown)
+
+The FINAL SUMMARY sections are Title Case: **Scale**, **Result Latency**, **Assessment**, **Detail**. Three unmistakable outcome labels (Assessment and footer share the same word):
+
+| Outcome | Meaning |
+|---|---|
+| **OK** | Integrity clean, no `--fail-p90*` breach, delivery P90 under **500 ms**, and no soft callout |
+| **INFORMATION** | Run succeeded; read Assessment (e.g. colocated `LOCAL_HOST_CPU`, or delivery P90 ≥ 500 ms without a hard fail limit) — not a failure by itself |
+| **ACTION NEEDED** | Integrity shortfall, `--fail-p90*` breach, no data, or a hard gate fail |
+
+**Results Used For Stats** = samples that passed integrity and are used for latency statistics (not a product “reject”). Bottleneck **codes** stay stable for tooling. Scale shows servers, **Results Per Server**, and total as an explicit product when uniform (e.g. `300 servers × 10 each`). The older ~100 ms “pipeline healthy” rule remains guide text only; it does **not** alone force ACTION NEEDED.
 
 ### Why Percentiles Matter More than Averages
 

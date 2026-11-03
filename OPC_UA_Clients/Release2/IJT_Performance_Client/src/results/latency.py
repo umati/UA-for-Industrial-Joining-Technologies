@@ -350,6 +350,7 @@ def extract_sample_from_event(
     clock_rtt_ms: float | None = None,
     bytes_received: datetime | None = None,
     decoded: datetime | None = None,
+    clock_probe_failed: bool = False,
 ) -> LatencySample:
     """Build a LatencySample from a JoiningSystemResultReadyEvent and classify its integrity.
 
@@ -406,6 +407,10 @@ def extract_sample_from_event(
         sample.integrity_reason = audit.error
     else:
         sample.integrity_status = INTEGRITY_VALID
+
+    if clock_probe_failed and sample.integrity_status == INTEGRITY_VALID:
+        sample.integrity_status = INTEGRITY_INCOMPLETE
+        sample.integrity_reason = "Clock probe failed; transfer time is not calibrated and is excluded from statistics"
 
     if t_collection_start is not None and isinstance(sample.event_time, datetime):
         tolerance_ms = clock_tolerance_ms + (clock_rtt_ms or 0.0) / 2.0

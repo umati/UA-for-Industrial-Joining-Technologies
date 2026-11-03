@@ -17,13 +17,23 @@ from urllib.parse import urlparse
 
 import yaml
 
+from .connection_security import ConnectionSecurity, connection_security_from_mapping, validate_connection_security
+
 VALID_MODES = {"passive", "active_burst", "both"}
 VALID_LIFECYCLES = {"external", "auto_simulator", "production"}
 VALID_ROLES = {"colocated", "serve-fleet", "client-only"}
 VALID_CLAIM_INTENDED = {"auto", "capacity", "split_path"}
 
 ALLOWED_TOP_KEYS_V1 = {"schema_version", "name", "description", "fleet", "execution", "engine", "thresholds", "meta"}
-ALLOWED_TOP_KEYS_V2 = ALLOWED_TOP_KEYS_V1 | {"role", "claim", "inventory", "gates", "report"}
+ALLOWED_TOP_KEYS_V2 = ALLOWED_TOP_KEYS_V1 | {
+    "role",
+    "claim",
+    "inventory",
+    "gates",
+    "report",
+    "connection",
+    "authentication",
+}
 ALLOWED_TOP_KEYS = ALLOWED_TOP_KEYS_V2  # reject unknown; schema_version gates which extras are meaningful
 
 ALLOWED_FLEET_KEYS = {"lifecycle", "endpoints", "url_template", "port_range"}
@@ -44,10 +54,44 @@ ALLOWED_ENGINE_KEYS = {
     "burst_delay_seconds",
     "clock_tolerance_ms",
     "settle_timeout_seconds",
+    "max_inflight_triggers",
 }
 ALLOWED_THRESHOLDS_KEYS = {"warn_p90_ms", "fail_p90_ms", "fail_p90_client_ready_ms"}
 ALLOWED_META_KEYS = {"name", "description", "lifecycle"}
 ALLOWED_CLAIM_KEYS = {"intended"}
+ALLOWED_CONNECTION_KEYS = {
+    "endpoint",
+    "security_mode",
+    "security_policy",
+    "client_certificate_path",
+    "client_private_key_path",
+    "server_certificate_path",
+    "trust_store_path",
+}
+ALLOWED_AUTHENTICATION_KEYS = {
+    "source",
+    "username",
+    "credentials_file",
+    "username_env_var",
+    "password_env_var",
+}
+_FORBIDDEN_SECRET_KEYS = frozenset(
+    {
+        "password",
+        "passwd",
+        "pwd",
+        "secret",
+        "token",
+        "api_key",
+        "apikey",
+        "access_key",
+        "private_key",
+        "private_key_password",
+        "certificate_password",
+        "client_secret",
+        "credentials",
+    }
+)
 ALLOWED_INVENTORY_KEYS = {
     "write_file",
     "path",
@@ -103,6 +147,9 @@ class OpcUaPoolConfig:
     skip_clock_skew: bool = False  # If True, bypasses Cristian's RTT clock skew probes (e.g. on localhost)
     clock_tolerance_ms: float = 1000.0  # Clock-health warning tolerance (plus RTT/2); never fails the gate
     settle_timeout_seconds: float = 5.0  # Max wait after the last trigger round for results to arrive
+    # 4 in-flight SimulateSingleResult calls per worker. 0 disables the cap.
+    max_inflight_triggers: int = 4
+    connection_security: ConnectionSecurity = field(default_factory=ConnectionSecurity)
     # --- schema v2 / modular plan fields (defaults preserve colocated Profile A) ---
     schema_version: int = 1
     role: str = "colocated"  # colocated | serve-fleet | client-only
@@ -207,6 +254,11 @@ class OpcUaPoolConfig:
         if self.max_disconnects is not None and self.max_disconnects < 0:
             raise ValueError(f"max_disconnects cannot be negative, got {self.max_disconnects}")
 
+        if not isinstance(self.max_inflight_triggers, int) or isinstance(self.max_inflight_triggers, bool):
+            raise ValueError(f"max_inflight_triggers must be an integer, got {self.max_inflight_triggers!r}")
+        if self.max_inflight_triggers < 0:
+            raise ValueError(f"max_inflight_triggers cannot be negative, got {self.max_inflight_triggers}")
+
         seen_endpoints = set()
         for idx, ep in enumerate(self.endpoints):
             if not isinstance(ep, str) or not ep.strip():
@@ -229,6 +281,23 @@ class OpcUaPoolConfig:
             seen_endpoints.add(ep_clean)
 
 
+def _reject_inline_secrets(node: Any, path: str) -> None:
+    """Reject a secret value inside a connection or authentication section."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            leaf = str(key).lower()
+            child = f"{path}.{key}"
+            if leaf in _FORBIDDEN_SECRET_KEYS or (isinstance(value, str) and leaf.endswith("_password")):
+                raise ValueError(
+                    f"{child}: profiles must never contain secret values. "
+                    "Use authentication.credentials_file or authentication.password_env_var."
+                )
+            _reject_inline_secrets(value, child)
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            _reject_inline_secrets(value, f"{path}[{index}]")
+
+
 def _validate_section_keys(section_dict: dict[str, Any], allowed_keys: set[str], section_name: str) -> None:
     """Helper to reject unknown keys in a configuration section."""
     for key in section_dict:
@@ -240,7 +309,14 @@ _ROOT_PROFILES_DIR = Path(__file__).resolve().parents[1] / "profiles"
 _PKG_PROFILES_DIR = Path(__file__).resolve().parent / "profiles"
 
 _PACKAGED_PROFILE_BASELINES = frozenset(
-    {"work_pc_colocated.yaml", "serve_fleet.yaml", "client_only.yaml", "single_server.yaml", "multi_server_fleet.yaml"}
+    {
+        "work_pc_colocated.yaml",
+        "serve_fleet.yaml",
+        "client_only.yaml",
+        "controller_observe.yaml",
+        "single_server.yaml",
+        "multi_server_fleet.yaml",
+    }
 )
 
 
@@ -416,6 +492,8 @@ def load_config(file_path: str | Path) -> OpcUaPoolConfig:
                 _set("clock_tolerance_ms", float(eng_sec["clock_tolerance_ms"]))
             if "settle_timeout_seconds" in eng_sec:
                 _set("settle_timeout_seconds", float(eng_sec["settle_timeout_seconds"]))
+            if "max_inflight_triggers" in eng_sec:
+                _set("max_inflight_triggers", int(eng_sec["max_inflight_triggers"]))
 
     # Thresholds section
     if "thresholds" in data:
@@ -478,6 +556,23 @@ def load_config(file_path: str | Path) -> OpcUaPoolConfig:
                 _set("report_redact", bool(rep["redact"]))
 
     config.explicit_profile_fields = frozenset(explicit)
+    for section_name, allowed in (
+        ("connection", ALLOWED_CONNECTION_KEYS),
+        ("authentication", ALLOWED_AUTHENTICATION_KEYS),
+    ):
+        if section_name not in data:
+            continue
+        section = data[section_name]
+        if not isinstance(section, dict):
+            raise ValueError(f"{section_name}: must be a mapping")
+        _validate_section_keys(section, allowed, section_name)
+        _reject_inline_secrets(section, section_name)
+    base_dir = str(source.parent) if isinstance(source, Path) else ""
+    security = connection_security_from_mapping(data, base_dir=base_dir)
+    security_issues = validate_connection_security(security)
+    if security_issues:
+        raise ValueError("connection profile cannot be applied:\n  - " + "\n  - ".join(security_issues))
+    config.connection_security = security
     # Perform strict validation
     config.validate()
     return config

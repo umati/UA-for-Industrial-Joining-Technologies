@@ -39,6 +39,19 @@ def test_clean_pytest_remainder_removes_only_separator():
     assert _mod._clean_pytest_remainder(None) == []
 
 
+def test_ad_hoc_endpoint_evidence_dir_is_a_legal_windows_name(tmp_path):
+    """``--endpoint`` without a manifest uses source_path '<default>', which Windows cannot create."""
+    assert _mod._filesystem_profile_name("<default>") == "default"
+    assert _mod._filesystem_profile_name(None) == "default"
+    assert _mod._filesystem_profile_name("") == "default"
+    assert _mod._filesystem_profile_name(str(Path("profiles") / "controller.sut.yaml")) == "controller.sut"
+
+    run_dir = _mod._make_unique_run_dir(tmp_path, "<default>")
+    assert run_dir.is_dir()
+    assert run_dir.parent.name == "_default_"
+    assert "<" not in run_dir.name and ">" not in run_dir.parent.name
+
+
 # ---------------------------------------------------------------------------
 # _StepResult state model
 # ---------------------------------------------------------------------------

@@ -47,6 +47,10 @@ class EffectiveConfigTracker:
             val = getattr(cfg, f.name)
             if f.name in self._SECRET_FIELDS:
                 val = "***" if val else None
+            elif f.name == "connection_security":
+                from .connection_security import describe_connection_security
+
+                val = describe_connection_security(val)
             src = self._sources.get(f.name, "default")
             out[f.name] = {"value": val, "source": src}
         if extra:

@@ -48,7 +48,13 @@ def run_preview() -> None:
             )
 
     timing = {"workers_reported": 20, "loop_lag_max_ms": 45.2, "loop_lag_worst_mean_ms": 6.1}
-    print_console_report(samples, verdict, "Fleet-500-Benchmark", timing=timing)
+    print_console_report(
+        samples,
+        verdict,
+        "Fleet-500-Benchmark",
+        timing=timing,
+        samples_per_endpoint=50,
+    )
 
 
 if __name__ == "__main__":

@@ -57,10 +57,13 @@ When timing hooks are installed, each sample also records when its bytes reached
 
 ### Benchmark Integrity Gate (summary)
 
+- Human FINAL SUMMARY sections: Scale, Result Latency, Assessment, Detail. Outcomes are exactly `OK` | `INFORMATION` | `ACTION NEEDED` (see PERFORMANCE_GUIDE). Soft colocated callouts use INFORMATION, not ACTION NEEDED. Scale prints servers × results-per-server; Results Used For Stats = integrity-OK samples used for latency KPIs.
 - Each result is `VALID`, `INCOMPLETE`, `DUPLICATE` or `UNMATCHED`; only `VALID` results feed statistics and pass/fail limits.
 - `active_burst`: VALID results must equal successful trigger calls per endpoint. `both`: fewer fails, extra results are counted as external events (warning). `passive`: no call matching.
 - A different IJT namespace version across endpoints fails the run; a missing one is reported as "unverified".
 - `--settle-timeout` (default 5 s) waits for late results; `--allow-partial-samples` relaxes only the sample-count target.
+- Default `--max-inflight` / `max_inflight_triggers` is **4** per worker (`0` = unlimited). Session policy applies request timeout **120 s**, watchdog **30 s**, requested session timeout **600000 ms**. Disconnected method sessions are retired (no reconnect this pass).
+- Connection security follows the shared helper pattern; unknown/invalid profile security keys fail closed. `controller_observe.yaml` is the listen-only profile.
 
 Full rules: [Performance Guide, Integrity Gate](PERFORMANCE_GUIDE.md). Report names vs. keys: [Glossary](PERFORMANCE_GUIDE.md#9-glossary).
 
@@ -78,9 +81,9 @@ Before running tests, `calibrate_clock_skew(client)`:
 5. Determines $\Delta t_{\text{skew}} = T_{\text{server}} - T_{\text{mid}}$.
 6. Applies the estimated offset: $\text{network\_transport\_time\_ms} = \text{raw\_wire} + \Delta t_{\text{skew}}$. Network asymmetry and calibration age remain sources of uncertainty.
 
-It probes several times, keeps the probe with the lowest round-trip time (RTT), and returns a `ClockCalibration(skew_ms, rtt_ms)`. `rtt_ms` is `None` when no probe succeeded, in which case the skew is 0. Local endpoints and `--skip-clock-skew` skip probing.
+It probes several times, keeps the probe with the lowest round-trip time (RTT), and returns a `ClockCalibration(skew_ms, rtt_ms)`. Local endpoints and `--skip-clock-skew` skip probing. When a probe is **required** and every attempt fails, samples are marked `INCOMPLETE` via `clock_probe_failed` (they do not enter VALID statistics with a silent skew of 0).
 
-The RTT feeds a clock-health check: an event whose skew-corrected `Time` is earlier than collection start by more than `--clock-tolerance-ms` (default 1000) plus half the round-trip time sets `clock_warning` on the sample. This is only a warning and never changes the integrity status.
+The RTT feeds a clock-health check: an event whose skew-corrected `Time` is earlier than collection start by more than `--clock-tolerance-ms` (default 1000) plus half the round-trip time sets `clock_warning` on the sample. That warning alone does not change integrity status; a failed required probe does (see above).
 
 ---
 
@@ -98,7 +101,7 @@ Schema v2 YAML adds deployment roles without changing the core `OpcUaClientPool`
 
 **Claim profiles:** **A** (`capacity`) documents colocated throughput; **B** (`split_path`) requires distinct producer/client host IDs from consumed inventory, a successful clock probe (`clock_rtt_ms` on samples — skew `0.0` alone is not enough), acceptable clock health, and high receive-timing coverage — never inferred from URL hostnames alone. Topology evidence for B requires `client-only` consumption of producer inventory (self-written colocated inventory is not independent; inventory `content_hash` detects tampering but is not a signature). **UNPROVEN** with `split_path` intended fails closed (exit 1; also reflected in JUnit).
 
-**Inventory:** Producers (`colocated`, `serve-fleet`) write `test-results/fleet-inventory.json` (configurable) with `content_hash` + TTL. Consumers (`client-only`) load by path or URL (bearer token refused over plaintext HTTP). Reserved CI/live ports and busy ports are blocked in `preflight_port_range` / `preflight_http_port` before bind. `run_fleet.py` builds client argv via one helper for colocated and client-only to avoid flag drift.
+**Inventory:** Producers (`colocated`, `serve-fleet`) write `test-results/fleet-inventory.json` (configurable) with `content_hash` + TTL. Consumers (`client-only`) load by path or URL (bearer token refused over plaintext HTTP). Reserved CI/live ports and busy ports are blocked in `preflight_port_range` / `preflight_http_port` before bind. `run_fleet.py` builds client argv via one helper for colocated and client-only to avoid flag drift. `serve-fleet` exposes a ready marker and stops on Ctrl+C or `--serve-for` (not stdin Enter).
 
 **Effective config:** `load_config` records `explicit_profile_fields`; the CLI tracker marks only those as `profile` (not every dataclass default). Precedence: CLI > env > profile > default. Env endpoint overrides while `-c` is set log a warning.
 

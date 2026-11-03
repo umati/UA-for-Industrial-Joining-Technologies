@@ -35,6 +35,7 @@ from typing import Any
 from asyncua import Client, ua
 
 from ..config import is_loopback_endpoint
+from ..connection_security import ConnectionSecurity, apply_connection_security
 from ..namespaces import (
     BN_SIMULATE_RESULTS,
     BN_SIMULATE_SINGLE_RESULT,
@@ -56,9 +57,10 @@ from ..results import (
     extract_sample_from_event,
 )
 from .session_policy import (
-    apply_session_policy,
     disconnect_client,
+    is_client_connected,
     load_ijt_type_definitions,
+    open_client,
     patch_asyncua_subtype_serializer,
 )
 from .timing_hooks import LoopLagMonitor, current_publish_timing, install_timing_hooks
@@ -70,6 +72,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_WORKERS: int = 4
 MAX_SAFE_WORKER_PROCESSES: int = 32
 MAX_WORKER_BUFFER_SIZE: int = 5000
+# How many SimulateSingleResult calls one worker may have in flight. 0 means no cap.
+# 4 keeps a real concurrent load while limiting the single-threaded decode queue.
+DEFAULT_MAX_INFLIGHT_TRIGGERS: int = 4
 # Bounded wait after the last trigger round for results of successful calls to arrive.
 DEFAULT_SETTLE_TIMEOUT_S: float = 5.0
 _NS_META_KEYS = ("version", "publication_date")
@@ -252,10 +257,12 @@ class _DurableWorkerSubHandler:
         collection_start: datetime | None = None,
         clock_tolerance_ms: float = DEFAULT_CLOCK_TOLERANCE_MS,
         clock_rtt_ms: float | None = None,
+        clock_probe_failed: bool = False,
     ) -> None:
         self.endpoint = endpoint
         self.clock_tolerance_ms = clock_tolerance_ms
         self.clock_rtt_ms = clock_rtt_ms
+        self.clock_probe_failed = clock_probe_failed
         self.local_buffer = local_buffer
         self.clock_skew_ms = clock_skew_ms
         self.max_buffer_size = max_buffer_size
@@ -290,6 +297,7 @@ class _DurableWorkerSubHandler:
             clock_rtt_ms=self.clock_rtt_ms,
             bytes_received=publish_timing[0] if publish_timing else None,
             decoded=publish_timing[1] if publish_timing else None,
+            clock_probe_failed=self.clock_probe_failed,
         )
 
         if sample.result_id:
@@ -325,6 +333,8 @@ async def _worker_event_loop(
     burst_delay: float = 1.0,
     clock_tolerance_ms: float = DEFAULT_CLOCK_TOLERANCE_MS,
     settle_timeout_s: float = DEFAULT_SETTLE_TIMEOUT_S,
+    max_inflight_triggers: int = DEFAULT_MAX_INFLIGHT_TRIGGERS,
+    connection_security: ConnectionSecurity | None = None,
 ) -> None:
     """The async task loop that runs inside each worker process."""
     patch_asyncua_subtype_serializer()
@@ -353,6 +363,13 @@ async def _worker_event_loop(
     type_definitions_lock = asyncio.Lock()
     connect_sem = asyncio.Semaphore(connect_concurrency)
 
+    async def _new_client(url: str) -> Client:
+        # Pass this module's Client so a test patch of client_pool.Client is the object that connects.
+        client = open_client(url, client_cls=Client)
+        if connection_security is not None and not connection_security.is_default_anonymous:
+            await apply_connection_security(client, connection_security)
+        return client
+
     async def connect_and_subscribe(url: str) -> None:
         nonlocal type_definitions_loaded, loaded_ns_ijt
         last_err: Exception | None = None
@@ -360,8 +377,7 @@ async def _worker_event_loop(
             if stop_event.is_set():
                 return
             async with connect_sem:
-                client = Client(url=url)
-                apply_session_policy(client)
+                client = await _new_client(url)
                 sub: Any = None
                 try:
                     await client.connect()
@@ -387,11 +403,16 @@ async def _worker_event_loop(
 
                     ns_meta = await read_namespace_metadata(client, NS_IJT_BASE)
 
-                    calibration = (
-                        ClockCalibration()
-                        if (skip_clock_skew or is_loopback_endpoint(url))
-                        else await calibrate_clock_skew(client)
-                    )
+                    probe_required = not skip_clock_skew and not is_loopback_endpoint(url)
+                    calibration = ClockCalibration() if not probe_required else await calibrate_clock_skew(client)
+                    probe_failed = probe_required and calibration.rtt_ms is None
+                    if probe_failed:
+                        logger.error(
+                            "[Worker %s] Clock probe failed for %s; "
+                            "results from this endpoint are excluded from transfer-time statistics",
+                            worker_id,
+                            url,
+                        )
                     skew = calibration.skew_ms
 
                     trace_expected = mode in ("active_burst", "both")
@@ -405,6 +426,7 @@ async def _worker_event_loop(
                         collection_start=collection_start,
                         clock_tolerance_ms=clock_tolerance_ms,
                         clock_rtt_ms=calibration.rtt_ms,
+                        clock_probe_failed=probe_failed,
                     )
                     sub = await client.create_subscription(sub_period_ms, handler)
                     await sub.subscribe_events(client.nodes.server, client.get_node(event_node_id), queuesize=500)
@@ -529,8 +551,7 @@ async def _worker_event_loop(
             m_cli: Client | None = None
             try:
                 async with connect_sem:
-                    m_cli = Client(url=url)
-                    apply_session_policy(m_cli)
+                    m_cli = await _new_client(url)
                     await m_cli.connect()
                     ns_app = await resolve_namespace_index(m_cli, NS_APP)
                     if ns_app is None:
@@ -594,39 +615,69 @@ async def _worker_event_loop(
         # Setup method clients concurrently across all connected endpoints
         await asyncio.gather(*(setup_method_client(url) for url, _, _ in clients), return_exceptions=True)
 
-        # Execute concurrent burst rounds across all tools simultaneously
+        # Cap in-flight calls so one worker does not decode every endpoint in one queue.
+        # 0 or negative means no cap (one slot per method client).
+        active_at_start = max(1, len(method_clients))
+        inflight_limit = active_at_start if max_inflight_triggers <= 0 else max(1, max_inflight_triggers)
+        trigger_slots = asyncio.Semaphore(inflight_limit)
+        retired: set[str] = set()
+        logger.info("[Worker %s] In-flight trigger cap: %s", worker_id, inflight_limit)
+
         for burst_idx in range(burst_trigger_count):
             if stop_event.is_set():
                 break
+            live_clients = [item for item in method_clients if item[0] not in retired]
 
-            async def fire_one(url: str, sim_node: Any, meth_id: Any) -> None:
+            async def fire_one(url: str, m_cli: Client, sim_node: Any, meth_id: Any) -> None:
                 nonlocal burst_failures
-                counters = call_stats.setdefault(url, {"calls_attempted": 0, "calls_succeeded": 0, "calls_failed": 0})
-                counters["calls_attempted"] += 1
-                sent_us = int(datetime.now(UTC).timestamp() * 1_000_000)
-                try:
-                    await sim_node.call_method(
-                        meth_id.nodeid,
-                        ua.Variant(2, ua.VariantType.UInt32),  # MULTI_STEP_OK_RESULT
-                        ua.Variant(True, ua.VariantType.Boolean),  # Traces
+                async with trigger_slots:
+                    counters = call_stats.setdefault(
+                        url, {"calls_attempted": 0, "calls_succeeded": 0, "calls_failed": 0}
                     )
-                    counters["calls_succeeded"] += 1
-                    counters.setdefault("first_success_send_us", sent_us)
-                except Exception as exc:
-                    counters["calls_failed"] += 1
-                    burst_failures += 1
-                    burst_errors.append(f"{url}: burst call failed: {exc}")
-                    logger.error(f"[Worker {worker_id}] {burst_errors[-1]}")
+                    counters["calls_attempted"] += 1
+                    sent_us = int(datetime.now(UTC).timestamp() * 1_000_000)
+                    try:
+                        await sim_node.call_method(
+                            meth_id.nodeid,
+                            ua.Variant(2, ua.VariantType.UInt32),  # MULTI_STEP_OK_RESULT
+                            ua.Variant(True, ua.VariantType.Boolean),  # Traces
+                        )
+                        counters["calls_succeeded"] += 1
+                        counters.setdefault("first_success_send_us", sent_us)
+                    except Exception as exc:
+                        counters["calls_failed"] += 1
+                        burst_failures += 1
+                        burst_errors.append(f"{url}: burst call failed: {exc}")
+                        logger.error(f"[Worker {worker_id}] {burst_errors[-1]}")
+                        if not await is_client_connected(m_cli):
+                            retired.add(url)
+                            counters["retired"] = 1
+                            logger.error(
+                                "[Worker %s] %s session dropped; retiring it for the rest of this run",
+                                worker_id,
+                                url,
+                            )
 
-            # Simultaneous execution via asyncio.gather
-            burst_calls = [fire_one(url, sim_node, meth_id) for url, _, sim_node, meth_id in method_clients]
+            burst_calls = [fire_one(url, m_cli, sim_node, meth_id) for url, m_cli, sim_node, meth_id in live_clients]
             if burst_calls:
                 call_results = await asyncio.gather(*burst_calls, return_exceptions=True)
-                for (url, _, _, _), result in zip(method_clients, call_results):
+                for (url, _, _, _), result in zip(live_clients, call_results):
                     if isinstance(result, BaseException):
                         burst_failures += 1
                         burst_errors.append(f"{url}: unhandled burst task error: {result}")
                         logger.error(f"[Worker {worker_id}] {burst_errors[-1]}")
+                        retired.add(url)
+            if retired:
+                kept: list[tuple[str, Client, Any, Any]] = []
+                for url, m_cli, sim_node, meth_id in method_clients:
+                    if url in retired:
+                        try:
+                            await disconnect_client(m_cli, settle_delay=0.01)
+                        except Exception as exc:
+                            teardown_errors.append(f"Method client disconnect on {url}: {exc}")
+                    else:
+                        kept.append((url, m_cli, sim_node, meth_id))
+                method_clients = kept
             trigger_rounds_fired += 1
             if burst_delay > 0 and burst_idx < burst_trigger_count - 1:
                 await asyncio.sleep(burst_delay)
@@ -746,6 +797,8 @@ def _worker_process_entry(
     verbose: bool = False,
     clock_tolerance_ms: float = DEFAULT_CLOCK_TOLERANCE_MS,
     settle_timeout_s: float = DEFAULT_SETTLE_TIMEOUT_S,
+    max_inflight_triggers: int = DEFAULT_MAX_INFLIGHT_TRIGGERS,
+    connection_security: ConnectionSecurity | None = None,
 ) -> None:
     """The entry point for each background worker process."""
     logging.basicConfig(
@@ -771,6 +824,8 @@ def _worker_process_entry(
                 burst_delay=burst_delay,
                 clock_tolerance_ms=clock_tolerance_ms,
                 settle_timeout_s=settle_timeout_s,
+                max_inflight_triggers=max_inflight_triggers,
+                connection_security=connection_security,
             )
         )
     except Exception as exc:
@@ -802,6 +857,8 @@ class OpcUaClientPool:
         verbose: bool = False,
         clock_tolerance_ms: float = DEFAULT_CLOCK_TOLERANCE_MS,
         settle_timeout_s: float = DEFAULT_SETTLE_TIMEOUT_S,
+        max_inflight_triggers: int = DEFAULT_MAX_INFLIGHT_TRIGGERS,
+        connection_security: ConnectionSecurity | None = None,
     ) -> None:
         self.endpoints = endpoints
         if max_workers is not None:
@@ -831,6 +888,12 @@ class OpcUaClientPool:
         if not math.isfinite(settle_timeout_s) or settle_timeout_s < 0:
             raise ValueError(f"settle_timeout_s must be a finite non-negative number, got {settle_timeout_s}")
         self.settle_timeout_s = settle_timeout_s
+        if not isinstance(max_inflight_triggers, int) or isinstance(max_inflight_triggers, bool):
+            raise ValueError(f"max_inflight_triggers must be an integer, got {max_inflight_triggers!r}")
+        if max_inflight_triggers < 0:
+            raise ValueError(f"max_inflight_triggers cannot be negative, got {max_inflight_triggers}")
+        self.max_inflight_triggers = max_inflight_triggers
+        self.connection_security = connection_security
         self.verbose = verbose
 
         self._ctx = mp.get_context("spawn")
@@ -921,6 +984,8 @@ class OpcUaClientPool:
                     self.verbose,
                     self.clock_tolerance_ms,
                     self.settle_timeout_s,
+                    self.max_inflight_triggers,
+                    self.connection_security,
                 ),
                 daemon=True,
             )
