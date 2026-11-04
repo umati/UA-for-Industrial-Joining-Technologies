@@ -42,6 +42,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
 
+# Suppress __pycache__ / .pyc generation for this process and all child processes.
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+sys.dont_write_bytecode = True
+
 for _parent in Path(__file__).resolve().parents:
     if (_parent / "scripts" / "tool_bootstrap.py").is_file():
         sys.path.insert(0, str(_parent / "scripts"))
@@ -290,14 +294,22 @@ def _stop_simulators(instances: list[tuple[subprocess.Popen, Path]]) -> None:
 
 def _step_ruff_lint() -> _StepResult:
     """Run Ruff lint checks."""
-    res = subprocess.run([sys.executable, "-m", "ruff", "check", "."], cwd=_HERE, capture_output=True, text=True)
+    res = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", ".", "--cache-dir", str(_HERE / "tmp" / "ruff-cache")],
+        cwd=_HERE,
+        capture_output=True,
+        text=True,
+    )
     return _StepResult("Ruff Lint", ok=res.returncode == 0, note=res.stdout.strip() if res.returncode != 0 else "Clean")
 
 
 def _step_ruff_format() -> _StepResult:
     """Run Ruff format check."""
     res = subprocess.run(
-        [sys.executable, "-m", "ruff", "format", "--check", "."], cwd=_HERE, capture_output=True, text=True
+        [sys.executable, "-m", "ruff", "format", "--check", ".", "--cache-dir", str(_HERE / "tmp" / "ruff-cache")],
+        cwd=_HERE,
+        capture_output=True,
+        text=True,
     )
     return _StepResult(
         "Ruff Format", ok=res.returncode == 0, note=res.stdout.strip() if res.returncode != 0 else "Clean"
@@ -307,7 +319,16 @@ def _step_ruff_format() -> _StepResult:
 def _step_mypy() -> _StepResult:
     """Run mypy static type checking."""
     res = subprocess.run(
-        [sys.executable, "-m", "mypy", "src", "--ignore-missing-imports", "--no-error-summary"],
+        [
+            sys.executable,
+            "-m",
+            "mypy",
+            "src",
+            "--ignore-missing-imports",
+            "--no-error-summary",
+            "--cache-dir",
+            str(_HERE / "tmp" / "mypy-cache"),
+        ],
         cwd=_HERE,
         capture_output=True,
         text=True,
@@ -581,6 +602,7 @@ def main() -> int:
 
     finally:
         _stop_simulators(server_instances)
+        _cleanup_caches(_HERE)
 
     # Print summary
     elapsed = time.monotonic() - t_start
@@ -598,6 +620,26 @@ def main() -> int:
 
     print("=" * 70 + "\n")
     return 1 if failed else 0
+
+
+def _cleanup_caches(root: Path) -> None:
+    """Remove cache/bytecode artifacts after run. Reports in test-results/ are preserved."""
+    if os.environ.get("IJT_PRESERVE_TEST_ARTIFACTS", "").lower() in {"1", "true", "yes", "on"}:
+        return
+    skip_dirs = {"node_modules", ".git", ".state", "test-results"}
+    cache_dirs = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "htmlcov", "tmp"}
+    for dirpath, dirs, files in os.walk(root, topdown=True):
+        dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith(".venv") and not d.startswith("venv")]
+        for d in list(dirs):
+            if d in cache_dirs or d.startswith("pytest-cache-files-"):
+                shutil.rmtree(Path(dirpath) / d, ignore_errors=True)
+                dirs.remove(d)
+        for f in files:
+            if f == ".coverage" or f.startswith(".coverage.") or f.endswith(".pyc"):
+                try:
+                    (Path(dirpath) / f).unlink(missing_ok=True)
+                except OSError:
+                    pass
 
 
 if __name__ == "__main__":

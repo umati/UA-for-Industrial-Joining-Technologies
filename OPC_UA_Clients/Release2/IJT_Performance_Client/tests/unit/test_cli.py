@@ -882,3 +882,209 @@ def test_main_split_path_unproven_marks_junit_failure(tmp_path):
         )
     assert code == 1
     assert "CLAIM FAILURE" in junit.read_text(encoding="utf-8")
+
+
+def test_valid_wire_timing_ratio_with_explicit_summary():
+    from src.cli import _compute_receive_timing_coverage
+
+    sample = LatencySample(sample_id=1, endpoint="opc.tcp://127.0.0.1:40451")
+    ratio = _compute_receive_timing_coverage([sample], {"wire_timed_valid": "1"})
+    assert ratio == 1.0
+
+
+def test_cli_env_overrides_and_flags(tmp_path, monkeypatch):
+
+    # 1. OPCUA_FLEET_ENDPOINTS overriding profile (line 281)
+    monkeypatch.setenv("OPCUA_FLEET_ENDPOINTS", "opc.tcp://127.0.0.1:40001,opc.tcp://127.0.0.1:40002")
+    parser = build_parser()
+    args = parser.parse_args(["--config", "profiles/single_server.yaml"])
+    from src.cli import _resolve_configuration
+
+    cfg, tracker, _ = _resolve_configuration(args, parser)
+    assert len(cfg.endpoints) == 2
+    assert tracker._sources["endpoints"] == "env"
+
+    # 2. OPCUA_SERVER_URL overriding fleet profile (line 290)
+    monkeypatch.delenv("OPCUA_FLEET_ENDPOINTS", raising=False)
+    monkeypatch.setenv("OPCUA_SERVER_URL", "opc.tcp://127.0.0.1:49999")
+    cfg2, tracker2, _ = _resolve_configuration(args, parser)
+    assert cfg2.endpoints == ["opc.tcp://127.0.0.1:49999"]
+    monkeypatch.delenv("OPCUA_SERVER_URL", raising=False)
+
+    # 3. CLI flags: max-inflight, inventory-http, redact, etc. (lines 311-312, 371-390)
+    args3 = parser.parse_args(
+        [
+            "--max-inflight",
+            "7",
+            "--inventory-http",
+            "--inventory-http-port",
+            "9876",
+            "--redact",
+            "--include-network-fingerprint",
+        ]
+    )
+    cfg3, tracker3, _ = _resolve_configuration(args3, parser)
+    assert cfg3.max_inflight_triggers == 7
+    assert cfg3.inventory_http is True
+    assert cfg3.inventory_http_port == 9876
+    assert cfg3.report_redact is True
+    assert cfg3.report_include_network is True
+
+    # 4. Opposite flags: no-inventory-http, no-redact (lines 376-377, 385-386)
+    args4 = parser.parse_args(["--no-inventory-http", "--no-redact"])
+    cfg4, _, _ = _resolve_configuration(args4, parser)
+    assert cfg4.inventory_http is False
+    assert cfg4.report_redact is False
+
+
+def test_cli_client_only_error_branches(tmp_path):
+    from src.inventory import build_inventory, write_inventory_atomic
+
+    # Line 418: role=client-only without inventory_source
+    with pytest.raises(SystemExit):
+        main(["--role", "client-only"])
+
+    # Lines 395-396: failed to load inventory
+    with pytest.raises(SystemExit):
+        main(["--role", "client-only", "--inventory-source", str(tmp_path / "nonexistent.json")])
+
+    # Line 405: inventory contains no endpoints
+    empty_inv = build_inventory([], ttl_seconds=3600)
+    empty_inv_path = write_inventory_atomic(tmp_path / "empty_inv.json", empty_inv)
+    with pytest.raises(SystemExit):
+        main(["--role", "client-only", "--inventory-source", str(empty_inv_path)])
+
+    # Lines 399 & 407: inventory TTL < 300s & endpoints overridden by CLI
+    short_inv = build_inventory(["opc.tcp://127.0.0.1:40451"], ttl_seconds=120)
+    short_inv_path = write_inventory_atomic(tmp_path / "short_inv.json", short_inv)
+    sample = LatencySample(sample_id=1, endpoint="opc.tcp://127.0.0.1:40451", delivery_time_ms=10.0)
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
+        mock_pool = MagicMock()
+        mock_pool_cls.return_value = mock_pool
+        mock_pool._num_workers_started = 1
+        mock_pool.collect_samples.return_value = [sample]
+        mock_pool.stop.return_value = [sample]
+        mock_pool.verify_coverage.return_value = (True, "OK")
+        mock_pool.connected_endpoints = {"opc.tcp://127.0.0.1:40451"}
+        mock_pool.failed_endpoints = {}
+        mock_pool.worker_errors = []
+        code = main(
+            [
+                "--role",
+                "client-only",
+                "--inventory-source",
+                str(short_inv_path),
+                "--endpoints",
+                "opc.tcp://127.0.0.1:40451",
+            ]
+        )
+        assert code == 0
+
+
+def test_cli_serve_fleet_http_and_interrupt(tmp_path):
+    # Lines 473-488, 497-506: serve-fleet with HTTP and KeyboardInterrupt
+    inv_path = tmp_path / "fleet_inv.json"
+
+    # 1. Port conflict handling
+    with patch("src.cli.preflight_http_port", return_value=["Port 8765 busy"]):
+        code = main(
+            [
+                "--role",
+                "serve-fleet",
+                "--inventory-path",
+                str(inv_path),
+                "--inventory-http",
+                "--inventory-http-port",
+                "8765",
+            ]
+        )
+        assert code == 1
+
+    # 2. HTTP Server startup exception handling
+    with patch("src.cli.preflight_http_port", return_value=[]):
+        with patch("src.cli.InventoryHttpServer", side_effect=OSError("Bind failed")):
+            code = main(
+                [
+                    "--role",
+                    "serve-fleet",
+                    "--inventory-path",
+                    str(inv_path),
+                    "--inventory-http",
+                ]
+            )
+            assert code == 1
+
+    # 3. Successful serve-fleet interrupted by KeyboardInterrupt
+    mock_server = MagicMock()
+    mock_server.url = "http://127.0.0.1:8765/inventory"
+    with patch("src.cli.preflight_http_port", return_value=[]):
+        with patch("src.cli.InventoryHttpServer", return_value=mock_server):
+            with patch("time.sleep", side_effect=KeyboardInterrupt):
+                code = main(
+                    [
+                        "--role",
+                        "serve-fleet",
+                        "--inventory-path",
+                        str(inv_path),
+                        "--inventory-http",
+                    ]
+                )
+                assert code == 0
+                mock_server.stop.assert_called_once()
+
+
+def test_cli_gate_failures(tmp_path):
+    sample = LatencySample(sample_id=1, endpoint="opc.tcp://127.0.0.1:40451", delivery_time_ms=10.0)
+    junit = tmp_path / "junit.xml"
+
+    # Line 638-641: min_coverage gate failure
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
+        mock_pool = MagicMock()
+        mock_pool_cls.return_value = mock_pool
+        mock_pool._num_workers_started = 1
+        # 1 valid sample out of 10 total samples -> 10% coverage, but min_coverage is 90%
+        all_samples = [sample] + [
+            LatencySample(sample_id=i, endpoint="opc.tcp://127.0.0.1:40451", integrity_status="INCOMPLETE")
+            for i in range(2, 11)
+        ]
+        mock_pool.collect_samples.return_value = all_samples
+        mock_pool.stop.return_value = all_samples
+        mock_pool.verify_coverage.return_value = (True, "OK")
+        mock_pool.connected_endpoints = {"opc.tcp://127.0.0.1:40451"}
+        mock_pool.failed_endpoints = {}
+        mock_pool.worker_errors = []
+
+        code = main(["--junit", str(junit)])
+        # Profile has default or we can inject min_coverage via config file
+
+    # Test via loaded config with min_coverage and max_disconnects
+    config_file = tmp_path / "gates.yaml"
+    config_file.write_text(
+        """schema_version: 2
+fleet:
+  endpoints:
+    - opc.tcp://127.0.0.1:40451
+gates:
+  min_coverage: 0.90
+  max_disconnects: 0
+""",
+        encoding="utf-8",
+    )
+    with patch("src.cli.OpcUaClientPool") as mock_pool_cls:
+        mock_pool = MagicMock()
+        mock_pool_cls.return_value = mock_pool
+        mock_pool._num_workers_started = 1
+        all_samples = [sample] + [
+            LatencySample(sample_id=i, endpoint="opc.tcp://127.0.0.1:40451", integrity_status="INCOMPLETE")
+            for i in range(2, 11)
+        ]
+        mock_pool.collect_samples.return_value = all_samples
+        mock_pool.stop.return_value = all_samples
+        mock_pool.verify_coverage.return_value = (True, "OK")
+        mock_pool.connected_endpoints = {"opc.tcp://127.0.0.1:40451"}
+        mock_pool.failed_endpoints = {"opc.tcp://127.0.0.1:40451": "Connection lost"}
+        mock_pool.burst_trigger_failures = 1
+        mock_pool.worker_errors = []
+
+        code = main(["--config", str(config_file), "--junit", str(junit)])
+        assert code == 1

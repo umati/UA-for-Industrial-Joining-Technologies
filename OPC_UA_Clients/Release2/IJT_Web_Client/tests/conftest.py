@@ -9,6 +9,9 @@ from pathlib import Path
 
 import pytest
 
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+sys.dont_write_bytecode = True
+
 
 def pytest_configure(config):
     """Ensure tests/fixtures/ exists for tests that materialize JSON fixtures."""

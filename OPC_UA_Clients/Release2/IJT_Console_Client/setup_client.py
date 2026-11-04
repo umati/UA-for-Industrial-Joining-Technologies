@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+sys.dont_write_bytecode = True
+
 for _parent in Path(__file__).resolve().parents:
     if (_parent / "scripts" / "tool_bootstrap.py").is_file():
         sys.path.insert(0, str(_parent / "scripts"))

@@ -449,3 +449,111 @@ def test_ci_workflow_does_not_override_coverage_gates() -> None:
                     f"{job_id} overrides the pyproject coverage gate"
                 )
                 assert float(value) == COVERAGE_GATES["performance-client"]
+
+
+def test_public_portal_workflow_contracts_and_private_envelope_exclusion() -> None:
+    portal_wf = _workflow("publish-public-reports.yml")
+    triggers = portal_wf.get("on", portal_wf.get(True, {}))
+    assert "workflow_call" in triggers
+    assert "workflow_dispatch" in triggers
+    assert "workflow_run" not in triggers
+    assert portal_wf.get("permissions") == {"contents": "read"}
+    assert portal_wf.get("env", {}).get("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24") is True
+
+    portal_job = portal_wf["jobs"]["publish-portal"]
+    assert portal_job["timeout-minutes"] == 10
+    assert portal_job["concurrency"]["group"] == "public-observability-portal-publish"
+    assert portal_job["concurrency"]["cancel-in-progress"] is False
+    assert portal_job["permissions"] == {"actions": "read", "contents": "write"}
+
+    steps = portal_job["steps"]
+    step_names = [s.get("name", "") for s in steps]
+    fetch_idx = step_names.index("Fetch existing public-reports-state branch (if present)")
+    download_idx = step_names.index("Download workflow artifacts for target run")
+    build_idx = step_names.index("Build static portal and harvest sanitized job logs")
+    push_idx = step_names.index("Force-push single-commit orphan snapshot to public-reports-state")
+    assert fetch_idx < download_idx < build_idx < push_idx
+
+    build_step = steps[build_idx]
+    assert "python3 scripts/reporting/build_public_portal.py" in build_step["run"]
+    assert "GH_TOKEN" in build_step["env"]
+
+    push_step = steps[push_idx]
+    assert "git init --quiet -b public-reports-state" in push_step["run"]
+    assert "push --force origin HEAD:refs/heads/public-reports-state" in push_step["run"]
+
+    # Token must travel via an http extraheader, never embedded in a remote URL.
+    fetch_run = steps[fetch_idx]["run"]
+    for script in (fetch_run, push_step["run"]):
+        assert "x-access-token:${GH_TOKEN}@" not in script
+        assert "http.https://github.com/.extraheader=" in script
+
+    # git ls-remote: rc 0 = exists, rc 2 = missing; any other rc (network/auth) must abort
+    # instead of silently initializing an empty site and force-pushing over history.
+    assert "ls-remote --exit-code --heads" in fetch_run
+    assert '[ "$rc" -eq 0 ]' in fetch_run
+    assert '[ "$rc" -eq 2 ]' in fetch_run
+    assert 'exit "$rc"' in fetch_run
+
+    dispatch_inputs = triggers["workflow_dispatch"]["inputs"]
+    assert dispatch_inputs["target_run_number"]["default"] == ""
+
+
+def test_public_portal_step_ordering_and_caller_allowlist_across_all_workflows() -> None:
+    """Only ci.yml and integration.yml may call publish-public-reports.yml, and
+    both must export summary.md after Generate Summary Table and before Upload Timing Artifacts."""
+    callers: set[str] = set()
+    for workflow_path in sorted(_WORKFLOWS_DIR.glob("*.yml")):
+        wf = _workflow(workflow_path.name)
+        for job in wf.get("jobs", {}).values():
+            if job.get("uses") == "$/.github/workflows/publish-public-reports.yml":
+                callers.add(workflow_path.name)
+            for step in job.get("steps", []):
+                assert "publish-public-reports.yml" not in str(step.get("uses", ""))
+
+    assert callers == {"ci.yml", "integration.yml"}, (
+        f"Strictly only ci.yml and integration.yml may publish to public portal, got: {callers}"
+    )
+
+    for wf_name, expected_slug in (("ci.yml", "ci"), ("integration.yml", "integration")):
+        wf = _workflow(wf_name)
+        report_steps = wf["jobs"]["report"]["steps"]
+        summary_idx = next(
+            i for i, s in enumerate(report_steps) if s.get("name") == "Generate Summary Table"
+        )
+        export_idx = next(
+            i
+            for i, s in enumerate(report_steps)
+            if s.get("name") == "Export Summary Markdown and Append Public Portal Links"
+        )
+        upload_idx = next(
+            i for i, s in enumerate(report_steps) if s.get("name") == "Upload Timing Artifacts"
+        )
+        assert summary_idx < export_idx < upload_idx, (
+            f"{wf_name}: Export Summary Markdown must run after Generate Summary Table "
+            f"and before Upload Timing Artifacts ({summary_idx}, {export_idx}, {upload_idx})"
+        )
+
+        export_step = report_steps[export_idx]
+        assert "timing-results/summary.md" in export_step["run"]
+        assert '>> "$GITHUB_STEP_SUMMARY"' in export_step["run"]
+
+        pub_job = wf["jobs"]["publish-public-report"]
+        assert pub_job["needs"] == ["report"]
+        assert pub_job["uses"] == "$/.github/workflows/publish-public-reports.yml"
+        assert "github.ref == 'refs/heads/main'" in pub_job["if"]
+        assert "github.event_name != 'pull_request'" in pub_job["if"]
+        assert pub_job["with"]["workflow_slug"] == expected_slug
+
+
+def test_readme_public_portal_links_match_generated_paths() -> None:
+    readme_text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    base_url = "https://umati.github.io/UA-for-Industrial-Joining-Technologies"
+    for expected_url in (
+        f"{base_url}/",
+        f"{base_url}/latest/ci/",
+        f"{base_url}/latest/integration/",
+        f"{base_url}/latest/integration/report.html",
+        f"{base_url}/latest/integration/report.xlsx",
+    ):
+        assert expected_url in readme_text, f"README.md missing public portal URL: {expected_url}"

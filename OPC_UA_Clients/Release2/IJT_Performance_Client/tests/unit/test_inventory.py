@@ -154,3 +154,124 @@ def test_port_appears_busy_when_socket_active():
         port = sock.getsockname()[1]
         assert _port_appears_busy(port) is True
         assert preflight_http_port(port) == [f"Inventory HTTP port {port} on 127.0.0.1 appears already in use"]
+
+
+def test_build_inventory_url_port_exception():
+    # Large invalid port causing urlparse.port to fail
+    inv = build_inventory(["opc.tcp://localhost:99999999999999999999999999999999999"])
+    assert inv.endpoints[0].port is None
+
+
+def test_inventory_load_validation_and_errors(tmp_path):
+    from unittest.mock import patch
+    from urllib.error import URLError
+
+    # File not found (line 192)
+    with pytest.raises(FileNotFoundError, match="Inventory file not found"):
+        load_inventory(tmp_path / "missing.json")
+
+    # JSON not an object (line 196)
+    bad_json = tmp_path / "not_object.json"
+    bad_json.write_text("[1, 2, 3]", encoding="utf-8")
+    with pytest.raises(ValueError, match="Inventory must be a JSON object"):
+        load_inventory(bad_json)
+
+    # Schema version mismatch (line 198)
+    bad_schema = tmp_path / "bad_schema.json"
+    bad_schema.write_text(json.dumps({"schema_version": 99}), encoding="utf-8")
+    with pytest.raises(ValueError, match="Unsupported inventory schema_version"):
+        load_inventory(bad_schema)
+
+    # Invalid expires_at ISO timestamp (lines 212-213)
+    inv = build_inventory(["opc.tcp://127.0.0.1:40451"])
+    inv.expires_at = "invalid-date"
+    inv_data = inv.to_dict()
+    bad_date_file = tmp_path / "bad_date.json"
+    bad_date_file.write_text(json.dumps(inv_data), encoding="utf-8")
+    with pytest.raises(ValueError, match="Inventory expires_at is not a valid ISO timestamp"):
+        load_inventory(bad_date_file)
+
+    # URLError when fetching URL (lines 186-187)
+    with patch("src.inventory._fetch_inventory_url", side_effect=URLError("Connection refused")):
+        with pytest.raises(FileNotFoundError, match="Failed to fetch inventory from"):
+            load_inventory("https://127.0.0.1:8765/inventory")
+
+
+def test_reject_redirects_handler():
+    from unittest.mock import MagicMock, patch
+    from urllib.error import URLError
+
+    import src.inventory as inv_mod
+
+    # Inspect _fetch_inventory_url code by calling with redirect simulation
+    with patch("urllib.request.build_opener") as mock_build_opener:
+        mock_opener = MagicMock()
+        mock_build_opener.return_value = mock_opener
+        mock_opener.open.return_value.__enter__.return_value.read.return_value = b"{}"
+        # Get the class passed to build_opener
+        inv_mod._fetch_inventory_url("https://example.com/test", token=None)
+        redirect_handler_cls = mock_build_opener.call_args[0][0]
+        handler = redirect_handler_cls()
+        with pytest.raises(URLError, match="Refusing to follow HTTP redirect"):
+            handler.redirect_request(None, None, 302, "Found", {}, "https://new.com")
+
+
+def test_preflight_port_range_busy_overflow():
+    from unittest.mock import patch
+
+    from src.inventory import preflight_port_range
+
+    with patch("src.inventory._port_appears_busy", return_value=True):
+        # 12 busy ports (lines 248-250)
+        conflicts = preflight_port_range(50000, 12, reserved=frozenset())
+        assert any("(+2 more)" in c for c in conflicts)
+
+
+def test_inventory_http_server_remote_requires_token():
+    from src.inventory import InventoryHttpServer
+
+    inv = build_inventory(["opc.tcp://127.0.0.1:40451"])
+    # Line 313: remote non-loopback without token
+    with pytest.raises(ValueError, match="Remote inventory HTTP requires an auth token"):
+        InventoryHttpServer(inv, host="10.0.0.1", token=None, allow_non_loopback=True)
+
+
+def test_inventory_handler_status_codes():
+    from io import BytesIO
+
+    from src.inventory import _InventoryHandler
+
+    class DummyHandler(_InventoryHandler):
+        def __init__(self, path, headers=None, token=None):
+            self.path = path
+            self.headers = headers or {}
+            self.auth_token = token
+            self.inventory_bytes = b'{"status": "ok"}'
+            self.rfile = BytesIO()
+            self.wfile = BytesIO()
+            self.error_code = None
+            self.error_message = None
+            self.response_code = None
+
+        def send_error(self, code, message=None):
+            self.error_code = code
+            self.error_message = message
+
+        def send_response(self, code, message=None):
+            self.response_code = code
+
+        def send_header(self, keyword, value):
+            pass
+
+        def end_headers(self):
+            pass
+
+    # 404 test (lines 279-280)
+    h404 = DummyHandler("/not_found")
+    h404.do_GET()
+    assert h404.error_code == 404
+
+    # 401 test with missing/bad token (lines 282-285)
+    h401 = DummyHandler("/inventory", headers={"Authorization": "Bearer wrong"}, token="expected_token")
+    h401.do_GET()
+    assert h401.error_code == 401

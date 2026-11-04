@@ -518,3 +518,137 @@ def test_verify_packaged_profiles():
 
     missing = verify_packaged_profiles()
     assert missing == []
+    # Test line 329: missing required profile
+    missing_custom = verify_packaged_profiles(required=frozenset({"does_not_exist_xyz.yaml"}))
+    assert missing_custom == ["does_not_exist_xyz.yaml"]
+
+
+def test_config_validation_branches():
+    # schema_version invalid (line 228)
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"])
+    cfg.schema_version = 99
+    with pytest.raises(ValueError, match="Unsupported schema_version 99"):
+        cfg.validate()
+
+    # role invalid (line 233)
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"])
+    cfg.role = "invalid-role"
+    with pytest.raises(ValueError, match="Invalid role 'invalid-role'"):
+        cfg.validate()
+
+    # claim_intended invalid (line 236)
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"])
+    cfg.claim_intended = "invalid-claim"
+    with pytest.raises(ValueError, match="Invalid claim.intended 'invalid-claim'"):
+        cfg.validate()
+
+    # client-only without inventory_source or endpoints (line 241)
+    cfg = OpcUaPoolConfig(endpoints=[])
+    cfg.role = "client-only"
+    cfg.inventory_source = ""
+    with pytest.raises(ValueError, match="role=client-only requires inventory.source or endpoints"):
+        cfg.validate()
+
+    # min_coverage out of range (line 252)
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"], min_coverage=1.5)
+    with pytest.raises(ValueError, match="min_coverage must be in"):
+        cfg.validate()
+
+    # max_disconnects negative (line 255)
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"], max_disconnects=-1)
+    with pytest.raises(ValueError, match="max_disconnects cannot be negative"):
+        cfg.validate()
+
+    # max_inflight_triggers not int or negative (lines 258, 260)
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"], max_inflight_triggers="not_int")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="max_inflight_triggers must be an integer"):
+        cfg.validate()
+
+    cfg = OpcUaPoolConfig(endpoints=["opc.tcp://localhost:40451"], max_inflight_triggers=-5)
+    with pytest.raises(ValueError, match="max_inflight_triggers cannot be negative"):
+        cfg.validate()
+
+
+def test_reject_inline_secrets():
+    from src.config import _reject_inline_secrets
+
+    # Secret key in dict (line 291)
+    with pytest.raises(ValueError, match="profiles must never contain secret values"):
+        _reject_inline_secrets({"password": "secret_val"}, "authentication")
+
+    with pytest.raises(ValueError, match="profiles must never contain secret values"):
+        _reject_inline_secrets({"sut_password": "secret_val"}, "connection")
+
+    # Secret key in list (lines 297-298)
+    with pytest.raises(ValueError, match="profiles must never contain secret values"):
+        _reject_inline_secrets([{"password": "secret"}], "test_path")
+
+
+def test_load_config_schema_validation_and_sections(tmp_path):
+    # Non-integer schema_version (lines 388-389)
+    bad_schema = tmp_path / "bad_schema.yaml"
+    bad_schema.write_text("schema_version: 'abc'\nfleet:\n  endpoints:\n    - opc.tcp://localhost:40451\n")
+    with pytest.raises(ValueError, match="schema_version must be an integer"):
+        load_config(bad_schema)
+
+    # Unsupported schema_version (line 391)
+    unsupp_schema = tmp_path / "unsupp_schema.yaml"
+    unsupp_schema.write_text("schema_version: 5\nfleet:\n  endpoints:\n    - opc.tcp://localhost:40451\n")
+    with pytest.raises(ValueError, match="Unsupported schema_version 5"):
+        load_config(unsupp_schema)
+
+    # Section not a mapping (line 567)
+    bad_section = tmp_path / "bad_section.yaml"
+    bad_section.write_text(
+        "schema_version: 2\nfleet:\n  endpoints:\n    - opc.tcp://localhost:40451\nconnection: 'not_a_map'\n"
+    )
+    with pytest.raises(ValueError, match="connection: must be a mapping"):
+        load_config(bad_section)
+
+    # Full v2 sections test (lines 419, 496, 528, 530, 532, 538-547)
+    v2_full = tmp_path / "v2_full.yaml"
+    v2_full.write_text(
+        """schema_version: 2
+meta:
+  name: "Full V2 Config"
+  description: "Description of test"
+  lifecycle: "production"
+role: "colocated"
+claim:
+  intended: "capacity"
+fleet:
+  endpoints:
+    - opc.tcp://localhost:40451
+engine:
+  max_inflight_triggers: 12
+inventory:
+  write_file: true
+  path: "test_inv.json"
+  http: true
+  http_host: "127.0.0.1"
+  http_port: 8765
+  http_token: "secret_token"
+  source: "inv.json"
+  ttl_seconds: 3600
+gates:
+  min_coverage: 0.95
+  max_disconnects: 2
+  fail_on_delivery_p90_ms: 50.0
+  fail_on_client_ready_p90_ms: 100.0
+report:
+  host_fingerprint: true
+  include_network: true
+  redact: true
+""",
+        encoding="utf-8",
+    )
+    loaded = load_config(v2_full)
+    assert loaded.description == "Description of test"
+    assert loaded.max_inflight_triggers == 12
+    assert loaded.inventory_http_host == "127.0.0.1"
+    assert loaded.inventory_http_port == 8765
+    assert loaded.inventory_http_token == "secret_token"
+    assert loaded.min_coverage == 0.95
+    assert loaded.max_disconnects == 2
+    assert loaded.fail_p90_ms == 50.0
+    assert loaded.fail_p90_client_ready_ms == 100.0

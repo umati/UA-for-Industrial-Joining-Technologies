@@ -1454,6 +1454,25 @@ jobs:
         run: |
           python3 scripts/reporting/collect_timing.py
 
+      - name: Export Summary Markdown and Append Public Portal Links
+        if: always()
+        env:
+          GH_BRANCH: ${{ github.ref_name }}
+          GH_EVENT_NAME: ${{ github.event_name }}
+          GH_RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p timing-results
+          if [ -f "$GITHUB_STEP_SUMMARY" ]; then
+            cp "$GITHUB_STEP_SUMMARY" timing-results/summary.md
+          fi
+          if [ "$GH_EVENT_NAME" != "pull_request" ] && [ "$GH_BRANCH" = "main" ]; then
+            {
+              echo ""
+              echo "---"
+              echo "🌐 **Public Report, Logs & Downloads (No Sign-In Required):** [📋 Summary & Step Console Logs](https://umati.github.io/UA-for-Industrial-Joining-Technologies/runs/${GH_RUN_ID}/) · [📊 Interactive report.html](https://umati.github.io/UA-for-Industrial-Joining-Technologies/runs/${GH_RUN_ID}/report.html) · [📥 Download 123-CU Excel (report.xlsx)](https://umati.github.io/UA-for-Industrial-Joining-Technologies/runs/${GH_RUN_ID}/report.xlsx) · [🗂️ All main Runs](https://umati.github.io/UA-for-Industrial-Joining-Technologies/)"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Upload Timing Artifacts
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
@@ -1461,3 +1480,24 @@ jobs:
           name: timing-system-tests
           path: timing-results/
           retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Public Observability Portal — publishes main-branch System Tests summary,
+  # report.html, report.xlsx, timing, and sanitized per-step console logs.
+  # ───────────────────────────────────────────────────────────────────────────
+  publish-public-report:
+    name: "🌐 Publish Public System Tests Report"
+    needs: [report]
+    if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    uses: $/.github/workflows/publish-public-reports.yml
+    permissions:
+      actions: read
+      contents: write
+    with:
+      workflow_slug: "integration"
+      workflow_name: "System Tests — Live OPC UA, Browser, Docker, Specification Testing"
+      target_run_id: ${{ github.run_id }}
+      target_run_number: ${{ github.run_number }}
+      target_sha: ${{ github.sha }}
+      target_branch: ${{ github.ref_name }}
+      target_event_name: ${{ github.event_name }}

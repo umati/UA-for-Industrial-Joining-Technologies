@@ -2233,7 +2233,7 @@ def test_print_summary_reports_suite_and_test_totals(capsys) -> None:
     assert "Not reported" in output
     assert "4 total suites; 4 passed, 0 failed, 0 skipped" in output
     assert "872 total tests; 732 passed, 0 failed, 0 errors, 140 skipped" in output
-    assert "WALL TIME (Parallel)" in output
+    assert "TOTAL TIME (Parallel)" in output
     assert "Slowest suites:" in output
 
 

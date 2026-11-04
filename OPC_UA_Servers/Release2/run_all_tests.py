@@ -55,6 +55,10 @@ import venv
 import zipfile
 from pathlib import Path
 
+# Suppress __pycache__ / .pyc generation for this process and all child processes.
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+sys.dont_write_bytecode = True
+
 # Ensure stdout/stderr use UTF-8 on Windows (cp1252 can't encode box-drawing chars)
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")

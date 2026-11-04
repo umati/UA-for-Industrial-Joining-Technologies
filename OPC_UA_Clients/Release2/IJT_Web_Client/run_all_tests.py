@@ -80,6 +80,10 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
+# Suppress __pycache__ / .pyc generation for this process and all child processes.
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+sys.dont_write_bytecode = True
+
 # Ensure stdout/stderr use UTF-8 on Windows (cp1252 can't encode box-drawing chars)
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
@@ -1908,7 +1912,16 @@ def _stage_optional_private_module_static(mode: str, python: Path) -> StageResul
     envelope_py_tests = _OPTIONAL_PRIVATE_ENVELOPE_DIR / "python" / "tests"
     if envelope_py_tests.is_dir():
         py_test_rc = _run(
-            [str(python), "-m", "pytest", str(envelope_py_tests)],
+            [
+                str(python),
+                "-m",
+                "pytest",
+                "-o",
+                "asyncio_default_fixture_loop_scope=function",
+                "-p",
+                "no:cacheprovider",
+                str(envelope_py_tests),
+            ],
             cwd=ROOT,
             label="Envelope Python tests",
         )

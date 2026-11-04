@@ -3,11 +3,11 @@ import neostandard from 'neostandard'
 export default [
   ...neostandard({
     ignores: [
-      'node_modules/**',
-      'venv/**',
-      '.venv/**',
-      '.state/**',
-      '.tmp-pip/**',
+      '**/node_modules/**',
+      '**/venv/**',
+      '**/.venv/**',
+      '**/.state/**',
+      '**/.tmp-pip/**',
       'src/javascripts/views/envelope/automate.mjs',
       'src/javascripts/views/envelope/**/*.test.mjs'
     ],

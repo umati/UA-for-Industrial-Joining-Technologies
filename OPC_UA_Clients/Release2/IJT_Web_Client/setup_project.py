@@ -3,6 +3,7 @@ import sys
 
 # Suppress __pycache__ / .pyc generation for all child processes (matches Docker behavior)
 os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+sys.dont_write_bytecode = True
 import argparse
 import atexit
 import contextlib

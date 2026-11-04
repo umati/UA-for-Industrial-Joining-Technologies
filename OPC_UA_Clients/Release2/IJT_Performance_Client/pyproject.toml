@@ -44,6 +44,10 @@ constraint-dependencies = [
 [tool.pytest.ini_options]
 pythonpath = [".", "src"]
 asyncio_default_fixture_loop_scope = "function"
+addopts = "-p no:cacheprovider"
+tmp_path_retention_policy = "failed"
+tmp_path_retention_count = 1
+norecursedirs = ["live", "tmp", "pytest-cache-files-*"]
 markers = [
     "live: live integration tests requiring a running OPC UA server",
     "performance: latency and throughput benchmarks",
@@ -68,3 +72,9 @@ cache-dir = "tmp/ruff-cache"
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 ignore = ["E501", "E402", "E731"]
+
+[tool.mypy]
+ignore_missing_imports = true
+explicit_package_bases = true
+exclude = ["pytest-cache-files-.*"]
+cache_dir = "tmp/mypy-cache"

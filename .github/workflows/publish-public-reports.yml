@@ -1,0 +1,169 @@
+name: "Public Observability — Publish Reports & Console Logs"
+
+# Publishes the static IJT Public CI/CD Observability Portal to the single-commit
+# orphan branch `public-reports-state` (served by GitHub Pages at
+# https://umati.github.io/UA-for-Industrial-Joining-Technologies/).
+#
+# Locked Scope:
+# - Only `ci.yml` and `integration.yml` runs on `main` (and manual backfills via
+#   workflow_dispatch).
+# - Strictly blocks `internal-private-envelope.yml` in `reporting/public_portal.py`.
+# - Overwrites `public-reports-state` as a single orphan commit (depth=1) so
+#   deleted runs never accumulate in `.git/objects/pack`.
+
+on:
+  workflow_call:
+    inputs:
+      workflow_slug:
+        description: "Canonical workflow slug ('ci' or 'integration')"
+        required: true
+        type: string
+      workflow_name:
+        description: "Human-readable workflow title"
+        required: true
+        type: string
+      target_run_id:
+        description: "Workflow run ID to harvest and publish"
+        required: true
+        type: string
+      target_run_number:
+        description: "Workflow run number"
+        required: true
+        type: string
+      target_sha:
+        description: "Commit SHA of the run"
+        required: true
+        type: string
+      target_branch:
+        description: "Branch or tag name of the run"
+        required: true
+        type: string
+      target_event_name:
+        description: "Trigger event name of the run"
+        required: true
+        type: string
+
+  workflow_dispatch:
+    inputs:
+      workflow_slug:
+        description: "Canonical workflow slug ('ci' or 'integration')"
+        required: true
+        type: choice
+        options:
+          - ci
+          - integration
+        default: integration
+      target_run_id:
+        description: "Target workflow run ID on main to publish/backfill"
+        required: true
+        type: string
+      target_run_number:
+        description: "Target workflow run number (optional; derived from timing.json when empty)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish-portal:
+    name: "🌐 Publish Public Observability Portal"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    concurrency:
+      group: public-observability-portal-publish
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version-file: ".python-version"
+
+      - name: Fetch existing public-reports-state branch (if present)
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf site-state
+          remote_url="https://github.com/${GH_REPOSITORY}.git"
+          auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::${auth_header#AUTHORIZATION: basic }"
+          # Exit codes: 0 = branch exists, 2 = branch missing, anything else = network/auth error.
+          # Never treat a transient error as "missing" — that would force-push over history.
+          rc=0
+          git -c "http.https://github.com/.extraheader=${auth_header}" \
+            ls-remote --exit-code --heads "$remote_url" public-reports-state >/dev/null || rc=$?
+          if [ "$rc" -eq 0 ]; then
+            git -c "http.https://github.com/.extraheader=${auth_header}" \
+              clone --depth 1 --branch public-reports-state "$remote_url" site-state
+            rm -rf site-state/.git
+          elif [ "$rc" -eq 2 ]; then
+            mkdir -p site-state
+            echo "Initialized new site-state directory (public-reports-state branch not yet created)."
+          else
+            echo "::error::git ls-remote failed with exit code ${rc}; refusing to overwrite public-reports-state."
+            exit "$rc"
+          fi
+
+      - name: Download workflow artifacts for target run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          run-id: ${{ inputs.target_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: all-results/
+
+      - name: Build static portal and harvest sanitized job logs
+        env:
+          PORTAL_SITE_DIR: site-state
+          PORTAL_ARTIFACTS_DIR: all-results
+          PORTAL_WORKFLOW_SLUG: ${{ inputs.workflow_slug }}
+          PORTAL_WORKFLOW_NAME: ${{ inputs.workflow_name || '' }}
+          GH_RUN_ID: ${{ inputs.target_run_id || github.run_id }}
+          GH_RUN_NUMBER: ${{ inputs.target_run_number || github.run_number }}
+          GH_SHA: ${{ inputs.target_sha || github.sha }}
+          GH_BRANCH: ${{ inputs.target_branch || github.ref_name }}
+          GH_EVENT_NAME: ${{ inputs.target_event_name || github.event_name }}
+          GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ inputs.target_run_id || github.run_id }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_API_URL: ${{ github.api_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/reporting/build_public_portal.py
+
+      - name: Force-push single-commit orphan snapshot to public-reports-state
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PORTAL_WORKFLOW_SLUG: ${{ inputs.workflow_slug }}
+          TARGET_RUN_ID: ${{ inputs.target_run_id || github.run_id }}
+        run: |
+          set -euo pipefail
+          cd site-state
+          touch .nojekyll
+          git init --quiet -b public-reports-state
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit --quiet -m "chore(portal): publish ${PORTAL_WORKFLOW_SLUG} run ${TARGET_RUN_ID}"
+          auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::${auth_header#AUTHORIZATION: basic }"
+          git remote add origin "https://github.com/${GH_REPOSITORY}.git"
+          git -c "http.https://github.com/.extraheader=${auth_header}" \
+            push --force origin HEAD:refs/heads/public-reports-state

@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -266,6 +267,10 @@ async def test_connect_retries_then_succeeds():
         mock_client.connect = _connect_mock
         mock_client.load_type_definitions = AsyncMock()
         mock_client.load_data_type_definitions = AsyncMock()
+        mock_client.get_node = MagicMock()
+        mock_node = MagicMock()
+        mock_node.read_value = AsyncMock(return_value=datetime.now(timezone.utc))
+        mock_client.get_node.return_value = mock_node
         MockClient.return_value = mock_client
 
         c = OPCUAClient("opc.tcp://localhost:4840")
@@ -300,6 +305,10 @@ async def test_connect_logs_retry_message():
         mock_client.connect = _connect_mock
         mock_client.load_type_definitions = AsyncMock()
         mock_client.load_data_type_definitions = AsyncMock()
+        mock_client.get_node = MagicMock()
+        mock_node = MagicMock()
+        mock_node.read_value = AsyncMock(return_value=datetime.now(timezone.utc))
+        mock_client.get_node.return_value = mock_node
         MockClient.return_value = mock_client
 
         c = OPCUAClient("opc.tcp://localhost:4840")

@@ -48,6 +48,10 @@ import sys
 import time
 from pathlib import Path
 
+# Suppress __pycache__ / .pyc generation for this process and all child processes.
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+sys.dont_write_bytecode = True
+
 for _parent in Path(__file__).resolve().parents:
     if (_parent / "scripts" / "tool_bootstrap.py").is_file():
         sys.path.insert(0, str(_parent / "scripts"))

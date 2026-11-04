@@ -413,3 +413,47 @@ def test_markdown_report_wire_timing_large_fleet_and_problematic_endpoints():
     assert "Metric Definitions" not in md
     assert "📋" not in md
     assert "FINDING" not in md
+
+
+def test_metric_guide_and_report_notes():
+    from src.reporters._metrics import (
+        OUTCOME_ACTION_NEEDED,
+        classify_report_outcome,
+        metric_guide,
+        report_notes,
+        summarize_scale,
+    )
+
+    # metric_guide (lines 125-126)
+    guide = metric_guide([("network_transport_time_ms", "Network Transport Latency")])
+    assert isinstance(guide, list)
+    assert any("Network Transport Latency" in g for g in guide)
+
+    # report_notes (lines 131-143)
+    s = _wire_sample(1, 10.0)
+    s.server_processing_time_ms = None
+    timing = {
+        "workers_reported": True,
+        "loop_lag_max_ms": 15.2,
+        "loop_lag_worst_mean_ms": 5.1,
+    }
+    notes = report_notes([s], timing)
+    assert any("Operation End Time" in n for n in notes)
+    assert any("Loop Lag" in n for n in notes)
+
+    # summarize_scale with target=None and varying lo..hi (line 236)
+    s1 = _wire_sample(1, 10.0)
+    s1.endpoint = "opc.tcp://s1:4840"
+    s2 = _wire_sample(2, 10.0)
+    s2.endpoint = "opc.tcp://s2:4840"
+    s3 = _wire_sample(3, 10.0)
+    s3.endpoint = "opc.tcp://s2:4840"
+    samples = [s1, s2, s3]
+    summary = summarize_scale(samples, samples_per_endpoint=None)
+    assert "varies by server" in summary.results_per_server_text
+
+    # classify_report_outcome quality gate failed (line 323)
+    verdict = DiagnosticVerdict("FAIL", "Quality failed", "Expl", "Rec", {}, [])
+    outcome = classify_report_outcome(verdict, samples, gate_failed=True)
+    assert outcome.label == OUTCOME_ACTION_NEEDED
+    assert "quality gate failed" in outcome.footer

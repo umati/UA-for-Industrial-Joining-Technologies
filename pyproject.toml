@@ -25,6 +25,8 @@ package = false
 # Sub-project suites still run via their own run_all_tests.py entrypoints.
 testpaths = ["tests"]
 addopts = "-p no:cacheprovider"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 norecursedirs = [
     ".git",
     ".venv",
@@ -61,7 +63,11 @@ ignore = ["S101"]  # allow assert in tests
 [tool.ruff.lint.per-file-ignores]
 # Test runners and infrastructure scripts call subprocess with trusted,
 # hard-coded args — S603/S314/S607 are false positives here.
-"**/run_all_tests.py" = ["S603", "S314", "S607"]
+# E402 is allowed because runners/scripts set PYTHONDONTWRITEBYTECODE and
+# sys.dont_write_bytecode = True before importing local modules.
+"**/run_all_tests.py" = ["S603", "S314", "S607", "E402"]
+"scripts/**/*.py" = ["E402"]
+"**/setup_*.py" = ["E402"]
 "**/tests/**" = ["S603", "S314"]
 # _STATUS_PASS is a display string, not a credential — S105 is a false positive.
 "**/smoke_test.py" = ["S105"]
@@ -197,3 +203,10 @@ ignore-magic = true
 ignore-semiprivate = true
 ignore-private = true
 verbose = 0
+
+[tool.mypy]
+ignore_missing_imports = true
+explicit_package_bases = true
+exclude = ["pytest-cache-files-.*"]
+# Keep mypy's incremental cache inside tmp/ so .mypy_cache never leaks into the repo root.
+cache_dir = "tmp/mypy-cache"

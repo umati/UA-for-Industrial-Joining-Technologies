@@ -140,7 +140,8 @@ def test_validate_simulator_zip_rejects_duplicate_member(tmp_path: Path) -> None
     archive = tmp_path / "dup.zip"
     with zipfile.ZipFile(archive, "w") as zf:
         zf.writestr("OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe", "a")
-        zf.writestr("OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe", "b")
+        with pytest.warns(UserWarning, match="Duplicate name"):
+            zf.writestr("OPC_UA_IJT_Server_Simulator/opcua_ijt_demo_application.exe", "b")
     with pytest.raises(RuntimeError, match="duplicate"):
         extract.validate_simulator_zip(archive, "OPC_UA_IJT_Server_Simulator")
 

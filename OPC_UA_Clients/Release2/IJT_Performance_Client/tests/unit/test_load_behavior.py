@@ -504,3 +504,69 @@ def test_effective_config_redacts_connection_security_and_tokens():
     assert "super-secret-token" not in str(snap)
     assert "password=" not in str(snap["connection_security"]["value"])
     assert "IJT_PW" in str(snap["connection_security"]["value"])
+
+
+def test_connection_security_validation_edge_cases(tmp_path):
+    from src.connection_security import Credentials
+
+    # str(Credentials) (line 103)
+    creds = Credentials("alice", "secret123")
+    assert str(creds) == "Credentials(username='alice', password=***)"
+
+    # Base_dir path resolution (line 168)
+    sub = tmp_path / "certs"
+    sub.mkdir()
+    sec = ConnectionSecurity(base_dir=str(tmp_path), client_certificate_path="certs/test.der")
+    resolved = sec.resolve_path("certs/test.der")
+    assert resolved == sub / "test.der"
+
+    # Invalid security_mode (line 245)
+    bad_mode = ConnectionSecurity(security_mode="InvalidMode", security_policy="None")
+    issues = validate_connection_security(bad_mode)
+    assert any("not a valid OPC UA message security mode" in i for i in issues)
+
+    # Mode and policy mismatch (line 250)
+    mismatch = ConnectionSecurity(security_mode="Sign", security_policy="None")
+    issues = validate_connection_security(mismatch)
+    assert any("both be 'None' or both be secure" in i for i in issues)
+
+    # _existing_file_issue: file does not exist (line 221)
+    non_existent = ConnectionSecurity(
+        security_mode="Sign",
+        security_policy="Basic256Sha256",
+        client_certificate_path=str(tmp_path / "non_existent.der"),
+        client_private_key_path=str(tmp_path / "non_existent.pem"),
+    )
+    issues = validate_connection_security(non_existent)
+    assert any("does not exist" in i for i in issues)
+
+    # _existing_file_issue: path is not a file (it is a directory) (line 223)
+    dir_path = tmp_path / "not_a_file"
+    dir_path.mkdir()
+    dir_as_file = ConnectionSecurity(
+        security_mode="Sign",
+        security_policy="Basic256Sha256",
+        client_certificate_path=str(dir_path),
+        client_private_key_path=str(dir_path),
+    )
+    issues = validate_connection_security(dir_as_file)
+    assert any("is not a file" in i for i in issues)
+
+    # trust_store_path is not a directory (line 286)
+    file_as_dir = tmp_path / "file.txt"
+    file_as_dir.write_text("hello", encoding="utf-8")
+    bad_trust = ConnectionSecurity(trust_store_path=str(file_as_dir))
+    issues = validate_connection_security(bad_trust)
+    assert any("is not an existing directory" in i for i in issues)
+
+    # auth_source='file' with file issues (lines 305-307)
+    file_sec = ConnectionSecurity(
+        security_mode="Sign",
+        security_policy="Basic256Sha256",
+        client_certificate_path=str(file_as_dir),
+        client_private_key_path=str(file_as_dir),
+        auth_source="file",
+        credentials_file=str(tmp_path / "missing_creds.yaml"),
+    )
+    issues = validate_connection_security(file_sec)
+    assert any("authentication.credentials_file" in i and "does not exist" in i for i in issues)

@@ -96,6 +96,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+# Suppress __pycache__ / .pyc generation for this process and all child processes.
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+sys.dont_write_bytecode = True
+
 if str(Path(__file__).parent / "scripts") not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 
@@ -3206,7 +3210,7 @@ def _print_summary(results: list[SuiteResult], total_time: float) -> int:  # noq
 
     # ── Totals row ────────────────────────────────────────────────────────────
     out(_hcols(LM, CR, RM) + "\n")
-    out(_row("WALL TIME (Parallel)", blank_s, f"{total_time:.1f}s", suite_totals) + "\n")
+    out(_row("TOTAL TIME (Parallel)", blank_s, f"{total_time:.1f}s", suite_totals) + "\n")
     out(_row("", blank_s, "", f"  \u2514 {total_test_detail}") + "\n")
     out(_hcols(BL, BT, BR) + "\n\n")
 

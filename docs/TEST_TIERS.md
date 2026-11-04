@@ -154,6 +154,7 @@ rather than ad-hoc bulk deletion:
 | `docker-hub` deployments | Keep the newest 50 records and delete older records after 30 days by default. These records are UI/audit noise from frequent Docker publication checks. |
 | Protected/internal deployments | Preserve all non-`docker-hub` environments, including `private-envelope-validation`, because they are useful security and validation evidence. |
 | Artifacts | Individual artifact uploads keep explicit `retention-days` values in their owning workflow, currently 14 days for routine CI evidence. |
+| `public-reports-state` (Public Observability Portal) | `publish-public-reports.yml` (`reporting/public_portal.py`) retains the newest 50 `main` runs (`ci` + `integration`) plus `v*` release tags, capped at 600 MB total, and force-pushes a single squashed orphan commit (`depth=1`) so pruned runs never accumulate in `.git/objects/pack`. |
 
 Run the workflow manually with `dry_run: true` before changing retention inputs.
 Do not broaden deployment cleanup without confirming the environment is

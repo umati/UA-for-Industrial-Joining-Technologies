@@ -205,6 +205,8 @@ Every `run_all_tests.py` calls `_cleanup_caches()` after writing reports. Cleanu
 
 `.pytest_cache` is cleaned post-run (regenerates on next run; `--lf`/`--ff` only work within the same session). Always preserved: `test-results/` (reports). The root orchestrator may create `tmp/runner-env/` for delegated tool caches; it is runtime state and must remain untracked.
 
+**Prevention (before cleanup):** every `run_all_tests.py`, `setup_*.py`, and `conftest.py` sets `PYTHONDONTWRITEBYTECODE=1` + `sys.dont_write_bytecode = True` before local imports, so `__pycache__` is never written by the runner or its child processes (root ruff allows the resulting `E402` for `**/run_all_tests.py`, `scripts/**`, and `**/setup_*.py`). Tool caches are redirected under `tmp/` (`[tool.mypy] cache_dir = "tmp/mypy-cache"`, ruff `cache-dir = "tmp/ruff-cache"`). Direct `pytest tests` from the repo root uses `tests/conftest.py`, whose `pytest_sessionfinish` hook removes `tmp/ruff-cache`, `tmp/mypy-cache`, `tmp/pytest`, `tmp/pytest_tmp`, and `tmp/pytest-root-tests` (set `IJT_PRESERVE_TEST_ARTIFACTS=1` to keep them for debugging).
+
 ---
 
 ### pyfakefs — Filesystem-Touching Unit Tests
@@ -459,7 +461,7 @@ UA-for-Industrial-Joining-Technologies/
 
 ## CI/CD
 
-**Workflows**: `.github/workflows/ci.yml`, `.github/workflows/integration.yml`, and `.github/workflows/codeql.yml` (all at **repo root**)
+**Workflows**: `.github/workflows/ci.yml`, `.github/workflows/integration.yml`, `.github/workflows/publish-public-reports.yml`, and `.github/workflows/codeql.yml` (all at **repo root**)
 
 ### CI (`ci.yml`) — triggers on every push/PR to `main`
 | Job | What it tests |
@@ -476,7 +478,8 @@ UA-for-Industrial-Joining-Technologies/
 | `actionlint` | GitHub Actions syntax/static validation for workflow changes (configured in `.github/actionlint.yaml`); local root runner SKIPs if the Go binary is absent |
 | `zizmor` | CI: SARIF upload (job does not fail on findings). Local: root `.venv` from `uv.lock`; FAIL on sync, High/Critical, or tool/parse errors. Detail: [DEVELOPMENT.md](DEVELOPMENT.md#what-is-handled-automatically) |
 | `pre-commit` | Runs `.pre-commit-config.yaml` on all files with npm-backed JS hooks skipped because dedicated JS jobs already own them |
-| `report` | Downloads all artifacts · writes summary table to Actions Summary with full pass · fail · skip counts · coverage/threshold cells from each client gate · failed-test detail (suite, test, message) and `::error` annotations parsed from the JUnit XML · skip-budget and coverage-threshold warnings · artifact sanity gate warns on missing XMLs |
+| `report` | Downloads all artifacts · writes summary table to Actions Summary with full pass · fail · skip counts · coverage/threshold cells from each client gate · failed-test detail (suite, test, message) and `::error` annotations parsed from the JUnit XML · skip-budget and coverage-threshold warnings · artifact sanity gate warns on missing XMLs · exports `timing-results/summary.md` and appends the 3-line Public Portal link bar on `main` runs |
+| `publish-public-report` | Runs on `main` pushes (`github.event_name != 'pull_request' && github.ref == 'refs/heads/main'`) after `report`; calls `/.github/workflows/publish-public-reports.yml` (`workflow_slug: ci`) to publish the executive summary, sanitized per-job/step console logs, and downloadable XML/JSON files to `/runs/<run_id>/` and `/latest/ci/` |
 
 Runtime: ~5–7 minutes. Python 3.14, Node.js 24, .NET 10 everywhere.
 Action versions: `checkout@v6`, `setup-python@v6`, `setup-node@v6`, `setup-dotnet@v5`, `upload-artifact@v7`, `download-artifact@v8`
@@ -608,7 +611,16 @@ Triggers on: `OPC_UA_Servers/**`, all Web Client files, `IJT_Test_Client/**`, Co
 | `live-webclient` | Windows live matrix: root-runner Web Client live/e2e suites with owned services and per-suite artifacts |
 | `live-console` | Windows live: Console Client live tests — server on port 40461 |
 | `csharp-live` | Windows live: C# xUnit live tests (nightly drift detection) — server on port 40464 |
-| `report` | Downloads integration artifacts and publishes pass/fail/skip totals, test-count deltas from `tests/baselines/integration-test-counts.json`, non-failing skip/test drift warnings, per-job wall-clock durations from the current run jobs API, split Web live/browser rows, and Browser Features / C# Live timing tables |
+| `report` | Downloads integration artifacts and publishes pass/fail/skip totals, test-count deltas from `tests/baselines/integration-test-counts.json`, non-failing skip/test drift warnings, per-job wall-clock durations from the current run jobs API, split Web live/browser rows, and Browser Features / C# Live timing tables · exports `timing-results/summary.md` and appends the 3-line Public Portal link bar on `main` runs |
+| `publish-public-report` | Runs on `main` runs (`github.event_name != 'pull_request' && github.ref == 'refs/heads/main'`) after `report`; calls `/.github/workflows/publish-public-reports.yml` (`workflow_slug: integration`) to publish the executive summary, sanitized per-job/step console logs, `report.html`, and `report.xlsx` to `/runs/<run_id>/` and `/latest/integration/` |
+
+### Public Observability Portal (`publish-public-reports.yml`)
+- **Purpose**: Provides zero-login public access to `main` CI and System Tests executive summaries, collapsible per-job/per-step console logs, `report.html`, and `report.xlsx` at `https://umati.github.io/UA-for-Industrial-Joining-Technologies/` (workaround for GitHub platform limitation where anonymous visitors cannot view raw job console logs or download Actions artifacts).
+- **Modules**: `reporting/public_portal.py` and CLI `scripts/reporting/build_public_portal.py`.
+- **Scope & Security**: Strictly restricted to `ci` and `integration` workflows on `main` (and `v*` tags); `internal-private-envelope.yml` and unmerged `pull_request` runs are hard-blocked in code and enforced by `tests/reporting/test_workflow_contracts.py`. Console logs are scrubbed of ANSI/terminal escape sequences and credential patterns (`ghp_*`, `github_pat_*`, `Bearer`/`Authorization:` headers, git `extraheader` auth, JWTs, URL credentials, `sig=`/`token=` query secrets such as Azure SAS URLs, AWS keys, private-key blocks). Job-log downloads follow the GitHub API 302 redirect over HTTPS only and strip `Authorization` when the host changes. `run_id` must match `^[A-Za-z0-9_-]{1,64}$` (no path traversal), and the embedded `report.html` iframe is sandboxed.
+- **Branch Safety**: The git token is passed via a masked `http.extraheader`, never embedded in a remote URL. `git ls-remote --exit-code` result `2` (branch missing) initializes a fresh site; any other non-zero code (network/auth error) aborts the job so the 50-run history is never force-pushed away.
+- **Run Status & Backfill**: Conclusion defaults to `auto` (`--conclusion` / `PORTAL_CONCLUSION`): derived from harvested jobs (`failure`, `timed_out`, `action_required`, `startup_failure` → failed), then `timing.json` jobs, then the summary banner. The portal's own `🌐 Publish Public …` jobs are excluded from harvesting. Manual `workflow_dispatch` backfills (`target_run_id`, optional `target_run_number`) take run number / SHA / branch from the target's `timing.json`, and `/latest/<slug>/` is only replaced when the published run is the newest for that workflow.
+- **Storage & Retention**: Force-pushes a single squashed orphan commit (`depth=1`) to `public-reports-state` under serialized concurrency (`group: public-observability-portal-publish`, `cancel-in-progress: false`), retaining the newest 50 `main` runs + `v*` release tags (capped at 600 MB) so `.git/objects/pack` never bloats.
 
 Runtime: ~10–15 minutes (int-testclient, live-webclient matrix jobs, live-console, csharp-live all run in parallel). Web Client GUI/JS changes now trigger integration because the live matrix includes Playwright smoke/features/regression suites.
 Use the report timing tables for CI performance decisions: Browser Features comes from Web Client `timing-latest.json` artifacts, and C# Live comes from `results-csharp-live/tests.trx` per-test durations.
