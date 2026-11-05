@@ -202,6 +202,43 @@ def test_print_console_report_more_than_ten_problematic_endpoints(capsys):
     assert "Showing 10 of 12 affected endpoints" in out
 
 
+def test_console_columns_follow_the_longest_cell(capsys):
+    verdict = DiagnosticVerdict(
+        primary_bottleneck="LOCAL_HOST_CPU",
+        headline="Shared computer",
+        explanation="colocated",
+        recommendation="None",
+        metrics_summary={"delivery_p90_ms": 175.1},
+        warnings=[],
+    )
+    long_endpoint = "opc.tcp://joining-controller.factory.example:48400"
+    samples = []
+    for index in range(12):
+        endpoint = long_endpoint if index < 6 else "opc.tcp://127.0.0.1:41001"
+        samples.append(
+            LatencySample(
+                sample_id=index,
+                endpoint=endpoint,
+                delivery_time_ms=8296.2 + index,
+                total_result_transfer_time_ms=8388.9 + index,
+                joining_duration_ms=51.7,
+                clock_skew_ms=12345.6,
+                timing_source="wire",
+            )
+        )
+    print_console_report(samples, verdict, "LongValues", samples_per_endpoint=6, timing={"workers_reported": 20})
+    out = capsys.readouterr().out
+    assert long_endpoint in out
+    assert "8301.2ms" in out
+    assert "+12345.6 ms (server ahead)" in out
+    box_lines = [line for line in out.splitlines() if line.startswith(("  \u2502", "  \u250c", "  \u2514", "  \u251c"))]
+    assert box_lines
+    assert len(set(map(len, box_lines))) == 1
+    lines = out.splitlines()
+    header_idx = next(i for i, line in enumerate(lines) if "For Stats" in line)
+    assert len(lines[header_idx]) == len(lines[header_idx - 1]) == len(lines[header_idx + 1])
+
+
 def test_local_host_cpu_is_information_not_action(capsys):
     verdict = DiagnosticVerdict(
         primary_bottleneck="LOCAL_HOST_CPU",
