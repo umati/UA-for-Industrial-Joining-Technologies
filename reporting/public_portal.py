@@ -479,19 +479,23 @@ def harvest_run_artifacts(
             return False
         return p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(base_resolved)
 
+    def _nonempty(p: Path) -> bool:
+        try:
+            return p.is_file() and not p.is_symlink() and p.stat().st_size > 0
+        except OSError:
+            return False
+
     summary_candidates: list[Path] = []
-    if summary_file is not None and summary_file.is_file() and not summary_file.is_symlink():
+    if summary_file is not None and _nonempty(summary_file):
         summary_candidates.append(summary_file)
-    if timing_dir is not None:
-        td_summary = timing_dir / "summary.md"
-        if td_summary.is_file() and not td_summary.is_symlink():
-            summary_candidates.append(td_summary)
+    if timing_dir is not None and _nonempty(timing_dir / "summary.md"):
+        summary_candidates.append(timing_dir / "summary.md")
     if artifacts_dir is not None and artifacts_dir.is_dir():
         for timing_sub in sorted(artifacts_dir.glob("timing-*/summary.md")):
-            if _safe_artifact_file(timing_sub):
+            if _safe_artifact_file(timing_sub) and _nonempty(timing_sub):
                 summary_candidates.append(timing_sub)
         for direct_sub in sorted(artifacts_dir.glob("summary.md")):
-            if _safe_artifact_file(direct_sub):
+            if _safe_artifact_file(direct_sub) and _nonempty(direct_sub):
                 summary_candidates.append(direct_sub)
 
     if summary_candidates:
@@ -795,6 +799,22 @@ def render_markdown_to_html(md_text: str) -> str:
     return "\n".join(out)
 
 
+_ROLLUP_JOB_NAMES = frozenset({"all checks passed"})
+
+
+def _is_cancelled_conclusion(conclusion: str) -> bool:
+    return conclusion.strip().lower() == "cancelled"
+
+
+def _latest_run(runs: list[RunPortalMetadata]) -> RunPortalMetadata | None:
+    """Newest settled run. A cancelled run is latest only when nothing else exists."""
+    if not runs:
+        return None
+    settled = [run for run in runs if not _is_cancelled_conclusion(run.conclusion)]
+    pool = settled or runs
+    return max(pool, key=lambda run: (run.run_number, run.created_at, run.run_id))
+
+
 def _status_badge(conclusion: str) -> tuple[str, str, str]:
     norm = conclusion.strip().lower()
     if norm == "success":
@@ -1004,13 +1024,6 @@ pre.code-block, pre.log-pre {
   border-radius: 4px;
   margin: 10px 0;
 }
-.spec-iframe {
-  width: 100%;
-  height: 78vh;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #fff;
-}
 .meta-row {
   color: var(--muted);
   font-size: 0.88rem;
@@ -1047,31 +1060,15 @@ def render_run_portal_page(
     short_sha = meta.commit_sha[:8] if meta.commit_sha else "unknown"
     summary_html = render_markdown_to_html(summary_markdown)
     safe_root = html.escape(root_rel, quote=True)
-    safe_slug = html.escape(meta.workflow_slug, quote=True)
-    safe_slug_up = html.escape(meta.workflow_slug.upper())
 
+    short_label = "CI" if meta.workflow_slug == "ci" else "System Tests"
     action_buttons: list[str] = [
-        f'<a class="btn" href="{safe_root}/index.html">🗂️ All Runs Dashboard</a>',
-        f'<a class="btn" href="{safe_root}/latest/{safe_slug}/index.html">'
-        f"📌 Latest {safe_slug_up}</a>",
+        f'<a class="btn" href="{safe_root}/index.html">Runs</a>',
+        f'<a class="btn" href="{safe_root}/latest/ci/index.html">CI</a>',
+        f'<a class="btn" href="{safe_root}/latest/integration/index.html">System Tests</a>',
     ]
-    if meta.has_spec_html:
-        action_buttons.append(
-            '<a class="btn btn-primary" href="report.html" target="_blank" rel="noopener">'
-            "📊 Open Interactive report.html</a>"
-        )
     if meta.has_spec_xlsx:
-        action_buttons.append(
-            '<a class="btn btn-primary" href="report.xlsx" download>'
-            "📥 Download 123-CU Excel (report.xlsx)</a>"
-        )
-    if meta.has_timing_json:
-        action_buttons.append('<a class="btn" href="timing.json" download>⏱️ timing.json</a>')
-    if meta.has_junit_zip:
-        action_buttons.append(
-            '<a class="btn" href="junit-and-coverage.zip" download>'
-            "📦 JUnit &amp; Coverage (.zip)</a>"
-        )
+        action_buttons.append('<a class="btn btn-primary" href="report.xlsx" download>Excel</a>')
     if meta.html_url and meta.html_url.startswith(("https://", "http://")):
         safe_run_url = html.escape(meta.html_url, quote=True)
         action_buttons.append(
@@ -1175,37 +1172,6 @@ def render_run_portal_page(
                 f"</tr>"
             )
 
-    spec_tab_btn = (
-        '<button type="button" class="tab-btn" onclick="selectTab(\'spec\')" id="tab-btn-spec">'
-        "📊 Interactive Spec Report (report.html)</button>"
-        if meta.has_spec_html
-        else ""
-    )
-    xlsx_btn = (
-        '<a class="btn btn-primary" href="report.xlsx" download>'
-        "📥 Download 123-CU Excel (report.xlsx)</a>"
-        if meta.has_spec_xlsx
-        else ""
-    )
-    spec_header_style = (
-        "display:flex;justify-content:space-between;align-items:center;"
-        "margin-bottom:12px;flex-wrap:wrap;gap:8px;"
-    )
-    spec_tab_pane = (
-        '<div class="tab-pane" id="tab-pane-spec">'
-        '<div class="card">'
-        f'<div style="{spec_header_style}">'
-        "<strong>📊 Test Client Interactive Specification Report</strong>"
-        '<div class="btn-row">'
-        '<a class="btn btn-primary" href="report.html" target="_blank" rel="noopener">'
-        "🔍 Open Fullscreen in New Tab</a>"
-        f"{xlsx_btn}</div></div>"
-        '<iframe class="spec-iframe" src="report.html" sandbox="allow-scripts" '
-        'title="Specification Test Report"></iframe>'
-        "</div></div>"
-        if meta.has_spec_html
-        else ""
-    )
     card_top_style = (
         "display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;"
     )
@@ -1215,7 +1181,7 @@ def render_run_portal_page(
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>{html.escape(meta.workflow_name)} — Run #{meta.run_number} | IJT Public CI Portal</title>
+  <title>{html.escape(short_label)} #{meta.run_number} | IJT</title>
   <style>{_PORTAL_CSS}</style>
 </head>
 <body>
@@ -1231,7 +1197,7 @@ def render_run_portal_page(
     <div class="card">
       <div style="{card_top_style}">
         <h1 style="margin:0;font-size:1.35rem;">
-          {html.escape(meta.workflow_name)} — Run #{meta.run_number}
+          {html.escape(short_label)} #{meta.run_number}
         </h1>
         <span class="badge {badge_cls}">{icon} {html.escape(status_text)}</span>
       </div>
@@ -1250,16 +1216,15 @@ def render_run_portal_page(
     <nav class="tabs">
       <button type="button" class="tab-btn active"
               onclick="selectTab('summary')" id="tab-btn-summary">
-        📋 Executive Summary
+        Summary
       </button>
       <button type="button" class="tab-btn"
               onclick="selectTab('logs')" id="tab-btn-logs">
-        🖥️ Job &amp; Step Console Logs ({len(jobs)})
+        Logs ({len(jobs)})
       </button>
-      {spec_tab_btn}
       <button type="button" class="tab-btn"
               onclick="selectTab('artifacts')" id="tab-btn-artifacts">
-        📦 Public Downloads &amp; Files
+        Files
       </button>
     </nav>
 
@@ -1273,11 +1238,9 @@ def render_run_portal_page(
       {logs_section_html}
     </section>
 
-    {spec_tab_pane}
-
     <section class="tab-pane" id="tab-pane-artifacts">
       <div class="card">
-        <h2 style="margin-top:0;">📦 Publicly Downloadable Run Files (Zero Sign-In Required)</h2>
+        <h2 style="margin-top:0;">Files</h2>
         <div class="table-wrap">
           <table>
             <thead>
@@ -1318,7 +1281,6 @@ def render_run_portal_page(
       }}
     }}
     if (window.location.hash === '#logs') selectTab('logs');
-    if (window.location.hash === '#spec') selectTab('spec');
     if (window.location.hash === '#artifacts') selectTab('artifacts');
   </script>
 </body>
@@ -1329,21 +1291,18 @@ def render_run_portal_page(
 def render_dashboard_index(runs: list[RunPortalMetadata]) -> str:
     """Render the root `index.html` dashboard showing latest `main` cards and run history."""
     latest_by_slug: dict[str, RunPortalMetadata] = {}
-    for run in runs:
-        prev = latest_by_slug.get(run.workflow_slug)
-        if prev is None or (run.run_number, run.created_at, run.run_id) > (
-            prev.run_number,
-            prev.created_at,
-            prev.run_id,
-        ):
-            latest_by_slug[run.workflow_slug] = run
+    for slug in {run.workflow_slug for run in runs}:
+        chosen = _latest_run([run for run in runs if run.workflow_slug == slug])
+        if chosen is not None:
+            latest_by_slug[slug] = chosen
 
     cards_html: list[str] = []
     card_hdr_style = (
         "display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"
     )
+    short_labels = {"ci": "CI", "integration": "System Tests"}
     for slug in ("ci", "integration"):
-        label = WORKFLOW_LABELS[slug]
+        label = short_labels[slug]
         latest = latest_by_slug.get(slug)
         if latest is None:
             cards_html.append(
@@ -1356,18 +1315,6 @@ def render_dashboard_index(runs: list[RunPortalMetadata]) -> str:
 
         icon, status_text, badge_cls = _status_badge(latest.conclusion)
         short_sha = latest.commit_sha[:8] if latest.commit_sha else "unknown"
-        extra_links = ""
-        if slug == "integration":
-            if latest.has_spec_html:
-                extra_links += (
-                    '<a class="btn btn-primary" href="latest/integration/report.html" '
-                    'target="_blank" rel="noopener">📊 Interactive report.html</a>'
-                )
-            if latest.has_spec_xlsx:
-                extra_links += (
-                    '<a class="btn btn-primary" href="latest/integration/report.xlsx" download>'
-                    "📥 123-CU Excel (.xlsx)</a>"
-                )
 
         cards_html.append(
             f'<div class="card">'
@@ -1381,9 +1328,7 @@ def render_dashboard_index(runs: list[RunPortalMetadata]) -> str:
             f"<span><strong>UTC:</strong> <code>{html.escape(latest.created_at)}</code></span>"
             f"</div>"
             f'<div class="btn-row">'
-            f'<a class="btn" href="latest/{slug}/index.html">📋 View Latest Summary &amp; Logs</a>'
-            f'<a class="btn" href="latest/{slug}/index.html#logs">🖥️ Console Logs</a>'
-            f"{extra_links}"
+            f'<a class="btn" href="latest/{slug}/index.html">Open</a>'
             f"</div>"
             f"</div>"
         )
@@ -1393,16 +1338,7 @@ def render_dashboard_index(runs: list[RunPortalMetadata]) -> str:
         icon, status_text, badge_cls = _status_badge(run.conclusion)
         short_sha = run.commit_sha[:8] if run.commit_sha else "unknown"
         safe_rid = html.escape(run.run_id, quote=True)
-        dl_links: list[str] = [
-            f'<a href="runs/{safe_rid}/index.html">📋 Summary</a>',
-            f'<a href="runs/{safe_rid}/index.html#logs">🖥️ Logs ({run.job_count})</a>',
-        ]
-        if run.has_spec_html:
-            dl_links.append(
-                f'<a href="runs/{safe_rid}/report.html" target="_blank" rel="noopener">📊 HTML</a>'
-            )
-        if run.has_spec_xlsx:
-            dl_links.append(f'<a href="runs/{safe_rid}/report.xlsx" download>📥 Excel</a>')
+        open_link = f'<a href="runs/{safe_rid}/index.html">Open</a>'
         rows_html.append(
             f'<tr data-workflow="{html.escape(run.workflow_slug, quote=True)}">'
             f'<td><span class="badge {badge_cls}">{icon} {html.escape(status_text)}</span></td>'
@@ -1411,7 +1347,7 @@ def render_dashboard_index(runs: list[RunPortalMetadata]) -> str:
             f"<td><code>{html.escape(run.branch)}</code></td>"
             f"<td><code>{html.escape(short_sha)}</code></td>"
             f"<td><code>{html.escape(run.created_at)}</code></td>"
-            f"<td>{' · '.join(dl_links)}</td>"
+            f"<td>{open_link}</td>"
             f"</tr>"
         )
 
@@ -1655,17 +1591,26 @@ def publish_run_to_portal(
 
     effective_conclusion = conclusion.strip().lower()
     if effective_conclusion in {"", "unknown", "auto"}:
-        if any(j.conclusion in _FAILURE_CONCLUSIONS for j in jobs):
-            effective_conclusion = "failure"
-        elif any(j.conclusion == "cancelled" for j in jobs):
+        real_failures = [
+            job
+            for job in jobs
+            if job.conclusion in _FAILURE_CONCLUSIONS
+            and job.name.strip().lower() not in _ROLLUP_JOB_NAMES
+        ]
+        cancelled_jobs = [job for job in jobs if _is_cancelled_conclusion(job.conclusion)]
+        if cancelled_jobs and not real_failures:
+            # The rollup job exits non-zero when a needed job was cancelled.
+            # That is not a product failure; the workflow itself was cancelled.
             effective_conclusion = "cancelled"
+        elif real_failures or any(job.conclusion in _FAILURE_CONCLUSIONS for job in jobs):
+            effective_conclusion = "failure"
         elif jobs:
             effective_conclusion = "success"
         elif any(
             str(tj.get("conclusion", "")).lower() in _FAILURE_CONCLUSIONS for tj in timing_jobs
         ):
             effective_conclusion = "failure"
-        elif any(str(tj.get("conclusion", "")).lower() == "cancelled" for tj in timing_jobs):
+        elif any(_is_cancelled_conclusion(str(tj.get("conclusion", ""))) for tj in timing_jobs):
             effective_conclusion = "cancelled"
         elif timing_jobs:
             effective_conclusion = "success"
@@ -1738,14 +1683,18 @@ def publish_run_to_portal(
     )
 
     slug_runs = [r for r in kept_runs if r.workflow_slug == slug]
-    newest_for_slug = (
-        max(slug_runs, key=lambda r: (r.run_number, r.created_at, r.run_id)) if slug_runs else meta
-    )
+    chosen_latest = _latest_run(slug_runs)
     latest_slug_dir = site_dir / "latest" / slug
-    if newest_for_slug.run_id == meta.run_id or not latest_slug_dir.exists():
-        if latest_slug_dir.exists():
-            shutil.rmtree(latest_slug_dir)
-        shutil.copytree(run_out_dir, latest_slug_dir)
+    if chosen_latest is not None and (
+        chosen_latest.run_id == meta.run_id or not latest_slug_dir.exists()
+    ):
+        source_dir = (
+            run_out_dir if chosen_latest.run_id == meta.run_id else runs_root / chosen_latest.run_id
+        )
+        if source_dir.is_dir():
+            if latest_slug_dir.exists():
+                shutil.rmtree(latest_slug_dir)
+            shutil.copytree(source_dir, latest_slug_dir)
 
     index_json_path.write_text(
         json.dumps([r.to_dict() for r in kept_runs], indent=2) + "\n",

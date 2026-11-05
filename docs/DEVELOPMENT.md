@@ -488,7 +488,7 @@ Tests run automatically on:
 - Security scanning via CodeQL
 
 View results:
-- **Public Observability Portal (No GitHub Sign-In Required):** [All `main` Runs Dashboard](https://umati.github.io/UA-for-Industrial-Joining-Technologies/) · [Latest CI Report & Console Logs](https://umati.github.io/UA-for-Industrial-Joining-Technologies/latest/ci/) · [Latest System Tests Report & Console Logs](https://umati.github.io/UA-for-Industrial-Joining-Technologies/latest/integration/) · [Interactive Spec Report (`report.html`)](https://umati.github.io/UA-for-Industrial-Joining-Technologies/latest/integration/report.html) · [123-CU Excel (`report.xlsx`)](https://umati.github.io/UA-for-Industrial-Joining-Technologies/latest/integration/report.xlsx)
+- **Reports (no sign-in):** [Runs](https://umati.github.io/UA-for-Industrial-Joining-Technologies/) · [CI](https://umati.github.io/UA-for-Industrial-Joining-Technologies/latest/ci/) · [System Tests](https://umati.github.io/UA-for-Industrial-Joining-Technologies/latest/integration/). The Excel workbook is on the System Tests page.
 - **GitHub Actions UI:** [GitHub Actions CI](https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions)
 
 ## Docker

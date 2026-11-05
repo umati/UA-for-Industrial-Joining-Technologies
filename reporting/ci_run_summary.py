@@ -25,6 +25,27 @@ except ImportError:  # pragma: no cover - standalone: python3 reporting/X.py
     from _table_padding import pad_table_rows  # type: ignore[no-redef]
 
 
+def _write_summary(text: str) -> None:
+    """Write the job summary to GitHub and, when set, to SUMMARY_MARKDOWN_OUT.
+
+    GITHUB_STEP_SUMMARY is a different file on every step, so a later step
+    cannot copy this step's summary. The durable path is what the public
+    portal publishes for anonymous readers.
+    """
+    payload = text if text.endswith("\n") else text + "\n"
+    step_summary = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout")
+    with open(step_summary, "a", encoding="utf-8", newline="\n") as fh:
+        fh.write(payload)
+    durable = os.environ.get("SUMMARY_MARKDOWN_OUT", "").strip()
+    if not durable:
+        return
+    parent = os.path.dirname(durable)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(durable, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(payload)
+
+
 def _urlopen(request, timeout):
     """HTTPS-only urlopen wrapper; tests can monkeypatch this seam.
 
@@ -1185,10 +1206,7 @@ def main() -> None:
         ),
     ]
 
-    with open(
-        os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout"), "a", encoding="utf-8", newline="\n"
-    ) as fh:
-        fh.write("\n".join(out) + "\n")
+    _write_summary("\n".join(out) + "\n")
     print("Summary written.")
 
 

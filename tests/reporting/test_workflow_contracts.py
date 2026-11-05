@@ -174,6 +174,7 @@ def test_ci_summary_step_invokes_extracted_module() -> None:
         "GH_API_URL",
         "GH_TOKEN",
         "REPORT_JOB_NAME",
+        "SUMMARY_MARKDOWN_OUT",
     }
 
 
@@ -294,6 +295,7 @@ def test_integration_summary_step_invokes_extracted_module() -> None:
         "GH_API_URL",
         "GH_TOKEN",
         "REPORT_JOB_NAME",
+        "SUMMARY_MARKDOWN_OUT",
     }
 
 
@@ -537,6 +539,9 @@ def test_public_portal_step_ordering_and_caller_allowlist_across_all_workflows()
         export_step = report_steps[export_idx]
         assert "timing-results/summary.md" in export_step["run"]
         assert '>> "$GITHUB_STEP_SUMMARY"' in export_step["run"]
+        assert 'cp "$GITHUB_STEP_SUMMARY"' not in export_step["run"]
+        generate_step = report_steps[summary_idx]
+        assert generate_step["env"]["SUMMARY_MARKDOWN_OUT"] == "timing-results/summary.md"
 
         pub_job = wf["jobs"]["publish-public-report"]
         assert pub_job["needs"] == ["report"]
@@ -553,7 +558,7 @@ def test_readme_public_portal_links_match_generated_paths() -> None:
         f"{base_url}/",
         f"{base_url}/latest/ci/",
         f"{base_url}/latest/integration/",
-        f"{base_url}/latest/integration/report.html",
-        f"{base_url}/latest/integration/report.xlsx",
     ):
         assert expected_url in readme_text, f"README.md missing public portal URL: {expected_url}"
+    assert "report.html" not in readme_text
+    assert "report.xlsx" not in readme_text

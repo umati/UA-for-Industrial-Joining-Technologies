@@ -1434,6 +1434,7 @@ jobs:
           GH_API_URL:     ${{ github.api_url }}
           GH_TOKEN:       ${{ github.token }}
           REPORT_JOB_NAME: "📋 System Tests Report"
+          SUMMARY_MARKDOWN_OUT: timing-results/summary.md
         run: |
           python3 reporting/system_tests_run_summary.py
 
@@ -1461,16 +1462,16 @@ jobs:
           GH_EVENT_NAME: ${{ github.event_name }}
           GH_RUN_ID: ${{ github.run_id }}
         run: |
-          mkdir -p timing-results
-          if [ -f "$GITHUB_STEP_SUMMARY" ]; then
-            cp "$GITHUB_STEP_SUMMARY" timing-results/summary.md
+          if [ ! -s timing-results/summary.md ]; then
+            echo "::error::timing-results/summary.md is missing. The summary step must set SUMMARY_MARKDOWN_OUT; GITHUB_STEP_SUMMARY is per-step and cannot be copied later."
+            exit 1
           fi
           if [ "$GH_EVENT_NAME" != "pull_request" ] && [ "$GH_BRANCH" = "main" ]; then
             {
               echo ""
               echo "---"
-              echo "🌐 **Public Report, Logs & Downloads (No Sign-In Required):** [📋 Summary & Step Console Logs](https://umati.github.io/UA-for-Industrial-Joining-Technologies/runs/${GH_RUN_ID}/) · [📊 Interactive report.html](https://umati.github.io/UA-for-Industrial-Joining-Technologies/runs/${GH_RUN_ID}/report.html) · [📥 Download 123-CU Excel (report.xlsx)](https://umati.github.io/UA-for-Industrial-Joining-Technologies/runs/${GH_RUN_ID}/report.xlsx) · [🗂️ All main Runs](https://umati.github.io/UA-for-Industrial-Joining-Technologies/)"
-            } >> "$GITHUB_STEP_SUMMARY"
+              echo "Reports (no sign-in): [Runs](https://umati.github.io/UA-for-Industrial-Joining-Technologies/) · [CI](https://umati.github.io/UA-for-Industrial-Joining-Technologies/latest/ci/) · [System Tests](https://umati.github.io/UA-for-Industrial-Joining-Technologies/runs/${GH_RUN_ID}/)"
+            } | tee -a timing-results/summary.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload Timing Artifacts

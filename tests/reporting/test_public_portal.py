@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from reporting.public_portal import (
+    JobLogBundle,
     RunPortalMetadata,
     prune_portal_runs,
     publish_run_to_portal,
@@ -174,6 +175,10 @@ def test_publish_run_to_portal_creates_run_and_latest_views(tmp_path: Path) -> N
     assert (site_dir / "latest" / "integration" / "index.html").is_file()
     assert (site_dir / "latest" / "integration" / "report.html").is_file()
     assert (site_dir / "latest" / "integration" / "report.xlsx").is_file()
+    page = (site_dir / "runs" / "12345" / "index.html").read_text(encoding="utf-8")
+    assert "Test Client" in page
+    assert ">Excel</a>" in page
+    assert 'src="report.html"' not in page
 
 
 def test_prune_portal_runs_preserves_releases_and_caps_non_release_runs(tmp_path: Path) -> None:
@@ -480,7 +485,58 @@ def test_older_backfill_does_not_overwrite_latest_pointer(tmp_path: Path) -> Non
     assert {r["run_id"] for r in index} == {"500", "400"}
 
 
-def test_run_page_iframe_sandboxed_and_unsafe_run_url_dropped(tmp_path: Path) -> None:
+def test_cancelled_run_does_not_replace_latest(tmp_path: Path) -> None:
+    site_dir = tmp_path / "site"
+    _publish_minimal(site_dir, "10", 10, commit_sha="goodsha1")
+    _publish_minimal(site_dir, "11", 11, commit_sha="cancsha1", conclusion="cancelled")
+    latest_html = (site_dir / "latest" / "ci" / "index.html").read_text(encoding="utf-8")
+    dashboard = (site_dir / "index.html").read_text(encoding="utf-8")
+    assert "goodsha1" in latest_html
+    assert "cancsha1" not in latest_html
+    assert "Latest Run:</strong> #10" in dashboard
+    index = json.loads((site_dir / "runs-index.json").read_text(encoding="utf-8"))
+    assert {row["run_id"] for row in index} == {"10", "11"}
+
+
+def test_cancelled_rollup_is_not_a_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from reporting import public_portal
+
+    def fake_jobs(**_kwargs: object) -> list[JobLogBundle]:
+        return [
+            JobLogBundle(
+                1, "Web Client - JavaScript", "completed", "success", 1.0, "", "logs/a.txt"
+            ),
+            JobLogBundle(2, "Console Client", "completed", "cancelled", 1.0, "", "logs/b.txt"),
+            JobLogBundle(3, "All checks passed", "completed", "failure", 1.0, "", "logs/c.txt"),
+        ]
+
+    monkeypatch.setattr(public_portal, "fetch_run_jobs_and_logs", fake_jobs)
+    meta = _publish_minimal(tmp_path / "site", "12", 12, conclusion="auto")
+    assert meta.conclusion == "cancelled"
+
+
+def test_real_failure_still_becomes_latest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from reporting import public_portal
+
+    site_dir = tmp_path / "site"
+    _publish_minimal(site_dir, "20", 20, commit_sha="goodsha2")
+
+    def fake_jobs(**_kwargs: object) -> list[JobLogBundle]:
+        return [
+            JobLogBundle(
+                1, "Web Client - JavaScript", "completed", "failure", 1.0, "", "logs/a.txt"
+            ),
+            JobLogBundle(2, "Console Client", "completed", "cancelled", 1.0, "", "logs/b.txt"),
+        ]
+
+    monkeypatch.setattr(public_portal, "fetch_run_jobs_and_logs", fake_jobs)
+    meta = _publish_minimal(site_dir, "21", 21, commit_sha="badsha22", conclusion="auto")
+    assert meta.conclusion == "failure"
+    latest_html = (site_dir / "latest" / "ci" / "index.html").read_text(encoding="utf-8")
+    assert "badsha22" in latest_html
+
+
+def test_run_page_shows_summary_and_drops_unsafe_run_url(tmp_path: Path) -> None:
     artifacts = tmp_path / "all-results" / "results-testclient"
     artifacts.mkdir(parents=True)
     (artifacts / "report.html").write_text("<html></html>", encoding="utf-8")
@@ -493,5 +549,5 @@ def test_run_page_iframe_sandboxed_and_unsafe_run_url_dropped(tmp_path: Path) ->
         html_url="javascript:alert(1)",
     )
     page = (tmp_path / "site" / "runs" / "9" / "index.html").read_text(encoding="utf-8")
-    assert 'sandbox="allow-scripts"' in page
+    assert 'src="report.html"' not in page
     assert "javascript:alert" not in page

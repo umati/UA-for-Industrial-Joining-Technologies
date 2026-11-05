@@ -892,7 +892,9 @@ def test_module_bootstrap_runs_main_via_runpy(tmp_path, monkeypatch):
     import runpy
 
     summary_file = tmp_path / "step_summary.md"
+    durable = tmp_path / "timing-results" / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+    monkeypatch.setenv("SUMMARY_MARKDOWN_OUT", str(durable))
     monkeypatch.chdir(tmp_path)
     module_path = Path(system_tests_run_summary.__file__)
 
@@ -900,6 +902,7 @@ def test_module_bootstrap_runs_main_via_runpy(tmp_path, monkeypatch):
 
     assert summary_file.exists()
     assert summary_file.stat().st_size > 0
+    assert durable.read_text(encoding="utf-8") == summary_file.read_text(encoding="utf-8")
 
 
 def test_lane_status_fmt_success():
