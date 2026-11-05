@@ -14,9 +14,8 @@ from typing import Any
 from ..diagnostics import DiagnosticVerdict
 from ..results import LatencySample, compute_statistics
 from ._metrics import (
+    ACTION_NEEDED,
     HEADLINE_METRIC,
-    OUTCOME_INFORMATION,
-    OUTCOME_OK,
     classify_report_outcome,
     detail_metric_rows,
     format_clock_offset,
@@ -77,7 +76,7 @@ def print_console_report(
     fail_p90_client_ready_ms: float | None = None,
     gate_failed: bool = False,
 ) -> None:
-    """Print a management-clear ANSI summary: Scale → Result Latency → Assessment → Detail → footer."""
+    """Print a management-clear ANSI summary: Run Size → Result Latency → Client Busy Time → footer."""
     use_colour = sys.stdout.isatty() and (os.name != "nt" or _enable_ansi_windows())
 
     def _c(ansi: str, text: str) -> str:
@@ -134,12 +133,15 @@ def print_console_report(
         _safe_print(f"  {V} {_c(_ANSI_CYAN, title.ljust(box_w - 4))} {V}")
         _safe_print(_box_span(LM, RM))
 
-    def _outcome_ansi(label: str) -> str:
-        if label == OUTCOME_OK:
-            return _ANSI_GREEN + "\033[1m"
-        if label == OUTCOME_INFORMATION:
-            return _ANSI_YELLOW + "\033[1m"
-        return _ANSI_RED + "\033[1m"
+    def _band_ansi(band: str) -> str:
+        if band.startswith("Over") or band == "No Results":
+            return _ANSI_RED + "\033[1m"
+        return _ANSI_CYAN + "\033[1m"
+
+    def _action_ansi(action: str) -> str:
+        if action == ACTION_NEEDED:
+            return _ANSI_RED + "\033[1m"
+        return _ANSI_GREEN + "\033[1m"
 
     width = 64
     bar = "\u2550" * width
@@ -152,7 +154,20 @@ def print_console_report(
     _safe_print(f"  IJT PERFORMANCE & SCALE BENCHMARK REPORT: {pool_name}")
     _safe_print()
 
-    # --- Scale ---
+    _safe_print(_box_span(TL, TR))
+    _print_meta_row("Time", outcome.time_band, val_ansi=_band_ansi(outcome.time_band))
+    _safe_print(_box_span(LM, RM))
+    _print_meta_row("Action", outcome.action, val_ansi=_action_ansi(outcome.action))
+    _safe_print(_box_span(LM, RM))
+    _print_meta_row("Detail", outcome.summary)
+    if verdict.warnings:
+        for idx, warning in enumerate(verdict.warnings, 1):
+            _safe_print(_box_span(LM, RM))
+            _print_meta_row(f"Note {idx}", warning)
+    _safe_print(_box_span(BL, BR))
+    _safe_print()
+
+    # --- Run Size ---
     valid_pct = (scale.valid_results / scale.total_results * 100.0) if scale.total_results else 0.0
     wire_count = wire_timing_count(valid)
     wire_pct = (wire_count / len(valid) * 100.0) if valid else 0.0
@@ -160,19 +175,19 @@ def print_console_report(
     valid_ansi = (
         _ANSI_GREEN + "\033[1m"
         if scale.total_results and scale.valid_results == scale.total_results
-        else (_ANSI_YELLOW + "\033[1m" if scale.valid_results else _ANSI_RED + "\033[1m")
+        else (_ANSI_RED + "\033[1m" if scale.total_results else None)
     )
     if wire_count and valid and wire_count == len(valid):
         wire_line = f"{wire_count}/{len(valid)} verified ({wire_pct:.1f}%)"
         wire_ansi: str | None = _ANSI_GREEN + "\033[1m"
     elif valid:
         wire_line = f"{wire_count}/{len(valid)} verified ({wire_pct:.1f}%)"
-        wire_ansi = _ANSI_YELLOW + "\033[1m"
+        wire_ansi = None
     else:
         wire_line = "0/0"
         wire_ansi = None
 
-    _section_title("Scale")
+    _section_title("Run Size")
     _print_meta_row("Servers Tested", f"{scale.servers}")
     _safe_print(_box_span(LM, RM))
     _print_meta_row("Results Per Server", scale.results_per_server_text)
@@ -199,41 +214,26 @@ def print_console_report(
     for i, (attr, label) in enumerate(headline_metric_rows()):
         if i:
             _safe_print(_box_span(LM, RM))
-        p90_ansi = _outcome_ansi(outcome.label) if outcome.label != OUTCOME_OK else (_ANSI_GREEN + "\033[1m")
-        _print_meta_row(label, _latency_line(attr), val_ansi=p90_ansi if valid else None)
+        _print_meta_row(label, _latency_line(attr))
     _safe_print(_box_span(BL, BR))
     _safe_print()
 
-    # --- Assessment (OK / INFORMATION / ACTION NEEDED — not always a problem) ---
-    _section_title("Assessment")
-    _print_meta_row("Outcome", outcome.label, val_ansi=_outcome_ansi(outcome.label))
-    _safe_print(_box_span(LM, RM))
-    _print_meta_row("Bottleneck", verdict.primary_bottleneck, val_ansi=_outcome_ansi(outcome.label))
-    _safe_print(_box_span(LM, RM))
-    _print_meta_row("Meaning", outcome.what_this_means)
-    _safe_print(_box_span(LM, RM))
-    _print_meta_row("Next Step", outcome.suggested_next_step)
     if timing and timing.get("workers_reported") is not None:
         lag = float(timing.get("loop_lag_max_ms", 0.0) or 0.0)
         lag_mean = float(timing.get("loop_lag_worst_mean_ms", 0.0) or 0.0)
+        _section_title("Client Busy Time")
+        _print_meta_row("Worst", f"{lag:.1f} ms")
         _safe_print(_box_span(LM, RM))
-        lag_ansi = _ANSI_YELLOW + "\033[1m" if lag >= 50.0 else None
-        _print_meta_row(
-            "Loop Lag",
-            f"Worst {lag:.1f} ms (Worst Worker Avg {lag_mean:.1f} ms)",
-            val_ansi=lag_ansi,
-        )
-    if verdict.warnings:
-        for idx, w in enumerate(verdict.warnings, 1):
-            _safe_print(_box_span(LM, RM))
-            _print_meta_row(f"Warning #{idx}", w, val_ansi=_ANSI_YELLOW + "\033[1m")
-    _safe_print(_box_span(BL, BR))
-    _safe_print()
+        _print_meta_row("Worst Worker Avg", f"{lag_mean:.1f} ms")
+        _safe_print(_box_span(BL, BR))
+        _safe_print()
 
     # --- Detail: top-5 / per-server ---
     num_servers = scale.servers
     if num_servers > 1:
-        cw = [34, 6, 10, 12, 10, 24]
+        # Widths sum to 96 so this table stays the same width as the report box.
+        # "For Stats" is 9 characters; a narrower column prints past the rule.
+        cw = [34, 9, 9, 11, 9, 24]
 
         def _srv_sep(lc: str, mid: str, rc: str) -> str:
             parts = [H * (w + 2) for w in cw]
@@ -271,7 +271,7 @@ def print_console_report(
         _safe_print(
             _srv_row(["Endpoint", "For Stats", "Average", "90% Under", "Slowest", "Clock Offset"], is_header=True)
         )
-        for ep_i, (ep, ep_samples) in enumerate(display_eps):
+        for ep, ep_samples in display_eps:
             _safe_print(_srv_sep(LM, CR, RM))
             ep_valid = valid_samples(ep_samples)
             st = compute_statistics(metric_values(ep_valid, HEADLINE_METRIC))
@@ -290,7 +290,7 @@ def print_console_report(
                             f"{st['max']:.1f}ms",
                             skew_str,
                         ],
-                        emphasize_p90=(ep_i == 0 and is_large_fleet),
+                        emphasize_p90=False,
                     )
                 )
         _safe_print(_srv_sep(BL, BT, BR))
@@ -320,7 +320,7 @@ def print_console_report(
 
         audit_title = f"Detail — Integrity Audit ({len(invalid_samples)} Issues)"
         _safe_print(_box_span(TL, TR))
-        _safe_print(f"  {V}  {_c(_ANSI_YELLOW + '\033[1m', audit_title.ljust(box_w - 4))}{V}")
+        _safe_print(f"  {V}  {_c(_ANSI_CYAN, audit_title.ljust(box_w - 4))}{V}")
         _safe_print(_aud_sep(LM, TT, RM))
         _safe_print(_aud_row(["Endpoint", "Received", "For Stats", "Incomplete", "Duplicate", "Unmatched"]))
         _safe_print(_aud_sep(LM, CR, RM))
@@ -387,7 +387,12 @@ def print_console_report(
         _safe_print(_met_sep(BL, BT, BR))
         _safe_print()
 
-    # Footer
-    footer_ansi = _outcome_ansi(outcome.label)
-    _safe_print(_c(footer_ansi, f"  {outcome.footer}"))
+    # Footer repeats the same time and action as the top.
+    _safe_print(
+        "  "
+        + _c(_band_ansi(outcome.time_band), outcome.time_band)
+        + " — "
+        + _c(_action_ansi(outcome.action), outcome.action)
+    )
+    _safe_print(f"  {outcome.summary}")
     _safe_print("  " + "\u2550" * width + "\n")

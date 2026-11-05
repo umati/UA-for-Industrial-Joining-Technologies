@@ -12,12 +12,12 @@ def test_example_report_preview_execution(capsys: pytest.CaptureFixture[str]) ->
     captured = capsys.readouterr().out
 
     assert "IJT PERFORMANCE & SCALE BENCHMARK" in captured
-    assert "Scale" in captured
+    assert "Run Size" in captured
     assert "Result Latency" in captured
-    assert "Assessment" in captured
+    assert "No Action Needed" in captured or "Action Needed" in captured
     assert "FINDING" not in captured
     assert "HEADLINE LATENCY" not in captured
     assert "Key Latency" not in captured
     assert "METRIC DEFINITIONS" not in captured
     assert "ACTION REQUIRED" not in captured
-    assert "OK —" in captured or "INFORMATION —" in captured or "ACTION NEEDED —" in captured
+    assert "Under " in captured or "Over " in captured or "No Results" in captured

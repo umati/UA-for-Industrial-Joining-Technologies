@@ -50,10 +50,10 @@ def test_markdown_and_json_reporters_empty_samples(tmp_path):
         warnings=[],
     )
     md = generate_markdown_report([], verdict, "TestPool")
-    assert "ACTION NEEDED" in md
-    assert "NO_DATA" in md
-    assert "### Scale" in md
-    assert "### Assessment" in md
+    assert "Action Needed" in md
+    assert "No Results" in md
+    assert "### Run Size" in md
+    assert "### Final Summary" in md
     assert "📋" not in md
     assert "FINDING" not in md
 
@@ -85,7 +85,8 @@ def test_markdown_report_with_warnings_and_samples():
     assert "IJT Performance & Scale Benchmark: WarningPool" in md
     assert "Switch backlog detected" in md
     assert "High packet jitter" in md
-    assert "INFORMATION" in md or "ACTION NEEDED" in md
+    assert "No Action Needed" in md
+    assert "Note 1" in md
     assert "Metric Definitions" not in md
     assert "📋" not in md
 
@@ -159,7 +160,7 @@ def test_markdown_and_json_per_server_reporting(tmp_path):
     assert "opc.tcp://127.0.0.1:40001" in md
     assert "opc.tcp://127.0.0.1:40002" in md
     assert "Results Per Server" in md
-    assert "Assessment" in md
+    assert "Final Summary" in md
     assert "FINDING" not in md
 
     json_path = tmp_path / "fleet.json"
@@ -263,14 +264,14 @@ def test_reporters_render_integrity_breakdown_tables(capsys):
     assert "Integrity Audit" in captured
     assert "opc.tcp://s1:4840" in captured
     assert "opc.tcp://s2:4840" in captured
-    assert "ACTION NEEDED" in captured
+    assert "Action Needed" in captured
 
     # Markdown report contains integrity audit section
     md = generate_markdown_report(samples, verdict, "IntegrityTestPool")
     assert "### Detail — Integrity Audit" in md
     assert "`opc.tcp://s1:4840`" in md
     assert "`opc.tcp://s2:4840`" in md
-    assert "ACTION NEEDED" in md
+    assert "Action Needed" in md
 
 
 def test_json_and_csv_include_wire_timing_and_valid_only_statistics(tmp_path):
@@ -354,17 +355,17 @@ def test_reports_hide_rows_that_only_repeat_total_and_show_loop_lag(capsys):
     assert "Server Processing Duration" not in out
     assert "Total Transfer Time" in out
     assert "METRIC DEFINITIONS" not in out
-    assert "Worst 369.1 ms" in out
-    assert "INFORMATION" in out
-    assert "Assessment" in out
+    assert "369.1 ms" in out
+    assert "Client Busy Time" in out
+    assert "No Action Needed" in out
 
     md = generate_markdown_report(samples, verdict, "Local", timing=timing)
     assert "Network Transport Latency" not in md
     assert "Server Processing Duration" not in md
-    assert "Worst 369.1 ms" in md
-    assert "INFORMATION" in md
+    assert "369.1 ms" in md
+    assert "Client Busy Time" in md
     assert "Total Transfer Time" in md
-    assert "Assessment" in md
+    assert "No Action Needed" in md
 
     # A server that stamps its event later than the operation end keeps the split rows.
     split = [_wire_sample(i, 5.0) for i in range(5)]
@@ -409,7 +410,7 @@ def test_markdown_report_wire_timing_large_fleet_and_problematic_endpoints():
     assert "Top 5 Slowest Of 24 Servers" in md
     assert "Showing top 5 slowest endpoints" in md
     assert "Showing 10 of 12 affected endpoints" in md
-    assert "ACTION NEEDED" in md
+    assert "Action Needed" in md
     assert "Metric Definitions" not in md
     assert "📋" not in md
     assert "FINDING" not in md

@@ -63,7 +63,9 @@ def test_outcome_ok_when_healthy_under_comfort():
         scale=summarize_scale(samples, samples_per_endpoint=1),
     )
     assert outcome.label == OUTCOME_OK
-    assert outcome.footer.startswith("OK —")
+    assert outcome.time_band == "Under 100 ms"
+    assert outcome.action == "No Action Needed"
+    assert outcome.footer.startswith("Under 100 ms — No Action Needed")
 
 
 def test_outcome_information_for_local_host_cpu_under_500():
@@ -82,9 +84,10 @@ def test_outcome_information_for_local_host_cpu_under_500():
         scale=summarize_scale(samples, samples_per_endpoint=1),
     )
     assert outcome.label == OUTCOME_INFORMATION
-    assert outcome.footer.startswith("INFORMATION —")
+    assert outcome.time_band == "Under 200 ms"
+    assert outcome.action == "No Action Needed"
+    assert "Client and servers were on one computer." in outcome.summary
     assert "ACTION NEEDED" not in outcome.footer
-    assert "LOCAL_HOST_CPU" in outcome.footer
 
 
 def test_outcome_information_when_p90_above_comfort_without_sla():
@@ -100,9 +103,10 @@ def test_outcome_information_when_p90_above_comfort_without_sla():
         _verdict("NONE (OPC UA PIPELINE HEALTHY)"),
         samples,
     )
-    # Healthy bottleneck but P90 >= 500 → INFORMATION (plant comfort)
+    # Healthy bottleneck but P90 >= 500 → Over 500 ms, and no limit was set.
     assert outcome.label == OUTCOME_INFORMATION
-    assert "500" in outcome.footer
+    assert outcome.time_band == "Over 500 ms"
+    assert outcome.action == "No Action Needed"
 
 
 def test_outcome_action_needed_on_fail_p90():
@@ -120,8 +124,9 @@ def test_outcome_action_needed_on_fail_p90():
         fail_p90_ms=500.0,
     )
     assert outcome.label == OUTCOME_ACTION_NEEDED
-    assert outcome.footer.startswith("ACTION NEEDED —")
-    assert "exceeded limit" in outcome.footer
+    assert outcome.action == "Action Needed"
+    assert outcome.time_band == "Over 500 ms"
+    assert "The limit you set was 500 ms." in outcome.summary
 
 
 def test_outcome_action_needed_on_integrity_shortfall():
@@ -136,4 +141,4 @@ def test_outcome_action_needed_on_integrity_shortfall():
     ]
     outcome = classify_report_outcome(_verdict("LOCAL_HOST_CPU"), samples)
     assert outcome.label == OUTCOME_ACTION_NEEDED
-    assert "used for stats" in outcome.footer.lower()
+    assert "could not be used" in outcome.summary

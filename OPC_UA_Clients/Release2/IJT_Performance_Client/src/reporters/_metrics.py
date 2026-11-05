@@ -15,12 +15,16 @@ from typing import Any
 from ..diagnostics import DiagnosticVerdict
 from ..results import INTEGRITY_VALID, TIMING_SOURCE_WIRE, LatencySample, compute_statistics
 
-# Plant-comfort default for OK vs INFORMATION when no --fail-p90 is set (ms).
+# Round lines for the headline. The title uses the tightest line the 90% time is still under.
+DELIVERY_TIME_BANDS_MS = (100.0, 200.0, 500.0)
+# Kept for callers that still treat 500 ms as the plant-comfort line.
 PLANT_COMFORT_DELIVERY_P90_MS = 500.0
 
 OUTCOME_OK = "OK"
 OUTCOME_INFORMATION = "INFORMATION"
 OUTCOME_ACTION_NEEDED = "ACTION NEEDED"
+NO_ACTION_NEEDED = "No Action Needed"
+ACTION_NEEDED = "Action Needed"
 
 _SOFT_FINDING_BOTTLENECKS = frozenset(
     {
@@ -250,12 +254,25 @@ def summarize_scale(
 
 @dataclass(frozen=True)
 class ReportOutcome:
-    """Human summary outcome: OK | INFORMATION | ACTION NEEDED (codes stay on the verdict)."""
+    """Headline for a performance run: tightest true time band, then whether action is needed."""
 
     label: str
     footer: str
     what_this_means: str
     suggested_next_step: str
+    time_band: str
+    action: str
+    summary: str
+
+
+def delivery_time_band(p90_ms: float | None) -> str:
+    """Tightest true round line: Under 100 ms, Under 200 ms, Under 500 ms, or Over 500 ms."""
+    if p90_ms is None:
+        return "No Results"
+    for bound in DELIVERY_TIME_BANDS_MS:
+        if p90_ms < bound:
+            return f"Under {bound:.0f} ms"
+    return "Over 500 ms"
 
 
 def finding_blurb(bottleneck: str, fallback: str = "") -> str:
@@ -276,8 +293,8 @@ def classify_report_outcome(
     fail_p90_client_ready_ms: float | None = None,
     gate_failed: bool = False,
 ) -> ReportOutcome:
-    """Map integrity, optional SLA limits, delivery P90, and bottleneck → one clear outcome label."""
-    scale = scale or summarize_scale(samples)
+    """Map integrity, optional SLA limits, and delivery P90 to a time band and an action."""
+    _ = scale  # Callers still pass scale; the headline no longer depends on it.
     valid = valid_samples(samples)
     total = len(samples)
     valid_n = len(valid)
@@ -295,63 +312,47 @@ def classify_report_outcome(
     bottleneck = verdict.primary_bottleneck
     means = finding_blurb(bottleneck, verdict.explanation)
     next_step = (verdict.recommendation or "").strip() or "Review the Detail section and re-run if needed."
-
-    scale_bit = (
-        f"{_format_int(scale.servers)} servers × {scale.per_server_min} results"
-        if scale.servers and scale.per_server_min == scale.per_server_max
-        else f"{_format_int(scale.total_results)} results"
-    )
-    p90_bit = f"delivery 90% under {delivery_p90:.1f} ms"
+    has_delivery = bool(delivery_vals) or "delivery_p90_ms" in metrics
+    time_band = delivery_time_band(delivery_p90 if has_delivery else None)
 
     integrity_bad = total == 0 or valid_n < total or bottleneck == "NO_DATA"
-    sla_msgs: list[str] = []
-    if fail_p90_ms is not None and valid and delivery_p90 > fail_p90_ms:
-        sla_msgs.append(f"delivery 90% under {delivery_p90:.1f} ms exceeded limit {fail_p90_ms:.1f} ms")
-    if fail_p90_client_ready_ms is not None and valid and client_ready_p90 > fail_p90_client_ready_ms:
-        sla_msgs.append(
-            f"client-ready 90% under {client_ready_p90:.1f} ms exceeded limit {fail_p90_client_ready_ms:.1f} ms"
-        )
+    limit_missed = fail_p90_ms is not None and valid and delivery_p90 > fail_p90_ms
+    client_ready_missed = fail_p90_client_ready_ms is not None and valid and client_ready_p90 > fail_p90_client_ready_ms
+    action_needed = integrity_bad or limit_missed or client_ready_missed or gate_failed
+    if integrity_bad or gate_failed:
+        legacy_label = OUTCOME_ACTION_NEEDED
+    elif limit_missed or client_ready_missed:
+        legacy_label = OUTCOME_ACTION_NEEDED
+    elif bottleneck in _SOFT_FINDING_BOTTLENECKS or (bool(valid) and delivery_p90 >= PLANT_COMFORT_DELIVERY_P90_MS):
+        legacy_label = OUTCOME_INFORMATION
+    else:
+        legacy_label = OUTCOME_OK
 
-    if integrity_bad or sla_msgs or gate_failed:
-        if bottleneck == "NO_DATA" or total == 0:
-            detail = "no result samples collected"
-        elif sla_msgs:
-            detail = "; ".join(sla_msgs)
-        elif valid_n < total:
-            detail = f"only {valid_n}/{total} results used for stats"
-        else:
-            detail = "quality gate failed"
-        return ReportOutcome(
-            label=OUTCOME_ACTION_NEEDED,
-            footer=f"{OUTCOME_ACTION_NEEDED} — {detail}",
-            what_this_means=means,
-            suggested_next_step=next_step,
-        )
-
-    soft = bottleneck in _SOFT_FINDING_BOTTLENECKS
-    above_comfort = bool(valid) and delivery_p90 >= PLANT_COMFORT_DELIVERY_P90_MS
-    if soft or above_comfort:
-        if soft:
-            detail = f"{means.rstrip('.')} ({bottleneck}); {p90_bit}"
-        else:
-            detail = (
-                f"delivery 90% under {delivery_p90:.1f} ms is at or above the "
-                f"{PLANT_COMFORT_DELIVERY_P90_MS:.0f} ms plant comfort guide"
-            )
-        return ReportOutcome(
-            label=OUTCOME_INFORMATION,
-            footer=f"{OUTCOME_INFORMATION} — {detail}",
-            what_this_means=means,
-            suggested_next_step=next_step,
-        )
-
+    sentences: list[str] = []
+    if not has_delivery:
+        sentences.append("No results were collected.")
+    else:
+        sentences.append(f"90% arrived within {delivery_p90:.1f} ms.")
+    if bottleneck == "LOCAL_HOST_CPU":
+        sentences.append("Client and servers were on one computer.")
+    if limit_missed and fail_p90_ms is not None:
+        sentences.append(f"The limit you set was {fail_p90_ms:.0f} ms.")
+    if client_ready_missed and fail_p90_client_ready_ms is not None:
+        sentences.append(f"The client-ready limit you set was {fail_p90_client_ready_ms:.0f} ms.")
+    if total and valid_n < total:
+        sentences.append(f"{total - valid_n:,} of {total:,} results could not be used.")
+    if gate_failed and not integrity_bad and not limit_missed and not client_ready_missed:
+        sentences.append("The quality gate failed.")
+    summary = " ".join(sentences)
+    action = ACTION_NEEDED if action_needed else NO_ACTION_NEEDED
     return ReportOutcome(
-        label=OUTCOME_OK,
-        footer=f"{OUTCOME_OK} — {scale_bit}; {p90_bit}",
-        what_this_means=means
-        if bottleneck in _HEALTHY_BOTTLENECKS
-        else "Run completed successfully with no action required.",
-        suggested_next_step=next_step if bottleneck in _HEALTHY_BOTTLENECKS else "No change required for this run.",
+        label=legacy_label,
+        footer=f"{time_band} — {action} — {summary}",
+        what_this_means=means,
+        suggested_next_step=next_step,
+        time_band=time_band,
+        action=action,
+        summary=summary,
     )
 
 

@@ -1,6 +1,29 @@
 # Industrial Joining Technologies (IJT) — Performance and Benchmarking Guide
 
-A comprehensive guide to measuring, analyzing, and optimizing OPC UA joining result delivery speed, scale testing, and automated root-cause diagnostics using the **IJT Performance Client**.
+This is the full model of the **IJT Performance Client**, for people and for tools.
+
+- People who only need a command start at the [README](../README.md).
+- Tools that need the engineering contract also read [SKILLS](SKILLS.md).
+- This guide keeps the shared detail: formulas, claim rules, worker math, integrity statuses, commands, and file names.
+- A later section often repeats a fact next to the command that uses it.
+
+Two sections are architecture, and they stay, because they change what a number means:
+
+- [Section 3](#3-concurrency-architecture-and-process-sharding) — one worker process per slice of servers. A one-computer fleet measures that computer, not the factory network.
+- [Section 4](#4-clock-offset-skew-calibration) — clock offset between the server and the client. Uncorrected clocks distort the time.
+
+| Section | What it is for |
+|---|---|
+| [1. Total Result Transfer Time](#1-understanding-total-result-transfer-time) | What the delivery time is |
+| [2. Timing Breakdown](#2-standardized-timing-breakdown) | Each stage, its formula, and its code name |
+| [2b. Claims, Roles, Inventory](#2b-claim-profiles-roles-and-fleet-inventory) | Profile A / B, roles, inventory, session defaults |
+| [3. Workers](#3-concurrency-architecture-and-process-sharding) | Why the client uses processes, and the worker formula |
+| [4. Clock Offset](#4-clock-offset-skew-calibration) | How the two clocks are lined up |
+| [5. Reading a Report](#5-interpreting-benchmark-reports-and-diagnostics) | Time band, action, percentiles, cause table |
+| [6. Commands](#6-practical-execution-scenarios) | Copy-paste runs, limits, integrity gate |
+| [7. Files](#7-export-formats-and-cicd-integration) | Console, Markdown, JUnit, JSON, CSV |
+| [8. Cadence](#8-joining-cadence-and-operation-interval) | `--burst-delay` |
+| [9. Glossary](#9-glossary) | Report words next to JSON and CSV keys |
 
 ---
 
@@ -8,13 +31,19 @@ A comprehensive guide to measuring, analyzing, and optimizing OPC UA joining res
 
 ### Purpose and Overview
 
-In an automated manufacturing facility, industrial joining systems (tightening spindles, riveting presses, clinching tools, adhesive dispensers) execute critical operations on assemblies. The moment a joining operation finishes, the machine controller records operational data: measured values (such as torque, angle, force, or stroke), physical timestamps, and overall status (OK / NOK).
+A joining system finishes an operation. Examples: a tightening spindle, a riveting press, a clinching tool, an adhesive dispenser.
 
-This result must travel across the factory network to quality databases, manufacturing software, and automation systems before downstream production steps proceed.
+The controller then records:
 
-**Total Result Transfer Time (`total_result_transfer_time_ms`)** is the end-to-end elapsed time of that delivery:
+- measured values (torque, angle, force, or stroke)
+- physical timestamps
+- status (OK / NOK)
 
-> **The elapsed duration from the exact millisecond physical joining completes (`ProcessingTimes.EndTime`) to the millisecond the client application receives, decodes, and processes the result event (`JoiningSystemResultReadyEvent`).**
+That result travels across the factory network to quality databases, manufacturing software, and automation systems before the next production step.
+
+**Total Result Transfer Time (`total_result_transfer_time_ms`)** is that delivery time:
+
+> From `ProcessingTimes.EndTime` (joining completes) to the client receiving, decoding, and processing `JoiningSystemResultReadyEvent`.
 
 ```mermaid
 flowchart TD
@@ -26,7 +55,7 @@ flowchart TD
 
 1. **Station Cycle Time:** Assembly stations frequently run on cycles of 30 to 60 seconds. Delivery delays stall automation handshakes and create line bottlenecks.
 2. **Immediate Quality Feedback:** Rapid result delivery ensures defective joints are detected before assemblies move downstream.
-3. **Scale Stability:** A single tool delivering results in 50 ms may perform well in isolation. However, when dozens or hundreds of joining systems emit results simultaneously, network queues and client software must process incoming traffic without dropping events or introducing artificial buffering latency.
+3. **Scale Stability:** One tool at 50 ms can look fine alone. Dozens or hundreds of systems emitting together still need the network and the client to keep up, without dropped events or extra buffering delay.
 
 ---
 
@@ -47,7 +76,9 @@ $$\text{Total Result Transfer Time} = (T_{\text{client}} - T_{\text{end}}) + \De
 
 ### Client-Side Measurement Points (Headline Metric)
 
-The handler timestamp above ($T_{\text{client}}$) includes time the result waits in the client's own event loop. To separate the network from the client, the client also records two earlier timestamps on the publish path:
+$T_{\text{client}}$ includes time the result waits in the client's own event loop.
+
+Two earlier timestamps separate the network from the client:
 
 | Timestamp | Taken when |
 |---|---|
@@ -63,29 +94,76 @@ The handler timestamp above ($T_{\text{client}}$) includes time the result waits
 | **Dispatch Delay** | `dispatch_delay_ms` | $T_{\text{client}} - T_{\text{decode}}$ | Event-loop scheduling before the handler runs |
 
 - Reports lead with **Delivery Time**. The four metrics in the table above are still reported unchanged.
-- If the publish-path hooks cannot be installed (for example, an unsupported asyncua version), the client logs a warning, Delivery and Client-Ready Time fall back to the handler time, and the report shows `Wire timing: N/M`. A value below M means some results used the fallback.
+- If the publish-path hooks cannot be installed (for example, an unsupported asyncua version):
+  - the client logs a warning
+  - Delivery Time and Client-Ready Time fall back to the handler time
+  - the report shows `Wire timing: N/M`
+  - N below M means some results used the fallback
 - The report also shows event-loop lag per worker (`loop_lag_max_ms`). High lag means the client host itself is saturated, so add workers or CPU before blaming the server.
 - A negative skew-corrected interval is clamped to 0 and flagged (`is_clamped_to_zero`). The unclamped value is kept in the `raw_*` field for audit.
 
-> **Timing honesty:** Delivery Time is **not** NIC wire time. It ends when the client stack reports the publish bytes (after reassembly/decryption and any publish wait). JSON exports include `timing_honesty` and `receive_timing_coverage` so downstream tools (including ToolsControl copy-only views) must not treat delivery as a hardware network probe.
+> **Timing honesty**
+>
+> - Delivery Time is **not** NIC wire time.
+> - It ends when the client stack reports the publish bytes.
+> - That is after reassembly, decryption, and any publish wait.
+> - JSON exports include `timing_honesty` and `receive_timing_coverage`.
+> - Downstream tools, including ToolsControl copy-only views, must not treat delivery as a hardware network probe.
 
 ---
 
 ## 2b. Claim profiles, roles, and fleet inventory
 
+Tools need every rule in this section. The README only names the three roles.
+
 | Claim | YAML `claim.intended` | Meaning |
 |-------|----------------------|---------|
 | **Profile A** | `capacity` or `auto` (colocated) | Throughput/latency under stated load on the configured topology. Does not prove plant network acquittal. |
-| **Profile B** | `split_path` (with evidence) | Bounded observed path from server event to client receive on **distinct hosts** (producer host id from consumed inventory is producer-asserted via content hash, not cryptographic proof), with a successful clock probe (`clock_rtt_ms` present), clock quality, and ≥95% receive-timing coverage over VALID samples. Still not global OPC UA proof. |
+| **Profile B** | `split_path` (with evidence) | Observed path from server event to client receive on **distinct hosts**, with the evidence below. Still not global OPC UA proof. |
 | **UNPROVEN** | `split_path` without evidence | Fail-closed exit when B was required but host IDs, clock, or wire-timing coverage were insufficient. |
 
-**Roles:** `colocated` runs simulators + client (default `run_fleet.py`); `serve-fleet` publishes inventory only (use `--advertise-host <LAN-IP>` so remote clients get reachable URLs); `client-only` loads inventory and runs the client elsewhere.
+**Profile B evidence** (all of these):
 
-**Inventory:** Atomic JSON (`inventory.path`) lists endpoints and `producer_host_id`, with a `content_hash` and TTL (`inventory.ttl_seconds`). Optional loopback HTTP serves the same document (`preflight_http_port` before bind). `preflight_port_range` rejects ranges overlapping reserved live/CI ports (40451, 40461, 40463, 40465, 40485) and ports that already appear busy. Expired or hash-mismatched inventory is refused. Short TTL on `serve-fleet` (< 600 s) and low remaining TTL on `client-only` (< 300 s) emit warnings. `serve-fleet` writes a ready marker and waits for **Ctrl+C** or `--serve-for <seconds>` (stdin Enter/EOF is not the stop path).
+- Distinct hosts.
+- `producer_host_id` comes from the consumed inventory.
+- That id is producer-asserted by `content_hash`. It is not a cryptographic proof.
+- A successful clock probe (`clock_rtt_ms` present) and clock quality.
+- At least 95% receive-timing coverage over VALID samples.
 
-**Config precedence:** CLI flags beat environment variables (`OPCUA_FLEET_ENDPOINTS`, `OPCUA_SERVER_URL`, `OPCUA_WORKERS`, …), which beat fields explicitly set in the YAML profile, which beat built-in defaults. Effective config in JSON reports shows `{value, source}` per field (secrets redacted).
+**Roles**
 
-**Phases:** Use `run_all_tests.py --phase1` for unit tests; `--phase2` for live runs; fleet orchestration via `python run_fleet.py --profile profiles/work_pc_colocated.yaml`.
+- `colocated` — simulators and the client. Default for `run_fleet.py`.
+- `serve-fleet` — publishes inventory only. Use `--advertise-host <LAN-IP>` so remote clients get reachable URLs.
+- `client-only` — loads the inventory and runs the client on another machine.
+
+**Inventory**
+
+- Atomic JSON at `inventory.path`.
+- Lists endpoints and `producer_host_id`.
+- Has a `content_hash` and a TTL (`inventory.ttl_seconds`).
+- Optional loopback HTTP serves the same document. `preflight_http_port` is checked before bind.
+- `preflight_port_range` rejects a range that overlaps reserved live/CI ports: 40451, 40461, 40463, 40465, 40485.
+- It also rejects ports that already look busy.
+- Expired inventory is refused. Hash-mismatched inventory is refused.
+- `serve-fleet` warns when TTL is under 600 s.
+- `client-only` warns when remaining TTL is under 300 s.
+- `serve-fleet` writes a ready marker, then waits for **Ctrl+C** or `--serve-for <seconds>`.
+- Stdin Enter and EOF are not the stop path.
+
+**Config precedence** (highest first)
+
+1. CLI flags
+2. Environment variables: `OPCUA_FLEET_ENDPOINTS`, `OPCUA_SERVER_URL`, `OPCUA_WORKERS`, and the rest
+3. Fields set in the YAML profile
+4. Built-in defaults
+
+JSON reports show the effective config as `{value, source}` per field. Secrets are redacted.
+
+**Phases**
+
+- `run_all_tests.py --phase1` — unit tests
+- `run_all_tests.py --phase2` — live runs
+- `python run_fleet.py --profile profiles/work_pc_colocated.yaml` — fleet orchestration
 
 ### Load and session policy (defaults)
 
@@ -98,11 +176,15 @@ The handler timestamp above ($T_{\text{client}}$) includes time the result waits
 | Remote clock probe failure | Sample → `INCOMPLETE` | Excluded from VALID statistics; loopback / `--skip-clock-skew` still skip probing |
 | Connection security | Profile-validated | Unknown/invalid security keys fail closed; see `controller_observe.yaml` for listen-only |
 
-The auto measurement window grows with trigger waves and honors an explicit `-w` / `OPCUA_WORKERS` pin (not only auto-scaled worker math). Default colocated `run_fleet.py --servers N` remains execution mode **both**.
+- The auto measurement window grows with trigger waves.
+- An explicit `-w` or `OPCUA_WORKERS` pin is honored. Auto-scaled worker math is not the only input.
+- Default colocated `run_fleet.py --servers N` stays execution mode **both**.
 
 ---
 
 ## 3. Concurrency Architecture and Process Sharding
+
+This is the architecture behind the timing numbers. The GIL notes, the worker formula, the 150-server example, and the simulator-versus-physical list all stay. Section 6 repeats the run modes next to the commands.
 
 ### Managing High-Scale Multi-Server Fleets
 
@@ -113,24 +195,27 @@ Modern manufacturing plants connect dozens to hundreds of joining systems to cen
 In traditional multi-threaded Python applications, assigning one operating system thread per endpoint creates severe scaling limitations due to the CPython **Global Interpreter Lock (GIL)**:
 - Hundreds of threads compete for a single CPU core during binary payload deserialization.
 - The operating system spends substantial CPU overhead on thread context-switching.
-- Incoming socket buffers experience starvation, causing events to wait seconds in memory queues before client callbacks execute. This can produce misleading benchmark results where the test client itself introduces artificial delays.
+- Incoming socket buffers starve. Events can wait seconds in memory before the callback runs.
+- The report can then blame OPC UA for delay that the test client itself added.
 
 ### Process-Sharded Connection Pool Architecture
 
 The IJT Performance Client implements a multi-process architecture (`OpcUaClientPool`):
 
+Each worker is its own process. It owns one slice of the servers. `N` is the number of servers.
+
 ```mermaid
 flowchart TD
-    subgraph Orchestrator["IJT Performance Client Orchestrator"]
-        W0["Worker Process 0 (AsyncIO Event Loop)<br/>Manages Sockets 1 .. N/4"]
-        W1["Worker Process 1 (AsyncIO Event Loop)<br/>Manages Sockets N/4+1 .. N/2"]
-        W2["Worker Process 2 (AsyncIO Event Loop)<br/>Manages Sockets N/2+1 .. 3N/4"]
-        W3["Worker Process 3 (AsyncIO Event Loop)<br/>Manages Sockets 3N/4+1 .. N"]
+    subgraph Orchestrator["Performance Client"]
+        W0["Worker 0"]
+        W1["Worker 1"]
+        W2["Worker 2"]
+        W3["Worker 3"]
     end
-    W0 --> E0["OPC UA Server Endpoints"]
-    W1 --> E1["OPC UA Server Endpoints"]
-    W2 --> E2["OPC UA Server Endpoints"]
-    W3 --> E3["OPC UA Server Endpoints"]
+    W0 --> E0["1 to N/4"]
+    W1 --> E1["N/4 to N/2"]
+    W2 --> E2["N/2 to 3N/4"]
+    W3 --> E3["3N/4 to N"]
 ```
 
 ### Architectural Advantages
@@ -139,7 +224,10 @@ flowchart TD
 2. **Cooperative Socket Multiplexing:** Within each worker process, a single non-blocking `asyncio` event loop multiplexes connections using OS kernel notification mechanisms (`IOCP` on Windows, `epoll` on Linux).
 3. **Paced Connection Setup:** Handshake attempts are rate-limited via concurrency semaphores to prevent socket connection spikes.
 4. **Worker-Local Buffering:** Results are captured directly in process-local memory and transmitted to the parent process in batches, eliminating lock contention during high-throughput bursts.
-5. **Type Definition & Browse Caching:** Custom IJT extension object definitions are fetched and registered once per worker process, skipping redundant XML downloads for subsequent endpoints. Method NodeIds are cached to eliminate hundreds of repetitive `Browse` roundtrips.
+5. **Type Definition and Browse Caching:**
+   - Custom IJT extension objects are fetched and registered once per worker.
+   - Later endpoints on that worker skip the XML download.
+   - Method NodeIds are cached, so the client does not repeat hundreds of `Browse` roundtrips.
 
 ### Intelligent Worker Auto-Scaling & Deserialization Backlog Math
 
@@ -151,16 +239,22 @@ If 150 servers are sharded across only 4 worker processes (37.5 servers per work
 - The 19th event waits behind 18 earlier decodes: $18 \times 35\text{ ms} + 30\text{ ms} \approx 660\text{--}730\text{ ms}$ (Mean latency).
 - The 37th event waits behind 36 earlier decodes: $36 \times 35\text{ ms} + 30\text{ ms} \approx 1,290\text{--}1,330\text{ ms}$ (Max latency).
 
-The client automatically scales worker processes based on endpoint count and available CPU cores:
+The client picks the worker count from the number of servers `N` and the CPU count:
 
-$$\text{workers} = \min\left(\max\left(4, \left\lfloor\frac{N + 19}{20}\right\rfloor\right), \min(\text{cpu\_count}, 32)\right)$$
+```text
+workers = min( max(4, floor((N + 19) / 20)), min(cpu_count, 32) )
+```
 
-For $N = 150$ endpoints on a machine with at least 8 CPU cores, the automatic formula defaults to **8 workers** ($\lfloor(150+19)/20\rfloor = 8$, assigning ~18–19 endpoints per worker). The calculation queries `os.cpu_count()`. Inside containerized environments (such as Docker or Kubernetes without CFS quota awareness), `os.cpu_count()` may report the host's physical cores rather than the container's allocated CPU limit. Users can explicitly configure the worker count with `-w` / `--workers` or `OPCUA_WORKERS`. For instance, in an explicitly configured benchmark on a 20-thread Windows PC, setting **12 workers** (`-w 12`) reduced the allocation to 12.5 endpoints per worker process, dropping the average result transfer time from ~728.6 ms down to 68.6 ms.
+- 150 servers and at least 8 CPU cores gives `floor((150 + 19) / 20)` = **8 workers**, about 18 or 19 servers each.
+- The count comes from `os.cpu_count()`.
+- Inside Docker or Kubernetes, that call can report the host's cores rather than the container limit.
+- Set the count with `-w` / `--workers` or `OPCUA_WORKERS`.
+- On one 20-thread Windows PC, **12 workers** (`-w 12`) cut the average result time from about 728.6 ms to 68.6 ms.
 
 #### Fleet Test Example (150 Endpoints)
 
 > [!NOTE]
-> The numbers below show a sample run on a local machine to illustrate how worker scaling speeds up result processing. Actual performance on a factory floor depends on your machine specs, network speed, and controller response times.
+> These figures are one Windows PC on one day. They show that more workers lowered the time on that PC. They are not a limit, not a plant result, and not a number to copy onto another machine.
 
 - **Test Machine:** Windows PC with 20 CPU threads, Python 3.14
 - **Workload:** 150 simulator instances, ports 40001–40150, 10 results per server = 1,500 total results
@@ -184,9 +278,17 @@ The client supports different operation models to evaluate latency across virtua
    - In `--mode active_burst` or `--mode both`, invokes `SimulateSingleResult(type=2, includeTraces=True)` for automated synthetic stress testing without physical hardware.
 2. **Passive Production Mode (`--mode passive`):**
    - Recommended for physical controllers (Atlas Copco Power Focus, Bosch Rexroth, Desoutter).
-   - No methods are called by the client. The client purely subscribes to `JoiningSystemResultReadyEvent` while external PLCs, robots, or manual operators run the joining operations. This guarantees zero interference with plant safety interlocks. Note that while passive mode avoids programmatic tool actuation, the client still opens standard OPC UA TCP sessions and event subscriptions, which consume server session licenses and network connection resources.
+   - The client calls no methods.
+   - It subscribes to `JoiningSystemResultReadyEvent`.
+   - External PLCs, robots, or manual operators run the joining.
+   - That avoids programmatic tool actuation, so it does not touch plant safety interlocks.
+   - The client still opens standard OPC UA TCP sessions and event subscriptions.
+   - Those sessions still use server session licenses and network connection resources.
 3. **Physical Operation Triggering Architecture:**
-   - In production environments, programmatic tool actuation requires strict physical safety interlocks. When automated actuation is required, standard OPC 40450-1 methods (`SelectJoiningProcess` and `StartSelectedJoining` under `JoiningProcessManagement`) can be orchestrated by a supervisory controller or dedicated HIL test harness while this performance client monitors result ingestion latency passively.
+   - Programmatic tool actuation in production needs physical safety interlocks.
+   - When automated actuation is required, a supervisory controller or a dedicated HIL harness calls the OPC 40450-1 methods.
+   - Those methods are `SelectJoiningProcess` and `StartSelectedJoining`, under `JoiningProcessManagement`.
+   - This performance client then only watches result-ingestion latency.
 
 ---
 
@@ -194,9 +296,11 @@ The client supports different operation models to evaluate latency across virtua
 
 ### Clock Drift Across Distributed Systems
 
-The server controller and the client host maintain independent system clocks. Even on synchronized local networks, clock offsets between 10 ms and 100 ms commonly occur due to network asymmetry, virtualization layers, or NTP synchronization intervals.
+The server and the client keep separate clocks.
 
-If an offset is uncorrected, calculating latency by subtracting timestamps across two different clocks produces distorted or even negative durations.
+- On a synchronized local network, offsets of 10 ms to 100 ms are common.
+- Causes include network asymmetry, virtualization, and NTP intervals.
+- Subtracting the two clocks without a correction gives a distorted time, sometimes a negative one.
 
 ### Cristian's Offset Estimation Algorithm
 
@@ -233,10 +337,15 @@ sequenceDiagram
    The calculated offset is added to cross-clock metrics, ensuring reported Result Transfer Times reflect true physical delivery latency.
 
 6. **Bypassing Calibration (`--skip-clock-skew`):**
-   When client and server share an external high-precision time reference (e.g. IEEE 1588 PTP or localhost loopback testing), `--skip-clock-skew` bypasses Cristian's calibration probes and assumes zero offset ($\Delta t_{\text{skew}} = 0.0\text{ ms}$). This flag bypasses calibration; it does not verify or audit whether the underlying clocks are synchronized.
+   - Use this when both sides share a precise time source, such as IEEE 1588 PTP, or when the test is localhost loopback.
+   - The flag skips Cristian's probes and assumes $\Delta t_{\text{skew}} = 0.0\text{ ms}$.
+   - It does not check that the clocks are actually synchronized.
 
 7. **Failed remote probe → `INCOMPLETE`:**
-   When a probe is required (non-loopback and not skipped) and every attempt fails, samples from that endpoint are marked `INCOMPLETE` and are excluded from VALID statistics. Do not treat a missing probe as “skew = 0 with healthy VALID delivery.”
+   - A probe is required when the endpoint is not loopback and `--skip-clock-skew` was not set.
+   - If every attempt fails, samples from that endpoint are `INCOMPLETE`.
+   - They are left out of VALID statistics.
+   - A missing probe is not “skew = 0 with healthy VALID delivery.”
 
 ---
 
@@ -244,15 +353,21 @@ sequenceDiagram
 
 ### Management summary outcomes (console and Markdown)
 
-The FINAL SUMMARY sections are Title Case: **Scale**, **Result Latency**, **Assessment**, **Detail**. Three unmistakable outcome labels (Assessment and footer share the same word):
+The FINAL SUMMARY opens with two lines.
 
-| Outcome | Meaning |
-|---|---|
-| **OK** | Integrity clean, no `--fail-p90*` breach, delivery P90 under **500 ms**, and no soft callout |
-| **INFORMATION** | Run succeeded; read Assessment (e.g. colocated `LOCAL_HOST_CPU`, or delivery P90 ≥ 500 ms without a hard fail limit) — not a failure by itself |
-| **ACTION NEEDED** | Integrity shortfall, `--fail-p90*` breach, no data, or a hard gate fail |
+- **Time** is the tightest true band for the 90% delivery time: **Under 100 ms**, **Under 200 ms**, **Under 500 ms**, or **Over 500 ms**.
+- **Action** is **No Action Needed** when the run finished and no limit you set was missed.
+- **Action** is **Action Needed** when a limit you set was missed, results are missing, or the quality gate failed.
+- A one-computer run also says the client and the servers were on one computer.
+- **Client Busy Time** stays in the detail.
 
-**Results Used For Stats** = samples that passed integrity and are used for latency statistics (not a product “reject”). Bottleneck **codes** stay stable for tooling. Scale shows servers, **Results Per Server**, and total as an explicit product when uniform (e.g. `300 servers × 10 each`). The older ~100 ms “pipeline healthy” rule remains guide text only; it does **not** alone force ACTION NEEDED.
+Other report words:
+
+- **Results Used For Stats** = samples that passed integrity and are used for latency statistics. This is not a product “reject”.
+- Bottleneck **codes** stay stable for tooling.
+- **Run Size** shows servers, **Results Per Server**, and the total as an explicit product when the count is uniform. Example: `300 servers × 10 each`.
+- The older ~100 ms pipeline-healthy wording stays in the diagnostic text.
+- That wording does not by itself make the action **Action Needed**.
 
 ### Why Percentiles Matter More than Averages
 
@@ -275,7 +390,12 @@ The JSON export also contains `median` and `p95`. See the [Glossary](#9-glossary
 
 ### Automated Diagnostic Classification
 
-After the run, the client reports the **Likely Cause of Delay**. The console and Markdown reports also show the worst client busy delay (loop lag), and hide the Server Processing and Network Transport rows when the server stamps its event at the operation end time (both would just repeat Total). In this table, "P90" means the 90%-under time of VALID results. Rules are checked from top to bottom; the first match wins:
+After the run, the client reports the **Likely Cause of Delay**.
+
+- The console and the Markdown report also show the worst client busy delay (loop lag).
+- They hide the Server Processing and Network Transport rows when the server stamps its event at the operation end time. Those two rows would only repeat Total.
+- In this table, "P90" means the 90%-under time of VALID results.
+- Rules are checked from top to bottom. The first match wins.
 
 | Metric Pattern | Diagnostic Classification | Operational Meaning and Recommended Action |
 |---|---|---|
@@ -291,13 +411,12 @@ After the run, the client reports the **Likely Cause of Delay**. The console and
 
 ## 6. Practical Execution Scenarios
 
-Run commands from the Performance Client directory. `run_fleet.py` and
-`run_all_tests.py` prepare their own environments automatically. Before direct
-`python main.py` examples, prepare and activate a runtime environment using the
-[Python Client Integration Guide](../../../../docs/PYTHON_CLIENT_INTEGRATION.md).
-An unactivated system Python does not use the launcher's installed packages.
+Run commands from the Performance Client directory.
 
-The Performance Client supports command-line flags, environment variables, and YAML profile configurations.
+- `run_fleet.py` and `run_all_tests.py` prepare their own environments.
+- Before a direct `python main.py` example, prepare and activate a runtime with the [Python Client Integration Guide](../../../../docs/PYTHON_CLIENT_INTEGRATION.md).
+- An unactivated system Python does not use the launcher's installed packages.
+- Settings can come from command-line flags, environment variables, or a YAML profile.
 
 ### Scenario A: Single Server Benchmark
 
@@ -310,7 +429,10 @@ python main.py --endpoints "opc.tcp://localhost:40451" --samples 10
 ```
 
 #### Strict Benchmark with Latency Threshold Gate (50 Samples)
-Collects 50 results and exits with a non-zero code if the 90%-under (P90) **Delivery Time** of VALID results exceeds 100 ms. Add `--fail-p90-client-ready <ms>` to also check the 90%-under **Client-Ready Time**:
+Collects 50 results.
+
+- Exit is non-zero if the 90%-under (P90) **Delivery Time** of VALID results exceeds 100 ms.
+- Add `--fail-p90-client-ready <ms>` to also check the 90%-under **Client-Ready Time**.
 ```bash
 python main.py \
   --endpoints "opc.tcp://192.168.1.100:40451" \
@@ -394,7 +516,13 @@ if decoded/client-ready time must also meet a limit.
 
 #### Choosing a time limit
 
-`--fail-p90` and `--fail-p90-client-ready` are off unless you pass them. A limit only means something for the setup it was chosen for. When every server runs on the same machine as the client, the times include CPU sharing between servers and client, so they grow with the number of servers. Suggested starting limits for `--fail-p90` (90%-under Delivery Time):
+`--fail-p90` and `--fail-p90-client-ready` are off unless you pass them.
+
+- A limit only means something for the setup it was chosen for.
+- When every server runs on the same machine as the client, the times include CPU sharing between the servers and the client.
+- Those times grow with the number of servers.
+
+Suggested starting limits for `--fail-p90` (90%-under Delivery Time):
 
 | Setup | Suggested `--fail-p90` | Why |
 |---|---|---|
@@ -403,7 +531,9 @@ if decoded/client-ready time must also meet a limit.
 | ~500 servers on this machine | 250–300 ms | Measures this machine's CPU, not the network (a 500-server run measured about 180–230 ms). |
 | Servers on other hosts (real network) | 100–150 ms | Measures network and server publishing; use the limit from your plant requirement. |
 
-Set `--fail-p90-client-ready` about 50 ms above `--fail-p90`. If a single-machine run exceeds the limit, the client also logs an `SLA HINT` line. Measure your own baseline once without a limit, then set the limit about 20–30% above it.
+- Set `--fail-p90-client-ready` about 50 ms above `--fail-p90`.
+- If a single-machine run exceeds the limit, the client also logs an `SLA HINT` line.
+- Measure your own baseline once without a limit, then set the limit about 20–30% above it.
 
 
 **Option 2 — Test Suite Runner (`run_all_tests.py`):**
@@ -421,7 +551,14 @@ python run_all_tests.py --fleet 50 -w 8
 # Live benchmark only (skips unit tests):
 python run_all_tests.py --phase2 --fleet 50 -w 8
 ```
-Both tools automatically copy binary instances of the simulator, patch port configurations (`40001..40050`), launch all processes concurrently, run the benchmark across auto-scaled or explicitly configured worker processes, collect timing metrics, and cleanly shut down all server instances in a `finally` block.
+Both tools do this for you:
+
+- copy binary instances of the simulator
+- patch port configurations (`40001..40050`)
+- launch all processes at the same time
+- run the benchmark on auto-scaled or explicitly configured workers
+- collect timing metrics
+- shut down every server instance in a `finally` block
 
 #### Dynamic Benchmark Execution & Hardware Variability
 
@@ -432,11 +569,14 @@ Benchmark throughput and delivery latencies vary across environments depending o
 - **Server Firmware:** Lightweight simulators vs. high-capability industrial controller firmware.
 - **Trace Payload Size:** Full time-series trace arrays (Torque, Angle, Force, Current curves with hundreds of raw float samples) require real deserialization time compared to lightweight scalar-only results.
 
-Because static benchmark numbers depend directly on the execution environment, users should run dynamic benchmarks in their target environment. The client writes authoritative results to `test-results/`:
-- `test-results/summary.md` (Markdown summary with per-server breakdown)
-- `test-results/perf-fleet.csv` (Sample-by-sample audit log with microsecond timestamps and trace verification)
-- `test-results/metrics.json` (Structured test metrics and timeline data)
-- `test-results/junit-perf.xml` (CI/CD test reporting)
+Because the numbers depend on the machine, run the benchmark on the machine you care about. `run_fleet.py` writes `test-results/`:
+
+- `perf-fleet.md` — the same summary as the console
+- `perf-fleet.csv` — one row per result
+- `perf-fleet.json` — the machine-readable metrics
+- `junit-fleet.xml` — the CI result
+
+`python main.py` writes the paths you pass to `--markdown`, `--json`, `--csv`, and `--junit`. The examples below use `summary.md` and `metrics.json` only because those commands name those files.
 
 #### Reading the Statistics
 
@@ -448,7 +588,12 @@ In factory automation and benchmark validation, teams need assurance that collec
 
 The client includes an in-memory **Benchmark Integrity Gate** that checks every received event payload without extra network calls. Each result gets exactly one status:
 
-- **`VALID`:** Has `ResultMetaData.ResultId`, event `Time`, and `ProcessingTimes.EndTime`; is not a duplicate; and every `Trace` present passes the strict check. A trace passes only if its `ResultId` matches its own result, it has at least one step trace, and each step declares `NumberOfTracePoints ≥ 1` and carries that many decoded values. Nested results (for example batch results) are checked the same way.
+- **`VALID`:**
+  - Has `ResultMetaData.ResultId`, event `Time`, and `ProcessingTimes.EndTime`.
+  - Is not a duplicate.
+  - Every `Trace` that is present passes the strict check.
+  - A trace passes only if its `ResultId` matches its own result, it has at least one step trace, and each step declares `NumberOfTracePoints ≥ 1` and carries that many decoded values.
+  - Nested results (for example batch results) are checked the same way.
 - **`INCOMPLETE`:** Any of the above is missing or does not match.
 - **`DUPLICATE`:** A `ResultId` already received on the same endpoint during this run.
 - **`UNMATCHED`:** (`active_burst` only) A result that arrived before the client sent its first successful trigger call to that endpoint. Such a result cannot be from this benchmark.
@@ -478,9 +623,13 @@ Both the CSV export (`test-results/perf-fleet.csv`) and JSON report (`test-resul
 5. **Physical & Network Timestamps:** High-precision timestamps recording operation start, completion, event dispatch, and client callback receipt.
 
 > [!IMPORTANT]
-> **Observation vs. Physical Corroboration:** Client-side audit logs and CSV reports prove that the client received, decoded, and verified genuine OPC UA event payloads from the server endpoint. They do not, by themselves, prove that a physical tool completed mechanical movement on an assembly line. Proving mechanical tool motion requires external PLC or controller hardware logs.
+> **Observation vs. physical corroboration**
+>
+> - The audit log and the CSV prove the client received, decoded, and checked a real OPC UA event from that endpoint.
+> - They do not, by themselves, prove a physical tool moved on the line.
+> - Mechanical motion still needs an external PLC log or a controller hardware log.
 
-By logging curve and point counts alongside integrity status without storing multi-megabyte raw float arrays, the audit CSV remains compact (~180 KB for 1,500 operations) while providing complete forensic transparency for every result.
+The audit CSV logs curve counts, point counts, and integrity status. It does not store the raw float arrays. That keeps it about 180 KB for 1,500 operations, with a forensic record for every result.
 
 #### Benchmarking Existing Plant Fleets
 When benchmarking physical controllers or container fleets already running on your network, use the fleet configuration profile [`profiles/multi_server_fleet.yaml`](../profiles/multi_server_fleet.yaml):
@@ -510,11 +659,25 @@ python main.py \
 
 The Performance Client exports benchmark data across multiple standardized formats:
 
-1. **Console Summary:** ANSI-formatted terminal summary showing Fastest, Average, 90% under, 99% under and Slowest per timing stage, sample counts, a per-server table (with Clock offset), the integrity result and the Likely Cause of Delay.
+1. **Console Summary:** ANSI terminal text.
+   - Fastest, Average, 90% under, 99% under, and Slowest, per timing stage.
+   - Sample counts.
+   - A per-server table, including Clock offset.
+   - The integrity result and the Likely Cause of Delay.
 2. **Markdown (`--markdown report.md`):** Formatted for GitHub Actions job summaries, pull request comments, and test logs.
 3. **JUnit XML (`--junit test-results/junit-perf.xml`):** Compatible with CI dashboards (Jenkins, GitLab CI, GitHub Actions) to visualize latency trends and enforce pass/fail gates.
-4. **JSON Metrics Export (`--json test-results/metrics.json`):** Machine-readable structured payload containing all statistics (`min`, `mean`, `median`, `p90`, `p95`, `p99`, `max`, `stdev`), per-server statistics, sample-level timeline timestamps, and environment metadata for dashboard ingestion.
-5. **CSV Metrics Log (`--csv test-results/perf-fleet.csv`):** Detailed sample-by-sample audit log recording exact ISO timestamps (`client_received_time`, `event_time`, `creation_time`, `start_time`, `end_time`) and latency intervals (`delivery_time_ms`, `client_ready_time_ms`, `client_decode_time_ms`, `dispatch_delay_ms`, `joining_duration_ms`, `server_processing_time_ms`, `network_transport_time_ms`, `total_result_transfer_time_ms`, `clock_skew_ms`, plus `timing_source` and integrity status) for every single joining operation across all controllers. By intentionally excluding massive raw trace float arrays, the export remains compact and lightweight (~180 KB for 1,500 results vs >100 MB with full curves), ready for immediate import into Excel, Python Pandas, PowerBI, or Grafana for post-test analysis and charting.
+4. **JSON Metrics Export (`--json test-results/metrics.json`):** machine-readable payload.
+   - Statistics: `min`, `mean`, `median`, `p90`, `p95`, `p99`, `max`, `stdev`.
+   - Per-server statistics.
+   - Sample-level timeline timestamps.
+   - Environment metadata for a dashboard.
+5. **CSV Metrics Log (`--csv test-results/perf-fleet.csv`):** one row per joining operation, on every controller.
+   - ISO timestamps: `client_received_time`, `event_time`, `creation_time`, `start_time`, `end_time`.
+   - Intervals: `delivery_time_ms`, `client_ready_time_ms`, `client_decode_time_ms`, `dispatch_delay_ms`, `joining_duration_ms`, `server_processing_time_ms`, `network_transport_time_ms`, `total_result_transfer_time_ms`, `clock_skew_ms`.
+   - Also `timing_source` and integrity status.
+   - Raw trace float arrays are left out on purpose.
+   - Size is about 180 KB for 1,500 results, versus more than 100 MB with full curves.
+   - Import into Excel, Python Pandas, PowerBI, or Grafana.
 
 ---
 
@@ -532,7 +695,14 @@ The `--burst-delay` option (in seconds, float, default `1.0`) controls the delay
 | **Standard Baseline** | `python run_fleet.py --servers 50 -w 8 --burst-delay 1.0` | Default 1-second cadence between burst rounds. |
 | **Production Takt Emulation** | `python run_fleet.py --servers 100 -w 8 --burst-delay 5.0` | Emulates realistic automotive/aerospace cycle times (e.g., 5 ± 1 seconds takt time). |
 
-The pause happens only between rounds, not after the last one. Collection terminates once `--duration` has elapsed or the `--samples` target has been reached. In active trigger modes (`active_burst`, `both`), if the duration ends before workers finish their assigned rounds (for example, if connecting took longer on a constrained host), listening undergoes a bounded extension until all worker rounds complete or the safety timeout (`duration + rounds × burst-delay + 60 s`) is reached. If a worker still stops early, the run fails with `Trigger rounds incomplete: … (worker 0: 4/5)`; increase `--duration` or reduce `--burst-delay`.
+- The pause is only between rounds, not after the last one.
+- Collection stops when `--duration` has elapsed, or when the `--samples` target has been reached.
+- Active trigger modes are `active_burst` and `both`.
+- If the duration ends before workers finish their assigned rounds, listening is extended.
+- A common cause is a slow connect on a constrained host.
+- The extension stops when every worker round is done, or when the safety timeout is reached: `duration + rounds × burst-delay + 60 s`.
+- If a worker still stops early, the run fails with `Trigger rounds incomplete: … (worker 0: 4/5)`.
+- Then increase `--duration`, or reduce `--burst-delay`.
 
 ---
 

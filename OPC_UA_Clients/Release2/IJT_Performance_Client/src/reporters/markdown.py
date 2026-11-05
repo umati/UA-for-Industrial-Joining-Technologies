@@ -57,15 +57,30 @@ def generate_markdown_report(
     lines = [
         f"## IJT Performance & Scale Benchmark: {pool_name}",
         "",
-        "### Scale",
+        "### Final Summary",
         "",
-        "| Parameter | Value |",
+        "| Field | Detail |",
         "| :--- | :--- |",
-        f"| **Servers Tested** | {scale.servers} |",
-        f"| **Results Per Server** | {scale.results_per_server_text} |",
-        f"| **Total Results** | {scale.total_results_text} |",
-        f"| **Results Used For Stats** | {scale.valid_results:,} of {scale.total_results:,} ({valid_pct:.1f}%) |",
+        f"| **Time** | **{outcome.time_band}** |",
+        f"| **Action** | **{outcome.action}** |",
+        f"| **Detail** | {outcome.summary} |",
     ]
+    if verdict.warnings:
+        for idx, warning in enumerate(verdict.warnings, 1):
+            lines.append(f"| **Note {idx}** | {warning} |")
+    lines.extend(
+        [
+            "",
+            "### Run Size",
+            "",
+            "| Parameter | Value |",
+            "| :--- | :--- |",
+            f"| **Servers Tested** | {scale.servers} |",
+            f"| **Results Per Server** | {scale.results_per_server_text} |",
+            f"| **Total Results** | {scale.total_results_text} |",
+            f"| **Results Used For Stats** | {scale.valid_results:,} of {scale.total_results:,} ({valid_pct:.1f}%) |",
+        ]
+    )
     if wire_count > 0:
         lines.append(f"| **Wire Timing** | {wire_count}/{len(valid)} verified ({wire_pct:.1f}%) |")
     else:
@@ -90,26 +105,20 @@ def generate_markdown_report(
             lines.append(f"| **{label}** | {st['mean']:.1f} ms | **{st['p90']:.1f} ms** | {st['max']:.1f} ms |")
     lines.append("")
 
-    lines.extend(
-        [
-            "### Assessment",
-            "",
-            "| Field | Detail |",
-            "| :--- | :--- |",
-            f"| **Outcome** | **{outcome.label}** |",
-            f"| **Bottleneck** | `{verdict.primary_bottleneck}` |",
-            f"| **Meaning** | {outcome.what_this_means} |",
-            f"| **Next Step** | {outcome.suggested_next_step} |",
-        ]
-    )
     if timing and timing.get("workers_reported") is not None:
         lag = float(timing.get("loop_lag_max_ms", 0.0) or 0.0)
         lag_mean = float(timing.get("loop_lag_worst_mean_ms", 0.0) or 0.0)
-        lines.append(f"| **Loop Lag** | Worst {lag:.1f} ms (Worst Worker Avg {lag_mean:.1f} ms) |")
-    if verdict.warnings:
-        for idx, w in enumerate(verdict.warnings, 1):
-            lines.append(f"| **Warning #{idx}** | {w} |")
-    lines.append("")
+        lines.extend(
+            [
+                "### Client Busy Time",
+                "",
+                "| Field | Value |",
+                "| :--- | :--- |",
+                f"| **Worst** | {lag:.1f} ms |",
+                f"| **Worst Worker Avg** | {lag_mean:.1f} ms |",
+                "",
+            ]
+        )
 
     num_servers = scale.servers
     if num_servers > 1:

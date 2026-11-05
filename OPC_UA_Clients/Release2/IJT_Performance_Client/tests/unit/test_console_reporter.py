@@ -21,10 +21,9 @@ def test_print_console_report_empty(capsys):
     assert "IJT PERFORMANCE & SCALE BENCHMARK REPORT: TestPool" in captured.out
     assert "Servers Tested" in captured.out
     assert "Results Per Server" in captured.out
-    assert "ACTION NEEDED" in captured.out
-    assert "NO_DATA" in captured.out
+    assert "Action Needed" in captured.out
+    assert "No Results" in captured.out
     assert "Test warning" in captured.out
-    assert "Assessment" in captured.out
     assert "FINDING" not in captured.out
 
 
@@ -51,10 +50,10 @@ def test_print_console_report_with_samples(capsys):
     assert "Results Per Server" in captured.out
     assert "1 servers × 1 each" in captured.out or "1 each" in captured.out
     assert "Results Used For Stats" in captured.out
-    assert "HEALTHY" in captured.out or "OK —" in captured.out
-    assert "Scale" in captured.out
+    assert "Under 100 ms" in captured.out
+    assert "No Action Needed" in captured.out
+    assert "Run Size" in captured.out
     assert "Result Latency" in captured.out
-    assert "Assessment" in captured.out
     assert "HEADLINE LATENCY" not in captured.out
     assert "Key Latency" not in captured.out
     assert "FINDING" not in captured.out
@@ -97,6 +96,10 @@ def test_print_console_report_per_server(capsys):
     assert "18.5ms" in captured.out
     assert "N/A" in captured.out
     assert "Results Per Server" in captured.out
+    lines = captured.out.splitlines()
+    header_idx = next(i for i, line in enumerate(lines) if "For Stats" in line)
+    assert len(lines[header_idx]) == len(lines[header_idx - 1])
+    assert len(lines[header_idx]) == len(lines[header_idx + 1])
 
 
 def test_print_console_report_excludes_invalid_results_from_statistics(capsys):
@@ -122,7 +125,7 @@ def test_print_console_report_excludes_invalid_results_from_statistics(capsys):
     assert "11.0" in out
     assert "999.0" not in out
     assert "Integrity Audit (1 Issues)" in out
-    assert "ACTION NEEDED" in out
+    assert "Action Needed" in out
 
 
 def test_enable_ansi_windows():
@@ -220,10 +223,11 @@ def test_local_host_cpu_is_information_not_action(capsys):
     ]
     print_console_report(samples, verdict, "Colocated", samples_per_endpoint=2)
     out = capsys.readouterr().out
-    assert "INFORMATION" in out
+    assert "Under 200 ms" in out
+    assert "No Action Needed" in out
+    assert "Client and servers were on one computer." in out
     assert "ACTION NEEDED" not in out
     assert "ACTION REQUIRED" not in out
-    assert "Assessment" in out
     assert "Results Per Server" in out
     assert "2" in out
     assert "3 servers × 2 each" in out

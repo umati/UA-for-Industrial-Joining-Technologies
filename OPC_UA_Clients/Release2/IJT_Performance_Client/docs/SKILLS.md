@@ -20,7 +20,7 @@ Because of Python's **Global Interpreter Lock (GIL)**:
 
 ### The Solution: Multi-Process Sharding + AsyncIO (`OpcUaClientPool`)
 `IJT_Performance_Client` solves this by decoupling connections across independent processes:
-- Automatically scales worker processes based on endpoint count and host CPU threads: $\text{workers} = \min\left(\max\left(4, \left\lfloor\frac{N + 19}{20}\right\rfloor\right), \min(\text{cpu\_count}, 32)\right)$ (yielding 8 workers for 150 endpoints when $\ge 8$ cores are available); operators may explicitly configure 1–32 workers via `-w` / `--workers` or `OPCUA_WORKERS` (for example, `-w 12` was an explicitly configured benchmark setting on a 20-thread host).
+- Automatically scales worker processes based on endpoint count and host CPU threads: `workers = min(max(4, floor((N + 19) / 20)), min(cpu_count, 32))` (8 workers for 150 endpoints when at least 8 cores are available). Operators may set 1–32 workers with `-w` / `--workers` or `OPCUA_WORKERS` (for example, `-w 12` was an explicitly configured benchmark setting on a 20-thread host). The same formula is in the Performance Guide, written as text so it renders.
 - Each process runs its own CPython interpreter with its own completely independent GIL, preventing event loop decode queue backlogs.
 - Type definition and browse caching: `load_ijt_type_definitions` is loaded once per worker process (cached across endpoints sharing identical namespace layouts; single-worker namespace mismatches are rejected at connect time to prevent process-global type collisions); method NodeIds are cached to eliminate hundreds of redundant `Browse` requests.
 - Operation models: Supports virtual simulation stimulation (`SimulateSingleResult`) for synthetic benchmarking, and passive production monitoring (`--mode passive`) where external line controllers trigger physical joining operations without client interference.
@@ -57,7 +57,7 @@ When timing hooks are installed, each sample also records when its bytes reached
 
 ### Benchmark Integrity Gate (summary)
 
-- Human FINAL SUMMARY sections: Scale, Result Latency, Assessment, Detail. Outcomes are exactly `OK` | `INFORMATION` | `ACTION NEEDED` (see PERFORMANCE_GUIDE). Soft colocated callouts use INFORMATION, not ACTION NEEDED. Scale prints servers × results-per-server; Results Used For Stats = integrity-OK samples used for latency KPIs.
+- Human FINAL SUMMARY opens with Time (tightest true band: Under 100 ms, Under 200 ms, Under 500 ms, Over 500 ms) and Action (`No Action Needed` or `Action Needed`). Action Needed is a missed `--fail-p90*`, missing results, or a failed quality gate. A one-computer run says so in Detail. Client Busy Time is the loop-lag detail. Run Size prints servers × results-per-server; Results Used For Stats = integrity-OK samples used for latency KPIs.
 - Each result is `VALID`, `INCOMPLETE`, `DUPLICATE` or `UNMATCHED`; only `VALID` results feed statistics and pass/fail limits.
 - `active_burst`: VALID results must equal successful trigger calls per endpoint. `both`: fewer fails, extra results are counted as external events (warning). `passive`: no call matching.
 - A different IJT namespace version across endpoints fails the run; a missing one is reported as "unverified".

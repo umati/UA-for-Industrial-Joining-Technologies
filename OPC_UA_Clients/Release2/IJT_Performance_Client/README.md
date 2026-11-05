@@ -133,7 +133,7 @@ Full options: `python run_fleet.py --help`. Depth (timing model, integrity gate,
 
 ### Reports (`test-results/`)
 
-The console / Markdown FINAL SUMMARY is management-oriented: **Scale** (servers × results per server × total), **Result Latency**, **Assessment** (outcome is not always a problem), then **Detail**. Outcome is exactly one of **OK**, **INFORMATION**, or **ACTION NEEDED** (colocated `LOCAL_HOST_CPU` is INFORMATION, not a failure). **Results Used For Stats** means integrity-OK samples that feed the latency statistics. Plant comfort for OK vs INFORMATION is delivery P90 under **500 ms** when no `--fail-p90` is set. Glossary depth lives in [PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md).
+The console / Markdown FINAL SUMMARY opens with the tightest true time band (**Under 100 ms**, **Under 200 ms**, **Under 500 ms**, or **Over 500 ms**) and **No Action Needed** or **Action Needed**. **Action Needed** means a limit you set was missed, results are missing, or the quality gate failed. **Results Used For Stats** means integrity-OK samples that feed the latency statistics. Glossary depth lives in [PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md).
 
 - `perf-fleet.md` — same story as the console summary (shareable; no emoji)
 - `perf-fleet.csv` — sample-level metrics (no heavy trace curves)
