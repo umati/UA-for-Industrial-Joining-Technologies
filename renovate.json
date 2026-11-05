@@ -112,6 +112,15 @@
       "addLabels": ["dependencies", "needs-manual-review"]
     },
     {
+      "description": "Group stylelint with its shareable configs. stylelint-config-standard declares a peer on a matching stylelint major (40 requires ^17, 41 requires ^18) and pulls stylelint-config-recommended at the same boundary. Separate PRs cannot refresh package-lock.json. separateMajorMinor is false so a major of either package is not isolated from the other package's pending update.",
+      "matchPackageNames": ["/^stylelint($|-)/"],
+      "groupName": "stylelint + shareable configs (coupled release)",
+      "groupSlug": "stylelint-configs",
+      "separateMajorMinor": false,
+      "automerge": false,
+      "addLabels": ["dependencies", "needs-manual-review"]
+    },
+    {
       "description": "Group Python dev tool updates (mypy, ruff, bandit, pip-audit) into a single weekly reviewed PR with a 3-day minimum release age.",
       "matchPackageNames": ["mypy", "ruff", "bandit", "pip-audit"],
       "groupName": "Python development tools",
