@@ -1,0 +1,370 @@
+﻿2026-11-04T23:33:13.2661451Z Current runner version: '2.338.2'
+2026-11-04T23:33:13.2698514Z ##[group]Runner Image Provisioner
+2026-11-04T23:33:13.2699946Z Hosted Compute Agent
+2026-11-04T23:33:13.2700917Z Version: 20261021.618
+2026-11-04T23:33:13.2701944Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-11-04T23:33:13.2703193Z Build Date: 2026-10-21T00:45:21Z
+2026-11-04T23:33:13.2704270Z Worker ID: {9195118e-be10-4744-b816-da72f695ac85}
+2026-11-04T23:33:13.2705488Z Region: northcentralus
+2026-11-04T23:33:13.2706349Z Cloud: Azure
+2026-11-04T23:33:13.2707160Z ##[endgroup]
+2026-11-04T23:33:13.2709674Z ##[group]Operating System
+2026-11-04T23:33:13.2710686Z Microsoft Windows Server 2025
+2026-11-04T23:33:13.2711652Z 10.0.26100
+2026-11-04T23:33:13.2712379Z Datacenter
+2026-11-04T23:33:13.2713126Z ##[endgroup]
+2026-11-04T23:33:13.2713936Z ##[group]Runner Image
+2026-11-04T23:33:13.2714864Z Image: windows-2025-vs2026
+2026-11-04T23:33:13.2715852Z Version: 20261030.294.1
+2026-11-04T23:33:13.2718409Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261030.294/images/windows/Windows2025-VS2026-Readme.md
+2026-11-04T23:33:13.2721274Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261030.294
+2026-11-04T23:33:13.2722917Z ##[endgroup]
+2026-11-04T23:33:13.2724688Z ##[group]GITHUB_TOKEN Permissions
+2026-11-04T23:33:13.2727233Z Contents: read
+2026-11-04T23:33:13.2728221Z Metadata: read
+2026-11-04T23:33:13.2729117Z ##[endgroup]
+2026-11-04T23:33:13.2732522Z Secret source: Actions
+2026-11-04T23:33:13.2733937Z Cache mode: write
+2026-11-04T23:33:13.2735137Z Prepare workflow directory
+2026-11-04T23:33:13.3291117Z Prepare all required actions
+2026-11-04T23:33:13.3364000Z Getting action download info
+2026-11-04T23:33:13.5355189Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-04T23:33:13.6713835Z Download action repository 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-04T23:33:14.0399132Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-04T23:33:14.2745070Z Complete job name: OPC UA Server - Windows Smoke
+2026-11-04T23:33:14.4516420Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-04T23:33:14.4517849Z with:
+2026-11-04T23:33:14.4518867Z   persist-credentials: false
+2026-11-04T23:33:14.4519618Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-04T23:33:14.4524350Z   token: ***
+2026-11-04T23:33:14.4524735Z   ssh-strict: true
+2026-11-04T23:33:14.4525118Z   ssh-user: git
+2026-11-04T23:33:14.4525482Z   clean: true
+2026-11-04T23:33:14.4525877Z   sparse-checkout-cone-mode: true
+2026-11-04T23:33:14.4526344Z   fetch-depth: 1
+2026-11-04T23:33:14.4526722Z   fetch-tags: false
+2026-11-04T23:33:14.4527106Z   show-progress: true
+2026-11-04T23:33:14.4527504Z   lfs: false
+2026-11-04T23:33:14.4527892Z   submodules: false
+2026-11-04T23:33:14.4528289Z   set-safe-directory: true
+2026-11-04T23:33:14.4528743Z   allow-unsafe-pr-checkout: false
+2026-11-04T23:33:14.4529462Z env:
+2026-11-04T23:33:14.4529864Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-04T23:33:14.4530399Z ##[endgroup]
+2026-11-04T23:33:14.6062550Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-04T23:33:14.6065510Z ##[group]Getting Git version info
+2026-11-04T23:33:14.6066580Z Working directory is 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-04T23:33:14.7048452Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-04T23:33:15.0615182Z git version 2.56.0.windows.4
+2026-11-04T23:33:15.0663116Z ##[endgroup]
+2026-11-04T23:33:15.0680765Z Temporarily overriding HOME='D:\a\_temp\1eb4fdcc-8eb5-49af-aa74-589163578c9a' before making global git config changes
+2026-11-04T23:33:15.0684206Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-04T23:33:15.0694550Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-04T23:33:15.1328348Z Deleting the contents of 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-04T23:33:15.1333291Z ##[group]Determining repository object format
+2026-11-04T23:33:15.1335232Z ##[endgroup]
+2026-11-04T23:33:15.1338091Z ##[group]Initializing the repository
+2026-11-04T23:33:15.1347486Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-04T23:33:15.2471252Z Initialized empty Git repository in D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-04T23:33:15.2524023Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-04T23:33:15.3476291Z ##[endgroup]
+2026-11-04T23:33:15.3479580Z ##[group]Disabling automatic garbage collection
+2026-11-04T23:33:15.3484324Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-04T23:33:15.3895020Z ##[endgroup]
+2026-11-04T23:33:15.3897700Z ##[group]Setting up auth
+2026-11-04T23:33:15.3899568Z Removing SSH command configuration
+2026-11-04T23:33:15.3908128Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-04T23:33:15.4302549Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-04T23:33:16.9974309Z Removing HTTP extra header
+2026-11-04T23:33:16.9984683Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-04T23:33:17.0380942Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-04T23:33:17.6422551Z Removing includeIf entries pointing to credentials config files
+2026-11-04T23:33:17.6430092Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-04T23:33:17.6823648Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-04T23:33:18.2614273Z [command]"C:\Program Files\Git\bin\git.exe" config --file D:\a\_temp\git-credentials-89b10888-162b-48f5-90a3-de7561a49e37.config http.https://github.com/.extraheader "AUTHORIZATION: basic [REDACTED_AUTH]"
+2026-11-04T23:33:18.3026432Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D:\a\_temp\git-credentials-89b10888-162b-48f5-90a3-de7561a49e37.config
+2026-11-04T23:33:18.3432787Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D:\a\_temp\git-credentials-89b10888-162b-48f5-90a3-de7561a49e37.config
+2026-11-04T23:33:18.3873598Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-89b10888-162b-48f5-90a3-de7561a49e37.config
+2026-11-04T23:33:18.4268005Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-89b10888-162b-48f5-90a3-de7561a49e37.config
+2026-11-04T23:33:18.4659498Z ##[endgroup]
+2026-11-04T23:33:18.4660633Z ##[group]Fetching the repository
+2026-11-04T23:33:18.4671679Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +9addd5600286c62fce5b98a2c7310e9602e54f01:refs/remotes/origin/main
+2026-11-04T23:33:20.1826771Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-04T23:33:20.1827977Z  * [new ref]         9addd5600286c62fce5b98a2c7310e9602e54f01 -> origin/main
+2026-11-04T23:33:20.1879540Z [command]"C:\Program Files\Git\bin\git.exe" branch --list --remote origin/main
+2026-11-04T23:33:20.2302890Z   origin/main
+2026-11-04T23:33:20.2352069Z [command]"C:\Program Files\Git\bin\git.exe" rev-parse refs/remotes/origin/main
+2026-11-04T23:33:20.2881849Z 9addd5600286c62fce5b98a2c7310e9602e54f01
+2026-11-04T23:33:20.2922073Z ##[endgroup]
+2026-11-04T23:33:20.2922477Z ##[group]Determining the checkout info
+2026-11-04T23:33:20.2922898Z ##[endgroup]
+2026-11-04T23:33:20.2930939Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-04T23:33:20.3634689Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-04T23:33:20.4028966Z ##[group]Checking out the ref
+2026-11-04T23:33:20.4038089Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B main refs/remotes/origin/main
+2026-11-04T23:33:20.9703565Z Switched to a new branch 'main'
+2026-11-04T23:33:20.9727275Z branch 'main' set up to track 'origin/main'.
+2026-11-04T23:33:20.9825329Z ##[endgroup]
+2026-11-04T23:33:21.0335006Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-04T23:33:21.0696937Z 9addd5600286c62fce5b98a2c7310e9602e54f01
+2026-11-04T23:33:21.0744721Z ##[group]Removing auth
+2026-11-04T23:33:21.0745168Z Removing SSH command configuration
+2026-11-04T23:33:21.0753147Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-04T23:33:21.1165762Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-04T23:33:21.6848039Z Removing HTTP extra header
+2026-11-04T23:33:21.6857031Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-04T23:33:21.7252960Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-04T23:33:22.3092281Z Removing includeIf entries pointing to credentials config files
+2026-11-04T23:33:22.3100616Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-04T23:33:22.3455224Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-04T23:33:22.3457139Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-04T23:33:22.3459125Z includeif.gitdir:/github/workspace/.git.path
+2026-11-04T23:33:22.3459789Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-04T23:33:22.3507183Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-04T23:33:22.3871265Z D:\a\_temp\git-credentials-89b10888-162b-48f5-90a3-de7561a49e37.config
+2026-11-04T23:33:22.3919621Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D\:\\a\\_temp\\git\-credentials\-89b10888\-162b\-48f5\-90a3\-de7561a49e37\.config
+2026-11-04T23:33:22.4365166Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-04T23:33:22.4724672Z D:\a\_temp\git-credentials-89b10888-162b-48f5-90a3-de7561a49e37.config
+2026-11-04T23:33:22.4775603Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D\:\\a\\_temp\\git\-credentials\-89b10888\-162b\-48f5\-90a3\-de7561a49e37\.config
+2026-11-04T23:33:22.5179059Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-04T23:33:22.5529511Z /github/runner_temp/git-credentials-89b10888-162b-48f5-90a3-de7561a49e37.config
+2026-11-04T23:33:22.5576273Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-89b10888\-162b\-48f5\-90a3\-de7561a49e37\.config
+2026-11-04T23:33:22.5973475Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-04T23:33:22.6321315Z /github/runner_temp/git-credentials-89b10888-162b-48f5-90a3-de7561a49e37.config
+2026-11-04T23:33:22.6367794Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-89b10888\-162b\-48f5\-90a3\-de7561a49e37\.config
+2026-11-04T23:33:22.6767417Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-04T23:33:23.2279323Z Removing credentials config 'D:\a\_temp\git-credentials-89b10888-162b-48f5-90a3-de7561a49e37.config'
+2026-11-04T23:33:23.2291127Z ##[endgroup]
+2026-11-04T23:33:23.2675936Z ##[group]Run Expand-Archive `
+2026-11-04T23:33:23.2676740Z Expand-Archive `
+2026-11-04T23:33:23.2677164Z   -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+2026-11-04T23:33:23.2677656Z   -DestinationPath "OPC_UA_Servers\Release2\" `
+2026-11-04T23:33:23.2678011Z   -Force
+2026-11-04T23:33:23.2678249Z Write-Host "Extracted ZIP contents:"
+2026-11-04T23:33:23.2678779Z Get-ChildItem "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\" | Select-Object Name
+2026-11-04T23:33:23.3392751Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-04T23:33:23.3393212Z env:
+2026-11-04T23:33:23.3393475Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-04T23:33:23.3393812Z ##[endgroup]
+2026-11-04T23:33:24.2652282Z Extracted ZIP contents:
+2026-11-04T23:33:24.2781642Z 
+2026-11-04T23:33:24.2814596Z Name
+2026-11-04T23:33:24.2815158Z ----
+2026-11-04T23:33:24.2816214Z Opc.Ua.AMB.NodeSet2.xml
+2026-11-04T23:33:24.2816686Z Opc.Ua.Di.NodeSet2.xml
+2026-11-04T23:33:24.2818050Z Opc.Ua.IA.NodeSet2.xml
+2026-11-04T23:33:24.2818545Z Opc.Ua.Ijt.Base.NodeSet2.xml
+2026-11-04T23:33:24.2819028Z Opc.Ua.Ijt.Tightening.NodeSet2.xml
+2026-11-04T23:33:24.2819722Z Opc.Ua.Ijt.Tightening.Server.xml
+2026-11-04T23:33:24.2820329Z Opc.Ua.Machinery.NodeSet2.xml
+2026-11-04T23:33:24.2821474Z Opc.Ua.Machinery.Result.NodeSet2.xml
+2026-11-04T23:33:24.2822231Z Opc.Ua.NodeSet2.xml
+2026-11-04T23:33:24.2822751Z opcua_ijt_demo_application.exe
+2026-11-04T23:33:24.2823329Z server_configuration.json
+2026-11-04T23:33:24.2823866Z simulated_asset_data.json
+2026-11-04T23:33:24.2824392Z user_identity_configuration.json
+2026-11-04T23:33:24.2824749Z 
+2026-11-04T23:33:24.3648796Z ##[group]Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+2026-11-04T23:33:24.3649232Z with:
+2026-11-04T23:33:24.3649432Z   python-version-file: .python-version
+2026-11-04T23:33:24.3649696Z   check-latest: false
+2026-11-04T23:33:24.3652000Z   token: ***
+2026-11-04T23:33:24.3652312Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-11-04T23:33:24.3652692Z   update-environment: true
+2026-11-04T23:33:24.3652905Z   allow-prereleases: false
+2026-11-04T23:33:24.3653106Z   freethreaded: false
+2026-11-04T23:33:24.3653509Z env:
+2026-11-04T23:33:24.3653690Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-04T23:33:24.3653947Z ##[endgroup]
+2026-11-04T23:33:24.5168338Z Resolved .python-version as 3.14
+2026-11-04T23:33:24.5170805Z ##[group]Installed versions
+2026-11-04T23:33:24.5387901Z Successfully set up CPython (3.14.10)
+2026-11-04T23:33:24.5388640Z ##[endgroup]
+2026-11-04T23:33:24.5658496Z ##[group]Run python scripts/start_server_on_port.py `
+2026-11-04T23:33:24.5658950Z python scripts/start_server_on_port.py `
+2026-11-04T23:33:24.5659248Z   --port 40451 `
+2026-11-04T23:33:24.5659513Z   --diagnostics-dir test-results/readiness
+2026-11-04T23:33:24.5786194Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-04T23:33:24.5786537Z env:
+2026-11-04T23:33:24.5786737Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-04T23:33:24.5787090Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:24.5787565Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-04T23:33:24.5788015Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:24.5788410Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:24.5788812Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:24.5789158Z ##[endgroup]
+2026-11-04T23:33:28.2247119Z ==> Starting OPC UA server on port 40451
+2026-11-04T23:33:28.2247746Z     Source : OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator
+2026-11-04T23:33:28.2248220Z     Copy   : D:\a\_temp\ijt-sim\server_40451
+2026-11-04T23:33:28.2248564Z     Server directory copied.
+2026-11-04T23:33:28.2248900Z     Patched serverEndpointTCPPort: 40451 -> 40451
+2026-11-04T23:33:28.2249288Z     EXE: opcua_ijt_demo_application.exe
+2026-11-04T23:33:28.2249621Z     Server started (PID 1996)
+2026-11-04T23:33:28.2250202Z     Port 40451 ready after 2.1s � server ready.
+2026-11-04T23:33:28.2250731Z     Exported SERVER_PID, OPCUA_SERVER_PORT, OPCUA_SERVER_URL to GITHUB_ENV.
+2026-11-04T23:33:28.3627944Z ##[group]Run pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+2026-11-04T23:33:28.3628536Z pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+2026-11-04T23:33:28.3700467Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-04T23:33:28.3700802Z env:
+2026-11-04T23:33:28.3700995Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-04T23:33:28.3701344Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:28.3701804Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-04T23:33:28.3702249Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:28.3702646Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:28.3703033Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:28.3703348Z   SERVER_PID: 1996
+2026-11-04T23:33:28.3703547Z   OPCUA_SERVER_PORT: 40451
+2026-11-04T23:33:28.3703866Z   OPCUA_SERVER_URL: opc.tcp://localhost:40451
+2026-11-04T23:33:28.3704137Z ##[endgroup]
+2026-11-04T23:33:32.1995272Z Collecting asyncua==2.1.0 (from -r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-04T23:33:32.2324831Z   Downloading asyncua-2.1.0-py3-none-any.whl.metadata (9.5 kB)
+2026-11-04T23:33:32.4955932Z Collecting cryptography>=50.0.0 (from -r OPC_UA_Servers/Release2/tests/requirements.txt (line 4))
+2026-11-04T23:33:32.5034314Z   Downloading cryptography-50.0.2-cp311-abi3-win_amd64.whl.metadata (4.4 kB)
+2026-11-04T23:33:32.5575567Z Collecting pyOpenSSL>=26.4.0 (from -r OPC_UA_Servers/Release2/tests/requirements.txt (line 5))
+2026-11-04T23:33:32.5627548Z   Downloading pyopenssl-26.4.0-py3-none-any.whl.metadata (22 kB)
+2026-11-04T23:33:32.6197820Z Collecting idna>=3.15 (from -r OPC_UA_Servers/Release2/tests/requirements.txt (line 6))
+2026-11-04T23:33:32.6258039Z   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+2026-11-04T23:33:32.6844867Z Collecting aiosqlite (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-04T23:33:32.6912450Z   Downloading aiosqlite-0.22.1-py3-none-any.whl.metadata (4.3 kB)
+2026-11-04T23:33:32.7491331Z Collecting anyio (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-04T23:33:32.7548548Z   Downloading anyio-4.16.0-py3-none-any.whl.metadata (4.7 kB)
+2026-11-04T23:33:32.8157469Z Collecting python-dateutil (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-04T23:33:32.8212034Z   Downloading python_dateutil-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+2026-11-04T23:33:32.8952375Z Collecting pytz (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-04T23:33:32.9013330Z   Downloading pytz-2026.6-py2.py3-none-any.whl.metadata (22 kB)
+2026-11-04T23:33:32.9569087Z Collecting sortedcontainers (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-04T23:33:32.9622592Z   Downloading sortedcontainers-2.4.0-py2.py3-none-any.whl.metadata (10 kB)
+2026-11-04T23:33:33.0207534Z Collecting typing-extensions (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-04T23:33:33.0285404Z   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+2026-11-04T23:33:33.1929376Z Collecting cffi>=2.0.0 (from cryptography>=50.0.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 4))
+2026-11-04T23:33:33.1991168Z   Downloading cffi-2.1.1-cp314-cp314-win_amd64.whl.metadata (2.6 kB)
+2026-11-04T23:33:33.2797564Z Collecting pycparser (from cffi>=2.0.0->cryptography>=50.0.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 4))
+2026-11-04T23:33:33.2850354Z   Downloading pycparser-3.12-py3-none-any.whl.metadata (9.7 kB)
+2026-11-04T23:33:33.3447990Z Collecting tzdata (from python-dateutil->asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-04T23:33:33.3504604Z   Downloading tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
+2026-11-04T23:33:33.3789832Z Downloading asyncua-2.1.0-py3-none-any.whl (890 kB)
+2026-11-04T23:33:33.4170043Z    ---------------------------------------- 890.6/890.6 kB 19.4 MB/s  0:00:00
+2026-11-04T23:33:33.4222493Z Downloading cryptography-50.0.2-cp311-abi3-win_amd64.whl (3.8 MB)
+2026-11-04T23:33:33.4799344Z    ---------------------------------------- 3.8/3.8 MB 65.4 MB/s  0:00:00
+2026-11-04T23:33:33.4871709Z Downloading pyopenssl-26.4.0-py3-none-any.whl (56 kB)
+2026-11-04T23:33:33.5150148Z Downloading idna-3.20-py3-none-any.whl (69 kB)
+2026-11-04T23:33:33.5394963Z Downloading cffi-2.1.1-cp314-cp314-win_amd64.whl (187 kB)
+2026-11-04T23:33:33.5690369Z Downloading aiosqlite-0.22.1-py3-none-any.whl (17 kB)
+2026-11-04T23:33:33.5952056Z Downloading anyio-4.16.0-py3-none-any.whl (134 kB)
+2026-11-04T23:33:33.6229684Z Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+2026-11-04T23:33:33.6472114Z Downloading pycparser-3.12-py3-none-any.whl (62 kB)
+2026-11-04T23:33:33.6777224Z Downloading python_dateutil-4.0.0-py3-none-any.whl (92 kB)
+2026-11-04T23:33:33.7051861Z Downloading pytz-2026.6-py2.py3-none-any.whl (506 kB)
+2026-11-04T23:33:33.7435113Z Downloading sortedcontainers-2.4.0-py2.py3-none-any.whl (29 kB)
+2026-11-04T23:33:33.7670253Z Downloading tzdata-2026.6-py2.py3-none-any.whl (348 kB)
+2026-11-04T23:33:34.0766104Z Installing collected packages: sortedcontainers, pytz, tzdata, typing-extensions, pycparser, idna, aiosqlite, python-dateutil, cffi, anyio, cryptography, pyOpenSSL, asyncua
+2026-11-04T23:33:39.6297256Z 
+2026-11-04T23:33:39.6334231Z Successfully installed aiosqlite-0.22.1 anyio-4.16.0 asyncua-2.1.0 cffi-2.1.1 cryptography-50.0.2 idna-3.20 pyOpenSSL-26.4.0 pycparser-3.12 python-dateutil-4.0.0 pytz-2026.6 sortedcontainers-2.4.0 typing-extensions-4.16.0 tzdata-2026.6
+2026-11-04T23:33:39.6350865Z 
+2026-11-04T23:33:39.6353377Z [notice] A new release of pip is available: 26.2.2 -> 26.3
+2026-11-04T23:33:39.6354756Z [notice] To update, run: python.exe -m pip install --upgrade pip
+2026-11-04T23:33:39.8531509Z ##[group]Run New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-04T23:33:39.8532155Z New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-04T23:33:39.8532605Z python OPC_UA_Servers/Release2/tests/smoke_test.py `
+2026-11-04T23:33:39.8532937Z   --tcp-timeout 30 `
+2026-11-04T23:33:39.8533192Z   --junitxml test-results/smoke.xml
+2026-11-04T23:33:39.8605002Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-04T23:33:39.8605460Z env:
+2026-11-04T23:33:39.8605654Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-04T23:33:39.8606021Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:39.8606485Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-04T23:33:39.8606929Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:39.8607380Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:39.8607781Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:39.8608089Z   SERVER_PID: 1996
+2026-11-04T23:33:39.8608273Z   OPCUA_SERVER_PORT: 40451
+2026-11-04T23:33:39.8608529Z   OPCUA_SERVER_URL: opc.tcp://localhost:40451
+2026-11-04T23:33:39.8608794Z ##[endgroup]
+2026-11-04T23:33:44.1867858Z 
+2026-11-04T23:33:44.1868596Z OPC UA IJT Server � Smoke Tests
+2026-11-04T23:33:44.1868970Z   Endpoint : opc.tcp://localhost:40451
+2026-11-04T23:33:44.1869235Z   Timeout  : 30s
+2026-11-04T23:33:44.1869473Z ------------------------------------------------------------
+2026-11-04T23:33:44.1869799Z   [OK]  TCP port reachable  (port 40451 is open)
+2026-11-04T23:33:44.1870107Z   [OK]  OPC UA session  (OPC UA session established)
+2026-11-04T23:33:44.1870494Z   [OK]  Server CurrentTime  (CurrentTime = 2026-11-04 23:33:44.159758+00:00)
+2026-11-04T23:33:44.1870939Z   [OK]  Namespace array  (9 namespaces, all IJT URIs present)
+2026-11-04T23:33:44.1871516Z   [OK]  TighteningSystem node  (TighteningSystem found (QualifiedName(NamespaceIndex=1, Name='TighteningSystem')))
+2026-11-04T23:33:44.1872096Z   [OK]  Simulations node  (Simulations node has 2 method(s))
+2026-11-04T23:33:44.1872471Z   [OK]  ResultManagement node  (ResultManagement node present)
+2026-11-04T23:33:44.1872844Z   [OK]  AssetManagement node  (AssetManagement node present)
+2026-11-04T23:33:44.1873665Z   [OK]  JoiningProcessManagement node  (JoiningProcessManagement node present)
+2026-11-04T23:33:44.1874105Z   [OK]  JointManagement node  (JointManagement node present)
+2026-11-04T23:33:44.1874447Z ------------------------------------------------------------
+2026-11-04T23:33:44.1874720Z   10/10 passed
+2026-11-04T23:33:44.1874829Z 
+2026-11-04T23:33:44.3201140Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-04T23:33:44.3201636Z with:
+2026-11-04T23:33:44.3201831Z   name: results-server-smoke
+2026-11-04T23:33:44.3202156Z   path: test-results/smoke.xml
+test-results/readiness/**
+
+2026-11-04T23:33:44.3202471Z   retention-days: 14
+2026-11-04T23:33:44.3202675Z   if-no-files-found: warn
+2026-11-04T23:33:44.3202885Z   compression-level: 6
+2026-11-04T23:33:44.3203075Z   overwrite: false
+2026-11-04T23:33:44.3203263Z   include-hidden-files: false
+2026-11-04T23:33:44.3203470Z   archive: true
+2026-11-04T23:33:44.3203628Z env:
+2026-11-04T23:33:44.3203803Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-04T23:33:44.3204143Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:44.3204582Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-04T23:33:44.3205023Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:44.3205444Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:44.3205864Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:44.3206513Z   SERVER_PID: 1996
+2026-11-04T23:33:44.3206729Z   OPCUA_SERVER_PORT: 40451
+2026-11-04T23:33:44.3206992Z   OPCUA_SERVER_URL: opc.tcp://localhost:40451
+2026-11-04T23:33:44.3207261Z ##[endgroup]
+2026-11-04T23:33:44.5036407Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-11-04T23:33:44.5040281Z The least common ancestor is D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\test-results. This will be the root directory of the artifact
+2026-11-04T23:33:44.5041719Z With the provided path, there will be 2 files uploaded
+2026-11-04T23:33:44.5046273Z Artifact name is valid!
+2026-11-04T23:33:44.5047719Z Root directory input is valid!
+2026-11-04T23:33:44.7545977Z Uploading artifact: results-server-smoke.zip
+2026-11-04T23:33:44.7592165Z Beginning upload of artifact content to blob storage
+2026-11-04T23:33:44.9128737Z Uploaded bytes 896
+2026-11-04T23:33:44.9655407Z Finished uploading artifact content to blob storage!
+2026-11-04T23:33:44.9657750Z SHA256 digest of uploaded artifact is 77ff09e2a22633237688aa385f92ac0d6d8baaf03d355197d70ac6637cbdbfdf
+2026-11-04T23:33:44.9658689Z Finalizing artifact upload
+2026-11-04T23:33:45.4706695Z Artifact results-server-smoke successfully finalized. Artifact ID 13372663022
+2026-11-04T23:33:45.4708316Z Artifact results-server-smoke has been successfully uploaded! Final size is 896 bytes. Artifact ID is 13372663022
+2026-11-04T23:33:45.4716829Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/41934595407/artifacts/13372663022
+2026-11-04T23:33:45.5025147Z ##[group]Run python scripts/start_server_on_port.py --port 40451 --stop
+2026-11-04T23:33:45.5026242Z python scripts/start_server_on_port.py --port 40451 --stop
+2026-11-04T23:33:45.5097964Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-04T23:33:45.5098302Z env:
+2026-11-04T23:33:45.5098510Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-04T23:33:45.5099111Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:45.5099604Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-04T23:33:45.5100077Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:45.5100485Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:45.5100896Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-04T23:33:45.5101208Z   SERVER_PID: 1996
+2026-11-04T23:33:45.5101408Z   OPCUA_SERVER_PORT: 40451
+2026-11-04T23:33:45.5101735Z   OPCUA_SERVER_URL: opc.tcp://localhost:40451
+2026-11-04T23:33:45.5102014Z ##[endgroup]
+2026-11-04T23:33:45.9612770Z     Stopped server PID 1996
+2026-11-04T23:33:45.9613097Z     Removed D:\a\_temp\ijt-sim\server_40451
+2026-11-04T23:33:46.1005052Z Post job cleanup.
+2026-11-04T23:33:46.2770743Z Post job cleanup.
+2026-11-04T23:33:46.4904404Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-04T23:33:46.5258569Z git version 2.56.0.windows.4
+2026-11-04T23:33:46.5328088Z Temporarily overriding HOME='D:\a\_temp\b8daef7c-3e38-4b0b-9370-790265decab9' before making global git config changes
+2026-11-04T23:33:46.5329639Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-04T23:33:46.5339487Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-04T23:33:46.5723947Z Removing SSH command configuration
+2026-11-04T23:33:46.5735786Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-04T23:33:46.6165783Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-04T23:33:47.1975692Z Removing HTTP extra header
+2026-11-04T23:33:47.1986522Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-04T23:33:47.2392018Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-04T23:33:47.8065421Z Removing includeIf entries pointing to credentials config files
+2026-11-04T23:33:47.8077290Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-04T23:33:47.8466621Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-04T23:33:48.4544242Z Cleaning up orphan processes

@@ -1,0 +1,578 @@
+﻿2026-11-07T08:19:23.8989214Z Current runner version: '2.338.2'
+2026-11-07T08:19:23.9009786Z ##[group]Runner Image Provisioner
+2026-11-07T08:19:23.9010456Z Hosted Compute Agent
+2026-11-07T08:19:23.9010943Z Version: 20261103.629
+2026-11-07T08:19:23.9011436Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-07T08:19:23.9012089Z Build Date: 2026-11-03T17:26:59Z
+2026-11-07T08:19:23.9012594Z Worker ID: {e1422618-2a46-46d9-b752-2a4ec44b9a0f}
+2026-11-07T08:19:23.9013120Z Region: westus2
+2026-11-07T08:19:23.9013634Z Cloud: Azure
+2026-11-07T08:19:23.9014407Z ##[endgroup]
+2026-11-07T08:19:23.9015497Z ##[group]Operating System
+2026-11-07T08:19:23.9016007Z Microsoft Windows Server 2025
+2026-11-07T08:19:23.9016459Z 10.0.26100
+2026-11-07T08:19:23.9016908Z Datacenter
+2026-11-07T08:19:23.9017356Z ##[endgroup]
+2026-11-07T08:19:23.9017820Z ##[group]Runner Image
+2026-11-07T08:19:23.9018306Z Image: windows-2025-vs2026
+2026-11-07T08:19:23.9018746Z Version: 20261103.298.1
+2026-11-07T08:19:23.9019993Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261103.298/images/windows/Windows2025-VS2026-Readme.md
+2026-11-07T08:19:23.9021323Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261103.298
+2026-11-07T08:19:23.9022103Z ##[endgroup]
+2026-11-07T08:19:23.9023022Z ##[group]GITHUB_TOKEN Permissions
+2026-11-07T08:19:23.9024591Z Contents: read
+2026-11-07T08:19:23.9025058Z Metadata: read
+2026-11-07T08:19:23.9025521Z ##[endgroup]
+2026-11-07T08:19:23.9027108Z Secret source: Actions
+2026-11-07T08:19:23.9027913Z Cache mode: write
+2026-11-07T08:19:23.9028496Z Prepare workflow directory
+2026-11-07T08:19:23.9343807Z Prepare all required actions
+2026-11-07T08:19:23.9385644Z Getting action download info
+2026-11-07T08:19:24.2830475Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-07T08:19:24.3834964Z Download action repository 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-07T08:19:24.6914735Z Download action repository 'actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68' (SHA:a98b56852c35b8e3190ac28c8c2271da59106c68)
+2026-11-07T08:19:25.0061968Z Download action repository 'docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069' (SHA:f87e5991a6d7451dcb8d9637bfbc97413f497069)
+2026-11-07T08:19:25.3465550Z Download action repository 'docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc' (SHA:c3c9e263c25d99ce0380d002d59b67737d91b0dc)
+2026-11-07T08:19:26.1080440Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-07T08:19:26.2973194Z Complete job name: C# OPC UA Security - Windows
+2026-11-07T08:19:26.4216295Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-07T08:19:26.4217601Z with:
+2026-11-07T08:19:26.4218238Z   persist-credentials: false
+2026-11-07T08:19:26.4219015Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-07T08:19:26.4222193Z   token: ***
+2026-11-07T08:19:26.4223127Z   ssh-strict: true
+2026-11-07T08:19:26.4223762Z   ssh-user: git
+2026-11-07T08:19:26.4224340Z   clean: true
+2026-11-07T08:19:26.4224935Z   sparse-checkout-cone-mode: true
+2026-11-07T08:19:26.4225575Z   fetch-depth: 1
+2026-11-07T08:19:26.4226190Z   fetch-tags: false
+2026-11-07T08:19:26.4226784Z   show-progress: true
+2026-11-07T08:19:26.4227371Z   lfs: false
+2026-11-07T08:19:26.4227938Z   submodules: false
+2026-11-07T08:19:26.4228516Z   set-safe-directory: true
+2026-11-07T08:19:26.4229156Z   allow-unsafe-pr-checkout: false
+2026-11-07T08:19:26.4230046Z env:
+2026-11-07T08:19:26.4230639Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-07T08:19:26.4280835Z ##[endgroup]
+2026-11-07T08:19:26.5486802Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-07T08:19:26.5488493Z ##[group]Getting Git version info
+2026-11-07T08:19:26.5489377Z Working directory is 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-07T08:19:26.6176707Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-07T08:19:26.9068894Z git version 2.56.0.windows.4
+2026-11-07T08:19:26.9109825Z ##[endgroup]
+2026-11-07T08:19:26.9122471Z Temporarily overriding HOME='D:\a\_temp\22d6caf9-5384-4ebd-aaa4-be3c3a5c6644' before making global git config changes
+2026-11-07T08:19:26.9123223Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-07T08:19:26.9131040Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-07T08:19:26.9679523Z Deleting the contents of 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-07T08:19:26.9683689Z ##[group]Determining repository object format
+2026-11-07T08:19:26.9685703Z ##[endgroup]
+2026-11-07T08:19:26.9686316Z ##[group]Initializing the repository
+2026-11-07T08:19:26.9696767Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-07T08:19:27.0436457Z Initialized empty Git repository in D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-07T08:19:27.0476523Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-07T08:19:27.1085026Z ##[endgroup]
+2026-11-07T08:19:27.1085752Z ##[group]Disabling automatic garbage collection
+2026-11-07T08:19:27.1093238Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-07T08:19:27.1393648Z ##[endgroup]
+2026-11-07T08:19:27.1394327Z ##[group]Setting up auth
+2026-11-07T08:19:27.1394816Z Removing SSH command configuration
+2026-11-07T08:19:27.1403619Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-07T08:19:27.1712028Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-07T08:19:28.4762408Z Removing HTTP extra header
+2026-11-07T08:19:28.4770665Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-07T08:19:28.5063574Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-07T08:19:28.9679013Z Removing includeIf entries pointing to credentials config files
+2026-11-07T08:19:28.9686050Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-07T08:19:29.0005188Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-07T08:19:29.4601533Z [command]"C:\Program Files\Git\bin\git.exe" config --file D:\a\_temp\git-credentials-bf7491e3-8ec9-4f12-b0f3-2ad373b61446.config http.https://github.com/.extraheader "AUTHORIZATION: basic [REDACTED_AUTH]"
+2026-11-07T08:19:29.4905498Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D:\a\_temp\git-credentials-bf7491e3-8ec9-4f12-b0f3-2ad373b61446.config
+2026-11-07T08:19:29.5202511Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D:\a\_temp\git-credentials-bf7491e3-8ec9-4f12-b0f3-2ad373b61446.config
+2026-11-07T08:19:29.5541029Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-bf7491e3-8ec9-4f12-b0f3-2ad373b61446.config
+2026-11-07T08:19:29.5850904Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-bf7491e3-8ec9-4f12-b0f3-2ad373b61446.config
+2026-11-07T08:19:29.6155990Z ##[endgroup]
+2026-11-07T08:19:29.6156386Z ##[group]Fetching the repository
+2026-11-07T08:19:29.6169979Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +a2e0539a449967b04b0ce3249e18d141d52212b4:refs/remotes/origin/main
+2026-11-07T08:19:32.2629579Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-07T08:19:32.2631281Z  * [new ref]         a2e0539a449967b04b0ce3249e18d141d52212b4 -> origin/main
+2026-11-07T08:19:32.2677173Z [command]"C:\Program Files\Git\bin\git.exe" branch --list --remote origin/main
+2026-11-07T08:19:32.3043319Z   origin/main
+2026-11-07T08:19:32.3082173Z [command]"C:\Program Files\Git\bin\git.exe" rev-parse refs/remotes/origin/main
+2026-11-07T08:19:32.3419573Z a2e0539a449967b04b0ce3249e18d141d52212b4
+2026-11-07T08:19:32.3448927Z ##[endgroup]
+2026-11-07T08:19:32.3449245Z ##[group]Determining the checkout info
+2026-11-07T08:19:32.3449559Z ##[endgroup]
+2026-11-07T08:19:32.3455577Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-07T08:19:32.3837160Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-07T08:19:32.4136185Z ##[group]Checking out the ref
+2026-11-07T08:19:32.4146589Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B main refs/remotes/origin/main
+2026-11-07T08:19:32.8502609Z Switched to a new branch 'main'
+2026-11-07T08:19:32.8596902Z branch 'main' set up to track 'origin/main'.
+2026-11-07T08:19:32.8671296Z ##[endgroup]
+2026-11-07T08:19:32.9091126Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-07T08:19:32.9364548Z a2e0539a449967b04b0ce3249e18d141d52212b4
+2026-11-07T08:19:32.9397842Z ##[group]Removing auth
+2026-11-07T08:19:32.9398107Z Removing SSH command configuration
+2026-11-07T08:19:32.9404268Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-07T08:19:32.9695116Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-07T08:19:33.4517052Z Removing HTTP extra header
+2026-11-07T08:19:33.4524745Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-07T08:19:33.4846600Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-07T08:19:33.9693871Z Removing includeIf entries pointing to credentials config files
+2026-11-07T08:19:33.9700383Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-07T08:19:33.9965221Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-07T08:19:33.9966311Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-07T08:19:33.9966808Z includeif.gitdir:/github/workspace/.git.path
+2026-11-07T08:19:33.9967086Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-07T08:19:34.0005356Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-07T08:19:34.0268661Z D:\a\_temp\git-credentials-bf7491e3-8ec9-4f12-b0f3-2ad373b61446.config
+2026-11-07T08:19:34.0304393Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D\:\\a\\_temp\\git\-credentials\-bf7491e3\-8ec9\-4f12\-b0f3\-2ad373b61446\.config
+2026-11-07T08:19:34.0607356Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-07T08:19:34.0863582Z D:\a\_temp\git-credentials-bf7491e3-8ec9-4f12-b0f3-2ad373b61446.config
+2026-11-07T08:19:34.0899352Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D\:\\a\\_temp\\git\-credentials\-bf7491e3\-8ec9\-4f12\-b0f3\-2ad373b61446\.config
+2026-11-07T08:19:34.1191325Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-07T08:19:34.1448891Z /github/runner_temp/git-credentials-bf7491e3-8ec9-4f12-b0f3-2ad373b61446.config
+2026-11-07T08:19:34.1485657Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-bf7491e3\-8ec9\-4f12\-b0f3\-2ad373b61446\.config
+2026-11-07T08:19:34.1778916Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-07T08:19:34.2033906Z /github/runner_temp/git-credentials-bf7491e3-8ec9-4f12-b0f3-2ad373b61446.config
+2026-11-07T08:19:34.2068066Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-bf7491e3\-8ec9\-4f12\-b0f3\-2ad373b61446\.config
+2026-11-07T08:19:34.2358817Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-07T08:19:34.6788953Z Removing credentials config 'D:\a\_temp\git-credentials-bf7491e3-8ec9-4f12-b0f3-2ad373b61446.config'
+2026-11-07T08:19:34.6798507Z ##[endgroup]
+2026-11-07T08:19:34.7130187Z ##[group]Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+2026-11-07T08:19:34.7130545Z with:
+2026-11-07T08:19:34.7130724Z   python-version-file: .python-version
+2026-11-07T08:19:34.7130942Z   check-latest: false
+2026-11-07T08:19:34.7133188Z   token: ***
+2026-11-07T08:19:34.7133438Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-11-07T08:19:34.7133801Z   update-environment: true
+2026-11-07T08:19:34.7133983Z   allow-prereleases: false
+2026-11-07T08:19:34.7134147Z   freethreaded: false
+2026-11-07T08:19:34.7134303Z env:
+2026-11-07T08:19:34.7134456Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-07T08:19:34.7134658Z ##[endgroup]
+2026-11-07T08:19:34.8334020Z Resolved .python-version as 3.14
+2026-11-07T08:19:34.8335225Z ##[group]Installed versions
+2026-11-07T08:19:34.8498111Z Successfully set up CPython (3.14.10)
+2026-11-07T08:19:34.8498601Z ##[endgroup]
+2026-11-07T08:19:34.8748469Z ##[group]Run actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+2026-11-07T08:19:34.8748817Z with:
+2026-11-07T08:19:34.8748974Z   dotnet-version: 10.0.x
+2026-11-07T08:19:34.8749156Z   cache: false
+2026-11-07T08:19:34.8749291Z env:
+2026-11-07T08:19:34.8749440Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-07T08:19:34.8749708Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:34.8750098Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-07T08:19:34.8750441Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:34.8750743Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:34.8751031Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:34.8751269Z ##[endgroup]
+2026-11-07T08:19:35.0954039Z [command]"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -Sta -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command & 'D:\a\_actions\actions\setup-dotnet\a98b56852c35b8e3190ac28c8c2271da59106c68\externals\install-dotnet.ps1' -SkipNonVersionedFiles -Runtime dotnet -Channel LTS
+2026-11-07T08:19:36.8463347Z dotnet-install: .NET Core Runtime with version '10.0.14' is already installed.
+2026-11-07T08:19:36.9501611Z [command]"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -Sta -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command & 'D:\a\_actions\actions\setup-dotnet\a98b56852c35b8e3190ac28c8c2271da59106c68\externals\install-dotnet.ps1' -SkipNonVersionedFiles -Channel 10.0
+2026-11-07T08:19:37.9773458Z dotnet-install: .NET Core SDK with version '10.0.403' is already installed.
+2026-11-07T08:19:38.0627937Z ##[group]Run Expand-Archive `
+2026-11-07T08:19:38.0628261Z Expand-Archive `
+2026-11-07T08:19:38.0628555Z   -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+2026-11-07T08:19:38.0628919Z   -DestinationPath "OPC_UA_Servers\Release2\" `
+2026-11-07T08:19:38.0629420Z   -Force
+2026-11-07T08:19:38.1098824Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-07T08:19:38.1099106Z env:
+2026-11-07T08:19:38.1099277Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-07T08:19:38.1099558Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:38.1099919Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-07T08:19:38.1100266Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:38.1100569Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:38.1100929Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:38.1101184Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-07T08:19:38.1101378Z ##[endgroup]
+2026-11-07T08:19:38.8946544Z ##[group]Run python run_all_tests.py --opcua-security --opcua-security-target csharp-client-opcua-security-windows --opcua-security-sut windows --junit-xml test-results/opcua-security-csharp-client-opcua-security-windows.xml
+2026-11-07T08:19:38.8947929Z python run_all_tests.py --opcua-security --opcua-security-target csharp-client-opcua-security-windows --opcua-security-sut windows --junit-xml test-results/opcua-security-csharp-client-opcua-security-windows.xml
+2026-11-07T08:19:38.9005483Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-07T08:19:38.9005752Z env:
+2026-11-07T08:19:38.9005914Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-07T08:19:38.9006190Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:38.9006554Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-07T08:19:38.9006906Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:38.9007262Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:38.9007670Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:19:38.9008041Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-07T08:19:38.9008245Z   IJT_OPCUA_SECURITY_SUT: windows
+2026-11-07T08:19:38.9008493Z   IJT_OPCUA_SECURITY_TARGET: csharp-client-opcua-security-windows
+2026-11-07T08:19:38.9008759Z   IJT_DOCKER_COMPOSE_BUILD: 0
+2026-11-07T08:19:38.9008942Z   OPCUA_SERVER_PORT: 40475
+2026-11-07T08:19:38.9009187Z   OPCUA_SERVER_URL: opc.tcp://localhost:40475
+2026-11-07T08:19:38.9009424Z   IJT_SERVER_URL: opc.tcp://localhost:40475
+2026-11-07T08:19:38.9009630Z ##[endgroup]
+2026-11-07T08:19:49.1395508Z   Determining projects to restore...
+2026-11-07T08:20:11.5214733Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.DI\UAModel.DI.csproj (in 20.08 sec).
+2026-11-07T08:20:11.5217312Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.MachineryResult\UAModel.MachineryResult.csproj (in 20.08 sec).
+2026-11-07T08:20:11.5320204Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.Machinery\UAModel.Machinery.csproj (in 20.08 sec).
+2026-11-07T08:20:11.5576389Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.IJTTightening\UAModel.IJTTightening.csproj (in 20.08 sec).
+2026-11-07T08:20:11.5667023Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.AMB\UAModel.AMB.csproj (in 13 ms).
+2026-11-07T08:20:11.5679047Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.IA\UAModel.IA.csproj (in 16 ms).
+2026-11-07T08:20:11.6570317Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.IJTBase\UAModel.IJTBase.csproj (in 26 ms).
+2026-11-07T08:20:18.5059438Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\IJT_CSharp_Client.csproj (in 6.92 sec).
+2026-11-07T08:20:19.9333488Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj (in 8.38 sec).
+2026-11-07T08:24:20.7559469Z 
+2026-11-07T08:24:20.7560157Z ==========================================================
+2026-11-07T08:24:20.7561579Z IJT C# Client � Test Suite   2026-11-07 08:19
+2026-11-07T08:24:20.7563789Z ==========================================================
+2026-11-07T08:24:20.7564176Z dotnet 10.0.403
+2026-11-07T08:24:20.7564514Z [PHASE 1] dotnet restore ............................ PASS
+2026-11-07T08:24:20.7565708Z   UAModel.DI -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\UAModel.DI\release_net10.0\UAModel.DI.dll
+2026-11-07T08:24:20.7567359Z   UAModel.IA -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\UAModel.IA\release_net10.0\UAModel.IA.dll
+2026-11-07T08:24:20.7569135Z   UAModel.AMB -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\UAModel.AMB\release_net10.0\UAModel.AMB.dll
+2026-11-07T08:24:20.7570815Z   UAModel.MachineryResult -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\UAModel.MachineryResult\release_net10.0\UAModel.MachineryResult.dll
+2026-11-07T08:24:20.7572491Z   UAModel.Machinery -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\UAModel.Machinery\release_net10.0\UAModel.Machinery.dll
+2026-11-07T08:24:20.7574064Z   UAModel.IJTBase -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\UAModel.IJTBase\release_net10.0\UAModel.IJTBase.dll
+2026-11-07T08:24:20.7575708Z   UAModel.IJTTightening -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\UAModel.IJTTightening\release_net10.0\UAModel.IJTTightening.dll
+2026-11-07T08:24:20.7577625Z   IJT_CSharp_Client -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client\release\IJT_CSharp_Client.dll
+2026-11-07T08:24:20.7579327Z   IJT_CSharp_Client.Tests -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\IJT_CSharp_Client.Tests.dll
+2026-11-07T08:24:20.7580163Z 
+2026-11-07T08:24:20.7580243Z Build succeeded.
+2026-11-07T08:24:20.7580458Z     0 Warning(s)
+2026-11-07T08:24:20.7580653Z     0 Error(s)
+2026-11-07T08:24:20.7580778Z 
+2026-11-07T08:24:20.7580912Z Time Elapsed 00:00:48.89
+2026-11-07T08:24:20.7581392Z [MATRIX] dotnet build (tests) ....................... PASS (0 warnings)
+2026-11-07T08:24:20.7582519Z Test run for D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\IJT_CSharp_Client.Tests.dll (.NETCoreApp,Version=v10.0)
+2026-11-07T08:24:20.7583529Z A total of 1 test files matched the specified pattern.
+2026-11-07T08:24:20.7583973Z [xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.1+0f7d528729 (64-bit .NET 10.0.14)
+2026-11-07T08:24:20.7584395Z [xUnit.net 00:00:01.21]   Discovering: IJT_CSharp_Client.Tests
+2026-11-07T08:24:20.7584778Z [xUnit.net 00:00:01.51]   Discovered:  IJT_CSharp_Client.Tests
+2026-11-07T08:24:20.7585126Z [xUnit.net 00:00:01.56]   Starting:    IJT_CSharp_Client.Tests
+2026-11-07T08:24:20.7586414Z 08:21:20.110 INFO [ServerFixture] Starting OPC UA server: \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe
+2026-11-07T08:24:20.7587892Z 08:21:20.112 INFO [ServerFixture] Preparing isolated server copy for port 40475. Source executable: \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator\opcua_ijt_demo_application.exe
+2026-11-07T08:24:20.7590103Z 08:21:20.129 INFO [ServerFixture] Isolated server copy prepared. Copied executable: D:\a\_temp\ijt-sim\server-copies\opcua_csharp_40475_7b26fbc9ec314d1baad0657bda60d1bd\opcua_ijt_demo_application.exe, temp directory: D:\a\_temp\ijt-sim\server-copies\opcua_csharp_40475_7b26fbc9ec314d1baad0657bda60d1bd, PKI directory: D:\a\_temp\ijt-sim\server-pki\40475_049580e0
+2026-11-07T08:24:20.7591859Z 08:21:20.140 INFO [ServerFixture] Trusted client application certificate D:\a\_temp\ijt-sim\server-pki\40475_049580e0\DefaultApplicationGroup\trusted\certs\IJT CSharp OPC UA Security Windows [DC4B5646E73F8E77FC513EBD7659BB085FD66332].der for local simulator.
+2026-11-07T08:24:20.7593154Z 08:21:20.141 INFO [ServerFixture] Trusted X509 user-identity certificate D:\a\_temp\ijt-sim\server-pki\40475_049580e0\DefaultUserTokenGroup\trusted\certs\user1.der in DefaultUserTokenGroup for local simulator.
+2026-11-07T08:24:20.7593942Z 08:21:22.239 INFO [ServerFixture] OPC UA probe succeeded on port 40475 (attempt 2/30).
+2026-11-07T08:24:20.7594385Z 08:21:22.239 INFO [ServerFixture] OPC UA server ready on port 40475.
+2026-11-07T08:24:20.7594833Z 08:21:22.360 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7595433Z 08:21:22.360 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7596073Z 08:21:27.527 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7596630Z 08:21:27.528 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7597141Z 08:21:27.535 INFO [AssetManagement] 
+2026-11-07T08:24:20.7597435Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7598158Z 08:21:27.561 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7599637Z 08:21:27.562 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7600809Z 08:21:28.312 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7601305Z 08:21:28.312 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7602555Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.Anonymous_ModernEndpoint_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: Sign, caseName: "Aes128Sha256RsaOaep_Sign") [6 s]
+2026-11-07T08:24:20.7603570Z 08:21:32.409 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7604090Z 08:21:32.409 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7604462Z 08:21:32.409 INFO [AssetManagement] 
+2026-11-07T08:24:20.7604741Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7605487Z 08:21:32.412 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7607060Z 08:21:32.412 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7608846Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.Anonymous_ModernEndpoint_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#None", securityMode: None, caseName: "None_None") [4 s]
+2026-11-07T08:24:20.7609779Z 08:21:32.429 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7610281Z 08:21:32.429 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7610844Z 08:21:36.603 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7611354Z 08:21:36.603 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7611736Z 08:21:36.603 INFO [AssetManagement] 
+2026-11-07T08:24:20.7612021Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7612730Z 08:21:36.606 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7614185Z 08:21:36.606 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7616033Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.Anonymous_ModernEndpoint_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: SignAndEncrypt, caseName: "Aes128Sha256RsaOaep_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7617055Z 08:21:36.621 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7617645Z 08:21:36.621 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7618188Z 08:21:40.775 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7618703Z 08:21:40.775 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7619082Z 08:21:40.775 INFO [AssetManagement] 
+2026-11-07T08:24:20.7619390Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7620096Z 08:21:40.778 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7621568Z 08:21:40.778 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7623329Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.Anonymous_ModernEndpoint_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: Sign, caseName: "Aes256Sha256RsaPss_Sign") [4 s]
+2026-11-07T08:24:20.7624282Z 08:21:40.793 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7624817Z 08:21:40.793 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7625353Z 08:21:44.957 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7625865Z 08:21:44.957 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7626242Z 08:21:44.957 INFO [AssetManagement] 
+2026-11-07T08:24:20.7626523Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7627317Z 08:21:44.960 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7629064Z 08:21:44.960 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7630844Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.Anonymous_ModernEndpoint_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: Sign, caseName: "Basic256Sha256_Sign") [4 s]
+2026-11-07T08:24:20.7631775Z 08:21:44.979 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7632278Z 08:21:44.979 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7632812Z 08:21:49.125 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7633327Z 08:21:49.125 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7633728Z 08:21:49.125 INFO [AssetManagement] 
+2026-11-07T08:24:20.7634006Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7634708Z 08:21:49.128 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7636176Z 08:21:49.128 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7637960Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.Anonymous_ModernEndpoint_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: SignAndEncrypt, caseName: "Aes256Sha256RsaPss_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7639553Z 08:21:49.142 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7640054Z 08:21:49.142 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7640589Z 08:21:53.290 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7641101Z 08:21:53.290 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7641474Z 08:21:53.290 INFO [AssetManagement] 
+2026-11-07T08:24:20.7641751Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7642469Z 08:21:53.293 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7643967Z 08:21:53.293 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7645769Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.Anonymous_ModernEndpoint_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: SignAndEncrypt, caseName: "Basic256Sha256_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7646745Z 08:21:53.311 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7647240Z 08:21:53.311 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7648291Z 08:21:58.449 WARN [ServerFixture] server stdout: 2026-11-07 08:21:58.448 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7649838Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_WrongPassword_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: SignAndEncrypt, caseName: "Basic256Sha256_SignAndEncrypt") [5 s]
+2026-11-07T08:24:20.7650777Z 08:21:58.473 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7651275Z 08:21:58.473 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7652022Z 08:22:02.640 WARN [ServerFixture] server stdout: 2026-11-07 08:21:58.448 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7652922Z 08:22:02.640 WARN [ServerFixture] server stdout: 2026-11-07 08:22:02.638 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7654157Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_WrongPassword_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: SignAndEncrypt, caseName: "Aes128Sha256RsaOaep_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7655099Z 08:22:02.655 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7655615Z 08:22:02.655 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7656377Z 08:22:06.811 WARN [ServerFixture] server stdout: 2026-11-07 08:22:02.638 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7657233Z 08:22:06.811 WARN [ServerFixture] server stdout: 2026-11-07 08:22:06.809 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7658398Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_WrongPassword_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: Sign, caseName: "Aes128Sha256RsaOaep_Sign") [4 s]
+2026-11-07T08:24:20.7659384Z 08:22:06.831 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7659884Z 08:22:06.831 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7660618Z 08:22:11.010 WARN [ServerFixture] server stdout: 2026-11-07 08:22:06.809 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7661477Z 08:22:11.010 WARN [ServerFixture] server stdout: 2026-11-07 08:22:11.009 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7662620Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_WrongPassword_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: Sign, caseName: "Basic256Sha256_Sign") [4 s]
+2026-11-07T08:24:20.7663493Z 08:22:11.027 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7663984Z 08:22:11.027 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7664707Z 08:22:15.195 WARN [ServerFixture] server stdout: 2026-11-07 08:22:11.009 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7665524Z 08:22:15.195 WARN [ServerFixture] server stdout: 2026-11-07 08:22:15.194 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7666698Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_WrongPassword_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: Sign, caseName: "Aes256Sha256RsaPss_Sign") [4 s]
+2026-11-07T08:24:20.7667610Z 08:22:15.216 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7668114Z 08:22:15.216 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7668926Z 08:22:21.261 WARN [ServerFixture] server stdout: 2026-11-07 08:22:15.194 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7670027Z 08:22:21.261 WARN [ServerFixture] server stdout: 2026-11-07 08:22:21.259 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7671293Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_WrongPassword_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: SignAndEncrypt, caseName: "Aes256Sha256RsaPss_SignAndEncrypt") [6 s]
+2026-11-07T08:24:20.7672262Z 08:22:21.281 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7672765Z 08:22:21.281 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7673509Z 08:22:25.447 WARN [ServerFixture] server stdout: 2026-11-07 08:22:21.259 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7674242Z 08:22:25.451 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7674755Z 08:22:25.451 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7675161Z 08:22:25.452 INFO [AssetManagement] 
+2026-11-07T08:24:20.7675446Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7676166Z 08:22:25.454 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7677634Z 08:22:25.454 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7679460Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_HappyPath_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: Sign, caseName: "Aes128Sha256RsaOaep_Sign") [4 s]
+2026-11-07T08:24:20.7680402Z 08:22:25.471 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7680904Z 08:22:25.471 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7681436Z 08:22:29.637 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7681946Z 08:22:29.638 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7682317Z 08:22:29.638 INFO [AssetManagement] 
+2026-11-07T08:24:20.7682596Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7683305Z 08:22:29.640 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7684783Z 08:22:29.640 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7686537Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_HappyPath_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: SignAndEncrypt, caseName: "Basic256Sha256_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7687494Z 08:22:29.660 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7687988Z 08:22:29.660 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7688586Z 08:22:33.845 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7689149Z 08:22:33.845 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7689811Z 08:22:33.845 INFO [AssetManagement] 
+2026-11-07T08:24:20.7690085Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7690787Z 08:22:33.847 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7692235Z 08:22:33.847 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7693980Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_HappyPath_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: Sign, caseName: "Aes256Sha256RsaPss_Sign") [4 s]
+2026-11-07T08:24:20.7694932Z 08:22:33.861 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7695425Z 08:22:33.861 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7695953Z 08:22:38.012 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7696461Z 08:22:38.012 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7696828Z 08:22:38.012 INFO [AssetManagement] 
+2026-11-07T08:24:20.7697103Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7697798Z 08:22:38.015 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7699288Z 08:22:38.015 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7701079Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_HappyPath_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: Sign, caseName: "Basic256Sha256_Sign") [4 s]
+2026-11-07T08:24:20.7701981Z 08:22:38.030 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7702476Z 08:22:38.030 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7703008Z 08:22:43.155 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7703552Z 08:22:43.155 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7703920Z 08:22:43.155 INFO [AssetManagement] 
+2026-11-07T08:24:20.7704193Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7704892Z 08:22:43.158 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7706339Z 08:22:43.158 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7708508Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_HappyPath_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: SignAndEncrypt, caseName: "Aes128Sha256RsaOaep_SignAndEncrypt") [5 s]
+2026-11-07T08:24:20.7709490Z 08:22:43.172 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7709989Z 08:22:43.172 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7710521Z 08:22:47.321 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7711033Z 08:22:47.321 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7711406Z 08:22:47.321 INFO [AssetManagement] 
+2026-11-07T08:24:20.7711685Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7712410Z 08:22:47.323 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7714056Z 08:22:47.323 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7715852Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_HappyPath_ConnectsAndRunsBenignFlow(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: SignAndEncrypt, caseName: "Aes256Sha256RsaPss_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7716968Z 08:22:47.338 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7718011Z 08:22:47.338 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7719010Z 08:22:51.516 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7719874Z 08:22:51.516 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7721948Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_CertificateUserTokenPolicy_UsesEndpointSecurityPolicy(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: Sign, caseName: "Basic256Sha256_Sign") [4 s]
+2026-11-07T08:24:20.7723834Z 08:22:51.543 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7724635Z 08:22:51.543 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7725532Z 08:22:55.719 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7726378Z 08:22:55.719 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7728717Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_CertificateUserTokenPolicy_UsesEndpointSecurityPolicy(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: SignAndEncrypt, caseName: "Aes128Sha256RsaOaep_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7730506Z 08:22:55.739 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7731268Z 08:22:55.739 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7732102Z 08:22:59.885 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7732927Z 08:22:59.885 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7734984Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_CertificateUserTokenPolicy_UsesEndpointSecurityPolicy(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: SignAndEncrypt, caseName: "Basic256Sha256_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7736498Z 08:22:59.901 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7737575Z 08:22:59.901 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7738137Z 08:23:05.909 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7738653Z 08:23:05.909 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7740439Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_CertificateUserTokenPolicy_UsesEndpointSecurityPolicy(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: Sign, caseName: "Aes256Sha256RsaPss_Sign") [7 s]
+2026-11-07T08:24:20.7741868Z 08:23:07.376 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7742365Z 08:23:07.376 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7742898Z 08:23:11.548 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7743415Z 08:23:11.548 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7744626Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_CertificateUserTokenPolicy_UsesEndpointSecurityPolicy(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: Sign, caseName: "Aes128Sha256RsaOaep_Sign") [4 s]
+2026-11-07T08:24:20.7745678Z 08:23:11.565 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7746317Z 08:23:11.565 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7746858Z 08:23:15.673 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7747369Z 08:23:15.673 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7748765Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_CertificateUserTokenPolicy_UsesEndpointSecurityPolicy(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: SignAndEncrypt, caseName: "Aes256Sha256RsaPss_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7750040Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.EndpointUserTokenPolicies_AreHardened [2 s]
+2026-11-07T08:24:20.7750610Z 08:23:17.743 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7751097Z 08:23:17.743 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7751617Z 08:23:21.931 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7752113Z 08:23:21.931 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7752479Z 08:23:21.931 INFO [AssetManagement] 
+2026-11-07T08:24:20.7752768Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7753494Z 08:23:21.934 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7754990Z 08:23:21.934 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7757127Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_KnownThumbprint_user1_OpensSession(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: SignAndEncrypt, caseName: "Aes256Sha256RsaPss_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7758141Z 08:23:21.948 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7758649Z 08:23:21.948 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7759286Z 08:23:26.139 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7759855Z 08:23:26.139 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7760238Z 08:23:26.139 INFO [AssetManagement] 
+2026-11-07T08:24:20.7760525Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7761262Z 08:23:26.142 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7762791Z 08:23:26.142 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7764513Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_KnownThumbprint_user1_OpensSession(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: Sign, caseName: "Aes256Sha256RsaPss_Sign") [5 s]
+2026-11-07T08:24:20.7765444Z 08:23:27.079 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7765936Z 08:23:27.079 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7766637Z 08:23:31.255 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7767154Z 08:23:31.255 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7767527Z 08:23:31.255 INFO [AssetManagement] 
+2026-11-07T08:24:20.7767809Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7768649Z 08:23:31.257 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7770096Z 08:23:31.257 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7771938Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_KnownThumbprint_user1_OpensSession(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: Sign, caseName: "Basic256Sha256_Sign") [5 s]
+2026-11-07T08:24:20.7772852Z 08:23:32.180 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7773348Z 08:23:32.180 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7773875Z 08:23:36.344 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7774385Z 08:23:36.344 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7774755Z 08:23:36.344 INFO [AssetManagement] 
+2026-11-07T08:24:20.7775036Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7775754Z 08:23:36.347 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7777194Z 08:23:36.347 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7778947Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_KnownThumbprint_user1_OpensSession(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: Sign, caseName: "Aes128Sha256RsaOaep_Sign") [4 s]
+2026-11-07T08:24:20.7779968Z 08:23:36.365 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7780502Z 08:23:36.365 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7781033Z 08:23:40.539 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7781546Z 08:23:40.539 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7781913Z 08:23:40.539 INFO [AssetManagement] 
+2026-11-07T08:24:20.7782185Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7782897Z 08:23:40.542 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7784351Z 08:23:40.542 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7786261Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_KnownThumbprint_user1_OpensSession(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: SignAndEncrypt, caseName: "Basic256Sha256_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7787299Z 08:23:40.560 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7787802Z 08:23:40.560 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7788451Z 08:23:44.720 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-07T08:24:20.7788960Z 08:23:44.720 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-07T08:24:20.7789327Z 08:23:44.720 INFO [AssetManagement] 
+2026-11-07T08:24:20.7789632Z -- GetIdentifiers () ------------------------
+2026-11-07T08:24:20.7790434Z 08:23:45.649 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-07T08:24:20.7791905Z 08:23:45.649 INFO [AssetManagement]   -> Full list -> \\?\D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\obj\opcua-security-artifacts\csharp-client-opcua-security-windows\bin\IJT_CSharp_Client.Tests\release\logs\entity_list\entity_list.json
+2026-11-07T08:24:20.7793738Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_KnownThumbprint_user1_OpensSession(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: SignAndEncrypt, caseName: "Aes128Sha256RsaOaep_SignAndEncrypt") [7 s]
+2026-11-07T08:24:20.7794766Z 08:23:47.687 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7795280Z 08:23:47.687 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7795938Z 08:23:51.833 WARN [ServerFixture] server stdout: 2026-11-07 08:23:51.831 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7797164Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_UnknownUser_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: SignAndEncrypt, caseName: "Aes128Sha256RsaOaep_SignAndEncrypt") [4 s]
+2026-11-07T08:24:20.7798082Z 08:23:51.847 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7798570Z 08:23:51.847 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7799321Z 08:23:55.986 WARN [ServerFixture] server stdout: 2026-11-07 08:23:51.831 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7800225Z 08:23:55.986 WARN [ServerFixture] server stdout: 2026-11-07 08:23:55.985 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7801369Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_UnknownUser_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes128_"···, securityMode: Sign, caseName: "Aes128Sha256RsaOaep_Sign") [4 s]
+2026-11-07T08:24:20.7802226Z 08:23:56.004 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7802715Z 08:23:56.004 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7803441Z 08:24:00.188 WARN [ServerFixture] server stdout: 2026-11-07 08:23:55.985 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7804283Z 08:24:00.188 WARN [ServerFixture] server stdout: 2026-11-07 08:24:00.187 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7805390Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_UnknownUser_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: Sign, caseName: "Basic256Sha256_Sign") [4 s]
+2026-11-07T08:24:20.7806260Z 08:24:00.201 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7806851Z 08:24:00.201 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7807589Z 08:24:06.225 WARN [ServerFixture] server stdout: 2026-11-07 08:24:00.187 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7808563Z 08:24:06.225 WARN [ServerFixture] server stdout: 2026-11-07 08:24:06.225 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7809768Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_UnknownUser_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic25"···, securityMode: SignAndEncrypt, caseName: "Basic256Sha256_SignAndEncrypt") [6 s]
+2026-11-07T08:24:20.7811382Z 08:24:06.242 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7811883Z 08:24:06.242 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7812619Z 08:24:11.847 WARN [ServerFixture] server stdout: 2026-11-07 08:24:06.225 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7813445Z 08:24:11.847 WARN [ServerFixture] server stdout: 2026-11-07 08:24:11.847 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7814692Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_UnknownUser_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: SignAndEncrypt, caseName: "Aes256Sha256RsaPss_SignAndEncrypt") [5 s]
+2026-11-07T08:24:20.7815621Z 08:24:11.861 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7816113Z 08:24:11.861 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7816834Z 08:24:16.006 WARN [ServerFixture] server stdout: 2026-11-07 08:24:11.847 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7817649Z 08:24:16.006 WARN [ServerFixture] server stdout: 2026-11-07 08:24:16.006 - WARNING - SimulatorUserIdentityValidator: UserName token rejected.
+2026-11-07T08:24:20.7818802Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.UserName_UnknownUser_IsRejected(securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Aes256_"···, securityMode: Sign, caseName: "Aes256Sha256RsaPss_Sign") [4 s]
+2026-11-07T08:24:20.7819656Z 08:24:16.101 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-07T08:24:20.7820214Z 08:24:16.101 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40475 ...
+2026-11-07T08:24:20.7820952Z 08:24:20.285 WARN [ServerFixture] server stdout: 2026-11-07 08:24:16.006 - WARNING - UserPermissionsProvider: User identity validator rejected UserName token. Status: 0x801F0000
+2026-11-07T08:24:20.7821588Z [xUnit.net 00:03:04.50]   Finished:    IJT_CSharp_Client.Tests
+2026-11-07T08:24:20.7822054Z Data collector 'Blame' message: All tests finished running, Sequence file will not be generated.
+2026-11-07T08:24:20.7822669Z   Passed IJT_CSharp_Client.Tests.OpcUaSecurityTests.X509IdentityToken_UnknownUser_IsRejected [4 s]
+2026-11-07T08:24:20.7823670Z Results File: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\test-results\opcua-security\csharp-client-opcua-security-windows\opcua-security.trx
+2026-11-07T08:24:20.7824315Z 
+2026-11-07T08:24:20.7824434Z Test Run Successful.
+2026-11-07T08:24:20.7824654Z Total tests: 39
+2026-11-07T08:24:20.7824861Z      Passed: 39
+2026-11-07T08:24:20.7825078Z  Total time: 3.1039 Minutes
+2026-11-07T08:24:20.7825489Z [MATRIX] OPC UA Security csharp-client-opcua-security-windows (windows) . PASS (39/39)
+2026-11-07T08:24:20.7825940Z ----------------------------------------------------------
+2026-11-07T08:24:20.7826308Z Result: PASS   Checks: 3 passed, 0 failed, 0 skipped
+2026-11-07T08:24:20.7826750Z Elapsed: 279.8s
+2026-11-07T08:24:20.7826998Z ==========================================================
+2026-11-07T08:24:20.7827162Z 
+2026-11-07T08:24:20.8754929Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-07T08:24:20.8755538Z with:
+2026-11-07T08:24:20.8756114Z   name: results-csharp-client-opcua-security-csharp-client-opcua-security-windows
+2026-11-07T08:24:20.8756856Z   path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
+2026-11-07T08:24:20.8757336Z   retention-days: 14
+2026-11-07T08:24:20.8757663Z   if-no-files-found: warn
+2026-11-07T08:24:20.8758005Z   compression-level: 6
+2026-11-07T08:24:20.8758771Z   overwrite: false
+2026-11-07T08:24:20.8759085Z   include-hidden-files: false
+2026-11-07T08:24:20.8759393Z   archive: true
+2026-11-07T08:24:20.8759690Z env:
+2026-11-07T08:24:20.8759974Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-07T08:24:20.8760464Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:24:20.8761116Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-07T08:24:20.8761855Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:24:20.8762420Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:24:20.8762997Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-07T08:24:20.8763491Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-07T08:24:20.8763867Z ##[endgroup]
+2026-11-07T08:24:21.0216715Z With the provided path, there will be 2 files uploaded
+2026-11-07T08:24:21.0220714Z Artifact name is valid!
+2026-11-07T08:24:21.0221673Z Root directory input is valid!
+2026-11-07T08:24:21.3720813Z Uploading artifact: results-csharp-client-opcua-security-csharp-client-opcua-security-windows.zip
+2026-11-07T08:24:21.3750675Z Beginning upload of artifact content to blob storage
+2026-11-07T08:24:21.6827609Z Uploaded bytes 11447
+2026-11-07T08:24:21.7599589Z Finished uploading artifact content to blob storage!
+2026-11-07T08:24:21.7600438Z SHA256 digest of uploaded artifact is 0aad14fb401ecd3ee2e460c3e7d231af7c54486b5790ec16a4385ce74d6e30ea
+2026-11-07T08:24:21.7602313Z Finalizing artifact upload
+2026-11-07T08:24:22.3235306Z Artifact results-csharp-client-opcua-security-csharp-client-opcua-security-windows successfully finalized. Artifact ID 13566994724
+2026-11-07T08:24:22.3236349Z Artifact results-csharp-client-opcua-security-csharp-client-opcua-security-windows has been successfully uploaded! Final size is 11447 bytes. Artifact ID is 13566994724
+2026-11-07T08:24:22.3243092Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/42354968080/artifacts/13566994724
+2026-11-07T08:24:22.3518121Z Post job cleanup.
+2026-11-07T08:24:22.4903796Z Post job cleanup.
+2026-11-07T08:24:22.6368729Z Post job cleanup.
+2026-11-07T08:24:22.7778539Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-07T08:24:22.8067262Z git version 2.56.0.windows.4
+2026-11-07T08:24:22.8118327Z Temporarily overriding HOME='D:\a\_temp\c18ad124-ef08-47f6-af9b-071cab7ef412' before making global git config changes
+2026-11-07T08:24:22.8118939Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-07T08:24:22.8127342Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-07T08:24:22.8419697Z Removing SSH command configuration
+2026-11-07T08:24:22.8428806Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-07T08:24:22.8729887Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-07T08:24:23.3277172Z Removing HTTP extra header
+2026-11-07T08:24:23.3286036Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-07T08:24:23.3580383Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-07T08:24:23.8189691Z Removing includeIf entries pointing to credentials config files
+2026-11-07T08:24:23.8199234Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-07T08:24:23.8492738Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-07T08:24:24.3274367Z Cleaning up orphan processes

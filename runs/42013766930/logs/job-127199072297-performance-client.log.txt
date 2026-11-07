@@ -1,0 +1,866 @@
+﻿2026-11-05T10:48:57.0990167Z Current runner version: '2.338.2'
+2026-11-05T10:48:57.1017844Z ##[group]Runner Image Provisioner
+2026-11-05T10:48:57.1018800Z Hosted Compute Agent
+2026-11-05T10:48:57.1019470Z Version: 20261021.618
+2026-11-05T10:48:57.1020185Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-11-05T10:48:57.1021270Z Build Date: 2026-10-21T00:45:21Z
+2026-11-05T10:48:57.1022333Z Worker ID: {aca6bc55-8a0b-4c10-a600-1df1b3a64644}
+2026-11-05T10:48:57.1023255Z Region: eastus
+2026-11-05T10:48:57.1023890Z Cloud: Azure
+2026-11-05T10:48:57.1024489Z ##[endgroup]
+2026-11-05T10:48:57.1026453Z ##[group]Operating System
+2026-11-05T10:48:57.1027156Z Ubuntu
+2026-11-05T10:48:57.1027804Z 24.04.5
+2026-11-05T10:48:57.1028399Z LTS
+2026-11-05T10:48:57.1029001Z ##[endgroup]
+2026-11-05T10:48:57.1029730Z ##[group]Runner Image
+2026-11-05T10:48:57.1030400Z Image: ubuntu-24.04
+2026-11-05T10:48:57.1031400Z Version: 20261025.353.1
+2026-11-05T10:48:57.1032833Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261025.353/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-05T10:48:57.1034567Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261025.353
+2026-11-05T10:48:57.1035621Z ##[endgroup]
+2026-11-05T10:48:57.1036889Z ##[group]GITHUB_TOKEN Permissions
+2026-11-05T10:48:57.1039194Z Contents: read
+2026-11-05T10:48:57.1040018Z Metadata: read
+2026-11-05T10:48:57.1040653Z ##[endgroup]
+2026-11-05T10:48:57.1043224Z Secret source: Actions
+2026-11-05T10:48:57.1044400Z Cache mode: write
+2026-11-05T10:48:57.1045488Z Prepare workflow directory
+2026-11-05T10:48:57.1465698Z Prepare all required actions
+2026-11-05T10:48:57.1517301Z Getting action download info
+2026-11-05T10:48:57.4410257Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-05T10:48:57.5454907Z Download action repository 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-05T10:48:57.7307499Z Download action repository 'umati/UA-for-Industrial-Joining-Technologies@66f8ea58c857a96b6e00c58dc56bad2759135679' (SHA:66f8ea58c857a96b6e00c58dc56bad2759135679)
+2026-11-05T10:48:58.4767353Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-05T10:48:58.6858502Z Complete job name: Performance Client
+2026-11-05T10:48:58.7970750Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-05T10:48:58.7972892Z with:
+2026-11-05T10:48:58.7973824Z   persist-credentials: false
+2026-11-05T10:48:58.7975157Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T10:48:58.7985250Z   token: ***
+2026-11-05T10:48:58.7986173Z   ssh-strict: true
+2026-11-05T10:48:58.7987101Z   ssh-user: git
+2026-11-05T10:48:58.7987992Z   clean: true
+2026-11-05T10:48:58.7988940Z   sparse-checkout-cone-mode: true
+2026-11-05T10:48:58.7990059Z   fetch-depth: 1
+2026-11-05T10:48:58.7990981Z   fetch-tags: false
+2026-11-05T10:48:58.7992090Z   show-progress: true
+2026-11-05T10:48:58.7993053Z   lfs: false
+2026-11-05T10:48:58.7993936Z   submodules: false
+2026-11-05T10:48:58.7994896Z   set-safe-directory: true
+2026-11-05T10:48:58.7995985Z   allow-unsafe-pr-checkout: false
+2026-11-05T10:48:58.8077114Z env:
+2026-11-05T10:48:58.8078307Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:48:58.8079645Z ##[endgroup]
+2026-11-05T10:48:59.1300796Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T10:48:59.1303656Z ##[group]Getting Git version info
+2026-11-05T10:48:59.1304873Z Working directory is '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-05T10:48:59.1306609Z [command]/usr/bin/git version
+2026-11-05T10:48:59.1412658Z git version 2.56.0
+2026-11-05T10:48:59.1465304Z ##[endgroup]
+2026-11-05T10:48:59.1471344Z Temporarily overriding HOME='/home/runner/work/_temp/c0dfd6f1-c94e-4365-abc3-df23150a2e0f' before making global git config changes
+2026-11-05T10:48:59.1473384Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-05T10:48:59.1482616Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-05T10:48:59.1546928Z Deleting the contents of '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-05T10:48:59.1581381Z ##[group]Determining repository object format
+2026-11-05T10:48:59.1588560Z ##[endgroup]
+2026-11-05T10:48:59.1589697Z ##[group]Initializing the repository
+2026-11-05T10:48:59.1595290Z [command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-05T10:48:59.1779770Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-05T10:48:59.1783064Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-05T10:48:59.1784066Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-05T10:48:59.1784610Z hint: call:
+2026-11-05T10:48:59.1785004Z hint:
+2026-11-05T10:48:59.1785384Z hint: 	git config --global init.defaultBranch <name>
+2026-11-05T10:48:59.1785795Z hint:
+2026-11-05T10:48:59.1786178Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-05T10:48:59.1786814Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-05T10:48:59.1787302Z hint:
+2026-11-05T10:48:59.1787578Z hint: 	git branch -m <name>
+2026-11-05T10:48:59.1787906Z hint:
+2026-11-05T10:48:59.1788322Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-05T10:48:59.1798605Z Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-05T10:48:59.1850320Z [command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T10:48:59.1902668Z ##[endgroup]
+2026-11-05T10:48:59.1903518Z ##[group]Disabling automatic garbage collection
+2026-11-05T10:48:59.1904336Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-05T10:48:59.1939782Z ##[endgroup]
+2026-11-05T10:48:59.1941398Z ##[group]Setting up auth
+2026-11-05T10:48:59.1942310Z Removing SSH command configuration
+2026-11-05T10:48:59.1948241Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T10:48:59.1998529Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-05T10:48:59.2438882Z Removing HTTP extra header
+2026-11-05T10:48:59.2444827Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T10:48:59.2489320Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-05T10:48:59.2734979Z Removing includeIf entries pointing to credentials config files
+2026-11-05T10:48:59.2740365Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T10:48:59.2785458Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-05T10:48:59.3030182Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-27fe900e-2a82-41ae-b0ec-61d404f31b9c.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+2026-11-05T10:48:59.3079956Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-27fe900e-2a82-41ae-b0ec-61d404f31b9c.config
+2026-11-05T10:48:59.3124692Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-27fe900e-2a82-41ae-b0ec-61d404f31b9c.config
+2026-11-05T10:48:59.3169350Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-27fe900e-2a82-41ae-b0ec-61d404f31b9c.config
+2026-11-05T10:48:59.3214579Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-27fe900e-2a82-41ae-b0ec-61d404f31b9c.config
+2026-11-05T10:48:59.3257095Z ##[endgroup]
+2026-11-05T10:48:59.3257954Z ##[group]Fetching the repository
+2026-11-05T10:48:59.3263784Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +66f8ea58c857a96b6e00c58dc56bad2759135679:refs/remotes/origin/main
+2026-11-05T10:49:00.0440876Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T10:49:00.0442916Z  * [new ref]         66f8ea58c857a96b6e00c58dc56bad2759135679 -> origin/main
+2026-11-05T10:49:00.0454015Z [command]/usr/bin/git branch --list --remote origin/main
+2026-11-05T10:49:00.0495858Z   origin/main
+2026-11-05T10:49:00.0505539Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-11-05T10:49:00.0543857Z 66f8ea58c857a96b6e00c58dc56bad2759135679
+2026-11-05T10:49:00.0549066Z ##[endgroup]
+2026-11-05T10:49:00.0550044Z ##[group]Determining the checkout info
+2026-11-05T10:49:00.0551391Z ##[endgroup]
+2026-11-05T10:49:00.0556383Z [command]/usr/bin/git sparse-checkout disable
+2026-11-05T10:49:00.0623969Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-05T10:49:00.0669022Z ##[group]Checking out the ref
+2026-11-05T10:49:00.0674579Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-05T10:49:00.3045333Z Switched to a new branch 'main'
+2026-11-05T10:49:00.3051864Z branch 'main' set up to track 'origin/main'.
+2026-11-05T10:49:00.3072622Z ##[endgroup]
+2026-11-05T10:49:00.3133168Z [command]/usr/bin/git log -1 --format=%H
+2026-11-05T10:49:00.3173355Z 66f8ea58c857a96b6e00c58dc56bad2759135679
+2026-11-05T10:49:00.3188361Z ##[group]Removing auth
+2026-11-05T10:49:00.3188962Z Removing SSH command configuration
+2026-11-05T10:49:00.3189564Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T10:49:00.3239487Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-05T10:49:00.3487544Z Removing HTTP extra header
+2026-11-05T10:49:00.3491551Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T10:49:00.3538046Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-05T10:49:00.3810023Z Removing includeIf entries pointing to credentials config files
+2026-11-05T10:49:00.3815495Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T10:49:00.3865578Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-05T10:49:00.3867653Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-05T10:49:00.3869064Z includeif.gitdir:/github/workspace/.git.path
+2026-11-05T10:49:00.3869889Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-05T10:49:00.3889536Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-05T10:49:00.3914828Z /home/runner/work/_temp/git-credentials-27fe900e-2a82-41ae-b0ec-61d404f31b9c.config
+2026-11-05T10:49:00.3927464Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-27fe900e\-2a82\-41ae\-b0ec\-61d404f31b9c\.config
+2026-11-05T10:49:00.3983653Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-05T10:49:00.4022450Z /home/runner/work/_temp/git-credentials-27fe900e-2a82-41ae-b0ec-61d404f31b9c.config
+2026-11-05T10:49:00.4030567Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-27fe900e\-2a82\-41ae\-b0ec\-61d404f31b9c\.config
+2026-11-05T10:49:00.4079480Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-05T10:49:00.4120001Z /github/runner_temp/git-credentials-27fe900e-2a82-41ae-b0ec-61d404f31b9c.config
+2026-11-05T10:49:00.4144218Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-27fe900e\-2a82\-41ae\-b0ec\-61d404f31b9c\.config
+2026-11-05T10:49:00.4180412Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-05T10:49:00.4217651Z /github/runner_temp/git-credentials-27fe900e-2a82-41ae-b0ec-61d404f31b9c.config
+2026-11-05T10:49:00.4228229Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-27fe900e\-2a82\-41ae\-b0ec\-61d404f31b9c\.config
+2026-11-05T10:49:00.4281944Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-05T10:49:00.4552762Z Removing credentials config '/home/runner/work/_temp/git-credentials-27fe900e-2a82-41ae-b0ec-61d404f31b9c.config'
+2026-11-05T10:49:00.4564586Z ##[endgroup]
+2026-11-05T10:49:00.4836218Z ##[group]Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+2026-11-05T10:49:00.4836687Z with:
+2026-11-05T10:49:00.4836963Z   python-version-file: .python-version
+2026-11-05T10:49:00.4837309Z   check-latest: false
+2026-11-05T10:49:00.4840080Z   token: ***
+2026-11-05T10:49:00.4840447Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-11-05T10:49:00.4840885Z   update-environment: true
+2026-11-05T10:49:00.4841493Z   allow-prereleases: false
+2026-11-05T10:49:00.4841778Z   freethreaded: false
+2026-11-05T10:49:00.4842033Z env:
+2026-11-05T10:49:00.4842285Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:00.4842598Z ##[endgroup]
+2026-11-05T10:49:00.6044012Z Resolved .python-version as 3.14
+2026-11-05T10:49:00.6045665Z ##[group]Installed versions
+2026-11-05T10:49:00.6130698Z Successfully set up CPython (3.14.9)
+2026-11-05T10:49:00.6131804Z ##[endgroup]
+2026-11-05T10:49:00.6327374Z ##[group]Run umati/UA-for-Industrial-Joining-Technologies/.github/actions/setup-uv-pypi@66f8ea58c857a96b6e00c58dc56bad2759135679
+2026-11-05T10:49:00.6328519Z env:
+2026-11-05T10:49:00.6328937Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:00.6329569Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:00.6330334Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib/pkgconfig
+2026-11-05T10:49:00.6331344Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:00.6331897Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:00.6332356Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:00.6332784Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib
+2026-11-05T10:49:00.6333149Z ##[endgroup]
+2026-11-05T10:49:00.6396996Z ##[start-action display=Install pinned uv from PyPI;id=__self.__run]
+2026-11-05T10:49:00.6462833Z ##[group]Run set -euo pipefail
+2026-11-05T10:49:00.6463821Z set -euo pipefail
+2026-11-05T10:49:00.6464401Z pin_file="${GITHUB_WORKSPACE}/.uv-version"
+2026-11-05T10:49:00.6465040Z if [[ ! -f "${pin_file}" ]]; then
+2026-11-05T10:49:00.6465605Z   echo "Missing ${pin_file}" >&2
+2026-11-05T10:49:00.6466253Z   exit 1
+2026-11-05T10:49:00.6466927Z fi
+2026-11-05T10:49:00.6467711Z version="$(tr -d '[:space:]' < "${pin_file}")"
+2026-11-05T10:49:00.6468815Z if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9._+-]*)?$ ]]; then
+2026-11-05T10:49:00.6469985Z   echo "Invalid .uv-version contents: '${version}'" >&2
+2026-11-05T10:49:00.6470967Z   exit 1
+2026-11-05T10:49:00.6471652Z fi
+2026-11-05T10:49:00.6472550Z python -m pip install --disable-pip-version-check --no-input "uv==${version}"
+2026-11-05T10:49:00.6473871Z installed="$(uv --version | awk '{print $2}')"
+2026-11-05T10:49:00.6474911Z if [[ "${installed}" != "${version}" ]]; then
+2026-11-05T10:49:00.6475901Z   echo "Expected uv ${version}, got ${installed}" >&2
+2026-11-05T10:49:00.6476762Z   exit 1
+2026-11-05T10:49:00.6477177Z fi
+2026-11-05T10:49:00.6477654Z echo "Installed uv ${installed} from PyPI"
+2026-11-05T10:49:00.6590962Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-05T10:49:00.6591624Z env:
+2026-11-05T10:49:00.6591896Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:00.6592305Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:00.6592763Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib/pkgconfig
+2026-11-05T10:49:00.6593221Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:00.6593648Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:00.6594068Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:00.6594490Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib
+2026-11-05T10:49:00.6594891Z ##[endgroup]
+2026-11-05T10:49:03.6885557Z Collecting uv==0.13.7
+2026-11-05T10:49:03.7369580Z   Downloading uv-0.13.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (11 kB)
+2026-11-05T10:49:03.7460652Z Downloading uv-0.13.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (17.2 MB)
+2026-11-05T10:49:03.8510160Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 17.2/17.2 MB 214.9 MB/s  0:00:00
+2026-11-05T10:49:04.0428434Z Installing collected packages: uv
+2026-11-05T10:49:04.2275978Z Successfully installed uv-0.13.7
+2026-11-05T10:49:04.3038780Z Installed uv 0.13.7 from PyPI
+2026-11-05T10:49:04.3057456Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=3665]
+2026-11-05T10:49:04.3094424Z ##[group]Run uv sync --locked
+2026-11-05T10:49:04.3094757Z uv sync --locked
+2026-11-05T10:49:04.3095026Z echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+2026-11-05T10:49:04.3095367Z echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+2026-11-05T10:49:04.3115674Z shell: /usr/bin/bash -e {0}
+2026-11-05T10:49:04.3115921Z env:
+2026-11-05T10:49:04.3116150Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:04.3116508Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:04.3116925Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib/pkgconfig
+2026-11-05T10:49:04.3117335Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:04.3117709Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:04.3118078Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:04.3118442Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib
+2026-11-05T10:49:04.3118779Z ##[endgroup]
+2026-11-05T10:49:04.3743037Z Using CPython 3.14.9 interpreter at: /opt/hostedtoolcache/Python/3.14.9/x64/bin/python3
+2026-11-05T10:49:04.3770080Z Creating virtual environment at: .venv
+2026-11-05T10:49:04.3770615Z Resolved 56 packages in 0.97ms
+2026-11-05T10:49:04.3904397Z    Building ijt-performance-client @ file:///home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client
+2026-11-05T10:49:04.4557382Z Downloading cryptography (4.5MiB)
+2026-11-05T10:49:04.4558135Z Downloading ast-serialize (1.3MiB)
+2026-11-05T10:49:04.4560260Z Downloading pygments (1.2MiB)
+2026-11-05T10:49:04.4627854Z Downloading mypy (14.7MiB)
+2026-11-05T10:49:04.4629902Z Downloading ruff (10.1MiB)
+2026-11-05T10:49:04.4645705Z Downloading pip (1.7MiB)
+2026-11-05T10:49:04.6162696Z  Downloaded ast-serialize
+2026-11-05T10:49:04.6222576Z  Downloaded pygments
+2026-11-05T10:49:04.6378887Z  Downloaded pip
+2026-11-05T10:49:04.6552567Z  Downloaded cryptography
+2026-11-05T10:49:04.7002587Z  Downloaded ruff
+2026-11-05T10:49:04.7955644Z  Downloaded mypy
+2026-11-05T10:49:05.6294683Z       Built ijt-performance-client @ file:///home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client
+2026-11-05T10:49:05.6306473Z Prepared 55 packages in 1.25s
+2026-11-05T10:49:05.6817248Z Installed 55 packages in 50ms
+2026-11-05T10:49:05.6818092Z  + aiosqlite==0.22.1
+2026-11-05T10:49:05.6818623Z  + anyio==4.16.0
+2026-11-05T10:49:05.6819160Z  + ast-serialize==0.13.1
+2026-11-05T10:49:05.6819862Z  + asyncua==2.1.0
+2026-11-05T10:49:05.6820354Z  + bandit==1.9.4
+2026-11-05T10:49:05.6820829Z  + boolean-py==5.0
+2026-11-05T10:49:05.6821606Z  + cachecontrol==0.14.4
+2026-11-05T10:49:05.6822032Z  + certifi==2026.10.23
+2026-11-05T10:49:05.6822388Z  + cffi==2.1.1
+2026-11-05T10:49:05.6822771Z  + charset-normalizer==3.5.2
+2026-11-05T10:49:05.6823201Z  + coverage==7.17.0
+2026-11-05T10:49:05.6823693Z  + cryptography==50.0.2
+2026-11-05T10:49:05.6824292Z  + cyclonedx-python-lib==11.12.0
+2026-11-05T10:49:05.6824797Z  + defusedxml==0.7.1
+2026-11-05T10:49:05.6825270Z  + filelock==4.2.6
+2026-11-05T10:49:05.6825731Z  + idna==3.20
+2026-11-05T10:49:05.6826866Z  + ijt-performance-client==1.0.0 (from file:///home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client)
+2026-11-05T10:49:05.6827887Z  + iniconfig==2.3.1
+2026-11-05T10:49:05.6828352Z  + librt==0.16.0
+2026-11-05T10:49:05.6828848Z  + license-expression==30.4.4
+2026-11-05T10:49:05.6829363Z  + markdown-it-py==4.2.0
+2026-11-05T10:49:05.6829835Z  + mdurl==0.1.2
+2026-11-05T10:49:05.6830293Z  + msgpack==1.2.4
+2026-11-05T10:49:05.6830761Z  + mypy==2.4.1
+2026-11-05T10:49:05.6831496Z  + mypy-extensions==1.1.0
+2026-11-05T10:49:05.6832071Z  + packageurl-python==0.17.6
+2026-11-05T10:49:05.6832563Z  + packaging==26.3
+2026-11-05T10:49:05.6833022Z  + pathspec==1.1.1
+2026-11-05T10:49:05.6833489Z  + pip==26.2.2
+2026-11-05T10:49:05.6834238Z  + pip-api==0.0.35
+2026-11-05T10:49:05.6834681Z  + pip-audit==2.10.1
+2026-11-05T10:49:05.6835195Z  + pip-requirements-parser==32.0.1
+2026-11-05T10:49:05.6835735Z  + platformdirs==4.14.3
+2026-11-05T10:49:05.6836293Z  + pluggy==1.7.0
+2026-11-05T10:49:05.6836655Z  + py-serializable==2.1.0
+2026-11-05T10:49:05.6836903Z  + pycparser==3.12
+2026-11-05T10:49:05.6837108Z  + pygments==2.21.0
+2026-11-05T10:49:05.6837310Z  + pyparsing==3.3.3
+2026-11-05T10:49:05.6837503Z  + pytest==9.2.0
+2026-11-05T10:49:05.6837913Z  + pytest-asyncio==1.4.1.post1
+2026-11-05T10:49:05.6838432Z  + pytest-cov==7.1.0
+2026-11-05T10:49:05.6838929Z  + pytest-timeout==2.4.0
+2026-11-05T10:49:05.6839420Z  + python-dateutil==4.0.0
+2026-11-05T10:49:05.6839900Z  + pytz==2026.6
+2026-11-05T10:49:05.6840349Z  + pyyaml==6.0.3
+2026-11-05T10:49:05.6840804Z  + requests==2.34.2
+2026-11-05T10:49:05.6841519Z  + rich==15.0.0
+2026-11-05T10:49:05.6841890Z  + ruff==0.17.3
+2026-11-05T10:49:05.6842106Z  + sortedcontainers==2.4.0
+2026-11-05T10:49:05.6842344Z  + stevedore==5.9.1
+2026-11-05T10:49:05.6842545Z  + tomli==2.5.0
+2026-11-05T10:49:05.6842755Z  + tomli-w==1.2.0
+2026-11-05T10:49:05.6842966Z  + typing-extensions==4.16.0
+2026-11-05T10:49:05.6843205Z  + tzdata==2026.6
+2026-11-05T10:49:05.6843396Z  + urllib3==2.8.0
+2026-11-05T10:49:05.7044320Z ##[group]Run mkdir -p test-results
+2026-11-05T10:49:05.7044847Z mkdir -p test-results
+2026-11-05T10:49:05.7069733Z shell: /usr/bin/bash -e {0}
+2026-11-05T10:49:05.7069983Z env:
+2026-11-05T10:49:05.7070202Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:05.7070557Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:05.7070980Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib/pkgconfig
+2026-11-05T10:49:05.7071888Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:05.7072303Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:05.7072681Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:05.7073056Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib
+2026-11-05T10:49:05.7073830Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client/.venv
+2026-11-05T10:49:05.7074588Z ##[endgroup]
+2026-11-05T10:49:05.7159415Z ##[group]Run set -o pipefail
+2026-11-05T10:49:05.7159719Z set -o pipefail
+2026-11-05T10:49:05.7159974Z python -m pytest tests/unit/ -v \
+2026-11-05T10:49:05.7160287Z   --junitxml=test-results/pytest.xml \
+2026-11-05T10:49:05.7160571Z   --cov=src \
+2026-11-05T10:49:05.7160834Z   --cov-report=xml:test-results/coverage.xml \
+2026-11-05T10:49:05.7161474Z   --cov-fail-under=95 \
+2026-11-05T10:49:05.7161771Z   2>&1 | tee test-results/pytest-output.txt
+2026-11-05T10:49:05.7180543Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-05T10:49:05.7180868Z env:
+2026-11-05T10:49:05.7181338Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:05.7181685Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:05.7182095Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib/pkgconfig
+2026-11-05T10:49:05.7182509Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:05.7182911Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:05.7183274Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:05.7183639Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib
+2026-11-05T10:49:05.7184404Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client/.venv
+2026-11-05T10:49:05.7185091Z ##[endgroup]
+2026-11-05T10:49:07.8074329Z ============================= test session starts ==============================
+2026-11-05T10:49:07.8076563Z platform linux -- Python 3.14.9, pytest-9.2.0, pluggy-1.7.0 -- /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client/.venv/bin/python
+2026-11-05T10:49:07.8079630Z rootdir: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client
+2026-11-05T10:49:07.8081671Z configfile: pyproject.toml
+2026-11-05T10:49:07.8082569Z plugins: anyio-4.16.0, platformdirs-4.14.3, asyncio-1.4.1.post1, timeout-2.4.0, cov-7.1.0
+2026-11-05T10:49:07.8083729Z asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+2026-11-05T10:49:09.9030751Z collecting ... collected 399 items
+2026-11-05T10:49:09.9031487Z 
+2026-11-05T10:49:09.9112126Z tests/unit/test_attribution.py::test_attribution_healthy PASSED          [  0%]
+2026-11-05T10:49:09.9123546Z tests/unit/test_attribution.py::test_attribution_server_processing_bottleneck PASSED [  0%]
+2026-11-05T10:49:09.9133794Z tests/unit/test_attribution.py::test_attribution_network_bottleneck PASSED [  0%]
+2026-11-05T10:49:09.9141772Z tests/unit/test_attribution.py::test_attribution_no_samples PASSED       [  1%]
+2026-11-05T10:49:09.9151573Z tests/unit/test_attribution.py::test_attribution_clock_drift_and_high_thread_count PASSED [  1%]
+2026-11-05T10:49:09.9161229Z tests/unit/test_attribution.py::test_attribution_mixed_delay PASSED      [  1%]
+2026-11-05T10:49:09.9177140Z tests/unit/test_attribution.py::test_client_processing_rule_needs_wire_timing PASSED [  1%]
+2026-11-05T10:49:09.9189151Z tests/unit/test_attribution.py::test_busy_client_on_one_machine_is_not_blamed_on_the_network PASSED [  2%]
+2026-11-05T10:49:09.9203660Z tests/unit/test_attribution.py::test_loop_lag_alone_marks_the_client_as_busy PASSED [  2%]
+2026-11-05T10:49:09.9213481Z tests/unit/test_attribution.py::test_local_run_never_reports_network_delay PASSED [  2%]
+2026-11-05T10:49:09.9225451Z tests/unit/test_attribution.py::test_network_rule_uses_delivery_time_when_wire_timing_exists PASSED [  2%]
+2026-11-05T10:49:09.9260665Z tests/unit/test_claim.py::test_capacity_intended_always_profile_a PASSED [  3%]
+2026-11-05T10:49:09.9269597Z tests/unit/test_claim.py::test_split_path_unproven_without_topology PASSED [  3%]
+2026-11-05T10:49:09.9278708Z tests/unit/test_claim.py::test_split_path_profile_b_when_verified PASSED [  3%]
+2026-11-05T10:49:09.9286988Z tests/unit/test_claim.py::test_split_path_unproven_when_coverage_unknown PASSED [  3%]
+2026-11-05T10:49:09.9295567Z tests/unit/test_claim.py::test_split_path_unproven_when_coverage_below_threshold PASSED [  4%]
+2026-11-05T10:49:09.9303816Z tests/unit/test_claim.py::test_split_path_unproven_when_clock_quality_bad PASSED [  4%]
+2026-11-05T10:49:09.9311565Z tests/unit/test_claim.py::test_split_path_unproven_when_clock_not_probed PASSED [  4%]
+2026-11-05T10:49:09.9319808Z tests/unit/test_claim.py::test_split_path_unproven_on_loopback_even_with_ids PASSED [  4%]
+2026-11-05T10:49:09.9328345Z tests/unit/test_claim.py::test_auto_intended_promotes_to_b_when_fully_proven PASSED [  5%]
+2026-11-05T10:49:09.9336988Z tests/unit/test_claim.py::test_auto_intended_falls_back_to_a_on_loopback PASSED [  5%]
+2026-11-05T10:49:09.9345376Z tests/unit/test_claim.py::test_endpoint_hosts_extracts_normalized_hosts PASSED [  5%]
+2026-11-05T10:49:09.9354351Z tests/unit/test_claim.py::test_unknown_intended_normalizes_to_auto PASSED [  5%]
+2026-11-05T10:49:09.9374595Z tests/unit/test_cli.py::test_build_parser_defaults PASSED                [  6%]
+2026-11-05T10:49:09.9389664Z tests/unit/test_cli.py::test_build_parser_overrides PASSED               [  6%]
+2026-11-05T10:49:09.9517204Z tests/unit/test_cli.py::test_main_successful_execution PASSED            [  6%]
+2026-11-05T10:49:09.9567464Z tests/unit/test_cli.py::test_main_sla_breach_returns_nonzero PASSED      [  6%]
+2026-11-05T10:49:09.9586283Z tests/unit/test_cli.py::test_main_module_execution PASSED                [  7%]
+2026-11-05T10:49:09.9601473Z tests/unit/test_cli.py::test_package_dunder_main PASSED                  [  7%]
+2026-11-05T10:49:09.9661916Z tests/unit/test_cli.py::test_main_coverage_failure_and_config_loading PASSED [  7%]
+2026-11-05T10:49:09.9720847Z tests/unit/test_cli.py::test_main_default_endpoint_fallback PASSED       [  7%]
+2026-11-05T10:49:09.9824936Z tests/unit/test_cli.py::test_cli_module_entrypoint PASSED                [  8%]
+2026-11-05T10:49:09.9865582Z tests/unit/test_cli.py::test_main_skip_clock_skew_flag PASSED            [  8%]
+2026-11-05T10:49:09.9908003Z tests/unit/test_cli.py::test_main_allow_partial_coverage_flag PASSED     [  8%]
+2026-11-05T10:49:09.9925971Z tests/unit/test_cli.py::test_main_mutually_exclusive_coverage_flags PASSED [  8%]
+2026-11-05T10:49:09.9944721Z tests/unit/test_cli.py::test_cli_version_flag PASSED                     [  9%]
+2026-11-05T10:49:09.9986800Z tests/unit/test_cli.py::test_main_env_var_fallback PASSED                [  9%]
+2026-11-05T10:49:10.0030596Z tests/unit/test_cli.py::test_main_env_var_single_fallback PASSED         [  9%]
+2026-11-05T10:49:10.0069962Z tests/unit/test_cli.py::test_main_workers_flag PASSED                    [  9%]
+2026-11-05T10:49:10.0113569Z tests/unit/test_cli.py::test_main_env_var_workers_fallback PASSED        [ 10%]
+2026-11-05T10:49:10.0136545Z tests/unit/test_cli.py::test_main_env_var_workers_invalid_fails PASSED   [ 10%]
+2026-11-05T10:49:10.0176210Z tests/unit/test_cli.py::test_main_burst_delay_flag PASSED                [ 10%]
+2026-11-05T10:49:10.0218810Z tests/unit/test_cli.py::test_main_env_var_burst_delay PASSED             [ 10%]
+2026-11-05T10:49:10.0241484Z tests/unit/test_cli.py::test_main_env_var_burst_delay_invalid_fails PASSED [ 11%]
+2026-11-05T10:49:10.0286288Z tests/unit/test_cli.py::test_main_csv_report_export PASSED               [ 11%]
+2026-11-05T10:49:10.0329361Z tests/unit/test_cli.py::test_main_allow_partial_samples_flag PASSED      [ 11%]
+2026-11-05T10:49:10.0371711Z tests/unit/test_cli.py::test_main_samples_per_endpoint_and_verbose_flag PASSED [ 11%]
+2026-11-05T10:49:10.0428845Z tests/unit/test_cli.py::test_main_json_exports_fleet_integrity_summary PASSED [ 12%]
+2026-11-05T10:49:10.0437964Z tests/unit/test_cli.py::test_integrity_summary_json_has_no_optimistic_defaults PASSED [ 12%]
+2026-11-05T10:49:10.0508226Z tests/unit/test_cli.py::test_main_clock_tolerance_flag_and_default PASSED [ 12%]
+2026-11-05T10:49:10.0535970Z tests/unit/test_cli.py::test_main_rejects_negative_clock_tolerance PASSED [ 12%]
+2026-11-05T10:49:10.0608399Z tests/unit/test_cli.py::test_main_client_ready_sla_is_separate_from_delivery_sla PASSED [ 13%]
+2026-11-05T10:49:10.0650145Z tests/unit/test_cli.py::test_main_sla_ignores_invalid_results PASSED     [ 13%]
+2026-11-05T10:49:10.0699643Z tests/unit/test_cli.py::test_main_sla_breach_hints_at_single_machine_limit_only_for_local_runs[opc.tcp://localhost:40451-True] PASSED [ 13%]
+2026-11-05T10:49:10.0744767Z tests/unit/test_cli.py::test_main_sla_breach_hints_at_single_machine_limit_only_for_local_runs[opc.tcp://plc-7:4840-False] PASSED [ 13%]
+2026-11-05T10:49:10.0763328Z tests/unit/test_cli.py::test_main_rejects_invalid_client_ready_sla[0] PASSED [ 14%]
+2026-11-05T10:49:10.0782011Z tests/unit/test_cli.py::test_main_rejects_invalid_client_ready_sla[-5] PASSED [ 14%]
+2026-11-05T10:49:10.0800277Z tests/unit/test_cli.py::test_main_rejects_invalid_client_ready_sla[nan] PASSED [ 14%]
+2026-11-05T10:49:10.0855701Z tests/unit/test_cli.py::test_main_settle_timeout_flag PASSED             [ 14%]
+2026-11-05T10:49:10.0880726Z tests/unit/test_cli.py::test_main_serve_fleet_writes_inventory_and_exits PASSED [ 15%]
+2026-11-05T10:49:10.0905048Z tests/unit/test_cli.py::test_main_serve_fleet_without_inventory_write_fails PASSED [ 15%]
+2026-11-05T10:49:10.1015954Z tests/unit/test_cli.py::test_main_client_only_loads_inventory PASSED     [ 15%]
+2026-11-05T10:49:10.1064378Z tests/unit/test_cli.py::test_main_split_path_unproven_marks_junit_failure PASSED [ 15%]
+2026-11-05T10:49:10.1073371Z tests/unit/test_cli.py::test_valid_wire_timing_ratio_with_explicit_summary PASSED [ 16%]
+2026-11-05T10:49:10.1142131Z tests/unit/test_cli.py::test_cli_env_overrides_and_flags PASSED          [ 16%]
+2026-11-05T10:49:10.1219141Z tests/unit/test_cli.py::test_cli_client_only_error_branches PASSED       [ 16%]
+2026-11-05T10:49:10.1279612Z tests/unit/test_cli.py::test_cli_serve_fleet_http_and_interrupt PASSED   [ 16%]
+2026-11-05T10:49:10.1359818Z tests/unit/test_cli.py::test_cli_gate_failures PASSED                    [ 17%]
+2026-11-05T10:49:10.1390820Z tests/unit/test_config.py::test_load_single_server_profile PASSED        [ 17%]
+2026-11-05T10:49:10.1424085Z tests/unit/test_config.py::test_load_multi_server_fleet_profile PASSED   [ 17%]
+2026-11-05T10:49:10.1433729Z tests/unit/test_config.py::test_config_rejects_duplicate_endpoints PASSED [ 17%]
+2026-11-05T10:49:10.1443278Z tests/unit/test_config.py::test_config_rejects_invalid_mode PASSED       [ 18%]
+2026-11-05T10:49:10.1456769Z tests/unit/test_config.py::test_config_rejects_zero_duration PASSED      [ 18%]
+2026-11-05T10:49:10.1468252Z tests/unit/test_config.py::test_config_rejects_malformed_url PASSED      [ 18%]
+2026-11-05T10:49:10.1477424Z tests/unit/test_config.py::test_config_rejects_empty_endpoints PASSED    [ 18%]
+2026-11-05T10:49:10.1518462Z tests/unit/test_config.py::test_config_validation_edge_cases PASSED      [ 19%]
+2026-11-05T10:49:10.1528426Z tests/unit/test_config.py::test_config_name_and_lifecycle_validation PASSED [ 19%]
+2026-11-05T10:49:10.1551564Z tests/unit/test_config.py::test_load_config_port_range_and_thresholds PASSED [ 19%]
+2026-11-05T10:49:10.1587773Z tests/unit/test_config.py::test_load_config_port_range_errors PASSED     [ 19%]
+2026-11-05T10:49:10.1616802Z tests/unit/test_config.py::test_config_strict_validation_coverage PASSED [ 20%]
+2026-11-05T10:49:10.1654935Z tests/unit/test_config.py::test_load_config_package_bundled_fallback PASSED [ 20%]
+2026-11-05T10:49:10.1766695Z tests/unit/test_config.py::test_load_config_smart_resolution PASSED      [ 20%]
+2026-11-05T10:49:10.1787066Z tests/unit/test_config.py::test_load_config_skip_clock_skew_in_execution PASSED [ 20%]
+2026-11-05T10:49:10.1806962Z tests/unit/test_config.py::test_load_config_skip_clock_skew_in_engine PASSED [ 21%]
+2026-11-05T10:49:10.1827028Z tests/unit/test_config.py::test_load_config_require_full_coverage_in_execution PASSED [ 21%]
+2026-11-05T10:49:10.1855613Z tests/unit/test_config.py::test_load_config_from_packaged_resources PASSED [ 21%]
+2026-11-05T10:49:10.1866153Z tests/unit/test_config.py::test_config_rejects_negative_burst_delay PASSED [ 21%]
+2026-11-05T10:49:10.1893586Z tests/unit/test_config.py::test_load_config_burst_delay_seconds PASSED   [ 22%]
+2026-11-05T10:49:10.1912823Z tests/unit/test_config.py::test_load_config_packaged_resources_nested_fallback PASSED [ 22%]
+2026-11-05T10:49:10.1923294Z tests/unit/test_config.py::test_config_rejects_invalid_clock_tolerance[-1.0] PASSED [ 22%]
+2026-11-05T10:49:10.1932930Z tests/unit/test_config.py::test_config_rejects_invalid_clock_tolerance[nan] PASSED [ 22%]
+2026-11-05T10:49:10.1942248Z tests/unit/test_config.py::test_config_rejects_invalid_clock_tolerance[inf] PASSED [ 23%]
+2026-11-05T10:49:10.1962139Z tests/unit/test_config.py::test_load_config_clock_tolerance_from_engine_section PASSED [ 23%]
+2026-11-05T10:49:10.1972749Z tests/unit/test_config.py::test_config_rejects_invalid_fail_thresholds[0.0-fail_p90_ms] PASSED [ 23%]
+2026-11-05T10:49:10.1983997Z tests/unit/test_config.py::test_config_rejects_invalid_fail_thresholds[0.0-fail_p90_client_ready_ms] PASSED [ 23%]
+2026-11-05T10:49:10.1994138Z tests/unit/test_config.py::test_config_rejects_invalid_fail_thresholds[-1.0-fail_p90_ms] PASSED [ 24%]
+2026-11-05T10:49:10.2004517Z tests/unit/test_config.py::test_config_rejects_invalid_fail_thresholds[-1.0-fail_p90_client_ready_ms] PASSED [ 24%]
+2026-11-05T10:49:10.2014687Z tests/unit/test_config.py::test_config_rejects_invalid_fail_thresholds[nan-fail_p90_ms] PASSED [ 24%]
+2026-11-05T10:49:10.2024854Z tests/unit/test_config.py::test_config_rejects_invalid_fail_thresholds[nan-fail_p90_client_ready_ms] PASSED [ 24%]
+2026-11-05T10:49:10.2034841Z tests/unit/test_config.py::test_config_rejects_invalid_fail_thresholds[inf-fail_p90_ms] PASSED [ 25%]
+2026-11-05T10:49:10.2045054Z tests/unit/test_config.py::test_config_rejects_invalid_fail_thresholds[inf-fail_p90_client_ready_ms] PASSED [ 25%]
+2026-11-05T10:49:10.2067539Z tests/unit/test_config.py::test_config_loads_client_ready_threshold_from_yaml PASSED [ 25%]
+2026-11-05T10:49:10.2078027Z tests/unit/test_config.py::test_config_rejects_invalid_settle_timeout[-1.0] PASSED [ 25%]
+2026-11-05T10:49:10.2087459Z tests/unit/test_config.py::test_config_rejects_invalid_settle_timeout[nan] PASSED [ 26%]
+2026-11-05T10:49:10.2096842Z tests/unit/test_config.py::test_config_rejects_invalid_settle_timeout[inf] PASSED [ 26%]
+2026-11-05T10:49:10.2115895Z tests/unit/test_config.py::test_load_config_settle_timeout_seconds PASSED [ 26%]
+2026-11-05T10:49:10.2126129Z tests/unit/test_config.py::test_is_loopback_endpoint[opc.tcp://localhost:40001-True] PASSED [ 26%]
+2026-11-05T10:49:10.2136116Z tests/unit/test_config.py::test_is_loopback_endpoint[opc.tcp://LOCALHOST:40001-True] PASSED [ 27%]
+2026-11-05T10:49:10.2146163Z tests/unit/test_config.py::test_is_loopback_endpoint[opc.tcp://127.0.0.1:40001-True] PASSED [ 27%]
+2026-11-05T10:49:10.2156198Z tests/unit/test_config.py::test_is_loopback_endpoint[opc.tcp://127.10.0.5:40001-True] PASSED [ 27%]
+2026-11-05T10:49:10.2166903Z tests/unit/test_config.py::test_is_loopback_endpoint[opc.tcp://[::1]:40001-True] PASSED [ 27%]
+2026-11-05T10:49:10.2177023Z tests/unit/test_config.py::test_is_loopback_endpoint[opc.tcp://192.168.1.20:40001-False] PASSED [ 28%]
+2026-11-05T10:49:10.2187081Z tests/unit/test_config.py::test_is_loopback_endpoint[opc.tcp://controller-01:4840-False] PASSED [ 28%]
+2026-11-05T10:49:10.2219423Z tests/unit/test_config.py::test_load_schema_v2_work_pc_colocated_profile PASSED [ 28%]
+2026-11-05T10:49:10.2228477Z tests/unit/test_config.py::test_config_rejects_non_positive_inventory_ttl PASSED [ 28%]
+2026-11-05T10:49:10.2247398Z tests/unit/test_config.py::test_schema_v1_rejects_v2_only_keys PASSED    [ 29%]
+2026-11-05T10:49:10.2257036Z tests/unit/test_config.py::test_verify_packaged_profiles PASSED          [ 29%]
+2026-11-05T10:49:10.2271587Z tests/unit/test_config.py::test_config_validation_branches PASSED        [ 29%]
+2026-11-05T10:49:10.2280911Z tests/unit/test_config.py::test_reject_inline_secrets PASSED             [ 29%]
+2026-11-05T10:49:10.2332238Z tests/unit/test_config.py::test_load_config_schema_validation_and_sections PASSED [ 30%]
+2026-11-05T10:49:10.2347198Z tests/unit/test_console_reporter.py::test_print_console_report_empty PASSED [ 30%]
+2026-11-05T10:49:10.2363795Z tests/unit/test_console_reporter.py::test_print_console_report_with_samples PASSED [ 30%]
+2026-11-05T10:49:10.2381255Z tests/unit/test_console_reporter.py::test_print_console_report_per_server PASSED [ 30%]
+2026-11-05T10:49:10.2396570Z tests/unit/test_console_reporter.py::test_print_console_report_excludes_invalid_results_from_statistics PASSED [ 31%]
+2026-11-05T10:49:10.2420495Z tests/unit/test_console_reporter.py::test_enable_ansi_windows PASSED     [ 31%]
+2026-11-05T10:49:10.2441226Z tests/unit/test_console_reporter.py::test_safe_print_branches PASSED     [ 31%]
+2026-11-05T10:49:10.2452959Z tests/unit/test_console_reporter.py::test_safe_print_unicode_encode_error PASSED [ 31%]
+2026-11-05T10:49:10.2469725Z tests/unit/test_console_reporter.py::test_print_console_report_more_than_ten_problematic_endpoints PASSED [ 32%]
+2026-11-05T10:49:10.2489073Z tests/unit/test_console_reporter.py::test_local_host_cpu_is_information_not_action PASSED [ 32%]
+2026-11-05T10:49:10.2497236Z tests/unit/test_effective_config.py::test_tracked_value_to_dict PASSED   [ 32%]
+2026-11-05T10:49:10.2506310Z tests/unit/test_effective_config.py::test_parse_env_int_success_and_error PASSED [ 32%]
+2026-11-05T10:49:10.2515421Z tests/unit/test_effective_config.py::test_parse_env_float_success_and_error PASSED [ 33%]
+2026-11-05T10:49:10.2524743Z tests/unit/test_effective_config.py::test_effective_config_tracker_mark_and_snapshot PASSED [ 33%]
+2026-11-05T10:49:10.2533219Z tests/unit/test_effective_config_env.py::test_parse_env_int_invalid PASSED [ 33%]
+2026-11-05T10:49:10.2541480Z tests/unit/test_effective_config_env.py::test_parse_env_float_invalid PASSED [ 33%]
+2026-11-05T10:49:10.2560932Z tests/unit/test_effective_config_env.py::test_cli_invalid_opcua_workers_exits PASSED [ 34%]
+2026-11-05T10:49:10.6186800Z tests/unit/test_example_report_preview.py::test_example_report_preview_execution PASSED [ 34%]
+2026-11-05T10:49:10.6195669Z tests/unit/test_host_fingerprint.py::test_fingerprint_no_username PASSED [ 34%]
+2026-11-05T10:49:10.6223664Z tests/unit/test_host_fingerprint.py::test_fingerprint_redact_hides_hostname PASSED [ 34%]
+2026-11-05T10:49:10.6233266Z tests/unit/test_host_fingerprint.py::test_fingerprint_no_redact_can_include_network PASSED [ 35%]
+2026-11-05T10:49:10.6240930Z tests/unit/test_host_fingerprint.py::test_generate_host_id_is_deterministic_and_bounded PASSED [ 35%]
+2026-11-05T10:49:10.6252272Z tests/unit/test_host_fingerprint.py::test_total_ram_bytes_posix_fallback PASSED [ 35%]
+2026-11-05T10:49:10.6262842Z tests/unit/test_host_fingerprint.py::test_total_ram_bytes_handles_os_error PASSED [ 35%]
+2026-11-05T10:49:10.6271785Z tests/unit/test_host_fingerprint.py::test_local_ips_filters_loopbacks_and_duplicates PASSED [ 36%]
+2026-11-05T10:49:10.6282369Z tests/unit/test_host_fingerprint.py::test_local_ips_handles_socket_error PASSED [ 36%]
+2026-11-05T10:49:10.6300369Z tests/unit/test_inventory.py::test_inventory_round_trip PASSED           [ 36%]
+2026-11-05T10:49:10.6321308Z tests/unit/test_inventory.py::test_inventory_hash_mismatch PASSED        [ 36%]
+2026-11-05T10:49:10.6342192Z tests/unit/test_inventory.py::test_inventory_expired PASSED              [ 37%]
+2026-11-05T10:49:10.6353687Z tests/unit/test_inventory.py::test_preflight_reserved_ports_overlap PASSED [ 37%]
+2026-11-05T10:49:10.6362975Z tests/unit/test_inventory.py::test_preflight_clean_high_port PASSED      [ 37%]
+2026-11-05T10:49:10.6382543Z tests/unit/test_inventory.py::test_inventory_missing_content_hash PASSED [ 37%]
+2026-11-05T10:49:10.6390819Z tests/unit/test_inventory.py::test_inventory_refuses_bearer_over_plaintext_http PASSED [ 38%]
+2026-11-05T10:49:10.6400881Z tests/unit/test_inventory.py::test_inventory_http_server_rejects_non_loopback_without_flag PASSED [ 38%]
+2026-11-05T10:49:11.1637691Z tests/unit/test_inventory.py::test_inventory_http_server_loopback_roundtrip PASSED [ 38%]
+2026-11-05T10:49:11.1646279Z tests/unit/test_inventory.py::test_effective_config_redacts_token PASSED [ 38%]
+2026-11-05T10:49:11.1656519Z tests/unit/test_inventory.py::test_remaining_ttl_seconds_positive PASSED [ 39%]
+2026-11-05T10:49:11.1666520Z tests/unit/test_inventory.py::test_preflight_http_port_clean PASSED      [ 39%]
+2026-11-05T10:49:11.1675860Z tests/unit/test_inventory.py::test_remaining_ttl_invalid_expires_returns_none PASSED [ 39%]
+2026-11-05T10:49:11.1687399Z tests/unit/test_inventory.py::test_fetch_inventory_url_rejects_redirect PASSED [ 39%]
+2026-11-05T10:49:11.1697784Z tests/unit/test_inventory.py::test_port_appears_busy_when_socket_active PASSED [ 40%]
+2026-11-05T10:49:11.1706975Z tests/unit/test_inventory.py::test_build_inventory_url_port_exception PASSED [ 40%]
+2026-11-05T10:49:11.1734878Z tests/unit/test_inventory.py::test_inventory_load_validation_and_errors PASSED [ 40%]
+2026-11-05T10:49:11.1769671Z tests/unit/test_inventory.py::test_reject_redirects_handler PASSED       [ 40%]
+2026-11-05T10:49:11.1781382Z tests/unit/test_inventory.py::test_preflight_port_range_busy_overflow PASSED [ 41%]
+2026-11-05T10:49:11.1791579Z tests/unit/test_inventory.py::test_inventory_http_server_remote_requires_token PASSED [ 41%]
+2026-11-05T10:49:11.1800878Z tests/unit/test_inventory.py::test_inventory_handler_status_codes PASSED [ 41%]
+2026-11-05T10:49:11.2007452Z tests/unit/test_load_behavior.py::test_measurement_window_grows_only_when_the_cap_splits_a_round PASSED [ 41%]
+2026-11-05T10:49:11.2072642Z tests/unit/test_load_behavior.py::test_measurement_window_uses_the_worker_count_the_pool_will_start PASSED [ 42%]
+2026-11-05T10:49:11.2135984Z tests/unit/test_load_behavior.py::test_default_fleet_mode_stays_both_and_a_passive_profile_is_honored PASSED [ 42%]
+2026-11-05T10:49:11.2163483Z tests/unit/test_load_behavior.py::test_controller_profile_is_listen_only_and_anonymous PASSED [ 42%]
+2026-11-05T10:49:11.2203252Z tests/unit/test_load_behavior.py::test_secure_profile_without_a_certificate_fails_before_connect PASSED [ 42%]
+2026-11-05T10:49:11.2214654Z tests/unit/test_load_behavior.py::test_failed_clock_probe_excludes_an_otherwise_valid_sample_from_statistics PASSED [ 43%]
+2026-11-05T10:49:11.2236109Z tests/unit/test_load_behavior.py::test_mistyped_security_key_does_not_load_as_anonymous PASSED [ 43%]
+2026-11-05T10:49:11.2257124Z tests/unit/test_load_behavior.py::test_inline_password_is_rejected PASSED [ 43%]
+2026-11-05T10:49:11.2266900Z tests/unit/test_load_behavior.py::test_certificates_or_user_identity_without_a_secure_channel_fail PASSED [ 43%]
+2026-11-05T10:49:11.2284849Z tests/unit/test_load_behavior.py::test_relative_certificate_path_without_a_profile_directory_is_refused PASSED [ 44%]
+2026-11-05T10:49:11.2300496Z tests/unit/test_load_behavior.py::test_session_policy_sets_the_request_timeout_and_watchdog PASSED [ 44%]
+2026-11-05T10:49:11.2337498Z tests/unit/test_load_behavior.py::test_apply_connection_security_is_a_noop_for_anonymous PASSED [ 44%]
+2026-11-05T10:49:11.2358388Z tests/unit/test_load_behavior.py::test_connection_security_rejects_unsupported_policy_and_auth PASSED [ 44%]
+2026-11-05T10:49:11.2368109Z tests/unit/test_load_behavior.py::test_environment_credentials_resolve_without_leaking_the_password PASSED [ 45%]
+2026-11-05T10:49:11.2434914Z tests/unit/test_load_behavior.py::test_apply_connection_security_sets_channel_and_user PASSED [ 45%]
+2026-11-05T10:49:11.2467855Z tests/unit/test_load_behavior.py::test_apply_trust_store_installs_a_certificate_validator PASSED [ 45%]
+2026-11-05T10:49:11.2477594Z tests/unit/test_load_behavior.py::test_effective_config_redacts_connection_security_and_tokens PASSED [ 45%]
+2026-11-05T10:49:11.2498336Z tests/unit/test_load_behavior.py::test_connection_security_validation_edge_cases PASSED [ 46%]
+2026-11-05T10:49:11.2506918Z tests/unit/test_namespaces.py::test_namespace_constants PASSED           [ 46%]
+2026-11-05T10:49:11.2524606Z tests/unit/test_namespaces.py::test_resolve_namespace_index_found PASSED [ 46%]
+2026-11-05T10:49:11.2540821Z tests/unit/test_namespaces.py::test_resolve_namespace_index_not_found PASSED [ 46%]
+2026-11-05T10:49:11.2577676Z tests/unit/test_namespaces.py::test_read_namespace_metadata_finds_matching_namespace PASSED [ 47%]
+2026-11-05T10:49:11.2606141Z tests/unit/test_namespaces.py::test_read_namespace_metadata_missing_values_are_none PASSED [ 47%]
+2026-11-05T10:49:11.2637841Z tests/unit/test_namespaces.py::test_read_namespace_metadata_child_uri_error PASSED [ 47%]
+2026-11-05T10:49:11.2679043Z tests/unit/test_opcua_client_pool.py::test_find_child PASSED             [ 47%]
+2026-11-05T10:49:11.2703765Z tests/unit/test_opcua_client_pool.py::test_locate_simulate_method PASSED [ 48%]
+2026-11-05T10:49:11.2718126Z tests/unit/test_opcua_client_pool.py::test_durable_worker_sub_handler PASSED [ 48%]
+2026-11-05T10:49:11.2731268Z tests/unit/test_opcua_client_pool.py::test_fleet_client_pool_init_and_sharding PASSED [ 48%]
+2026-11-05T10:49:11.2749486Z tests/unit/test_opcua_client_pool.py::test_fleet_client_pool_collect_samples_and_coverage PASSED [ 48%]
+2026-11-05T10:49:11.2764910Z tests/unit/test_opcua_client_pool.py::test_fleet_client_pool_coverage_failures PASSED [ 49%]
+2026-11-05T10:49:11.3150350Z tests/unit/test_opcua_client_pool.py::test_fleet_client_pool_stop PASSED [ 49%]
+2026-11-05T10:49:11.3319177Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_mocked PASSED [ 49%]
+2026-11-05T10:49:11.3489620Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_active_burst PASSED [ 49%]
+2026-11-05T10:49:11.5039781Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_connection_exhaustion PASSED [ 50%]
+2026-11-05T10:49:11.5060980Z tests/unit/test_opcua_client_pool.py::test_worker_process_entry_calls_event_loop PASSED [ 50%]
+2026-11-05T10:49:11.5083415Z tests/unit/test_opcua_client_pool.py::test_worker_process_entry_handles_exception PASSED [ 50%]
+2026-11-05T10:49:11.5107626Z tests/unit/test_opcua_client_pool.py::test_stop_preserves_final_batch_samples PASSED [ 50%]
+2026-11-05T10:49:11.5119726Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_detects_missing_done PASSED [ 51%]
+2026-11-05T10:49:11.5145642Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_detects_nonzero_exitcode PASSED [ 51%]
+2026-11-05T10:49:11.5292189Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_detects_forced_termination PASSED [ 51%]
+2026-11-05T10:49:11.6870434Z tests/unit/test_opcua_client_pool.py::test_partial_subscription_cleanup_on_connect_failure PASSED [ 51%]
+2026-11-05T10:49:11.6897245Z tests/unit/test_opcua_client_pool.py::test_fleet_client_pool_start PASSED [ 52%]
+2026-11-05T10:49:13.1369646Z tests/unit/test_opcua_client_pool.py::test_real_spawn_worker_emits_status_and_done_without_network PASSED [ 52%]
+2026-11-05T10:49:13.1400228Z tests/unit/test_opcua_client_pool.py::test_find_child_edge_cases PASSED  [ 52%]
+2026-11-05T10:49:13.1428156Z tests/unit/test_opcua_client_pool.py::test_locate_simulate_method_none_branches PASSED [ 52%]
+2026-11-05T10:49:13.1551776Z tests/unit/test_opcua_client_pool.py::test_fleet_client_pool_edge_cases PASSED [ 53%]
+2026-11-05T10:49:13.2878245Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_retries_and_burst PASSED [ 53%]
+2026-11-05T10:49:13.2934234Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_ns_missing_and_retry_backoff PASSED [ 53%]
+2026-11-05T10:49:13.4497926Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_stop_before_connect_and_sub_delete_error PASSED [ 53%]
+2026-11-05T10:49:13.4518274Z tests/unit/test_opcua_client_pool.py::test_worker_process_entry_crash_reporting PASSED [ 54%]
+2026-11-05T10:49:13.4540909Z tests/unit/test_opcua_client_pool.py::test_pool_stop_sets_stop_event PASSED [ 54%]
+2026-11-05T10:49:14.4828233Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_method_connect_fail_and_buffer_flush PASSED [ 54%]
+2026-11-05T10:49:14.4851444Z tests/unit/test_opcua_client_pool.py::test_fleet_client_pool_start_with_empty_shard PASSED [ 54%]
+2026-11-05T10:49:14.5064273Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_periodic_flush_triggered PASSED [ 55%]
+2026-11-05T10:49:14.5077564Z tests/unit/test_opcua_client_pool.py::test_durable_handler_buffer_overflow PASSED [ 55%]
+2026-11-05T10:49:14.5089802Z tests/unit/test_opcua_client_pool.py::test_pool_max_workers_validation PASSED [ 55%]
+2026-11-05T10:49:14.5106761Z tests/unit/test_opcua_client_pool.py::test_pool_max_workers_autoscaling PASSED [ 55%]
+2026-11-05T10:49:14.5123925Z tests/unit/test_opcua_client_pool.py::test_pool_stop_idempotent_and_queue_cleanup PASSED [ 56%]
+2026-11-05T10:49:14.5136847Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_dropped_samples_and_burst_failures PASSED [ 56%]
+2026-11-05T10:49:14.5148027Z tests/unit/test_opcua_client_pool.py::test_dropped_sample_totals_are_cumulative_not_additive PASSED [ 56%]
+2026-11-05T10:49:14.5159419Z tests/unit/test_opcua_client_pool.py::test_process_queue_msg_restores_audit_and_clamping_fields PASSED [ 56%]
+2026-11-05T10:49:14.5227508Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_teardown_and_burst_failure_coverage PASSED [ 57%]
+2026-11-05T10:49:14.5239088Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_warning_when_partial_coverage_allowed PASSED [ 57%]
+2026-11-05T10:49:14.5253739Z tests/unit/test_opcua_client_pool.py::test_collect_samples_queue_error_raises_runtime_error PASSED [ 57%]
+2026-11-05T10:49:14.5316086Z tests/unit/test_opcua_client_pool.py::test_stop_queue_error_handling PASSED [ 57%]
+2026-11-05T10:49:14.5328559Z tests/unit/test_opcua_client_pool.py::test_pool_burst_delay_validation PASSED [ 58%]
+2026-11-05T10:49:14.6579460Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_connection_exception_and_method_cache_hit PASSED [ 58%]
+2026-11-05T10:49:14.7650259Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_method_not_found_and_burst_task_error PASSED [ 58%]
+2026-11-05T10:49:14.8826441Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_burst_task_exception_and_teardown_timeout PASSED [ 58%]
+2026-11-05T10:49:14.8839087Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_target_sample_count_shortfall_strict PASSED [ 59%]
+2026-11-05T10:49:14.8850188Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_target_sample_count_shortfall_warning PASSED [ 59%]
+2026-11-05T10:49:14.8861750Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_target_sample_count_shortfall_single_server_fails_by_default PASSED [ 59%]
+2026-11-05T10:49:14.8873347Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_target_sample_count_satisfied PASSED [ 59%]
+2026-11-05T10:49:15.0145986Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_candidate_verification_failure_fallback PASSED [ 60%]
+2026-11-05T10:49:15.1430828Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_method_setup_ns_missing_error PASSED [ 60%]
+2026-11-05T10:49:15.1444510Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_per_endpoint_sample_shortfall PASSED [ 60%]
+2026-11-05T10:49:15.1456705Z tests/unit/test_opcua_client_pool.py::test_collect_samples_non_finite_timing_validation PASSED [ 60%]
+2026-11-05T10:49:15.3035755Z tests/unit/test_opcua_client_pool.py::test_worker_event_loop_mixed_namespace_collision PASSED [ 61%]
+2026-11-05T10:49:15.3047280Z tests/unit/test_opcua_client_pool.py::test_client_pool_connect_concurrency_partitioning PASSED [ 61%]
+2026-11-05T10:49:15.3059504Z tests/unit/test_opcua_client_pool.py::test_durable_worker_handler_deduplicates_result_ids PASSED [ 61%]
+2026-11-05T10:49:15.3076728Z tests/unit/test_opcua_client_pool.py::test_evaluate_fleet_integrity_and_verify_coverage_gate PASSED [ 61%]
+2026-11-05T10:49:15.3085816Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_allow_partial_relaxes_only_counts PASSED [ 62%]
+2026-11-05T10:49:15.3097373Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_records_run_failures_in_integrity_summary PASSED [ 62%]
+2026-11-05T10:49:15.3108780Z tests/unit/test_opcua_client_pool.py::test_process_queue_msg_merges_cumulative_endpoint_stats PASSED [ 62%]
+2026-11-05T10:49:15.3121263Z tests/unit/test_opcua_client_pool.py::test_pool_rejects_invalid_clock_tolerance[-1.0] PASSED [ 62%]
+2026-11-05T10:49:15.3133305Z tests/unit/test_opcua_client_pool.py::test_pool_rejects_invalid_clock_tolerance[nan] PASSED [ 63%]
+2026-11-05T10:49:15.3145166Z tests/unit/test_opcua_client_pool.py::test_pool_rejects_invalid_clock_tolerance[inf] PASSED [ 63%]
+2026-11-05T10:49:15.3156539Z tests/unit/test_opcua_client_pool.py::test_clock_warnings_are_counted_but_never_fail_the_gate PASSED [ 63%]
+2026-11-05T10:49:15.3168118Z tests/unit/test_opcua_client_pool.py::test_durable_worker_handler_forwards_clock_tolerance_and_rtt PASSED [ 63%]
+2026-11-05T10:49:15.3181788Z tests/unit/test_opcua_client_pool.py::test_durable_worker_handler_uses_wire_timing_from_publish_hooks PASSED [ 64%]
+2026-11-05T10:49:15.3197611Z tests/unit/test_opcua_client_pool.py::test_pool_timing_summary_and_missing_hook_warning PASSED [ 64%]
+2026-11-05T10:49:15.6523751Z tests/unit/test_opcua_client_pool.py::test_worker_settles_until_timeout_when_results_are_missing PASSED [ 64%]
+2026-11-05T10:49:15.6537021Z tests/unit/test_opcua_client_pool.py::test_active_burst_marks_results_before_first_successful_call_unmatched PASSED [ 64%]
+2026-11-05T10:49:15.6549067Z tests/unit/test_opcua_client_pool.py::test_active_burst_without_successful_call_marks_all_unmatched PASSED [ 65%]
+2026-11-05T10:49:15.6568149Z tests/unit/test_opcua_client_pool.py::test_call_result_correlation[active_burst-2-2-True-] PASSED [ 65%]
+2026-11-05T10:49:15.6585026Z tests/unit/test_opcua_client_pool.py::test_call_result_correlation[active_burst-1-2-False-fewer VALID results than successful trigger calls] PASSED [ 65%]
+2026-11-05T10:49:15.6601276Z tests/unit/test_opcua_client_pool.py::test_call_result_correlation[active_burst-3-2-False-more VALID results than successful trigger calls] PASSED [ 65%]
+2026-11-05T10:49:15.6617398Z tests/unit/test_opcua_client_pool.py::test_call_result_correlation[both-1-2-False-fewer VALID results than successful trigger calls] PASSED [ 66%]
+2026-11-05T10:49:15.6633871Z tests/unit/test_opcua_client_pool.py::test_call_result_correlation[both-3-2-True-1 external event(s)] PASSED [ 66%]
+2026-11-05T10:49:15.6649249Z tests/unit/test_opcua_client_pool.py::test_call_result_correlation[passive-0-5-True-] PASSED [ 66%]
+2026-11-05T10:49:15.6662229Z tests/unit/test_opcua_client_pool.py::test_pool_settle_timeout_validation_and_stop_drain_default PASSED [ 66%]
+2026-11-05T10:49:15.6674831Z tests/unit/test_opcua_client_pool.py::test_namespace_metadata_consistent_passes_and_is_reported PASSED [ 67%]
+2026-11-05T10:49:15.6686998Z tests/unit/test_opcua_client_pool.py::test_namespace_version_mismatch_fails_even_with_partial_samples PASSED [ 67%]
+2026-11-05T10:49:15.6699139Z tests/unit/test_opcua_client_pool.py::test_namespace_metadata_absent_is_unverified_warning_only PASSED [ 67%]
+2026-11-05T10:49:15.8892791Z tests/unit/test_opcua_client_pool.py::test_worker_rejects_second_endpoint_with_different_ijt_namespace_index PASSED [ 67%]
+2026-11-05T10:49:15.8907905Z tests/unit/test_opcua_client_pool.py::test_triggers_pending_until_every_live_worker_reports PASSED [ 68%]
+2026-11-05T10:49:15.8920106Z tests/unit/test_opcua_client_pool.py::test_triggers_not_pending_in_passive_mode_or_without_rounds PASSED [ 68%]
+2026-11-05T10:49:15.8931559Z tests/unit/test_opcua_client_pool.py::test_triggers_done_merges_call_stats PASSED [ 68%]
+2026-11-05T10:49:15.8943360Z tests/unit/test_opcua_client_pool.py::test_done_records_rounds_without_overriding_triggers_done PASSED [ 68%]
+2026-11-05T10:49:16.1966026Z tests/unit/test_opcua_client_pool.py::test_collect_samples_waits_past_duration_for_pending_triggers PASSED [ 69%]
+2026-11-05T10:49:16.1979621Z tests/unit/test_opcua_client_pool.py::test_collect_samples_target_reached_still_waits_for_triggers PASSED [ 69%]
+2026-11-05T10:49:16.5003576Z tests/unit/test_opcua_client_pool.py::test_collect_samples_extension_is_bounded PASSED [ 69%]
+2026-11-05T10:49:16.5018053Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_reports_incomplete_trigger_rounds_first PASSED [ 69%]
+2026-11-05T10:49:16.5033115Z tests/unit/test_opcua_client_pool.py::test_verify_coverage_passes_trigger_check_when_all_rounds_fired PASSED [ 70%]
+2026-11-05T10:49:16.6108404Z tests/unit/test_opcua_client_pool.py::test_worker_reports_triggers_done_and_skips_pause_after_last_round PASSED [ 70%]
+2026-11-05T10:49:16.6180460Z tests/unit/test_opcua_client_pool.py::test_worker_stopped_early_reports_fewer_rounds PASSED [ 70%]
+2026-11-05T10:49:16.6192210Z tests/unit/test_opcua_client_pool.py::test_process_queue_msg_invalid_endpoint_stats PASSED [ 70%]
+2026-11-05T10:49:16.6204631Z tests/unit/test_opcua_client_pool.py::test_mark_unmatched_before_first_call_ignores_non_valid PASSED [ 71%]
+2026-11-05T10:49:16.6298659Z tests/unit/test_project_runner.py::test_runner_sync_uses_managed_uv_and_selected_environment[True] PASSED [ 71%]
+2026-11-05T10:49:16.6387533Z tests/unit/test_project_runner.py::test_runner_sync_uses_managed_uv_and_selected_environment[False] PASSED [ 71%]
+2026-11-05T10:49:16.6472812Z tests/unit/test_project_runner.py::test_runner_phase2_preflight_validation PASSED [ 71%]
+2026-11-05T10:49:16.6557598Z tests/unit/test_project_runner.py::test_runner_invalid_port_range_exits_before_any_step PASSED [ 72%]
+2026-11-05T10:49:16.6648709Z tests/unit/test_project_runner.py::test_live_runner_requires_mandatory_benchmarks PASSED [ 72%]
+2026-11-05T10:49:16.6745511Z tests/unit/test_project_runner.py::test_live_runner_rejects_skipped_mandatory_benchmarks PASSED [ 72%]
+2026-11-05T10:49:16.6809427Z tests/unit/test_project_runner.py::test_mandatory_live_metrics_require_nonzero_samples PASSED [ 72%]
+2026-11-05T10:49:16.6896147Z tests/unit/test_project_runner.py::test_extract_pytest_summary PASSED    [ 73%]
+2026-11-05T10:49:16.6981500Z tests/unit/test_project_runner.py::test_project_runner_parser PASSED     [ 73%]
+2026-11-05T10:49:16.7046707Z tests/unit/test_project_runner.py::test_run_fleet_parser_and_worker_forwarding PASSED [ 73%]
+2026-11-05T10:49:16.7118844Z tests/unit/test_project_runner.py::test_run_fleet_uses_lock_pinned_runtime_venv PASSED [ 73%]
+2026-11-05T10:49:16.7178992Z tests/unit/test_project_runner.py::test_validate_fleet_args PASSED       [ 74%]
+2026-11-05T10:49:16.7240210Z tests/unit/test_project_runner.py::test_build_client_cli_args_shared_for_client_only_and_colocated PASSED [ 74%]
+2026-11-05T10:49:16.7327552Z tests/unit/test_project_runner.py::test_fleet_status_lines_carry_log_style_timestamps PASSED [ 74%]
+2026-11-05T10:49:16.7336751Z tests/unit/test_report_outcome.py::test_summarize_scale_uniform_product PASSED [ 74%]
+2026-11-05T10:49:16.7345776Z tests/unit/test_report_outcome.py::test_summarize_scale_uneven_with_target PASSED [ 75%]
+2026-11-05T10:49:16.7355322Z tests/unit/test_report_outcome.py::test_outcome_ok_when_healthy_under_comfort PASSED [ 75%]
+2026-11-05T10:49:16.7365304Z tests/unit/test_report_outcome.py::test_outcome_information_for_local_host_cpu_under_500 PASSED [ 75%]
+2026-11-05T10:49:16.7374761Z tests/unit/test_report_outcome.py::test_outcome_information_when_p90_above_comfort_without_sla PASSED [ 75%]
+2026-11-05T10:49:16.7383845Z tests/unit/test_report_outcome.py::test_outcome_action_needed_on_fail_p90 PASSED [ 76%]
+2026-11-05T10:49:16.7397645Z tests/unit/test_report_outcome.py::test_outcome_action_needed_on_integrity_shortfall PASSED [ 76%]
+2026-11-05T10:49:16.7414997Z tests/unit/test_reporters.py::test_junit_reporter_handles_empty_samples PASSED [ 76%]
+2026-11-05T10:49:16.7432093Z tests/unit/test_reporters.py::test_markdown_and_json_reporters_empty_samples PASSED [ 76%]
+2026-11-05T10:49:16.7442193Z tests/unit/test_reporters.py::test_markdown_report_with_warnings_and_samples PASSED [ 77%]
+2026-11-05T10:49:16.7458298Z tests/unit/test_reporters.py::test_junit_reporter_with_worker_errors PASSED [ 77%]
+2026-11-05T10:49:16.7485659Z tests/unit/test_reporters.py::test_markdown_and_json_per_server_reporting PASSED [ 77%]
+2026-11-05T10:49:16.7501995Z tests/unit/test_reporters.py::test_csv_reporter_exports_rows PASSED      [ 77%]
+2026-11-05T10:49:16.7519463Z tests/unit/test_reporters.py::test_reporters_render_integrity_breakdown_tables PASSED [ 78%]
+2026-11-05T10:49:16.7543080Z tests/unit/test_reporters.py::test_json_and_csv_include_wire_timing_and_valid_only_statistics PASSED [ 78%]
+2026-11-05T10:49:16.7553616Z tests/unit/test_reporters.py::test_format_clock_offset[None-not measured] PASSED [ 78%]
+2026-11-05T10:49:16.7564092Z tests/unit/test_reporters.py::test_format_clock_offset[0.0-0.0 ms (in sync)] PASSED [ 78%]
+2026-11-05T10:49:16.7574467Z tests/unit/test_reporters.py::test_format_clock_offset[12.04-+12.0 ms (server ahead)] PASSED [ 79%]
+2026-11-05T10:49:16.7584685Z tests/unit/test_reporters.py::test_format_clock_offset[-3.5--3.5 ms (server behind)] PASSED [ 79%]
+2026-11-05T10:49:16.7614579Z tests/unit/test_reporters.py::test_reports_hide_rows_that_only_repeat_total_and_show_loop_lag PASSED [ 79%]
+2026-11-05T10:49:16.7623109Z tests/unit/test_reporters.py::test_summary_line PASSED                   [ 79%]
+2026-11-05T10:49:16.7641528Z tests/unit/test_reporters.py::test_markdown_report_wire_timing_large_fleet_and_problematic_endpoints PASSED [ 80%]
+2026-11-05T10:49:16.7652792Z tests/unit/test_reporters.py::test_metric_guide_and_report_notes PASSED  [ 80%]
+2026-11-05T10:49:16.7661296Z tests/unit/test_result_transfer_latency.py::test_latency_sample_calculation PASSED [ 80%]
+2026-11-05T10:49:16.7669663Z tests/unit/test_result_transfer_latency.py::test_latency_sample_with_clock_skew PASSED [ 80%]
+2026-11-05T10:49:16.7678993Z tests/unit/test_result_transfer_latency.py::test_compute_statistics PASSED [ 81%]
+2026-11-05T10:49:16.7687861Z tests/unit/test_result_transfer_latency.py::test_compute_statistics_single_element PASSED [ 81%]
+2026-11-05T10:49:16.7697008Z tests/unit/test_result_transfer_latency.py::test_latency_sample_fallback_server_processing_without_event_time PASSED [ 81%]
+2026-11-05T10:49:16.7705780Z tests/unit/test_result_transfer_latency.py::test_latency_sample_clamping_to_zero PASSED [ 81%]
+2026-11-05T10:49:16.7715063Z tests/unit/test_result_transfer_latency.py::test_latency_sample_unfloatable_skew_keeps_raw_value PASSED [ 82%]
+2026-11-05T10:49:16.7724204Z tests/unit/test_result_transfer_latency.py::test_extract_valid_event_without_trace PASSED [ 82%]
+2026-11-05T10:49:16.7734734Z tests/unit/test_result_transfer_latency.py::test_extract_valid_event_with_complete_trace PASSED [ 82%]
+2026-11-05T10:49:16.7746338Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace0-does not match ResultId] PASSED [ 82%]
+2026-11-05T10:49:16.7757458Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace1-does not match ResultId] PASSED [ 83%]
+2026-11-05T10:49:16.7768596Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace2-has no StepTraces] PASSED [ 83%]
+2026-11-05T10:49:16.7779617Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace3-StepTraces[0] is empty] PASSED [ 83%]
+2026-11-05T10:49:16.7790924Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace4-NumberOfTracePoints is missing or zero] PASSED [ 83%]
+2026-11-05T10:49:16.7802150Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace5-NumberOfTracePoints is missing or zero] PASSED [ 84%]
+2026-11-05T10:49:16.7813132Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace6-has no StepTraceContent] PASSED [ 84%]
+2026-11-05T10:49:16.7824521Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace7-Values is missing] PASSED [ 84%]
+2026-11-05T10:49:16.7835777Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace8-has 2 values, NumberOfTracePoints declares 3] PASSED [ 84%]
+2026-11-05T10:49:16.7846805Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace9-has 3 values, NumberOfTracePoints declares 2] PASSED [ 85%]
+2026-11-05T10:49:16.7867976Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace10-non-finite or non-numeric] PASSED [ 85%]
+2026-11-05T10:49:16.7873850Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace11-non-finite or non-numeric] PASSED [ 85%]
+2026-11-05T10:49:16.7884395Z tests/unit/test_result_transfer_latency.py::test_extract_strict_trace_rules_mark_incomplete[trace12-non-finite or non-numeric] PASSED [ 85%]
+2026-11-05T10:49:16.7892284Z tests/unit/test_result_transfer_latency.py::test_extract_missing_trace_when_expected_is_incomplete PASSED [ 86%]
+2026-11-05T10:49:16.7902829Z tests/unit/test_result_transfer_latency.py::test_extract_missing_required_fields_are_incomplete[event0-ResultId] PASSED [ 86%]
+2026-11-05T10:49:16.7913074Z tests/unit/test_result_transfer_latency.py::test_extract_missing_required_fields_are_incomplete[event1-event Time] PASSED [ 86%]
+2026-11-05T10:49:16.7923222Z tests/unit/test_result_transfer_latency.py::test_extract_missing_required_fields_are_incomplete[event2-ProcessingTimes.EndTime] PASSED [ 86%]
+2026-11-05T10:49:16.7933180Z tests/unit/test_result_transfer_latency.py::test_extract_missing_required_fields_are_incomplete[event3-ResultId, ProcessingTimes.EndTime] PASSED [ 87%]
+2026-11-05T10:49:16.7942857Z tests/unit/test_result_transfer_latency.py::test_extract_missing_required_fields_are_incomplete[event4-ResultId] PASSED [ 87%]
+2026-11-05T10:49:16.7950379Z tests/unit/test_result_transfer_latency.py::test_extract_ignores_non_spec_flat_shape PASSED [ 87%]
+2026-11-05T10:49:16.7959962Z tests/unit/test_result_transfer_latency.py::test_extract_nested_batch_results_use_their_own_result_id PASSED [ 87%]
+2026-11-05T10:49:16.8023322Z tests/unit/test_result_transfer_latency.py::test_extract_walks_deep_nesting_lists_and_single_entries_without_cap PASSED [ 88%]
+2026-11-05T10:49:16.8030949Z tests/unit/test_result_transfer_latency.py::test_extract_cycle_guard_terminates PASSED [ 88%]
+2026-11-05T10:49:16.8041535Z tests/unit/test_result_transfer_latency.py::test_extract_result_evaluation_names[1-OK] PASSED [ 88%]
+2026-11-05T10:49:16.8051643Z tests/unit/test_result_transfer_latency.py::test_extract_result_evaluation_names[2-NOT_OK] PASSED [ 88%]
+2026-11-05T10:49:16.8061538Z tests/unit/test_result_transfer_latency.py::test_extract_result_evaluation_names[99-99] PASSED [ 89%]
+2026-11-05T10:49:16.8071486Z tests/unit/test_result_transfer_latency.py::test_extract_result_evaluation_names[raw3-CUSTOM] PASSED [ 89%]
+2026-11-05T10:49:16.8081312Z tests/unit/test_result_transfer_latency.py::test_extract_result_evaluation_names[None-None] PASSED [ 89%]
+2026-11-05T10:49:16.8090875Z tests/unit/test_result_transfer_latency.py::test_clock_warning_uses_skew_tolerance_and_rtt_without_changing_status PASSED [ 89%]
+2026-11-05T10:49:16.8099893Z tests/unit/test_result_transfer_latency.py::test_latency_sample_dict_round_trip PASSED [ 90%]
+2026-11-05T10:49:16.8108418Z tests/unit/test_result_transfer_latency.py::test_latency_sample_from_dict_missing_status_is_incomplete_and_ignores_unknown_keys PASSED [ 90%]
+2026-11-05T10:49:16.8117744Z tests/unit/test_result_transfer_latency.py::test_safe_getattr_none_and_unconfigured_mock PASSED [ 90%]
+2026-11-05T10:49:16.8138171Z tests/unit/test_result_transfer_latency.py::test_calibrate_clock_skew_success_returns_skew_and_rtt PASSED [ 90%]
+2026-11-05T10:49:16.8157603Z tests/unit/test_result_transfer_latency.py::test_calibrate_clock_skew_error_returns_default PASSED [ 91%]
+2026-11-05T10:49:16.8180211Z tests/unit/test_result_transfer_latency.py::test_calibrate_clock_skew_ignores_non_datetime_and_accepts_naive PASSED [ 91%]
+2026-11-05T10:49:16.8808604Z tests/unit/test_result_transfer_latency.py::test_calibrate_clock_skew_high_rtt_is_reported PASSED [ 91%]
+2026-11-05T10:49:16.8818411Z tests/unit/test_result_transfer_latency.py::test_wire_timing_metrics_split_delivery_decode_and_dispatch PASSED [ 91%]
+2026-11-05T10:49:16.8827987Z tests/unit/test_result_transfer_latency.py::test_handler_fallback_labels_source_and_reuses_handler_time PASSED [ 92%]
+2026-11-05T10:49:16.8836369Z tests/unit/test_result_transfer_latency.py::test_negative_skewed_delivery_is_clamped_with_raw_value_kept PASSED [ 92%]
+2026-11-05T10:49:16.8846130Z tests/unit/test_result_transfer_latency.py::test_wire_timing_fields_survive_dict_round_trip PASSED [ 92%]
+2026-11-05T10:49:16.8942399Z tests/unit/test_result_transfer_time_scenarios.py::test_scenario_single_server_several_results PASSED [ 92%]
+2026-11-05T10:49:16.9052125Z tests/unit/test_result_transfer_time_scenarios.py::test_scenario_multiple_servers_several_results_per_server PASSED [ 93%]
+2026-11-05T10:49:16.9062022Z tests/unit/test_result_transfer_time_scenarios.py::test_scenario_forensic_latency_aspects_decomposition PASSED [ 93%]
+2026-11-05T10:49:16.9077061Z tests/unit/test_session_policy.py::test_apply_session_policy PASSED      [ 93%]
+2026-11-05T10:49:16.9085714Z tests/unit/test_session_policy.py::test_is_subtyped_number PASSED        [ 93%]
+2026-11-05T10:49:16.9094731Z tests/unit/test_session_policy.py::test_serialize_subtyped_number PASSED [ 94%]
+2026-11-05T10:49:16.9102779Z tests/unit/test_session_policy.py::test_patch_asyncua_subtype_serializer_idempotent PASSED [ 94%]
+2026-11-05T10:49:16.9121445Z tests/unit/test_session_policy.py::test_load_ijt_type_definitions_coroutine PASSED [ 94%]
+2026-11-05T10:49:16.9137133Z tests/unit/test_session_policy.py::test_load_ijt_type_definitions_sync PASSED [ 94%]
+2026-11-05T10:49:16.9153885Z tests/unit/test_session_policy.py::test_is_client_connected_states PASSED [ 95%]
+2026-11-05T10:49:16.9276443Z tests/unit/test_session_policy.py::test_disconnect_client_clean PASSED   [ 95%]
+2026-11-05T10:49:16.9291362Z tests/unit/test_session_policy.py::test_patched_dataclass_deserializer PASSED [ 95%]
+2026-11-05T10:49:16.9306880Z tests/unit/test_session_policy.py::test_is_client_connected_exception PASSED [ 95%]
+2026-11-05T10:49:16.9343508Z tests/unit/test_session_policy.py::test_patched_type_serializers_and_branches PASSED [ 96%]
+2026-11-05T10:49:16.9354381Z tests/unit/test_session_policy.py::test_verify_asyncua_version_compatibility_rejects_unknown_version PASSED [ 96%]
+2026-11-05T10:49:16.9363976Z tests/unit/test_timing_hooks.py::test_self_test_passes_on_supported_asyncua PASSED [ 96%]
+2026-11-05T10:49:16.9371861Z tests/unit/test_timing_hooks.py::test_install_is_idempotent_and_marks_wrappers PASSED [ 96%]
+2026-11-05T10:49:16.9381679Z tests/unit/test_timing_hooks.py::test_install_falls_back_when_self_test_fails PASSED [ 97%]
+2026-11-05T10:49:16.9390550Z tests/unit/test_timing_hooks.py::test_self_test_detects_signature_change PASSED [ 97%]
+2026-11-05T10:49:16.9406701Z tests/unit/test_timing_hooks.py::test_call_callback_records_arrival_only_for_publish_responses PASSED [ 97%]
+2026-11-05T10:49:16.9477802Z tests/unit/test_timing_hooks.py::test_publish_hook_sets_timing_visible_to_dispatched_handler_tasks PASSED [ 97%]
+2026-11-05T10:49:17.1107396Z tests/unit/test_timing_hooks.py::test_loop_lag_monitor_measures_blocking PASSED [ 98%]
+2026-11-05T10:49:17.1116381Z tests/unit/test_timing_hooks.py::test_loop_lag_monitor_snapshot_without_ticks PASSED [ 98%]
+2026-11-05T10:49:17.1126045Z tests/unit/test_timing_hooks.py::test_self_test_import_error PASSED      [ 98%]
+2026-11-05T10:49:17.1135450Z tests/unit/test_timing_hooks.py::test_self_test_missing_targets PASSED   [ 98%]
+2026-11-05T10:49:17.1144693Z tests/unit/test_timing_hooks.py::test_self_test_publish_loop_missing PASSED [ 99%]
+2026-11-05T10:49:17.1154712Z tests/unit/test_timing_hooks.py::test_self_test_publish_signature_changed PASSED [ 99%]
+2026-11-05T10:49:17.1164282Z tests/unit/test_timing_hooks.py::test_self_test_missing_publish_encoding_id PASSED [ 99%]
+2026-11-05T10:49:17.8128049Z tests/unit/test_timing_hooks.py::test_install_timing_hooks_when_already_wrapped PASSED [100%]
+2026-11-05T10:49:17.8128547Z 
+2026-11-05T10:49:17.8129387Z - generated xml file: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client/test-results/pytest.xml -
+2026-11-05T10:49:17.8130935Z ================================ tests coverage ================================
+2026-11-05T10:49:17.8131901Z _______________ coverage: platform linux, python 3.14.9-final-0 ________________
+2026-11-05T10:49:17.8132255Z 
+2026-11-05T10:49:17.8132435Z Coverage XML written to file test-results/coverage.xml
+2026-11-05T10:49:17.8132904Z Required test coverage of 95% reached. Total coverage: 99.24%
+2026-11-05T10:49:17.8133370Z ============================= 399 passed in 9.92s ==============================
+2026-11-05T10:49:18.0020397Z ##[group]Run python -m bandit -r . -c "/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/pyproject.toml" --severity-level medium -f json -o test-results/bandit.json
+2026-11-05T10:49:18.0022313Z python -m bandit -r . -c "/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/pyproject.toml" --severity-level medium -f json -o test-results/bandit.json
+2026-11-05T10:49:18.0043337Z shell: /usr/bin/bash -e {0}
+2026-11-05T10:49:18.0043579Z env:
+2026-11-05T10:49:18.0043796Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:18.0044148Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:18.0044563Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib/pkgconfig
+2026-11-05T10:49:18.0044969Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:18.0045347Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:18.0045755Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:18.0046127Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib
+2026-11-05T10:49:18.0046901Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client/.venv
+2026-11-05T10:49:18.0047602Z ##[endgroup]
+2026-11-05T10:49:18.4117540Z [main]	INFO	profile include tests: None
+2026-11-05T10:49:18.4118157Z [main]	INFO	profile exclude tests: B101
+2026-11-05T10:49:18.4118631Z [main]	INFO	cli include tests: None
+2026-11-05T10:49:18.4119099Z [main]	INFO	cli exclude tests: None
+2026-11-05T10:49:18.9356809Z [manager]	WARNING	Test in comment: operator is not a test name or id, ignoring
+2026-11-05T10:49:18.9357529Z [manager]	WARNING	Test in comment: supplied is not a test name or id, ignoring
+2026-11-05T10:49:18.9358151Z [manager]	WARNING	Test in comment: inventory is not a test name or id, ignoring
+2026-11-05T10:49:18.9358769Z [manager]	WARNING	Test in comment: URL is not a test name or id, ignoring
+2026-11-05T10:49:19.7982733Z Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:01
+2026-11-05T10:49:19.7989016Z [json]	INFO	JSON output written to file: test-results/bandit.json
+2026-11-05T10:49:19.8872961Z ##[group]Run python -m pip_audit --format json -o test-results/pip-audit.json --progress-spinner off
+2026-11-05T10:49:19.8874314Z python -m pip_audit --format json -o test-results/pip-audit.json --progress-spinner off
+2026-11-05T10:49:19.8905967Z shell: /usr/bin/bash -e {0}
+2026-11-05T10:49:19.8906382Z env:
+2026-11-05T10:49:19.8906732Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:19.8907335Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:19.8908070Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib/pkgconfig
+2026-11-05T10:49:19.8908804Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:19.8909457Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:19.8910140Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:19.8910802Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib
+2026-11-05T10:49:19.8912570Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client/.venv
+2026-11-05T10:49:19.8913840Z ##[endgroup]
+2026-11-05T10:49:21.9391727Z No known vulnerabilities found
+2026-11-05T10:49:21.9965378Z ##[group]Run python -m ruff check . --output-format=github
+2026-11-05T10:49:21.9966143Z python -m ruff check . --output-format=github
+2026-11-05T10:49:21.9997482Z shell: /usr/bin/bash -e {0}
+2026-11-05T10:49:21.9997897Z env:
+2026-11-05T10:49:21.9998256Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:21.9998861Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:21.9999597Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib/pkgconfig
+2026-11-05T10:49:22.0000343Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:22.0001010Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:22.0001985Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:22.0002691Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib
+2026-11-05T10:49:22.0004201Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client/.venv
+2026-11-05T10:49:22.0005536Z ##[endgroup]
+2026-11-05T10:49:22.0636772Z ##[group]Run python -m mypy src --ignore-missing-imports --no-error-summary
+2026-11-05T10:49:22.0637530Z python -m mypy src --ignore-missing-imports --no-error-summary
+2026-11-05T10:49:22.0658472Z shell: /usr/bin/bash -e {0}
+2026-11-05T10:49:22.0658720Z env:
+2026-11-05T10:49:22.0658943Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:22.0659300Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:22.0659723Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib/pkgconfig
+2026-11-05T10:49:22.0660130Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:22.0660494Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:22.0660858Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:22.0661635Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib
+2026-11-05T10:49:22.0662494Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client/.venv
+2026-11-05T10:49:22.0663203Z ##[endgroup]
+2026-11-05T10:49:25.7304716Z src/engine/session_policy.py:179: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+2026-11-05T10:49:26.0340444Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-05T10:49:26.0340872Z with:
+2026-11-05T10:49:26.0341366Z   name: results-performance-client
+2026-11-05T10:49:26.0341737Z   path: OPC_UA_Clients/Release2/IJT_Performance_Client/test-results/
+2026-11-05T10:49:26.0342092Z   retention-days: 14
+2026-11-05T10:49:26.0342316Z   if-no-files-found: warn
+2026-11-05T10:49:26.0342542Z   compression-level: 6
+2026-11-05T10:49:26.0342751Z   overwrite: false
+2026-11-05T10:49:26.0342962Z   include-hidden-files: false
+2026-11-05T10:49:26.0343194Z   archive: true
+2026-11-05T10:49:26.0343576Z env:
+2026-11-05T10:49:26.0343788Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T10:49:26.0344125Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:26.0344533Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib/pkgconfig
+2026-11-05T10:49:26.0344944Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:26.0345339Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:26.0345705Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.9/x64
+2026-11-05T10:49:26.0346071Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.9/x64/lib
+2026-11-05T10:49:26.0346843Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Performance_Client/.venv
+2026-11-05T10:49:26.0347541Z ##[endgroup]
+2026-11-05T10:49:26.1897710Z With the provided path, there will be 6 files uploaded
+2026-11-05T10:49:26.1904474Z Artifact name is valid!
+2026-11-05T10:49:26.1905302Z Root directory input is valid!
+2026-11-05T10:49:26.4105220Z Uploading artifact: results-performance-client.zip
+2026-11-05T10:49:26.4147871Z Beginning upload of artifact content to blob storage
+2026-11-05T10:49:26.5149925Z Uploaded bytes 24622
+2026-11-05T10:49:26.5294597Z Finished uploading artifact content to blob storage!
+2026-11-05T10:49:26.5295681Z SHA256 digest of uploaded artifact is bc8f8ebfd3a8f93c3aa9448e3f01760d6449e90b8757f995619e916f5fb3b673
+2026-11-05T10:49:26.5296632Z Finalizing artifact upload
+2026-11-05T10:49:27.6154234Z Artifact results-performance-client successfully finalized. Artifact ID 13408222566
+2026-11-05T10:49:27.6155257Z Artifact results-performance-client has been successfully uploaded! Final size is 24622 bytes. Artifact ID is 13408222566
+2026-11-05T10:49:27.6158955Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/42013766930/artifacts/13408222566
+2026-11-05T10:49:27.6387964Z Post job cleanup.
+2026-11-05T10:49:27.7794630Z Post job cleanup.
+2026-11-05T10:49:27.8773046Z [command]/usr/bin/git version
+2026-11-05T10:49:27.8823710Z git version 2.56.0
+2026-11-05T10:49:27.8867584Z Temporarily overriding HOME='/home/runner/work/_temp/e2d42be3-040c-47a4-aacb-13b907560538' before making global git config changes
+2026-11-05T10:49:27.8868664Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-05T10:49:27.8874429Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-05T10:49:27.8916891Z Removing SSH command configuration
+2026-11-05T10:49:27.8924749Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T10:49:27.8974920Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-05T10:49:27.9263993Z Removing HTTP extra header
+2026-11-05T10:49:27.9270475Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T10:49:27.9319294Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-05T10:49:27.9618632Z Removing includeIf entries pointing to credentials config files
+2026-11-05T10:49:27.9626511Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T10:49:27.9680718Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-05T10:49:28.0089833Z Evaluate and set job outputs
+2026-11-05T10:49:28.0095695Z Set output 'mypy_result'
+2026-11-05T10:49:28.0097451Z Set output 'ruff_result'
+2026-11-05T10:49:28.0098441Z Cleaning up orphan processes

@@ -1,0 +1,824 @@
+﻿2026-11-05T08:40:24.8780563Z Current runner version: '2.338.2'
+2026-11-05T08:40:24.8806585Z ##[group]Runner Image Provisioner
+2026-11-05T08:40:24.8807370Z Hosted Compute Agent
+2026-11-05T08:40:24.8807827Z Version: 20261021.618
+2026-11-05T08:40:24.8808328Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-11-05T08:40:24.8808894Z Build Date: 2026-10-21T00:45:21Z
+2026-11-05T08:40:24.8809391Z Worker ID: {1e8a28ee-d8a6-4638-9660-2989182609e4}
+2026-11-05T08:40:24.8810010Z Region: eastus
+2026-11-05T08:40:24.8810454Z Cloud: Azure
+2026-11-05T08:40:24.8810871Z ##[endgroup]
+2026-11-05T08:40:24.8811872Z ##[group]Operating System
+2026-11-05T08:40:24.8812344Z Microsoft Windows Server 2025
+2026-11-05T08:40:24.8812896Z 10.0.26100
+2026-11-05T08:40:24.8813331Z Datacenter
+2026-11-05T08:40:24.8813759Z ##[endgroup]
+2026-11-05T08:40:24.8814240Z ##[group]Runner Image
+2026-11-05T08:40:24.8814721Z Image: windows-2025-vs2026
+2026-11-05T08:40:24.8815170Z Version: 20261030.294.1
+2026-11-05T08:40:24.8816546Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261030.294/images/windows/Windows2025-VS2026-Readme.md
+2026-11-05T08:40:24.8817931Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261030.294
+2026-11-05T08:40:24.8818669Z ##[endgroup]
+2026-11-05T08:40:24.8819537Z ##[group]GITHUB_TOKEN Permissions
+2026-11-05T08:40:24.8821063Z Contents: read
+2026-11-05T08:40:24.8821529Z Metadata: read
+2026-11-05T08:40:24.8821969Z ##[endgroup]
+2026-11-05T08:40:24.8824868Z Secret source: Actions
+2026-11-05T08:40:24.8825613Z Cache mode: write
+2026-11-05T08:40:24.8826134Z Prepare workflow directory
+2026-11-05T08:40:24.9194427Z Prepare all required actions
+2026-11-05T08:40:24.9237072Z Getting action download info
+2026-11-05T08:40:25.1190067Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-05T08:40:25.2213170Z Download action repository 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-05T08:40:25.5091177Z Download action repository 'umati/UA-for-Industrial-Joining-Technologies@28696967131b43e648681ea74dc50a5ade62bb52' (SHA:28696967131b43e648681ea74dc50a5ade62bb52)
+2026-11-05T08:40:28.4899639Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-05T08:40:28.6973930Z Complete job name: Test Client - Windows Live (port 40462)
+2026-11-05T08:40:29.3254352Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-05T08:40:29.3255824Z with:
+2026-11-05T08:40:29.3256348Z   persist-credentials: false
+2026-11-05T08:40:29.3257128Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T08:40:29.3263589Z   token: ***
+2026-11-05T08:40:29.3264155Z   ssh-strict: true
+2026-11-05T08:40:29.3264677Z   ssh-user: git
+2026-11-05T08:40:29.3265171Z   clean: true
+2026-11-05T08:40:29.3265708Z   sparse-checkout-cone-mode: true
+2026-11-05T08:40:29.3266388Z   fetch-depth: 1
+2026-11-05T08:40:29.3266901Z   fetch-tags: false
+2026-11-05T08:40:29.3267423Z   show-progress: true
+2026-11-05T08:40:29.3267979Z   lfs: false
+2026-11-05T08:40:29.3268477Z   submodules: false
+2026-11-05T08:40:29.3269005Z   set-safe-directory: true
+2026-11-05T08:40:29.3269635Z   allow-unsafe-pr-checkout: false
+2026-11-05T08:40:29.3270585Z env:
+2026-11-05T08:40:29.3271103Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:40:29.3271812Z ##[endgroup]
+2026-11-05T08:40:29.4823001Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T08:40:29.4825116Z ##[group]Getting Git version info
+2026-11-05T08:40:29.4826329Z Working directory is 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-05T08:40:29.5456203Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-05T08:40:29.9366171Z git version 2.56.0.windows.4
+2026-11-05T08:40:29.9405890Z ##[endgroup]
+2026-11-05T08:40:29.9419665Z Temporarily overriding HOME='D:\a\_temp\1cbda7e1-20de-4caa-bf2e-5c2d612f24a5' before making global git config changes
+2026-11-05T08:40:29.9420341Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-05T08:40:29.9428625Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-05T08:40:29.9988157Z Deleting the contents of 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-05T08:40:29.9991885Z ##[group]Determining repository object format
+2026-11-05T08:40:29.9993445Z ##[endgroup]
+2026-11-05T08:40:29.9993953Z ##[group]Initializing the repository
+2026-11-05T08:40:30.0001246Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-05T08:40:30.1297724Z Initialized empty Git repository in D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-05T08:40:30.1339405Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T08:40:30.1990392Z ##[endgroup]
+2026-11-05T08:40:30.1991069Z ##[group]Disabling automatic garbage collection
+2026-11-05T08:40:30.1998760Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-05T08:40:30.2308619Z ##[endgroup]
+2026-11-05T08:40:30.2309267Z ##[group]Setting up auth
+2026-11-05T08:40:30.2309770Z Removing SSH command configuration
+2026-11-05T08:40:30.2318262Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T08:40:30.2646722Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-05T08:40:31.8205998Z Removing HTTP extra header
+2026-11-05T08:40:31.8214476Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T08:40:31.8550861Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-05T08:40:32.3965005Z Removing includeIf entries pointing to credentials config files
+2026-11-05T08:40:32.3972914Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T08:40:32.4322369Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-05T08:40:32.9869040Z [command]"C:\Program Files\Git\bin\git.exe" config --file D:\a\_temp\git-credentials-1150088f-4211-4630-8f61-841ce58872d1.config http.https://github.com/.extraheader "AUTHORIZATION: basic [REDACTED_AUTH]"
+2026-11-05T08:40:33.0247640Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D:\a\_temp\git-credentials-1150088f-4211-4630-8f61-841ce58872d1.config
+2026-11-05T08:40:33.0678771Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D:\a\_temp\git-credentials-1150088f-4211-4630-8f61-841ce58872d1.config
+2026-11-05T08:40:33.1104982Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-1150088f-4211-4630-8f61-841ce58872d1.config
+2026-11-05T08:40:33.1455783Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-1150088f-4211-4630-8f61-841ce58872d1.config
+2026-11-05T08:40:33.1916186Z ##[endgroup]
+2026-11-05T08:40:33.1916534Z ##[group]Fetching the repository
+2026-11-05T08:40:33.1931541Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +28696967131b43e648681ea74dc50a5ade62bb52:refs/remotes/origin/main
+2026-11-05T08:40:34.6895378Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T08:40:34.6896448Z  * [new ref]         28696967131b43e648681ea74dc50a5ade62bb52 -> origin/main
+2026-11-05T08:40:34.6946537Z [command]"C:\Program Files\Git\bin\git.exe" branch --list --remote origin/main
+2026-11-05T08:40:34.7289820Z   origin/main
+2026-11-05T08:40:34.7327986Z [command]"C:\Program Files\Git\bin\git.exe" rev-parse refs/remotes/origin/main
+2026-11-05T08:40:34.7701452Z 28696967131b43e648681ea74dc50a5ade62bb52
+2026-11-05T08:40:34.7730049Z ##[endgroup]
+2026-11-05T08:40:34.7730369Z ##[group]Determining the checkout info
+2026-11-05T08:40:34.7731391Z ##[endgroup]
+2026-11-05T08:40:34.7739608Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-05T08:40:34.8179483Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-05T08:40:34.8488919Z ##[group]Checking out the ref
+2026-11-05T08:40:34.8496595Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B main refs/remotes/origin/main
+2026-11-05T08:40:35.3018651Z Switched to a new branch 'main'
+2026-11-05T08:40:35.3036824Z branch 'main' set up to track 'origin/main'.
+2026-11-05T08:40:35.3112573Z ##[endgroup]
+2026-11-05T08:40:35.3528701Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-05T08:40:35.3862464Z 28696967131b43e648681ea74dc50a5ade62bb52
+2026-11-05T08:40:35.3904711Z ##[group]Removing auth
+2026-11-05T08:40:35.3905429Z Removing SSH command configuration
+2026-11-05T08:40:35.3913436Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T08:40:35.4266115Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-05T08:40:35.9273670Z Removing HTTP extra header
+2026-11-05T08:40:35.9281048Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T08:40:35.9603494Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-05T08:40:36.4974283Z Removing includeIf entries pointing to credentials config files
+2026-11-05T08:40:36.4981006Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T08:40:36.5277775Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-05T08:40:36.5279002Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-05T08:40:36.5279477Z includeif.gitdir:/github/workspace/.git.path
+2026-11-05T08:40:36.5279743Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-05T08:40:36.5319020Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-05T08:40:36.5630124Z D:\a\_temp\git-credentials-1150088f-4211-4630-8f61-841ce58872d1.config
+2026-11-05T08:40:36.5674436Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D\:\\a\\_temp\\git\-credentials\-1150088f\-4211\-4630\-8f61\-841ce58872d1\.config
+2026-11-05T08:40:36.6034013Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-05T08:40:36.6329817Z D:\a\_temp\git-credentials-1150088f-4211-4630-8f61-841ce58872d1.config
+2026-11-05T08:40:36.6372099Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D\:\\a\\_temp\\git\-credentials\-1150088f\-4211\-4630\-8f61\-841ce58872d1\.config
+2026-11-05T08:40:36.6712716Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-05T08:40:36.7008456Z /github/runner_temp/git-credentials-1150088f-4211-4630-8f61-841ce58872d1.config
+2026-11-05T08:40:36.7048515Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-1150088f\-4211\-4630\-8f61\-841ce58872d1\.config
+2026-11-05T08:40:36.7388624Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-05T08:40:36.7682829Z /github/runner_temp/git-credentials-1150088f-4211-4630-8f61-841ce58872d1.config
+2026-11-05T08:40:36.7723531Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-1150088f\-4211\-4630\-8f61\-841ce58872d1\.config
+2026-11-05T08:40:36.8066376Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-05T08:40:37.3359490Z Removing credentials config 'D:\a\_temp\git-credentials-1150088f-4211-4630-8f61-841ce58872d1.config'
+2026-11-05T08:40:37.3370922Z ##[endgroup]
+2026-11-05T08:40:37.3767581Z ##[group]Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+2026-11-05T08:40:37.3768019Z with:
+2026-11-05T08:40:37.3768221Z   python-version-file: .python-version
+2026-11-05T08:40:37.3768432Z   check-latest: false
+2026-11-05T08:40:37.3770510Z   token: ***
+2026-11-05T08:40:37.3770916Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-11-05T08:40:37.3771219Z   update-environment: true
+2026-11-05T08:40:37.3771398Z   allow-prereleases: false
+2026-11-05T08:40:37.3771581Z   freethreaded: false
+2026-11-05T08:40:37.3771748Z env:
+2026-11-05T08:40:37.3771907Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:40:37.3772109Z ##[endgroup]
+2026-11-05T08:40:37.5055931Z Resolved .python-version as 3.14
+2026-11-05T08:40:37.5057374Z ##[group]Installed versions
+2026-11-05T08:40:37.6322106Z Successfully set up CPython (3.14.10)
+2026-11-05T08:40:37.6322595Z ##[endgroup]
+2026-11-05T08:40:37.6589551Z ##[group]Run umati/UA-for-Industrial-Joining-Technologies/.github/actions/setup-uv-pypi@28696967131b43e648681ea74dc50a5ade62bb52
+2026-11-05T08:40:37.6590080Z env:
+2026-11-05T08:40:37.6590256Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:40:37.6590549Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:37.6590920Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:40:37.6591265Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:37.6591571Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:37.6591869Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:37.6592109Z ##[endgroup]
+2026-11-05T08:40:37.6643654Z ##[start-action display=Install pinned uv from PyPI;id=__self.__run]
+2026-11-05T08:40:37.6776808Z ##[group]Run set -euo pipefail
+2026-11-05T08:40:37.6777096Z set -euo pipefail
+2026-11-05T08:40:37.6777382Z pin_file="${GITHUB_WORKSPACE}/.uv-version"
+2026-11-05T08:40:37.6777652Z if [[ ! -f "${pin_file}" ]]; then
+2026-11-05T08:40:37.6778096Z   echo "Missing ${pin_file}" >&2
+2026-11-05T08:40:37.6778294Z   exit 1
+2026-11-05T08:40:37.6778439Z fi
+2026-11-05T08:40:37.6778626Z version="$(tr -d '[:space:]' < "${pin_file}")"
+2026-11-05T08:40:37.6778941Z if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9._+-]*)?$ ]]; then
+2026-11-05T08:40:37.6779267Z   echo "Invalid .uv-version contents: '${version}'" >&2
+2026-11-05T08:40:37.6779514Z   exit 1
+2026-11-05T08:40:37.6779658Z fi
+2026-11-05T08:40:37.6779936Z python -m pip install --disable-pip-version-check --no-input "uv==${version}"
+2026-11-05T08:40:37.6780288Z installed="$(uv --version | awk '{print $2}')"
+2026-11-05T08:40:37.6780539Z if [[ "${installed}" != "${version}" ]]; then
+2026-11-05T08:40:37.6780811Z   echo "Expected uv ${version}, got ${installed}" >&2
+2026-11-05T08:40:37.6781049Z   exit 1
+2026-11-05T08:40:37.6781191Z fi
+2026-11-05T08:40:37.6781366Z echo "Installed uv ${installed} from PyPI"
+2026-11-05T08:40:37.6852886Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-05T08:40:37.6853234Z env:
+2026-11-05T08:40:37.6853996Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:40:37.6854393Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:37.6854745Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:40:37.6855088Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:37.6855388Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:37.6855683Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:37.6855924Z ##[endgroup]
+2026-11-05T08:40:43.7040866Z Collecting uv==0.13.7
+2026-11-05T08:40:43.7390405Z   Downloading uv-0.13.7-py3-none-win_amd64.whl.metadata (11 kB)
+2026-11-05T08:40:43.7740607Z Downloading uv-0.13.7-py3-none-win_amd64.whl (15.3 MB)
+2026-11-05T08:40:43.9072765Z    ---------------------------------------- 15.3/15.3 MB 126.1 MB/s  0:00:00
+2026-11-05T08:40:44.1194771Z Installing collected packages: uv
+2026-11-05T08:40:44.2777453Z Successfully installed uv-0.13.7
+2026-11-05T08:40:44.8493721Z Installed uv 0.13.7 from PyPI
+2026-11-05T08:40:44.8537661Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=7189]
+2026-11-05T08:40:44.8668270Z ##[group]Run uv sync --locked
+2026-11-05T08:40:44.8668568Z uv sync --locked
+2026-11-05T08:40:44.8668849Z "$pwd\.venv\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Append
+2026-11-05T08:40:44.8669211Z "VIRTUAL_ENV=$pwd\.venv" | Out-File -FilePath $env:GITHUB_ENV -Append
+2026-11-05T08:40:44.8669574Z pip install -r ../../../OPC_UA_Servers/Release2/tests/requirements.txt
+2026-11-05T08:40:44.9358406Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-05T08:40:44.9358718Z env:
+2026-11-05T08:40:44.9358893Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:40:44.9359175Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:44.9359517Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:40:44.9359865Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:44.9360239Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:44.9360543Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:40:44.9360779Z ##[endgroup]
+2026-11-05T08:40:45.3460799Z Using CPython 3.14.10 interpreter at: C:\hostedtoolcache\windows\Python\3.14.10\x64\python3.exe
+2026-11-05T08:40:45.3461453Z Creating virtual environment at: .venv
+2026-11-05T08:40:45.3725604Z Resolved 73 packages in 1ms
+2026-11-05T08:40:45.6734584Z Downloading ruff (9.9MiB)
+2026-11-05T08:40:45.6799073Z Downloading pyright (5.9MiB)
+2026-11-05T08:40:45.7041289Z Downloading virtualenv (5.3MiB)
+2026-11-05T08:40:45.7103027Z Downloading ast-serialize (1.1MiB)
+2026-11-05T08:40:45.7165585Z Downloading cryptography (3.6MiB)
+2026-11-05T08:40:45.7170468Z Downloading pygments (1.2MiB)
+2026-11-05T08:40:45.7187908Z Downloading pip (1.7MiB)
+2026-11-05T08:40:45.7200922Z Downloading mypy (11.0MiB)
+2026-11-05T08:40:48.9665399Z  Downloaded ast-serialize
+2026-11-05T08:40:50.9470073Z  Downloaded ruff
+2026-11-05T08:40:50.9620196Z  Downloaded virtualenv
+2026-11-05T08:40:52.2298562Z  Downloaded pygments
+2026-11-05T08:40:52.2911564Z  Downloaded cryptography
+2026-11-05T08:40:53.3215394Z  Downloaded pip
+2026-11-05T08:40:54.6649880Z  Downloaded mypy
+2026-11-05T08:40:58.4866277Z  Downloaded pyright
+2026-11-05T08:40:58.4901130Z Prepared 72 packages in 13.11s
+2026-11-05T08:40:58.4933296Z warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.
+2026-11-05T08:40:58.4934334Z          If the cache and target directories are on different filesystems, hardlinking may not be supported.
+2026-11-05T08:40:58.4940514Z          If this is intentional, set `export UV_LINK_MODE=copy` or use `--link-mode=copy` to suppress this warning.
+2026-11-05T08:41:03.3723294Z Installed 72 packages in 4.88s
+2026-11-05T08:41:03.3724819Z  + aiosqlite==0.22.1
+2026-11-05T08:41:03.3725884Z  + anyio==4.16.0
+2026-11-05T08:41:03.3726937Z  + ast-serialize==0.13.1
+2026-11-05T08:41:03.3727932Z  + asyncua==2.1.0
+2026-11-05T08:41:03.3728966Z  + bandit==1.9.4
+2026-11-05T08:41:03.3729832Z  + boolean-py==5.0
+2026-11-05T08:41:03.3730866Z  + cachecontrol==0.14.4
+2026-11-05T08:41:03.3731839Z  + certifi==2026.10.23
+2026-11-05T08:41:03.3732933Z  + cffi==2.1.1
+2026-11-05T08:41:03.3733872Z  + cfgv==3.5.0
+2026-11-05T08:41:03.3734903Z  + charset-normalizer==3.5.2
+2026-11-05T08:41:03.3735933Z  + colorama==0.4.6
+2026-11-05T08:41:03.3736934Z  + coverage==7.17.0
+2026-11-05T08:41:03.3737915Z  + cryptography==50.0.2
+2026-11-05T08:41:03.3738941Z  + cyclonedx-python-lib==11.12.0
+2026-11-05T08:41:03.3739994Z  + defusedxml==0.7.1
+2026-11-05T08:41:03.3740997Z  + detect-secrets==1.5.0
+2026-11-05T08:41:03.3741966Z  + distlib==0.4.4
+2026-11-05T08:41:03.3743176Z  + et-xmlfile==2.0.0
+2026-11-05T08:41:03.3743993Z  + execnet==2.1.2
+2026-11-05T08:41:03.3744985Z  + filelock==4.2.6
+2026-11-05T08:41:03.3745982Z  + identify==2.6.20
+2026-11-05T08:41:03.3746819Z  + idna==3.20
+2026-11-05T08:41:03.3747862Z  + iniconfig==2.3.1
+2026-11-05T08:41:03.3750835Z  + jinja2==3.1.6
+2026-11-05T08:41:03.3751227Z  + librt==0.16.0
+2026-11-05T08:41:03.3751506Z  + license-expression==30.4.4
+2026-11-05T08:41:03.3752572Z  + markdown-it-py==4.2.0
+2026-11-05T08:41:03.3753577Z  + markupsafe==3.0.4
+2026-11-05T08:41:03.3754510Z  + mdurl==0.1.2
+2026-11-05T08:41:03.3755464Z  + msgpack==1.2.4
+2026-11-05T08:41:03.3756478Z  + mypy==2.4.1
+2026-11-05T08:41:03.3757491Z  + mypy-extensions==1.1.0
+2026-11-05T08:41:03.3758461Z  + nodeenv==1.12.0
+2026-11-05T08:41:03.3759389Z  + openpyxl==3.1.5
+2026-11-05T08:41:03.3760414Z  + packageurl-python==0.17.6
+2026-11-05T08:41:03.3761324Z  + packaging==26.3
+2026-11-05T08:41:03.3762327Z  + pathspec==1.1.1
+2026-11-05T08:41:03.3763427Z  + pip==26.2.2
+2026-11-05T08:41:03.3764370Z  + pip-api==0.0.35
+2026-11-05T08:41:03.3765376Z  + pip-audit==2.10.1
+2026-11-05T08:41:03.3766378Z  + pip-requirements-parser==32.0.1
+2026-11-05T08:41:03.3767419Z  + platformdirs==4.14.3
+2026-11-05T08:41:03.3768391Z  + pluggy==1.7.0
+2026-11-05T08:41:03.3769387Z  + pre-commit==4.7.0
+2026-11-05T08:41:03.3770394Z  + py-serializable==2.1.0
+2026-11-05T08:41:03.3771237Z  + pycparser==3.12
+2026-11-05T08:41:03.3772267Z  + pygments==2.21.0
+2026-11-05T08:41:03.3773266Z  + pyparsing==3.3.3
+2026-11-05T08:41:03.3774267Z  + pyright==1.1.414
+2026-11-05T08:41:03.3775266Z  + pytest==9.2.0
+2026-11-05T08:41:03.3776445Z  + pytest-asyncio==1.4.1.post1
+2026-11-05T08:41:03.3777472Z  + pytest-cov==7.1.0
+2026-11-05T08:41:03.3778465Z  + pytest-html==4.2.0
+2026-11-05T08:41:03.3779450Z  + pytest-metadata==3.1.1
+2026-11-05T08:41:03.3780612Z  + pytest-timeout==2.4.0
+2026-11-05T08:41:03.3781639Z  + pytest-xdist==3.8.0
+2026-11-05T08:41:03.3782593Z  + python-dateutil==4.0.0
+2026-11-05T08:41:03.3783545Z  + python-discovery==1.9.0
+2026-11-05T08:41:03.3784327Z  + pytz==2026.6
+2026-11-05T08:41:03.3785349Z  + pyyaml==6.0.3
+2026-11-05T08:41:03.3786386Z  + requests==2.34.2
+2026-11-05T08:41:03.3787347Z  + rich==15.0.0
+2026-11-05T08:41:03.3788355Z  + ruff==0.17.3
+2026-11-05T08:41:03.3789445Z  + sortedcontainers==2.4.0
+2026-11-05T08:41:03.3790369Z  + stevedore==5.9.1
+2026-11-05T08:41:03.3791330Z  + tomli==2.5.0
+2026-11-05T08:41:03.3792359Z  + tomli-w==1.2.0
+2026-11-05T08:41:03.3793356Z  + typing-extensions==4.16.0
+2026-11-05T08:41:03.3794272Z  + tzdata==2026.6
+2026-11-05T08:41:03.3795668Z  + urllib3==2.8.0
+2026-11-05T08:41:03.3797415Z  + virtualenv==21.15.2
+2026-11-05T08:41:04.7083817Z Collecting asyncua==2.1.0 (from -r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-05T08:41:04.7479625Z   Downloading asyncua-2.1.0-py3-none-any.whl.metadata (9.5 kB)
+2026-11-05T08:41:04.9336154Z Collecting cryptography>=50.0.0 (from -r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 4))
+2026-11-05T08:41:04.9383165Z   Downloading cryptography-50.0.2-cp311-abi3-win_amd64.whl.metadata (4.4 kB)
+2026-11-05T08:41:05.0173765Z Collecting pyOpenSSL>=26.4.0 (from -r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 5))
+2026-11-05T08:41:05.0218024Z   Downloading pyopenssl-26.4.0-py3-none-any.whl.metadata (22 kB)
+2026-11-05T08:41:05.0806191Z Collecting idna>=3.15 (from -r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 6))
+2026-11-05T08:41:05.0890274Z   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+2026-11-05T08:41:05.1501242Z Collecting aiosqlite (from asyncua==2.1.0->-r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-05T08:41:05.1544689Z   Downloading aiosqlite-0.22.1-py3-none-any.whl.metadata (4.3 kB)
+2026-11-05T08:41:05.2193574Z Collecting anyio (from asyncua==2.1.0->-r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-05T08:41:05.2243119Z   Downloading anyio-4.16.0-py3-none-any.whl.metadata (4.7 kB)
+2026-11-05T08:41:05.2769375Z Collecting python-dateutil (from asyncua==2.1.0->-r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-05T08:41:05.2846883Z   Downloading python_dateutil-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+2026-11-05T08:41:05.3585550Z Collecting pytz (from asyncua==2.1.0->-r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-05T08:41:05.3632410Z   Downloading pytz-2026.6-py2.py3-none-any.whl.metadata (22 kB)
+2026-11-05T08:41:05.4154376Z Collecting sortedcontainers (from asyncua==2.1.0->-r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-05T08:41:05.4227102Z   Downloading sortedcontainers-2.4.0-py2.py3-none-any.whl.metadata (10 kB)
+2026-11-05T08:41:05.4756698Z Collecting typing-extensions (from asyncua==2.1.0->-r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-05T08:41:05.4805648Z   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+2026-11-05T08:41:05.6012281Z Collecting cffi>=2.0.0 (from cryptography>=50.0.0->-r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 4))
+2026-11-05T08:41:05.6060021Z   Downloading cffi-2.1.1-cp314-cp314-win_amd64.whl.metadata (2.6 kB)
+2026-11-05T08:41:05.6567196Z Collecting pycparser (from cffi>=2.0.0->cryptography>=50.0.0->-r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 4))
+2026-11-05T08:41:05.6609802Z   Downloading pycparser-3.12-py3-none-any.whl.metadata (9.7 kB)
+2026-11-05T08:41:05.7143630Z Collecting tzdata (from python-dateutil->asyncua==2.1.0->-r ../../../OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-05T08:41:05.7190740Z   Downloading tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
+2026-11-05T08:41:05.7513253Z Downloading asyncua-2.1.0-py3-none-any.whl (890 kB)
+2026-11-05T08:41:05.7830071Z    ---------------------------------------- 890.6/890.6 kB 24.2 MB/s  0:00:00
+2026-11-05T08:41:05.7876816Z Downloading cryptography-50.0.2-cp311-abi3-win_amd64.whl (3.8 MB)
+2026-11-05T08:41:05.8431110Z    ---------------------------------------- 3.8/3.8 MB 67.5 MB/s  0:00:00
+2026-11-05T08:41:05.8498410Z Downloading pyopenssl-26.4.0-py3-none-any.whl (56 kB)
+2026-11-05T08:41:05.8736869Z Downloading idna-3.20-py3-none-any.whl (69 kB)
+2026-11-05T08:41:05.8951273Z Downloading cffi-2.1.1-cp314-cp314-win_amd64.whl (187 kB)
+2026-11-05T08:41:05.9206302Z Downloading aiosqlite-0.22.1-py3-none-any.whl (17 kB)
+2026-11-05T08:41:05.9406651Z Downloading anyio-4.16.0-py3-none-any.whl (134 kB)
+2026-11-05T08:41:05.9641530Z Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+2026-11-05T08:41:05.9932018Z Downloading pycparser-3.12-py3-none-any.whl (62 kB)
+2026-11-05T08:41:06.0554796Z Downloading python_dateutil-4.0.0-py3-none-any.whl (92 kB)
+2026-11-05T08:41:06.0775779Z Downloading pytz-2026.6-py2.py3-none-any.whl (506 kB)
+2026-11-05T08:41:06.1075920Z Downloading sortedcontainers-2.4.0-py2.py3-none-any.whl (29 kB)
+2026-11-05T08:41:06.1276856Z Downloading tzdata-2026.6-py2.py3-none-any.whl (348 kB)
+2026-11-05T08:41:06.2524493Z Installing collected packages: sortedcontainers, pytz, tzdata, typing-extensions, pycparser, idna, aiosqlite, python-dateutil, cffi, anyio, cryptography, pyOpenSSL, asyncua
+2026-11-05T08:41:10.6993639Z 
+2026-11-05T08:41:10.7011735Z Successfully installed aiosqlite-0.22.1 anyio-4.16.0 asyncua-2.1.0 cffi-2.1.1 cryptography-50.0.2 idna-3.20 pyOpenSSL-26.4.0 pycparser-3.12 python-dateutil-4.0.0 pytz-2026.6 sortedcontainers-2.4.0 typing-extensions-4.16.0 tzdata-2026.6
+2026-11-05T08:41:10.7024264Z 
+2026-11-05T08:41:10.7026077Z [notice] A new release of pip is available: 26.2.2 -> 26.3
+2026-11-05T08:41:10.7026535Z [notice] To update, run: python.exe -m pip install --upgrade pip
+2026-11-05T08:41:10.8504808Z ##[group]Run Expand-Archive `
+2026-11-05T08:41:10.8505095Z Expand-Archive `
+2026-11-05T08:41:10.8505396Z   -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+2026-11-05T08:41:10.8505735Z   -DestinationPath "OPC_UA_Servers\Release2\" `
+2026-11-05T08:41:10.8505964Z   -Force
+2026-11-05T08:41:10.8562460Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-05T08:41:10.8562743Z env:
+2026-11-05T08:41:10.8562909Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:41:10.8563183Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:10.8563532Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:41:10.8563869Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:10.8564169Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:10.8564520Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:10.8565046Z   VIRTUAL_ENV: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\.venv
+2026-11-05T08:41:10.8565516Z ##[endgroup]
+2026-11-05T08:41:11.5928520Z ##[group]Run python scripts/start_server_on_port.py `
+2026-11-05T08:41:11.5928903Z python scripts/start_server_on_port.py `
+2026-11-05T08:41:11.5929134Z   --port 40462 `
+2026-11-05T08:41:11.5929346Z   --diagnostics-dir test-results/readiness
+2026-11-05T08:41:11.5987763Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-05T08:41:11.5988038Z env:
+2026-11-05T08:41:11.5988215Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:41:11.5988495Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:11.5988852Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:41:11.5989191Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:11.5989505Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:11.5990004Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:11.5990576Z   VIRTUAL_ENV: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\.venv
+2026-11-05T08:41:11.5991045Z ##[endgroup]
+2026-11-05T08:41:14.0521435Z ==> Starting OPC UA server on port 40462
+2026-11-05T08:41:14.0521919Z     Source : OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator
+2026-11-05T08:41:14.0522331Z     Copy   : D:\a\_temp\ijt-sim\server_40462
+2026-11-05T08:41:14.0522651Z     Server directory copied.
+2026-11-05T08:41:14.0522956Z     Patched serverEndpointTCPPort: 40451 -> 40462
+2026-11-05T08:41:14.0523289Z     EXE: opcua_ijt_demo_application.exe
+2026-11-05T08:41:14.0523575Z     Server started (PID 8568)
+2026-11-05T08:41:14.0524308Z     Port 40462 ready after 2.1s � server ready.
+2026-11-05T08:41:14.0524792Z     Exported SERVER_PID, OPCUA_SERVER_PORT, OPCUA_SERVER_URL to GITHUB_ENV.
+2026-11-05T08:41:14.1623589Z ##[group]Run New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-05T08:41:14.1624111Z New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-05T08:41:14.1624467Z python OPC_UA_Servers/Release2/tests/smoke_test.py `
+2026-11-05T08:41:14.1624732Z   --tcp-timeout 30 `
+2026-11-05T08:41:14.1624953Z   --junitxml test-results/smoke-sanity.xml
+2026-11-05T08:41:14.1682418Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-05T08:41:14.1682698Z env:
+2026-11-05T08:41:14.1682869Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:41:14.1683142Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:14.1683500Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:41:14.1683845Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:14.1684209Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:14.1684522Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:14.1685059Z   VIRTUAL_ENV: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\.venv
+2026-11-05T08:41:14.1685549Z   SERVER_PID: 8568
+2026-11-05T08:41:14.1685718Z   OPCUA_SERVER_PORT: 40462
+2026-11-05T08:41:14.1685947Z   OPCUA_SERVER_URL: opc.tcp://localhost:40462
+2026-11-05T08:41:14.1686182Z ##[endgroup]
+2026-11-05T08:41:18.8684560Z 
+2026-11-05T08:41:18.8685456Z OPC UA IJT Server � Smoke Tests
+2026-11-05T08:41:18.8685872Z   Endpoint : opc.tcp://localhost:40462
+2026-11-05T08:41:18.8686173Z   Timeout  : 30s
+2026-11-05T08:41:18.8686494Z ------------------------------------------------------------
+2026-11-05T08:41:18.8686889Z   [OK]  TCP port reachable  (port 40462 is open)
+2026-11-05T08:41:18.8687262Z   [OK]  OPC UA session  (OPC UA session established)
+2026-11-05T08:41:18.8687726Z   [OK]  Server CurrentTime  (CurrentTime = 2026-11-05 08:41:18.849925+00:00)
+2026-11-05T08:41:18.8688201Z   [OK]  Namespace array  (9 namespaces, all IJT URIs present)
+2026-11-05T08:41:18.8688860Z   [OK]  TighteningSystem node  (TighteningSystem found (QualifiedName(NamespaceIndex=1, Name='TighteningSystem')))
+2026-11-05T08:41:18.8689501Z   [OK]  Simulations node  (Simulations node has 2 method(s))
+2026-11-05T08:41:18.8689937Z   [OK]  ResultManagement node  (ResultManagement node present)
+2026-11-05T08:41:18.8690353Z   [OK]  AssetManagement node  (AssetManagement node present)
+2026-11-05T08:41:18.8690844Z   [OK]  JoiningProcessManagement node  (JoiningProcessManagement node present)
+2026-11-05T08:41:18.8691340Z   [OK]  JointManagement node  (JointManagement node present)
+2026-11-05T08:41:18.8691717Z ------------------------------------------------------------
+2026-11-05T08:41:18.8692024Z   10/10 passed
+2026-11-05T08:41:18.8692153Z 
+2026-11-05T08:41:19.0018111Z ##[group]Run python -m pytest `
+2026-11-05T08:41:19.0019131Z python -m pytest `
+2026-11-05T08:41:19.0019449Z   specification_tests/ assets/ joining_process/ results/ joint/ events/ common/ `
+2026-11-05T08:41:19.0019815Z   -v --tb=short -rs --timeout=120 `
+2026-11-05T08:41:19.0020028Z   --durations=30 `
+2026-11-05T08:41:19.0020229Z   --junitxml=test-results/pytest.xml `
+2026-11-05T08:41:19.0020501Z   --html=test-results/report.html --self-contained-html
+2026-11-05T08:41:19.0078447Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-05T08:41:19.0078735Z env:
+2026-11-05T08:41:19.0078912Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:41:19.0079207Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:19.0079711Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:41:19.0080095Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:19.0080412Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:19.0080715Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:19.0081247Z   VIRTUAL_ENV: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\.venv
+2026-11-05T08:41:19.0081711Z   SERVER_PID: 8568
+2026-11-05T08:41:19.0081865Z   OPCUA_SERVER_PORT: 40462
+2026-11-05T08:41:19.0082077Z   OPCUA_SERVER_URL: opc.tcp://localhost:40462
+2026-11-05T08:41:19.0082386Z   OPCUA_CAPABILITIES_FILE: target_server_cu_profiles/simulator.sut.yaml
+2026-11-05T08:41:19.0082668Z ##[endgroup]
+2026-11-05T08:41:23.3463883Z ============================= test session starts =============================
+2026-11-05T08:41:23.3464810Z platform win32 -- Python 3.14.10, pytest-9.2.0, pluggy-1.7.0 -- D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\.venv\Scripts\python.exe
+2026-11-05T08:41:23.3466205Z metadata: {'Python': '3.14.10', 'Platform': 'Windows-2025Server-10.0.26100-SP0', 'Packages': {'pytest': '9.2.0', 'pluggy': '1.7.0'}, 'Plugins': {'anyio': '4.16.0', 'platformdirs': '4.14.3', 'asyncio': '1.4.1.post1', 'cov': '7.1.0', 'html': '4.2.0', 'metadata': '3.1.1', 'timeout': '2.4.0', 'xdist': '3.8.0'}, 'CI': 'true', 'JAVA_HOME': 'C:\\hostedtoolcache\\windows\\Java_Temurin-Hotspot_jdk\\17.0.20-101\\x64'}
+2026-11-05T08:41:23.3467391Z rootdir: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client
+2026-11-05T08:41:23.3467859Z configfile: pyproject.toml
+2026-11-05T08:41:23.3468236Z plugins: anyio-4.16.0, platformdirs-4.14.3, asyncio-1.4.1.post1, cov-7.1.0, html-4.2.0, metadata-3.1.1, timeout-2.4.0, xdist-3.8.0
+2026-11-05T08:41:23.3468829Z asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=session, asyncio_default_test_loop_scope=session
+2026-11-05T08:41:23.3469215Z timeout: 120.0s
+2026-11-05T08:41:23.3469368Z timeout method: thread
+2026-11-05T08:41:23.3469536Z timeout func_only: False
+2026-11-05T08:41:24.4716104Z collecting ... collected 1072 items
+2026-11-05T08:41:24.4716368Z 
+2026-11-05T08:41:29.7555341Z specification_tests/test_asset_identifier_methods.py::test_send_identifier_methods_present_in_method_set[SendIdentifiers] PASSED [  0%]
+2026-11-05T08:41:29.7615385Z specification_tests/test_asset_identifier_methods.py::test_send_identifier_methods_present_in_method_set[SendTextIdentifiers] PASSED [  0%]
+2026-11-05T08:41:29.7670821Z specification_tests/test_asset_identifier_methods.py::test_get_identifiers_method_present_in_method_set PASSED [  0%]
+2026-11-05T08:41:29.7724824Z specification_tests/test_asset_identifier_methods.py::test_reset_identifiers_method_present_in_method_set PASSED [  0%]
+2026-11-05T08:41:31.8504567Z specification_tests/test_asset_identifier_methods.py::test_get_identifiers_callable PASSED [  0%]
+2026-11-05T08:41:31.8772625Z specification_tests/test_asset_identifier_methods.py::test_get_identifiers_returns_list_or_none PASSED [  0%]
+2026-11-05T08:41:31.9035352Z specification_tests/test_asset_identifier_methods.py::test_reset_identifiers_callable PASSED [  0%]
+2026-11-05T08:41:31.9296466Z specification_tests/test_asset_identifier_methods.py::test_reset_identifiers_returns_status_output PASSED [  0%]
+2026-11-05T08:41:31.9555616Z specification_tests/test_asset_identifier_methods.py::test_send_text_identifiers_callable PASSED [  0%]
+2026-11-05T08:41:34.4713645Z specification_tests/test_asset_identifier_methods.py::test_send_text_then_get_then_reset_round_trip PASSED [  0%]
+2026-11-05T08:41:34.4793241Z specification_tests/test_asset_joining_variable_nodes.py::test_cable_length_physical_quantity_via_has_component PASSED [  1%]
+2026-11-05T08:41:34.4850503Z specification_tests/test_asset_joining_variable_nodes.py::test_cable_length_enum_strings_accessible PASSED [  1%]
+2026-11-05T08:41:34.4922498Z specification_tests/test_asset_joining_variable_nodes.py::test_feeder_feeding_speed_physical_quantity_via_has_component PASSED [  1%]
+2026-11-05T08:41:34.4982689Z specification_tests/test_asset_joining_variable_nodes.py::test_feeder_feeding_speed_enum_strings_accessible PASSED [  1%]
+2026-11-05T08:41:34.5045799Z specification_tests/test_asset_joining_variable_nodes.py::test_battery_nominal_voltage_physical_quantity_via_has_component PASSED [  1%]
+2026-11-05T08:41:34.5105908Z specification_tests/test_asset_joining_variable_nodes.py::test_battery_nominal_voltage_enum_strings_accessible PASSED [  1%]
+2026-11-05T08:41:34.5173920Z specification_tests/test_asset_joining_variable_nodes.py::test_battery_nominal_voltage_engineering_unit_is_volt PASSED [  1%]
+2026-11-05T08:41:34.5222982Z specification_tests/test_asset_joining_variable_nodes.py::test_battery_capacity_physical_quantity_via_has_component PASSED [  1%]
+2026-11-05T08:41:34.5277788Z specification_tests/test_asset_joining_variable_nodes.py::test_battery_capacity_enum_strings_accessible PASSED [  1%]
+2026-11-05T08:41:34.5347239Z specification_tests/test_asset_joining_variable_nodes.py::test_battery_capacity_physical_quantity_is_other PASSED [  1%]
+2026-11-05T08:41:34.5411160Z specification_tests/test_asset_joining_variable_nodes.py::test_battery_capacity_engineering_unit_is_ampere_hour PASSED [  1%]
+2026-11-05T08:41:34.5469318Z specification_tests/test_asset_joining_variable_nodes.py::test_power_supply_nominal_power_physical_quantity_via_has_component PASSED [  2%]
+2026-11-05T08:41:34.5520984Z specification_tests/test_asset_joining_variable_nodes.py::test_power_supply_nominal_power_enum_strings_accessible PASSED [  2%]
+2026-11-05T08:41:34.5568735Z specification_tests/test_asset_joining_variable_nodes.py::test_power_supply_actual_power_physical_quantity_via_has_component PASSED [  2%]
+2026-11-05T08:41:34.5620743Z specification_tests/test_asset_joining_variable_nodes.py::test_power_supply_actual_power_enum_strings_accessible PASSED [  2%]
+2026-11-05T08:41:34.5679059Z specification_tests/test_asset_joining_variable_nodes.py::test_sensor_measured_value_physical_quantity_via_has_component PASSED [  2%]
+2026-11-05T08:41:34.5733033Z specification_tests/test_asset_joining_variable_nodes.py::test_sensor_measured_value_enum_strings_accessible PASSED [  2%]
+2026-11-05T08:41:34.5778773Z specification_tests/test_asset_joining_variable_nodes.py::test_sensor_measured_value_is_navigable PASSED [  2%]
+2026-11-05T08:41:34.5837617Z specification_tests/test_asset_joining_variable_nodes.py::test_tool_max_torque_physical_quantity_via_has_component PASSED [  2%]
+2026-11-05T08:41:34.5885986Z specification_tests/test_asset_joining_variable_nodes.py::test_tool_min_torque_physical_quantity_via_has_component PASSED [  2%]
+2026-11-05T08:41:34.5936477Z specification_tests/test_asset_joining_variable_nodes.py::test_tool_max_speed_physical_quantity_via_has_component PASSED [  2%]
+2026-11-05T08:41:34.5998835Z specification_tests/test_asset_joining_variable_nodes.py::test_tool_max_torque_enum_strings_accessible PASSED [  2%]
+2026-11-05T08:41:34.6015074Z specification_tests/test_asset_management.py::test_asset_management_addin_present PASSED [  3%]
+2026-11-05T08:41:34.6040450Z specification_tests/test_asset_management.py::test_asset_management_assets_folder_present PASSED [  3%]
+2026-11-05T08:41:34.6067302Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[Controllers] PASSED [  3%]
+2026-11-05T08:41:34.6093599Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[Tools] PASSED [  3%]
+2026-11-05T08:41:34.6119706Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[Batteries] PASSED [  3%]
+2026-11-05T08:41:34.6146868Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[Servos] PASSED [  3%]
+2026-11-05T08:41:34.6173436Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[Cables] PASSED [  3%]
+2026-11-05T08:41:34.6199455Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[Feeders] PASSED [  3%]
+2026-11-05T08:41:34.6226176Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[PowerSupplies] PASSED [  3%]
+2026-11-05T08:41:34.6252178Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[Sensors] PASSED [  3%]
+2026-11-05T08:41:34.6281873Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[MemoryDevices] PASSED [  4%]
+2026-11-05T08:41:34.6308446Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[Accessories] PASSED [  4%]
+2026-11-05T08:41:34.6334312Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[SubComponents] PASSED [  4%]
+2026-11-05T08:41:34.6360526Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[SoftwareComponents] PASSED [  4%]
+2026-11-05T08:41:34.6386099Z specification_tests/test_asset_management.py::test_all_asset_category_folders_present[VirtualStations] PASSED [  4%]
+2026-11-05T08:41:34.6408820Z specification_tests/test_asset_management.py::test_assets_folder_not_typed_as_joining_system PASSED [  4%]
+2026-11-05T08:41:34.6433630Z specification_tests/test_asset_management.py::test_browsing_absent_folder_returns_none PASSED [  4%]
+2026-11-05T08:41:34.6471559Z specification_tests/test_asset_management.py::test_controllers_folder_has_at_least_one_instance PASSED [  4%]
+2026-11-05T08:41:34.6497787Z specification_tests/test_asset_management.py::test_controller_implements_icontroller_type_interface PASSED [  4%]
+2026-11-05T08:41:34.6523262Z specification_tests/test_asset_management.py::test_all_controller_instances_have_identification PASSED [  4%]
+2026-11-05T08:41:34.6559616Z specification_tests/test_asset_management.py::test_controller_identification_has_manufacturer PASSED [  4%]
+2026-11-05T08:41:34.6595231Z specification_tests/test_asset_management.py::test_controller_identification_has_manufacturer_uri PASSED [  5%]
+2026-11-05T08:41:34.6631503Z specification_tests/test_asset_management.py::test_controller_identification_has_model PASSED [  5%]
+2026-11-05T08:41:34.6667733Z specification_tests/test_asset_management.py::test_controller_identification_has_device_class PASSED [  5%]
+2026-11-05T08:41:34.6702936Z specification_tests/test_asset_management.py::test_controller_identification_has_serial_number PASSED [  5%]
+2026-11-05T08:41:34.6737944Z specification_tests/test_asset_management.py::test_controller_identification_has_product_code PASSED [  5%]
+2026-11-05T08:41:34.6773528Z specification_tests/test_asset_management.py::test_controller_identification_has_product_instance_uri PASSED [  5%]
+2026-11-05T08:41:34.6809394Z specification_tests/test_asset_management.py::test_controller_identification_has_hardware_or_software_revision PASSED [  5%]
+2026-11-05T08:41:34.6833826Z specification_tests/test_asset_management.py::test_controller_has_parameters_node PASSED [  5%]
+2026-11-05T08:41:34.6867131Z specification_tests/test_asset_management.py::test_controller_parameters_has_type_property PASSED [  5%]
+2026-11-05T08:41:34.6891435Z specification_tests/test_asset_management.py::test_tools_folder_has_at_least_one_instance PASSED [  5%]
+2026-11-05T08:41:34.6915932Z specification_tests/test_asset_management.py::test_tool_implements_itool_type_interface PASSED [  5%]
+2026-11-05T08:41:34.6941186Z specification_tests/test_asset_management.py::test_all_tool_instances_have_identification PASSED [  6%]
+2026-11-05T08:41:34.6979541Z specification_tests/test_asset_management.py::test_tool_identification_has_serial_number PASSED [  6%]
+2026-11-05T08:41:34.7015799Z specification_tests/test_asset_management.py::test_tool_identification_has_manufacturer PASSED [  6%]
+2026-11-05T08:41:34.7052275Z specification_tests/test_asset_management.py::test_tool_identification_has_product_instance_uri PASSED [  6%]
+2026-11-05T08:41:34.7077839Z specification_tests/test_asset_management.py::test_tool_has_parameters_node PASSED [  6%]
+2026-11-05T08:41:34.7114460Z specification_tests/test_asset_management.py::test_tool_parameters_has_type_property PASSED [  6%]
+2026-11-05T08:41:34.7149806Z specification_tests/test_asset_management.py::test_servos_folder_has_at_least_one_instance PASSED [  6%]
+2026-11-05T08:41:34.7181073Z specification_tests/test_asset_management.py::test_servo_implements_iservo_type_interface PASSED [  6%]
+2026-11-05T08:41:34.7224339Z specification_tests/test_asset_management.py::test_servo_parameters_has_node_number PASSED [  6%]
+2026-11-05T08:41:34.7262554Z specification_tests/test_asset_management.py::test_memory_devices_folder_has_at_least_one_instance PASSED [  6%]
+2026-11-05T08:41:34.7295344Z specification_tests/test_asset_management.py::test_memory_device_implements_imemory_device_type_interface PASSED [  6%]
+2026-11-05T08:41:34.7318595Z specification_tests/test_asset_management.py::test_cables_folder_has_at_least_one_instance PASSED [  7%]
+2026-11-05T08:41:34.7349817Z specification_tests/test_asset_management.py::test_cable_implements_icable_type_interface PASSED [  7%]
+2026-11-05T08:41:34.7374316Z specification_tests/test_asset_management.py::test_power_supplies_folder_has_at_least_one_instance PASSED [  7%]
+2026-11-05T08:41:34.7405189Z specification_tests/test_asset_management.py::test_power_supply_implements_ipower_supply_type_interface PASSED [  7%]
+2026-11-05T08:41:34.7446434Z specification_tests/test_asset_management.py::test_power_supply_parameters_has_input_specification PASSED [  7%]
+2026-11-05T08:41:34.7469530Z specification_tests/test_asset_management.py::test_feeders_folder_has_at_least_one_instance PASSED [  7%]
+2026-11-05T08:41:34.7498953Z specification_tests/test_asset_management.py::test_feeder_implements_ifeeder_type_interface PASSED [  7%]
+2026-11-05T08:41:34.7537683Z specification_tests/test_asset_management.py::test_feeder_parameters_has_material PASSED [  7%]
+2026-11-05T08:41:34.7561331Z specification_tests/test_asset_management.py::test_batteries_folder_has_at_least_one_instance PASSED [  7%]
+2026-11-05T08:41:34.7613394Z specification_tests/test_asset_management.py::test_battery_parameters_has_nominal_voltage_and_capacity PASSED [  7%]
+2026-11-05T08:41:34.7637383Z specification_tests/test_asset_management.py::test_sensors_folder_has_at_least_one_instance PASSED [  8%]
+2026-11-05T08:41:34.7668180Z specification_tests/test_asset_management.py::test_sensor_implements_isensor_type_interface PASSED [  8%]
+2026-11-05T08:41:34.7703037Z specification_tests/test_asset_management.py::test_accessories_folder_has_at_least_one_instance PASSED [  8%]
+2026-11-05T08:41:34.7734092Z specification_tests/test_asset_management.py::test_accessory_implements_iaccessory_type_interface PASSED [  8%]
+2026-11-05T08:41:34.7769405Z specification_tests/test_asset_management.py::test_software_components_folder_has_at_least_one_instance PASSED [  8%]
+2026-11-05T08:41:34.7799670Z specification_tests/test_asset_management.py::test_software_implements_isoftware_type_interface PASSED [  8%]
+2026-11-05T08:41:34.7833703Z specification_tests/test_asset_management.py::test_sub_components_folder_has_at_least_one_instance PASSED [  8%]
+2026-11-05T08:41:34.7864424Z specification_tests/test_asset_management.py::test_sub_component_implements_isub_component_type_interface PASSED [  8%]
+2026-11-05T08:41:34.7900790Z specification_tests/test_asset_management.py::test_virtual_stations_folder_has_at_least_one_instance PASSED [  8%]
+2026-11-05T08:41:34.7931628Z specification_tests/test_asset_management.py::test_virtual_station_implements_ivirtual_station_type_interface PASSED [  8%]
+2026-11-05T08:41:34.7958009Z specification_tests/test_asset_management.py::test_asset_has_operation_counters_object[controllers_instances] PASSED [  8%]
+2026-11-05T08:41:34.7983710Z specification_tests/test_asset_management.py::test_asset_has_operation_counters_object[tools_instances] PASSED [  9%]
+2026-11-05T08:41:34.8015823Z specification_tests/test_asset_management.py::test_tool_operation_counters_has_operation_cycle_counter PASSED [  9%]
+2026-11-05T08:41:34.8055250Z specification_tests/test_asset_management.py::test_battery_operation_counters_has_operation_cycle_counter PASSED [  9%]
+2026-11-05T08:41:34.8104501Z specification_tests/test_asset_management.py::test_asset_health_has_device_health_property[controllers_instances] PASSED [  9%]
+2026-11-05T08:41:34.8155020Z specification_tests/test_asset_management.py::test_asset_health_has_device_health_property[tools_instances] PASSED [  9%]
+2026-11-05T08:41:34.8199469Z specification_tests/test_asset_management.py::test_asset_monitoring_health_has_device_health_property[controllers_instances] PASSED [  9%]
+2026-11-05T08:41:34.8241310Z specification_tests/test_asset_management.py::test_asset_monitoring_health_has_device_health_property[tools_instances] PASSED [  9%]
+2026-11-05T08:41:34.8292011Z specification_tests/test_asset_management.py::test_asset_maintenance_service_has_required_properties[controllers_instances] PASSED [  9%]
+2026-11-05T08:41:34.8342243Z specification_tests/test_asset_management.py::test_asset_maintenance_service_has_required_properties[tools_instances] PASSED [  9%]
+2026-11-05T08:41:34.8391926Z specification_tests/test_asset_management.py::test_asset_maintenance_calibration_has_required_properties[controllers_instances] PASSED [  9%]
+2026-11-05T08:41:34.8440791Z specification_tests/test_asset_management.py::test_asset_maintenance_calibration_has_required_properties[tools_instances] PASSED [  9%]
+2026-11-05T08:41:34.8476215Z specification_tests/test_asset_management.py::test_asset_identification_has_joining_technology_property[controllers_instances] PASSED [ 10%]
+2026-11-05T08:41:34.8511865Z specification_tests/test_asset_management.py::test_asset_identification_has_joining_technology_property[tools_instances] PASSED [ 10%]
+2026-11-05T08:41:34.8537772Z specification_tests/test_asset_management.py::test_asset_has_machinery_building_blocks[controllers_instances] PASSED [ 10%]
+2026-11-05T08:41:34.8563670Z specification_tests/test_asset_management.py::test_asset_has_machinery_building_blocks[tools_instances] PASSED [ 10%]
+2026-11-05T08:41:34.8590920Z specification_tests/test_asset_management.py::test_asset_has_monitoring_node[controllers_instances] PASSED [ 10%]
+2026-11-05T08:41:34.8617739Z specification_tests/test_asset_management.py::test_asset_has_monitoring_node[tools_instances] PASSED [ 10%]
+2026-11-05T08:41:34.8642143Z specification_tests/test_asset_management.py::test_controller_asset_associated_with_references PASSED [ 10%]
+2026-11-05T08:41:34.8686622Z specification_tests/test_asset_management.py::test_controller_product_instance_uri_unique_across_instances PASSED [ 10%]
+2026-11-05T08:41:36.9172554Z specification_tests/test_asset_management.py::test_controller_serial_number_write_rejected PASSED [ 10%]
+2026-11-05T08:41:36.9213222Z specification_tests/test_asset_management.py::test_tool_identification_has_device_class PASSED [ 10%]
+2026-11-05T08:41:36.9273357Z specification_tests/test_asset_management.py::test_tool_has_connected_property PASSED [ 11%]
+2026-11-05T08:41:36.9328868Z specification_tests/test_asset_management.py::test_tool_has_enabled_property PASSED [ 11%]
+2026-11-05T08:41:36.9380516Z specification_tests/test_asset_management.py::test_servo_identification_has_manufacturer PASSED [ 11%]
+2026-11-05T08:41:36.9441544Z specification_tests/test_asset_management.py::test_servo_identification_has_serial_number PASSED [ 11%]
+2026-11-05T08:41:36.9493701Z specification_tests/test_asset_management.py::test_memory_device_identification_has_manufacturer PASSED [ 11%]
+2026-11-05T08:41:36.9538554Z specification_tests/test_asset_management.py::test_memory_device_identification_has_serial_number PASSED [ 11%]
+2026-11-05T08:41:36.9582221Z specification_tests/test_asset_management.py::test_cable_identification_has_manufacturer PASSED [ 11%]
+2026-11-05T08:41:36.9631366Z specification_tests/test_asset_management.py::test_cable_identification_serial_number_is_non_empty PASSED [ 11%]
+2026-11-05T08:41:36.9675173Z specification_tests/test_asset_management.py::test_power_supply_identification_has_manufacturer PASSED [ 11%]
+2026-11-05T08:41:36.9719158Z specification_tests/test_asset_management.py::test_power_supply_identification_has_serial_number PASSED [ 11%]
+2026-11-05T08:41:36.9762799Z specification_tests/test_asset_management.py::test_feeder_identification_has_manufacturer PASSED [ 11%]
+2026-11-05T08:41:36.9805960Z specification_tests/test_asset_management.py::test_feeder_identification_has_serial_number PASSED [ 12%]
+2026-11-05T08:41:36.9846882Z specification_tests/test_asset_management.py::test_feeder_parameters_has_type_property PASSED [ 12%]
+2026-11-05T08:41:36.9878869Z specification_tests/test_asset_management.py::test_battery_implements_ibattery_type_interface PASSED [ 12%]
+2026-11-05T08:41:36.9923079Z specification_tests/test_asset_management.py::test_battery_identification_has_manufacturer PASSED [ 12%]
+2026-11-05T08:41:36.9967573Z specification_tests/test_asset_management.py::test_battery_identification_has_serial_number PASSED [ 12%]
+2026-11-05T08:41:37.0010874Z specification_tests/test_asset_management.py::test_sensor_identification_has_manufacturer PASSED [ 12%]
+2026-11-05T08:41:37.0053187Z specification_tests/test_asset_management.py::test_sensor_identification_has_serial_number PASSED [ 12%]
+2026-11-05T08:41:37.0092134Z specification_tests/test_asset_management.py::test_sensor_parameters_has_type_property PASSED [ 12%]
+2026-11-05T08:41:37.0134775Z specification_tests/test_asset_management.py::test_accessory_identification_has_manufacturer PASSED [ 12%]
+2026-11-05T08:41:37.0178899Z specification_tests/test_asset_management.py::test_accessory_identification_has_serial_number PASSED [ 12%]
+2026-11-05T08:41:37.0219082Z specification_tests/test_asset_management.py::test_accessory_parameters_has_type_property PASSED [ 12%]
+2026-11-05T08:41:37.0260014Z specification_tests/test_asset_management.py::test_software_identification_has_manufacturer PASSED [ 13%]
+2026-11-05T08:41:37.0307385Z specification_tests/test_asset_management.py::test_software_identification_has_software_revision PASSED [ 13%]
+2026-11-05T08:41:37.0350470Z specification_tests/test_asset_management.py::test_sub_component_identification_has_manufacturer PASSED [ 13%]
+2026-11-05T08:41:37.0393276Z specification_tests/test_asset_management.py::test_sub_component_identification_has_serial_number PASSED [ 13%]
+2026-11-05T08:41:37.0432059Z specification_tests/test_asset_management.py::test_sub_component_parameters_has_type_property PASSED [ 13%]
+2026-11-05T08:41:37.0465644Z specification_tests/test_asset_management.py::test_operation_counters_has_machinery_counter_type_definition[controllers_instances] PASSED [ 13%]
+2026-11-05T08:41:37.0498583Z specification_tests/test_asset_management.py::test_operation_counters_has_machinery_counter_type_definition[tools_instances] PASSED [ 13%]
+2026-11-05T08:41:37.0567234Z specification_tests/test_asset_management.py::test_operation_counters_values_are_non_negative[controllers_instances] PASSED [ 13%]
+2026-11-05T08:41:37.0634891Z specification_tests/test_asset_management.py::test_operation_counters_values_are_non_negative[tools_instances] PASSED [ 13%]
+2026-11-05T08:41:37.0674342Z specification_tests/test_asset_management.py::test_tool_operation_cycle_counter_value_is_non_negative PASSED [ 13%]
+2026-11-05T08:41:37.0713485Z specification_tests/test_asset_management.py::test_controller_operation_cycle_counter_is_valid_when_present PASSED [ 13%]
+2026-11-05T08:41:37.0762444Z specification_tests/test_asset_management.py::test_battery_operation_cycle_counter_value_is_non_negative PASSED [ 14%]
+2026-11-05T08:41:37.0803678Z specification_tests/test_asset_management.py::test_tool_operation_cycle_counter_is_valid_under_common_operation_counters PASSED [ 14%]
+2026-11-05T08:41:37.0864768Z specification_tests/test_asset_management.py::test_asset_health_device_health_value_is_valid_enumeration[controllers_instances] PASSED [ 14%]
+2026-11-05T08:41:37.0932033Z specification_tests/test_asset_management.py::test_asset_health_device_health_value_is_valid_enumeration[tools_instances] PASSED [ 14%]
+2026-11-05T08:41:37.1000477Z specification_tests/test_asset_management.py::test_asset_health_device_health_is_normal_when_no_faults[controllers_instances] PASSED [ 14%]
+2026-11-05T08:41:37.1065106Z specification_tests/test_asset_management.py::test_asset_health_device_health_is_normal_when_no_faults[tools_instances] PASSED [ 14%]
+2026-11-05T08:41:37.1118852Z specification_tests/test_asset_management.py::test_asset_monitoring_health_device_health_is_readable[controllers_instances] PASSED [ 14%]
+2026-11-05T08:41:37.1174730Z specification_tests/test_asset_management.py::test_asset_monitoring_health_device_health_is_readable[tools_instances] PASSED [ 14%]
+2026-11-05T08:41:37.1221076Z specification_tests/test_asset_management.py::test_asset_maintenance_service_next_service_date_is_in_future[controllers_instances] PASSED [ 14%]
+2026-11-05T08:41:37.1266758Z specification_tests/test_asset_management.py::test_asset_maintenance_service_next_service_date_is_in_future[tools_instances] PASSED [ 14%]
+2026-11-05T08:41:37.1311010Z specification_tests/test_asset_management.py::test_asset_maintenance_calibration_value_is_present[controllers_instances] PASSED [ 15%]
+2026-11-05T08:41:37.1354317Z specification_tests/test_asset_management.py::test_asset_maintenance_calibration_value_is_present[tools_instances] PASSED [ 15%]
+2026-11-05T08:41:37.1396977Z specification_tests/test_asset_management.py::test_asset_maintenance_calibration_next_calibration_date_in_future[controllers_instances] PASSED [ 15%]
+2026-11-05T08:41:37.1439298Z specification_tests/test_asset_management.py::test_asset_maintenance_calibration_next_calibration_date_in_future[tools_instances] PASSED [ 15%]
+2026-11-05T08:41:37.1489682Z specification_tests/test_asset_management.py::test_asset_has_connected_property[controllers_instances] PASSED [ 15%]
+2026-11-05T08:41:37.1541175Z specification_tests/test_asset_management.py::test_asset_has_connected_property[tools_instances] PASSED [ 15%]
+2026-11-05T08:41:37.1590192Z specification_tests/test_asset_management.py::test_asset_has_enabled_property[controllers_instances] PASSED [ 15%]
+2026-11-05T08:41:37.1641476Z specification_tests/test_asset_management.py::test_asset_has_enabled_property[tools_instances] PASSED [ 15%]
+2026-11-05T08:41:37.1709582Z specification_tests/test_asset_management.py::test_tool_and_controller_joining_technology_is_non_zero PASSED [ 15%]
+2026-11-05T08:41:37.1759680Z specification_tests/test_asset_management.py::test_joining_technology_invalid_integer_write_rejected PASSED [ 15%]
+2026-11-05T08:41:37.1794011Z specification_tests/test_asset_management.py::test_machinery_building_blocks_has_correct_type_definition[controllers_instances] PASSED [ 15%]
+2026-11-05T08:41:37.1826736Z specification_tests/test_asset_management.py::test_machinery_building_blocks_has_correct_type_definition[tools_instances] PASSED [ 16%]
+2026-11-05T08:41:37.1867707Z specification_tests/test_asset_management.py::test_machinery_building_blocks_identification_type_is_machine_or_component[controllers_instances] PASSED [ 16%]
+2026-11-05T08:41:37.1908221Z specification_tests/test_asset_management.py::test_machinery_building_blocks_identification_type_is_machine_or_component[tools_instances] PASSED [ 16%]
+2026-11-05T08:41:37.1935021Z specification_tests/test_asset_management.py::test_all_assets_in_fixture_have_machinery_building_blocks[controllers_instances] PASSED [ 16%]
+2026-11-05T08:41:37.3998113Z specification_tests/test_asset_management.py::test_all_assets_in_fixture_have_machinery_building_blocks[tools_instances] PASSED [ 16%]
+2026-11-05T08:41:37.4040232Z specification_tests/test_asset_operations.py::test_asset_management_method_set_present PASSED [ 16%]
+2026-11-05T08:41:37.4087851Z specification_tests/test_asset_operations.py::test_asset_operation_method_input_arguments_match_nodeset[DisconnectAsset-expected_args0] SKIPPED [ 16%]
+2026-11-05T08:41:37.4183929Z specification_tests/test_asset_operations.py::test_asset_operation_method_input_arguments_match_nodeset[EnableAsset-expected_args1] PASSED [ 16%]
+2026-11-05T08:41:37.4227847Z specification_tests/test_asset_operations.py::test_asset_operation_method_input_arguments_match_nodeset[ExecuteOperation-expected_args2] SKIPPED [ 16%]
+2026-11-05T08:41:37.4270750Z specification_tests/test_asset_operations.py::test_asset_operation_method_input_arguments_match_nodeset[GetErrorInformation-expected_args3] SKIPPED [ 16%]
+2026-11-05T08:41:37.4313691Z specification_tests/test_asset_operations.py::test_asset_operation_method_input_arguments_match_nodeset[RebootAsset-expected_args4] SKIPPED [ 16%]
+2026-11-05T08:41:37.4355852Z specification_tests/test_asset_operations.py::test_asset_operation_method_input_arguments_match_nodeset[SetCalibration-expected_args5] SKIPPED [ 17%]
+2026-11-05T08:41:37.4395586Z specification_tests/test_asset_operations.py::test_enable_asset_method_present_in_method_set PASSED [ 17%]
+2026-11-05T08:41:37.4407302Z specification_tests/test_asset_operations.py::test_disconnect_asset_method_present_in_method_set SKIPPED [ 17%]
+2026-11-05T08:41:37.4418493Z specification_tests/test_asset_operations.py::test_disable_asset_then_enable_asset_restores_state SKIPPED [ 17%]
+2026-11-05T08:41:40.5798040Z specification_tests/test_asset_operations.py::test_enable_asset_callable_with_tool_product_instance_uri 
+2026-11-05T08:41:40.5798537Z 
+2026-11-05T08:41:40.5799004Z - generated xml file: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\test-results\pytest.xml -
+2026-11-05T08:41:40.5799659Z ============================ slowest 30 durations =============================
+2026-11-05T08:41:40.5800161Z 5.27s setup    specification_tests/test_asset_identifier_methods.py::test_send_identifier_methods_present_in_method_set[SendIdentifiers]
+2026-11-05T08:41:40.5800778Z 2.07s setup    specification_tests/test_asset_identifier_methods.py::test_send_text_then_get_then_reset_round_trip
+2026-11-05T08:41:40.5801313Z 2.05s setup    specification_tests/test_asset_identifier_methods.py::test_get_identifiers_callable
+2026-11-05T08:41:40.5801810Z 2.04s setup    specification_tests/test_asset_management.py::test_controller_serial_number_write_rejected
+2026-11-05T08:41:40.5802367Z 0.42s teardown specification_tests/test_asset_identifier_methods.py::test_send_text_then_get_then_reset_round_trip
+2026-11-05T08:41:40.5802980Z 0.20s teardown specification_tests/test_asset_management.py::test_all_assets_in_fixture_have_machinery_building_blocks[tools_instances]
+2026-11-05T08:41:40.5803617Z 0.03s call     specification_tests/test_asset_identifier_methods.py::test_send_text_then_get_then_reset_round_trip
+2026-11-05T08:41:40.5804123Z 0.03s call     specification_tests/test_asset_identifier_methods.py::test_get_identifiers_callable
+2026-11-05T08:41:40.5804605Z 0.02s call     specification_tests/test_asset_identifier_methods.py::test_reset_identifiers_callable
+2026-11-05T08:41:40.5805528Z 0.02s call     specification_tests/test_asset_identifier_methods.py::test_get_identifiers_returns_list_or_none
+2026-11-05T08:41:40.5806084Z 0.02s call     specification_tests/test_asset_identifier_methods.py::test_reset_identifiers_returns_status_output
+2026-11-05T08:41:40.5807536Z 0.02s call     specification_tests/test_asset_identifier_methods.py::test_send_text_identifiers_callable
+2026-11-05T08:41:40.5808149Z 0.01s call     specification_tests/test_asset_operations.py::test_asset_operation_method_input_arguments_match_nodeset[EnableAsset-expected_args1]
+2026-11-05T08:41:40.5808794Z 0.01s call     specification_tests/test_asset_joining_variable_nodes.py::test_battery_capacity_physical_quantity_is_other
+2026-11-05T08:41:40.5809397Z 0.01s call     specification_tests/test_asset_management.py::test_operation_counters_values_are_non_negative[controllers_instances]
+2026-11-05T08:41:40.5809985Z 0.01s call     specification_tests/test_asset_management.py::test_tool_and_controller_joining_technology_is_non_zero
+2026-11-05T08:41:40.5810555Z 0.01s call     specification_tests/test_asset_management.py::test_operation_counters_values_are_non_negative[tools_instances]
+2026-11-05T08:41:40.5811150Z 0.01s call     specification_tests/test_asset_joining_variable_nodes.py::test_battery_nominal_voltage_engineering_unit_is_volt
+2026-11-05T08:41:40.5811782Z 0.00s call     specification_tests/test_asset_management.py::test_asset_health_device_health_is_normal_when_no_faults[controllers_instances]
+2026-11-05T08:41:40.5812414Z 0.00s call     specification_tests/test_asset_joining_variable_nodes.py::test_battery_capacity_engineering_unit_is_ampere_hour
+2026-11-05T08:41:40.5813022Z 0.00s call     specification_tests/test_asset_management.py::test_asset_health_device_health_value_is_valid_enumeration[tools_instances]
+2026-11-05T08:41:40.5813656Z 0.00s call     specification_tests/test_asset_management.py::test_asset_health_device_health_is_normal_when_no_faults[tools_instances]
+2026-11-05T08:41:40.5814288Z 0.00s call     specification_tests/test_asset_identifier_methods.py::test_send_identifier_methods_present_in_method_set[SendIdentifiers]
+2026-11-05T08:41:40.5814940Z 0.00s call     specification_tests/test_asset_management.py::test_asset_health_device_health_value_is_valid_enumeration[controllers_instances]
+2026-11-05T08:41:40.5815758Z 0.00s call     specification_tests/test_asset_joining_variable_nodes.py::test_battery_nominal_voltage_enum_strings_accessible
+2026-11-05T08:41:40.5816487Z 0.00s call     specification_tests/test_asset_joining_variable_nodes.py::test_tool_max_torque_enum_strings_accessible
+2026-11-05T08:41:40.5817058Z 0.00s call     specification_tests/test_asset_joining_variable_nodes.py::test_feeder_feeding_speed_enum_strings_accessible
+2026-11-05T08:41:40.5817661Z 0.00s call     specification_tests/test_asset_joining_variable_nodes.py::test_feeder_feeding_speed_physical_quantity_via_has_component
+2026-11-05T08:41:40.5818310Z 0.00s call     specification_tests/test_asset_identifier_methods.py::test_send_identifier_methods_present_in_method_set[SendTextIdentifiers]
+2026-11-05T08:41:40.5818895Z 0.00s call     specification_tests/test_asset_management.py::test_servo_identification_has_serial_number
+2026-11-05T08:41:40.5819649Z - Generated html report: file:///D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Test_Client/test-results/report.html -
+2026-11-05T08:41:40.5820368Z =========================== short test summary info ===========================
+2026-11-05T08:41:40.5821043Z SKIPPED [1] helpers\skip_reasons.py:108: COMPANION SPEC PROFILE NOTE - Optional AssetManagement method 'DisconnectAsset' is absent; dedicated method CU tracks server support
+2026-11-05T08:41:40.5821955Z SKIPPED [1] helpers\skip_reasons.py:108: COMPANION SPEC PROFILE NOTE - Optional AssetManagement method 'ExecuteOperation' is absent; dedicated method CU tracks server support
+2026-11-05T08:41:40.5823684Z SKIPPED [1] helpers\skip_reasons.py:108: COMPANION SPEC PROFILE NOTE - Optional AssetManagement method 'GetErrorInformation' is absent; dedicated method CU tracks server support
+2026-11-05T08:41:40.5825052Z SKIPPED [1] helpers\skip_reasons.py:108: COMPANION SPEC PROFILE NOTE - Optional AssetManagement method 'RebootAsset' is absent; dedicated method CU tracks server support
+2026-11-05T08:41:40.5826994Z SKIPPED [1] helpers\skip_reasons.py:108: COMPANION SPEC PROFILE NOTE - Optional AssetManagement method 'SetCalibration' is absent; dedicated method CU tracks server support
+2026-11-05T08:41:40.5828088Z SKIPPED [2] conftest.py:197: Method 'DisconnectAsset' is not supported NOT SUPPORTED
+2026-11-05T08:41:40.5828695Z !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+2026-11-05T08:41:40.5829237Z C:\hostedtoolcache\windows\Python\3.14.10\x64\Lib\asyncio\runners.py:133: KeyboardInterrupt
+2026-11-05T08:41:40.5829710Z (to show a full traceback on KeyboardInterrupt use --full-trace)
+2026-11-05T08:41:40.5830104Z ======================= 179 passed, 7 skipped in 17.11s =======================
+2026-11-05T08:41:40.9574696Z ##[error]The operation was canceled.
+2026-11-05T08:41:41.0974510Z ##[group]Run python scripts/make_excel_report.py
+2026-11-05T08:41:41.0974926Z python scripts/make_excel_report.py
+2026-11-05T08:41:41.0975301Z # Visible GitHub run-page summary is owned by the 📋 System Tests Report job below.
+2026-11-05T08:41:41.0975751Z python scripts/make_specification_test_summary.py --github-summary=never
+2026-11-05T08:41:41.1061096Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-05T08:41:41.1061538Z env:
+2026-11-05T08:41:41.1061798Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:41:41.1062252Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:41.1062903Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:41:41.1063481Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:41.1063997Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:41.1064570Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:41.1065513Z   VIRTUAL_ENV: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\.venv
+2026-11-05T08:41:41.1066324Z   SERVER_PID: 8568
+2026-11-05T08:41:41.1066565Z   OPCUA_SERVER_PORT: 40462
+2026-11-05T08:41:41.1066908Z   OPCUA_SERVER_URL: opc.tcp://localhost:40462
+2026-11-05T08:41:41.1067420Z   OPCUA_CAPABILITIES_FILE: target_server_cu_profiles/simulator.sut.yaml
+2026-11-05T08:41:41.1067872Z ##[endgroup]
+2026-11-05T08:41:42.3551850Z Reading: test-results\pytest.xml
+2026-11-05T08:41:42.3552207Z   186 test cases found
+2026-11-05T08:41:42.3552356Z 
+2026-11-05T08:41:42.3552467Z Report written: test-results\report.xlsx
+2026-11-05T08:41:42.3552763Z   Passed:   179
+2026-11-05T08:41:42.3552963Z   Failed:   0
+2026-11-05T08:41:42.3553156Z   Skipped:  7
+2026-11-05T08:41:42.3553349Z   Xfailed:  0
+2026-11-05T08:41:42.3553532Z   Total:    186
+2026-11-05T08:41:42.3553956Z   CU sheets: IJT Facet Breakdown, Conformance Unit Details, Profile Coverage Comparison
+2026-11-05T08:41:42.6384397Z Summary written: test-results\summary.md
+2026-11-05T08:41:42.6385385Z Baseline written: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\test-results\report-baseline.json
+2026-11-05T08:41:42.9169267Z ##[group]Run Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/pytest.xml `
+2026-11-05T08:41:42.9170172Z Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/pytest.xml `
+2026-11-05T08:41:42.9170824Z   test-results/pytest.xml -ErrorAction SilentlyContinue
+2026-11-05T08:41:42.9171460Z Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/report.html `
+2026-11-05T08:41:42.9172101Z   test-results/report.html -ErrorAction SilentlyContinue
+2026-11-05T08:41:42.9172721Z Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/report.xlsx `
+2026-11-05T08:41:42.9173358Z   test-results/report.xlsx -ErrorAction SilentlyContinue
+2026-11-05T08:41:42.9174244Z Copy-Item OPC_UA_Clients/Release2/IJT_Test_Client/test-results/summary.md `
+2026-11-05T08:41:42.9174896Z   test-results/summary.md -ErrorAction SilentlyContinue
+2026-11-05T08:41:42.9252263Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-05T08:41:42.9252564Z env:
+2026-11-05T08:41:42.9252741Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:41:42.9253028Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:42.9253390Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:41:42.9253747Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:42.9254065Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:42.9254370Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:42.9254906Z   VIRTUAL_ENV: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\.venv
+2026-11-05T08:41:42.9255389Z   SERVER_PID: 8568
+2026-11-05T08:41:42.9255554Z   OPCUA_SERVER_PORT: 40462
+2026-11-05T08:41:42.9255780Z   OPCUA_SERVER_URL: opc.tcp://localhost:40462
+2026-11-05T08:41:42.9256023Z ##[endgroup]
+2026-11-05T08:41:43.6316471Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-05T08:41:43.6316853Z with:
+2026-11-05T08:41:43.6317033Z   name: results-testclient
+2026-11-05T08:41:43.6317582Z   path: test-results/pytest.xml
+test-results/smoke-sanity.xml
+test-results/report.html
+test-results/report.xlsx
+test-results/summary.md
+test-results/readiness/**
+
+2026-11-05T08:41:43.6318098Z   retention-days: 14
+2026-11-05T08:41:43.6318260Z   if-no-files-found: warn
+2026-11-05T08:41:43.6318427Z   compression-level: 6
+2026-11-05T08:41:43.6318582Z   overwrite: false
+2026-11-05T08:41:43.6318743Z   include-hidden-files: false
+2026-11-05T08:41:43.6318918Z   archive: true
+2026-11-05T08:41:43.6319069Z env:
+2026-11-05T08:41:43.6319227Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:41:43.6319495Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:43.6319840Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:41:43.6320208Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:43.6320510Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:43.6320802Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:43.6321326Z   VIRTUAL_ENV: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\.venv
+2026-11-05T08:41:43.6321784Z   SERVER_PID: 8568
+2026-11-05T08:41:43.6321935Z   OPCUA_SERVER_PORT: 40462
+2026-11-05T08:41:43.6322144Z   OPCUA_SERVER_URL: opc.tcp://localhost:40462
+2026-11-05T08:41:43.6322361Z ##[endgroup]
+2026-11-05T08:41:43.9945799Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-11-05T08:41:43.9949503Z The least common ancestor is D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\test-results. This will be the root directory of the artifact
+2026-11-05T08:41:43.9950169Z With the provided path, there will be 6 files uploaded
+2026-11-05T08:41:43.9953814Z Artifact name is valid!
+2026-11-05T08:41:43.9954889Z Root directory input is valid!
+2026-11-05T08:41:44.2089239Z Uploading artifact: results-testclient.zip
+2026-11-05T08:41:44.2121394Z Beginning upload of artifact content to blob storage
+2026-11-05T08:41:44.2860319Z Uploaded bytes 58801
+2026-11-05T08:41:44.2976578Z Finished uploading artifact content to blob storage!
+2026-11-05T08:41:44.2977278Z SHA256 digest of uploaded artifact is cae4e1638a73c32248e6d1d240477479ebdc4dcbfa6573a56263cd2fa2ea6a68
+2026-11-05T08:41:44.2977832Z Finalizing artifact upload
+2026-11-05T08:41:44.7558889Z Artifact results-testclient successfully finalized. Artifact ID 13400930434
+2026-11-05T08:41:44.7560216Z Artifact results-testclient has been successfully uploaded! Final size is 58801 bytes. Artifact ID is 13400930434
+2026-11-05T08:41:44.7567920Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/41996275741/artifacts/13400930434
+2026-11-05T08:41:44.9130922Z ##[group]Run python scripts/start_server_on_port.py --port 40462 --stop
+2026-11-05T08:41:44.9131418Z python scripts/start_server_on_port.py --port 40462 --stop
+2026-11-05T08:41:44.9204527Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-05T08:41:44.9204817Z env:
+2026-11-05T08:41:44.9204998Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T08:41:44.9205286Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:44.9205652Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-05T08:41:44.9206003Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:44.9206330Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:44.9206640Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-05T08:41:44.9207217Z   VIRTUAL_ENV: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Test_Client\.venv
+2026-11-05T08:41:44.9207693Z   SERVER_PID: 8568
+2026-11-05T08:41:44.9207866Z   OPCUA_SERVER_PORT: 40462
+2026-11-05T08:41:44.9208097Z   OPCUA_SERVER_URL: opc.tcp://localhost:40462
+2026-11-05T08:41:44.9208344Z ##[endgroup]
+2026-11-05T08:41:45.4820540Z     Stopped server PID 8568
+2026-11-05T08:41:45.4820978Z     Removed D:\a\_temp\ijt-sim\server_40462
+2026-11-05T08:41:45.7346887Z Post job cleanup.
+2026-11-05T08:41:46.0734236Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-05T08:41:46.1042500Z git version 2.56.0.windows.4
+2026-11-05T08:41:46.1101552Z Temporarily overriding HOME='D:\a\_temp\26a8b01d-54e6-4d26-9f4d-9e6747e5be20' before making global git config changes
+2026-11-05T08:41:46.1102273Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-05T08:41:46.1110985Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-05T08:41:46.1451426Z Removing SSH command configuration
+2026-11-05T08:41:46.1462247Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T08:41:46.1817277Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-05T08:41:46.6852378Z Removing HTTP extra header
+2026-11-05T08:41:46.6861945Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T08:41:46.7217954Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-05T08:41:47.2421589Z Removing includeIf entries pointing to credentials config files
+2026-11-05T08:41:47.2432419Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T08:41:47.2771718Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-05T08:41:47.8088673Z Cleaning up orphan processes

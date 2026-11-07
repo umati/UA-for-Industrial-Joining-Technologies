@@ -1,0 +1,536 @@
+﻿2026-11-05T13:02:21.1578952Z Current runner version: '2.338.2'
+2026-11-05T13:02:21.1598843Z ##[group]Runner Image Provisioner
+2026-11-05T13:02:21.1599512Z Hosted Compute Agent
+2026-11-05T13:02:21.1599882Z Version: 20261028.624
+2026-11-05T13:02:21.1600293Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-05T13:02:21.1600749Z Build Date: 2026-10-28T21:51:42Z
+2026-11-05T13:02:21.1601166Z Worker ID: {c98954ff-c060-4884-ac66-6691264be43f}
+2026-11-05T13:02:21.1601661Z Region: westus3
+2026-11-05T13:02:21.1602005Z Cloud: Azure
+2026-11-05T13:02:21.1602332Z ##[endgroup]
+2026-11-05T13:02:21.1603195Z ##[group]Operating System
+2026-11-05T13:02:21.1603571Z Ubuntu
+2026-11-05T13:02:21.1603974Z 24.04.5
+2026-11-05T13:02:21.1604296Z LTS
+2026-11-05T13:02:21.1604607Z ##[endgroup]
+2026-11-05T13:02:21.1604999Z ##[group]Runner Image
+2026-11-05T13:02:21.1605387Z Image: ubuntu-24.04
+2026-11-05T13:02:21.1605934Z Version: 20261101.360.1
+2026-11-05T13:02:21.1606736Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-05T13:02:21.1607675Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-05T13:02:21.1608247Z ##[endgroup]
+2026-11-05T13:02:21.1609002Z ##[group]GITHUB_TOKEN Permissions
+2026-11-05T13:02:21.1610244Z Contents: read
+2026-11-05T13:02:21.1610643Z Metadata: read
+2026-11-05T13:02:21.1611038Z ##[endgroup]
+2026-11-05T13:02:21.1612707Z Secret source: Actions
+2026-11-05T13:02:21.1613321Z Cache mode: write
+2026-11-05T13:02:21.1613873Z Prepare workflow directory
+2026-11-05T13:02:21.1880349Z Prepare all required actions
+2026-11-05T13:02:21.1914746Z Getting action download info
+2026-11-05T13:02:21.5640708Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-05T13:02:21.6563229Z Download action repository 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-05T13:02:22.3235058Z Download action repository 'umati/UA-for-Industrial-Joining-Technologies@5d1106a5636026098248f0f2c6b935f1d84a67f4' (SHA:5d1106a5636026098248f0f2c6b935f1d84a67f4)
+2026-11-05T13:02:25.2068009Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-05T13:02:25.3643943Z Complete job name: Console Client
+2026-11-05T13:02:25.4287150Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-05T13:02:25.4287530Z with:
+2026-11-05T13:02:25.4287671Z   persist-credentials: false
+2026-11-05T13:02:25.4287866Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T13:02:25.4289693Z   token: ***
+2026-11-05T13:02:25.4289818Z   ssh-strict: true
+2026-11-05T13:02:25.4289941Z   ssh-user: git
+2026-11-05T13:02:25.4290063Z   clean: true
+2026-11-05T13:02:25.4290194Z   sparse-checkout-cone-mode: true
+2026-11-05T13:02:25.4290346Z   fetch-depth: 1
+2026-11-05T13:02:25.4290479Z   fetch-tags: false
+2026-11-05T13:02:25.4290626Z   show-progress: true
+2026-11-05T13:02:25.4290767Z   lfs: false
+2026-11-05T13:02:25.4290883Z   submodules: false
+2026-11-05T13:02:25.4291010Z   set-safe-directory: true
+2026-11-05T13:02:25.4291158Z   allow-unsafe-pr-checkout: false
+2026-11-05T13:02:25.4291383Z env:
+2026-11-05T13:02:25.4291510Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:25.4291705Z ##[endgroup]
+2026-11-05T13:02:25.6280271Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T13:02:25.6281404Z ##[group]Getting Git version info
+2026-11-05T13:02:25.6281754Z Working directory is '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-05T13:02:25.6282277Z [command]/usr/bin/git version
+2026-11-05T13:02:25.6334506Z git version 2.56.0
+2026-11-05T13:02:25.6348724Z ##[endgroup]
+2026-11-05T13:02:25.6357842Z Temporarily overriding HOME='/home/runner/work/_temp/14228264-134d-4b75-9b59-8f17de5331f7' before making global git config changes
+2026-11-05T13:02:25.6359012Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-05T13:02:25.6362521Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-05T13:02:25.6406477Z Deleting the contents of '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-05T13:02:25.6408497Z ##[group]Determining repository object format
+2026-11-05T13:02:25.6409679Z ##[endgroup]
+2026-11-05T13:02:25.6410000Z ##[group]Initializing the repository
+2026-11-05T13:02:25.6412843Z [command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-05T13:02:25.6498276Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-05T13:02:25.6498838Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-05T13:02:25.6499295Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-05T13:02:25.6499682Z hint: call:
+2026-11-05T13:02:25.6499857Z hint:
+2026-11-05T13:02:25.6500121Z hint: 	git config --global init.defaultBranch <name>
+2026-11-05T13:02:25.6500402Z hint:
+2026-11-05T13:02:25.6500677Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-05T13:02:25.6501150Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-05T13:02:25.6501494Z hint:
+2026-11-05T13:02:25.6501678Z hint: 	git branch -m <name>
+2026-11-05T13:02:25.6501917Z hint:
+2026-11-05T13:02:25.6502209Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-05T13:02:25.6510252Z Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-05T13:02:25.6519745Z [command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T13:02:25.6570954Z ##[endgroup]
+2026-11-05T13:02:25.6571319Z ##[group]Disabling automatic garbage collection
+2026-11-05T13:02:25.6571631Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-05T13:02:25.6608669Z ##[endgroup]
+2026-11-05T13:02:25.6609005Z ##[group]Setting up auth
+2026-11-05T13:02:25.6609259Z Removing SSH command configuration
+2026-11-05T13:02:25.6613248Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T13:02:25.6647032Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-05T13:02:25.6959099Z Removing HTTP extra header
+2026-11-05T13:02:25.6963886Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T13:02:25.7007831Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-05T13:02:25.7224815Z Removing includeIf entries pointing to credentials config files
+2026-11-05T13:02:25.7229849Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T13:02:25.7270798Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-05T13:02:25.7468160Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-678a2c76-cc6d-4c9a-80fb-ff8ee3842108.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+2026-11-05T13:02:25.7510747Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-678a2c76-cc6d-4c9a-80fb-ff8ee3842108.config
+2026-11-05T13:02:25.7548578Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-678a2c76-cc6d-4c9a-80fb-ff8ee3842108.config
+2026-11-05T13:02:25.7587520Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-678a2c76-cc6d-4c9a-80fb-ff8ee3842108.config
+2026-11-05T13:02:25.7625355Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-678a2c76-cc6d-4c9a-80fb-ff8ee3842108.config
+2026-11-05T13:02:25.7661679Z ##[endgroup]
+2026-11-05T13:02:25.7666624Z ##[group]Fetching the repository
+2026-11-05T13:02:25.7667066Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +5d1106a5636026098248f0f2c6b935f1d84a67f4:refs/remotes/origin/main
+2026-11-05T13:02:27.0461819Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-05T13:02:27.0462370Z  * [new ref]         5d1106a5636026098248f0f2c6b935f1d84a67f4 -> origin/main
+2026-11-05T13:02:27.0469997Z [command]/usr/bin/git branch --list --remote origin/main
+2026-11-05T13:02:27.0505984Z   origin/main
+2026-11-05T13:02:27.0512325Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-11-05T13:02:27.0546007Z 5d1106a5636026098248f0f2c6b935f1d84a67f4
+2026-11-05T13:02:27.0549756Z ##[endgroup]
+2026-11-05T13:02:27.0550134Z ##[group]Determining the checkout info
+2026-11-05T13:02:27.0550564Z ##[endgroup]
+2026-11-05T13:02:27.0554078Z [command]/usr/bin/git sparse-checkout disable
+2026-11-05T13:02:27.0610682Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-05T13:02:27.0649082Z ##[group]Checking out the ref
+2026-11-05T13:02:27.0652265Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-05T13:02:27.2576291Z Switched to a new branch 'main'
+2026-11-05T13:02:27.2578844Z branch 'main' set up to track 'origin/main'.
+2026-11-05T13:02:27.2597438Z ##[endgroup]
+2026-11-05T13:02:27.2648902Z [command]/usr/bin/git log -1 --format=%H
+2026-11-05T13:02:27.2684536Z 5d1106a5636026098248f0f2c6b935f1d84a67f4
+2026-11-05T13:02:27.2693491Z ##[group]Removing auth
+2026-11-05T13:02:27.2693774Z Removing SSH command configuration
+2026-11-05T13:02:27.2696524Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T13:02:27.2737069Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-05T13:02:27.2939770Z Removing HTTP extra header
+2026-11-05T13:02:27.2942315Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T13:02:27.2981897Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-05T13:02:27.3179191Z Removing includeIf entries pointing to credentials config files
+2026-11-05T13:02:27.3181634Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T13:02:27.3220166Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-05T13:02:27.3220992Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-05T13:02:27.3221435Z includeif.gitdir:/github/workspace/.git.path
+2026-11-05T13:02:27.3221851Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-05T13:02:27.3228375Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-05T13:02:27.3260715Z /home/runner/work/_temp/git-credentials-678a2c76-cc6d-4c9a-80fb-ff8ee3842108.config
+2026-11-05T13:02:27.3269200Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-678a2c76\-cc6d\-4c9a\-80fb\-ff8ee3842108\.config
+2026-11-05T13:02:27.3316157Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-05T13:02:27.3349867Z /home/runner/work/_temp/git-credentials-678a2c76-cc6d-4c9a-80fb-ff8ee3842108.config
+2026-11-05T13:02:27.3356630Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-678a2c76\-cc6d\-4c9a\-80fb\-ff8ee3842108\.config
+2026-11-05T13:02:27.3396781Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-05T13:02:27.3428823Z /github/runner_temp/git-credentials-678a2c76-cc6d-4c9a-80fb-ff8ee3842108.config
+2026-11-05T13:02:27.3434084Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-678a2c76\-cc6d\-4c9a\-80fb\-ff8ee3842108\.config
+2026-11-05T13:02:27.3476673Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-05T13:02:27.3511519Z /github/runner_temp/git-credentials-678a2c76-cc6d-4c9a-80fb-ff8ee3842108.config
+2026-11-05T13:02:27.3519283Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-678a2c76\-cc6d\-4c9a\-80fb\-ff8ee3842108\.config
+2026-11-05T13:02:27.3565455Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-05T13:02:27.3790963Z Removing credentials config '/home/runner/work/_temp/git-credentials-678a2c76-cc6d-4c9a-80fb-ff8ee3842108.config'
+2026-11-05T13:02:27.3791810Z ##[endgroup]
+2026-11-05T13:02:27.3999940Z ##[group]Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+2026-11-05T13:02:27.4000173Z with:
+2026-11-05T13:02:27.4000304Z   python-version-file: .python-version
+2026-11-05T13:02:27.4000461Z   check-latest: false
+2026-11-05T13:02:27.4002057Z   token: ***
+2026-11-05T13:02:27.4002244Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-11-05T13:02:27.4002471Z   update-environment: true
+2026-11-05T13:02:27.4002610Z   allow-prereleases: false
+2026-11-05T13:02:27.4002742Z   freethreaded: false
+2026-11-05T13:02:27.4002863Z env:
+2026-11-05T13:02:27.4002988Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:27.4003139Z ##[endgroup]
+2026-11-05T13:02:27.4813175Z Resolved .python-version as 3.14
+2026-11-05T13:02:27.4813775Z ##[group]Installed versions
+2026-11-05T13:02:27.4870830Z Successfully set up CPython (3.14.10)
+2026-11-05T13:02:27.4871295Z ##[endgroup]
+2026-11-05T13:02:27.5011070Z ##[group]Run umati/UA-for-Industrial-Joining-Technologies/.github/actions/setup-uv-pypi@5d1106a5636026098248f0f2c6b935f1d84a67f4
+2026-11-05T13:02:27.5011419Z env:
+2026-11-05T13:02:27.5011551Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:27.5011749Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:27.5012008Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-05T13:02:27.5012250Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:27.5012465Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:27.5012686Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:27.5012905Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-05T13:02:27.5013089Z ##[endgroup]
+2026-11-05T13:02:27.5062214Z ##[start-action display=Install pinned uv from PyPI;id=__self.__run]
+2026-11-05T13:02:27.5099366Z ##[group]Run set -euo pipefail
+2026-11-05T13:02:27.5099860Z set -euo pipefail
+2026-11-05T13:02:27.5100041Z pin_file="${GITHUB_WORKSPACE}/.uv-version"
+2026-11-05T13:02:27.5100238Z if [[ ! -f "${pin_file}" ]]; then
+2026-11-05T13:02:27.5100408Z   echo "Missing ${pin_file}" >&2
+2026-11-05T13:02:27.5100561Z   exit 1
+2026-11-05T13:02:27.5100676Z fi
+2026-11-05T13:02:27.5100821Z version="$(tr -d '[:space:]' < "${pin_file}")"
+2026-11-05T13:02:27.5101053Z if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9._+-]*)?$ ]]; then
+2026-11-05T13:02:27.5101308Z   echo "Invalid .uv-version contents: '${version}'" >&2
+2026-11-05T13:02:27.5101495Z   exit 1
+2026-11-05T13:02:27.5101609Z fi
+2026-11-05T13:02:27.5101823Z python -m pip install --disable-pip-version-check --no-input "uv==${version}"
+2026-11-05T13:02:27.5102091Z installed="$(uv --version | awk '{print $2}')"
+2026-11-05T13:02:27.5102285Z if [[ "${installed}" != "${version}" ]]; then
+2026-11-05T13:02:27.5102486Z   echo "Expected uv ${version}, got ${installed}" >&2
+2026-11-05T13:02:27.5102667Z   exit 1
+2026-11-05T13:02:27.5102784Z fi
+2026-11-05T13:02:27.5102926Z echo "Installed uv ${installed} from PyPI"
+2026-11-05T13:02:27.5255195Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-05T13:02:27.5255544Z env:
+2026-11-05T13:02:27.5255897Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:27.5256196Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:27.5256555Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-05T13:02:27.5256913Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:27.5257245Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:27.5257569Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:27.5257920Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-05T13:02:27.5258211Z ##[endgroup]
+2026-11-05T13:02:29.8542046Z Collecting uv==0.13.7
+2026-11-05T13:02:29.8988856Z   Downloading uv-0.13.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (11 kB)
+2026-11-05T13:02:29.9096105Z Downloading uv-0.13.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (17.2 MB)
+2026-11-05T13:02:30.0522750Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 17.2/17.2 MB 132.9 MB/s  0:00:00
+2026-11-05T13:02:30.2615047Z Installing collected packages: uv
+2026-11-05T13:02:30.4019909Z Successfully installed uv-0.13.7
+2026-11-05T13:02:30.4649143Z Installed uv 0.13.7 from PyPI
+2026-11-05T13:02:30.4661928Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=2959]
+2026-11-05T13:02:30.4688384Z ##[group]Run uv sync --locked
+2026-11-05T13:02:30.4688571Z uv sync --locked
+2026-11-05T13:02:30.4688727Z echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+2026-11-05T13:02:30.4710541Z echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+2026-11-05T13:02:30.4730359Z shell: /usr/bin/bash -e {0}
+2026-11-05T13:02:30.4730514Z env:
+2026-11-05T13:02:30.4730648Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:30.4730855Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:30.4731098Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-05T13:02:30.4731339Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:30.4731556Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:30.4731774Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:30.4731991Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-05T13:02:30.4732210Z ##[endgroup]
+2026-11-05T13:02:30.5159247Z Using CPython 3.14.10 interpreter at: /opt/hostedtoolcache/Python/3.14.10/x64/bin/python3
+2026-11-05T13:02:30.5159740Z Creating virtual environment at: .venv
+2026-11-05T13:02:30.5181816Z Resolved 68 packages in 0.90ms
+2026-11-05T13:02:30.5748776Z Downloading pyright (5.9MiB)
+2026-11-05T13:02:30.5749502Z Downloading pygments (1.2MiB)
+2026-11-05T13:02:30.5756913Z Downloading ruff (10.1MiB)
+2026-11-05T13:02:30.5758544Z Downloading pip (1.7MiB)
+2026-11-05T13:02:30.5760021Z Downloading ast-serialize (1.3MiB)
+2026-11-05T13:02:30.5765887Z Downloading cryptography (4.5MiB)
+2026-11-05T13:02:30.5768447Z Downloading mypy (14.7MiB)
+2026-11-05T13:02:30.5770717Z Downloading virtualenv (5.3MiB)
+2026-11-05T13:02:30.7180177Z  Downloaded ast-serialize
+2026-11-05T13:02:30.7226850Z  Downloaded pygments
+2026-11-05T13:02:30.7316738Z  Downloaded pip
+2026-11-05T13:02:30.7567039Z  Downloaded virtualenv
+2026-11-05T13:02:30.7656546Z  Downloaded cryptography
+2026-11-05T13:02:30.7784141Z  Downloaded ruff
+2026-11-05T13:02:30.8757448Z  Downloaded mypy
+2026-11-05T13:02:30.9156812Z  Downloaded pyright
+2026-11-05T13:02:30.9158100Z Prepared 66 packages in 396ms
+2026-11-05T13:02:31.0168942Z Installed 66 packages in 100ms
+2026-11-05T13:02:31.0169375Z  + aiofiles==25.1.0
+2026-11-05T13:02:31.0169672Z  + aiosqlite==0.22.1
+2026-11-05T13:02:31.0169865Z  + anyio==4.16.0
+2026-11-05T13:02:31.0170080Z  + ast-serialize==0.13.1
+2026-11-05T13:02:31.0170302Z  + asyncua==2.1.0
+2026-11-05T13:02:31.0170482Z  + bandit==1.9.4
+2026-11-05T13:02:31.0170669Z  + boolean-py==5.0
+2026-11-05T13:02:31.0170863Z  + cachecontrol==0.14.4
+2026-11-05T13:02:31.0171067Z  + certifi==2026.10.23
+2026-11-05T13:02:31.0171259Z  + cffi==2.1.1
+2026-11-05T13:02:31.0171435Z  + cfgv==3.5.0
+2026-11-05T13:02:31.0171629Z  + charset-normalizer==3.5.2
+2026-11-05T13:02:31.0171846Z  + coverage==7.17.0
+2026-11-05T13:02:31.0172043Z  + cryptography==50.0.2
+2026-11-05T13:02:31.0172265Z  + cyclonedx-python-lib==11.12.0
+2026-11-05T13:02:31.0172505Z  + defusedxml==0.7.1
+2026-11-05T13:02:31.0172707Z  + detect-secrets==1.5.0
+2026-11-05T13:02:31.0172906Z  + distlib==0.4.4
+2026-11-05T13:02:31.0173088Z  + filelock==4.2.6
+2026-11-05T13:02:31.0173271Z  + identify==2.6.20
+2026-11-05T13:02:31.0173450Z  + idna==3.20
+2026-11-05T13:02:31.0173625Z  + iniconfig==2.3.1
+2026-11-05T13:02:31.0173813Z  + librt==0.16.0
+2026-11-05T13:02:31.0174014Z  + license-expression==30.4.4
+2026-11-05T13:02:31.0174243Z  + markdown-it-py==4.2.0
+2026-11-05T13:02:31.0174447Z  + mdurl==0.1.2
+2026-11-05T13:02:31.0174627Z  + msgpack==1.2.4
+2026-11-05T13:02:31.0174805Z  + mypy==2.4.1
+2026-11-05T13:02:31.0175202Z  + mypy-extensions==1.1.0
+2026-11-05T13:02:31.0175570Z  + nodeenv==1.12.0
+2026-11-05T13:02:31.0175921Z  + orjson==3.13.0
+2026-11-05T13:02:31.0176122Z  + packageurl-python==0.17.6
+2026-11-05T13:02:31.0176344Z  + packaging==26.3
+2026-11-05T13:02:31.0176533Z  + pathspec==1.1.1
+2026-11-05T13:02:31.0176717Z  + pip==26.2.2
+2026-11-05T13:02:31.0176893Z  + pip-api==0.0.35
+2026-11-05T13:02:31.0177331Z  + pip-audit==2.10.1
+2026-11-05T13:02:31.0177544Z  + pip-requirements-parser==32.0.1
+2026-11-05T13:02:31.0177789Z  + platformdirs==4.14.3
+2026-11-05T13:02:31.0177990Z  + pluggy==1.7.0
+2026-11-05T13:02:31.0178173Z  + pre-commit==4.7.0
+2026-11-05T13:02:31.0178369Z  + py-serializable==2.1.0
+2026-11-05T13:02:31.0178582Z  + pycparser==3.12
+2026-11-05T13:02:31.0178771Z  + pyfakefs==6.3.0
+2026-11-05T13:02:31.0178952Z  + pygments==2.21.0
+2026-11-05T13:02:31.0179137Z  + pyparsing==3.3.3
+2026-11-05T13:02:31.0179320Z  + pyright==1.1.414
+2026-11-05T13:02:31.0179504Z  + pytest==9.2.0
+2026-11-05T13:02:31.0179764Z  + pytest-asyncio==1.4.1.post1
+2026-11-05T13:02:31.0180019Z  + pytest-cov==7.1.0
+2026-11-05T13:02:31.0180238Z  + pytest-timeout==2.4.0
+2026-11-05T13:02:31.0180464Z  + python-dateutil==4.0.0
+2026-11-05T13:02:31.0180727Z  + python-discovery==1.9.0
+2026-11-05T13:02:31.0180959Z  + pytz==2026.6
+2026-11-05T13:02:31.0181213Z  + pyyaml==6.0.3
+2026-11-05T13:02:31.0181483Z  + requests==2.34.2
+2026-11-05T13:02:31.0181733Z  + rich==15.0.0
+2026-11-05T13:02:31.0181972Z  + ruff==0.17.3
+2026-11-05T13:02:31.0182166Z  + sortedcontainers==2.4.0
+2026-11-05T13:02:31.0182460Z  + stevedore==5.9.1
+2026-11-05T13:02:31.0182770Z  + tomli==2.5.0
+2026-11-05T13:02:31.0183217Z  + tomli-w==1.2.0
+2026-11-05T13:02:31.0183608Z  + typing-extensions==4.16.0
+2026-11-05T13:02:31.0183823Z  + tzdata==2026.6
+2026-11-05T13:02:31.0184139Z  + urllib3==2.8.0
+2026-11-05T13:02:31.0184355Z  + virtualenv==21.15.2
+2026-11-05T13:02:31.0329774Z ##[group]Run mkdir -p test-results
+2026-11-05T13:02:31.0330081Z mkdir -p test-results
+2026-11-05T13:02:31.0353172Z shell: /usr/bin/bash -e {0}
+2026-11-05T13:02:31.0353409Z env:
+2026-11-05T13:02:31.0353615Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:31.0353946Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:31.0354342Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-05T13:02:31.0354737Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:31.0355088Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:31.0355437Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:31.0355962Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-05T13:02:31.0356736Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Console_Client/.venv
+2026-11-05T13:02:31.0357387Z ##[endgroup]
+2026-11-05T13:02:31.0435400Z ##[group]Run python -m pytest tests/unit/ -q \
+2026-11-05T13:02:31.0435612Z python -m pytest tests/unit/ -q \
+2026-11-05T13:02:31.0436045Z   --junitxml=test-results/pytest.xml \
+2026-11-05T13:02:31.0436215Z   --cov=. \
+2026-11-05T13:02:31.0436372Z   --cov-report=xml:test-results/coverage.xml \
+2026-11-05T13:02:31.0436558Z   --cov-report=term-missing
+2026-11-05T13:02:31.0452301Z shell: /usr/bin/bash -e {0}
+2026-11-05T13:02:31.0452444Z env:
+2026-11-05T13:02:31.0452572Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:31.0452772Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:31.0453009Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-05T13:02:31.0453254Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:31.0453468Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:31.0453696Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:31.0453911Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-05T13:02:31.0454333Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Console_Client/.venv
+2026-11-05T13:02:31.0454714Z ##[endgroup]
+2026-11-05T13:02:34.4976986Z ============================= test session starts ==============================
+2026-11-05T13:02:34.4977314Z platform linux -- Python 3.14.10, pytest-9.2.0, pluggy-1.7.0
+2026-11-05T13:02:34.4977746Z rootdir: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Console_Client
+2026-11-05T13:02:34.4978128Z configfile: pyproject.toml
+2026-11-05T13:02:34.4978425Z plugins: anyio-4.16.0, platformdirs-4.14.3, asyncio-1.4.1.post1, timeout-2.4.0, pyfakefs-6.3.0, cov-7.1.0
+2026-11-05T13:02:34.4978838Z asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=module, asyncio_default_test_loop_scope=function
+2026-11-05T13:02:34.4979132Z collected 652 items
+2026-11-05T13:02:34.4979216Z 
+2026-11-05T13:02:34.5050914Z tests/unit/test_call_structure.py .........                              [  1%]
+2026-11-05T13:02:34.5185280Z tests/unit/test_client_config_and_main.py ...........................    [  5%]
+2026-11-05T13:02:34.5517479Z tests/unit/test_coverage_phase5.py ......................                [  8%]
+2026-11-05T13:02:34.5574386Z tests/unit/test_docker_freshness.py ..........                           [ 10%]
+2026-11-05T13:02:34.5643162Z tests/unit/test_event_handler.py .......                                 [ 11%]
+2026-11-05T13:02:34.6829993Z tests/unit/test_event_handler_extended.py ............                   [ 13%]
+2026-11-05T13:02:34.6902453Z tests/unit/test_event_types_unit.py ......                               [ 14%]
+2026-11-05T13:02:34.6957281Z tests/unit/test_ijt_logger.py ..............                             [ 16%]
+2026-11-05T13:02:34.7394744Z tests/unit/test_import_paths.py .............................            [ 20%]
+2026-11-05T13:02:34.7866058Z tests/unit/test_independence.py .                                        [ 21%]
+2026-11-05T13:02:34.9126049Z tests/unit/test_main_extended.py ...............                         [ 23%]
+2026-11-05T13:02:34.9422659Z tests/unit/test_method_caller.py ...........................             [ 27%]
+2026-11-05T13:02:38.9807172Z tests/unit/test_opcua_client.py .......................                  [ 30%]
+2026-11-05T13:02:39.8769522Z tests/unit/test_opcua_client_extended.py ............................... [ 35%]
+2026-11-05T13:02:41.8964704Z ........                                                                 [ 36%]
+2026-11-05T13:02:42.0212241Z tests/unit/test_opcua_security_support.py .............                  [ 38%]
+2026-11-05T13:02:42.0385811Z tests/unit/test_repo_hygiene.py .................................        [ 44%]
+2026-11-05T13:02:44.6557645Z tests/unit/test_resource_management.py ........                          [ 45%]
+2026-11-05T13:02:44.9784596Z tests/unit/test_result_event_handler.py ..................               [ 48%]
+2026-11-05T13:02:44.9848172Z tests/unit/test_result_transfer_time_helpers.py ........                 [ 49%]
+2026-11-05T13:02:45.0079130Z tests/unit/test_ruff_format_guard.py .                                   [ 49%]
+2026-11-05T13:02:45.6449509Z tests/unit/test_runner_step_result.py ...........................        [ 53%]
+2026-11-05T13:02:46.2047628Z tests/unit/test_security.py ...............                              [ 55%]
+2026-11-05T13:02:46.2174781Z tests/unit/test_serialize_data.py .....................................  [ 61%]
+2026-11-05T13:02:46.2218320Z tests/unit/test_serialize_data_extended.py ..........                    [ 63%]
+2026-11-05T13:02:46.2400849Z tests/unit/test_setup_client.py ........................................ [ 69%]
+2026-11-05T13:02:46.4267004Z ........................................................................ [ 80%]
+2026-11-05T13:02:46.4577906Z ...........................                                              [ 84%]
+2026-11-05T13:02:48.3107149Z tests/unit/test_static_analysis.py .............                         [ 86%]
+2026-11-05T13:02:48.3286880Z tests/unit/test_utils.py ...............................                 [ 91%]
+2026-11-05T13:02:48.3641809Z tests/unit/test_utils_extended.py ...................................... [ 96%]
+2026-11-05T13:02:48.3749611Z ......                                                                   [ 97%]
+2026-11-05T13:02:48.6196176Z tests/unit/test_wire_format_contracts.py ..............                  [100%]
+2026-11-05T13:02:48.6196532Z 
+2026-11-05T13:02:48.6197121Z - generated xml file: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Console_Client/test-results/pytest.xml -
+2026-11-05T13:02:48.6197955Z ================================ tests coverage ================================
+2026-11-05T13:02:48.6198343Z _______________ coverage: platform linux, python 3.14.10-final-0 _______________
+2026-11-05T13:02:48.6198582Z 
+2026-11-05T13:02:48.6198696Z Name                        Stmts   Miss  Cover   Missing
+2026-11-05T13:02:48.6198978Z ---------------------------------------------------------
+2026-11-05T13:02:48.6199258Z client_config.py                4      0   100%
+2026-11-05T13:02:48.6199518Z docker_freshness.py            43      0   100%
+2026-11-05T13:02:48.6199774Z event_handler.py               70      0   100%
+2026-11-05T13:02:48.6200030Z event_types.py                 15      0   100%
+2026-11-05T13:02:48.6200275Z ijt_logger.py                  26      0   100%
+2026-11-05T13:02:48.6200521Z main.py                        94      0   100%
+2026-11-05T13:02:48.6200768Z method_caller.py              107      0   100%
+2026-11-05T13:02:48.6201555Z opcua_client.py               235      1    99%   285
+2026-11-05T13:02:48.6201864Z opcua_security_support.py     128      4    97%   48-49, 240-241
+2026-11-05T13:02:48.6202184Z result_event_handler.py        35      1    97%   55
+2026-11-05T13:02:48.6202450Z serialize_data.py              63      0   100%
+2026-11-05T13:02:48.6202724Z utils.py                      285      8    97%   96, 99, 111, 117-120, 285
+2026-11-05T13:02:48.6203026Z ---------------------------------------------------------
+2026-11-05T13:02:48.6203283Z TOTAL                        1105     14    99%
+2026-11-05T13:02:48.6203556Z Coverage XML written to file test-results/coverage.xml
+2026-11-05T13:02:48.6203884Z Required test coverage of 95.0% reached. Total coverage: 98.73%
+2026-11-05T13:02:48.6204214Z ============================= 652 passed in 15.82s =============================
+2026-11-05T13:02:48.8247064Z ##[group]Run python -m bandit -r . -c "/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/pyproject.toml" --severity-level medium -f json -o test-results/bandit.json
+2026-11-05T13:02:48.8247909Z python -m bandit -r . -c "/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/pyproject.toml" --severity-level medium -f json -o test-results/bandit.json
+2026-11-05T13:02:48.8264907Z shell: /usr/bin/bash -e {0}
+2026-11-05T13:02:48.8265045Z env:
+2026-11-05T13:02:48.8265172Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:48.8265365Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:48.8265603Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-05T13:02:48.8265957Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:48.8266166Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:48.8266409Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:48.8266624Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-05T13:02:48.8267040Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Console_Client/.venv
+2026-11-05T13:02:48.8267422Z ##[endgroup]
+2026-11-05T13:02:49.0996162Z [main]	INFO	profile include tests: None
+2026-11-05T13:02:49.0996421Z [main]	INFO	profile exclude tests: B101
+2026-11-05T13:02:49.0996592Z [main]	INFO	cli include tests: None
+2026-11-05T13:02:49.0996748Z [main]	INFO	cli exclude tests: None
+2026-11-05T13:02:49.2236194Z [tester]	WARNING	nosec encountered (B324), but no failed test on file ./opcua_security_support.py:189
+2026-11-05T13:02:49.2236830Z [tester]	WARNING	nosec encountered (B324), but no failed test on file ./opcua_security_support.py:189
+2026-11-05T13:02:49.3079703Z [tester]	WARNING	nosec encountered (B607), but no failed test on file ./setup_client.py:203
+2026-11-05T13:02:49.3080191Z [tester]	WARNING	nosec encountered (B603), but no failed test on file ./setup_client.py:203
+2026-11-05T13:02:49.3101366Z [tester]	WARNING	nosec encountered (B603), but no failed test on file ./setup_client.py:277
+2026-11-05T13:02:49.3143956Z [tester]	WARNING	nosec encountered (B603), but no failed test on file ./setup_client.py:404
+2026-11-05T13:02:49.3173428Z [tester]	WARNING	nosec encountered (B603), but no failed test on file ./setup_client.py:494
+2026-11-05T13:02:49.3186159Z [tester]	WARNING	nosec encountered (B603), but no failed test on file ./setup_client.py:542
+2026-11-05T13:02:49.7837339Z Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+2026-11-05T13:02:49.7841595Z [json]	INFO	JSON output written to file: test-results/bandit.json
+2026-11-05T13:02:49.8471303Z ##[group]Run python -m pip_audit --format json -o test-results/pip-audit.json --progress-spinner off
+2026-11-05T13:02:49.8471709Z python -m pip_audit --format json -o test-results/pip-audit.json --progress-spinner off
+2026-11-05T13:02:49.8489163Z shell: /usr/bin/bash -e {0}
+2026-11-05T13:02:49.8489598Z env:
+2026-11-05T13:02:49.8489730Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:49.8489927Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:49.8490164Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-05T13:02:49.8490402Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:49.8490615Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:49.8490833Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:49.8491206Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-05T13:02:49.8491723Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Console_Client/.venv
+2026-11-05T13:02:49.8492111Z ##[endgroup]
+2026-11-05T13:02:51.8875510Z No known vulnerabilities found
+2026-11-05T13:02:51.9503465Z ##[group]Run python -m ruff check . --output-format=github
+2026-11-05T13:02:51.9503860Z python -m ruff check . --output-format=github
+2026-11-05T13:02:51.9521311Z shell: /usr/bin/bash -e {0}
+2026-11-05T13:02:51.9521571Z env:
+2026-11-05T13:02:51.9521904Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:51.9522254Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:51.9522614Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-05T13:02:51.9522936Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:51.9523222Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:51.9523569Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:51.9523903Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-05T13:02:51.9524550Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Console_Client/.venv
+2026-11-05T13:02:51.9525027Z ##[endgroup]
+2026-11-05T13:02:51.9927872Z ##[group]Run python -m mypy . --ignore-missing-imports --no-error-summary
+2026-11-05T13:02:51.9928190Z python -m mypy . --ignore-missing-imports --no-error-summary
+2026-11-05T13:02:51.9945237Z shell: /usr/bin/bash -e {0}
+2026-11-05T13:02:51.9945377Z env:
+2026-11-05T13:02:51.9945506Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:51.9945826Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:51.9946066Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-05T13:02:51.9946307Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:51.9946522Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:51.9946740Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:51.9946961Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-05T13:02:51.9947423Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Console_Client/.venv
+2026-11-05T13:02:51.9947825Z ##[endgroup]
+2026-11-05T13:02:53.5868696Z tests/unit/test_runner_step_result.py:72: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+2026-11-05T13:02:53.5869764Z tests/unit/test_runner_step_result.py:92: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+2026-11-05T13:02:53.5870761Z tests/unit/test_runner_step_result.py:133: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+2026-11-05T13:02:53.5871755Z tests/unit/test_runner_step_result.py:163: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+2026-11-05T13:02:53.5872759Z tests/unit/test_runner_step_result.py:213: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+2026-11-05T13:02:54.7832629Z tests/live/conftest.py:543: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+2026-11-05T13:02:54.9439634Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-05T13:02:54.9439864Z with:
+2026-11-05T13:02:54.9439998Z   name: results-console-client
+2026-11-05T13:02:54.9440178Z   path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/
+2026-11-05T13:02:54.9440363Z   retention-days: 14
+2026-11-05T13:02:54.9440488Z   if-no-files-found: warn
+2026-11-05T13:02:54.9440619Z   compression-level: 6
+2026-11-05T13:02:54.9440738Z   overwrite: false
+2026-11-05T13:02:54.9440857Z   include-hidden-files: false
+2026-11-05T13:02:54.9440991Z   archive: true
+2026-11-05T13:02:54.9441098Z env:
+2026-11-05T13:02:54.9441216Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-05T13:02:54.9441415Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:54.9441643Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-05T13:02:54.9441869Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:54.9442095Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:54.9442299Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-05T13:02:54.9442507Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-05T13:02:54.9442917Z   VIRTUAL_ENV: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release2/IJT_Console_Client/.venv
+2026-11-05T13:02:54.9443293Z ##[endgroup]
+2026-11-05T13:02:55.0397100Z With the provided path, there will be 4 files uploaded
+2026-11-05T13:02:55.0404135Z Artifact name is valid!
+2026-11-05T13:02:55.0426142Z Root directory input is valid!
+2026-11-05T13:02:55.3977264Z Uploading artifact: results-console-client.zip
+2026-11-05T13:02:55.4002619Z Beginning upload of artifact content to blob storage
+2026-11-05T13:02:55.6959549Z Uploaded bytes 17084
+2026-11-05T13:02:55.7515213Z Finished uploading artifact content to blob storage!
+2026-11-05T13:02:55.7515979Z SHA256 digest of uploaded artifact is 573a3df4bd2a2f88205c05774228291aee416f67909561b151592540247de045
+2026-11-05T13:02:55.7516427Z Finalizing artifact upload
+2026-11-05T13:02:56.3304390Z Artifact results-console-client successfully finalized. Artifact ID 13416243580
+2026-11-05T13:02:56.3304829Z Artifact results-console-client has been successfully uploaded! Final size is 17084 bytes. Artifact ID is 13416243580
+2026-11-05T13:02:56.3307834Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/42032194355/artifacts/13416243580
+2026-11-05T13:02:56.3468663Z Post job cleanup.
+2026-11-05T13:02:56.4331469Z Post job cleanup.
+2026-11-05T13:02:56.4956453Z [command]/usr/bin/git version
+2026-11-05T13:02:56.4999466Z git version 2.56.0
+2026-11-05T13:02:56.5021322Z Temporarily overriding HOME='/home/runner/work/_temp/06a7d7c4-5408-4ba5-ad83-13fbb48c162e' before making global git config changes
+2026-11-05T13:02:56.5022156Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-05T13:02:56.5024923Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-05T13:02:56.5056561Z Removing SSH command configuration
+2026-11-05T13:02:56.5061438Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T13:02:56.5095284Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-05T13:02:56.5323219Z Removing HTTP extra header
+2026-11-05T13:02:56.5329191Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T13:02:56.5368501Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-05T13:02:56.5631580Z Removing includeIf entries pointing to credentials config files
+2026-11-05T13:02:56.5640169Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T13:02:56.5688075Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-05T13:02:56.6025610Z Evaluate and set job outputs
+2026-11-05T13:02:56.6031440Z Set output 'mypy_result'
+2026-11-05T13:02:56.6032876Z Set output 'ruff_result'
+2026-11-05T13:02:56.6033257Z Cleaning up orphan processes

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>OPC UA IJT — Public CI &amp; System Tests Observability Portal</title>
+  <style>
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --panel-alt: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --pass: #238636;
+  --fail: #da3633;
+  --warn: #9e6a03;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f8fa;
+    --panel: #ffffff;
+    --panel-alt: #f3f4f6;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #57606a;
+    --accent: #0969da;
+    --pass: #1a7f37;
+    --fail: #cf222e;
+    --warn: #9a6700;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.container { max-width: 1380px; margin: 0 auto; padding: 20px 24px 48px; }
+.topbar {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.topbar-title { font-weight: 600; font-size: 1.05rem; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); text-decoration: none; }
+.btn-primary { background: var(--pass); color: #fff; border-color: transparent; }
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.badge-pass {
+  background: rgba(35, 134, 54, 0.2);
+  color: #3fb950;
+  border: 1px solid var(--pass);
+}
+.badge-fail {
+  background: rgba(218, 54, 51, 0.2);
+  color: #f85149;
+  border: 1px solid var(--fail);
+}
+.badge-warn {
+  background: rgba(158, 106, 3, 0.2);
+  color: #d29922;
+  border: 1px solid var(--warn);
+}
+.badge-neutral {
+  background: var(--panel-alt);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 16px;
+}
+.tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.92rem;
+}
+.tab-btn.active {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--border);
+}
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+th { background: var(--panel-alt); font-weight: 600; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--panel-alt);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+pre.code-block, pre.log-pre {
+  background: #010409;
+  color: #e6edf3;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 8px 0;
+}
+.logs-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .logs-layout { grid-template-columns: 1fr; }
+}
+.job-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.job-item.active { border-color: var(--accent); font-weight: 600; }
+.step-details {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: var(--panel);
+}
+.step-details summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.alert {
+  padding: 10px 14px;
+  border-left: 4px solid var(--accent);
+  background: var(--panel-alt);
+  border-radius: 4px;
+  margin: 10px 0;
+}
+.meta-row {
+  color: var(--muted);
+  font-size: 0.88rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">
+      🔬 umati / UA-for-Industrial-Joining-Technologies — Public CI &amp; System Tests Portal
+    </div>
+    <div class="btn-row">
+      <a class="btn" href="https://github.com/umati/UA-for-Industrial-Joining-Technologies" target="_blank" rel="noopener">
+        📦 GitHub Repository
+      </a>
+      <a class="btn" href="https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions" target="_blank" rel="noopener">
+        ⚙️ GitHub Actions
+      </a>
+    </div>
+  </header>
+  <main class="container">
+    <div class="grid-2">
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.1rem;">CI</h2><span class="badge badge-pass">✅ Passed</span></div><div class="meta-row" style="margin:10px 0 14px;"><span><strong>Latest Run:</strong> #1318</span><span><strong>Commit:</strong> <code>a2e0539a</code></span><span><strong>UTC:</strong> <code>2026-11-06 17:53:16 UTC</code></span></div><div class="btn-row"><a class="btn" href="latest/ci/index.html">Open</a></div></div><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.1rem;">System Tests</h2><span class="badge badge-pass">✅ Passed</span></div><div class="meta-row" style="margin:10px 0 14px;"><span><strong>Latest Run:</strong> #1056</span><span><strong>Commit:</strong> <code>a2e0539a</code></span><span><strong>UTC:</strong> <code>2026-11-07 08:25:28 UTC</code></span></div><div class="btn-row"><a class="btn" href="latest/integration/index.html">Open</a></div></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+        <h2 style="margin:0;font-size:1.15rem;">
+          🗂️ Recent <code>main</code> Branch Runs (Zero Sign-In Required)
+        </h2>
+        <div class="btn-row">
+          <button type="button" class="btn" onclick="filterRuns('all')">
+            All (20)
+          </button>
+          <button type="button" class="btn" onclick="filterRuns('ci')">
+            CI Only
+          </button>
+          <button type="button" class="btn" onclick="filterRuns('integration')">
+            System Tests Only
+          </button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="runs-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Run</th>
+              <th>Workflow</th>
+              <th>Branch</th>
+              <th>Commit</th>
+              <th>Published (UTC)</th>
+              <th>Direct Public Links</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42354968080/index.html"><strong>#1056</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>a2e0539a</code></td><td><code>2026-11-07 08:25:28 UTC</code></td><td><a href="runs/42354968080/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42264939025/index.html"><strong>#1055</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>a2e0539a</code></td><td><code>2026-11-06 17:54:58 UTC</code></td><td><a href="runs/42264939025/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42264939128/index.html"><strong>#1318</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>a2e0539a</code></td><td><code>2026-11-06 17:53:16 UTC</code></td><td><a href="runs/42264939128/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42262076488/index.html"><strong>#1316</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>1b255bcf</code></td><td><code>2026-11-06 17:34:24 UTC</code></td><td><a href="runs/42262076488/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42191180383/index.html"><strong>#1053</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>0c107a83</code></td><td><code>2026-11-06 09:01:47 UTC</code></td><td><a href="runs/42191180383/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42033935037/index.html"><strong>#1052</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>0c107a83</code></td><td><code>2026-11-05 13:20:49 UTC</code></td><td><a href="runs/42033935037/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42033934963/index.html"><strong>#1314</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>0c107a83</code></td><td><code>2026-11-05 13:19:57 UTC</code></td><td><a href="runs/42033934963/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42032194355/index.html"><strong>#1313</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>5d1106a5</code></td><td><code>2026-11-05 13:06:21 UTC</code></td><td><a href="runs/42032194355/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42030491947/index.html"><strong>#1051</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>b8ecfcfe</code></td><td><code>2026-11-05 12:56:17 UTC</code></td><td><a href="runs/42030491947/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42030492103/index.html"><strong>#1311</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>b8ecfcfe</code></td><td><code>2026-11-05 12:54:49 UTC</code></td><td><a href="runs/42030492103/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42013766973/index.html"><strong>#1050</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>66f8ea58</code></td><td><code>2026-11-05 10:56:00 UTC</code></td><td><a href="runs/42013766973/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/42013766930/index.html"><strong>#1310</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>66f8ea58</code></td><td><code>2026-11-05 10:52:49 UTC</code></td><td><a href="runs/42013766930/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/41998476768/index.html"><strong>#1049</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>30f3a914</code></td><td><code>2026-11-05 09:05:54 UTC</code></td><td><a href="runs/41998476768/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/41996305556/index.html"><strong>#1048</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>30f3a914</code></td><td><code>2026-11-05 08:59:08 UTC</code></td><td><a href="runs/41996305556/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/41996305486/index.html"><strong>#1309</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>30f3a914</code></td><td><code>2026-11-05 08:47:50 UTC</code></td><td><a href="runs/41996305486/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-fail">❌ Failed</span></td><td><a href="runs/41996275803/index.html"><strong>#1308</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>28696967</code></td><td><code>2026-11-05 08:42:46 UTC</code></td><td><a href="runs/41996275803/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/41996275741/index.html"><strong>#1047</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>28696967</code></td><td><code>2026-11-05 08:42:23 UTC</code></td><td><a href="runs/41996275741/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/41934595407/index.html"><strong>#1304</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>9addd560</code></td><td><code>2026-11-04 23:37:31 UTC</code></td><td><a href="runs/41934595407/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/41932826461/index.html"><strong>#1042</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>5170b9b5</code></td><td><code>2026-11-04 23:31:25 UTC</code></td><td><a href="runs/41932826461/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/41932826434/index.html"><strong>#1301</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>5170b9b5</code></td><td><code>2026-11-04 23:27:03 UTC</code></td><td><a href="runs/41932826434/index.html">Open</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+  <script>
+    function filterRuns(slug) {
+      document.querySelectorAll('#runs-table tbody tr[data-workflow]').forEach(row => {
+        const matches = (slug === 'all' || row.getAttribute('data-workflow') === slug);
+        row.style.display = matches ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>
