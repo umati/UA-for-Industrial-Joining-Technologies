@@ -166,7 +166,7 @@ When you run `python run_all_tests.py`, the repository handles the following wit
 | **Node.js Packages** | Automatically runs `npm ci` when `node_modules` is missing |
 | **Playwright Browsers** | Automatically installs browser binaries (`playwright install chromium`) during E2E stages |
 | **OPC UA Server Simulators** | Ensures present simulator ZIPs via `scripts/simulator_extract.py` (locked staging → rename-aside swap), then launches native/containerized instances with dedicated port isolation |
-| **Hadolint** | Pinned binary auto-downloaded (SHA-256 verified) by `scripts/ensure_hadolint.py`; fails (not skips) on hosted CI hosts; soft-skips inside app containers |
+| **Hadolint** | Pinned binary auto-downloaded (SHA-256 verified, retried with exponential backoff and custom User-Agent) by `scripts/ensure_hadolint.py`; fails (not skips) on hosted CI hosts; soft-skips inside app containers |
 | **Missing Optional Tools** | OS/binary scanners (Trivy, Actionlint, Semgrep, …) skip gracefully when absent; CI remains authoritative |
 
 **Lockfile Python tools (required):** The repository **root is a uv project**
@@ -210,7 +210,7 @@ packaging is gated by CI `docker-smoke` / System Tests `webclient-docker` /
 local `web-client-docker-unit` (full in-image pytest + vitest) before production
 compose smoke.
 `scripts/ensure_hadolint.py` downloads the pinned hadolint v2.12.0 binary for
-your OS/arch (SHA-256 verified, cached in `.state/tools/`) and the Web Client
+your OS/arch (SHA-256 verified, cached in `.state/tools/` with exponential backoff and custom User-Agent to withstand transient CDN 504 timeouts) and the Web Client
 and Server runners, pre-commit, and CI all use it with the shared repo-root
 `.hadolint.yaml`. yamllint (`tool_bootstrap.YAMLLINT_VERSION`, also the
 pre-commit rev and Web `pyproject.toml` dev pin) always runs with the explicit

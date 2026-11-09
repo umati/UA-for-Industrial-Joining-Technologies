@@ -39,7 +39,9 @@ from tool_bootstrap import preparation_lock  # noqa: E402
 HADOLINT_VERSION = "2.12.0"
 _RELEASE_BASE = f"https://github.com/hadolint/hadolint/releases/download/v{HADOLINT_VERSION}"
 DOWNLOAD_TIMEOUT = 120.0
-DOWNLOAD_ATTEMPTS = 3
+DOWNLOAD_ATTEMPTS = 5
+DOWNLOAD_BACKOFF_SCHEDULE = (2.0, 5.0, 10.0, 20.0)
+USER_AGENT = "UA-for-Industrial-Joining-Technologies/CI (+https://github.com/umati/UA-for-Industrial-Joining-Technologies)"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HADOLINT_CONFIG = REPO_ROOT / ".hadolint.yaml"
@@ -118,14 +120,15 @@ def cache_path(project: Path, key: str) -> Path:
 
 
 def _download(url: str, destination: Path) -> None:
+    if not url.startswith("https://"):
+        raise RuntimeError(f"Refusing non-HTTPS download: {url}")
     last: Exception | None = None
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310  # nosec B310
     for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
         try:
-            if not url.startswith("https://"):
-                raise RuntimeError(f"Refusing non-HTTPS download: {url}")
             # safe: https-only URL built from the pinned release constant.
             with (
-                urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response,  # noqa: S310  # nosec B310
+                urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT) as response,  # noqa: S310  # nosec B310
                 destination.open("wb") as out,
             ):
                 shutil.copyfileobj(response, out)
@@ -133,8 +136,15 @@ def _download(url: str, destination: Path) -> None:
         except (OSError, urllib.error.URLError) as exc:
             last = exc
             if attempt < DOWNLOAD_ATTEMPTS:
-                time.sleep(2.0 * attempt)
-    raise RuntimeError(f"Could not download {url}: {last}") from last
+                delay = (
+                    DOWNLOAD_BACKOFF_SCHEDULE[attempt - 1]
+                    if attempt <= len(DOWNLOAD_BACKOFF_SCHEDULE)
+                    else DOWNLOAD_BACKOFF_SCHEDULE[-1]
+                )
+                time.sleep(delay)
+    raise RuntimeError(
+        f"Could not download {url} after {DOWNLOAD_ATTEMPTS} attempts: {last}"
+    ) from last
 
 
 def ensure_hadolint(project: Path | None = None, *, key: str | None = None) -> Path:

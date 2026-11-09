@@ -116,6 +116,86 @@ def test_ensure_hadolint_redownloads_corrupted_cache(tmp_path, monkeypatch):
     assert target.read_bytes() == payload and len(calls) == 1
 
 
+def test_download_sets_user_agent_and_writes_payload(tmp_path, monkeypatch):
+    import io
+    import urllib.request
+
+    captured_requests: list[urllib.request.Request] = []
+
+    class DummyResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    def dummy_urlopen(req, timeout=None):
+        captured_requests.append(req)
+        return DummyResponse(b"binary payload")
+
+    monkeypatch.setattr(urllib.request, "urlopen", dummy_urlopen)
+    dest = tmp_path / "downloaded"
+    eh._download("https://example.com/asset", dest)
+
+    assert dest.read_bytes() == b"binary payload"
+    assert len(captured_requests) == 1
+    req = captured_requests[0]
+    assert isinstance(req, urllib.request.Request)
+    assert req.headers.get("User-agent") == eh.USER_AGENT
+
+
+def test_download_retries_on_network_error_with_backoff(tmp_path, monkeypatch):
+    import io
+    import urllib.error
+    import urllib.request
+
+    attempts = 0
+    slept: list[float] = []
+
+    class DummyResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    def flaky_urlopen(req, timeout=None):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise urllib.error.URLError("HTTP 504 Gateway Time-out")
+        return DummyResponse(b"eventual success")
+
+    monkeypatch.setattr(urllib.request, "urlopen", flaky_urlopen)
+    monkeypatch.setattr(eh.time, "sleep", lambda s: slept.append(s))
+    dest = tmp_path / "flaky"
+    eh._download("https://example.com/asset", dest)
+
+    assert dest.read_bytes() == b"eventual success"
+    assert attempts == 3
+    assert slept == [2.0, 5.0]
+
+
+def test_download_exhausts_retries_and_raises(tmp_path, monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    def failing_urlopen(req, timeout=None):
+        raise urllib.error.URLError("down")
+
+    monkeypatch.setattr(urllib.request, "urlopen", failing_urlopen)
+    monkeypatch.setattr(eh.time, "sleep", lambda s: None)
+    dest = tmp_path / "fail"
+    with pytest.raises(RuntimeError, match="after 5 attempts"):
+        eh._download("https://example.com/asset", dest)
+
+
+def test_download_rejects_non_https(tmp_path):
+    dest = tmp_path / "insecure"
+    with pytest.raises(RuntimeError, match="Refusing non-HTTPS download"):
+        eh._download("http://example.com/asset", dest)
+
+
 def test_main_prints_path_links_and_passes_through_with_shared_config(
     tmp_path, monkeypatch, capsys
 ):
