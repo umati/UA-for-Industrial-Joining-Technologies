@@ -1060,6 +1060,11 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    env:
+      OPCUA_SERVER_PORT: '40464'
+      OPCUA_SERVER_URL: 'opc.tcp://localhost:40464'
+      IJT_OPCUA_SECURITY_SUT: windows
+      IJT_PHASE1_ONLY: 'false'
     defaults:
       run:
         working-directory: OPC_UA_Clients/Release2/IJT_CSharp_Client
@@ -1076,13 +1081,6 @@ jobs:
             -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
             -DestinationPath "OPC_UA_Servers\Release2\" `
             -Force
-
-      - name: Start OPC UA server on port 40464
-        working-directory: ${{ github.workspace }}
-        run: |
-          python scripts/start_server_on_port.py `
-            --port 40464 `
-            --diagnostics-dir OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/readiness
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v6.1.0
         with:
@@ -1143,6 +1141,18 @@ jobs:
             --logger "console;verbosity=normal" `
             --results-directory test-results `
             --blame-hang --blame-hang-timeout 120s
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          [xml]$trx = Get-Content test-results\tests.trx -Raw
+          foreach ($name in @(
+            "SubscribeResultVariable_ThenTrigger_DataChangeNotificationReceived",
+            "SubscribeResultVariable_AfterChannelReconnect_DataChangeNotificationReceived"
+          )) {
+            $result = @($trx.TestRun.Results.UnitTestResult | Where-Object testName -eq "IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.$name")
+            if ($result.Count -ne 1 -or $result[0].outcome -ne "Passed") {
+              Write-Error "Required production subscription test did not pass: $name"
+              exit 1
+            }
+          }
 
       - name: Convert TRX to JUnit XML
         if: always()
@@ -1193,11 +1203,6 @@ jobs:
           path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
           retention-days: 14
 
-      - name: Stop OPC UA server
-        if: always()
-        working-directory: ${{ github.workspace }}
-        run: python scripts/start_server_on_port.py --port 40464 --stop
-
       - name: Fail if Tests Failed
         if: always() && (steps.build.outcome == 'failure' || steps.tests.outcome == 'failure')
         env:
@@ -1205,8 +1210,8 @@ jobs:
           TESTS_OUTCOME: ${{ steps.tests.outcome }}
         run: |
           echo "C# live tests failed:"
-          echo "  build -> $BUILD_OUTCOME"
-          echo "  tests -> $TESTS_OUTCOME"
+          echo "  build -> $env:BUILD_OUTCOME"
+          echo "  tests -> $env:TESTS_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────

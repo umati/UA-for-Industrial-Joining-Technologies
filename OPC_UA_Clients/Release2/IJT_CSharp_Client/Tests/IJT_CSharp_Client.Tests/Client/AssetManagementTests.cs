@@ -2,6 +2,7 @@
 
 using System.Collections.Generic;
 using IJT_CSharp_Client.Client;
+using IJT_CSharp_Client.Tests.UnitTests;
 using Moq;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -429,7 +430,6 @@ public sealed class AssetManagementTests
     }
 
     [Fact]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Obsolete", "CS0618")]
     public async Task SubscribeAssetVariables_WhenNoCategoriesFound_DisposesWithoutCreate()
     {
         var amNodeId = new NodeId(5002u, (ushort)2);
@@ -448,7 +448,13 @@ public sealed class AssetManagementTests
             });
 
         var mockSession = new Mock<ISession>();
-        mockSession.Setup(s => s.DefaultSubscription).Returns(new Subscription(DefaultTelemetry.Create(_ => { })));
+        var (subMgr, _, _) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
         mock.Setup(s => s.Session).Returns(mockSession.Object);
         mock.Setup(s => s.Config).Returns(new IJT_CSharp_Client.Configuration.ClientConfig());
 
@@ -670,7 +676,7 @@ public sealed class AssetManagementTests
         var field = typeof(AssetManagement).GetField(
             "_assetVarSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
+        field!.SetValue(sut, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         // Delete() will throw because subscription has no session; caught by handler
         var ex = await Record.ExceptionAsync(async () => await sut.StopAssetVariableSubscriptionAsync());
@@ -688,7 +694,7 @@ public sealed class AssetManagementTests
         var field = typeof(AssetManagement).GetField(
             "_assetVarSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
+        field!.SetValue(sut, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync());
         Assert.Null(ex);
@@ -705,7 +711,7 @@ public sealed class AssetManagementTests
         var field = typeof(AssetManagement).GetField(
             "_assetVarSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
+        field!.SetValue(sut, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         var ex = await Record.ExceptionAsync(async () => await sut.SubscribeAssetVariablesAsync());
         Assert.Null(ex);

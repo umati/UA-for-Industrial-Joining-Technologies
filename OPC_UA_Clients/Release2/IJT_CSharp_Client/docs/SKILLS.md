@@ -8,7 +8,7 @@
 |------|-------|
 | **Location** | `OPC_UA_Clients/Release2/IJT_CSharp_Client/` |
 | **Purpose** | C# OPC UA IJT reference client — interactive menu covering events, results, assets, joining process, and joint management |
-| **Stack** | .NET 10, OPC Foundation UA .NET Standard SDK 2.0.0 (with dual-mode 1.5.378 legacy profile), xUnit, Moq, coverlet |
+| **Stack** | .NET 10, OPC Foundation UA .NET Standard SDK 2.0.2 (with dual-mode 1.5.378 legacy profile), xUnit, Moq, coverlet |
 | **OPC UA Spec** | OPC UA for Industrial Joining Technologies (IJT Base + Tightening) on top of DI, Machinery, MachineryResult, AMB |
 | **Server default** | `opc.tcp://localhost:40451` |
 
@@ -18,7 +18,7 @@
 
 ```
 OPC UA Core (Part 1-14)
-  └─ ISession (Opc.Ua.Client.ISession) — OPC Foundation SDK 2.0.0
+  └─ ISession (Opc.Ua.Client.ISession) — OPC Foundation SDK 2.0.2 with V2 Managed Subscription Engine
 
 Harmonized Companion Specs (DI, Machinery, Machinery/Result, AMB, IA)
   └─ IJT Base + IJT Tightening companion specs (Roslyn Source Generated from NodeSet2.xml)
@@ -52,6 +52,17 @@ IJoiningSystem  ← interface used by management classes and Moq mocks
 - `JoiningSystem` owns `ISession` directly; management classes take `IJoiningSystem` in constructors.
 - Menu item numbers are an implementation detail of `Program.cs` — they are not part of the architecture and will change as features are added. Never hardcode menu numbers in documentation.
 
+### V2 Managed Subscription Engine (SDK 2.0.2)
+
+The client uses the OPC Foundation SDK 2.0.2 V2 managed subscription engine (`ISubscriptionManager`, `ISubscription`, `IMonitoredItemCollection`):
+- **Engine Activation:** Explicitly configured via `SubscriptionEngineFactory = new DefaultSubscriptionEngineFactory()` on `DefaultSessionFactory` in `OpcUaSessionConnector.cs`.
+- **Zero-DI Configuration:** Uses `StaticOptionsMonitor<T>` to provide `IOptionsMonitor<T>` options to `ISubscriptionManager.Add` and `IMonitoredItemCollection.TryAdd` without requiring a dependency injection container.
+- **Explicit Publishing:** In SDK 2.0.2, `SubscriptionOptions.PublishingEnabled` defaults to `false`. All subscription initializers explicitly configure `PublishingEnabled = true`, `KeepAliveCount = 10`, `LifetimeCount = 100`, `MaxNotificationsPerPublish = 1000`, and `Priority = 0`.
+- **Observable Server Readiness:** Monitored item creation occurs asynchronously. `DelegatingSubscriptionNotificationHandler.WaitForReadinessAsync` bounds and confirms server-side item readiness (`item.Created == true`) and status code validation before exposing the active subscription handle.
+- **Monitored Item Admission:** Local admission results from `TryAdd` are strictly validated; admission failure aborts and disposes the subscription.
+- **Collision-Safe Asset Routing:** Monitored items for asset variables are keyed with unique item identifiers mapped internally through `ConcurrentDictionary<string, (string AssetKey, string ChildPath)> _monitoredItemRouting`, preventing routing collisions when asset `DisplayName` contains `/`.
+- **Lifecycle & Teardown Synchronization:** Subscription creation and disposal are coordinated with `SemaphoreSlim(1, 1)`, and subscriptions are safely disposed via `await subscription.DisposeAsync()`. This lock does not coordinate the entire session reconnect lifecycle.
+
 ---
 
 ## Project File Map
@@ -69,6 +80,9 @@ IJT_CSharp_Client/
 ├── Client/
 │   ├── IJoiningSystem.cs        # Interface: OPC UA helpers + IJT domain properties
 │   ├── JoiningSystem.cs         # IJT domain root — ISession direct owner, ConnectAsync, BrowseMethod 3-tier
+│   ├── OpcUaSessionConnector.cs # Session connector, PKI configuration, and V2 DefaultSubscriptionEngineFactory wiring
+│   ├── StaticOptionsMonitor.cs  # Zero-DI IOptionsMonitor adapter for V2 subscription and monitored item options
+│   ├── DelegatingSubscriptionNotificationHandler.cs # V2 notification dispatcher with observable readiness tracking
 │   ├── AssetManagement.cs       # EnableAsset, SendIdentifiers, SendTextIdentifiers, GetIdentifiers, ResetIdentifiers, SubscribeAssetVariables
 │   ├── ResultManagement.cs      # GetLatestResult, GetResultById, SubscribeResultVariable
 │   ├── JoiningProcessManagement.cs  # GetJoiningProcessList, SelectJoiningProcess, GetSelectedJoiningProgram
@@ -99,6 +113,7 @@ IJT_CSharp_Client/
         │   ├── JoiningSystemUnitTests.cs            # JoiningSystem: CallMethod, BrowseMethod tiers, NodeId factories, Uncertain/Bad status, keep-alive, dispose
         │   ├── JointManagementUnitTests.cs          # JointManagement: all 5 operations, null-node guards, EncodingMask tests
         │   ├── AssetManagementUnitTests.cs
+        │   ├── DelegatingSubscriptionNotificationHandlerUnitTests.cs # V2 readiness, error states, and cancellation semantics
         │   ├── ResultManagementUnitTests.cs
         │   ├── JoiningProcessManagementUnitTests.cs
         │   ├── EventSubscriberUnitTests.cs
@@ -402,8 +417,8 @@ Always call `JoiningSystem.BrowseMethod(objectId, name, fallbackConstant)` — n
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `OPCFoundation.NetStandard.Opc.Ua` | 2.0.0 | OPC UA SDK client and core stack |
-| `OPCFoundation.NetStandard.Opc.Ua.Core` | 2.0.0 | Core types and Roslyn Source Generators (`NodeSet2.xml`) |
+| `OPCFoundation.NetStandard.Opc.Ua` | 2.0.2 | OPC UA SDK client, core stack, and V2 managed subscription engine |
+| `OPCFoundation.NetStandard.Opc.Ua.Core` | 2.0.2 | Core types and Roslyn Source Generators (`NodeSet2.xml`) |
 | `xunit` | latest | Unit test framework |
 | `Moq` | 4.20.72+ | Mocking `IJoiningSystem` in unit tests |
 | `coverlet.collector` | latest | Code coverage collection |
@@ -416,13 +431,17 @@ This client's test runner auto-launches a dedicated server instance on port **40
 mechanism — `OpcUaServerFixture.cs` copies the binary, patches `server_configuration.json`, and manages
 the full lifecycle). Port 40451 is not used during CI or parallel test runs. For standalone developer
 use (no `OPCUA_SERVER_PORT` env var set), the runner falls back to the server's native port 40451.
-If the selected port is already open, the fixture first probes OPC UA readiness and reuses the server
-only when the OPC UA stack answers. Runner-managed runs kill and relaunch a process on that port only
-when the readiness probe fails. Fresh native and Docker launches also require the OPC UA readiness
+Without an explicit simulator target, the fixture probes an occupied port and can reuse a ready
+server; when `OPCUA_SERVER_PORT` is set, a failed probe triggers stale-process cleanup and relaunch.
+When both `OPCUA_SERVER_PORT` and `IJT_OPCUA_SECURITY_SUT` are set, the fixture instead stops an
+existing process on that port before isolated startup, even if it is ready. Fresh native and
+Docker launches also require the OPC UA readiness
 probe after TCP opens, which prevents all-skipped live runs caused by cold server initialisation.
-GitHub integration starts the managed port through the root `scripts/start_server_on_port.py`
-launcher, which keeps the copied simulator under a short `RUNNER_TEMP/ijt-sim` root before
-the xUnit fixture connects.
+The C# live integration job lets the xUnit fixture own the simulator on its assigned port,
+using the short `RUNNER_TEMP/ijt-sim` root. This ensures result-correlation and reconnect
+tests run rather than skipping because a prestarted server is outside the fixture's control.
+The job also requires both production result-delivery and channel-reconnect tests to report
+Passed in the TRX results; missing, failed, or skipped results fail the job.
 The Integration summary parses `results-csharp-live/tests.trx` and publishes C# Live timing by
 test class plus the slowest individual tests; use that data before changing live-test sharding or
 filter topology.
@@ -430,6 +449,24 @@ filter topology.
 Runner-managed Phase 2 must produce real live-test evidence. If every live test is skipped while
 `OPCUA_SERVER_PORT` is set, the runner treats that as a failure because the managed server was
 unavailable; it is not accepted as a green live run.
+
+Result-delivery and channel-reconnect tests exercise the production subscription path and
+match notifications to the simulator's generated result ID. They require a fixture-owned
+simulator, not a reused external server. For an isolated native Windows run, select an unused
+`OPCUA_SERVER_PORT` and set `IJT_OPCUA_SECURITY_SUT=windows` before running phase 2.
+Never select a port used by another server: explicitly managed fixture runs may stop its
+process even when it passes readiness checks. Security validation uses the runner's
+`--opcua-security` targets for Windows and Linux. Offline unit-test success alone does not
+establish live or reconnect acceptance.
+
+Reconnect delivery allows queued Publish requests to drain and missed messages to be
+republished. Its deadline uses the server-revised publishing interval, keep-alive count,
+and publish-worker count, plus a scheduling margin; a fixed ten-second deadline can
+expire before legitimate recovery. SDK diagnostics use the application's `IJT_LOG_LEVEL`
+setting, with the SDK's default handling of sensitive log values unchanged.
+This test invokes SDK channel replacement and verifies delivery with the same session and
+logical subscription. It does not establish server-restart recovery, replacement-session
+transfer, or every application-level automatic reconnect path.
 
 For the full port assignment table, auto-launch mechanics, and venv rationale, see
 [`docs/TEST_TIERS.md`](../../../../docs/TEST_TIERS.md).

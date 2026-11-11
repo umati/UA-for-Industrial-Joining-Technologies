@@ -126,7 +126,7 @@ public sealed class MenuDispatchTests
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-        field.SetValue(sut, new Subscription(DefaultTelemetry.Create(_ => { })));
+        field.SetValue(sut, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         var ex = await Record.ExceptionAsync(async () => await sut.SubscribeAsync());
         Assert.Null(ex);

@@ -26,7 +26,13 @@ public sealed class JoiningSystemUnitTests
         var mock = new Mock<ISession>();
         mock.Setup(s => s.Connected).Returns(connected);
         mock.Setup(s => s.MessageContext).Returns(ServiceMessageContext.CreateEmpty(DefaultTelemetry.Create(_ => { })));
-        mock.Setup(s => s.DefaultSubscription).Returns(new Subscription(DefaultTelemetry.Create(_ => { })));
+        var (subMgr, _, _) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+        mock.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
         mock.Setup(s => s.OperationLimits).Returns(new OperationLimits());
         mock.Setup(s => s.ServerCapabilities).Returns(new ServerCapabilities());
         mock.Setup(s => s.AddSubscription(It.IsAny<Subscription>())).Returns(true);
@@ -1708,15 +1714,15 @@ public sealed class JoiningSystemUnitTests
     public async Task DisposeAsync_WhenCleanupTimesOut_LogsWarningAndProceeds()
     {
         var mockSession = CreateMockSession(connected: false);
-        var tcs = new TaskCompletionSource<bool>();
-        mockSession.Setup(s => s.RemoveSubscriptionAsync(It.IsAny<Subscription>()))
-            .Returns(tcs.Task);
-
         var sut = CreateSession(mockSession.Object);
+        var mockSub = new Mock<Opc.Ua.Client.Subscriptions.ISubscription>();
+        var tcs = new TaskCompletionSource<bool>();
+        mockSub.Setup(s => s.DisposeAsync()).Returns(new ValueTask(tcs.Task));
+
         var field = typeof(ResultManagement).GetField(
             "_resultVarSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(sut.ResultManagement, new Subscription(DefaultTelemetry.Create(_ => { })));
+        field!.SetValue(sut.ResultManagement, mockSub.Object);
 
         JoiningSystem.ShutdownTimeoutOverrideForTesting.Value = TimeSpan.FromMilliseconds(5);
         try

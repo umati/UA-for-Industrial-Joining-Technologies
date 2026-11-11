@@ -529,10 +529,8 @@ public sealed class AssetManagementUnitTests
     public async Task StopAssetVariableSubscription_WhenSessionRemovalThrowsServiceResult_CleansUp()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.Session).Returns(
-            MockSessionBuilder.CreateThrowingSession(new ServiceResultException(StatusCodes.BadSessionClosed)));
         await using var am = new AssetManagement(session.Object);
-        SetAssetVarSubscription(am, new Subscription(DefaultTelemetry.Create(_ => { })));
+        SetAssetVarSubscription(am, CreateThrowingSubscription(new ServiceResultException(StatusCodes.BadSessionClosed)));
 
         await am.StopAssetVariableSubscriptionAsync();
 
@@ -543,10 +541,8 @@ public sealed class AssetManagementUnitTests
     public async Task StopAssetVariableSubscription_WhenSessionRemovalThrowsUnexpectedException_CleansUp()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.Session).Returns(
-            MockSessionBuilder.CreateThrowingSession(new InvalidOperationException("remove failed")));
         await using var am = new AssetManagement(session.Object);
-        SetAssetVarSubscription(am, new Subscription(DefaultTelemetry.Create(_ => { })));
+        SetAssetVarSubscription(am, CreateThrowingSubscription(new InvalidOperationException("remove failed")));
 
         await am.StopAssetVariableSubscriptionAsync();
 
@@ -577,15 +573,11 @@ public sealed class AssetManagementUnitTests
         Assert.False(am.IsAssetVarSubscribed);
     }
 
-    private static Subscription CreateThrowingSubscription(Exception ex)
+    private static Opc.Ua.Client.Subscriptions.ISubscription CreateThrowingSubscription(Exception ex)
     {
-        var sub = new Subscription(DefaultTelemetry.Create(_ => { }));
-        var idField = typeof(Subscription).GetField("<Id>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        idField!.SetValue(sub, 1u);
-        var sessionSetter = typeof(Subscription).GetProperty(nameof(Subscription.Session))!
-            .GetSetMethod(nonPublic: true)!;
-        sessionSetter.Invoke(sub, [MockSessionBuilder.CreateThrowingSession(ex)]);
-        return sub;
+        var mock = new Mock<Opc.Ua.Client.Subscriptions.ISubscription>();
+        mock.Setup(s => s.DisposeAsync()).Throws(ex);
+        return mock.Object;
     }
 
 
@@ -698,7 +690,7 @@ public sealed class AssetManagementUnitTests
 
     // ── StopAssetVariableSubscriptionAsync — normal path ────────────────────────────
 
-    private static void SetAssetVarSubscription(AssetManagement am, Subscription? value)
+    private static void SetAssetVarSubscription(AssetManagement am, Opc.Ua.Client.Subscriptions.ISubscription? value)
     {
         var field = typeof(AssetManagement).GetField(
             "_assetVarSubscription",
@@ -711,7 +703,7 @@ public sealed class AssetManagementUnitTests
     {
         var session = MockSessionBuilder.Create();
         await using var am = new AssetManagement(session.Object);
-        SetAssetVarSubscription(am, new Subscription(DefaultTelemetry.Create(_ => { })));
+        SetAssetVarSubscription(am, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         Assert.True(am.IsAssetVarSubscribed);
 
@@ -1018,5 +1010,396 @@ public sealed class EntityDataTypeEncodingMaskTests
         // Verify the mask is NOT set for Name (documents the pitfall, prevents regression)
         Assert.True((entity.EncodingMask & (uint)IJTBase.EntityDataTypeFields.Name) == 0u,
             "Object-initializer without EncodingMask leaves Name bit unset — use EntityDataType.Create() instead");
+    }
+
+    [Fact]
+    public async Task SubscribeAssetVariables_WithSlashInDisplayName_RoutesNotificationCorrectly()
+    {
+        var catNodeId = new NodeId(200, 1);
+        var instNodeId = new NodeId(201, 1);
+        var varNodeId = new NodeId(202, 1);
+
+        var catRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(catNodeId),
+            NodeClass = NodeClass.Object,
+            BrowseName = new QualifiedName("Controllers", 1),
+            DisplayName = new LocalizedText("", "Controllers"),
+        };
+        var instRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(instNodeId),
+            NodeClass = NodeClass.Object,
+            BrowseName = new QualifiedName("Line1/ToolA", 1),
+            DisplayName = new LocalizedText("", "Line1/ToolA"),
+        };
+        var varRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(varNodeId),
+            NodeClass = NodeClass.Variable,
+            BrowseName = new QualifiedName("ProductInstanceUri", 1),
+            DisplayName = new LocalizedText("", "ProductInstanceUri"),
+        };
+
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, mockItems) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler? capturedHandler = null;
+        subMgr.Setup(m => m.Add(
+                It.IsAny<Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>>()))
+            .Callback<Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler, Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>>(
+                (h, _) => capturedHandler = h)
+            .Returns(mockSub.Object);
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(MockSessionBuilder.ValidNodeId)),
+                (uint)NodeClass.Object))
+            .ReturnsAsync(new ReferenceDescriptionCollection { catRef });
+
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(catNodeId)),
+                (uint)NodeClass.Object))
+            .ReturnsAsync(new ReferenceDescriptionCollection { instRef });
+
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(instNodeId)),
+                (uint)(NodeClass.Variable | NodeClass.Object)))
+            .ReturnsAsync(new ReferenceDescriptionCollection { varRef });
+
+        await using var am = new AssetManagement(session.Object);
+        await am.SubscribeAssetVariablesAsync();
+
+        Assert.True(am.IsAssetVarSubscribed);
+        Assert.NotNull(capturedHandler);
+
+        // Verify routing handles slash in display name when notification arrives
+        var dummyItem = new Mock<Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem>();
+        dummyItem.SetupGet(i => i.Name).Returns("asset_item_1");
+
+        var change = new Opc.Ua.Client.Subscriptions.DataValueChange(
+            dummyItem.Object,
+            new DataValue(new Variant("test-uri-value"), StatusCodes.Good),
+            null);
+
+        await capturedHandler.OnDataChangeNotificationAsync(
+            mockSub.Object, 1, DateTime.UtcNow, new[] { change }, Opc.Ua.Client.Subscriptions.PublishState.None, []);
+
+        var field = typeof(AssetManagement).GetField(
+            "_assetValues",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var assetValues = (System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentDictionary<string, object?>>)field!.GetValue(am)!;
+
+        Assert.True(assetValues.ContainsKey("Controllers_Line1/ToolA"));
+        Assert.Equal("test-uri-value", assetValues["Controllers_Line1/ToolA"]["ProductInstanceUri"]);
+    }
+
+    [Fact]
+    public async Task SubscribeAssetVariables_WhenTryAddFails_ThrowsAndDisposesSubscription()
+    {
+        var catNodeId = new NodeId(200, 1);
+        var instNodeId = new NodeId(201, 1);
+        var varNodeId = new NodeId(202, 1);
+
+        var catRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(catNodeId),
+            NodeClass = NodeClass.Object,
+            BrowseName = new QualifiedName("Controllers", 1),
+            DisplayName = new LocalizedText("", "Controllers"),
+        };
+        var instRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(instNodeId),
+            NodeClass = NodeClass.Object,
+            BrowseName = new QualifiedName("Tool-001", 1),
+            DisplayName = new LocalizedText("", "Tool-001"),
+        };
+        var varRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(varNodeId),
+            NodeClass = NodeClass.Variable,
+            BrowseName = new QualifiedName("ProductInstanceUri", 1),
+            DisplayName = new LocalizedText("", "ProductInstanceUri"),
+        };
+
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, mockItems) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        var dummy = (Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem?)null;
+        mockItems.Setup(m => m.TryAdd(
+                It.IsAny<string>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>>(),
+                out dummy))
+            .Returns(false);
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(MockSessionBuilder.ValidNodeId)),
+                (uint)NodeClass.Object))
+            .ReturnsAsync(new ReferenceDescriptionCollection { catRef });
+
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(catNodeId)),
+                (uint)NodeClass.Object))
+            .ReturnsAsync(new ReferenceDescriptionCollection { instRef });
+
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(instNodeId)),
+                (uint)(NodeClass.Variable | NodeClass.Object)))
+            .ReturnsAsync(new ReferenceDescriptionCollection { varRef });
+
+        await using var am = new AssetManagement(session.Object);
+        var ex = await Record.ExceptionAsync(async () => await am.SubscribeAssetVariablesAsync());
+
+        Assert.IsType<InvalidOperationException>(ex);
+        Assert.False(am.IsAssetVarSubscribed);
+        mockSub.Verify(s => s.DisposeAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task SubscribeAssetVariables_WhenDiscoveryThrows_DisposesSubscriptionWithoutLeaking()
+    {
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, _) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        // Throw during browse children of Assets
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(MockSessionBuilder.ValidNodeId)),
+                (uint)NodeClass.Object))
+            .ThrowsAsync(new InvalidOperationException("Browse network failure"));
+
+        await using var am = new AssetManagement(session.Object);
+        var ex = await Record.ExceptionAsync(async () => await am.SubscribeAssetVariablesAsync());
+
+        Assert.IsType<InvalidOperationException>(ex);
+        Assert.False(am.IsAssetVarSubscribed);
+        mockSub.Verify(s => s.DisposeAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task SubscribeAssetVariables_WhenDataChangeArrivesDuringTryAdd_RoutesValueSuccessfully()
+    {
+        var catNodeId = new NodeId(200, 1);
+        var instNodeId = new NodeId(201, 1);
+        var varNodeId = new NodeId(202, 1);
+
+        var catRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(catNodeId),
+            NodeClass = NodeClass.Object,
+            BrowseName = new QualifiedName("Controllers", 1),
+            DisplayName = new LocalizedText("", "Controllers"),
+        };
+        var instRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(instNodeId),
+            NodeClass = NodeClass.Object,
+            BrowseName = new QualifiedName("FastTool", 1),
+            DisplayName = new LocalizedText("", "FastTool"),
+        };
+        var varRef = new ReferenceDescription
+        {
+            NodeId = new ExpandedNodeId(varNodeId),
+            NodeClass = NodeClass.Variable,
+            BrowseName = new QualifiedName("ProductInstanceUri", 1),
+            DisplayName = new LocalizedText("", "ProductInstanceUri"),
+        };
+
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, mockItems) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler? capturedHandler = null;
+        subMgr.Setup(m => m.Add(
+                It.IsAny<Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>>()))
+            .Callback<Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler, Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>>(
+                (h, _) => capturedHandler = h)
+            .Returns(mockSub.Object);
+
+        // Simulate TryAdd dispatching an immediate data change BEFORE TryAdd returns
+        mockItems.Setup(m => m.TryAdd(
+                It.IsAny<string>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>>(),
+                out It.Ref<Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem?>.IsAny))
+            .Returns(new MockSessionBuilder.TryAddMonitoredItemCallback((string name, Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions> opts, out Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem? item) =>
+            {
+                var mockItem = new Mock<Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem>();
+                mockItem.SetupGet(i => i.Name).Returns(name);
+                mockItem.SetupGet(i => i.Created).Returns(true);
+                item = mockItem.Object;
+
+                // Dispatch data change notification during TryAdd execution
+                var change = new Opc.Ua.Client.Subscriptions.DataValueChange(
+                    mockItem.Object,
+                    new DataValue(new Variant("immediate-arrival-uri"), StatusCodes.Good),
+                    null);
+
+                capturedHandler?.OnDataChangeNotificationAsync(
+                    mockSub.Object, 1, DateTime.UtcNow, new[] { change }, Opc.Ua.Client.Subscriptions.PublishState.None, []).AsTask().Wait();
+
+                return true;
+            }));
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(MockSessionBuilder.ValidNodeId)),
+                (uint)NodeClass.Object))
+            .ReturnsAsync(new ReferenceDescriptionCollection { catRef });
+
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(catNodeId)),
+                (uint)NodeClass.Object))
+            .ReturnsAsync(new ReferenceDescriptionCollection { instRef });
+
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(instNodeId)),
+                (uint)(NodeClass.Variable | NodeClass.Object)))
+            .ReturnsAsync(new ReferenceDescriptionCollection { varRef });
+
+        await using var am = new AssetManagement(session.Object);
+        await am.SubscribeAssetVariablesAsync();
+
+        Assert.True(am.IsAssetVarSubscribed);
+
+        var field = typeof(AssetManagement).GetField(
+            "_assetValues",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var assetValues = (System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentDictionary<string, object?>>)field!.GetValue(am)!;
+
+        Assert.True(assetValues.ContainsKey("Controllers_FastTool"));
+        Assert.Equal("immediate-arrival-uri", assetValues["Controllers_FastTool"]["ProductInstanceUri"]);
+    }
+
+    [Fact]
+    public async Task SubscribeAssetVariables_WhenDisposalThrows_PreservesPrimaryExceptionAndClearsLocalState()
+    {
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, _) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        // Primary failure: browse failure
+        session.Setup(s => s.BrowseChildrenAsync(
+                It.Is<NodeId>(n => n.Equals(MockSessionBuilder.ValidNodeId)),
+                (uint)NodeClass.Object))
+            .ThrowsAsync(new InvalidOperationException("Primary browse network failure"));
+
+        // Disposal failure: DisposeAsync also throws
+        mockSub.Setup(s => s.DisposeAsync()).Throws(new ServiceResultException(StatusCodes.BadCommunicationError, "Disposal pipe broken"));
+
+        await using var am = new AssetManagement(session.Object);
+        var ex = await Record.ExceptionAsync(async () => await am.SubscribeAssetVariablesAsync());
+
+        // Must preserve primary exception, NOT replace it with disposal exception
+        Assert.IsType<InvalidOperationException>(ex);
+        Assert.Equal("Primary browse network failure", ex.Message);
+        Assert.False(am.IsAssetVarSubscribed);
+
+        var field = typeof(AssetManagement).GetField(
+            "_monitoredItemRouting",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var routing = (System.Collections.Concurrent.ConcurrentDictionary<string, (string, string)>)field!.GetValue(am)!;
+        Assert.Empty(routing);
+    }
+
+    [Fact]
+    public async Task SubscribeAssetVariables_WhenCancelledDuringDiscovery_ThrowsOperationCanceledExceptionAndCleansUp()
+    {
+        var session = MockSessionBuilder.Create();
+        using var cts = new CancellationTokenSource();
+
+        // Simulate cancellation during asset browse
+        session.Setup(s => s.BrowseChildAsync(
+                session.Object.NodeId, IJTBase.BrowseNames.AssetManagement))
+            .ReturnsAsync(() =>
+            {
+                cts.Cancel();
+                return NodeId.Null; // Node absent or returned null due to cancellation
+            });
+
+        await using var am = new AssetManagement(session.Object);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            am.SubscribeAssetVariablesAsync(cts.Token));
+
+        Assert.False(am.IsAssetVarSubscribed);
+    }
+
+    [Fact]
+    public async Task SubscribeAssetVariables_WhenCancelledDuringRecursiveDiscovery_ThrowsOperationCanceledExceptionAndDisposesSubscription()
+    {
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, _) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        using var cts = new CancellationTokenSource();
+
+        var assetsNode = MockSessionBuilder.ValidNodeId;
+        var catRef = new ReferenceDescription
+        {
+            BrowseName = new QualifiedName("Controllers"),
+            NodeId = new ExpandedNodeId(new NodeId(2001, 7)),
+            NodeClass = NodeClass.Object
+        };
+
+        session.Setup(s => s.BrowseChildrenAsync(assetsNode, (uint)NodeClass.Object))
+            .ReturnsAsync([catRef]);
+
+        session.Setup(s => s.BrowseChildrenAsync((NodeId)catRef.NodeId, (uint)NodeClass.Object))
+            .ReturnsAsync(() =>
+            {
+                cts.Cancel();
+                return [];
+            });
+
+        await using var am = new AssetManagement(session.Object);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            am.SubscribeAssetVariablesAsync(cts.Token));
+
+        mockSub.Verify(s => s.DisposeAsync(), Times.Once);
+        Assert.False(am.IsAssetVarSubscribed);
     }
 }

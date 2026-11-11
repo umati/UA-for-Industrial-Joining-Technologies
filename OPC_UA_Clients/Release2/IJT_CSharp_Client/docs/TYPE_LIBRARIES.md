@@ -13,7 +13,7 @@ The `Types/` directory contains C# bindings for IJT and prerequisite companion-s
 
 The type libraries support two compilation models to ensure both modern development efficiency and backwards compatibility:
 
-### 1. Modern Mode (OPC Foundation SDK 2.0.0 — Default)
+### 1. Modern Mode (OPC Foundation SDK 2.0.2 — Default)
 - **Compile-Time Roslyn Source Generation:** Type classes are generated on the fly directly from the official companion-spec `*.NodeSet2.xml` files via `<AdditionalFiles Include="*.NodeSet2.xml" />` provided by `Opc.Ua.Core`.
 - **Target Frameworks:** `net8.0`, `net9.0`, `net10.0`.
 - **Advantages:** Eliminates ModelCompiler maintenance overhead, eliminates committed class drift, and guarantees exact schema compliance with upstream NodeSet2 files.

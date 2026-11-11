@@ -189,7 +189,7 @@ public sealed class EventSubscriberUnitTests
 
     // ── UnsubscribeAsync — paths when a subscription is active ────────────────────
 
-    private static void SetEventSubscription(EventSubscriber sub, Subscription? value)
+    private static void SetEventSubscription(EventSubscriber sub, Opc.Ua.Client.Subscriptions.ISubscription? value)
     {
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
@@ -202,7 +202,7 @@ public sealed class EventSubscriberUnitTests
     {
         var session = MockSessionBuilder.Create();
         await using var sub = new EventSubscriber(session.Object);
-        SetEventSubscription(sub, new Subscription(DefaultTelemetry.Create(_ => { })));
+        SetEventSubscription(sub, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         Assert.True(sub.IsSubscribed);
 
@@ -216,10 +216,10 @@ public sealed class EventSubscriberUnitTests
     public async Task Unsubscribe_WhenRemoveSubscriptionThrows_LogsAndClearsSubscription()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.Session).Returns(
-            MockSessionBuilder.CreateThrowingSession(new InvalidOperationException("remove failed")));
         await using var sub = new EventSubscriber(session.Object);
-        SetEventSubscription(sub, new Subscription(DefaultTelemetry.Create(_ => { })));
+        var mockSub = new Mock<Opc.Ua.Client.Subscriptions.ISubscription>();
+        mockSub.Setup(s => s.DisposeAsync()).Throws(new InvalidOperationException("dispose failed"));
+        SetEventSubscription(sub, mockSub.Object);
 
         var ex = await Record.ExceptionAsync(async () => await sub.UnsubscribeAsync());
 
@@ -232,13 +232,9 @@ public sealed class EventSubscriberUnitTests
     {
         var session = MockSessionBuilder.Create();
         await using var sub = new EventSubscriber(session.Object);
-        var throwingSub = new Subscription(DefaultTelemetry.Create(_ => { }));
-        var idField = typeof(Subscription).GetField("<Id>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        idField!.SetValue(throwingSub, 1u);
-        var sessionSetter = typeof(Subscription).GetProperty(nameof(Subscription.Session))!
-            .GetSetMethod(nonPublic: true)!;
-        sessionSetter.Invoke(throwingSub, [MockSessionBuilder.CreateThrowingSession(new InvalidOperationException("delete failed"))]);
-        SetEventSubscription(sub, throwingSub);
+        var mockSub = new Mock<Opc.Ua.Client.Subscriptions.ISubscription>();
+        mockSub.Setup(s => s.DisposeAsync()).Throws(new ServiceResultException(StatusCodes.BadUnexpectedError));
+        SetEventSubscription(sub, mockSub.Object);
 
         var ex = await Record.ExceptionAsync(async () => await sub.UnsubscribeAsync());
 
@@ -277,6 +273,97 @@ public sealed class EventSubscriberUnitTests
         var session = MockSessionBuilder.Create();
         await using var sub = new EventSubscriber(session.Object);
 
+        Assert.False(sub.IsSubscribed);
+    }
+
+    [Fact]
+    public async Task SubscribeAsync_ConfiguresPublishingEnabled_True()
+    {
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, _) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        Opc.Ua.Client.Subscriptions.SubscriptionOptions? capturedOptions = null;
+        subMgr.Setup(m => m.Add(
+                It.IsAny<Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>>()))
+            .Callback<Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler, Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>>(
+                (_, opts) => capturedOptions = opts.CurrentValue)
+            .Returns(mockSub.Object);
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        await using var sub = new EventSubscriber(session.Object);
+        await sub.SubscribeAsync();
+
+        Assert.True(sub.IsSubscribed);
+        Assert.NotNull(capturedOptions);
+        Assert.True(capturedOptions.PublishingEnabled);
+    }
+
+    [Fact]
+    public async Task SubscribeAsync_WhenTryAddFails_ThrowsAndDisposesSubscription()
+    {
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, mockItems) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        var dummy = (Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem?)null;
+        mockItems.Setup(m => m.TryAdd(
+                It.IsAny<string>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>>(),
+                out dummy))
+            .Returns(false);
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        await using var sub = new EventSubscriber(session.Object);
+        var ex = await Record.ExceptionAsync(async () => await sub.SubscribeAsync());
+
+        Assert.IsType<InvalidOperationException>(ex);
+        Assert.False(sub.IsSubscribed);
+        mockSub.Verify(s => s.DisposeAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task SubscribeAsync_WhenDisposalThrows_PreservesPrimaryException()
+    {
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, mockItems) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        var dummy = (Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem?)null;
+        mockItems.Setup(m => m.TryAdd(
+                It.IsAny<string>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>>(),
+                out dummy))
+            .Returns(false); // Primary failure: registration rejected
+
+        // Disposal failure: DisposeAsync throws
+        mockSub.Setup(s => s.DisposeAsync()).Throws(new ServiceResultException(StatusCodes.BadCommunicationError, "Disposal pipe broken"));
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        await using var sub = new EventSubscriber(session.Object);
+        var ex = await Record.ExceptionAsync(async () => await sub.SubscribeAsync());
+
+        Assert.IsType<InvalidOperationException>(ex);
+        Assert.Contains("Failed to register monitored item 'IJT Result Events'", ex.Message);
         Assert.False(sub.IsSubscribed);
     }
 }

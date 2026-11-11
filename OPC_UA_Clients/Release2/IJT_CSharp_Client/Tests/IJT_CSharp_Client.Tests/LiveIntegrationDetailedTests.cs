@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Threading.Channels;
 using IJT_CSharp_Client.Client;
 using IJT_CSharp_Client.Configuration;
 using IJT_CSharp_Client.Helpers;
@@ -701,64 +702,109 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     }
 
     [SkippableFact]
-    public async Task SubscribeResultVariable_ThenTrigger_DataChangeNotificationReceived()
+    public Task SubscribeResultVariable_ThenTrigger_DataChangeNotificationReceived()
+        => VerifyResultVariableDeliveryAsync(reconnect: false);
+
+    [SkippableFact]
+    public Task SubscribeResultVariable_AfterChannelReconnect_DataChangeNotificationReceived()
+        => VerifyResultVariableDeliveryAsync(reconnect: true);
+
+    private async Task VerifyResultVariableDeliveryAsync(bool reconnect)
     {
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        Skip.IfNot(_fixture.OwnsServer, "Result correlation requires a fixture-owned simulator without external producers.");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         await using var session = await OpenFreshSessionAsync(cts.Token).ConfigureAwait(false);
 
-        var rmNode = await WithTimeout(
-            async () => await session.BrowseChildAsync(session.NodeId, "ResultManagement"),
-            10, "browse ResultManagement").ConfigureAwait(false);
-        Skip.IfNot(!rmNode.IsNull, "ResultManagement not found; skipping");
-
-        var resultsFolder = await WithTimeout(
-            async () => await session.BrowseChildAsync(rmNode, "Results"),
-            10, "browse Results folder").ConfigureAwait(false);
-        Skip.IfNot(!resultsFolder.IsNull, "Results folder not found; skipping");
-
-        var varRefs = await session.BrowseChildrenAsync(resultsFolder, (uint)NodeClass.Variable);
-        Skip.IfNot(varRefs.Count > 0, "No result variable found under Results; skipping");
-
-        var resultVarId = (NodeId)varRefs[0].NodeId;
-        var sub = new Subscription(session.Session.DefaultSubscription)
+        if (!session.Session.TryGetSubscriptionManager(out var subMgr))
         {
-            DisplayName = "test-result-variable-watch",
-            PublishingInterval = 200,
+            throw new InvalidOperationException("V2 subscription engine is unavailable on this session.");
+        }
+        var notifications = Channel.CreateUnbounded<string>();
+        session.ResultManagement.OnResultVariableChanged += (_, result) =>
+        {
+            if (!string.IsNullOrEmpty(result.ResultId))
+            {
+                Assert.True(notifications.Writer.TryWrite(result.ResultId));
+            }
         };
-        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var item = new MonitoredItem(sub.DefaultItem)
-        {
-            DisplayName = "TestResultVar",
-            StartNodeId = resultVarId,
-            AttributeId = Attributes.Value,
-            SamplingInterval = 200,
-        };
-        item.Notification += (_, _) => tcs.TrySetResult(true);
-        sub.AddItem(item);
 
-        await WithTimeout(async () =>
-        {
-            session.Session.AddSubscription(sub);
-            await sub.CreateAsync().ConfigureAwait(false);
-        },
-            10, "create result variable subscription").ConfigureAwait(false);
-
-        var triggered = await TriggerSingleResult(session).ConfigureAwait(false);
-        Skip.IfNot(triggered, "SimulateSingleResultAsync not available; skipping");
-
-        var received = await Task.WhenAny(tcs.Task, Task.Delay(10_000, cts.Token))
-            .ConfigureAwait(false) == tcs.Task;
+        var initialSubscriptionCount = subMgr.Count;
         try
         {
-            await sub.DeleteAsync(silent: true).ConfigureAwait(false);
-            await session.Session.RemoveSubscriptionAsync(sub).ConfigureAwait(false);
-            sub.Dispose();
-        }
-        catch { /* best-effort cleanup */ }
+            await session.ResultManagement.SubscribeResultVariableAsync(cts.Token).ConfigureAwait(false);
+            Assert.True(session.ResultManagement.IsResultVarSubscribed);
+            Assert.Equal(initialSubscriptionCount + 1, subMgr.Count);
+            var subscription = Assert.Single(subMgr.Items);
 
-        Assert.True(received,
-            "No data-change notification received on ResultVariable within 10 s after SimulateSingleResultAsync");
+            var firstResultId = await AssertTriggeredResultReceivedAsync(
+                session, notifications.Reader, previousResultId: null, cts.Token).ConfigureAwait(false);
+            firstResultId = await AssertTriggeredResultReceivedAsync(
+                session, notifications.Reader, firstResultId, cts.Token).ConfigureAwait(false);
+            if (reconnect)
+            {
+                // Queued Publish requests can consume a keep-alive period per worker before republishing catches up.
+                var recoveryTimeout = subscription.CurrentPublishingInterval * subscription.CurrentKeepAliveCount *
+                    (Math.Max(1, subMgr.PublishWorkerCount) + 1) + TimeSpan.FromSeconds(5);
+                var sessionId = session.Session.SessionId;
+                // ReconnectAsync owns channel replacement; a separate CloseAsync races keep-alive recovery.
+                await session.Session.ReconnectAsync(null, null, cts.Token).ConfigureAwait(false);
+                Assert.Equal(sessionId, session.Session.SessionId);
+                Assert.True(session.Session.TryGetSubscriptionManager(out var reconnectedManager));
+                Assert.Same(subMgr, reconnectedManager);
+                Assert.Same(subscription, Assert.Single(subMgr.Items));
+
+                await AssertTriggeredResultReceivedAsync(
+                    session, notifications.Reader, firstResultId, cts.Token, recoveryTimeout).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            await session.ResultManagement.StopResultVariableSubscriptionAsync().ConfigureAwait(false);
+            notifications.Writer.TryComplete();
+        }
+        Assert.Equal(initialSubscriptionCount, subMgr.Count);
+    }
+
+    private static async Task<string> AssertTriggeredResultReceivedAsync(
+        JoiningSystem session,
+        ChannelReader<string> notifications,
+        string? previousResultId,
+        CancellationToken cancellationToken,
+        TimeSpan? deliveryTimeout = null)
+    {
+        Assert.True(await TriggerSingleResult(session).ConfigureAwait(false),
+            "The isolated simulator must expose SimulateSingleResult.");
+        var latest = await session.ResultManagement.GetLatestResultAsync()
+            .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+        Assert.True(latest.IsSuccess);
+        Assert.NotNull(latest.Result);
+        Assert.False(string.IsNullOrEmpty(latest.Result.ResultId));
+        var expectedResultId = latest.Result.ResultId;
+        Assert.NotEqual(previousResultId, expectedResultId);
+
+        var timeout = deliveryTimeout ?? TimeSpan.FromSeconds(10);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeout);
+        string? lastReceivedId = null;
+        try
+        {
+            while ((lastReceivedId = await notifications.ReadAsync(deadline.Token).ConfigureAwait(false)) != expectedResultId)
+            {
+                // Initial values and republished values from before reconnect are not this trigger.
+            }
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            session.Session.TryGetSubscriptionManager(out var manager);
+            var states = manager is null ? "unavailable" : string.Join(", ", manager.Items.Select(
+                item => $"created={item.Created}, publishing={item.CurrentPublishingEnabled}, missing={item.MissingMessageCount}"));
+            throw new TimeoutException(
+                $"ResultVariable did not deliver triggered result '{expectedResultId}' within {timeout.TotalSeconds:g} seconds. " +
+                $"Last received={lastReceivedId}. " +
+                $"Workers={manager?.PublishWorkerCount}, good={manager?.GoodPublishRequestCount}, bad={manager?.BadPublishRequestCount}; {states}.", ex);
+        }
+        return expectedResultId;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

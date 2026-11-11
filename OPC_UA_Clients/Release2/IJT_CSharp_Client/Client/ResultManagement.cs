@@ -21,7 +21,8 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
 {
     private readonly ILogger<ResultManagement> _log = IjtLog.For<ResultManagement>();
     private readonly IJoiningSystem _js;
-    private Subscription? _resultVarSubscription;
+    private readonly SemaphoreSlim _subscriptionLock = new(1, 1);
+    private Opc.Ua.Client.Subscriptions.ISubscription? _resultVarSubscription;
     private NodeId _rmNodeId = NodeId.Null;
 
     /// <summary>Event raised whenever a new result is published via the live Result variable.</summary>
@@ -43,12 +44,14 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
     /// for a "ResultManagement" child; falls back to the type-level object NodeId.
     /// Result is cached until <see cref="InvalidateNodeCache"/> is called.
     /// </summary>
-    private async Task<NodeId> GetResultManagementNodeAsync()
+    private async Task<NodeId> GetResultManagementNodeAsync(CancellationToken cancellationToken = default)
     {
         if (!_rmNodeId.IsNull)
             return _rmNodeId;
 
+        cancellationToken.ThrowIfCancellationRequested();
         var child = await _js.BrowseChildAsync(_js.NodeId, MachineryResult.BrowseNames.ResultManagement);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!child.IsNull)
         {
             _rmNodeId = child;
@@ -156,61 +159,118 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
 
     // -- Subscribe to ResultVariable -------------------------------------------
 
+    /// <inheritdoc/>
+    public Task SubscribeResultVariableAsync() => SubscribeResultVariableAsync(CancellationToken.None);
+
     /// <summary>
     /// Creates a data-change subscription on the Result variable under
     /// <c>ResultManagement/Results</c>. Prints notifications to console.
     /// Does nothing if already subscribed.
     /// </summary>
-    public async Task SubscribeResultVariableAsync()
+    public async Task SubscribeResultVariableAsync(CancellationToken cancellationToken)
     {
-        if (_resultVarSubscription != null)
+        await _subscriptionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            _log.LogWarning("WARN Result variable subscription already active.");
-            return;
+            if (_resultVarSubscription != null)
+            {
+                _log.LogWarning("WARN Result variable subscription already active.");
+                return;
+            }
+
+            _log.LogInformation("\n-- Subscribing to Result variable -------------------");
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var rmNode = await GetResultManagementNodeAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Try to find the Results folder child, then the first variable inside
+            var resultsFolder = await _js.BrowseChildAsync(rmNode, "Results").ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            NodeId resultVarNode = NodeId.Null;
+
+            if (!resultsFolder.IsNull)
+            {
+                // Find first variable child of Results via mockable BrowseChildren
+                var varRefs = await _js.BrowseChildrenAsync(resultsFolder, (uint)NodeClass.Variable).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (varRefs?.Count > 0)
+                    resultVarNode = (NodeId)varRefs[0].NodeId;
+            }
+
+            if (resultVarNode.IsNull)
+            {
+                _log.LogError("ERROR Result variable node not found - skipping subscription.");
+                return;
+            }
+
+            if (!_js.Session.TryGetSubscriptionManager(out var subMgr))
+            {
+                throw new InvalidOperationException("V2 subscription engine is unavailable on this session.");
+            }
+
+            var subOptions = new Opc.Ua.Client.Subscriptions.SubscriptionOptions
+            {
+                PublishingInterval = TimeSpan.FromMilliseconds(_js.Config.PublishingIntervalMs > 0 ? _js.Config.PublishingIntervalMs : 500),
+                PublishingEnabled = true,
+                KeepAliveCount = 10,
+                LifetimeCount = 100,
+                MaxNotificationsPerPublish = 1000,
+                Priority = 0,
+            };
+
+            var handler = new DelegatingSubscriptionNotificationHandler(
+                onDataChange: (_, changes) =>
+                {
+                    foreach (var change in changes.Span)
+                    {
+                        ProcessResultVariableValue(change.Value);
+                    }
+                    return ValueTask.CompletedTask;
+                });
+
+            var subscription = subMgr.Add(handler, new StaticOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>(subOptions));
+
+            try
+            {
+                var itemOptions = new Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions
+                {
+                    StartNodeId = resultVarNode,
+                    AttributeId = Attributes.Value,
+                    SamplingInterval = TimeSpan.FromMilliseconds(500),
+                    QueueSize = 10,
+                    DiscardOldest = true,
+                };
+
+                if (!subscription.MonitoredItems.TryAdd("ResultVariable", new StaticOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>(itemOptions), out var item) || item == null)
+                {
+                    throw new InvalidOperationException("Failed to register monitored item 'ResultVariable' with subscription manager.");
+                }
+
+                await handler.WaitForReadinessAsync(subscription, [item], TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+
+                // Publish active handle only after successful readiness
+                _resultVarSubscription = subscription;
+                _log.LogInformation("OK Subscribed to Result variable ({NodeId}).", resultVarNode);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Failed to establish result variable subscription readiness on server.");
+                try
+                {
+                    await subscription.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception disposeEx)
+                {
+                    _log.LogWarning(disposeEx, "WARN Error during subscription disposal after failure: {Message}", disposeEx.Message);
+                }
+                throw;
+            }
         }
-
-        _log.LogInformation("\n-- Subscribing to Result variable -------------------");
-
-        var rmNode = await GetResultManagementNodeAsync();
-
-        // Try to find the Results folder child, then the first variable inside
-        var resultsFolder = await _js.BrowseChildAsync(rmNode, "Results");
-        NodeId resultVarNode = NodeId.Null;
-
-        if (!resultsFolder.IsNull)
+        finally
         {
-            // Find first variable child of Results via mockable BrowseChildren
-            var varRefs = await _js.BrowseChildrenAsync(resultsFolder, (uint)NodeClass.Variable);
-            if (varRefs?.Count > 0)
-                resultVarNode = (NodeId)varRefs[0].NodeId;
+            _subscriptionLock.Release();
         }
-
-        if (resultVarNode.IsNull)
-        {
-            _log.LogError("ERROR Result variable node not found - skipping subscription.");
-            return;
-        }
-
-        _resultVarSubscription = new Subscription(_js.Session.DefaultSubscription)
-        {
-            DisplayName = "IJT ResultVariable",
-            PublishingInterval = _js.Config.PublishingIntervalMs,
-        };
-
-        var item = new MonitoredItem(_resultVarSubscription.DefaultItem)
-        {
-            DisplayName = "ResultVariable",
-            StartNodeId = resultVarNode,
-            AttributeId = Attributes.Value,
-            SamplingInterval = 500,
-        };
-        item.Notification += OnMonitoredItemNotification;
-
-        _resultVarSubscription.AddItem(item);
-        _js.Session.AddSubscription(_resultVarSubscription);
-        await _resultVarSubscription.CreateAsync().ConfigureAwait(false);
-
-        _log.LogInformation("OK Subscribed to Result variable ({NodeId}).", resultVarNode);
     }
 
     private void OnMonitoredItemNotification(MonitoredItem item, MonitoredItemNotificationEventArgs e)
@@ -278,36 +338,36 @@ public sealed class ResultManagement : IResultVariableReceiver, IResultMethodCli
     }
 
     /// <summary>Stops the result variable data-change subscription if active.</summary>
-    public async Task StopResultVariableSubscriptionAsync()
+    /// <inheritdoc/>
+    public Task StopResultVariableSubscriptionAsync() => StopResultVariableSubscriptionAsync(CancellationToken.None);
+
+    /// <summary>Stops the Result variable data-change subscription if active.</summary>
+    public async Task StopResultVariableSubscriptionAsync(CancellationToken cancellationToken)
     {
-        var subscription = _resultVarSubscription;
-        if (subscription == null) return;
-        _resultVarSubscription = null;
+        await _subscriptionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await subscription.DeleteAsync(silent: true).ConfigureAwait(false);
-        }
-        catch (Opc.Ua.ServiceResultException srex)
-        {
-            _log.LogError("ERROR OPC UA error {Status}: {Message}",
-                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "WARN Subscription stop warning");
-        }
-        try
-        {
-            await _js.Session.RemoveSubscriptionAsync(subscription).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "WARN Removing the result-variable subscription from the session failed");
+            var subscription = _resultVarSubscription;
+            if (subscription == null) return;
+            _resultVarSubscription = null;
+            try
+            {
+                await subscription.DisposeAsync().ConfigureAwait(false);
+                _log.LogInformation("OK Result variable subscription stopped.");
+            }
+            catch (Opc.Ua.ServiceResultException srex)
+            {
+                _log.LogError("ERROR OPC UA error {Status}: {Message}",
+                    IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "WARN Subscription stop warning");
+            }
         }
         finally
         {
-            subscription.Dispose();
-            _log.LogInformation("OK Result variable subscription stopped.");
+            _subscriptionLock.Release();
         }
     }
 

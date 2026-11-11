@@ -68,7 +68,13 @@ internal static class MockSessionBuilder
 
         // Mock ISession with enough surface for subscription-heavy code paths
         var mockSession = new Mock<ISession>();
-        mockSession.Setup(s => s.DefaultSubscription).Returns(new Subscription(DefaultTelemetry.Create(_ => { })));
+        var (subMgr, _, _) = CreateMockSubscriptionInfrastructure();
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
         mockSession.Setup(s => s.AddSubscription(It.IsAny<Subscription>())).Returns(true);
         session.Setup(s => s.Session).Returns(mockSession.Object);
 
@@ -88,19 +94,53 @@ internal static class MockSessionBuilder
         return session;
     }
 
+    public delegate bool TryGetSubscriptionManagerCallback(out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager);
+    public delegate bool TryAddMonitoredItemCallback(
+        string name,
+        Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions> options,
+        out Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem? item);
+
+    public static (Mock<Opc.Ua.Client.Subscriptions.ISubscriptionManager> SubMgr,
+                   Mock<Opc.Ua.Client.Subscriptions.ISubscription> Sub,
+                   Mock<Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItemCollection> Items)
+        CreateMockSubscriptionInfrastructure()
+    {
+        var mockSubMgr = new Mock<Opc.Ua.Client.Subscriptions.ISubscriptionManager>();
+        var mockSub = new Mock<Opc.Ua.Client.Subscriptions.ISubscription>();
+        mockSub.SetupGet(s => s.Created).Returns(true);
+        var mockItems = new Mock<Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItemCollection>();
+        mockItems.Setup(m => m.TryAdd(
+                It.IsAny<string>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>>(),
+                out It.Ref<Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem?>.IsAny))
+            .Returns(new TryAddMonitoredItemCallback((string name, Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions> opts, out Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem? item) =>
+            {
+                var mockItem = new Mock<Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem>();
+                mockItem.SetupGet(i => i.Name).Returns(name);
+                mockItem.SetupGet(i => i.Created).Returns(true);
+                item = mockItem.Object;
+                return true;
+            }));
+        mockSub.SetupGet(s => s.MonitoredItems).Returns(mockItems.Object);
+        mockSubMgr.Setup(m => m.Add(
+                It.IsAny<Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>>()))
+            .Returns(mockSub.Object);
+
+        return (mockSubMgr, mockSub, mockItems);
+    }
+
     public static Mock<ISession> CreateSubscriptionCapableSession()
     {
         var session = new Mock<ISession>();
-        var defaultSubscription = new Subscription(DefaultTelemetry.Create(_ => { }));
-        // ISession assigns this internally; the SDK does not expose its setter publicly.
-        var sessionSetter = typeof(Subscription).GetProperty(nameof(Subscription.Session))!
-            .GetSetMethod(nonPublic: true)!;
-        sessionSetter
-            .Invoke(defaultSubscription, [session.Object]);
-        session.Setup(s => s.DefaultSubscription).Returns(defaultSubscription);
-        session.Setup(s => s.AddSubscription(It.IsAny<Subscription>()))
-            .Callback<Subscription>(subscription => sessionSetter.Invoke(subscription, [session.Object]))
-            .Returns(true);
+        var (subMgr, _, _) = CreateMockSubscriptionInfrastructure();
+        session.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+        session.Setup(s => s.AddSubscription(It.IsAny<Subscription>())).Returns(true);
         session.Setup(s => s.CreateSubscriptionAsync(
                 It.IsAny<RequestHeader>(),
                 It.IsAny<double>(),

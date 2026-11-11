@@ -61,6 +61,8 @@ public sealed class OpcUaServerFixture : IAsyncLifetime
     private JoiningSystem? _reusableSession;
 
     public bool IsAvailable { get; private set; }
+    /// <summary>True when this fixture launched the server rather than reusing an external server.</summary>
+    public bool OwnsServer => _serverProcess is not null || _dockerStarted;
     public string ServerUrl { get; } = $"opc.tcp://localhost:{_port}";
     public string? ClientPkiRootPath { get; private set; }
     public string? KnownX509UserCertificatePfxPath { get; private set; }

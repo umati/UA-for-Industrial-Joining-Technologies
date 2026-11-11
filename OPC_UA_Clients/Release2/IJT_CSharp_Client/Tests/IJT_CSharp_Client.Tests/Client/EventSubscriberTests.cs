@@ -62,7 +62,7 @@ public sealed class EventSubscriberTests
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
+        field!.SetValue(sut, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         // Delete() will throw because subscription has no session; caught by handler
         var ex = await Record.ExceptionAsync(async () => await sut.UnsubscribeAsync());
@@ -79,7 +79,7 @@ public sealed class EventSubscriberTests
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
+        field!.SetValue(sut, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync());
         Assert.Null(ex);
@@ -189,7 +189,7 @@ public sealed class EventSubscriberTests
         var field = typeof(EventSubscriber).GetField(
             "_eventSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(sut, new Subscription(DefaultTelemetry.Create(_ => { })));
+        field!.SetValue(sut, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         // Second call should hit the "already subscribed" guard
         var ex = await Record.ExceptionAsync(async () => await sut.SubscribeAsync());

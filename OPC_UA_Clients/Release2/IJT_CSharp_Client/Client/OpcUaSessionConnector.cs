@@ -28,7 +28,15 @@ internal static class OpcUaSessionConnector
 {
     private const int EndpointDiscoveryTimeoutMs = 15_000;
     private static readonly ConcurrentDictionary<string, EndpointDescription> EndpointDiscoveryCache = new();
-    private static readonly ITelemetryContext Telemetry = DefaultTelemetry.Create(_ => { });
+    private static readonly ITelemetryContext Telemetry = DefaultTelemetry.Create(builder =>
+        builder.SetMinimumLevel(LogLevel.Trace).AddProvider(new SdkLoggerProvider()));
+
+    private sealed class SdkLoggerProvider : ILoggerProvider
+    {
+        public ILogger CreateLogger(string categoryName) => IjtLog.ForCategory(categoryName);
+        // The application, not this adapter, owns the logging factory.
+        public void Dispose() { }
+    }
 
     internal static AsyncLocal<Func<ApplicationConfiguration, ClientConfig, CancellationToken, Task<IReadOnlyList<EndpointDescription>>>?> EndpointDiscoveryHandlerForTesting { get; } = new();
     internal static AsyncLocal<Func<ApplicationConfiguration, string, bool, int, CancellationToken, Task<EndpointDescription?>>?> SelectEndpointAsyncHandlerForTesting { get; } = new();
@@ -412,7 +420,10 @@ internal static class OpcUaSessionConnector
             (appConfig, ct) => appConfig.ValidateAsync(ApplicationType.Client, ct),
             OpcUaSessionConnector.EnsureApplicationCertificateAsync,
             OpcUaSessionConnector.SelectEndpointDescriptionAsync,
-            (appConfig, endpoint, config, identity, ct) => new DefaultSessionFactory(Telemetry).CreateAsync(
+            (appConfig, endpoint, config, identity, ct) => new DefaultSessionFactory(Telemetry)
+            {
+                SubscriptionEngineFactory = new DefaultSubscriptionEngineFactory()
+            }.CreateAsync(
                     appConfig,
                     endpoint,
                     updateBeforeConnect: false,

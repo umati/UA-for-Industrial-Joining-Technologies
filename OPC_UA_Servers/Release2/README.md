@@ -75,3 +75,6 @@ OPCUA_HOSTNAME=localhost docker compose up --build
 - [Developer Notes](docs/README.md)
 - [Operational Reference](docs/SKILLS.md#start--stop) — remote connections,
   stopping and restarting, troubleshooting, certificate handling, and network access
+
+Use the simulator for demos, learning, and client evaluation or integration
+testing, not production. See the [license terms](../../LICENSE#ijt-simulator-package-terms).

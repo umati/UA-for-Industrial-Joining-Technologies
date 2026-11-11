@@ -22,7 +22,8 @@ public sealed class EventSubscriber : IJT_CSharp_Client.Domain.Events.IResultEve
 {
     private readonly ILogger<EventSubscriber> _log = IjtLog.For<EventSubscriber>();
     private readonly IJoiningSystem _s;
-    private Subscription? _eventSubscription;
+    private readonly SemaphoreSlim _subscriptionLock = new(1, 1);
+    private Opc.Ua.Client.Subscriptions.ISubscription? _eventSubscription;
 
     // -- Public .NET events ----------------------------------------------------
 
@@ -95,90 +96,152 @@ public sealed class EventSubscriber : IJT_CSharp_Client.Domain.Events.IResultEve
 
     // -- Subscription management -----------------------------------------------
 
+    /// <inheritdoc/>
+    public Task SubscribeAsync() => SubscribeAsync(CancellationToken.None);
+
     /// <summary>
     /// Creates an OPC UA subscription on the Server node for all three IJT event types.
     /// Two monitored items are used - one for result events, one for system events.
     /// Does nothing if already subscribed.
     /// </summary>
-    public async Task SubscribeAsync()
+    public async Task SubscribeAsync(CancellationToken cancellationToken)
     {
-        if (_eventSubscription != null)
-        {
-            _log.LogWarning("WARN Event subscription already active.");
-            return;
-        }
-
-        _log.LogInformation("-- Subscribing to IJT events -----------------------");
-
-        _eventSubscription = new Subscription(_s.Session.DefaultSubscription)
-        {
-            DisplayName = "IJT Events",
-            PublishingInterval = _s.Config.PublishingIntervalMs,
-            KeepAliveCount = 10,
-            LifetimeCount = 100,
-            MaxNotificationsPerPublish = 1000,
-        };
-
-        // -- MonitoredItem 1: result events ------------------------------------
-        var resultItem = new MonitoredItem(_eventSubscription.DefaultItem)
-        {
-            DisplayName = "IJT Result Events",
-            StartNodeId = Opc.Ua.ObjectIds.Server,
-            AttributeId = Attributes.EventNotifier,
-            NodeClass = NodeClass.Object,
-            SamplingInterval = 0,
-            QueueSize = 100,
-            Filter = BuildResultEventFilter(),
-        };
-        resultItem.Notification += OnResultEventNotification;
-
-        // -- MonitoredItem 2: JoiningSystem events -----------------------------
-        var sysItem = new MonitoredItem(_eventSubscription.DefaultItem)
-        {
-            DisplayName = "IJT JoiningSystem Events",
-            StartNodeId = Opc.Ua.ObjectIds.Server,
-            AttributeId = Attributes.EventNotifier,
-            NodeClass = NodeClass.Object,
-            SamplingInterval = 0,
-            QueueSize = 100,
-            Filter = BuildJoiningSystemEventFilter(),
-        };
-        sysItem.Notification += OnJoiningSystemEventNotification;
-
-        _eventSubscription.AddItem(resultItem);
-        _eventSubscription.AddItem(sysItem);
-        _s.Session.AddSubscription(_eventSubscription);
-        await _eventSubscription.CreateAsync().ConfigureAwait(false);
-
-        _log.LogInformation("OK Event subscription created (SubId={SubId}).", _eventSubscription.Id);
-    }
-
-    /// <summary>Removes and disposes the event subscription.</summary>
-    public async Task UnsubscribeAsync()
-    {
-        var subscription = _eventSubscription;
-        if (subscription == null) return;
-        _eventSubscription = null;
+        await _subscriptionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await subscription.DeleteAsync(silent: true).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "WARN Unsubscribe warning");
-        }
-        try
-        {
-            await _s.Session.RemoveSubscriptionAsync(subscription).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "WARN Removing the event subscription from the session failed");
+            if (_eventSubscription != null)
+            {
+                _log.LogWarning("WARN Event subscription already active.");
+                return;
+            }
+
+            _log.LogInformation("-- Subscribing to IJT events -----------------------");
+
+            if (!_s.Session.TryGetSubscriptionManager(out var subMgr))
+            {
+                throw new InvalidOperationException("V2 subscription engine is unavailable on this session.");
+            }
+
+            var subOptions = new Opc.Ua.Client.Subscriptions.SubscriptionOptions
+            {
+                PublishingInterval = TimeSpan.FromMilliseconds(_s.Config.PublishingIntervalMs > 0 ? _s.Config.PublishingIntervalMs : 500),
+                PublishingEnabled = true,
+                KeepAliveCount = 10,
+                LifetimeCount = 100,
+                MaxNotificationsPerPublish = 1000,
+                Priority = 0,
+            };
+
+            var handler = new DelegatingSubscriptionNotificationHandler(
+                onEvent: (_, events) =>
+                {
+                    foreach (var ev in events.Span)
+                    {
+                        if (ev.MonitoredItem?.Name == "IJT Result Events")
+                        {
+                            if (ev.Fields.Count > 0 && ev.Fields.ToArray() is { } fields)
+                            {
+                                ProcessResultEvent(fields);
+                            }
+                        }
+                        else if (ev.MonitoredItem?.Name == "IJT JoiningSystem Events")
+                        {
+                            if (ev.Fields.Count > 0 && ev.Fields.ToArray() is { } fields)
+                            {
+                                ProcessJoiningSystemEvent(fields);
+                            }
+                        }
+                    }
+                    return ValueTask.CompletedTask;
+                });
+
+            var subscription = subMgr.Add(handler, new StaticOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>(subOptions));
+
+            try
+            {
+                var resultItemOptions = new Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions
+                {
+                    StartNodeId = Opc.Ua.ObjectIds.Server,
+                    AttributeId = Attributes.EventNotifier,
+                    MonitoringMode = MonitoringMode.Reporting,
+                    SamplingInterval = TimeSpan.Zero,
+                    QueueSize = 100,
+                    DiscardOldest = true,
+                    Filter = BuildResultEventFilter(),
+                };
+
+                var sysItemOptions = new Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions
+                {
+                    StartNodeId = Opc.Ua.ObjectIds.Server,
+                    AttributeId = Attributes.EventNotifier,
+                    MonitoringMode = MonitoringMode.Reporting,
+                    SamplingInterval = TimeSpan.Zero,
+                    QueueSize = 100,
+                    DiscardOldest = true,
+                    Filter = BuildJoiningSystemEventFilter(),
+                };
+
+                if (!subscription.MonitoredItems.TryAdd("IJT Result Events", new StaticOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>(resultItemOptions), out var resultItem) || resultItem == null)
+                {
+                    throw new InvalidOperationException("Failed to register monitored item 'IJT Result Events' with subscription manager.");
+                }
+
+                if (!subscription.MonitoredItems.TryAdd("IJT JoiningSystem Events", new StaticOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>(sysItemOptions), out var sysItem) || sysItem == null)
+                {
+                    throw new InvalidOperationException("Failed to register monitored item 'IJT JoiningSystem Events' with subscription manager.");
+                }
+
+                await handler.WaitForReadinessAsync(subscription, [resultItem, sysItem], TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+
+                _eventSubscription = subscription;
+                _log.LogInformation("OK Event subscription created.");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Failed to establish event subscription readiness on server.");
+                try
+                {
+                    await subscription.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception disposeEx)
+                {
+                    _log.LogWarning(disposeEx, "WARN Error during subscription disposal after failure: {Message}", disposeEx.Message);
+                }
+                throw;
+            }
         }
         finally
         {
-            subscription.Dispose();
-            _log.LogInformation("OK Event subscription removed.");
+            _subscriptionLock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public Task UnsubscribeAsync() => UnsubscribeAsync(CancellationToken.None);
+
+    /// <summary>Removes and disposes the event subscription.</summary>
+    public async Task UnsubscribeAsync(CancellationToken cancellationToken)
+    {
+        await _subscriptionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var subscription = _eventSubscription;
+            if (subscription == null) return;
+            _eventSubscription = null;
+            _log.LogInformation("-- Unsubscribing from IJT events -------------------");
+            try
+            {
+                await subscription.DisposeAsync().ConfigureAwait(false);
+                _log.LogInformation("OK Event subscription removed.");
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "WARN Error during unsubscribe: {Message}", ex.Message);
+            }
+        }
+        finally
+        {
+            _subscriptionLock.Release();
         }
     }
 

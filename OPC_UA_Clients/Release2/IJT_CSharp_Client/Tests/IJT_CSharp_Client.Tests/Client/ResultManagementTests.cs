@@ -335,7 +335,7 @@ public sealed class ResultManagementTests
         var field = typeof(ResultManagement).GetField(
             "_resultVarSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
+        field!.SetValue(sut, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         // Now stop — Delete() throws because subscription has no session; caught by handler
         var ex = await Record.ExceptionAsync(async () => await sut.StopResultVariableSubscriptionAsync());
@@ -354,7 +354,7 @@ public sealed class ResultManagementTests
         var field = typeof(ResultManagement).GetField(
             "_resultVarSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
+        field!.SetValue(sut, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         var ex = await Record.ExceptionAsync(async () => await sut.DisposeAsync());
         Assert.Null(ex);
@@ -385,7 +385,7 @@ public sealed class ResultManagementTests
         var field = typeof(ResultManagement).GetField(
             "_resultVarSubscription",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field!.SetValue(sut, new Opc.Ua.Client.Subscription(DefaultTelemetry.Create(_ => { })));
+        field!.SetValue(sut, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         var ex = await Record.ExceptionAsync(async () => await sut.SubscribeResultVariableAsync());
         Assert.Null(ex);

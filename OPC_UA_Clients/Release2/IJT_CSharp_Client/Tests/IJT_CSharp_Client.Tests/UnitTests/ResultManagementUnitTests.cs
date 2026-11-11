@@ -549,12 +549,10 @@ public sealed class ResultManagementUnitTests
 
         await using var rm = new ResultManagement(session.Object);
 
-        // Record.Exception catches the NullReferenceException from Subscription.Create()
-        // so that all lines before it are counted as covered.
         var ex = await Record.ExceptionAsync(async () => await rm.SubscribeResultVariableAsync());
 
-        // _resultVarSubscription was set at line 173 before Create() threw; IsResultVarSubscribed is true
-        Assert.NotNull(ex);
+        Assert.Null(ex);
+        Assert.True(rm.IsResultVarSubscribed);
     }
 
     [Fact]
@@ -578,15 +576,7 @@ public sealed class ResultManagementUnitTests
         await rm.SubscribeResultVariableAsync();
 
         Assert.True(rm.IsResultVarSubscribed);
-        uaSession.Verify(s => s.CreateSubscriptionAsync(
-            It.IsAny<RequestHeader>(),
-            It.IsAny<double>(),
-            It.IsAny<uint>(),
-            It.IsAny<uint>(),
-            It.IsAny<uint>(),
-            It.IsAny<bool>(),
-            It.IsAny<byte>(),
-            It.IsAny<CancellationToken>()), Times.Once);
+        uaSession.Verify(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny), Times.Once);
     }
 
     [Fact]
@@ -629,7 +619,7 @@ public sealed class ResultManagementUnitTests
 
     // ── StopResultVariableSubscriptionAsync — normal path ─────────────────────────
 
-    private static void SetResultVarSubscription(ResultManagement rm, Subscription? value)
+    private static void SetResultVarSubscription(ResultManagement rm, Opc.Ua.Client.Subscriptions.ISubscription? value)
     {
         var field = typeof(ResultManagement).GetField(
             "_resultVarSubscription",
@@ -643,7 +633,7 @@ public sealed class ResultManagementUnitTests
         var session = MockSessionBuilder.Create();
         // RemoveSubscription returns false by default (Moq) — no exception
         await using var rm = new ResultManagement(session.Object);
-        SetResultVarSubscription(rm, new Subscription(DefaultTelemetry.Create(_ => { })));
+        SetResultVarSubscription(rm, new Mock<Opc.Ua.Client.Subscriptions.ISubscription>().Object);
 
         Assert.True(rm.IsResultVarSubscribed);  // field was set
 
@@ -657,10 +647,10 @@ public sealed class ResultManagementUnitTests
     public async Task StopResultVariableSubscription_WhenSessionRemovalThrowsServiceResult_CleansUp()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.Session).Returns(
-            MockSessionBuilder.CreateThrowingSession(new ServiceResultException(StatusCodes.BadSessionClosed)));
         await using var rm = new ResultManagement(session.Object);
-        SetResultVarSubscription(rm, new Subscription(DefaultTelemetry.Create(_ => { })));
+        var mockSub = new Mock<Opc.Ua.Client.Subscriptions.ISubscription>();
+        mockSub.Setup(s => s.DisposeAsync()).Throws(new ServiceResultException(StatusCodes.BadSessionClosed));
+        SetResultVarSubscription(rm, mockSub.Object);
 
         await rm.StopResultVariableSubscriptionAsync();
 
@@ -671,10 +661,10 @@ public sealed class ResultManagementUnitTests
     public async Task StopResultVariableSubscription_WhenSessionRemovalThrowsUnexpectedException_CleansUp()
     {
         var session = MockSessionBuilder.Create();
-        session.Setup(s => s.Session).Returns(
-            MockSessionBuilder.CreateThrowingSession(new InvalidOperationException("remove failed")));
         await using var rm = new ResultManagement(session.Object);
-        SetResultVarSubscription(rm, new Subscription(DefaultTelemetry.Create(_ => { })));
+        var mockSub = new Mock<Opc.Ua.Client.Subscriptions.ISubscription>();
+        mockSub.Setup(s => s.DisposeAsync()).Throws(new InvalidOperationException("dispose failed"));
+        SetResultVarSubscription(rm, mockSub.Object);
 
         Assert.Null(await Record.ExceptionAsync(() => rm.StopResultVariableSubscriptionAsync()));
         Assert.False(rm.IsResultVarSubscribed);
@@ -712,15 +702,11 @@ public sealed class ResultManagementUnitTests
         method.Invoke(rm, [new List<object> { "out1" }]);
     }
 
-    private static Subscription CreateThrowingSubscription(Exception ex)
+    private static Opc.Ua.Client.Subscriptions.ISubscription CreateThrowingSubscription(Exception ex)
     {
-        var sub = new Subscription(DefaultTelemetry.Create(_ => { }));
-        var idField = typeof(Subscription).GetField("<Id>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        idField!.SetValue(sub, 1u);
-        var sessionSetter = typeof(Subscription).GetProperty(nameof(Subscription.Session))!
-            .GetSetMethod(nonPublic: true)!;
-        sessionSetter.Invoke(sub, [MockSessionBuilder.CreateThrowingSession(ex)]);
-        return sub;
+        var mock = new Mock<Opc.Ua.Client.Subscriptions.ISubscription>();
+        mock.Setup(s => s.DisposeAsync()).Throws(ex);
+        return mock.Object;
     }
 
 
@@ -762,5 +748,141 @@ public sealed class ResultManagementUnitTests
             if (Directory.Exists(root))
                 Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task SubscribeResultVariableAsync_ConfiguresPublishingEnabled_True()
+    {
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, _) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        Opc.Ua.Client.Subscriptions.SubscriptionOptions? capturedOptions = null;
+        subMgr.Setup(m => m.Add(
+                It.IsAny<Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>>()))
+            .Callback<Opc.Ua.Client.Subscriptions.ISubscriptionNotificationHandler, Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>>(
+                (_, opts) => capturedOptions = opts.CurrentValue)
+            .Returns(mockSub.Object);
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        session.Setup(s => s.BrowseChildAsync(It.IsAny<NodeId>(), "Results", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
+            .ReturnsAsync(new NodeId(100, 1));
+        session.Setup(s => s.BrowseChildrenAsync(It.IsAny<NodeId>(), (uint)NodeClass.Variable))
+            .ReturnsAsync(new ReferenceDescriptionCollection
+            {
+                new() { NodeId = new ExpandedNodeId(new NodeId(101, 1)) },
+            });
+
+        await using var rm = new ResultManagement(session.Object);
+        await rm.SubscribeResultVariableAsync();
+
+        Assert.True(rm.IsResultVarSubscribed);
+        Assert.NotNull(capturedOptions);
+        Assert.True(capturedOptions.PublishingEnabled);
+    }
+
+    [Fact]
+    public async Task SubscribeResultVariableAsync_WhenTryAddFails_ThrowsAndDisposesSubscription()
+    {
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, mockItems) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        var dummy = (Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem?)null;
+        mockItems.Setup(m => m.TryAdd(
+                It.IsAny<string>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>>(),
+                out dummy))
+            .Returns(false);
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        session.Setup(s => s.BrowseChildAsync(It.IsAny<NodeId>(), "Results", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
+            .ReturnsAsync(new NodeId(100, 1));
+        session.Setup(s => s.BrowseChildrenAsync(It.IsAny<NodeId>(), (uint)NodeClass.Variable))
+            .ReturnsAsync(new ReferenceDescriptionCollection
+            {
+                new() { NodeId = new ExpandedNodeId(new NodeId(101, 1)) },
+            });
+
+        await using var rm = new ResultManagement(session.Object);
+        var ex = await Record.ExceptionAsync(async () => await rm.SubscribeResultVariableAsync());
+
+        Assert.IsType<InvalidOperationException>(ex);
+        Assert.False(rm.IsResultVarSubscribed);
+        mockSub.Verify(s => s.DisposeAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task SubscribeResultVariable_WhenDisposalThrows_PreservesPrimaryException()
+    {
+        var session = MockSessionBuilder.Create();
+        var mockSession = Mock.Get(session.Object.Session);
+        var (subMgr, mockSub, mockItems) = MockSessionBuilder.CreateMockSubscriptionInfrastructure();
+
+        var dummy = (Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem?)null;
+        mockItems.Setup(m => m.TryAdd(
+                It.IsAny<string>(),
+                It.IsAny<Microsoft.Extensions.Options.IOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>>(),
+                out dummy))
+            .Returns(false); // Primary failure: registration rejected
+
+        // Disposal failure: DisposeAsync throws
+        mockSub.Setup(s => s.DisposeAsync()).Throws(new ServiceResultException(StatusCodes.BadCommunicationError, "Disposal pipe broken"));
+
+        mockSession.Setup(s => s.TryGetSubscriptionManager(out It.Ref<Opc.Ua.Client.Subscriptions.ISubscriptionManager?>.IsAny))
+            .Returns(new MockSessionBuilder.TryGetSubscriptionManagerCallback((out Opc.Ua.Client.Subscriptions.ISubscriptionManager? manager) =>
+            {
+                manager = subMgr.Object;
+                return true;
+            }));
+
+        session.Setup(s => s.BrowseChildAsync(It.IsAny<NodeId>(), "Results", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
+            .ReturnsAsync(new NodeId(100, 1));
+        session.Setup(s => s.BrowseChildrenAsync(It.IsAny<NodeId>(), (uint)NodeClass.Variable))
+            .ReturnsAsync(new ReferenceDescriptionCollection
+            {
+                new() { NodeId = new ExpandedNodeId(new NodeId(101, 1)) },
+            });
+
+        await using var rm = new ResultManagement(session.Object);
+        var ex = await Record.ExceptionAsync(async () => await rm.SubscribeResultVariableAsync());
+
+        Assert.IsType<InvalidOperationException>(ex);
+        Assert.Contains("Failed to register monitored item 'ResultVariable'", ex.Message);
+        Assert.False(rm.IsResultVarSubscribed);
+    }
+
+    [Fact]
+    public async Task SubscribeResultVariable_WhenCancelledDuringDiscovery_ThrowsOperationCanceledException()
+    {
+        var session = MockSessionBuilder.Create();
+        using var cts = new CancellationTokenSource();
+
+        // Simulate cancellation during Results folder browse
+        session.Setup(s => s.BrowseChildAsync(It.IsAny<NodeId>(), "Results", It.IsAny<ushort>(), It.IsAny<NodeClass>()))
+            .ReturnsAsync(() =>
+            {
+                cts.Cancel();
+                return NodeId.Null;
+            });
+
+        await using var rm = new ResultManagement(session.Object);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            rm.SubscribeResultVariableAsync(cts.Token));
+
+        Assert.False(rm.IsResultVarSubscribed);
     }
 }

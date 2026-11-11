@@ -15,10 +15,13 @@ All tests in this repository are classified into three tiers:
 ## CI (`ci.yml`)
 
 Fast and deterministic on GitHub-hosted runners. **Must pass before any merge.**
-`csharp-unit` runs build, format, and all non-live xUnit tests.
+`csharp-unit` runs build, format, and offline xUnit tests, excluding `Category=Live`
+and `Category=OpcUaSecurity`.
 `csharp-vuln` runs the C# NuGet vulnerability scan as a separate CI gate.
 Live C# coverage is tracked by the `csharp-live` integration job on a
-dedicated server instance (port 40464).
+fixture-owned server instance (port 40464). Its production result-delivery and
+channel-reconnect tests must both report Passed; missing, failed, or skipped
+results fail the job.
 The Web Client CI check is split into `web-client-python` and `web-client-js`.
 Both delegate to `OPC_UA_Clients/Release2/IJT_Web_Client/run_all_tests.py`
 (`--phase1-python` and `--phase1-js`) instead of duplicating pytest, Vitest,
@@ -332,17 +335,20 @@ intentionally keeps the Windows simulator copy path short; the simulator
 creates long PKI certificate filenames and rejects install roots above its own
 safe path-length threshold.
 
-**C# client** (`OpcUaServerFixture.cs`): temp dir in `{TEMP}/opcua_csharp_{port}_{guid}/`
-- Triggered automatically when `OPCUA_SERVER_PORT != 40451`
+**C# client** (`OpcUaServerFixture.cs`): Windows simulator copies live in
+`{RUNNER_TEMP or system temp}/ijt-sim/server-copies/opcua_csharp_{port}_{guid}/`.
+- Unless `IJT_PHASE1_ONLY=true`, the fixture checks the selected port and launches the simulator when needed.
 - Phase 2 passes `IJT_PHASE1_ONLY=false`; an all-skipped managed live run is a failure, not accepted as a valid live result
-- If the resolved port is already open, the fixture probes OPC UA readiness first and reuses the server when it is ready; runner-managed mode kills and relaunches only when that readiness probe fails.
+- Without an explicit simulator target, an already-ready server can be reused; when `OPCUA_SERVER_PORT` is set, a failed readiness probe triggers stale-process cleanup and relaunch.
+- With both `OPCUA_SERVER_PORT` and `IJT_OPCUA_SECURITY_SUT` set, the fixture stops an existing process on the selected port before its isolated launch, even if that server is ready. Select an unused port, never one belonging to another server.
+- The `csharp-live` job explicitly selects the Windows simulator on port 40464 and lets the fixture own startup and teardown. Production result-delivery and channel-reconnect tests require fixture ownership; both must report Passed in this job.
 - Native and Docker launch paths both require an OPC UA readiness probe after TCP opens, so tests do not start against a listener whose OPC UA stack is still initialising.
 - For OPC UA Security on Linux, Docker compose launch budgets 120s warm / 300s cold (up to 360s process timeout); the C# runner pairs this with a 400s blame-hang timeout (override via `IJT_OPCUA_SECURITY_BLAME_HANG_TIMEOUT`) so VSTest never aborts the test host before fixture diagnostics finish.
 - Cleaned up in `Dispose()` — works for both local dev and CI
 
 - **CI non-Web live jobs** (`scripts/start_server_on_port.py`): temp dir in `{RUNNER_TEMP or system temp}/ijt-sim/server_{port}/`
 - Cross-platform Python script that handles copy, patch, start, port-wait, and GITHUB_ENV export
-- Used by the Test Client, Console Client, and C# Windows live jobs in `integration.yml`
+- Used by the Test Client and Console Client Windows live jobs in `integration.yml`; the C# live job uses its own fixture instead
 - The short default copy root avoids depending on the repository checkout depth for simulator PKI/certificate path headroom
 
 **Web Client runner-owned servers** also export
@@ -387,10 +393,12 @@ in those environments. Missing prerequisites in an explicitly selected root
 
 ### `OPCUA_SERVER_URL` Override
 
-Set `OPCUA_SERVER_URL` to point a client at a specific server; auto-launch is skipped when
-this variable is present. CI workflows set this per-job. The root-level `run_all_tests.py`
-does NOT set this for Python sub-runners — each auto-launches on its dedicated port. Only
-the C# runner receives `OPCUA_SERVER_PORT=40464` from the root runner.
+Python client test runners use `OPCUA_SERVER_URL` to select an external server and
+skip auto-launch. CI workflows set this per-job. The root-level `run_all_tests.py`
+does NOT set this for Python sub-runners — each auto-launches on its dedicated port.
+The C# fixture does not treat `OPCUA_SERVER_URL` alone as a request to suppress startup;
+its lifecycle also depends on the selected port, simulator target, and `IJT_PHASE1_ONLY`.
+The C# runner receives `OPCUA_SERVER_PORT=40464` from the root runner.
 
 ---
 

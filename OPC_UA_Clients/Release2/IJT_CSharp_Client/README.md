@@ -8,9 +8,9 @@ C#/.NET reference client for connecting to an OPC UA IJT server, featuring an in
 
 ## Architecture & SDK Support
 
-The active console client targets **OPC Foundation .NET SDK 2.0.0** on .NET 10, using compile-time Roslyn source generation for companion specifications (`NodeSet2.xml`) and an SDK-neutral domain layer (`DomainResultEnvelope`, `IResultEventReceiver`, `IResultVariableReceiver`, `IResultMethodClient`).
+The active console client targets **OPC Foundation .NET SDK 2.0.2** on .NET 10, using compile-time Roslyn source generation for companion specifications (`NodeSet2.xml`), the V2 managed subscription engine (`ISubscriptionManager`, `ISubscription`, `DefaultSubscriptionEngineFactory`), and an SDK-neutral domain layer (`DomainResultEnvelope`, `IResultEventReceiver`, `IResultVariableReceiver`, `IResultMethodClient`).
 
-- **Active client:** The application and its SDK integration use SDK 2.0; the client is not dual-targeted against SDK 1.5.
+- **Active client:** The application and its SDK integration use SDK 2.0.2 with the V2 subscription engine; the client is not dual-targeted against SDK 1.5.
 - **Previous SDK 1.5 client example:** Use the immutable [pre-migration snapshot at commit `02386911ef546623a94520d5d819fe75a5fcb137`](https://github.com/umati/UA-for-Industrial-Joining-Technologies/tree/02386911ef546623a94520d5d819fe75a5fcb137/OPC_UA_Clients/Release2/IJT_CSharp_Client) rather than maintaining duplicate SDK-specific client code.
 - **Legacy model-library profile:** `OpcUaClientOnly=true` retains the model-library compatibility build using committed pre-compiled classes. This is not an SDK 1.5 build of the active console client.
 
@@ -41,6 +41,9 @@ dotnet build Types/UAModel.IJTBase/UAModel.IJTBase.csproj -p:OpcUaClientOnly=tru
 # Run complete test suite (static analysis, unit tests, coverage, and live integration)
 python run_all_tests.py
 ```
+
+For developer testing instructions and simulator safety notes, see the
+[developer guide](docs/SKILLS.md#test-commands).
 
 ## Learn More
 

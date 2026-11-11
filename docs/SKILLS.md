@@ -522,7 +522,7 @@ Advanced Setup (GitHub Default Setup disabled). Uses `security-extended` queries
 | `live-webclient` | `integration.yml` | **40463/40466/40467** | Windows native EXE for non-browser Web Client live suites |
 | `live-webclient-browser` | `integration.yml` | **40469–40472 / 40480** | `ubuntu-latest` host runner; suites execute **inside** the owned `ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci` image from the reviewed `image-pin.json` digest under `docker run --network=none`; Chromium, Linux system libraries, Python 3.14, and Node 24 are baked into the image; the Linux simulator binary comes from the mounted checkout |
 | `live-console` | `integration.yml` | **40461** | Windows native EXE |
-| `csharp-live` (nightly) | `integration.yml` | **40464** | Windows native EXE |
+| `csharp-live` | `integration.yml` | **40464** | Fixture-owned Windows native EXE; scheduled, manual, and applicable push/PR runs |
 
 Root-level `python run_all_tests.py` includes `server-smoke` in default Phase 2 so local full validation exercises the native/default server package path on port 40451. When Docker is running, it also runs `server-linux-package-smoke` on port 40465 to build the Docker image from the Linux ZIP package and smoke-test it, plus `web-client-docker-unit` (in-image pytest+vitest) and `web-client-docker-smoke` (production image readiness). Root-runner Docker smoke uses isolated host ports 3008/8011 and a scoped Compose project so it can run beside other Web Client suites. If Docker is unavailable, the root runner marks those Docker suites skipped instead of launching child runners that would fail on Docker daemon startup. Set `IJT_DOCKER_BUILD_TIMEOUT` for cold image builds or `IJT_DOCKER_COMPOSE_WAIT_TIMEOUT` for slow first container startup.
 The root runner splits Web Client live/browser validation by test type instead
@@ -603,7 +603,7 @@ remain inspectable and browser automation has a durable semantic selector.
 > All Release 2 client jobs now use dedicated isolated ports.
 
 ### Integration (`integration.yml`) — nightly + path-triggered
-Triggers on: `OPC_UA_Servers/**`, all Web Client files, `IJT_Test_Client/**`, Console Client live/deps, or workflow file change.
+Triggers include `OPC_UA_Servers/**`, all Web Client files, `IJT_Test_Client/**`, Console Client live/deps, `IJT_CSharp_Client/**`, and workflow file changes, alongside scheduled and manual runs.
 | Job | What it tests |
 |-----|--------------|
 | `server-smoke-docker` | Full Docker build + server smoke (10/10) |
@@ -611,7 +611,7 @@ Triggers on: `OPC_UA_Servers/**`, all Web Client files, `IJT_Test_Client/**`, Co
 | `int-testclient` | Windows live: Test Client full suite against server on port 40462 |
 | `live-webclient` | Windows live matrix: root-runner Web Client live/e2e suites with owned services and per-suite artifacts |
 | `live-console` | Windows live: Console Client live tests — server on port 40461 |
-| `csharp-live` | Windows live: C# xUnit live tests (nightly drift detection) — server on port 40464 |
+| `csharp-live` | C# xUnit live tests against a fixture-owned Windows simulator on port 40464; production result-delivery and channel-reconnect cases must both report Passed, not missing or skipped |
 | `report` | Downloads integration artifacts and publishes pass/fail/skip totals, test-count deltas from `tests/baselines/integration-test-counts.json`, non-failing skip/test drift warnings, per-job wall-clock durations from the current run jobs API, split Web live/browser rows, and Browser Features / C# Live timing tables · exports `timing-results/summary.md` and appends the 3-line Public Portal link bar on `main` runs |
 | `publish-public-report` | Runs on `main` runs (`github.event_name != 'pull_request' && github.ref == 'refs/heads/main'`) after `report`; calls `/.github/workflows/publish-public-reports.yml` (`workflow_slug: integration`) to publish the executive summary, sanitized per-job/step console logs, `report.html`, and `report.xlsx` to `/runs/<run_id>/` and `/latest/integration/` |
 

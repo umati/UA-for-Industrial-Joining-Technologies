@@ -18,13 +18,16 @@ public sealed class AssetManagement : IAsyncDisposable
 {
     private readonly ILogger<AssetManagement> _log = IjtLog.For<AssetManagement>();
     private readonly IJoiningSystem _js;
-    private Subscription? _assetVarSubscription;
+    private readonly SemaphoreSlim _subscriptionLock = new(1, 1);
+    private Opc.Ua.Client.Subscriptions.ISubscription? _assetVarSubscription;
     private NodeId _methodSetNodeId = NodeId.Null;
+    private long _itemCounter;
 
     // Flat store of all subscribed values per asset.
     // Outer key: asset DisplayName (= file name).
     // Inner key: slash-delimited path, e.g. "Identification/ProductInstanceUri".
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, object?>> _assetValues = new();
+    private readonly ConcurrentDictionary<string, (string AssetKey, string ChildPath)> _monitoredItemRouting = new();
 
     /// <summary>Creates an AssetManagement facade backed by <paramref name="js"/>.</summary>
     public AssetManagement(IJoiningSystem js) => _js = js;
@@ -284,85 +287,162 @@ public sealed class AssetManagement : IAsyncDisposable
     ///
     /// Does nothing if already subscribed.
     /// </summary>
-    public async Task SubscribeAssetVariablesAsync()
+    /// <summary>
+    /// Browses the entire Asset tree and subscribes to data changes on all
+    /// Variable nodes under every asset in every category.
+    /// Does nothing if already subscribed.
+    /// </summary>
+    public Task SubscribeAssetVariablesAsync() => SubscribeAssetVariablesAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Browses the entire Asset tree and subscribes to data changes on all
+    /// Variable nodes under every asset in every category with cancellation support.
+    /// </summary>
+    public async Task SubscribeAssetVariablesAsync(CancellationToken cancellationToken)
     {
-        if (_assetVarSubscription != null)
+        await _subscriptionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            _log.LogWarning("WARN Asset variable subscription already active.");
-            return;
-        }
-
-        _log.LogInformation("\n-- Subscribing to all Asset variables ----");
-
-        var assetMgmtNode = await _js.BrowseChildAsync(
-            _js.NodeId, IJTBase.BrowseNames.AssetManagement);
-        if (assetMgmtNode.IsNull)
-        {
-            _log.LogError("ERROR AssetManagement node not found.");
-            return;
-        }
-
-        var assetsNode = await _js.BrowseChildAsync(assetMgmtNode, IJTBase.BrowseNames.Assets);
-        if (assetsNode.IsNull)
-        {
-            _log.LogError("ERROR Assets node not found.");
-            return;
-        }
-
-        _assetVarSubscription = new Subscription(_js.Session.DefaultSubscription)
-        {
-            DisplayName = "IJT Asset Variables",
-            PublishingInterval = _js.Config.PublishingIntervalMs,
-        };
-
-        int count = 0;
-
-        // Browse all category folders under Assets (Controllers, Tools, Servos, …)
-        var categoryRefs = await _js.BrowseChildrenAsync(assetsNode, (uint)NodeClass.Object);
-        foreach (var catRef in categoryRefs ?? [])
-        {
-            var catName = catRef.BrowseName.Name;
-            if (catName == null || catName.StartsWith('<')) continue;
-
-            var catNodeId = (NodeId)catRef.NodeId;
-
-            // Browse asset instances within the category folder
-            var instanceRefs = await _js.BrowseChildrenAsync(catNodeId, (uint)NodeClass.Object);
-            foreach (var instRef in instanceRefs ?? [])
+            if (_assetVarSubscription != null)
             {
-                var browseName = instRef.BrowseName.Name;
-                var displayName = !string.IsNullOrEmpty(instRef.DisplayName.Text) ? instRef.DisplayName.Text : (browseName ?? "Unknown");
-                if (browseName == null || browseName.StartsWith('<')) continue;
+                _log.LogWarning("WARN Asset variable subscription already active.");
+                return;
+            }
 
-                var instNodeId = (NodeId)instRef.NodeId;
+            _log.LogInformation("\n-- Subscribing to all Asset variables ----");
 
-                // Qualify key with category to avoid collision when two categories
-                // contain assets with the same DisplayName.
-                var assetKey = $"{catName}_{displayName}";
+            cancellationToken.ThrowIfCancellationRequested();
+            var assetMgmtNode = await _js.BrowseChildAsync(
+                _js.NodeId, IJTBase.BrowseNames.AssetManagement).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (assetMgmtNode.IsNull)
+            {
+                _log.LogError("ERROR AssetManagement node not found.");
+                return;
+            }
 
-                // Ensure a value store exists for this asset before any callbacks fire
-                _assetValues.GetOrAdd(assetKey, _ => new ConcurrentDictionary<string, object?>());
+            var assetsNode = await _js.BrowseChildAsync(assetMgmtNode, IJTBase.BrowseNames.Assets).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (assetsNode.IsNull)
+            {
+                _log.LogError("ERROR Assets node not found.");
+                return;
+            }
 
-                count += await SubscribeAllVariablesAsync(
-                    _assetVarSubscription, instNodeId, assetKey, path: "").ConfigureAwait(false);
+            if (!_js.Session.TryGetSubscriptionManager(out var subMgr))
+            {
+                throw new InvalidOperationException("V2 subscription engine is unavailable on this session.");
+            }
 
-                _log.LogInformation("  Asset: {Category}/{Name} — subscribed",
-                    catName, displayName);
+            var subOptions = new Opc.Ua.Client.Subscriptions.SubscriptionOptions
+            {
+                PublishingInterval = TimeSpan.FromMilliseconds(_js.Config.PublishingIntervalMs > 0 ? _js.Config.PublishingIntervalMs : 500),
+                PublishingEnabled = true,
+                KeepAliveCount = 10,
+                LifetimeCount = 100,
+                MaxNotificationsPerPublish = 1000,
+                Priority = 0,
+            };
+
+            var handler = new DelegatingSubscriptionNotificationHandler(
+                onDataChange: (_, changes) =>
+                {
+                    foreach (var change in changes.Span)
+                    {
+                        if (change.MonitoredItem?.Name != null &&
+                            _monitoredItemRouting.TryGetValue(change.MonitoredItem.Name, out var route))
+                        {
+                            var boxed = change.Value.WrappedValue.AsBoxedObject(Variant.BoxingBehavior.Legacy);
+                            if (_assetValues.TryGetValue(route.AssetKey, out var dict))
+                            {
+                                dict[route.ChildPath] = boxed;
+                                FlushAssetJson(route.AssetKey);
+                            }
+                        }
+                    }
+                    return ValueTask.CompletedTask;
+                });
+
+            var subscription = subMgr.Add(handler, new StaticOptionsMonitor<Opc.Ua.Client.Subscriptions.SubscriptionOptions>(subOptions));
+            var registeredItems = new List<Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem>();
+
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                // Browse all category folders under Assets (Controllers, Tools, Servos, …)
+                var categoryRefs = await _js.BrowseChildrenAsync(assetsNode, (uint)NodeClass.Object).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                foreach (var catRef in categoryRefs ?? [])
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var catName = catRef.BrowseName.Name;
+                    if (catName == null || catName.StartsWith('<')) continue;
+
+                    var catNodeId = (NodeId)catRef.NodeId;
+
+                    // Browse asset instances within the category folder
+                    var instanceRefs = await _js.BrowseChildrenAsync(catNodeId, (uint)NodeClass.Object).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    foreach (var instRef in instanceRefs ?? [])
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var browseName = instRef.BrowseName.Name;
+                        var displayName = !string.IsNullOrEmpty(instRef.DisplayName.Text) ? instRef.DisplayName.Text : (browseName ?? "Unknown");
+                        if (browseName == null || browseName.StartsWith('<')) continue;
+
+                        var instNodeId = (NodeId)instRef.NodeId;
+
+                        // Qualify key with category to avoid collision when two categories
+                        // contain assets with the same DisplayName.
+                        var assetKey = $"{catName}_{displayName}";
+
+                        // Ensure a value store exists for this asset before any callbacks fire
+                        _assetValues.GetOrAdd(assetKey, _ => new ConcurrentDictionary<string, object?>());
+
+                        await SubscribeAllVariablesAsync(
+                            subscription, instNodeId, assetKey, path: "", registeredItems, depth: 0, cancellationToken).ConfigureAwait(false);
+
+                        _log.LogInformation("  Asset: {Category}/{Name} — subscribed",
+                            catName, displayName);
+                    }
+                }
+
+                if (registeredItems.Count == 0)
+                {
+                    _log.LogWarning("WARN No asset variables found to subscribe.");
+                    await subscription.DisposeAsync().ConfigureAwait(false);
+                    return;
+                }
+
+                await handler.WaitForReadinessAsync(subscription, registeredItems, TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+
+                _assetVarSubscription = subscription;
+                _log.LogInformation("OK Subscribed to {Count} asset variable(s) across {Assets} asset(s).",
+                    registeredItems.Count, _assetValues.Count);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Failed to establish asset variables subscription readiness on server.");
+                try
+                {
+                    await subscription.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception disposeEx)
+                {
+                    _log.LogWarning(disposeEx, "WARN Error during subscription disposal after failure: {Message}", disposeEx.Message);
+                }
+                finally
+                {
+                    _monitoredItemRouting.Clear();
+                    _assetValues.Clear();
+                }
+                throw;
             }
         }
-
-        if (count == 0)
+        finally
         {
-            _log.LogWarning("WARN No asset variables found to subscribe.");
-            _assetVarSubscription.Dispose();
-            _assetVarSubscription = null;
-            return;
+            _subscriptionLock.Release();
         }
-
-        _js.Session.AddSubscription(_assetVarSubscription);
-        await _assetVarSubscription.CreateAsync().ConfigureAwait(false);
-        _log.LogInformation("OK Subscribed to {Count} asset variable(s) across {Assets} asset(s).",
-            count, _assetValues.Count);
     }
 
     /// <summary>
@@ -370,20 +450,28 @@ public sealed class AssetManagement : IAsyncDisposable
     /// Variable child. Object children are recursed into (max depth 8).
     /// MethodSet nodes are skipped — they contain only Methods, not data.
     /// </summary>
-    private async Task<int> SubscribeAllVariablesAsync(
-        Subscription sub, NodeId nodeId, string assetKey, string path, int depth = 0)
+    private async Task SubscribeAllVariablesAsync(
+        Opc.Ua.Client.Subscriptions.ISubscription sub,
+        NodeId nodeId,
+        string assetKey,
+        string path,
+        List<Opc.Ua.Client.Subscriptions.MonitoredItems.IMonitoredItem> registeredItems,
+        int depth = 0,
+        CancellationToken cancellationToken = default)
     {
         const int MaxDepth = 8;
-        if (depth > MaxDepth) return 0;
+        if (depth > MaxDepth) return;
+        cancellationToken.ThrowIfCancellationRequested();
 
         var children = await _js.BrowseChildrenAsync(
             nodeId, (uint)(NodeClass.Variable | NodeClass.Object)).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        if (children == null || children.Count == 0) return 0;
+        if (children == null || children.Count == 0) return;
 
-        int added = 0;
         foreach (var child in children)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var name = child.BrowseName.Name;
             if (name == null || name.StartsWith('<')) continue;
 
@@ -395,37 +483,30 @@ public sealed class AssetManagement : IAsyncDisposable
 
             if (child.NodeClass == NodeClass.Variable)
             {
-                var item = new MonitoredItem(sub.DefaultItem)
+                var itemKey = $"asset_item_{Interlocked.Increment(ref _itemCounter)}";
+                var itemOptions = new Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions
                 {
-                    DisplayName = $"{assetKey}/{childPath}",
                     StartNodeId = childNodeId,
                     AttributeId = Attributes.Value,
-                    SamplingInterval = 1000,
+                    SamplingInterval = TimeSpan.FromMilliseconds(1000),
+                    DiscardOldest = true,
                 };
 
-                var capturedKey = assetKey;
-                var capturedPath = childPath;
-                item.Notification += (mi, _) =>
+                _monitoredItemRouting[itemKey] = (assetKey, childPath);
+                if (!sub.MonitoredItems.TryAdd(itemKey, new StaticOptionsMonitor<Opc.Ua.Client.Subscriptions.MonitoredItems.MonitoredItemOptions>(itemOptions), out var item) || item == null)
                 {
-                    foreach (var v in mi.DequeueValues())
-                    {
-                        _assetValues[capturedKey][capturedPath] =
-                            v.WrappedValue.AsBoxedObject(Variant.BoxingBehavior.Legacy);
-                        FlushAssetJson(capturedKey);
-                    }
-                };
+                    _monitoredItemRouting.TryRemove(itemKey, out _);
+                    throw new InvalidOperationException($"Failed to register monitored item '{itemKey}' for path '{childPath}'.");
+                }
 
-                sub.AddItem(item);
-                added++;
+                registeredItems.Add(item);
             }
             else if (child.NodeClass == NodeClass.Object)
             {
-                added += await SubscribeAllVariablesAsync(
-                    sub, childNodeId, assetKey, childPath, depth + 1).ConfigureAwait(false);
+                await SubscribeAllVariablesAsync(
+                    sub, childNodeId, assetKey, childPath, registeredItems, depth + 1, cancellationToken).ConfigureAwait(false);
             }
         }
-
-        return added;
     }
 
     /// <summary>
@@ -475,37 +556,40 @@ public sealed class AssetManagement : IAsyncDisposable
     }
 
     /// <summary>Stops the asset variable data-change subscription if active.</summary>
-    public async Task StopAssetVariableSubscriptionAsync()
+    public Task StopAssetVariableSubscriptionAsync() => StopAssetVariableSubscriptionAsync(CancellationToken.None);
+
+    /// <summary>Stops the asset variable data-change subscription if active with optional cancellation.</summary>
+    public async Task StopAssetVariableSubscriptionAsync(CancellationToken cancellationToken)
     {
-        var subscription = _assetVarSubscription;
-        if (subscription == null) return;
-        _assetVarSubscription = null;
+        await _subscriptionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await subscription.DeleteAsync(silent: true).ConfigureAwait(false);
-        }
-        catch (Opc.Ua.ServiceResultException srex)
-        {
-            _log.LogError("ERROR OPC UA error {Status}: {Message}",
-                IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "WARN Asset subscription stop warning");
-        }
-        try
-        {
-            await _js.Session.RemoveSubscriptionAsync(subscription).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "WARN Removing the asset subscription from the session failed");
+            var subscription = _assetVarSubscription;
+            if (subscription == null) return;
+            _assetVarSubscription = null;
+            try
+            {
+                await subscription.DisposeAsync().ConfigureAwait(false);
+                _log.LogInformation("OK Asset variable subscription stopped.");
+            }
+            catch (Opc.Ua.ServiceResultException srex)
+            {
+                _log.LogError("ERROR OPC UA error {Status}: {Message}",
+                    IjtStatusHelper.FormatCode(srex.StatusCode), srex.Message);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "WARN Asset subscription stop warning");
+            }
+            finally
+            {
+                _assetValues.Clear();
+                _monitoredItemRouting.Clear();
+            }
         }
         finally
         {
-            subscription.Dispose();
-            _assetValues.Clear();
-            _log.LogInformation("OK Asset variable subscription stopped.");
+            _subscriptionLock.Release();
         }
     }
 

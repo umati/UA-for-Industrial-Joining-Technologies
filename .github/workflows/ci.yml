@@ -710,10 +710,10 @@ jobs:
           FORMAT_OUTCOME:                  ${{ steps.format.outcome }}
         run: |
           echo "One or more C# unit checks failed:"
-          echo "  build                    -> $BUILD_OUTCOME"
-          echo "  opcua security contract  -> $OPCUA_SECURITY_CONTRACT_OUTCOME"
-          echo "  tests                    -> $TESTS_OUTCOME"
-          echo "  format                   -> $FORMAT_OUTCOME"
+          echo "  build                    -> $env:BUILD_OUTCOME"
+          echo "  opcua security contract  -> $env:OPCUA_SECURITY_CONTRACT_OUTCOME"
+          echo "  tests                    -> $env:TESTS_OUTCOME"
+          echo "  format                   -> $env:FORMAT_OUTCOME"
           exit 1
 
   # ───────────────────────────────────────────────────────────────────────────
