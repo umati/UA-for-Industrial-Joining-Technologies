@@ -31,6 +31,7 @@ from helpers.cu_test_counts import (
     render_text_lines,
 )
 from helpers.namespaces import result_classification_value
+from helpers.process_selectors import selection_names
 from helpers.target_server_cu_config import (
     OUTCOME_BLOCKED,
     OUTCOME_CLAIM_MISMATCH,
@@ -47,6 +48,7 @@ from helpers.target_server_readiness import (
     check_endpoint_reachable,
     check_live_process_selectors,
     has_live_process_selector_checks,
+    preflight_repair_lines,
     run_config_preflight,
 )
 
@@ -306,6 +308,8 @@ def _write_human_summary(
         "",
         *preflight_report.summary_lines(),
         "",
+        *preflight_repair_lines(profile, preflight_report),
+        "",
     ]
     test_counts = _spec_test_counts(extra)
     if test_counts is not None:
@@ -357,6 +361,10 @@ def _write_markdown_summary(
         lines.append(
             f"| `{check.check_name}` | {status_icon} `{check.outcome}` | {check.canonical_label} | {check.detail} |"
         )
+
+    recovery = preflight_repair_lines(profile, preflight_report)
+    if recovery:
+        lines.extend(["", "## Setup Recovery", "", "```text", *recovery, "```"])
 
     lines.extend(
         [
@@ -511,6 +519,7 @@ async def async_discover_target_server(
     *,
     security: ConnectionSecurity | None = None,
     prompt: CredentialPrompt | None = None,
+    expected_tool_uri: str | None = None,
 ) -> dict:
     """Connect to a target OPC UA server, discover Tools and Joining Processes, and return structured metadata.
 
@@ -552,7 +561,13 @@ async def async_discover_target_server(
             return discovery_data
 
         # 1. Discover Tool PIU
-        piu = await read_tool_product_instance_uri(client, ns_ijt, ns_di)
+        if expected_tool_uri is None:
+            piu = await read_tool_product_instance_uri(client, ns_ijt, ns_di)
+        else:
+            piu = await read_tool_product_instance_uri(client, ns_ijt, ns_di, expected_tool_uri=expected_tool_uri)
+        if expected_tool_uri is not None and not piu:
+            discovery_data["error"] = "No unique matching Tool ProductInstanceUri discovered; catalog was not requested"
+            return discovery_data
         if piu:
             discovery_data["tools"].append({"name": "PrimaryTool", "product_instance_uri": piu})
 
@@ -578,16 +593,20 @@ async def async_discover_target_server(
                         pcls = int(raw_cls) if raw_cls is not None else 0
                     except (TypeError, ValueError):
                         pcls = 0
-                    sel_name = ""
+                    associated_names = []
                     for entity in getattr(p, "AssociatedEntities", []) or []:
                         if getattr(entity, "Name", "") == "SelectionName":
-                            sel_name = str(getattr(entity, "EntityId", "") or "")
+                            associated_names.append(
+                                {"Name": "SelectionName", "EntityId": str(getattr(entity, "EntityId", "") or "")}
+                            )
+                    names = sorted(selection_names(p))
                     discovery_data["processes"].append(
                         {
                             "id": jid,
                             "origin_id": orig,
                             "name": pname,
-                            "selection_name": sel_name,
+                            "selection_name": names[0] if names else "",
+                            "AssociatedEntities": associated_names,
                             "classification": pcls,
                         }
                     )
@@ -1209,6 +1228,8 @@ def run_preflight(
 
     if blocking:
         _log(_c(_ANSI_RED, f"  {len(blocking)} blocking issue(s) found — fix before running."))
+        for line in preflight_repair_lines(profile, cfg_report):
+            _log(line)
     elif manual_required:
         _log(_c(_ANSI_YELLOW, f"  {len(manual_required)} check(s) require manual operator action."))
     else:
@@ -1313,8 +1334,13 @@ def run_automated(
         _log(_c(_ANSI_RED, f"\n  {len(blocking)} blocking issue(s) — cannot proceed:"))
         for c in blocking:
             _log(f"    [{c.outcome}] {c.check_name}: {c.detail}")
+        for line in preflight_repair_lines(profile, cfg_report):
+            _log(line)
         run_start = datetime.datetime.now(datetime.timezone.utc).isoformat()
         _write_evidence_report(output_dir, profile, cfg_report, mode, run_start)
+        outcome_summary = f"BLOCKING ({len(blocking)} issues)"
+        _write_human_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary)
+        _write_markdown_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary)
         return 1
 
     manual_checks = cfg_report.manual_required_checks

@@ -72,6 +72,21 @@ Before step 3, review the generated manifest and discovered-process comment bloc
 - Keep real endpoints, Tool PIUs, serial numbers, and process identifiers only in this ignored local manifest.
 - Set `max_start_invocations` to a conservative safety cap. Pacing and queue inspection reduce extra-start races but cannot make the server interaction atomic.
 
+If recreating controller programs or sequences makes an existing exact selector
+stale, use the prepared environment and refresh the ignored local manifest:
+
+```powershell
+python run_all_tests.py refresh-profile --profile .\target_server_cu_profiles\controller.sut.yaml
+```
+
+This reads the saved endpoint's live catalog and asks for explicit process
+choices, an identifier-only diff review and typed save confirmation. It does
+not run workloads or change claims, identifier strategies, security or risk
+approvals. Multiple advertised aliases are never guessed when a selection
+name is used or stored. Cancel leaves the manifest unchanged. Follow the
+[refresh guide](../docs/TARGET_SERVER_CU_GUIDE.md#refresh-stale-ids-without-rebuilding-the-manifest),
+then rerun preflight before separately approving workloads.
+
 ---
 
 ## Learn more

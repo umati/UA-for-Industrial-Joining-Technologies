@@ -21,10 +21,13 @@ python run_all_tests.py inspect --profile controller.sut.yaml
 
 # Generate a pre-filled manifest from a live server
 python run_all_tests.py init-profile --endpoint opc.tcp://10.246.32.8:40451 --output controller.sut.yaml
+
+# Repair stale exact process references in an existing local manifest
+python run_all_tests.py refresh-profile --profile controller.sut.yaml
 ```
 
-All flags from `run_all_tests.py` still work unchanged. The subcommands are
-thin aliases over the flag-based API for discoverability.
+All existing flags from `run_all_tests.py` still work unchanged.
+`refresh-profile` is an interactive local-configuration operation, not a test run.
 
 ---
 
@@ -56,6 +59,73 @@ Before writing or editing a manifest, connect to the target server to automatica
 ```bash
 python run_all_tests.py init-profile --endpoint opc.tcp://<controller-host>:40451 --output controller.sut.yaml
 ```
+
+### Refresh stale IDs without rebuilding the manifest
+
+Discovery already fetches `GetJoiningProcessList` dynamically. An exact selector
+still must match that catalog; runtime discovery never silently relaxes it.
+After controller programs/sequences are recreated, use:
+
+```powershell
+python run_all_tests.py refresh-profile --profile .\target_server_cu_profiles\controller.local.sut.yaml
+```
+
+This reuses the prepared environment, the manifest's endpoint, and its declared
+security/authentication. It does not install dependencies, clean run evidence,
+override the endpoint, or change the controller's state. A configured Tool
+ProductInstanceUri selects that exact Tool, including a non-first Tool in the
+server's Tools folder. Missing or duplicate requested Tool identities stop
+before catalog access; an empty configured PIU still requires a discovered Tool.
+
+The guide lists current process IDs, origins, selection names and process
+classifications. For each group of related exact references, explicitly choose
+a process number, enter `k` to keep fully current, strategy-valid unique matches,
+or `q` to cancel. A unique primary match alone does not permit keeping stale
+secondary identifiers.
+There is no default process choice. Matching Job, counter-effect and intervention
+parent references are reviewed together; unrelated references are reviewed
+separately. Process classification alone is not proof of result capability.
+Same process IDs remain grouped even when secondary metadata needs refreshing.
+Conflicting secondary-only identities stay separate; ambiguous/transitive
+secondary-only bridges require manual review instead of merging unrelated roles.
+Without a process ID on either reference, both active `match_by` keys must be
+present and equal in the shared identity. A shared origin alone cannot absorb
+an unrelated name-matched reference. ID-anchored Job/counter groups can still
+include their origin-only intervention parent.
+The catalog displays all advertised `SelectionNames`, sorted. An explicit
+advertised alias is preserved; a sole associated name is resolved even without
+a scalar display name. Multiple names require an explicit advertised alias
+whenever the selector uses or stores `selection_name`, not just for
+`selection_name_only`. Unused aliases do not block an identifier-only refresh.
+`selection_name_only` also requires a unique advertised wire name;
+`all_available` requires all three identifiers. The selected strategy is never
+silently weakened.
+
+Review the diff, then type `REFRESH <profile filename>` exactly. All changes are
+saved together by one local file replacement, only after manifest validation
+and unique live-selector checks. The original comments, newline style,
+exact-match policies, `match_by`, identifier strategies, CU claims, risk approvals
+and counter limits are preserved. Missing required identifier fields are added;
+IDs are not copied into tracked templates automatically.
+
+Cancellation, EOF, ambiguous identities, missing required identifiers, discovery
+failure or a detected profile edit during review stops without saving. YAML
+anchors/aliases, duplicate/merge keys and block-scalar identifiers require manual
+review instead of an unsafe rewrite. Non-interactive refresh is rejected before
+connecting. This is a snapshot-based repair, not a controller reservation or
+whole-run lock; run `--preflight-only` afterward and approve workloads separately.
+
+### When setup blocks a run
+
+The terminal and text/Markdown summaries name the actual manifest, effective
+endpoint and public field to review, such as
+`workflows.process_selectors_by_classification.job.joining_process_id`.
+Stale-selector failures include a reviewed-refresh command; discovery or
+security failures require restoring catalog access first, not replacing IDs.
+The recheck command is preflight-only and retains the effective endpoint.
+Before refreshing, confirm the saved endpoint matches that controller:
+`refresh-profile` deliberately uses the saved manifest, not runtime overrides.
+Keep exact-match policies, claims, security and risk approvals unchanged.
 
 ---
 

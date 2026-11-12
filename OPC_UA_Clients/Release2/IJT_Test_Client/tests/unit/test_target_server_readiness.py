@@ -33,6 +33,66 @@ from helpers.target_server_readiness import (
     run_config_preflight,
 )
 
+
+def test_stale_selector_recovery_names_public_fields_and_quotes_the_actual_profile(tmp_path):
+    from helpers.target_server_readiness import PreflightReport, ReadinessOutcome, preflight_repair_lines
+
+    source = str(tmp_path / "owner's $controller.sut.yaml")
+    profile = build_execution_profile(
+        {"schema_version": 1, "target": {"endpoint": "opc.tcp://reviewed-host:40451"}}, source_path=source
+    )
+    report = PreflightReport()
+    for label in ("selection.joining_processes.job", "cu_execution.counter_effects[0]"):
+        report.add(
+            ReadinessOutcome(
+                outcome=OUTCOME_BLOCKED,
+                check_name=f"live_selector:{label}",
+                detail="Matched zero current processes",
+                evidence={"match_by": "joining_process_id"},
+            )
+        )
+    lines = "\n".join(preflight_repair_lines(profile, report))
+    assert f"Profile file: {source}" in lines
+    assert "workflows.process_selectors_by_classification.job.joining_process_id" in lines
+    assert "execution_policy.counter_effects[0].joining_process_id" in lines
+    quoted = "'" + source.replace("'", "''") + "'"
+    assert f"refresh-profile --profile {quoted}" in lines
+    assert f"--profile {quoted} --endpoint 'opc.tcp://reviewed-host:40451' --preflight-only" in lines
+    assert "saved connection.endpoint" in lines
+    assert len(report.blocking_checks) == 2
+    assert "--allow-" not in lines
+
+
+@pytest.mark.parametrize("check_name", ["connection_security", "live_process_selector_discovery", "endpoint_reachable"])
+def test_connection_failures_are_not_misdiagnosed_as_stale_ids(check_name):
+    from helpers.target_server_readiness import PreflightReport, ReadinessOutcome, preflight_repair_lines
+
+    profile = build_default_profile()
+    report = PreflightReport()
+    report.add(ReadinessOutcome(outcome=OUTCOME_BLOCKED, check_name=check_name, detail="Connection unavailable"))
+    lines = "\n".join(preflight_repair_lines(profile, report))
+    assert "connection." in lines
+    assert "refresh-profile" not in lines
+    assert "--preflight-only" in lines
+    assert "--profile" not in lines
+    assert "no saved manifest" in lines
+
+
+def test_passing_preflight_has_no_repair_instructions():
+    from helpers.target_server_readiness import preflight_repair_lines
+
+    profile = build_execution_profile(
+        {
+            "schema_version": 1,
+            "target": {"endpoint": "opc.tcp://controller:40451"},
+            "triggers": {"result": {"mode": "simulate_methods"}},
+        }
+    )
+    report = run_config_preflight(profile)
+    assert not report.blocking_checks
+    assert preflight_repair_lines(profile, report) == []
+
+
 # ---------------------------------------------------------------------------
 # ReadinessOutcome dataclass
 # ---------------------------------------------------------------------------

@@ -351,9 +351,11 @@ async def find_method_set(
     return None
 
 
-async def read_tool_product_instance_uri(client, ns_ijt: int, ns_di: int, ns_app: int | None = None) -> str:
+async def read_tool_product_instance_uri(
+    client, ns_ijt: int, ns_di: int, ns_app: int | None = None, *, expected_tool_uri: str | None = None
+) -> str:
     """
-    Read ProductInstanceUri from the first tool in AssetManagement/Assets/Tools.
+    Read the first Tool PIU, or uniquely resolve an explicitly requested Tool PIU.
 
     Navigation path: JoiningSystem → AssetManagement → Assets → Tools →
     <first tool instance> → Identification → ProductInstanceUri.
@@ -381,18 +383,22 @@ async def read_tool_product_instance_uri(client, ns_ijt: int, ns_di: int, ns_app
         tool_refs = await _browse_refs(tools_folder)
         if not tool_refs:
             return ""
-        first_tool = _node_from_ref(tools_folder, tool_refs[0].NodeId)
-        ident = await find_child_by_browse_name(first_tool, "Identification", ns_di)
-        if ident is None:
-            return ""
-        # ProductInstanceUri browse name uses ns_di on standard servers
-        pi_node = await find_child_by_browse_name(ident, "ProductInstanceUri", ns_di)
-        if pi_node is None and ns_app is not None:
-            pi_node = await find_child_by_browse_name(ident, "ProductInstanceUri", ns_app)
-        if pi_node is None:
-            return ""
-        value = await asyncio.wait_for(pi_node.read_value(), timeout=_BROWSE_TIMEOUT)
-        return str(value) if value is not None else ""
+        matches = []
+        for tool_ref in tool_refs if expected_tool_uri else tool_refs[:1]:
+            tool = _node_from_ref(tools_folder, tool_ref.NodeId)
+            ident = await find_child_by_browse_name(tool, "Identification", ns_di)
+            if ident is None:
+                continue
+            pi_node = await find_child_by_browse_name(ident, "ProductInstanceUri", ns_di)
+            if pi_node is None and ns_app is not None:
+                pi_node = await find_child_by_browse_name(ident, "ProductInstanceUri", ns_app)
+            if pi_node is None:
+                continue
+            value = await asyncio.wait_for(pi_node.read_value(), timeout=_BROWSE_TIMEOUT)
+            piu = str(value) if value is not None else ""
+            if piu and (not expected_tool_uri or piu == expected_tool_uri):
+                matches.append(piu)
+        return matches[0] if len(matches) == 1 else ""
     except Exception as exc:  # noqa: BLE001
         _handle_discovery_error(exc)
         return ""

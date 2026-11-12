@@ -525,15 +525,28 @@ async def test_find_joining_system_returns_none_when_objects_browse_fails(monkey
 
 
 @pytest.mark.asyncio
-async def test_read_tool_product_instance_uri_follows_dynamic_tool_path(monkeypatch):
+@pytest.mark.parametrize(
+    "requested,second_piu,expected",
+    [
+        (None, "TOOL-PIU-2", "TOOL-PIU-1"),
+        ("TOOL-PIU-2", "TOOL-PIU-2", "TOOL-PIU-2"),
+        ("missing", "TOOL-PIU-2", ""),
+        ("TOOL-PIU-1", "TOOL-PIU-1", ""),
+    ],
+)
+async def test_read_tool_product_instance_uri_follows_dynamic_tool_path(monkeypatch, requested, second_piu, expected):
     js = object()
     am = object()
     assets = object()
     tools = object()
     tool = object()
+    second_tool = object()
     ident = object()
+    second_ident = object()
     pi_node = FakeNode(value="TOOL-PIU-1")
+    second_pi_node = FakeNode(value=second_piu)
     tool_ref = ref("ToolA", node_id=101)
+    second_ref = ref("ToolB", node_id=102)
 
     async def fake_find_joining_system(client):
         return js
@@ -544,26 +557,29 @@ async def test_read_tool_product_instance_uri_follows_dynamic_tool_path(monkeypa
             (am, "Assets"): assets,
             (assets, "Tools"): tools,
             (tool, "Identification"): ident,
+            (second_tool, "Identification"): second_ident,
             (ident, "ProductInstanceUri"): pi_node if ns_index == 5 else None,
+            (second_ident, "ProductInstanceUri"): second_pi_node if ns_index == 5 else None,
         }
         return mapping.get((parent, name))
 
     async def fake_browse(node, timeout=node_discovery._BROWSE_TIMEOUT):
-        return [tool_ref] if node is tools else []
+        return [tool_ref, second_ref] if node is tools else []
 
     def fake_node_from_ref(source, node_id):
         assert source is tools
-        assert node_id == tool_ref.NodeId
-        return tool
+        return tool if node_id == tool_ref.NodeId else second_tool
 
     monkeypatch.setattr(node_discovery, "find_joining_system", fake_find_joining_system)
     monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find_child)
     monkeypatch.setattr(node_discovery, "_browse_refs", fake_browse)
     monkeypatch.setattr(node_discovery, "_node_from_ref", fake_node_from_ref)
 
-    result = await node_discovery.read_tool_product_instance_uri(object(), ns_ijt=7, ns_di=5)
+    result = await node_discovery.read_tool_product_instance_uri(
+        object(), ns_ijt=7, ns_di=5, expected_tool_uri=requested
+    )
 
-    assert result == "TOOL-PIU-1"
+    assert result == expected
 
 
 @pytest.mark.asyncio

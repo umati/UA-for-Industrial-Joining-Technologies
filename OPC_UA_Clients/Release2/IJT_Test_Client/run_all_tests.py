@@ -35,6 +35,7 @@ Stable subcommands (recommended for regular use):
   python run_all_tests.py inspect --endpoint URL        # read-only discovery + model inventory (no state change)
   python run_all_tests.py inspect --profile FILE        # same, endpoint taken from manifest
   python run_all_tests.py init-profile --endpoint URL --output FILE.sut.yaml  # guided manifest creation
+  python run_all_tests.py refresh-profile --profile FILE.sut.yaml  # review current process IDs; confirm local save
 
 Target Server options (used with --profile and/or --endpoint):
   --endpoint URL                    Endpoint override; suppresses simulator auto-launch
@@ -1845,12 +1846,10 @@ def _apply_plan_runtime_env_overrides(plan: RunPlan) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Stable subcommands: run / inspect / init-profile
+# Stable subcommands: run / inspect / init-profile / refresh-profile
 # ---------------------------------------------------------------------------
-# These are thin, documented wrappers over the existing flag-based API so
-# users have a stable, easy-to-remember interface that will not break when
-# internal flags evolve.  Each subcommand maps to exactly one existing path;
-# no logic is duplicated.
+# Run/inspect/init-profile wrap the existing execution and discovery paths.
+# Refresh-profile reviews local identifier changes using the same discovery API.
 
 
 def _subcommand_inspect(endpoint: str, profile_path: str | None) -> int:
@@ -1978,6 +1977,58 @@ def _subcommand_init_profile(endpoint: str, output_path: str) -> int:
     return 0
 
 
+def _subcommand_refresh_profile(profile_path: str) -> int:
+    """Read the live catalog and review an atomic local process-reference refresh."""
+    if not sys.stdin.isatty():
+        _log(_c(_ANSI_RED, "[ERROR] refresh-profile requires an interactive terminal; no changes made."))
+        return 2
+    # Reuse the prepared environment, without installing tools or cleaning artifacts.
+    _relaunch_if_needed()
+
+    import asyncio
+
+    import yaml
+    from asyncua.ua.uaerrors import UaError
+
+    from helpers.connection_security import connection_security_from_manifest, default_credential_prompt
+    from helpers.profile_refresh import guide_process_refresh, parse_refresh_manifest
+    from helpers.target_server_execution import async_discover_target_server
+
+    try:
+        path = Path(profile_path).resolve(strict=True)
+        original = path.read_bytes()
+        manifest = parse_refresh_manifest(original.decode("utf-8"), path)
+        endpoint = manifest.endpoint
+        if manifest.is_auto_simulator or not endpoint.startswith("opc.tcp://") or "<" in endpoint:
+            raise ValueError("refresh-profile requires an external profile with its actual connection.endpoint.")
+        _section(f"refresh-profile - {endpoint}")
+        _log("  Reading GetJoiningProcessList only; no controller state changes or test workloads.")
+        security = connection_security_from_manifest(manifest)
+        tool_uri = manifest.data["workflows"]["tool_selector"]["product_instance_uri"]
+        data = asyncio.run(
+            async_discover_target_server(
+                endpoint,
+                timeout=15.0,
+                security=security,
+                prompt=default_credential_prompt,
+                expected_tool_uri=tool_uri,
+            )
+        )
+        if data.get("error"):
+            raise ValueError(f"Discovery failed: {data['error']}")
+        if not data.get("tools"):
+            raise ValueError("No Tool ProductInstanceUri discovered; nothing refreshed.")
+        if tool_uri and not any(tool.get("product_instance_uri") == tool_uri for tool in data.get("tools", [])):
+            raise ValueError("Discovered Tool ProductInstanceUri does not match the profile; nothing refreshed.")
+        return guide_process_refresh(path, original, data.get("processes", []), emit=_log)
+    except (EOFError, KeyboardInterrupt):
+        _log("Refresh interrupted; check the local profile. No test workload was started.")
+        return 1
+    except (OSError, ValueError, RuntimeError, UaError, yaml.YAMLError) as exc:
+        _log(_c(_ANSI_RED, f"[ERROR] Profile refresh stopped: {exc}"))
+        return 2
+
+
 def _safe_dir_component(name: str) -> str:
     """Return *name* with characters that are illegal in a Windows directory removed."""
     cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
@@ -2038,13 +2089,13 @@ def _make_unique_run_dir(base_dir: Path, profile_name: str) -> Path:
 
 
 def _handle_subcommands(argv: list[str] | None = None) -> int | None:
-    """Detect and handle stable subcommands (run/inspect/init-profile).
+    """Detect and handle stable subcommands (run/inspect/init-profile/refresh-profile).
 
     Returns an exit code when a subcommand was handled, or None when
     the caller should fall through to the legacy flag-based parser.
     """
     args = argv if argv is not None else sys.argv[1:]
-    if not args or args[0] not in {"run", "inspect", "init-profile"}:
+    if not args or args[0] not in {"run", "inspect", "init-profile", "refresh-profile"}:
         return None
 
     sub = args[0]
@@ -2076,6 +2127,16 @@ def _handle_subcommands(argv: list[str] | None = None) -> int | None:
         sub_parser.add_argument("--output", metavar="FILE", required=True, help="Output *.sut.yaml path")
         parsed = sub_parser.parse_args(rest)
         return _subcommand_init_profile(parsed.endpoint, parsed.output)
+
+    if sub == "refresh-profile":
+        sub_parser.description = (
+            "Read the profile's live process catalog and review exact process references together.\n"
+            "Preview identifier-only edits, then type confirmation to save the local profile atomically.\n"
+            "Interactive only; no joining methods, test workloads or approval changes."
+        )
+        sub_parser.add_argument("--profile", metavar="FILE", required=True, help="Local SUT manifest to review")
+        parsed = sub_parser.parse_args(rest)
+        return _subcommand_refresh_profile(parsed.profile)
 
     if sub == "run":
         # Map ``run [options]`` to the existing flag-based parser by re-injecting args.
@@ -2308,11 +2369,19 @@ def main() -> int:
     except RunnerConfigError as exc:
         _log(_c(_ANSI_RED, f"[ERROR] Invalid CLI usage: {exc}"))
         return 2
-    except FileNotFoundError as exc:
-        _log(_c(_ANSI_RED, f"[ERROR] SUT manifest not found: {exc}"))
-        return 2
-    except (SutManifestError, TargetServerConfigError) as exc:
-        _log(_c(_ANSI_RED, f"[ERROR] SUT manifest configuration error: {exc}"))
+    except (FileNotFoundError, SutManifestError, TargetServerConfigError) as exc:
+        source = args.profile or args.target_server_profile
+        if source:
+            _log(_c(_ANSI_RED, f"[ERROR] Profile file: {source}"))
+        reason = "not found" if isinstance(exc, FileNotFoundError) else "configuration error"
+        _log(_c(_ANSI_RED, f"[ERROR] SUT manifest {reason}: {exc}"))
+        _log("Review the named manifest field without relaxing claims, security or risk approvals.")
+        if source:
+            quoted_source = "'" + str(source).replace("'", "''") + "'"
+            endpoint = ""
+            if args.endpoint:
+                endpoint = " --endpoint '" + args.endpoint.replace("'", "''") + "'"
+            _log(f"Recheck only: python .\\run_all_tests.py run --profile {quoted_source}{endpoint} --preflight-only")
         return 2
 
     if getattr(args, "discover_target", False):

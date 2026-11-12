@@ -61,6 +61,32 @@ To check profile classification before executing specification tests:
 python run_all_tests.py run --profile controller.sut.yaml --endpoint opc.tcp://<host>:40451 --preflight-only
 ```
 
+If recreating controller programs or sequences makes an exact process selector
+stale, refresh the existing local manifest instead of copying IDs by hand:
+
+```bash
+python run_all_tests.py refresh-profile --profile controller.sut.yaml
+```
+
+The guide reads the profile's live catalog using its security settings, groups
+matching Job/counter/parent references, and asks you to choose a current process.
+It honors a configured non-first Tool and refuses missing/ambiguous Tool
+identities. Keeping a match also checks its required secondary identifiers;
+selection-name-only targets must have a unique wire name.
+All advertised selection-name aliases are displayed. An existing advertised
+alias is retained; a sole alias can be refreshed automatically, but multiple
+aliases require an explicit advertised name if the profile uses or stores one.
+Secondary-only references group only when both active matching keys are shared.
+Review the identifier-only diff and type the displayed confirmation to save.
+Comments, exact-match policies, identifier strategies, claims and approvals stay
+unchanged. No joining, counter or test workload runs; cancel leaves the file
+unchanged. Use an interactive terminal and a previously prepared environment.
+
+Blocked setup names the actual profile, effective endpoint and manifest field
+in the terminal and text/Markdown summaries. Use its preflight-only recheck;
+refresh is suggested for stale selectors, not connection/security failures.
+Never weaken exact selectors, CU claims or approvals just to pass preflight.
+
 Follow the guide's safety and applicability instructions before testing a
 physical controller; choose the profile that matches its capabilities and
 trigger mode.

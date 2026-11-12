@@ -475,7 +475,7 @@ class TestRunPreflightDirect:
             check["check_name"].startswith("live_selector:") and check["outcome"] == OUTCOME_PASSED for check in checks
         )
 
-    def test_live_selector_mismatch_blocks_preflight(self, tmp_path, monkeypatch):
+    def test_live_selector_mismatch_blocks_preflight(self, tmp_path, monkeypatch, capsys):
         profile = build_execution_profile(
             {
                 "schema_version": 1,
@@ -485,9 +485,10 @@ class TestRunPreflightDirect:
                     "joining_process": {
                         "policy": "exact_match",
                         "joining_process_id": "stale-id",
-                    }
+                    },
                 },
-            }
+            },
+            source_path=str(tmp_path / "controller.sut.yaml"),
         )
         monkeypatch.setattr(
             tse,
@@ -505,6 +506,14 @@ class TestRunPreflightDirect:
             check["check_name"].startswith("live_selector:") and check["outcome"] == OUTCOME_BLOCKED
             for check in report["preflight"]["checks"]
         )
+        output = capsys.readouterr().out
+        assert "controller.sut.yaml" in output
+        assert "workflows.process_selector.joining_process_id" in output
+        assert "refresh-profile --profile" in output
+        for suffix in ("txt", "md"):
+            summary = (tmp_path / f"target-server-cu-summary.{suffix}").read_text(encoding="utf-8")
+            assert "refresh-profile --profile" in summary
+            assert "--preflight-only" in summary
 
     def test_selector_preflight_discovery_failure_blocks_without_running_tests(self, tmp_path, monkeypatch):
         profile = build_execution_profile(
@@ -615,6 +624,11 @@ class TestRunPreflightDirect:
         report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
         blocked = [c["check_name"] for c in report["preflight"]["checks"] if c["outcome"] == OUTCOME_BLOCKED]
         assert blocked and all(name.startswith("live_selector:") for name in blocked)
+        for suffix in ("txt", "md"):
+            summary = (tmp_path / f"target-server-cu-summary.{suffix}").read_text(encoding="utf-8")
+            assert "BLOCKING" in summary
+            assert "workflows.process_selector.joining_process_id" in summary
+            assert "--preflight-only" in summary
 
     def test_manual_required_is_non_blocking(self, tmp_path, monkeypatch):
         profile = build_execution_profile(
@@ -981,7 +995,10 @@ class TestRunLiveSpecTestsDirectExceptions:
             JoiningProcessOriginId="Prog_Orig_1",
             Name="Program1",
             Classification=JoiningProcessClassification.PROGRAM.value,
-            AssociatedEntities=[MagicMock(Name="SelectionName", EntityId="ProgIndex_1")],
+            AssociatedEntities=[
+                MagicMock(Name="SelectionName", EntityId="ProgIndex_1"),
+                MagicMock(Name="SelectionName", EntityId="ProgIndex_2"),
+            ],
         )
         mock_proc_job = MagicMock(
             JoiningProcessId="Job_1",
@@ -1011,12 +1028,36 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert len(data["tools"]) == 1
         assert data["tools"][0]["product_instance_uri"] == "uri:tool1"
         assert len(data["processes"]) == 3
+        assert data["processes"][0]["selection_name"] == "ProgIndex_1"
+        assert len(data["processes"][0]["AssociatedEntities"]) == 2
         assert "Prog_1" in data["suggested_yaml"]
         assert "Job_1" in data["suggested_yaml"]
         # Each process is suggested under exactly one canonical classification key.
         assert data["suggested_selection"]["single"]["id"] == "Prog_1"
         assert data["suggested_selection"]["job"]["id"] == "Job_1"
         assert data["suggested_selection"]["batch"]["id"] == "Batch_1"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("requested", ["uri:tool2", ""])
+    async def test_refresh_discovery_requires_a_unique_tool_before_catalog_access(self, requested):
+        client = MagicMock(
+            connect=AsyncMock(),
+            disconnect=AsyncMock(),
+            get_namespace_index=AsyncMock(return_value=2),
+            load_data_type_definitions=AsyncMock(),
+        )
+        find_child = AsyncMock(side_effect=AssertionError("Must not request a catalog for a missing Tool"))
+        with (
+            patch("asyncua.Client", return_value=client),
+            patch("helpers.node_discovery.find_joining_system", new=AsyncMock(return_value=object())),
+            patch("helpers.node_discovery.read_tool_product_instance_uri", new=AsyncMock(return_value="")) as read_tool,
+            patch("helpers.node_discovery.find_child_by_browse_name", new=find_child),
+        ):
+            data = await tse.async_discover_target_server("opc.tcp://not-contacted:40451", expected_tool_uri=requested)
+        assert "No unique matching Tool" in data["error"]
+        assert read_tool.call_args.kwargs["expected_tool_uri"] == requested
+        find_child.assert_not_called()
+        client.disconnect.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_async_discover_target_server_no_joining_system(self):

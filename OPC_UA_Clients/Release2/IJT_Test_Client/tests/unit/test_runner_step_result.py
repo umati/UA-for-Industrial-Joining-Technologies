@@ -39,6 +39,42 @@ def test_clean_pytest_remainder_removes_only_separator():
     assert _mod._clean_pytest_remainder(None) == []
 
 
+@pytest.mark.parametrize("missing", [False, True])
+def test_manifest_error_names_profile_field_and_endpoint_preserving_recheck(tmp_path, monkeypatch, capsys, missing):
+    from helpers import runner_plan
+    from helpers.sut_manifest import SutManifestError
+
+    profile = tmp_path / "owner's $controller.yaml"
+    endpoint = "opc.tcp://reviewed-controller:40451"
+    monkeypatch.setattr(
+        sys, "argv", ["run_all_tests.py", "--profile", str(profile), "--endpoint", endpoint, "--preflight-only"]
+    )
+    monkeypatch.setattr(_mod, "_handle_subcommands", lambda: None)
+    for name in (
+        "_cleanup_caches",
+        "_prepare_tmp_dir",
+        "ensure_venv",
+        "install_requirements",
+        "_ensure_precommit_hooks",
+        "_relaunch_if_needed",
+    ):
+        monkeypatch.setattr(_mod, name, lambda *args: None)
+
+    def reject_plan(args):
+        if missing:
+            raise FileNotFoundError(str(profile))
+        raise SutManifestError("connection.endpoint must be configured")
+
+    monkeypatch.setattr(runner_plan, "resolve_run_plan", reject_plan)
+    assert _mod.main() == 2
+    output = capsys.readouterr().out
+    assert f"Profile file: {profile}" in output
+    assert "--profile '" + str(profile).replace("'", "''") + "'" in output
+    assert f"--endpoint '{endpoint}' --preflight-only" in output
+    assert ("not found" if missing else "connection.endpoint must be configured") in output
+    assert "without relaxing claims, security or risk approvals" in output
+
+
 def test_ad_hoc_endpoint_evidence_dir_is_a_legal_windows_name(tmp_path):
     """``--endpoint`` without a manifest uses source_path '<default>', which Windows cannot create."""
     assert _mod._filesystem_profile_name("<default>") == "default"

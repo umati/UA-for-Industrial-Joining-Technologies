@@ -359,7 +359,7 @@ def check_endpoint_configured(endpoint: str) -> ReadinessOutcome:
             reason_code="configuration_invalid",
             detail=(
                 "Profile endpoint is not set or is still the placeholder value. "
-                "Set 'target.endpoint' to the real target_server URL."
+                "Set 'connection.endpoint' in the SUT manifest to the reviewed server URL."
             ),
             check_name=check_name,
         )
@@ -428,8 +428,8 @@ def check_state_changing_methods_policy(
             reason_code=REASON_UNSAFE_METHOD_NOT_ENABLED,
             detail=(
                 f"State-changing method(s) not allowed by profile: {blocked_methods}. "
-                "Add them to cu_execution.state_changing_methods.allowed_methods or "
-                "set default_policy to 'allow_all'."
+                "Review workflows.approved and execution_policy.state_changing_methods.allowed_methods "
+                "with the owner before changing explicit approvals. Do not broaden default_policy to bypass preflight."
             ),
             check_name=check_name,
             evidence={"blocked_methods": blocked_methods},
@@ -463,8 +463,8 @@ def check_tool_piu_configured(profile: TargetServerCuProfile) -> ReadinessOutcom
             outcome=OUTCOME_CONFIGURATION_ERROR,
             reason_code="configuration_invalid",
             detail=(
-                "selection.tool.policy is 'exact_match' but no product_instance_uri is configured. "
-                "Either provide a PIU or change the policy to 'first_ready'."
+                "workflows.tool_selector.policy is 'exact_match' but no product_instance_uri is configured. "
+                "Provide the reviewed workflows.tool_selector.product_instance_uri; keep exact_match."
             ),
             check_name=check_name,
         )
@@ -498,8 +498,9 @@ def check_joining_process_configured(profile: TargetServerCuProfile) -> Readines
             outcome=OUTCOME_CONFIGURATION_ERROR,
             reason_code="configuration_invalid",
             detail=(
-                "selection.joining_process.policy is 'exact_match' but no process ID, origin ID, "
-                "or SelectionName is configured. Provide at least one selector or change the policy."
+                "workflows.process_selector.policy is 'exact_match' but no process ID, origin ID, "
+                "or SelectionName is configured. Review the catalog and configure the selected match_by "
+                "field in workflows.process_selector; keep exact_match."
             ),
             check_name=check_name,
         )
@@ -769,6 +770,81 @@ async def check_joining_process_list(
 # ---------------------------------------------------------------------------
 # Composite preflight — run all config-level checks synchronously
 # ---------------------------------------------------------------------------
+
+
+def preflight_repair_lines(profile: TargetServerCuProfile, report: PreflightReport) -> list[str]:
+    """Explain blocked checks using public manifest fields and safe recheck commands."""
+    if not report.blocking_checks:
+        return []
+    source = profile.source_path or profile.capabilities_file
+    has_manifest = bool(source and not source.startswith("<"))
+
+    def quote(value: str) -> str:
+        return "'" + value.replace("'", "''") + "'"
+
+    lines = [
+        "Setup recovery (instructions only; no settings or approvals changed):",
+        f"  Profile file: {source if has_manifest else '(no saved manifest; endpoint-only/in-memory profile)'}",
+        f"  Effective endpoint: {profile.target.endpoint}",
+    ]
+    fields = {
+        "endpoint_configured": "connection.endpoint",
+        "endpoint_reachable": "connection.endpoint / network reachability",
+        "connection_security": "connection.security_* / certificate paths / authentication.*",
+        "live_process_selector_discovery": "connection.endpoint / connection.security_* / authentication.*",
+        "tool_piu_configured": "workflows.tool_selector.product_instance_uri",
+        "joining_process_configured": "workflows.process_selector",
+        "result_trigger_mode": "triggers.result.mode",
+        "state_changing_methods_policy": "workflows.approved / execution_policy.state_changing_methods.allowed_methods",
+    }
+    selector_problem = False
+    for check in report.blocking_checks:
+        if check.check_name.startswith("live_selector:"):
+            field_name = check.check_name.removeprefix("live_selector:")
+            for old, new in (
+                ("selection.joining_processes.", "workflows.process_selectors_by_classification."),
+                ("selection.joining_process", "workflows.process_selector"),
+                ("cu_execution.", "execution_policy."),
+            ):
+                if field_name.startswith(old):
+                    field_name = new + field_name[len(old) :]
+                    break
+            match_by = check.evidence.get("match_by")
+            if match_by in {"joining_process_id", "joining_process_origin_id", "selection_name"}:
+                field_name += f".{match_by}"
+            selector_problem = True
+        else:
+            field_name = fields.get(check.check_name, check.check_name)
+        lines.append(f"  Review {field_name}: {check.detail}")
+
+    endpoint = quote(profile.target.endpoint)
+    if selector_problem and has_manifest:
+        lines.extend(
+            [
+                "  Confirm the saved connection.endpoint matches the intended effective endpoint before refresh.",
+                "  For a different controller, use its own reviewed local manifest; do not overwrite another target's profile.",
+                f"  Repair: python .\\run_all_tests.py refresh-profile --profile {quote(source)}",
+                "  Review the catalog and diff, then confirm the local save; exact-match policies stay unchanged.",
+            ]
+        )
+    elif any(check.check_name == "live_process_selector_discovery" for check in report.blocking_checks):
+        lines.append(
+            "  Restore connectivity/security and catalog access first; do not replace IDs from a failed discovery."
+        )
+    if has_manifest:
+        lines.append(
+            f"  Recheck only: python .\\run_all_tests.py run --profile {quote(source)} "
+            f"--endpoint {endpoint} --preflight-only"
+        )
+    else:
+        lines.extend(
+            [
+                "  No saved file can be refreshed. Review a local manifest before pinning process identities.",
+                f"  Recheck only: python .\\run_all_tests.py run --endpoint {endpoint} --preflight-only",
+            ]
+        )
+    lines.append("  Do not weaken claims, exact selectors, security or risk approvals to make preflight pass.")
+    return lines
 
 
 def run_config_preflight(
