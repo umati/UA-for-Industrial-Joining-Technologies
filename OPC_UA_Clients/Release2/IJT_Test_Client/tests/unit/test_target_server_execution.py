@@ -475,6 +475,38 @@ class TestRunPreflightDirect:
             check["check_name"].startswith("live_selector:") and check["outcome"] == OUTCOME_PASSED for check in checks
         )
 
+    @pytest.mark.parametrize(
+        ("tool_uri", "discovery_error"),
+        [
+            ("uri:tool-2", None),
+            ("", "Automatic discovery is ambiguous with two Tools"),
+            ("uri:missing", "Configured Tool does not match an advertised Tool"),
+        ],
+    )
+    def test_selector_preflight_preserves_tool_binding(self, monkeypatch, tool_uri, discovery_error):
+        profile = build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://not-contacted:40451"},
+                "selection": {
+                    "tool": {"product_instance_uri": tool_uri},
+                    "joining_process": {"policy": "exact_match", "joining_process_id": "process-1"},
+                },
+            }
+        )
+        discover = AsyncMock(
+            return_value={"error": discovery_error} if discovery_error else {"processes": [{"id": "process-1"}]}
+        )
+        monkeypatch.setattr(tse, "async_discover_target_server", discover)
+        report = PreflightReport(profile_name="Configured Tool", endpoint=profile.target.endpoint)
+
+        tse._add_live_process_selector_checks(profile, report)
+
+        discover.assert_awaited_once()
+        assert discover.call_args.kwargs["expected_tool_uri"] == (tool_uri or None)
+        assert report.checks
+        assert all(check.outcome == (OUTCOME_BLOCKED if discovery_error else OUTCOME_PASSED) for check in report.checks)
+
     def test_live_selector_mismatch_blocks_preflight(self, tmp_path, monkeypatch, capsys):
         profile = build_execution_profile(
             {
@@ -570,7 +602,7 @@ class TestRunPreflightDirect:
         monkeypatch.setattr(getpass, "getpass", lambda prompt="": "s3cret")
         seen: dict = {}
 
-        async def discover(endpoint, *, timeout, security, prompt):
+        async def discover(endpoint, *, timeout, security, prompt, expected_tool_uri=None):
             seen["security"] = security
             seen["credentials"] = prompt(security)
             return {"processes": [{"id": "process-1"}]}
@@ -600,7 +632,7 @@ class TestRunPreflightDirect:
         assert report.checks[0].outcome == OUTCOME_BLOCKED
         assert "BadUserAccessDenied" in report.checks[0].detail
 
-    def test_automated_run_with_joining_workflow_blocks_on_stale_selector(self, tmp_path, monkeypatch):
+    def test_automated_run_continues_independent_tests_but_never_passes_stale_selector(self, tmp_path, monkeypatch):
         raw = self._exact_selector_raw("start_selected_joining")
         raw["cu_execution"] = {
             "state_changing_methods": {"allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining"]}
@@ -615,18 +647,27 @@ class TestRunPreflightDirect:
         async def discover(*args, **kwargs):
             return {"processes": [{"id": "current-id"}]}
 
-        def fail_if_called(*args, **kwargs):
-            raise AssertionError("spec tests must not run when the selector preflight blocks")
+        calls = []
+
+        def run_independent(*args, **kwargs):
+            calls.append(True)
+            return 0, {"status": "completed"}
 
         monkeypatch.setattr(tse, "async_discover_target_server", discover)
-        monkeypatch.setattr(tse, "run_live_spec_tests", fail_if_called)
-        assert tse.run_automated(profile, tmp_path, base_dir=tmp_path) == 1
+        monkeypatch.setattr(tse, "run_live_spec_tests", run_independent)
+        monkeypatch.setattr(
+            tse,
+            "_capture_model_inventory",
+            lambda *_: {"status": "completed", "server_node_count": 1, "warning_count": 0},
+        )
+        assert tse.run_automated(profile, tmp_path, base_dir=tmp_path, excel_mode="never") == 6
+        assert calls == [True]
         report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
         blocked = [c["check_name"] for c in report["preflight"]["checks"] if c["outcome"] == OUTCOME_BLOCKED]
         assert blocked and all(name.startswith("live_selector:") for name in blocked)
         for suffix in ("txt", "md"):
             summary = (tmp_path / f"target-server-cu-summary.{suffix}").read_text(encoding="utf-8")
-            assert "BLOCKING" in summary
+            assert "INCOMPLETE" in summary
             assert "workflows.process_selector.joining_process_id" in summary
             assert "--preflight-only" in summary
 
@@ -655,6 +696,73 @@ class TestRunPreflightDirect:
 
 
 class TestRunAutomatedDirect:
+    @pytest.mark.parametrize("unreviewed", [[], ["future_cu"]])
+    def test_incomplete_run_generates_real_inconclusive_workbook(self, tmp_path, monkeypatch, unreviewed):
+        import openpyxl
+
+        self._mock_reachable(monkeypatch)
+        profile = self._reachable_profile()
+
+        def incomplete(*args, **kwargs):
+            (tmp_path / "spec-tests.xml").write_text(
+                '<testsuite><testcase name="passed" /></testsuite>', encoding="utf-8"
+            )
+            (tmp_path / "cu-coverage-report.json").write_text(
+                json.dumps(
+                    {
+                        "by_cu": {
+                            "job_result": {
+                                "claimed": True,
+                                "compliance": "untested",
+                                "passed": 0,
+                                "untested": 1,
+                                "scope_excluded": True,
+                            }
+                        },
+                        "supported_cus": ["job_result"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return 6, {
+                "status": "completed",
+                "qualification": {
+                    "outcome": "incomplete",
+                    "scope_excluded_claimed_cus": ["job_result"],
+                    "unreviewed_cus": unreviewed,
+                },
+            }
+
+        monkeypatch.setattr(tse, "run_live_spec_tests", incomplete)
+        assert tse.run_automated(profile, tmp_path, excel_mode="always") == 6
+        report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
+        assert report["qualification"]["outcome"] == "incomplete"
+        assert report["excel_report"]["status"] == tse.EXCEL_STATUS_GENERATED
+        workbook = openpyxl.load_workbook(report["excel_report"]["path"])
+        try:
+            assert "Inconclusive" in workbook["Conformance Overview"]["A1"].value
+            if unreviewed:
+                assert "future_cu" in workbook["Conformance Overview"]["A4"].value
+        finally:
+            workbook.close()
+        for extension in ("txt", "md"):
+            summary = (tmp_path / f"target-server-cu-summary.{extension}").read_text(encoding="utf-8")
+            assert "job_result" in summary and "INCOMPLETE" in summary
+            if unreviewed:
+                assert "future_cu" in summary and "new tests disabled" in summary
+
+    def test_failed_qualification_overrides_zero_subprocess_exit(self, tmp_path, monkeypatch):
+        self._mock_reachable(monkeypatch)
+        monkeypatch.setattr(
+            tse,
+            "run_live_spec_tests",
+            lambda *a, **kw: (
+                0,
+                {"status": "completed", "qualification": {"outcome": "failed"}},
+            ),
+        )
+        assert tse.run_automated(self._reachable_profile(), tmp_path, excel_mode="never") == 1
+
     def _reachable_profile(self, *, trigger_mode: str = "simulate_methods") -> object:
         return build_execution_profile(
             {
@@ -692,25 +800,28 @@ class TestRunAutomatedDirect:
         self._mock_reachable(monkeypatch)
         profile = self._reachable_profile()
         rc = tse.run_automated(profile, tmp_path, skip_spec_tests=True, base_dir=tmp_path)
-        assert rc == 0
+        assert rc == 6
         report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
         assert "spec_tests" not in report
         assert "cu_classification" in report
+        assert report["qualification"]["outcome"] == "not_tested"
 
-    def test_missing_spec_dir_is_skipped_not_a_failure(self, tmp_path, monkeypatch):
+    def test_missing_spec_dir_is_not_tested_and_never_passes(self, tmp_path, monkeypatch):
         self._mock_reachable(monkeypatch)
         profile = self._reachable_profile()
         # base_dir has no specification_tests/ directory -> run_live_spec_tests skips
         rc = tse.run_automated(profile, tmp_path, base_dir=tmp_path)
-        assert rc == 0
+        assert rc == 6
         report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
         assert report["spec_tests"]["status"] == "skipped"
         assert report["spec_tests"]["reason"] == "spec_dir_not_found"
+        assert report["qualification"]["outcome"] == "not_tested"
 
     def test_completed_spec_run_logs_unique_and_cu_test_counts(self, tmp_path, monkeypatch, capsys):
         self._mock_reachable(monkeypatch)
         profile = self._reachable_profile()
         extra = TestEvidenceWriters._write_count_artifacts(tmp_path)
+        extra["spec_tests"]["qualification"] = {"outcome": "passed"}
         monkeypatch.setattr(tse, "run_live_spec_tests", lambda *a, **kw: (0, dict(extra["spec_tests"])))
         monkeypatch.setattr(
             tse,
@@ -729,7 +840,7 @@ class TestRunAutomatedDirect:
         self._mock_reachable(monkeypatch)
         profile = self._reachable_profile(trigger_mode="manual_trigger")
         rc = tse.run_automated(profile, tmp_path, mode="automated", base_dir=tmp_path)
-        assert rc == 0
+        assert rc == 6
         assert "manual action" in capsys.readouterr().out.lower()
 
     def test_guided_mode_interactive_prompt_confirmed(self, tmp_path, monkeypatch):
@@ -737,7 +848,7 @@ class TestRunAutomatedDirect:
         profile = self._reachable_profile(trigger_mode="manual_trigger")
         monkeypatch.setattr("builtins.input", lambda *_: "")
         rc = tse.run_automated(profile, tmp_path, mode="guided", interactive_prompts=True, base_dir=tmp_path)
-        assert rc == 0
+        assert rc == 6
 
     def test_guided_mode_interactive_prompt_interrupted(self, tmp_path, monkeypatch):
         self._mock_reachable(monkeypatch)
@@ -757,7 +868,12 @@ class TestRunAutomatedDirect:
         def fake_run_live_spec_tests(profile, output_dir, **kwargs):
             (output_dir / "spec-tests.xml").write_text("<xml/>", encoding="utf-8")
             (output_dir / "cu-coverage-report.json").write_text("{}", encoding="utf-8")
-            return 0, {"status": "completed", "outcome": "passed", "exit_code": 0}
+            return 0, {
+                "status": "completed",
+                "outcome": "passed",
+                "exit_code": 0,
+                "qualification": {"outcome": "passed"},
+            }
 
         monkeypatch.setattr(tse, "run_live_spec_tests", fake_run_live_spec_tests)
         monkeypatch.setattr(
@@ -777,7 +893,12 @@ class TestRunAutomatedDirect:
         def fake_run_live_spec_tests(profile, output_dir, **kwargs):
             (output_dir / "spec-tests.xml").write_text("<xml/>", encoding="utf-8")
             (output_dir / "cu-coverage-report.json").write_text("{}", encoding="utf-8")
-            return 0, {"status": "completed", "outcome": "passed", "exit_code": 0}
+            return 0, {
+                "status": "completed",
+                "outcome": "passed",
+                "exit_code": 0,
+                "qualification": {"outcome": "passed"},
+            }
 
         monkeypatch.setattr(tse, "run_live_spec_tests", fake_run_live_spec_tests)
         monkeypatch.setattr(
@@ -806,6 +927,7 @@ class TestRunAutomatedDirect:
                 "target": {"endpoint": ""},
             }
         )
+        object.__setattr__(profile.target, "endpoint", "")
         report = tse.PreflightReport()
         report.add(tse.ReadinessOutcome(outcome="passed", check_name="mock"))
         monkeypatch.setattr(tse, "run_config_preflight", lambda *a, **kw: report)
@@ -813,7 +935,7 @@ class TestRunAutomatedDirect:
             tse, "check_endpoint_reachable", lambda *a, **kw: tse.ReadinessOutcome(outcome="passed", check_name="tcp")
         )
         rc = tse.run_automated(profile, tmp_path, base_dir=tmp_path, skip_spec_tests=False)
-        assert rc == 0
+        assert rc == 6
 
 
 # ---------------------------------------------------------------------------
@@ -822,6 +944,26 @@ class TestRunAutomatedDirect:
 
 
 class TestRunLiveSpecTestsDirectExceptions:
+    def test_corrupt_coverage_cannot_qualify_successful_subprocess(self, tmp_path, monkeypatch):
+        profile = build_execution_profile({"schema_version": 1, "target": {"endpoint": "opc.tcp://offline:4840"}})
+        (tmp_path / "specification_tests").mkdir()
+        (tmp_path / "cu-coverage-report.json").write_text("{", encoding="utf-8")
+        monkeypatch.setattr(tse.subprocess, "run", lambda *a, **kw: type("Result", (), {"returncode": 0})())
+        rc, meta = tse.run_live_spec_tests(profile, tmp_path, base_dir=tmp_path)
+        assert rc == 6
+        assert meta["qualification"]["outcome"] == "incomplete"
+        assert "Unreadable CU coverage" in meta["qualification"]["issues"][0]
+
+    def test_reviewed_manifest_hash_is_bound_to_current_file_bytes(self, tmp_path):
+        import hashlib
+
+        manifest = tmp_path / "profile.sut.yaml"
+        content = b"schema_version: 1\nname: Reviewed profile\n"
+        manifest.write_bytes(content)
+        profile = build_execution_profile({"schema_version": 1}, source_path=str(manifest))
+        env = tse._build_spec_test_env(profile, base_dir=tmp_path)
+        assert env["OPCUA_TARGET_MANIFEST_SHA256"] == hashlib.sha256(content).hexdigest()
+
     def test_timeout_expired_sets_timeout_metadata(self, tmp_path, monkeypatch):
         profile = build_execution_profile(
             {
@@ -886,6 +1028,10 @@ class TestRunLiveSpecTestsDirectExceptions:
         class MockResult:
             returncode = 0
 
+        (tmp_path / "cu-coverage-report.json").write_text(
+            json.dumps({"by_cu": {"single_result": {"claimed": True, "compliance": "supported", "passed": 1}}}),
+            encoding="utf-8",
+        )
         monkeypatch.setattr(tse.subprocess, "run", lambda *a, **kw: MockResult())
         rc, meta = tse.run_live_spec_tests(profile, tmp_path, base_dir=tmp_path)
         assert rc == 0
@@ -1038,7 +1184,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         assert data["suggested_selection"]["batch"]["id"] == "Batch_1"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("requested", ["uri:tool2", ""])
+    @pytest.mark.parametrize("requested", ["uri:tool2", "", None])
     async def test_refresh_discovery_requires_a_unique_tool_before_catalog_access(self, requested):
         client = MagicMock(
             connect=AsyncMock(),
@@ -1055,7 +1201,7 @@ class TestRunLiveSpecTestsDirectExceptions:
         ):
             data = await tse.async_discover_target_server("opc.tcp://not-contacted:40451", expected_tool_uri=requested)
         assert "No unique matching Tool" in data["error"]
-        assert read_tool.call_args.kwargs["expected_tool_uri"] == requested
+        assert read_tool.call_args.kwargs.get("expected_tool_uri") == requested
         find_child.assert_not_called()
         client.disconnect.assert_awaited_once()
 
@@ -1488,7 +1634,7 @@ class TestRunAutomatedExcelReporting:
         monkeypatch.setattr(
             tse,
             "run_live_spec_tests",
-            lambda *a, **kw: (0, {"status": "completed", "outcome": "passed"}),
+            lambda *a, **kw: (0, {"status": "completed", "outcome": "passed", "qualification": {"outcome": "passed"}}),
         )
         monkeypatch.setattr(
             tse,
@@ -1722,3 +1868,41 @@ class TestTargetSessionConnectionSecurity:
         monkeypatch.setattr(tse, "_generate_excel_report", lambda *args, **kwargs: {"status": "skipped"})
         rc = tse.run_automated(profile, tmp_path)
         assert rc == 1
+
+    @pytest.mark.asyncio
+    async def test_async_discover_reads_nested_joining_process_metadata(self):
+        from types import SimpleNamespace
+
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock()
+        mock_client.disconnect = AsyncMock()
+        mock_client.load_data_type_definitions = AsyncMock()
+        mock_client.get_namespace_index = AsyncMock(return_value=2)
+
+        job_entry = SimpleNamespace(
+            JoiningProcessId="job-1",
+            JoiningProcessOriginId="orig-1",
+            JoiningProcessMetaData=SimpleNamespace(
+                Name="MultiStepJob",
+                Classification=5,
+                AssociatedEntities=[SimpleNamespace(Name="SelectionName", EntityId="JobSel")],
+            ),
+        )
+        jpm = MagicMock()
+        jpm.call_method = AsyncMock(return_value=[[job_entry]])
+        gjpl = SimpleNamespace(nodeid="ns=2;i=99")
+
+        with (
+            patch("asyncua.Client", return_value=mock_client),
+            patch("helpers.node_discovery.find_joining_system", new=AsyncMock(return_value=MagicMock())),
+            patch("helpers.node_discovery.read_tool_product_instance_uri", new=AsyncMock(return_value="urn:tool:1")),
+            patch("helpers.node_discovery.find_child_by_browse_name", new=AsyncMock(side_effect=[jpm, gjpl])),
+        ):
+            data = await tse.async_discover_target_server("opc.tcp://localhost:40451")
+
+        assert len(data["processes"]) == 1
+        proc = data["processes"][0]
+        assert proc["id"] == "job-1"
+        assert proc["name"] == "MultiStepJob"
+        assert proc["classification"] == 5
+        assert proc["selection_name"] == "JobSel"

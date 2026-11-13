@@ -54,6 +54,156 @@ The test structure mirrors the specification chapters:
 
 ## 2) Auto-discover Tools and Processes
 
+### Which YAML file controls what
+
+Supply one complete SUT manifest from `target_server_cu_profiles/` or an ignored
+local copy. The separate `profiles/` files are specification capability bundles
+and a facet catalogue, not additional runtime manifests.
+Generated SUTs use `capability_claims.cu_scope_policy: explicit`, so their
+`cu_overrides` rows alone define claimed scope. `active_profile` and
+`supported_facets` do not expand that table. Older manifests default to
+`inherit`, where the profile and facets add groups before overrides apply.
+Claims define scope, not physical permissions or proof of compliance.
+
+Keep common field comments and ordering aligned, but preserve real differences
+in identity, claims, permitted methods/risks and bounded result windows.
+`Schema default` means the value used when omitted, not the value every example
+must choose. [Profile maintenance](../target_server_cu_profiles/README.md#keep-portable-and-local-profiles-aligned)
+describes the offline `--format-local` command, which consolidates verified
+schema prose and aligns field order without changing YAML values or owner notes.
+
+Keep past run dates and observations in project records or run reports, not
+beside current settings. A support declaration is not evidence that the current
+firmware passed. Combined results can contain child references or inline child
+results, depending on the declared capability. Neither form belongs exclusively
+to controllers or simulators.
+
+**Tool selection is separate from process selection.** An empty Tool
+`product_instance_uri` allows discovery only when exactly one distinct Tool
+Object is present. Multiple Tools are ambiguous, even when the policy is named
+`first_ready`. An explicit ProductInstanceUri takes precedence and must match
+one Tool. Policies do not rank ready Tools or filter by `capability_tags`.
+Use `exact_match` with the
+intended Tool's ProductInstanceUri when several physical Tools are possible.
+Automatic process discovery can still use fresh process IDs within that fixed
+Tool scope. Do not remove an exact Tool binding just to make two YAMLs match.
+
+### Repeat runs without updating process IDs
+
+Configure intent once, then run the same command after programs are recreated:
+
+```powershell
+python -B .\run_all_tests.py run --profile .\target_server_cu_profiles\controller.local.sut.yaml
+```
+
+Automatic mode uses standard `GetJoiningProcessList` metadata and the current
+process ID, not a vendor-specific name. Example settings:
+
+```yaml
+workflows:
+  allow_discovered_processes: true
+  max_candidates: 3
+  max_total_start_invocations: 6
+  process_selector:
+    policy: first_compatible
+    identifier_strategy: id_only
+execution_policy:
+  counter_effects:
+    - method: IncrementJoiningProcessCounter
+      count: 1
+      process_policy: discover_unique
+      process_classification: job
+      identifier_strategy: id_only
+      expected_result_classification: batch
+```
+
+This fragment supplements a reviewed manifest. Existing method and workflow
+approvals are still required. It is not permission to run a production controller.
+
+| Setting | Meaning |
+|---|---|
+| `first_compatible` | Try bounded compatible candidates using fresh IDs. Observed results, not catalog metadata, prove capability |
+| `allow_discovered_processes: true` | Approve compatible processes within the reviewed Tool scope as physical workflow candidates |
+| `exact_match` | Honour the configured ID, origin ID or optional SelectionName. Never substitute another target |
+| `discover_unique` | Requires discovery approval and `id_only` or `id_with_origin`. Resolve exactly one process of the stated standard classification, respecting exact restrictions |
+| `max_total_start_invocations` | Cap attempted starts across all candidates in one workflow, including failed/uncertain calls |
+
+Missing or ambiguous counter targets block that workflow without a mutation.
+Identity and catalog are checked again before the counter call. An attempted
+counter effect is never retried in the same run. With `evidence_reuse.enabled`,
+complete matching immutable evidence may serve other assertions in that run.
+Completed counter evidence can be reused by the same trigger or a reader
+without a new subscriber. Tool, current catalog, names, selected process and
+structured configuration snapshots must still match. A fresh mutation always
+requires its own subscriber. Legacy intervention without `counter_effects`
+remains one-shot and does not provide the complete reusable capture contract.
+Physical workflows require serial execution and an exclusively controlled test
+environment. OPC UA calls are not transactional, so these checks cannot prevent
+every concurrent external state change.
+
+Discovery never rewrites the manifest, claims or approvals. A manifest changed
+while the specification suite runs blocks subsequent workflows. Normal repeats
+do not need `refresh-profile`; refresh is for deliberately pinned restrictions.
+
+**Qualification:** PASS requires passing evidence for every claimed CU.
+Blocked, partial, untested or inconclusive required coverage gives INCOMPLETE
+(exit code 6), never PASS. Independent tests can continue after a restricted
+workflow is blocked. Genuine configuration, connectivity and discovery failures
+still stop the run. Pytest's raw skip transport does not determine qualification.
+
+In explicit scope, new catalogue CUs missing from the table are **unreviewed**,
+not unsupported. Previously approved tests can continue, but tests requiring
+those new CUs stay disabled. JSON, text, Markdown and Excel identify the review
+gap, and qualification against the newer catalogue remains **INCOMPLETE / 6**.
+Neither formatting nor table completion guesses a support declaration.
+
+The generated remote-start example is for regression on a dedicated test
+controller. It includes stored-result and identifier method permissions and
+asset-disable approval. Review all of these before using the example with a
+real installation. They are not vendor capability claims or permission to
+operate a controller. The universal template retains conservative defaults.
+Private Tool identities, result windows and other risk settings must not be
+copied merely to remove differences.
+
+Claimed CUs outside the selected workflow scope remain visible and keep the
+qualification INCOMPLETE. Do not change a true support claim to unsupported
+merely to obtain PASS. Review the intended scope, enable a safe approved
+workflow, or retain the explicit qualification gap.
+Classification-only or skipped specification suites return **6 / Not tested**,
+not zero. CI and wrappers must distinguish execution success from qualification
+and propagate this nonzero exit. Excel uses a yellow Inconclusive cover and
+sheet warnings for incomplete/not-tested runs, never a green Passed cover.
+
+Candidate and action budgets bound physical work, not proof requirements.
+`all_compatible` refers to the admitted candidate window, bounded by
+`max_candidates`, not every program installed on the controller.
+An issued start without its required evidence ends candidate progression.
+Rejected or unattempted admitted candidates keep `all_compatible` incomplete.
+New runner invocations can act again and do not restore previous controller
+state. Exclusive controller ownership remains an operator prerequisite.
+Normal select/start workflows recheck the original catalog and selected
+identity before selection and again before each start. This reduces stale-target
+races but does not make OPC UA calls atomic. The action journal's
+`candidate_scope` record reports total catalog size, admitted candidate count
+and configured cap, not a claim that every installed process was qualified.
+
+Use the canonical runner for preflight, approvals and run-scoped evidence.
+At pytest startup, the selected manifest's actual bytes are checked against the
+runner's supplied hash. Direct pytest captures its own startup hash when none
+was supplied, it does not replace an existing hash or grant workflow approval.
+The session retains the selected path and hash, checks them before each test
+and direct OPC UA method call, and checks the file before physical selection
+and known state-changing helper calls. A detected edit or unreadable file is
+BLOCKED evidence, not a qualification PASS. A session-created hash is released
+at shutdown without deleting a different caller's hash.
+
+These checks reduce mid-run changes. File reads and OPC UA calls are not atomic,
+and no profile file is a controller lock. Direct pytest still needs the intended
+runtime profile and explicit physical-action approvals.
+
+[Shared versus installation-specific settings](../target_server_cu_profiles/README.md#keep-portable-and-local-profiles-aligned)
+explains local maintenance without duplicated defaults or permission copying.
+
 Before writing or editing a manifest, connect to the target server to automatically discover its Tool `ProductInstanceUri`, available Joining Processes, and generate a recommended YAML snippet:
 
 ```bash
@@ -196,7 +346,7 @@ Then update `controller.sut.yaml`:
 | `authentication.source` | `anonymous`, `prompt`, `file`, or `environment` - references only, never a secret value |
 | `capability_claims.active_profile` / `supported_facets` / `cu_overrides` | The controller's authoritative CU claims |
 | `workflows.tool_selector.product_instance_uri` | Leave empty for runtime Tool discovery; otherwise enter the Tool PIU |
-| `workflows.process_selector.policy` | `first_compatible` is the schema default; committed presets may use `first_ready`. Non-exact policies order direct Classification matches first, then bounded Job candidates for Batch or Sync evidence. `all_compatible` exercises every ordered candidate; the other policies stop after the first proof. A result-specific `exact_match` may intentionally cross process Classification, but the requested completed result is always the capability proof. |
+| `workflows.process_selector.policy` | `first_compatible` is the schema default; committed presets may use `first_ready`. Non-exact policies order direct Classification matches first, then bounded Job candidates for Batch or Sync evidence. `all_compatible` tests every ordered candidate; the other policies stop after the first proof. A result-specific `exact_match` may intentionally cross process Classification, but the requested completed result is always the capability proof. |
 | `workflows.process_selector.joining_process_id` | Advertised Process ID used for exact matching by default; no automatic identifier fallback |
 | `workflows.process_selector.joining_process_origin_id` | Advertised origin ID used when explicitly selected by `match_by` or included by `identifier_strategy` |
 | `workflows.process_selector.selection_name` | Advertised SelectionName used only by an explicitly configured matching or payload strategy |
@@ -320,7 +470,7 @@ approving the candidate recipes are operator prerequisites. Use `exact_match`
 with a reviewed ID to restrict testing to a specific process; counter mutations
 continue to require exact selection.
 
-For workflows exercising both single tightening programs (for SingleResult) and multi-operation Jobs/Batches:
+For workflows testing both single tightening programs (for SingleResult) and multi-operation Jobs/Batches:
 ```yaml
 selection:
   joining_processes:
@@ -337,7 +487,7 @@ selection:
 ```
 `first_compatible` prefers direct standard-classification matches and may then try a
 bounded Job candidate for Batch or Sync evidence. `all_compatible` is an explicit
-opt-in that exercises every ordered candidate within the per-candidate start limit.
+opt-in that tests every ordered candidate within the per-candidate start limit.
 
 ### Result layering & multi-operation starts
 Joining-process and result classifications are different OPC 40450-1 domains:
@@ -386,7 +536,7 @@ Result classification describes the evidence emitted by the workflow, not the ve
 ### Transactional physical workflows
 
 - Identifier workflows generate one run-unique value, verify it through `GetIdentifiers`, selectively reset only that value, verify absence, and retry selective cleanup in `finally`. `ResetAll` remains prohibited.
-- Counter-effect scenarios are explicit entries under `execution_policy.counter_effects`. Every physical mutation requires `process_policy: exact_match` and exactly one current process matched by `match_by` (JoiningProcessId by default, with explicit OriginId or SelectionName alternatives); broad discovery policies and implicit fallbacks are rejected. Read-only preflight performs this uniqueness check before any automated test. A completed `InterventionResult` is mandatory. When an affected classification is configured, one loss-aware subscription must also observe a partial or final Batch/Sync/Job update that explicitly references that InterventionResult; the counter action does not imply that the parent has reached its final boundary.
+- Counter-effect scenarios are explicit entries under `execution_policy.counter_effects`. Use `process_policy: exact_match` for a reviewed specific target, or explicitly opt into `discover_unique` for exactly one current process of the configured standard classification. Ambiguous targets and implicit fallbacks are rejected. Preflight checks uniqueness, and runtime checks the bound identity again before mutation. A completed `InterventionResult` must match the selected Tool and process. When an affected classification is configured, one loss-aware subscription must also observe a matching partial or final Batch/Sync/Job update that explicitly references that InterventionResult. The counter action does not prove that the parent reached its final boundary.
 - `triggers.event.mode: workflow_actions` maps an event CU to one approved physical cause. Select-process events use one `SelectJoiningProcess`; asset-enable-state events use `EnableAsset` and always finish with `EnableAsset(true)`.
 - Identifier events and Conditions should remain unclaimed when the controller firmware provides no safe deterministic cause.
 
@@ -413,4 +563,4 @@ The Test Client provides dedicated trigger methods for compound multi-step seque
 - `EnableAsset(false)` requires explicit argument-level opt-in, and tests restore `true` in a `finally` block.
 - For `EnableAsset(true)`, use `when_disabled` to monitor `Tool.Parameters.Enabled`, or `always` when harmless reassertion is needed for a controller's remote-readiness state.
 - Use the discovered Tool `ProductInstanceUri` for Tool-context operations (identifications, joining processes, counters, interventions). Do not use the Controller PIU for Tool methods.
-- Keep real endpoints, ProductInstanceUris, process identifiers, serial numbers, and unsanitized evidence in ignored private manifests (`*.sut.yaml`).
+- Keep real endpoints, ProductInstanceUris, process identifiers, serial numbers, and reports containing private details in ignored local files.

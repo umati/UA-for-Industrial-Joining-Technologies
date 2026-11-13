@@ -10,6 +10,7 @@ reporting.  It is consumed by ``run_all_tests.py`` (``--profile``,
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 import logging
 import math
@@ -22,6 +23,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from helpers.cu_coverage_report import INCOMPLETE_EXIT_CODE, qualification_disposition
 from helpers.cu_test_counts import (
     TestCountSummary,
     load_test_count_summary,
@@ -273,6 +275,20 @@ def _write_evidence_report(
         "preflight": preflight_report.to_dict(),
         **(extra or {}),
     }
+    disposition = report_data.get("qualification", {}).get("outcome")
+    if disposition:
+        report_data["canonical_outcome"] = {
+            "passed": "passed",
+            "failed": "failed",
+            "incomplete": "inconclusive",
+            "not_tested": "not_tested",
+        }[disposition]
+        report_data["canonical_label"] = {
+            "passed": "Passed",
+            "failed": "Failed",
+            "incomplete": "Inconclusive",
+            "not_tested": "Not Tested",
+        }[disposition]
     report_path = output_dir / "target-server-cu-report.json"
     report_path.write_text(json.dumps(report_data, indent=2, default=str), encoding="utf-8")
     return report_path
@@ -312,6 +328,12 @@ def _write_human_summary(
         "",
     ]
     test_counts = _spec_test_counts(extra)
+    excluded = (extra or {}).get("qualification", {}).get("scope_excluded_claimed_cus", [])
+    if excluded:
+        lines.append("  Claimed CUs excluded by workflow scope (not qualified): " + ", ".join(excluded))
+    unreviewed = (extra or {}).get("qualification", {}).get("unreviewed_cus", [])
+    if unreviewed:
+        lines.append("  Unreviewed catalogue CUs (new tests disabled): " + ", ".join(unreviewed))
     if test_counts is not None:
         lines.extend(render_text_lines(test_counts))
     summary_path = output_dir / "target-server-cu-summary.txt"
@@ -330,9 +352,12 @@ def _write_markdown_summary(
 ) -> Path:
     """Write a structured GitHub-flavored Markdown summary report."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    disposition = (extra or {}).get("qualification", {}).get("outcome")
     badge = (
-        "🟢 **PASSED**"
-        if "PASSED" in outcome_summary
+        "🟡 **INCOMPLETE**"
+        if disposition == "incomplete" or outcome_summary == "INCOMPLETE"
+        else "🟢 **PASSED**"
+        if "PASSED" in outcome_summary and disposition != "failed"
         else (
             "🟡 **SKIPPED / CLASSIFICATION ONLY**"
             if "SKIPPED" in outcome_summary or "CLASSIFICATION" in outcome_summary
@@ -354,6 +379,17 @@ def _write_markdown_summary(
         "| Check Name | Status | Outcome | Detail |",
         "|---|:---:|:---:|---|",
     ]
+    excluded = (extra or {}).get("qualification", {}).get("scope_excluded_claimed_cus", [])
+    if excluded:
+        lines[8:8] = [
+            "- **Claimed CUs excluded by workflow scope (not qualified):** "
+            + ", ".join(f"`{key}`" for key in excluded),
+        ]
+    unreviewed = (extra or {}).get("qualification", {}).get("unreviewed_cus", [])
+    if unreviewed:
+        lines[8:8] = [
+            "- **Unreviewed catalogue CUs (new tests disabled):** " + ", ".join(f"`{key}`" for key in unreviewed),
+        ]
     for check in preflight_report.checks:
         status_icon = (
             "✅" if check.outcome == OUTCOME_PASSED else ("⚠️" if check.outcome == OUTCOME_MANUAL_REQUIRED else "❌")
@@ -565,8 +601,11 @@ async def async_discover_target_server(
             piu = await read_tool_product_instance_uri(client, ns_ijt, ns_di)
         else:
             piu = await read_tool_product_instance_uri(client, ns_ijt, ns_di, expected_tool_uri=expected_tool_uri)
-        if expected_tool_uri is not None and not piu:
-            discovery_data["error"] = "No unique matching Tool ProductInstanceUri discovered; catalog was not requested"
+        if not piu:
+            discovery_data["error"] = (
+                "No unique matching Tool ProductInstanceUri discovered; "
+                "configure the intended Tool when several exist. Catalog was not requested."
+            )
             return discovery_data
         if piu:
             discovery_data["tools"].append({"name": "PrimaryTool", "product_instance_uri": piu})
@@ -583,23 +622,46 @@ async def async_discover_target_server(
                     else (call_out if isinstance(call_out, list) else [])
                 )
                 for p in procs:
-                    jid = str(getattr(p, "JoiningProcessId", "") or "")
-                    orig = str(getattr(p, "JoiningProcessOriginId", "") or "")
-                    pname = str(getattr(p, "Name", "") or "")
+                    raw_meta = getattr(p, "JoiningProcessMetaData", None)
+                    meta = (
+                        raw_meta
+                        if raw_meta is not None
+                        and not hasattr(raw_meta, "_mock_name")
+                        and type(raw_meta).__name__ != "MagicMock"
+                        else None
+                    )
+                    jid = str(
+                        getattr(p, "JoiningProcessId", None)
+                        or (getattr(meta, "JoiningProcessId", "") if meta is not None else "")
+                        or ""
+                    )
+                    orig = str(
+                        getattr(p, "JoiningProcessOriginId", None)
+                        or (getattr(meta, "JoiningProcessOriginId", "") if meta is not None else "")
+                        or ""
+                    )
+                    pname = str(
+                        getattr(p, "Name", None) or (getattr(meta, "Name", "") if meta is not None else "") or ""
+                    )
                     # 0 = Undefined: do not guess "single" when the server
                     # reports nothing; the name hints decide instead.
-                    raw_cls = getattr(p, "Classification", None)
+                    raw_cls = getattr(meta, "Classification", None) if meta is not None else None
+                    if raw_cls is None:
+                        raw_cls = getattr(p, "Classification", None)
                     try:
                         pcls = int(raw_cls) if raw_cls is not None else 0
                     except (TypeError, ValueError):
                         pcls = 0
+                    raw_entities = getattr(meta, "AssociatedEntities", None) if meta is not None else None
+                    if raw_entities is None:
+                        raw_entities = getattr(p, "AssociatedEntities", None)
                     associated_names = []
-                    for entity in getattr(p, "AssociatedEntities", []) or []:
+                    for entity in raw_entities or []:
                         if getattr(entity, "Name", "") == "SelectionName":
                             associated_names.append(
                                 {"Name": "SelectionName", "EntityId": str(getattr(entity, "EntityId", "") or "")}
                             )
-                    names = sorted(selection_names(p))
+                    names = sorted((selection_names(meta) if meta is not None else set()) | selection_names(p))
                     discovery_data["processes"].append(
                         {
                             "id": jid,
@@ -765,6 +827,7 @@ def _generate_excel_report(
     script = base_dir / "scripts" / "make_excel_report.py"
     cmd = [
         sys.executable,
+        "-B",
         str(script),
         "--xml",
         str(junit_xml),
@@ -846,9 +909,12 @@ def _build_spec_test_env(
 
     base_dir = base_dir or _HERE
     env = os.environ.copy()
+    env.pop("OPCUA_TARGET_MANIFEST_SHA256", None)
     env["OPCUA_SERVER_URL"] = profile.target.endpoint
     if profile.source_path:
         env["OPCUA_TARGET_SERVER_PROFILE"] = profile.source_path
+        if Path(profile.source_path).is_file():
+            env["OPCUA_TARGET_MANIFEST_SHA256"] = hashlib.sha256(Path(profile.source_path).read_bytes()).hexdigest()
     env["OPCUA_TARGET_SERVER_MODE"] = profile.cu_execution.default_mode
     # Only an explicitly interactive run may prompt for credentials; unattended
     # runs must fail with a configuration error instead of blocking on stdin.
@@ -1026,6 +1092,7 @@ def run_live_spec_tests(
     junit_xml = output_dir / "spec-tests.xml"
     cu_report = output_dir / "cu-coverage-report.json"
     env["IJT_CU_COVERAGE_REPORT_FILE"] = str(cu_report)
+    env["IJT_WORKFLOW_ACTIONS_FILE"] = str(output_dir / "workflow-actions.jsonl")
 
     cmd = _build_spec_test_command(
         python_exe,
@@ -1086,15 +1153,33 @@ def run_live_spec_tests(
         rc = 1
 
     elapsed = time.monotonic() - t0
+    qualification = {"outcome": "incomplete", "issues": ["Missing run-scoped CU coverage."]}
+    if cu_report.exists():
+        try:
+            qualification = qualification_disposition(json.loads(cu_report.read_text(encoding="utf-8")))
+        except (OSError, ValueError, TypeError) as exc:
+            qualification = {"outcome": "incomplete", "issues": [f"Unreadable CU coverage: {exc}"]}
+    if rc in {0, INCOMPLETE_EXIT_CODE}:
+        rc = (
+            1
+            if qualification["outcome"] == "failed"
+            else INCOMPLETE_EXIT_CODE
+            if qualification["outcome"] != "passed"
+            else rc
+        )
 
     metadata: dict = {
         "status": "timeout" if timed_out else ("error" if error_msg else "completed"),
-        "outcome": "passed" if rc == 0 else "failed",
+        "outcome": "passed" if rc == 0 else "incomplete" if rc == INCOMPLETE_EXIT_CODE else "failed",
+        "qualification": qualification,
         "exit_code": rc,
         "elapsed_seconds": round(elapsed, 1),
         "endpoint": endpoint,
         "junit_xml": str(junit_xml) if junit_xml.exists() else None,
         "cu_coverage_json": str(cu_report) if cu_report.exists() else None,
+        "workflow_actions_jsonl": str(output_dir / "workflow-actions.jsonl")
+        if (output_dir / "workflow-actions.jsonl").exists()
+        else None,
         "excluded_simulation": exclude_simulation,
         "mode": mode,
     }
@@ -1146,6 +1231,7 @@ def _add_live_process_selector_checks(
                 timeout=15.0,
                 security=security,
                 prompt=prompt,
+                expected_tool_uri=profile.selection.tool.product_instance_uri or None,
             )
         )
     except Exception as exc:  # noqa: BLE001 - represent connection/discovery failure in preflight evidence
@@ -1330,7 +1416,12 @@ def run_automated(
         _print_check(check)
 
     blocking = cfg_report.blocking_checks
-    if blocking:
+    fatal = [
+        check
+        for check in blocking
+        if not (check.check_name.startswith("live_selector:") and check.outcome == OUTCOME_BLOCKED)
+    ]
+    if fatal:
         _log(_c(_ANSI_RED, f"\n  {len(blocking)} blocking issue(s) — cannot proceed:"))
         for c in blocking:
             _log(f"    [{c.outcome}] {c.check_name}: {c.detail}")
@@ -1343,6 +1434,8 @@ def run_automated(
         _write_markdown_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary)
         return 1
 
+    if blocking:
+        _log("  Restricted workflows are BLOCKED. Independent tests continue; qualification remains incomplete.")
     manual_checks = cfg_report.manual_required_checks
     if manual_checks and mode == "automated":
         _log(
@@ -1440,10 +1533,18 @@ def run_automated(
             interactive_prompts=interactive_prompts,
         )
         extra["spec_tests"] = spec_meta
+        qualification = spec_meta.get("qualification") or {}
+        if spec_rc == 0 and (spec_meta.get("status") != "completed" or qualification.get("outcome") != "passed"):
+            spec_rc = 1 if qualification.get("outcome") == "failed" else INCOMPLETE_EXIT_CODE
+        if blocking and spec_rc == 0:
+            spec_rc = INCOMPLETE_EXIT_CODE
         if spec_meta.get("status") == "completed":
             if spec_rc == 0:
                 outcome_summary = "SPEC_TESTS_PASSED"
                 _log(_c(_ANSI_GREEN, "\n  Live specification_tests: PASSED"))
+            elif spec_rc == INCOMPLETE_EXIT_CODE:
+                outcome_summary = "INCOMPLETE"
+                _log(_c(_ANSI_YELLOW, "\n  Live specification_tests: INCOMPLETE — required coverage is unresolved."))
             else:
                 outcome_summary = "SPEC_TESTS_FAILED"
                 _log(_c(_ANSI_RED, "\n  Live specification_tests: FAILED"))
@@ -1457,13 +1558,34 @@ def run_automated(
                 _log(line)
     else:
         outcome_summary = "CLASSIFICATION_ONLY"
+        spec_rc = INCOMPLETE_EXIT_CODE
         _log("\n  Endpoint not configured — live specification_tests run skipped.")
         _log("  Configure target.endpoint in the profile or pass --endpoint <url>.")
 
+    if outcome_summary == "CLASSIFICATION_ONLY":
+        spec_rc = INCOMPLETE_EXIT_CODE
+    if blocking and spec_rc == 0:
+        spec_rc = INCOMPLETE_EXIT_CODE
+        outcome_summary = "INCOMPLETE"
     if inventory_failed:
-        spec_rc = spec_rc or 1
+        spec_rc = 1
         outcome_summary = "MODEL_INVENTORY_FAILED"
 
+    extra["qualification"] = dict((spec_meta or {}).get("qualification") or {})
+    extra["qualification"].update(
+        {
+            "outcome": (
+                "not_tested"
+                if spec_rc == INCOMPLETE_EXIT_CODE and (not spec_meta or spec_meta.get("status") == "skipped")
+                else "passed"
+                if spec_rc == 0
+                else "incomplete"
+                if spec_rc == INCOMPLETE_EXIT_CODE
+                else "failed"
+            ),
+            "blocked_workflows": [check.check_name for check in blocking],
+        }
+    )
     report_path = _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
     summary_path = _write_human_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra)
     md_summary_path = _write_markdown_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra)
@@ -1472,7 +1594,7 @@ def run_automated(
             profile,
             output_dir,
             report_path,
-            run_result="passed" if spec_rc == 0 else "failed",
+            run_result="passed" if spec_rc == 0 else "incomplete" if spec_rc == INCOMPLETE_EXIT_CODE else "failed",
             base_dir=base_dir,
             excel_mode=excel_mode,
             excel_out=excel_out,
@@ -1501,13 +1623,34 @@ def run_automated(
                     "  Coverage evidence for this run is incomplete — the target run cannot be reported as passed.",
                 )
             )
-            spec_rc = spec_rc or 1
+            spec_rc = 1
+            outcome_summary = "COVERAGE_EVIDENCE_FAILED"
+    extra["qualification"].update(
+        {
+            "outcome": (
+                "not_tested"
+                if spec_rc == INCOMPLETE_EXIT_CODE and (not spec_meta or spec_meta.get("status") == "skipped")
+                else "passed"
+                if spec_rc == 0
+                else "incomplete"
+                if spec_rc == INCOMPLETE_EXIT_CODE
+                else "failed"
+            ),
+            "blocked_workflows": [check.check_name for check in blocking],
+        }
+    )
+    _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
+    _write_human_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra)
+    _write_markdown_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra)
 
     _log(f"\n  Evidence report: {report_path}")
     _log(f"  Human summary:   {summary_path}")
     _log(f"  Markdown report: {md_summary_path}")
     _log("")
 
+    if spec_rc == INCOMPLETE_EXIT_CODE:
+        _log(_c(_ANSI_YELLOW, "  Target Server qualification INCOMPLETE — not a compliance PASS."))
+        return INCOMPLETE_EXIT_CODE
     if spec_rc != 0:
         _log(
             _c(

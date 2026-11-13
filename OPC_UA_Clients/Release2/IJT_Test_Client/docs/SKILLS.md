@@ -116,7 +116,7 @@ simulator set is not required. Non-Good values are not treated as valid samples.
 | **Simulate path** | SimulateSingleResult etc. live under `Simulations/SimulateResults/` — NOT under ResultManagement |
 | **GetLatestResult needs Timeout** | Signature is `GetLatestResult(Timeout: Int32)` — pass `ua.Variant(5000, ua.VariantType.Int32)` |
 | **include_traces = True** | All SimulateSingleResult calls should pass `True` for include_traces |
-| **Choose result packaging explicitly** | `send_as_refs=True` requests reference stubs; `False` requests inline children. Combined-result tests exercise both modes; do not force reference mode in every call. |
+| **Choose result packaging explicitly** | `send_as_refs=True` requests reference stubs; `False` requests inline children. Combined-result tests check both modes; do not force reference mode in every call. |
 | **ResultState values** | Machinery Result NodeSet uses `1=Completed`, `2=Processing`, `3=Aborted`, `4=Failed`; do not use stale `1=Processing`, `2=Completed` mappings |
 | **node.session not node.server** | asyncua 1.2+ renamed the attribute — use `node.session` |
 | **Annotate empty accumulators** | `check_untyped_defs = true`; dynamic OPC UA lists such as `all_values = []` need explicit types, usually `list[Any]` |
@@ -133,7 +133,7 @@ claim that a physical Controller has been validated.
 | Test module | Contract |
 |---|---|
 | `specification_tests/test_consolidated_results.py` | Capability-gated checks inspect decoded child metadata and classification-dependent content in inline and reference modes. Simulator-only cases additionally require exact Batch/Sync child counts, unique IDs, final state/counters and inline parent links; Batch reference progression checks stable parent/child IDs, growing snapshots and full-child event closure. |
-| `specification_tests/test_identifiers.py` | Simulator-only reset-mode and exact filtering regressions exercise isolated generated state, structured identifier fields and cleanup. Name/ID/token aliases and the last-stored external latest policy are simulator behavior, not universal vendor requirements. |
+| `specification_tests/test_identifiers.py` | Simulator-only reset-mode and exact filtering regressions test isolated generated state, structured identifier fields and cleanup. Name/ID/token aliases and the last-stored external latest policy are simulator behavior, not universal vendor requirements. |
 | `specification_tests/test_asset_operations.py` | The existing opt-in disable/enable test reads the original Boolean Enabled state, observes both transitions and restores the original value in `finally`. Without an observable Enabled node it skips before mutation, rather than assuming the Tool originally enabled. |
 | `specification_tests/test_result_trace_data.py` | Required fields are checked on every step trace. Point counts must be UInt32 values, not coerced strings or Booleans; Values must be arrays with lengths matching NumberOfTracePoints. |
 
@@ -268,8 +268,8 @@ IJT_Test_Client/
 ├── joining_process/              ← JoiningProcessManagement structure + methods
 ├── joint/                        ← JointManagement structure + methods
 ├── specification_tests/          ← Specification Unit tests (asset, result, event, joining process, joint)
-├── target_server_cu_profiles/       ← SUT manifests, one file per system under test (sanitized examples)
-│   ├── README.md                 ← Manifest usage, commands, sanitization rules
+├── target_server_cu_profiles/       ← SUT manifests, one file per system under test (placeholder examples)
+│   ├── README.md                 ← Manifest usage, commands, privacy rules
 │   ├── template.sut.yaml             ← Generated, fully commented template with safe defaults
 │   ├── simulator.sut.yaml            ← Generated, placeholder-free manifest for the checked-in simulator
 │   ├── controller_remote_start.sut.yaml ← Generated remote-start controller example
@@ -381,8 +381,11 @@ Stable reason codes used in preflight reports, CU evidence, and skip reasons:
 | `manual_required` | Physical operator action needed |
 | `claim_mismatch` | Profile claims support but address space disagrees |
 | `configuration_error` | YAML invalid or inconsistent |
+| `cu_unreviewed` | New catalogue CU has no explicit declaration, its tests remain disabled and untested |
 
-### Sanitization Rules for Committed Profiles
+<a id="sanitization-rules-for-committed-profiles"></a>
+
+### Privacy Rules for Committed Profiles
 
 Target Server CU profiles may **not** contain:
 - Real IP addresses or hostnames
@@ -391,7 +394,57 @@ Target Server CU profiles may **not** contain:
 - Operator credentials or authentication tokens
 
 Use placeholders like `opc.tcp://<target-server-host>:40451` in committed examples.
-Store real profiles outside the repository or sanitize before committing.
+Keep real profiles in ignored local files. Remove private details before
+sharing or committing an example.
+
+### Manifest Integrity During Tests
+
+`pytest_configure` freezes the selected manifest path and actual-byte hash.
+It verifies a supplied `OPCUA_TARGET_MANIFEST_SHA256`, or captures a startup
+hash when absent. Setup checks before each test and the direct UANode guard
+check the immutable session snapshot. Physical workflow selection and known
+state-changing method helpers also check the reviewed file before calls.
+An edit or unreadable file produces `blocked / manifest_changed`, not evidence
+of a passing workflow. A session-created hash is released at shutdown without
+removing a different caller's hash. This is not physical-action approval or
+an atomic controller lock.
+
+Only an excluded primary `requires_cu` adds `ijt_scope_excluded=true`.
+An excluded `requires_dependency_cu` prevents that test but leaves its primary
+CU untested, so a required dependency cannot disappear from qualification.
+
+Local comment refresh rejects edited or unmatched schema markers. Marker-like
+text inside YAML strings remains data. Keep owner notes outside marked blocks,
+and keep run dates and previous results in reports rather than current YAML
+guidance.
+
+### Generated SUT Contract
+
+Field descriptions, defaults and preset values are maintained in
+**helpers/sut_manifest.py**. Update this source, regenerate all tracked SUTs
+and the field reference, then run the read-only `--check`.
+Use `--format-local` for common comments, field order, spacing and mapping-list
+style in an ignored copy. It preserves scalar text, action order and owner
+notes. `--check-local FILE` detects local comment or layout drift without saving.
+Label installation notes with `# Local note:`.
+
+Generated examples use `capability_claims.cu_scope_policy: explicit`.
+Missing new catalogue rows are unreviewed, not unsupported. Existing approved
+tests remain runnable, but primary or dependency tests requiring an unreviewed
+CU are skipped as `untested / cu_unreviewed`. Reports retain earlier evidence
+and mark newer-catalogue qualification INCOMPLETE, with exit code 6.
+`declaration_state: declared` describes scope, not independent approval.
+Older manifests default to inherited profile/facet behaviour.
+
+`--complete-local-cus` freezes an older inherited table's current scope without
+changing execution settings. For an explicit table it never fills new rows
+with guessed statuses. Comment/layout failures belong to offline quality
+checks, they do not block valid approved runtime tests. Invalid configuration
+and mid-run file changes still block execution.
+
+The pre-commit contract hook and existing CI unit tests protect tracked
+artifacts. Ignored profiles need their separate local check. Required
+branch-protection settings remain a repository-admin responsibility.
 
 ### Key Fixtures (conftest.py)
 | Fixture | Scope | Description |
@@ -404,7 +457,8 @@ Store real profiles outside the repository or sanitize before committing.
 | `simulate_results_folder` | session | `Simulations/SimulateResults/` node |
 | `simulate_events_folder` | session | `Simulations/SimulateEventsAndConditions/` node |
 | `opcua_client` | **module** | One connection shared across all tests in a file — avoids per-test OPC UA handshake overhead |
-| `subscription_client` | **module** | Separate client for event subscriptions (module-scoped — one per file for result/event tests) |
+| `subscription_client` | **function** | Isolated Target Server subscription client per test, shared module client for the simulator |
+| `_guard_direct_target_method_calls` | **function**, autouse | Checks manifest integrity before direct UANode calls and prevents unauthorized Target Server state changes |
 
 > **Note**: `tests/unit/` fixtures use `SimpleNamespace` — no OPC UA connection required. All unit tests run offline and collect instantly.
 

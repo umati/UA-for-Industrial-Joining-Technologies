@@ -12,6 +12,25 @@ import pytest
 from asyncua import ua
 
 from helpers.method_caller import MethodCallResult, OpcUaStatusHelper
+from helpers.sut_manifest import manifest_file_sha256
+
+
+async def test_authorized_target_mutation_is_blocked_after_manifest_edit(monkeypatch, tmp_path):
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+    from helpers.method_caller import call_method
+
+    path = tmp_path / "reviewed.yaml"
+    path.write_bytes(b"reviewed")
+    monkeypatch.setenv("OPCUA_TARGET_SERVER_PROFILE", str(path))
+    monkeypatch.setenv("OPCUA_TARGET_MANIFEST_SHA256", manifest_file_sha256(path))
+    path.write_bytes(b"changed")
+    parent = MagicMock()
+    parent.call_method = AsyncMock()
+    with pytest.raises(WorkflowEvidenceUnavailable) as result:
+        await call_method(parent, "method", method_name="StartSelectedJoining", target_server_authorized=True)
+    assert result.value.ijt_properties["ijt_outcome"] == "blocked"
+    assert result.value.ijt_properties["ijt_reason_code"] == "manifest_changed"
+    parent.call_method.assert_not_awaited()
 
 
 class TestOpcUaStatusHelperIsBad:

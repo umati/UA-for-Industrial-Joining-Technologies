@@ -53,11 +53,13 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
 import uuid
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 from helpers.namespaces import (
@@ -68,7 +70,7 @@ from helpers.namespaces import (
     parse_joining_process_classification,
     result_classification_value,
 )
-from helpers.process_selectors import matching_processes, selection_names
+from helpers.process_selectors import counter_candidates, matching_processes, selection_names
 from helpers.target_server_cu_config import TargetServerCuProfile
 from helpers.trigger import (
     EventTrigger,
@@ -153,6 +155,10 @@ class TargetServerTriggerOutcome(TriggerOutcome):
     starts_issued: int = 0
     results_confirmed: int = 0
     pre_trigger_baseline: dict[str, Any] = field(default_factory=dict)
+    mutation_attempted: bool = False
+    execution_outcome: str = ""
+    reason_code: str = ""
+    evidence_reused: bool = False
     candidate_process_ids: tuple[str, ...] = ()
     proven_process_ids: tuple[str, ...] = ()
     rejected_process_ids: tuple[str, ...] = ()
@@ -189,6 +195,9 @@ class WorkflowEvidenceRecord:
     key: WorkflowEvidenceKey
     progression: Any
     captured_monotonic: float
+
+
+_COUNTER_ATTEMPTS: dict[tuple, TargetServerTriggerOutcome | None] = {}
 
 
 class RunScopedEvidenceStore:
@@ -297,6 +306,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         self._subscription_client = subscription_client
         self._last_method_failure = ""
         self._pending_evidence_key: WorkflowEvidenceKey | None = None
+        self._start_attempts = 0
+        self._current_process_id = ""
+        self._counter_attempts: set[int] = set()
 
     @staticmethod
     def _result_matches_context(
@@ -522,6 +534,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
 
     async def trigger_select_process_event(self) -> TargetServerTriggerOutcome:
         """Invoke exactly one SelectJoiningProcess action after the caller subscribes."""
+        blocked = self._physical_selection_blocker(method="SelectJoiningProcess")
+        if blocked:
+            return blocked
         if not self._profile.cu_execution.state_changing_methods.allow_state_changing_method("SelectJoiningProcess"):
             return TargetServerTriggerOutcome(
                 triggered=False,
@@ -862,6 +877,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         from helpers.namespaces import NS_IJT_BASE
         from helpers.result_collector import (
             ResultCollector,
+            ResultProgression,
             get_classification,
             get_result_id,
             is_terminal_completed,
@@ -869,6 +885,13 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         )
 
         effects = self._profile.cu_execution.counter_effects
+        if os.environ.get("PYTEST_XDIST_WORKER"):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                skip_reason="Physical counter workflows require serial execution.",
+                method="CounterEffect",
+                reason_code="parallel_physical_workflow",
+            )
         if "counter_intervention" not in self._profile.workflow_execution.approved_workflows:
             return TargetServerTriggerOutcome(
                 triggered=False,
@@ -884,6 +907,17 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 trigger_mode="counter_effect",
             )
         effect = effects[effect_index]
+        if (
+            effect.process_policy == "discover_unique"
+            and not self._profile.workflow_execution.allow_discovered_processes
+        ):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=effect.method,
+                trigger_mode="counter_effect",
+                skip_reason="Discovered counter candidates are not approved.",
+                reason_code="candidate_scope_not_approved",
+            )
         if not self._profile.cu_execution.state_changing_methods.allow_state_changing_method(effect.method):
             return TargetServerTriggerOutcome(
                 triggered=False,
@@ -891,7 +925,23 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 method=effect.method,
                 trigger_mode="counter_effect",
             )
-        if self._subscription_client is None:
+        if not self._profile.cu_execution.state_changing_methods.allow_state_changing_method("SelectJoiningProcess"):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=effect.method,
+                trigger_mode="counter_effect",
+                skip_reason="SelectJoiningProcess is not authorized for counter setup.",
+                reason_code="unsafe_method_not_enabled",
+            )
+        cached_capture_possible = self._profile.workflow_execution.evidence_reuse.enabled and any(
+            key[0] == self._profile.target.endpoint
+            and key[2] == self._profile.source_path
+            and key[3] == effect_index
+            and previous is not None
+            and previous.triggered
+            for key, previous in _COUNTER_ATTEMPTS.items()
+        )
+        if self._subscription_client is None and not cached_capture_possible:
             return TargetServerTriggerOutcome(
                 triggered=False,
                 skip_reason="Counter-effect workflows require a separate subscription client.",
@@ -902,7 +952,10 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         jpm_node = await self._get_joining_process_management()
         piu = await self._resolve_tool_piu()
         processes = await self._get_joining_process_list(jpm_node, piu) if jpm_node is not None else []
-        candidates = matching_processes(processes, effect)
+        selection = self._profile.selection.joining_processes.get(
+            effect.process_classification, self._profile.selection.joining_process
+        )
+        candidates = counter_candidates(processes, effect, selection)
         if len(candidates) != 1:
             return TargetServerTriggerOutcome(
                 triggered=False,
@@ -916,12 +969,63 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
 
         process = candidates[0]
+        fingerprint = self._process_list_fingerprint(processes)
         process_id = self._process_field(
             process,
             "JoiningProcessId",
             "JoiningProcessIdentification",
             "Id",
         )
+        attempt_key = (self._profile.target.endpoint, piu, self._profile.source_path, effect_index)
+        if attempt_key in _COUNTER_ATTEMPTS:
+            previous = _COUNTER_ATTEMPTS[attempt_key]
+            if (
+                previous is not None
+                and previous.triggered
+                and self._profile.workflow_execution.evidence_reuse.enabled
+                and previous.joining_process_id == process_id
+                and previous.pre_trigger_baseline.get("catalog_fingerprint") == fingerprint
+                and previous.pre_trigger_baseline.get("selection_names") == sorted(selection_names(process))
+                and previous.pre_trigger_baseline.get("counter_config") == asdict(effect)
+                and previous.pre_trigger_baseline.get("selection_config") == asdict(selection)
+            ):
+                reused = replace(previous, evidence_reused=True)
+                self._record_workflow_action("counter_evidence_reused", piu, process_id, method=effect.method)
+                return reused
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=effect.method,
+                trigger_mode="counter_effect",
+                skip_reason="This run already attempted the counter effect; no additional mutation is permitted.",
+                execution_outcome="inconclusive",
+                mutation_attempted=True,
+                reason_code="mutation_retry_prohibited",
+            )
+        if effect_index in self._counter_attempts:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=effect.method,
+                skip_reason="Counter mutation already attempted; retargeting or retry is prohibited.",
+                mutation_attempted=True,
+                execution_outcome="inconclusive",
+                reason_code="mutation_retry_prohibited",
+            )
+        if self._subscription_client is None:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=effect.method,
+                skip_reason="New counter mutation requires a separate subscription client.",
+                execution_outcome="blocked",
+                reason_code="counter_subscription_required",
+            )
+        if not process_id or not await self._counter_target_current(jpm_node, piu, process, fingerprint):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=effect.method,
+                trigger_mode="counter_effect",
+                skip_reason="Counter target is missing or changed before selection.",
+                reason_code="target_changed",
+            )
         if not await self._select_joining_process(
             jpm_node,
             process,
@@ -951,6 +1055,16 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 product_instance_uri=piu,
                 joining_process_id=process_id,
             )
+        if not await self._counter_target_current(jpm_node, piu, process, fingerprint):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=effect.method,
+                trigger_mode="counter_effect",
+                skip_reason="Counter catalog or bound identity changed before mutation.",
+                reason_code="target_changed",
+                product_instance_uri=piu,
+                joining_process_id=process_id,
+            )
 
         expected_classification = self._result_classification_value(effect.expected_result_classification)
         ns_indices = {NS_IJT_BASE: await self._resolve_ijt_namespace_index()}
@@ -960,6 +1074,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 candidate
                 for candidate in results
                 if is_terminal_completed(candidate, ResultClassification.INTERVENTION_RESULT)
+                and self._result_matches_context(candidate, piu, process_id)
             ]
             for intervention_candidate in reversed(interventions):
                 if expected_classification is None:
@@ -968,8 +1083,10 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 if not intervention_id:
                     continue
                 for affected_candidate in reversed(results):
-                    if get_classification(affected_candidate) == expected_classification and references_result_id(
-                        affected_candidate, intervention_id, results
+                    if (
+                        self._result_matches_context(affected_candidate, piu, process_id)
+                        and get_classification(affected_candidate) == expected_classification
+                        and references_result_id(affected_candidate, intervention_id, results)
                     ):
                         return intervention_candidate, affected_candidate
             return (interventions[-1], None) if interventions else (None, None)
@@ -981,6 +1098,18 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
 
         async with ResultCollector(self._subscription_client, ns_indices, is_simulator=False) as collector:
+            collector.discard_pending()
+            self._record_workflow_action(
+                "counter_attempt",
+                piu,
+                process_id,
+                method=effect.method,
+                count=effect.count,
+                catalog_fingerprint=fingerprint,
+                process_policy=effect.process_policy,
+            )
+            self._counter_attempts.add(effect_index)
+            _COUNTER_ATTEMPTS[attempt_key] = None
             result = await find_and_call_method(
                 jpm_node,
                 effect.method,
@@ -992,6 +1121,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 target_server_authorized=True,
             )
             if not self._method_succeeded(effect.method, result, observe_uncertain=True):
+                definite_failure = self._counter_call_rejected(result)
                 return TargetServerTriggerOutcome(
                     triggered=False,
                     skip_reason=f"{effect.method} failed: {self._last_method_failure}",
@@ -999,6 +1129,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                     trigger_mode="counter_effect",
                     product_instance_uri=piu,
                     joining_process_id=process_id,
+                    mutation_attempted=True,
+                    execution_outcome="failed" if definite_failure else "inconclusive",
+                    reason_code="method_rejected" if definite_failure else "mutation_outcome_unknown",
                 )
             capture = await collector.collect_evidence(
                 evidence_ready,
@@ -1017,6 +1150,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 trigger_mode="counter_effect",
                 product_instance_uri=piu,
                 joining_process_id=process_id,
+                mutation_attempted=True,
+                execution_outcome="inconclusive",
+                reason_code="result_evidence_incomplete",
             )
         if intervention is None:
             return TargetServerTriggerOutcome(
@@ -1026,6 +1162,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 trigger_mode="counter_effect",
                 product_instance_uri=piu,
                 joining_process_id=process_id,
+                mutation_attempted=True,
+                execution_outcome="inconclusive",
+                reason_code="result_evidence_incomplete",
             )
         if expected_classification is not None and affected is None:
             return TargetServerTriggerOutcome(
@@ -1039,14 +1178,103 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 product_instance_uri=piu,
                 joining_process_id=process_id,
                 results_confirmed=1,
+                mutation_attempted=True,
+                execution_outcome="inconclusive",
+                reason_code="result_evidence_incomplete",
             )
-        return TargetServerTriggerOutcome(
+        outcome = TargetServerTriggerOutcome(
             triggered=True,
             method=effect.method,
             trigger_mode="counter_effect",
             product_instance_uri=piu,
             joining_process_id=process_id,
             results_confirmed=1 + int(affected is not None),
+            mutation_attempted=True,
+            execution_outcome="passed",
+            pre_trigger_baseline={
+                "catalog_fingerprint": fingerprint,
+                "selection_names": sorted(selection_names(process)),
+                "counter_config": asdict(effect),
+                "selection_config": asdict(selection),
+            },
+            result_progression=ResultProgression(
+                classification=ResultClassification.INTERVENTION_RESULT,
+                final_result=intervention,
+                all_results=capture.all_results,
+                source_events=capture.source_events,
+            ),
+        )
+        _COUNTER_ATTEMPTS[attempt_key] = outcome
+        self._record_workflow_action("counter_confirmed", piu, process_id, method=effect.method)
+        return outcome
+
+    def _physical_selection_blocker(
+        self,
+        classification: str | int | None = None,
+        *,
+        method: str = "StartSelectedJoining",
+        reset_budget: bool = True,
+    ) -> TargetServerTriggerOutcome | None:
+        if reset_budget:
+            self._start_attempts = 0
+            self._current_process_id = ""
+            self._last_method_failure = ""
+        selection, _ = self._get_selection_for_classification(classification)
+        reason = ""
+        code = ""
+        from helpers.sut_manifest import manifest_change_reason
+
+        issue = manifest_change_reason(self._profile.source_path, os.environ.get("OPCUA_TARGET_MANIFEST_SHA256"))
+        if issue:
+            reason = issue
+            code = "manifest_changed"
+        elif os.environ.get("PYTEST_XDIST_WORKER"):
+            reason = "Physical workflows require serial execution."
+            code = "parallel_physical_workflow"
+        elif selection.policy != "exact_match" and not self._profile.workflow_execution.allow_discovered_processes:
+            reason = "Automatic process candidates are not approved by workflows.allow_discovered_processes."
+            code = "candidate_scope_not_approved"
+        if not reason:
+            return None
+        logger.warning("%s blocked: %s", method, reason)
+        return TargetServerTriggerOutcome(
+            triggered=False,
+            method=method,
+            skip_reason=reason,
+            reason_code=code,
+            execution_outcome="blocked",
+        )
+
+    def _record_workflow_action(self, action: str, piu: str, process_id: str, **details: Any) -> None:
+        filename = os.environ.get("IJT_WORKFLOW_ACTIONS_FILE")
+        record = {
+            "action": action,
+            "endpoint": self._profile.target.endpoint,
+            "tool_piu": piu,
+            "joining_process_id": process_id,
+            **details,
+        }
+        logger.info("Workflow action: %s", record)
+        if filename:
+            with Path(filename).open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(record) + "\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+
+    async def _counter_target_current(self, jpm: Any, piu: str, process: Any, fingerprint: tuple) -> bool:
+        current = await self._get_joining_process_list(jpm, piu)
+        matches = matching_processes(
+            current,
+            {
+                "joining_process_id": self._process_field(
+                    process, "JoiningProcessId", "JoiningProcessIdentification", "Id"
+                )
+            },
+        )
+        return (
+            self._process_list_fingerprint(current) == fingerprint
+            and len(matches) == 1
+            and selection_names(matches[0]) == selection_names(process)
         )
 
     async def _resolve_tool_piu(self) -> str:
@@ -1207,12 +1435,6 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 )
                 return []
 
-            if not self._selection_has_selector(selection):
-                logger.warning(
-                    "Joining process selection policy is 'exact_match' but match_by='%s' has no configured value",
-                    selection.match_by,
-                )
-                return []
             matches = matching_processes(processes, selection)
             if len(matches) > 1:
                 logger.warning(
@@ -1224,7 +1446,11 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             return self._validate_exact_candidates(matches, norm_key, matches_requested_classification)
 
         if not norm_key or norm_key == "intervention":
-            return list(processes) if selection.policy == "all_compatible" else [processes[0]]
+            return (
+                list(processes)[: self._profile.workflow_execution.max_candidates]
+                if selection.policy == "all_compatible"
+                else [processes[0]]
+            )
 
         direct = [process for process in processes if matches_requested_classification(process)]
         compound = (
@@ -1236,7 +1462,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             if norm_key in {"batch", "sync"}
             else []
         )
-        return direct + compound
+        return (direct + compound)[: self._profile.workflow_execution.max_candidates]
 
     def _validate_exact_candidates(
         self,
@@ -1514,6 +1740,8 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             selection.policy,
             strategy,
         )
+        process_id = self._process_field(process, "JoiningProcessId", "JoiningProcessIdentification", "Id")
+        self._record_workflow_action("select_attempt", piu, process_id, identifier_strategy=strategy)
         result = await find_and_call_method(
             jpm_node,
             BN.SELECT_JOINING_PROCESS,
@@ -1523,13 +1751,35 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             timeout=self._profile.cu_execution.default_timeout_seconds,
             target_server_authorized=True,
         )
-        return self._method_succeeded(BN.SELECT_JOINING_PROCESS, result)
+        selected = self._method_succeeded(BN.SELECT_JOINING_PROCESS, result)
+        if selected:
+            self._current_process_id = process_id
+        return selected
+
+    @staticmethod
+    def _counter_call_rejected(result: Any) -> bool:
+        from asyncua import ua
+
+        definite_service_rejections = {
+            ua.StatusCodes.BadInvalidArgument,
+            ua.StatusCodes.BadUserAccessDenied,
+            ua.StatusCodes.BadMethodInvalid,
+            ua.StatusCodes.BadTypeMismatch,
+        }
+        status = result.output_list[0] if result.output_list else None
+        return bool(
+            result.status_code in definite_service_rejections
+            or (result.success and not (isinstance(status, ua.StatusCode) and status.is_uncertain()))
+        )
 
     async def _trigger_intervention(self) -> TargetServerTriggerOutcome:
         """Generate an InterventionResult using a configured process action."""
         from asyncua import ua
 
         from helpers.method_caller import find_and_call_method
+
+        if self._profile.cu_execution.counter_effects:
+            return await self.trigger_counter_effect(0)
 
         method_name = str(
             self._profile.cu_execution.extension_fields.get(
@@ -1560,6 +1810,30 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 trigger_mode="joining_process_intervention",
             )
 
+        blocked = self._physical_selection_blocker("intervention", method=method_name)
+        if blocked:
+            return blocked
+        selection, _ = self._get_selection_for_classification("intervention")
+        if selection.policy != "exact_match":
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=method_name,
+                skip_reason="Legacy intervention requires an exact target. Configure counter_effects for bounded discovery.",
+                reason_code="explicit_intervention_target_required",
+                execution_outcome="blocked",
+            )
+        required_workflow = {
+            "AbortJoiningProcess": "remote_abort_job",
+            "ResetJoiningProcess": "remote_reset_job",
+        }.get(method_name, "counter_intervention")
+        if required_workflow not in self._profile.workflow_execution.approved_workflows:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=method_name,
+                reason_code="workflow_not_approved",
+                execution_outcome="blocked",
+                skip_reason=f"Workflow '{required_workflow}' is not approved.",
+            )
         jpm_node = await self._get_joining_process_management()
         piu = await self._resolve_tool_piu()
         if jpm_node is None or not piu:
@@ -1619,6 +1893,27 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 )
             )
 
+        process_id = self._process_field(process, "JoiningProcessId", "JoiningProcessIdentification", "Id")
+        attempt_key = (self._profile.target.endpoint, piu, self._profile.source_path, f"legacy:{method_name}")
+        if attempt_key in _COUNTER_ATTEMPTS:
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=method_name,
+                mutation_attempted=True,
+                execution_outcome="inconclusive",
+                reason_code="mutation_retry_prohibited",
+                skip_reason="Legacy intervention was already attempted in this run. Retry prohibited.",
+            )
+        if not await self._counter_target_current(jpm_node, piu, process, self._process_list_fingerprint(processes)):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method=method_name,
+                reason_code="target_changed",
+                skip_reason="Intervention target changed before mutation.",
+                execution_outcome="blocked",
+            )
+        self._record_workflow_action("intervention_attempt", piu, process_id, method=method_name)
+        _COUNTER_ATTEMPTS[attempt_key] = None
         result = await find_and_call_method(
             jpm_node,
             method_name,
@@ -1640,6 +1935,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 trigger_mode="joining_process_intervention",
                 product_instance_uri=piu,
                 joining_process_id=process_id,
+                mutation_attempted=True,
+                execution_outcome="failed" if self._counter_call_rejected(result) else "inconclusive",
+                reason_code="method_rejected" if self._counter_call_rejected(result) else "mutation_outcome_unknown",
             )
         return TargetServerTriggerOutcome(
             triggered=True,
@@ -1657,6 +1955,17 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         from helpers.method_caller import find_and_call_method
         from helpers.namespaces import BN
 
+        if self._start_attempts >= self._profile.workflow_execution.max_total_start_invocations:
+            self._last_method_failure = "Total workflow start-attempt budget exhausted."
+            return False
+        self._start_attempts += 1
+        self._record_workflow_action(
+            "start_attempt",
+            piu,
+            self._current_process_id,
+            attempt=self._start_attempts,
+            total_budget=self._profile.workflow_execution.max_total_start_invocations,
+        )
         result = await find_and_call_method(
             jpm_node,
             BN.START_SELECTED_JOINING,
@@ -1678,7 +1987,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         """Discover and exercise ordered candidates within the configured policy."""
         self._pending_evidence_key = None
         sc = self._profile.cu_execution.state_changing_methods
-
+        selection, _ = self._get_selection_for_classification(classification)
         if not sc.allow_state_changing_method("SelectJoiningProcess"):
             skip_reason = (
                 "SelectJoiningProcess is not in the allowed state-changing methods list. "
@@ -1690,7 +1999,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 method="StartSelectedJoining",
                 trigger_mode="start_selected_joining",
             )
-
+        blocked = self._physical_selection_blocker(classification)
+        if blocked:
+            return blocked
         jpm_node = await self._get_joining_process_management()
         if jpm_node is None:
             return TargetServerTriggerOutcome(
@@ -1747,6 +2058,16 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
 
         selection, _ = self._get_selection_for_classification(classification)
+        candidates = candidates[: self._profile.workflow_execution.max_candidates]
+        self._record_workflow_action(
+            "candidate_scope",
+            piu,
+            "",
+            policy=selection.policy,
+            catalog_process_count=len(processes),
+            admitted_candidate_count=len(candidates),
+            max_candidates=self._profile.workflow_execution.max_candidates,
+        )
         candidate_ids = tuple(
             self._process_field(
                 candidate,
@@ -1762,7 +2083,18 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         outcomes: list[TargetServerTriggerOutcome] = []
 
         for candidate, candidate_id in zip(candidates, candidate_ids, strict=True):
+            if self._start_attempts >= self._profile.workflow_execution.max_total_start_invocations:
+                break
             attempted_ids.append(candidate_id)
+            candidate_classification = _process_classification(candidate)
+            self._record_workflow_action(
+                "candidate_attempt",
+                piu,
+                candidate_id,
+                policy=selection.policy,
+                classification=candidate_classification.value if candidate_classification is not None else None,
+                catalog_fingerprint=self._process_list_fingerprint(processes),
+            )
             outcome = await self._run_candidate_workflow(
                 jpm_node,
                 piu,
@@ -1770,6 +2102,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 operation_count=operation_count,
                 classification=classification,
                 require_partials=require_partials,
+                catalog_fingerprint=self._process_list_fingerprint(processes),
             )
             outcomes.append(outcome)
             if outcome.triggered:
@@ -1778,6 +2111,8 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                     break
             else:
                 rejected_ids.append(candidate_id)
+                if self._last_method_failure or outcome.starts_issued > 0:
+                    break
 
         successful = next((outcome for outcome in outcomes if outcome.triggered), None)
         final_outcome = successful or outcomes[-1]
@@ -1790,6 +2125,18 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             proven_process_ids=tuple(proven_ids),
             rejected_process_ids=tuple(rejected_ids),
         )
+        if selection.policy == "all_compatible" and (rejected_ids or len(attempted_ids) < len(candidates)):
+            rejected = next((outcome for outcome in outcomes if not outcome.triggered), None)
+            summarized = replace(
+                summarized,
+                triggered=False,
+                skip_reason=(rejected.skip_reason if rejected else None)
+                or "Approved candidate scope was not completed within the total start budget.",
+                reason_code="candidate_evidence_incomplete" if rejected else "start_budget_exhausted",
+                execution_outcome="inconclusive" if summarized.starts_issued else "blocked",
+                mutation_attempted=bool(summarized.starts_issued),
+                result_progression=None,
+            )
         requested_classification = self._result_classification_value(classification)
         if summarized.triggered and requested_classification is not None:
             self._pending_evidence_key = self._workflow_evidence_key(
@@ -1820,6 +2167,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
         operation_count: int,
         classification: str | int | None,
         require_partials: bool = False,
+        catalog_fingerprint: tuple | None = None,
     ) -> TargetServerTriggerOutcome:
         """Select, start, and collect capability evidence for one candidate."""
         jp_id = self._process_field(
@@ -1834,6 +2182,19 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             "JoiningProcessIdentificationOrigin",
         )
 
+        fingerprint = catalog_fingerprint
+        if fingerprint is None:
+            fingerprint = self._process_list_fingerprint(await self._get_joining_process_list(jpm_node, piu))
+        if not await self._counter_target_current(jpm_node, piu, target_process, fingerprint):
+            return TargetServerTriggerOutcome(
+                triggered=False,
+                method="SelectJoiningProcess",
+                product_instance_uri=piu,
+                joining_process_id=jp_id,
+                execution_outcome="blocked",
+                reason_code="target_changed",
+                skip_reason="Selected candidate no longer matches the current catalog before selection.",
+            )
         selected = await self._select_joining_process(jpm_node, target_process, piu, classification=classification)
         if not selected:
             return TargetServerTriggerOutcome(
@@ -1893,7 +2254,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                     joining_process_id=jp_id,
                     joining_process_origin_id=jp_origin,
                 )
-
+            self._current_process_id = jp_id
             pacing = float(getattr(self._profile.workflow_execution, "consecutive_start_delay_seconds", 0.25))
             expected_state = int(
                 getattr(
@@ -1924,6 +2285,20 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                             max_starts,
                         )
                         break
+                if not await self._counter_target_current(jpm_node, piu, target_process, fingerprint):
+                    return TargetServerTriggerOutcome(
+                        triggered=False,
+                        method="StartSelectedJoining",
+                        product_instance_uri=piu,
+                        joining_process_id=jp_id,
+                        starts_issued=completed_operations,
+                        operation_count=completed_operations,
+                        results_confirmed=confirmed_operations,
+                        mutation_attempted=True,
+                        execution_outcome="inconclusive",
+                        reason_code="target_changed",
+                        skip_reason="Process identity or catalog changed after selection, before the next start.",
+                    )
                 started = await self._start_selected_joining(jpm_node, piu, deselect)
                 if not started:
                     # The failing start was never accepted, so neither it nor a
@@ -2140,6 +2515,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                     trigger_mode="start_selected_joining",
                 )
 
+        blocked = self._physical_selection_blocker("job", method="AbortJoiningProcess")
+        if blocked:
+            return blocked
         jpm_node = await self._get_joining_process_management()
         if jpm_node is None:
             return TargetServerTriggerOutcome(
@@ -2169,7 +2547,11 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
 
         target_process = self._choose_joining_process(processes, classification="job")
-        if target_process is None:
+        job_selection, _ = self._get_selection_for_classification("job")
+        if target_process is None and job_selection.policy != "exact_match":
+            blocked = self._physical_selection_blocker("batch", method="AbortJoiningProcess", reset_budget=False)
+            if blocked:
+                return blocked
             target_process = self._choose_joining_process(processes, classification="batch")
         if target_process is None:
             return TargetServerTriggerOutcome(
@@ -2278,6 +2660,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                     "IJT target-server automated abort test",
                 )
             )
+            self._record_workflow_action("abort_attempt", piu, jp_id)
             abort_result = await find_and_call_method(
                 jpm_node,
                 BN.ABORT_JOINING_PROCESS,
@@ -2364,6 +2747,9 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                     trigger_mode="start_selected_joining",
                 )
 
+        blocked = self._physical_selection_blocker("job", method="ResetJoiningProcess")
+        if blocked:
+            return blocked
         jpm_node = await self._get_joining_process_management()
         if jpm_node is None:
             return TargetServerTriggerOutcome(
@@ -2384,7 +2770,11 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
             )
 
         target_process = self._choose_joining_process(processes, classification="job")
-        if target_process is None:
+        job_selection, _ = self._get_selection_for_classification("job")
+        if target_process is None and job_selection.policy != "exact_match":
+            blocked = self._physical_selection_blocker("batch", method="ResetJoiningProcess", reset_budget=False)
+            if blocked:
+                return blocked
             target_process = self._choose_joining_process(processes, classification="batch")
         if target_process is None:
             return TargetServerTriggerOutcome(
@@ -2482,6 +2872,7 @@ class StartSelectedJoiningResultTrigger(ResultTrigger):
                 )
 
             # Step 2: Issue ResetJoiningProcess
+            self._record_workflow_action("reset_attempt", piu, jp_id)
             reset_result = await find_and_call_method(
                 jpm_node,
                 BN.RESET_JOINING_PROCESS,

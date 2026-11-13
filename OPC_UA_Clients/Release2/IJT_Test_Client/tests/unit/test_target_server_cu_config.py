@@ -217,6 +217,50 @@ def test_counter_effect_requires_one_exact_process(policy):
         )
 
 
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"joining_process_id": "old-id"},
+        {"identifier_strategy": "selection_name_only"},
+    ],
+)
+def test_dynamic_counter_rejects_pinned_or_non_id_strategy_at_typed_boundary(override):
+    with pytest.raises(TargetServerConfigError):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {
+                    "approved_workflows": ["counter_intervention"],
+                    "allow_discovered_processes": True,
+                },
+                "cu_execution": {
+                    "counter_effects": [
+                        {
+                            "method": "IncrementJoiningProcessCounter",
+                            "process_policy": "discover_unique",
+                            **override,
+                        }
+                    ]
+                },
+            }
+        )
+
+
+def test_dynamic_counter_requires_discovery_approval_at_typed_boundary():
+    with pytest.raises(TargetServerConfigError, match="allow_discovered_processes"):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "workflow_execution": {"approved_workflows": ["counter_intervention"]},
+                "cu_execution": {
+                    "counter_effects": [
+                        {"method": "IncrementJoiningProcessCounter", "process_policy": "discover_unique"}
+                    ],
+                },
+            }
+        )
+
+
 def test_counter_effect_requires_process_id_at_typed_boundary():
     with pytest.raises(TargetServerConfigError, match="joining_process_id"):
         build_execution_profile(

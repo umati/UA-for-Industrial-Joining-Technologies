@@ -29,6 +29,43 @@ _report_scoring: Any = importlib.import_module("helpers.report_scoring")
 _triage_report: Any = importlib.import_module("triage_cu_specification_test")
 ACTION_NEEDED, BLOCKED, NOT_SUPPORTED, WITH_NOTES = _report_scoring.KPI_LABELS
 
+
+@pytest.mark.parametrize("outcome", ["incomplete", "not_tested"])
+def test_real_excel_cli_preserves_unresolved_qualification(tmp_path, monkeypatch, outcome):
+    import openpyxl
+
+    xml = tmp_path / "spec-tests.xml"
+    xml.write_text('<testsuite><testcase name="passing" /></testsuite>', encoding="utf-8")
+    target_report = tmp_path / "target-server-cu-report.json"
+    target_report.write_text(json.dumps({"qualification": {"outcome": outcome}}), encoding="utf-8")
+    out = tmp_path / "unresolved.xlsx"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "make_excel_report",
+            "--xml",
+            str(xml),
+            "--out",
+            str(out),
+            "--cu-json",
+            str(tmp_path / "missing.json"),
+            "--run-result",
+            outcome,
+            "--target-report",
+            str(target_report),
+        ],
+    )
+    assert _excel_report.main() == 0
+    wb = openpyxl.load_workbook(out)
+    try:
+        assert "Inconclusive" in wb["Conformance Overview"]["A1"].value
+        assert "not a compliance PASS" in wb["Conformance Overview"]["B3"].value
+        assert "Inconclusive" in wb["Test Outcome Counts"]["B3"].value
+    finally:
+        wb.close()
+
+
 KPI_PATTERN = re.compile(
     rf"{re.escape(_report_scoring.KPI_ICONS[ACTION_NEEDED])}\s+(\d+)\s+"
     rf"{re.escape(ACTION_NEEDED)}"

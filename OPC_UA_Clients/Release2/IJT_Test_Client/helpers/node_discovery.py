@@ -16,6 +16,7 @@ HierarchicalReferences (id=33) and an asyncio.wait_for timeout instead.
 
 import asyncio
 import logging
+import os
 
 from asyncua import ua
 from asyncua.common.node import Node as UANode
@@ -355,17 +356,21 @@ async def read_tool_product_instance_uri(
     client, ns_ijt: int, ns_di: int, ns_app: int | None = None, *, expected_tool_uri: str | None = None
 ) -> str:
     """
-    Read the first Tool PIU, or uniquely resolve an explicitly requested Tool PIU.
+    Read the sole Tool PIU, or uniquely resolve an explicitly requested Tool PIU.
 
     Navigation path: JoiningSystem → AssetManagement → Assets → Tools →
-    <first tool instance> → Identification → ProductInstanceUri.
+    <selected tool instance> → Identification → ProductInstanceUri.
 
     This is the ProductInstanceUri used by all JoiningProcessManagement and
     AssetManagement method calls per IJT spec and confirmed by the Web Client
     reference implementation.
 
-    Returns empty string if any navigation step fails.
+    Target Server tests also honor their configured runtime Tool URI. Without
+    a binding, multiple Tool instances block discovery rather than choosing one.
+    Returns empty string if navigation fails or selection is ambiguous.
     """
+    if expected_tool_uri is None and os.environ.get("OPCUA_TARGET_SERVER_PROFILE"):
+        expected_tool_uri = os.environ.get("OPCUA_TOOL_PRODUCT_INSTANCE_URI") or None
     try:
         js = await find_joining_system(client)
         if js is None:
@@ -379,12 +384,22 @@ async def read_tool_product_instance_uri(
         tools_folder = await find_child_by_browse_name(assets, "Tools", ns_ijt)
         if tools_folder is None:
             return ""
-        # Get first tool instance — do not hardcode the instance name; it varies by server
-        tool_refs = await _browse_refs(tools_folder)
+        tool_refs = list(
+            {
+                ref.NodeId: ref for ref in await _browse_refs(tools_folder) if ref.NodeClass == ua.NodeClass.Object
+            }.values()
+        )
         if not tool_refs:
             return ""
+        if not expected_tool_uri and len(tool_refs) != 1:
+            logger.warning(
+                "Automatic Tool discovery requires exactly one Tool, found %d. "
+                "Configure the intended Tool ProductInstanceUri before running workflows.",
+                len(tool_refs),
+            )
+            return ""
         matches = []
-        for tool_ref in tool_refs if expected_tool_uri else tool_refs[:1]:
+        for tool_ref in tool_refs:
             tool = _node_from_ref(tools_folder, tool_ref.NodeId)
             ident = await find_child_by_browse_name(tool, "Identification", ns_di)
             if ident is None:

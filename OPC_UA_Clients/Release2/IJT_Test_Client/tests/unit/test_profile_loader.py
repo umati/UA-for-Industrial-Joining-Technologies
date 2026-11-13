@@ -21,7 +21,44 @@ from helpers.profile_loader import (
     resolve_session_supported_cus,
     selected_manifest_path,
 )
-from helpers.sut_manifest import LegacyPairedFileError, SutManifestError
+from helpers.sut_manifest import CapabilityClaims, LegacyPairedFileError, SutManifestError
+
+
+def test_complete_cu_table_preserves_scope_manual_status_and_extensions():
+    claims = CapabilityClaims(
+        active_profile="general_joining_system",
+        cu_overrides={"basic_result": "unsupported", "get_result_by_id": "manual_required", "extra_cu": "supported"},
+    )
+    complete = _pl_module.complete_cu_overrides(claims)
+    assert _pl_module.load_all_cus_from_facets() <= complete.keys()
+    assert complete["get_result_by_id"] == "manual_required"
+    assert complete["basic_result"] == "unsupported"
+    assert complete["extra_cu"] == "supported"
+    assert _pl_module.resolve_claimed_cus(CapabilityClaims(cu_overrides=complete)) == _pl_module.resolve_claimed_cus(
+        claims
+    )
+
+
+def test_complete_cu_table_refuses_a_missing_catalogue(monkeypatch):
+    monkeypatch.setattr(_pl_module, "load_all_cus_from_facets", lambda: frozenset())
+    with pytest.raises(ExplicitManifestError, match="usable facet catalogue"):
+        _pl_module.complete_cu_overrides(CapabilityClaims())
+
+
+def test_explicit_scope_keeps_catalogue_additions_unreviewed(monkeypatch):
+    monkeypatch.setattr(_pl_module, "load_all_cus_from_facets", lambda: frozenset({"basic_result", "future_cu"}))
+    claims = CapabilityClaims(cu_scope_policy="explicit", cu_overrides={"basic_result": "supported"})
+    assert _pl_module.resolve_claimed_cus(claims) == frozenset({"basic_result"})
+    assert _pl_module.unreviewed_cus(claims) == frozenset({"future_cu"})
+    assert _pl_module.complete_cu_overrides(claims) == {"basic_result": "supported"}
+    assert _pl_module.unreviewed_cus(CapabilityClaims()) == frozenset()
+
+
+@pytest.mark.parametrize("operation", ["resolve_claimed_cus", "unreviewed_cus", "complete_cu_overrides"])
+def test_scope_helpers_refuse_unknown_policies(operation):
+    with pytest.raises(ExplicitManifestError, match="Unknown CU scope policy"):
+        getattr(_pl_module, operation)(CapabilityClaims(cu_scope_policy="misspelled"))
+
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -50,8 +50,12 @@ from helpers.profile_loader import (
     ExplicitManifestError,
     get_skip_reason,
     load_all_cus_from_facets,
+    load_capability_claims,
     resolve_session_supported_cus,
+    selected_manifest_path,
+    unreviewed_cus,
 )
+from helpers.sut_manifest import manifest_change_reason, manifest_file_sha256
 
 _session_policy = load_shared_session_policy(__file__)
 connect_opcua_client = _session_policy.connect_client
@@ -69,6 +73,19 @@ collect_ignore = ["tmp"]
 # that cannot be read fails configuration instead of disabling gating.
 _SUPPORTED_CUS: frozenset[str] | None = None
 _WORKFLOW_EXCLUDED_CUS: frozenset[str] = frozenset()
+_UNREVIEWED_CUS: frozenset[str] = frozenset()
+_MANIFEST_REVIEW = pytest.StashKey[tuple[Path, str, bool] | None]()
+
+
+def _manifest_review_issue(config) -> str | None:
+    snapshot = config.stash.get(_MANIFEST_REVIEW, None)
+    if snapshot is None:
+        return None
+    path, digest, _ = snapshot
+    selected = selected_manifest_path()
+    if selected is None or selected.resolve() != path:
+        return "Selected SUT manifest changed during this run. No workflow operations are permitted."
+    return manifest_change_reason(path, digest)
 
 
 def _deletes_disabled() -> bool:
@@ -151,13 +168,41 @@ def pytest_configure(config):
             config.option.basetemp = str(_basetemp_chosen)
     _project_root.joinpath("tests", "fixtures").mkdir(parents=True, exist_ok=True)
 
+    config.stash[_MANIFEST_REVIEW] = None
+    path = selected_manifest_path()
+    if path is not None:
+        supplied_hash = os.environ.get("OPCUA_TARGET_MANIFEST_SHA256")
+        try:
+            digest = supplied_hash or manifest_file_sha256(path)
+        except OSError as exc:
+            raise pytest.UsageError(f"Cannot review the selected SUT manifest: {exc}") from exc
+        issue = manifest_change_reason(path, digest)
+        if issue:
+            raise pytest.UsageError(issue)
+        config.stash[_MANIFEST_REVIEW] = (path.resolve(), digest, not supplied_hash)
+        if not supplied_hash:
+            os.environ["OPCUA_TARGET_MANIFEST_SHA256"] = digest
+
     try:
         _SUPPORTED_CUS = resolve_session_supported_cus()
+        global _UNREVIEWED_CUS
+        _UNREVIEWED_CUS = unreviewed_cus(load_capability_claims(path)) if path is not None else frozenset()
     except ExplicitManifestError as exc:
         # An explicitly selected manifest is a claim statement. Refusing to start
         # is the only safe response: continuing would silently score the run
         # against a claim scope nobody configured.
         raise pytest.UsageError(str(exc)) from exc
+    issue = _manifest_review_issue(config)
+    if issue:
+        raise pytest.UsageError(issue)
+    if _UNREVIEWED_CUS:
+        sys.stderr.write(
+            "\n[conftest] New catalogue CUs are unreviewed and disabled: "
+            + ", ".join(sorted(_UNREVIEWED_CUS))
+            + ". Approved tests continue. Newer catalogue coverage remains INCOMPLETE. "
+            "Review controller documentation before adding capability_claims.cu_overrides entries. "
+            "Do not guess unsupported when support is unknown.\n"
+        )
 
     _WORKFLOW_EXCLUDED_CUS = frozenset(
         key.strip() for key in os.environ.get("OPCUA_TARGET_EXCLUDED_CUS", "").split(",") if key.strip()
@@ -173,6 +218,7 @@ def pytest_configure(config):
             root=_project_root,
             all_cus=load_all_cus_from_facets(),
             supported_cus=_SUPPORTED_CUS,
+            unreviewed_cus=_UNREVIEWED_CUS,
         ),
         "ijt-cu-coverage-report",
     )
@@ -186,19 +232,31 @@ def pytest_runtest_setup(item):
     When _SUPPORTED_CUS is an empty frozenset (manifest present but declares nothing) all
     CU-gated tests are skipped — this is the correct behaviour for an explicit empty profile.
     """
+    issue = _manifest_review_issue(item.config)
+    if issue:
+        item.user_properties.extend([("ijt_outcome", "blocked"), ("ijt_reason_code", "manifest_changed")])
+        pytest.skip(f"BLOCKED: {issue}")
     if _SUPPORTED_CUS is None:
         return  # no profile loaded → run everything
+    for marker_name in ("requires_cu", "requires_dependency_cu"):
+        for marker in item.iter_markers(marker_name):
+            if any(key in _UNREVIEWED_CUS for key in marker.args):
+                item.user_properties.extend([("ijt_outcome", "untested"), ("ijt_reason_code", "cu_unreviewed")])
+                pytest.skip("CU declaration is unreviewed. The new test is disabled pending owner review.")
 
     for marker in item.iter_markers("requires_cu"):
         for cu_key in marker.args:
             if cu_key in _WORKFLOW_EXCLUDED_CUS:
+                item.user_properties.append(("ijt_scope_excluded", "true"))
+                item.user_properties.append(("ijt_outcome", "untested"))
                 pytest.skip(f"CU '{cu_key}' is outside this target workflow's expected result classification")
             if cu_key not in _SUPPORTED_CUS:
                 pytest.skip(get_skip_reason(cu_key))
     for marker in item.iter_markers("requires_dependency_cu"):
         for cu_key in marker.args:
             if cu_key in _WORKFLOW_EXCLUDED_CUS:
-                pytest.skip(f"CU '{cu_key}' is outside this target workflow's expected result classification")
+                item.user_properties.append(("ijt_outcome", "untested"))
+                pytest.skip(f"Required dependency CU '{cu_key}' is excluded from this target workflow")
             if cu_key not in _SUPPORTED_CUS:
                 pytest.skip(get_skip_reason(cu_key))
 
@@ -242,7 +300,7 @@ _OPCUA_WATCHDOG_INTERVAL_S = 30  # asyncua also uses this as the health-probe de
 
 
 @pytest.fixture(autouse=True)
-def _guard_direct_target_method_calls(monkeypatch):
+def _guard_direct_target_method_calls(monkeypatch, request):
     """Block target state changes that bypass an authorized workflow adapter."""
     if not _target_server_profile_path():
         yield
@@ -256,6 +314,11 @@ def _guard_direct_target_method_calls(monkeypatch):
     original_call_method = UANode.call_method
 
     async def guarded_call_method(node, method_id, *args):
+        issue = _manifest_review_issue(request.config)
+        if issue:
+            from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+
+            raise WorkflowEvidenceUnavailable(issue, "manifest_changed", "blocked", "manifest_integrity")
         if not is_target_method_call_authorized():
             method_node = method_id if isinstance(method_id, UANode) else UANode(node.session, method_id)
             browse_name = await method_node.read_browse_name()
@@ -820,7 +883,15 @@ def _load_target_server_profile_with_runtime_overrides(profile_path: str):
 
     from helpers.sut_manifest import load_sut_manifest
 
-    profile = load_sut_manifest(Path(profile_path)).to_execution_profile()
+    path = Path(profile_path)
+    reviewed = os.environ.get("OPCUA_TARGET_MANIFEST_SHA256")
+    issue = manifest_change_reason(path, reviewed)
+    if issue:
+        pytest.skip(f"BLOCKED: {issue}")
+    profile = load_sut_manifest(path).to_execution_profile()
+    issue = manifest_change_reason(path, reviewed)
+    if issue:
+        pytest.skip(f"BLOCKED: {issue}")
     tool_piu = os.environ.get("OPCUA_TOOL_PRODUCT_INSTANCE_URI", "")
     process_id = os.environ.get("OPCUA_JOINING_PROCESS_ID", "")
     process_origin_id = os.environ.get("OPCUA_JOINING_PROCESS_ORIGIN_ID", "")
@@ -1022,6 +1093,13 @@ def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
 
 def pytest_unconfigure(config: object) -> None:
     """Remove only this process's basetemp after pytest plugins release it."""
+    stash = getattr(config, "stash", {})
+    snapshot = stash.get(_MANIFEST_REVIEW, None)
+    if snapshot is not None:
+        _, digest, owned = snapshot
+        if owned and os.environ.get("OPCUA_TARGET_MANIFEST_SHA256") == digest:
+            os.environ.pop("OPCUA_TARGET_MANIFEST_SHA256")
+        stash[_MANIFEST_REVIEW] = None
     if _deletes_disabled():
         return
     try:

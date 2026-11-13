@@ -82,12 +82,23 @@ def is_target_state_changing_method(method_name: str) -> bool:
 
 def _enforce_target_method_authorization(method_name: str, authorized: bool) -> None:
     """Prevent generic specification tests from mutating a configured real target."""
-    if authorized or method_name not in _TARGET_STATE_CHANGING_METHODS:
+    if method_name not in _TARGET_STATE_CHANGING_METHODS:
         return
-    if not os.environ.get("OPCUA_TARGET_SERVER_PROFILE"):
+    path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
+    if not path:
         return
 
     import pytest
+
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+    from helpers.sut_manifest import manifest_change_reason
+
+    issue = manifest_change_reason(path, os.environ.get("OPCUA_TARGET_MANIFEST_SHA256"))
+    if issue:
+        logger.warning("%s blocked: %s", method_name, issue)
+        raise WorkflowEvidenceUnavailable(issue, "manifest_changed", "blocked", method_name)
+    if authorized:
+        return
 
     pytest.skip(
         f"{method_name} is state-changing on a real Target Server and must be "

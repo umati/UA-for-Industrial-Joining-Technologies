@@ -176,6 +176,13 @@ repos:
         pass_filenames: false
         files: '(^\.dockerignore$|^\.hadolint\.yaml$|^\.pre-commit-config\.yaml$|(^|/)Dockerfile$|^OPC_UA_Clients/Release2/IJT_Web_Client/(docker-compose(\.smoke)?\.yml|\.yamllint\.yml|pyproject\.toml)$|^scripts/(simulator_extract|tool_bootstrap|ensure_hadolint|opcua_session_policy(_loader)?|ijt_live_readiness)\.py$|^tests/test_(docker_context_contract|shared_lint_tooling)\.py$|^\.github/workflows/(ci|integration)\.yml$)'
 
+      - id: sut-manifest-contract
+        name: SUT manifest generated contract
+        language: system
+        entry: python -B OPC_UA_Clients/Release2/IJT_Test_Client/scripts/generate_sut_manifest_docs.py --check
+        pass_filenames: false
+        files: '(^\.pre-commit-config\.yaml$|^OPC_UA_Clients/Release2/IJT_Test_Client/(helpers/(sut_manifest|profile_loader)\.py|profiles/.*\.yaml|target_server_cu_profiles/.*\.yaml|scripts/generate_sut_manifest_docs\.py|docs/SUT_MANIFEST_REFERENCE\.md)$)'
+
       - id: eslint-node-client
         name: ESLint (Node Client)
         language: system

@@ -7,6 +7,7 @@ import pytest
 
 from helpers.cu_coverage_report import (
     CuCoverageReportRecorder,
+    WorkflowEvidenceUnavailable,
     _classify_report,
     _dependency_cus_for_not_supported_reason,
     _marker_cus,
@@ -14,7 +15,147 @@ from helpers.cu_coverage_report import (
     _rollup_compliance,
     _rollup_outcome,
     _skip_text,
+    qualification_disposition,
 )
+
+
+@pytest.mark.parametrize("compliance", ["blocked", "partial", "untested", "not_supported"])
+def test_required_unresolved_coverage_is_never_pass(compliance):
+    result = qualification_disposition(
+        {
+            "by_cu": {
+                "single_result": {"claimed": True, "compliance": "supported", "passed": 1},
+                "job_result": {"claimed": True, "compliance": compliance},
+            },
+        }
+    )
+    assert result["outcome"] == "incomplete"
+    assert result["incomplete_cus"] == ["job_result"]
+
+
+def test_claimed_scope_exclusion_is_visible_and_never_passes():
+    result = qualification_disposition(
+        {
+            "by_cu": {
+                "single_result": {"claimed": True, "compliance": "supported", "passed": 1},
+                "job_result": {"claimed": True, "compliance": "untested", "scope_excluded": True},
+            },
+        }
+    )
+    assert result["outcome"] == "incomplete"
+    assert result["scope_excluded_claimed_cus"] == ["job_result"]
+
+
+@pytest.mark.parametrize(
+    "coverage",
+    [
+        [],
+        {},
+        {"by_cu": {"job": None}},
+        {"by_cu": {"job": {"claimed": False}}},
+        {"by_cu": {"job": {"claimed": True, "compliance": "supported", "passed": 0}}},
+        {"by_cu": {"job": {"claimed": True, "compliance": "supported", "passed": True}}},
+        {"by_cu": {"job": {"claimed": True, "compliance": "supported", "passed": 1}}, "supported_cus": ["missing"]},
+    ],
+)
+def test_missing_or_unproven_claims_never_qualify(coverage):
+    assert qualification_disposition(coverage)["outcome"] == "incomplete"
+
+
+def test_structured_block_is_not_reclassified_by_reason_keywords():
+    report = _Report(skipped=True, longrepr=("file.py", 1, "Environment unavailable, not supported"))
+    report.user_properties = [("ijt_outcome", "blocked"), ("ijt_reason_code", "target_changed")]
+    assert _classify_report(report) == "blocked"
+
+
+@pytest.mark.parametrize("outcome", ["blocked", "environment"])
+def test_workflow_skip_preserves_structured_reason_through_pytest_report(outcome, report_tmp_path):
+    recorder = CuCoverageReportRecorder(root=report_tmp_path, all_cus=[], supported_cus=[])
+    error = WorkflowEvidenceUnavailable(
+        "not supported is not the real reason", "mutation_retry_prohibited", outcome, "counter"
+    )
+    report = _Report(skipped=True, longrepr=("file.py", 1, str(error)))
+    report.user_properties = []
+    hook = recorder.pytest_runtest_makereport(None, SimpleNamespace(excinfo=SimpleNamespace(value=error)))
+    next(hook)
+    with pytest.raises(StopIteration):
+        hook.send(SimpleNamespace(get_result=lambda: report))
+    assert _classify_report(report) == outcome
+    assert dict(report.user_properties)["ijt_reason_code"] == "mutation_retry_prohibited"
+
+
+def test_definite_failure_cannot_be_hidden_by_scope_exclusion():
+    result = qualification_disposition({"by_cu": {"counter": {"claimed": True, "failed": 1, "scope_excluded": True}}})
+    assert result["outcome"] == "failed"
+    assert result["scope_excluded_claimed_cus"] == ["counter"]
+
+
+@pytest.mark.parametrize("pending", [None, "future_cu", [123]])
+@pytest.mark.parametrize("failed", [0, 1])
+def test_malformed_catalogue_review_metadata_never_passes(pending, failed):
+    coverage = {
+        "by_cu": {"known": {"claimed": True, "passed": 1, "failed": failed, "compliance": "supported"}},
+        "unreviewed_cus": pending,
+    }
+    assert qualification_disposition(coverage)["outcome"] == ("failed" if failed else "incomplete")
+
+
+def test_unreviewed_row_cannot_be_hidden_by_missing_top_level_metadata():
+    coverage = {
+        "by_cu": {
+            "known": {"claimed": True, "passed": 1, "compliance": "supported"},
+            "future_cu": {"claimed": False, "declaration_state": "unreviewed"},
+        },
+    }
+    result = qualification_disposition(coverage)
+    assert result["outcome"] == "incomplete"
+    assert result["unreviewed_cus"] == ["future_cu"]
+
+
+def test_unreviewed_additions_preserve_approved_results_but_do_not_qualify_newer_catalogue(
+    report_tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("OPCUA_TARGET_SERVER_PROFILE", "reviewed.sut.yaml")
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(report_tmp_path / "coverage.json"))
+    recorder = CuCoverageReportRecorder(
+        root=report_tmp_path,
+        all_cus=["single_result", "future_cu"],
+        supported_cus=["single_result"],
+        unreviewed_cus=["future_cu"],
+    )
+    item = _Item(
+        nodeid="approved-test",
+        fspath=report_tmp_path / "test_approved.py",
+        name="approved",
+        markers=[_Marker("single_result")],
+    )
+    recorder.pytest_collection_modifyitems(None, None, [item])
+    recorder.pytest_runtest_logreport(_Report(nodeid="approved-test", passed=True))
+    session = SimpleNamespace(exitstatus=0)
+    recorder.pytest_sessionfinish(session, 0)
+    payload = json.loads(recorder.output_path.read_text(encoding="utf-8"))
+    assert payload["by_cu"]["single_result"]["passed"] == 1
+    assert payload["by_cu"]["single_result"]["declaration_state"] == "declared"
+    assert payload["by_cu"]["future_cu"]["compliance"] == "untested"
+    assert payload["by_cu"]["future_cu"]["declaration_state"] == "unreviewed"
+    assert payload["qualification"]["unreviewed_cus"] == ["future_cu"]
+    assert session.exitstatus == 6
+
+
+def test_external_session_with_blocked_claim_returns_incomplete(report_tmp_path, monkeypatch):
+    monkeypatch.setenv("OPCUA_TARGET_SERVER_PROFILE", "reviewed.sut.yaml")
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(report_tmp_path / "coverage.json"))
+    recorder = CuCoverageReportRecorder(root=report_tmp_path, all_cus=["job_result"], supported_cus=["job_result"])
+    item = _Item(nodeid="job-test", fspath=report_tmp_path / "test_job.py", name="job", markers=[_Marker("job_result")])
+    recorder.pytest_collection_modifyitems(None, None, [item])
+    recorder.pytest_runtest_logreport(_Report(nodeid="job-test", skipped=True, longrepr="BLOCKED: stale target"))
+    session = SimpleNamespace(exitstatus=0)
+    recorder.pytest_sessionfinish(session, 0)
+    assert session.exitstatus == 6
+    coverage = json.loads(recorder.output_path.read_text())
+    assert coverage["qualification"]["outcome"] == "incomplete"
+    assert coverage["exitstatus"] == 6
 
 
 class _Marker:
@@ -55,6 +196,7 @@ class _Report:
         self.duration = duration
         self.longrepr = longrepr
         self.longreprtext = longreprtext
+        self.user_properties: list[tuple[str, object]] = []
 
 
 @pytest.fixture
@@ -169,7 +311,7 @@ def test_rollup_compliance_is_conservative_for_report_readers():
     assert _rollup_compliance([]) == "untested"
     assert _rollup_compliance(["passed", "failed", "not_supported"]) == "action_needed"
     assert _rollup_compliance(["passed", "blocked"]) == "partial"
-    assert _rollup_compliance(["passed", "accepted_policy", "environment"]) == "supported"
+    assert _rollup_compliance(["passed", "accepted_policy", "environment"]) == "partial"
     assert _rollup_compliance(["not_supported", "not_supported"]) == "not_supported"
     assert _rollup_compliance(["blocked", "not_supported"]) == "blocked"
     assert _rollup_compliance(["accepted_policy", "environment"]) == "blocked"
@@ -476,9 +618,9 @@ def test_recorder_handles_teardown_after_result():
 
     # Log call phase first
     recorder.pytest_runtest_logreport(_Report(nodeid=item.nodeid, when="call", passed=True))
-    # Teardown failure should be ignored if call already recorded
+    # Cleanup errors invalidate otherwise passing execution evidence.
     recorder.pytest_runtest_logreport(_Report(nodeid=item.nodeid, when="teardown", failed=True))
-    assert recorder.results_by_nodeid[item.nodeid]["outcome"] == "passed"
+    assert recorder.results_by_nodeid[item.nodeid]["outcome"] == "error"
 
 
 def test_recorder_ignores_non_cu_tests():
@@ -553,8 +695,8 @@ def test_recorder_handles_workbook_error(report_tmp_path, monkeypatch):
 
 
 def test_rollup_compliance_handles_passed_with_environment():
-    """Test that passed with only environment outcomes returns supported."""
-    assert _rollup_compliance(["passed", "environment"]) == "supported"
+    """Unavailable evidence cannot be hidden behind another passing test."""
+    assert _rollup_compliance(["passed", "environment"]) == "partial"
 
 
 def test_rollup_compliance_handles_all_not_supported():

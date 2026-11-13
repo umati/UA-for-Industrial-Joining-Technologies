@@ -110,6 +110,10 @@ def resolve_claimed_cus(claims: CapabilityClaims) -> FrozenSet[str]:
       4. Apply ``cu_overrides``: ``unsupported`` removes a key,
          ``supported``/``manual_required`` add one.
     """
+    if claims.cu_scope_policy == "explicit":
+        return frozenset(key for key, value in claims.cu_overrides.items() if value in _CLAIMING_DISPOSITIONS)
+    if claims.cu_scope_policy != "inherit":
+        raise ExplicitManifestError(f"Unknown CU scope policy: {claims.cu_scope_policy}")
     all_facets = _load_facets()
     claimed: set[str] = set()
 
@@ -139,6 +143,29 @@ def resolve_claimed_cus(claims: CapabilityClaims) -> FrozenSet[str]:
         claims.active_profile,
     )
     return frozenset(claimed)
+
+
+def complete_cu_overrides(claims: CapabilityClaims) -> dict[str, str]:
+    """List the entire CU catalogue without changing claims or existing dispositions."""
+    catalogue = load_all_cus_from_facets()
+    if not catalogue:
+        raise ExplicitManifestError("Cannot complete a CU table without a usable facet catalogue.")
+    if claims.cu_scope_policy == "explicit":
+        return dict(sorted(claims.cu_overrides.items()))
+    claimed = resolve_claimed_cus(claims)
+    return {
+        key: claims.cu_overrides.get(key, "supported" if key in claimed else "unsupported")
+        for key in sorted(catalogue | claimed | claims.cu_overrides.keys())
+    }
+
+
+def unreviewed_cus(claims: CapabilityClaims) -> FrozenSet[str]:
+    """Find catalogue additions without assuming support or changing approved scope."""
+    if claims.cu_scope_policy == "inherit":
+        return frozenset()
+    if claims.cu_scope_policy != "explicit":
+        raise ExplicitManifestError(f"Unknown CU scope policy: {claims.cu_scope_policy}")
+    return frozenset(load_all_cus_from_facets() - claims.cu_overrides.keys())
 
 
 def load_supported_cus(manifest_path: Path | None = None) -> FrozenSet[str]:

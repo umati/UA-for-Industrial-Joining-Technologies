@@ -34,6 +34,26 @@ evidence — never a separate test suite.
 See [Target Server CU Guide](docs/TARGET_SERVER_CU_GUIDE.md) for the
 full Target Server option reference.
 
+For repeated controller runs, enable
+[bounded automatic process discovery](docs/TARGET_SERVER_CU_GUIDE.md#repeat-runs-without-updating-process-ids).
+Explicit YAML target restrictions remain supported. Required blocked or missing
+coverage produces **INCOMPLETE**, not PASS, even when pytest has no failures.
+Generated SUTs use an explicit complete CU table. New catalogue entries remain
+unreviewed and disabled until their support is declared. Previously approved
+tests can continue, but the newer catalogue cannot receive PASS without review.
+The [profile maintenance guide](target_server_cu_profiles/README.md#keep-portable-and-local-profiles-aligned)
+separates shared defaults from installation-specific claims and approvals.
+The selected manifest is checked at pytest startup and before tests and
+guarded method calls. Editing it during a run blocks further operations.
+This integrity check also applies to direct pytest, it does not grant approval
+to run a controller.
+
+The two YAML directories have different jobs: `profiles/` contains reusable
+specification/CU capability definitions. `target_server_cu_profiles/` contains
+complete SUT execution manifests. Similar fields share guidance within their
+schema, but simulator, manual-trigger and remote-start values need not match.
+See [the directory explanation](target_server_cu_profiles/README.md#why-there-are-two-yaml-directories).
+
 ## Usage
 
 ### Testing a Real Controller
@@ -45,7 +65,10 @@ python run_all_tests.py run --profile target_server_cu_profiles/controller_remot
 
 Use [`controller_manual_trigger.sut.yaml`](target_server_cu_profiles/controller_manual_trigger.sut.yaml) instead if the operator physically triggers the tool.
 
-**Only create a custom manifest** when the target controller has different capability claims. Use `init-profile` to auto-generate one from live discovery:
+**Create a local manifest** when the controller needs different connection,
+target, capability or approval settings. Copy the relevant example or use
+`init-profile` to seed one from live discovery, then review its claims and
+permissions before execution:
 ```bash
 python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output controller.sut.yaml
 ```

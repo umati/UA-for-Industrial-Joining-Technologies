@@ -2867,10 +2867,19 @@ async def test_get_joining_process_revision_list_with_nonexistent_id_returns_emp
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
-async def test_configured_counter_effect_produces_intervention_evidence(result_trigger):
+async def test_configured_counter_effect_produces_intervention_evidence(result_trigger, request):
     """Authorized counter mutations must produce complete correlated InterventionResult evidence."""
     workflow = getattr(result_trigger, "trigger_counter_effect", None)
     if workflow is None:
         pytest.skip("No target-server counter workflow is configured")
     outcome = await workflow(0)
+    if not outcome.triggered and outcome.execution_outcome != "failed":
+        request.node.user_properties.extend(
+            [
+                ("ijt_outcome", "environment" if outcome.mutation_attempted else "blocked"),
+                ("ijt_reason_code", outcome.reason_code or "counter_workflow_precondition"),
+                ("ijt_workflow", "counter_intervention"),
+            ]
+        )
+        pytest.skip(outcome.skip_reason)
     assert outcome.triggered, outcome.skip_reason

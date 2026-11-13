@@ -46,6 +46,7 @@ from __future__ import annotations
 import copy
 import datetime
 import functools
+import hashlib
 import logging
 import math
 import os
@@ -146,7 +147,7 @@ class FieldSpec:
     max_value: float | None = None
     value_choices: frozenset[str] | None = None  # for str_map values
     secret_reference: bool = False  # value names a secret, never holds one
-    prose: bool = False  # free text for humans; never scanned for placeholders
+    prose: bool = False  # Free text for humans, never scanned for placeholders.
 
     def default_value(self) -> Any:
         """Return a fresh copy of the declared default."""
@@ -255,8 +256,8 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                 name="expected_server",
                 description="Optional server identity cross-check (warn-only by default).",
                 fields=(
-                    FieldSpec("application_name", "str", "Expected ApplicationName; empty disables the check."),
-                    FieldSpec("application_version", "str", "Expected application version; empty disables the check."),
+                    FieldSpec("application_name", "str", "Expected ApplicationName. Empty disables the check."),
+                    FieldSpec("application_version", "str", "Expected application version. Empty disables the check."),
                     FieldSpec(
                         "warn_only_on_version_drift",
                         "bool",
@@ -309,20 +310,38 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
         name="capability_claims",
         description=(
             "Authoritative Conformance Unit (CU) claims for this SUT. These claims define the "
-            "scored scope; discovery never silently changes them."
+            "scored scope. Discovery never silently changes them."
         ),
         fields=(
             FieldSpec(
                 "active_profile",
                 "str",
-                "Base CU profile from profiles/ that this SUT claims.",
+                "Capability bundle used by inherit. With explicit, only the reviewed CU rows define scope.",
                 default="full_specification_coverage",
             ),
-            FieldSpec("supported_facets", "str_list", "Extra facet names claimed on top of the active profile."),
+            FieldSpec(
+                "supported_facets",
+                "str_list",
+                "Additional facet groups used by inherit. With explicit, these do not add CU claims.",
+            ),
+            FieldSpec(
+                "cu_scope_policy",
+                "str",
+                "explicit uses only the CU rows below. New catalogue entries remain unreviewed and disabled "
+                "until an owner adds a declaration. Approved tests can continue, but newer catalogue coverage "
+                "is incomplete. inherit preserves older partial manifests by using the profile and facets "
+                "for missing rows. Permissions remain separate from support declarations.",
+                default="inherit",
+                choices=("explicit", "inherit"),
+            ),
             FieldSpec(
                 "cu_overrides",
                 "str_map",
-                "Per-CU claim overrides: supported, unsupported, or manual_required.",
+                "Per-CU support declarations. supported requires passing test evidence. unsupported "
+                "removes that CU from this profile's declared scope. manual_required still needs "
+                "evidence after an operator action. Missing entries follow cu_scope_policy. With explicit, "
+                "a missing row is unreviewed, not unsupported. Edit reviewed rows to change scope. "
+                "Do not change declarations just to obtain PASS.",
                 value_choices=VALID_CLAIM_DISPOSITIONS,
             ),
             FieldSpec(
@@ -358,6 +377,22 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                 min_value=1,
             ),
             FieldSpec(
+                "allow_discovered_processes",
+                "bool",
+                "Explicitly approve compatible processes returned by live discovery as workflow candidates. "
+                "Does not authorize methods or override exact_match restrictions. False blocks automatic physical selection.",
+                default=False,
+            ),
+            FieldSpec("max_candidates", "int", "Maximum candidates attempted per workflow.", default=3, min_value=1),
+            FieldSpec(
+                "max_total_start_invocations",
+                "int",
+                "Maximum attempted StartSelectedJoining calls across all candidates in one workflow. "
+                "Failed or uncertain calls also consume this budget.",
+                default=6,
+                min_value=1,
+            ),
+            FieldSpec(
                 "max_start_invocations_by_result_classification",
                 "int_map",
                 (
@@ -387,17 +422,23 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                     FieldSpec(
                         "policy",
                         "str",
-                        "Tool selection policy.",
+                        "Automatic policies require exactly one Tool. With several Tools, configure the intended "
+                        "ProductInstanceUri. exact_match always requires that identity. "
+                        "Policy names do not rank Tool readiness.",
                         default="first_ready",
                         choices=VALID_SELECTION_POLICIES,
                     ),
                     FieldSpec(
                         "product_instance_uri",
                         "str",
-                        "Exact Tool ProductInstanceUri. Leave empty for runtime discovery. "
+                        "Exact Tool ProductInstanceUri. Leave empty only for single-Tool discovery. "
                         "Do not commit real serial numbers.",
                     ),
-                    FieldSpec("capability_tags", "str_list", "Optional tags used to narrow tool selection."),
+                    FieldSpec(
+                        "capability_tags",
+                        "str_list",
+                        "Tool tags retained in configuration. Current Tool discovery does not filter by these tags.",
+                    ),
                 ),
             ),
             SectionSpec(
@@ -409,9 +450,9 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "str",
                         "Joining process selection policy. Non-exact policies order direct standard-"
                         "classification matches first and may then try a Job process as bounded evidence "
-                        "for Batch or Sync results; only a completed requested-classification result proves "
-                        "support. all_compatible exercises every ordered candidate, while the other non-exact "
-                        "policies stop after the first proof. exact_match pins an advertised identifier; a "
+                        "for Batch or Sync results. Only a completed requested-classification result proves "
+                        "support. all_compatible tests every ordered candidate, while the other non-exact "
+                        "policies stop after the first proof. exact_match pins an advertised identifier. A "
                         "result-specific exact selector may intentionally cross process-classification "
                         "metadata, but still requires result-stream proof. Names and vendor fields never "
                         "prove capability.",
@@ -421,13 +462,18 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                     FieldSpec(
                         "match_by",
                         "str",
-                        "Exact matching key used when policy is exact_match. JoiningProcessId is the portable default; "
+                        "Exact matching key used when policy is exact_match. JoiningProcessId is the portable default. "
                         "SelectionName and JoiningProcessOriginId are explicit controller-specific alternatives. "
                         "A match must identify exactly one current process.",
                         default="joining_process_id",
                         choices=VALID_COUNTER_PROCESS_MATCH_FIELDS,
                     ),
-                    FieldSpec("joining_process_id", "str", "Exact JoiningProcessId. Do not commit real IDs."),
+                    FieldSpec(
+                        "joining_process_id",
+                        "str",
+                        "Exact JoiningProcessId. Do not commit real IDs. With automatic discovery, leave it "
+                        "empty to use current advertised IDs. With exact_match, configure the selected key.",
+                    ),
                     FieldSpec(
                         "joining_process_origin_id",
                         "str",
@@ -442,12 +488,13 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "identifier_strategy",
                         "str",
                         "Strategy for populating JoiningProcessIdentificationDataType: "
-                        "id_only (default/portable, sends JoiningProcessId only with empty OriginId and SelectionName; recommended for generic profiles), "
+                        "id_only (default/portable, sends JoiningProcessId only with empty OriginId and SelectionName, recommended for generic profiles), "
                         "id_with_origin (sends JoiningProcessId and OriginId), "
-                        "id_with_selection_name (sends JoiningProcessId and SelectionName, e.g. Atlas Copco SequenceIndex_1; use in local uncommitted manifests), "
-                        "selection_name_only (sends only an advertised SelectionName with empty ID and OriginId; "
+                        "id_with_selection_name (sends JoiningProcessId and an advertised SelectionName, "
+                        "use only when the controller needs both), "
+                        "selection_name_only (sends only an advertised SelectionName with empty ID and OriginId, "
                         "requires a unique live target and never constructs vendor-specific names), "
-                        "all_available (sends all three identifiers; use only when hardware evidence proves all are required).",
+                        "all_available (sends all three identifiers, use only when hardware evidence proves all are required).",
                         default="id_only",
                         choices=VALID_IDENTIFIER_STRATEGIES,
                     ),
@@ -493,7 +540,7 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "str",
                         (
                             "How captured results resolve a referenced child ResultId. "
-                            "terminal_required waits for IsPartial=false; partial_allowed accepts "
+                            "terminal_required waits for IsPartial=false. partial_allowed accepts "
                             "the latest partial update for open or effectively infinite batches."
                         ),
                         default="terminal_required",
@@ -530,12 +577,15 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
             ),
             SectionSpec(
                 name="evidence_reuse",
-                description="Reuse immutable joining-workflow evidence within one runner invocation.",
+                description=(
+                    "Reuse only complete, immutable evidence within this run when the endpoint, Tool, "
+                    "current process list, workflow bounds and selection policy still match."
+                ),
                 fields=(
                     FieldSpec(
                         "enabled",
                         "bool",
-                        "Reuse one provenance-keyed capture across compatible CU assertions.",
+                        "Reuse completed matching results for related CU tests within this run.",
                         default=False,
                     ),
                     FieldSpec(
@@ -633,13 +683,16 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                 "counter_effects",
                 "mapping_list",
                 "Explicit counter-effect scenarios. Every entry has these fields: method is the OPC UA "
-                "BrowseName; count is a positive bounded change; process_policy must be exact_match because "
-                "physical counter mutations may affect only one explicitly reviewed process; "
+                "BrowseName. count is a positive limited change. process_policy defaults to exact_match. "
+                "Opt-in discover_unique resolves exactly one current process of process_classification "
+                "(single, batch, sync, or job, default job), respecting exact workflow restrictions. "
+                "It requires allow_discovered_processes and an ID-carrying identifier_strategy. "
+                "Never retries an attempted mutation. No persistent IDs or vendor names are needed in this mode. "
                 "match_by selects one exact current-list key (joining_process_id by default, "
-                "or an explicitly configured joining_process_origin_id or selection_name); "
-                "identifier_strategy separately controls which identifiers are sent to the method; "
+                "or an explicitly configured joining_process_origin_id or selection_name). "
+                "identifier_strategy separately controls which identifiers are sent to the method. "
                 "expected_result_classification optionally requires a partial or final affected-result "
-                "update that explicitly references the completed InterventionResult; accepted values are "
+                "update that explicitly references the completed InterventionResult. Accepted values are "
                 "single, batch, sync, job, stitching, intervention, or text.",
             ),
         ),
@@ -659,7 +712,8 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "allowed_methods",
                         "str_list",
                         "Safety permissions only: methods explicitly approved for this SUT. "
-                        "This list never creates or enables tests.",
+                        "This list never creates or enables tests. Workflow approvals and setup are also "
+                        "required. A claimed CU without the required permission remains blocked, not unsupported.",
                     ),
                 ),
             ),
@@ -708,7 +762,7 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         name="parent_process",
                         description=(
                             "Parent batch/job process some controllers require before counter or abort methods. "
-                            "match_by chooses the single exact key; the default is joining_process_id."
+                            "match_by chooses the single exact key. The default is joining_process_id."
                         ),
                         fields=(
                             FieldSpec(
@@ -735,7 +789,10 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
             ),
             SectionSpec(
                 name="identifier_workflows",
-                description="Safety contract for structured and text identifier round trips.",
+                description=(
+                    "Use per-run unique identifiers and reset only values created by the active workflow. "
+                    "ResetAll requires its own approved workflow and is never used as cleanup."
+                ),
                 fields=(
                     FieldSpec(
                         "enabled",
@@ -762,7 +819,7 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "bool",
                         (
                             "Allow broad ResetAll only through the separately approved "
-                            "reset_all_identifiers workflow; never use it as cleanup."
+                            "reset_all_identifiers workflow. Never use it as cleanup."
                         ),
                         default=False,
                     ),
@@ -796,7 +853,7 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "to_sequence_number",
                         "int",
                         "Configured inclusive upper sequence bound for sequence_number or both mode (at least "
-                        "from_sequence_number, up to UInt64 max; default: 50, providing a safe 50-result compliance window). "
+                        "from_sequence_number, up to UInt64 max, default: 50, providing a safe 50-result compliance window). "
                         "Active result tests dynamically shift this window to cover recent history ending at the triggered "
                         "sequence number. Timestamp mode ignores this setting and transmits 0.",
                         default=50,
@@ -807,7 +864,7 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "from_time",
                         "str",
                         "Inclusive lower timestamp for timestamp or both mode, as ISO 8601. Use Z or an explicit UTC "
-                        "offset; a timestamp without an offset is interpreted as UTC. When both timestamps are valid, "
+                        "offset. A timestamp without an offset is interpreted as UTC. When both timestamps are valid, "
                         "from_time must not be later than to_time. Invalid text uses the safe runtime lower default.",
                         default="2000-01-01T00:00:00Z",
                     ),
@@ -815,7 +872,7 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "to_time",
                         "str",
                         "Inclusive upper timestamp for timestamp or both mode, as ISO 8601. Use Z or an explicit UTC "
-                        "offset; a timestamp without an offset is interpreted as UTC. Invalid text uses the safe runtime "
+                        "offset. A timestamp without an offset is interpreted as UTC. Invalid text uses the safe runtime "
                         "upper default. Conforming servers ignore both timestamps when sequence bounds are non-zero.",
                         default="9999-01-01T00:00:00Z",
                     ),
@@ -823,7 +880,7 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "min_duration_ms",
                         "number",
                         "RequestedMinimumDurationBetweenResults as a finite, non-negative number of milliseconds. It "
-                        "is sent as the OPC UA Duration/Double argument; 100.0 ms is the recommended default interval.",
+                        "is sent as the OPC UA Duration/Double argument. 100.0 ms is the recommended default interval.",
                         default=100.0,
                         min_value=0.0,
                     ),
@@ -890,7 +947,7 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
             FieldSpec(
                 "claimed_scope_only",
                 "bool",
-                "Keep true: score only what this manifest claims; unclaimed gaps stay informational.",
+                "Keep true: score only what this manifest claims. Unclaimed gaps stay informational.",
                 default=True,
             ),
         ),
@@ -908,19 +965,19 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
             FieldSpec(
                 "sanitize_shared_artifacts",
                 "bool",
-                "Redact hostnames, serial numbers, PIUs, and process IDs in shared artifacts.",
+                "Remove private host names, serial numbers, Tool IDs and process IDs from shared reports.",
                 default=True,
             ),
             FieldSpec(
                 "keep_local_exact_debug_artifacts",
                 "bool",
-                "Keep unredacted local debug artifacts. Keep false for shared or committed runs.",
+                "Keep private local debug reports with real names and IDs. Leave false for shared or committed runs.",
                 default=False,
             ),
             FieldSpec(
                 "redact_fields",
                 "str_list",
-                "Extra field names to redact in shared artifacts.",
+                "Extra field names whose values must be hidden in shared reports.",
                 default=["endpoint", "product_instance_uri", "joining_process_id", "serial_number"],
             ),
         ),
@@ -1057,7 +1114,7 @@ def _validate_process_selectors(raw: Any) -> dict[str, dict[str, Any]]:
     """Validate the free-keyed per-classification selector mapping.
 
     The enclosing section validation has already established that *raw* is a
-    mapping (or absent); this adds the per-classification key rules.
+    mapping (or absent), this adds the per-classification key rules.
     """
     if raw is None:
         raw = {}
@@ -1172,7 +1229,7 @@ def operational_placeholder_issues(data: Mapping[str, Any]) -> list[str]:
 class CapabilityClaims:
     """Authoritative CU claims declared by a SUT manifest.
 
-    Facet/profile resolution lives in :mod:`helpers.profile_loader`; this type
+    Facet/profile resolution lives in :mod:`helpers.profile_loader`. This type
     only carries the claim data so it has exactly one definition.
     """
 
@@ -1181,6 +1238,7 @@ class CapabilityClaims:
     cu_overrides: Mapping[str, str] = field(default_factory=dict)
     claims_are_authoritative: bool = True
     allow_discovery_to_relax_claims: bool = False
+    cu_scope_policy: str = "inherit"
 
 
 @dataclass(frozen=True)
@@ -1374,6 +1432,9 @@ class SutManifest:
             "workflow_execution": {
                 "approved_workflows": tuple(workflows.get("approved", ())),
                 "max_start_invocations": workflows.get("max_start_invocations", 6),
+                "allow_discovered_processes": workflows["allow_discovered_processes"],
+                "max_candidates": workflows["max_candidates"],
+                "max_total_start_invocations": workflows["max_total_start_invocations"],
                 "max_start_invocations_by_result_classification": dict(
                     workflows.get(
                         "max_start_invocations_by_result_classification",
@@ -1468,6 +1529,7 @@ def parse_sut_manifest(raw: Mapping[str, Any], source_path: str = "<in-memory>")
             cu_overrides=dict(data["capability_claims"]["cu_overrides"]),
             claims_are_authoritative=bool(data["capability_claims"]["claims_are_authoritative"]),
             allow_discovery_to_relax_claims=bool(data["capability_claims"]["allow_discovery_to_relax_claims"]),
+            cu_scope_policy=str(data["capability_claims"]["cu_scope_policy"]),
         ),
         timeouts=TimeoutBudgets(**data["timeouts"]),
         risk_approvals=RiskApprovals(**data["execution_policy"]["risk_approvals"]),
@@ -1570,6 +1632,7 @@ def _validate_consistency(manifest: SutManifest) -> None:
         "method",
         "count",
         "process_policy",
+        "process_classification",
         "match_by",
         "joining_process_id",
         "joining_process_origin_id",
@@ -1595,8 +1658,16 @@ def _validate_consistency(manifest: SutManifest) -> None:
         if isinstance(count, bool) or not isinstance(count, int) or count < 1:
             raise SutManifestError(f"{path}.count must be a positive integer")
         process_policy = effect.get("process_policy", "exact_match")
-        if process_policy != "exact_match":
-            raise SutManifestError(f"{path}.process_policy must be 'exact_match' for a physical counter mutation")
+        if process_policy not in {"exact_match", "discover_unique"}:
+            raise SutManifestError(f"{path}.process_policy must be exact_match or discover_unique")
+        classification = effect.get("process_classification", "job")
+        if classification not in {"single", "batch", "sync", "job"}:
+            raise SutManifestError(f"{path}.process_classification must be single, batch, sync, or job")
+        if process_policy == "discover_unique":
+            if not manifest.data["workflows"]["allow_discovered_processes"]:
+                raise SutManifestError(f"{path}: discover_unique requires workflows.allow_discovered_processes")
+            if any(effect.get(key) for key in ("joining_process_id", "joining_process_origin_id", "selection_name")):
+                raise SutManifestError(f"{path}: discover_unique cannot also pin identifier fields")
         match_by = effect.get("match_by", "joining_process_id")
         if not isinstance(match_by, str) or match_by not in VALID_COUNTER_PROCESS_MATCH_FIELDS:
             raise SutManifestError(f"{path}.match_by must be one of {sorted(VALID_COUNTER_PROCESS_MATCH_FIELDS)}")
@@ -1604,11 +1675,13 @@ def _validate_consistency(manifest: SutManifest) -> None:
             value = effect.get(field_name, "")
             if not isinstance(value, str):
                 raise SutManifestError(f"{path}.{field_name} must be a string")
-        if not effect.get(match_by):
+        if process_policy == "exact_match" and not effect.get(match_by):
             raise SutManifestError(f"{path}.{match_by} is required when selected by match_by")
         identifier_strategy = effect.get("identifier_strategy", "id_only")
         if not isinstance(identifier_strategy, str) or identifier_strategy not in VALID_IDENTIFIER_STRATEGIES:
             raise SutManifestError(f"{path}.identifier_strategy must be one of {sorted(VALID_IDENTIFIER_STRATEGIES)}")
+        if process_policy == "discover_unique" and identifier_strategy not in {"id_only", "id_with_origin"}:
+            raise SutManifestError(f"{path}: discover_unique requires id_only or id_with_origin")
         expected_classification = effect.get("expected_result_classification", "")
         if (
             not isinstance(expected_classification, str)
@@ -1814,9 +1887,8 @@ _REMOTE_START_FACETS: tuple[str, ...] = (
     "asset_management_assets_server_facet",
 )
 
-#: Claims carried over verbatim from the previous paired capability declaration
-#: for the multi-operation job example. Do not drop entries: they are the
-#: authoritative claim set for that generic controller workflow.
+#: Reviewed claims for the dedicated-test-controller regression example.
+#: These extend the historical controller scope, not discovery observations.
 _REMOTE_START_CU_OVERRIDES: dict[str, str] = {
     "acknowledge_results": "unsupported",
     "asset_management_accessory": "unsupported",
@@ -1832,11 +1904,13 @@ _REMOTE_START_CU_OVERRIDES: dict[str, str] = {
     "asset_management_servo": "unsupported",
     "asset_management_software": "unsupported",
     "asset_management_sub_component": "unsupported",
+    "consolidated_result_with_references": "supported",
     "delete_joint": "unsupported",
     "delete_joint_component": "unsupported",
     "delete_joint_design": "unsupported",
     "deselect_joining_process": "unsupported",
     "disconnect_asset": "unsupported",
+    "engineering_units": "supported",
     "execute_operation": "unsupported",
     "feedback_methods": "unsupported",
     "get_error_information": "unsupported",
@@ -1887,7 +1961,7 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
         "name": "Template SUT",
         "description": (
             "Copy this template, replace every <placeholder>, and keep controller-specific "
-            "copies outside the repository or sanitized."
+            "copies outside the repository, or remove private details before sharing."
         ),
         "lifecycle": {"mode": "external"},
         "connection": {"endpoint": "opc.tcp://<host>:40451"},
@@ -1937,14 +2011,10 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
         "scoring": {"mode": "strict_profile"},
     },
     "remote_start_multi_operation": {
-        "name": "Generic remote-start multi-operation controller",
+        "name": "Remote Start Multi-Operation Job",
         "description": (
-            "Generic sanitized example for any vendor controller that runs a multi-operation job "
-            "started remotely. GetJoiningProcessList may return several programs, batches, or jobs; "
-            "this manifest pins one Job-producing JoiningProcess so the starts and result layers are "
-            "deterministic. Six remote starts exercise two batches of three operations, producing "
-            "SingleResult, BatchResult, and a final JobResult. IncrementJoiningProcessCounter produces "
-            "companion InterventionResult evidence."
+            "Tests remotely started multi-operation jobs using bounded process discovery, counter "
+            "intervention, and required intermediate and final result evidence."
         ),
         "lifecycle": {"mode": "external"},
         "connection": {"endpoint": "opc.tcp://<target-server-host>:40451"},
@@ -1957,28 +2027,31 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
         "workflows": {
             "approved": ["remote_start_multi_operation_job", "counter_intervention"],
             "max_start_invocations": 6,
+            "allow_discovered_processes": True,
+            "max_candidates": 3,
+            "max_total_start_invocations": 6,
             "consecutive_start_delay_seconds": 0.25,
             "process_selector": {
-                "policy": "first_ready",
+                "policy": "first_compatible",
                 "joining_process_id": "",
                 "joining_process_origin_id": "",
                 "identifier_strategy": "id_only",
             },
             "process_selectors_by_classification": {
                 "single": {
-                    "policy": "first_ready",
+                    "policy": "first_compatible",
                     "joining_process_id": "",
                     "joining_process_origin_id": "",
                     "identifier_strategy": "id_only",
                 },
                 "job": {
-                    "policy": "first_ready",
+                    "policy": "first_compatible",
                     "joining_process_id": "",
                     "joining_process_origin_id": "",
                     "identifier_strategy": "id_only",
                 },
                 "batch": {
-                    "policy": "first_ready",
+                    "policy": "first_compatible",
                     "joining_process_id": "",
                     "joining_process_origin_id": "",
                     "identifier_strategy": "id_only",
@@ -1987,9 +2060,10 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
             "expected_results": {
                 "classification": "job",
                 "intermediate_classifications": ["single", "batch", "sync", "intervention"],
-                "final_result_required": False,
+                "final_result_required": True,
             },
-            "cleanup": {"policy": "best_effort_with_evidence", "deselect_process": False},
+            "cleanup": {"policy": "strict_cleanup", "deselect_process": False},
+            "evidence_reuse": {"enabled": True, "scope": "current_run"},
         },
         "triggers": {
             "result": {"mode": "start_selected_joining", "deselect_after_joining": False},
@@ -2010,11 +2084,33 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
                     "DecrementJoiningProcessCounter",
                     "AbortJoiningProcess",
                     "ResetJoiningProcess",
+                    "RequestResults",
+                    "GetLatestResult",
+                    "GetResultById",
+                    "GetResultIdListFiltered",
+                    "ReleaseResultHandle",
+                    "SendIdentifiers",
+                    "SendTextIdentifiers",
+                    "ResetIdentifiers",
                 ],
             },
             "intervention": {"method": "IncrementJoiningProcessCounter", "count": 1},
+            "counter_effects": [
+                {
+                    "method": "IncrementJoiningProcessCounter",
+                    "count": 1,
+                    "process_policy": "discover_unique",
+                    "process_classification": "job",
+                    "match_by": "joining_process_id",
+                    "joining_process_id": "",
+                    "joining_process_origin_id": "",
+                    "selection_name": "",
+                    "identifier_strategy": "id_only",
+                    "expected_result_classification": "batch",
+                }
+            ],
             "risk_approvals": {
-                "allow_disable_asset": False,
+                "allow_disable_asset": True,
                 "enable_asset_policy": "always",
                 "allow_destructive_methods": True,
                 "approved_by": "test-user",
@@ -2033,7 +2129,7 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
     "manual_trigger": {
         "name": "Generic manually triggered controller",
         "description": (
-            "Generic sanitized example for a controller where joining results are produced by a "
+            "Example with placeholder connection details for a controller where joining results are produced by a "
             "physical operator/tool trigger rather than a remote StartSelectedJoining. The client "
             "subscribes first and then waits for the operator. Replace <target-server-host> and keep "
             "any manifest holding real identifiers outside the repository."
@@ -2102,10 +2198,22 @@ def _schema_defaults(schema: Sequence[SectionSpec] = MANIFEST_SCHEMA) -> dict[st
 
 def preset_data(name: str) -> dict[str, Any]:
     """Return the fully-defaulted raw mapping for preset *name*."""
+    from helpers.profile_loader import complete_cu_overrides
+
     if name not in _PRESETS:
         raise SutManifestError(f"Unknown preset '{name}'. Available presets: {list(preset_names())}")
     data = _schema_defaults()
-    return _deep_merge(data, _PRESETS[name])
+    data = _deep_merge(data, _PRESETS[name])
+    raw = data["capability_claims"]
+    raw["cu_overrides"] = complete_cu_overrides(
+        CapabilityClaims(
+            active_profile=raw["active_profile"],
+            supported_facets=tuple(raw["supported_facets"]),
+            cu_overrides=raw["cu_overrides"],
+        )
+    )
+    raw["cu_scope_policy"] = "explicit"
+    return data
 
 
 def build_preset(name: str) -> SutManifest:
@@ -2129,13 +2237,16 @@ _HEADER = """\
 # Regenerate with:  python scripts/generate_sut_manifest_docs.py
 # Check for drift:  python scripts/generate_sut_manifest_docs.py --check
 #
+# "Schema default" describes an omitted field. The YAML value is this file's
+# chosen setting. Preset choices, capability claims and approvals are distinct.
+#
 # Security:
 #   Never put a password, token, or key in this file. Reference a local
 #   credentials file or environment variable names instead.
 #   Do not commit real endpoints, ProductInstanceUris, or process IDs.
 #
 # Placeholders written as <like-this> must be replaced before an external
-# (non-simulator) run; the runner fails fast while any remain.
+# (non-simulator) run. The runner fails fast while any remain.
 #
 # This report describes what this client observed. It is not an OPC Foundation
 # certification and makes no certification claim.
@@ -2149,8 +2260,16 @@ def _yaml_scalar(value: Any) -> str:
     return dumped
 
 
+def _default_comment(spec: FieldSpec) -> str:
+    if spec.default_value() == "inherit profile/map":
+        return "When omitted: use the parent profile/map policy."
+    return f"Schema default: {_yaml_scalar(spec.default_value())}"
+
+
 def _comment_lines(spec: FieldSpec, indent: str) -> list[str]:
     lines = [f"{indent}# {line}" for line in _wrap(spec.description, 100 - len(indent))]
+    if spec.default_value() not in ("follow cu_scope_policy", "section guidance"):
+        lines.extend(f"{indent}# {line}" for line in _wrap(_default_comment(spec), 100 - len(indent)))
     if spec.choices:
         lines.append(f"{indent}# Values: {', '.join(_sorted_choices(spec.choices))}")
     if spec.value_choices:
@@ -2178,10 +2297,85 @@ def _wrap(text: str, width: int) -> list[str]:
     return lines or [""]
 
 
-def _render_value(value: Any, indent: str) -> list[str]:
+def _counter_field_specs() -> tuple[FieldSpec, ...]:
+    selector = _find_section(("workflows", "process_selector"))
+    return (
+        FieldSpec(
+            "method", "str", "Counter method BrowseName. Requires explicit method and workflow approval.", required=True
+        ),
+        FieldSpec(
+            "count", "int", "Positive limited counter change, called at most once per effect in this run.", default=1
+        ),
+        FieldSpec(
+            "process_policy",
+            "str",
+            "exact_match pins a reviewed target. discover_unique requires discovery approval and exactly one current match.",
+            default="exact_match",
+            choices=frozenset({"exact_match", "discover_unique"}),
+        ),
+        FieldSpec(
+            "process_classification",
+            "str",
+            "Standard process classification for discover_unique, not proof of result support.",
+            default="job",
+            choices=frozenset({"single", "batch", "sync", "job"}),
+        ),
+        *(
+            spec
+            for spec in selector.fields
+            if spec.name
+            in {"match_by", "joining_process_id", "joining_process_origin_id", "selection_name", "identifier_strategy"}
+        ),
+        FieldSpec(
+            "expected_result_classification",
+            "str",
+            "Require a correlated partial or final affected result referencing the completed InterventionResult. Empty requires only InterventionResult.",
+            choices=VALID_RESULT_CLASSIFICATIONS - {"any"},
+        ),
+    )
+
+
+def _map_entry_spec(parent: FieldSpec, key: str) -> FieldSpec:
+    defaults = parent.default_value()
+    default = defaults.get(key, "inherit profile/map") if isinstance(defaults, dict) else "inherit profile/map"
+    if parent.name == "cu_overrides":
+        default = "follow cu_scope_policy"
+    description = (
+        f"Support for {key.replace('_', ' ')}."
+        if parent.name == "cu_overrides"
+        else f"Entry for {key}. {parent.description}"
+    )
+    return FieldSpec(key, "str", description, default=default)
+
+
+def _selector_role_spec(role: str) -> FieldSpec:
+    return FieldSpec(
+        role,
+        "str_map",
+        f"Process selector for the {role} workflow. When omitted, use process_selector. "
+        "Selection does not declare Conformance Unit support.",
+        default={},
+    )
+
+
+def _render_value(value: Any, indent: str, spec: FieldSpec) -> list[str]:
     """Render a non-empty mapping or list value under its field name."""
     if isinstance(value, dict):
-        return [f"{indent}  {key}: {_yaml_scalar(item)}" for key, item in value.items()]
+        lines = []
+        for key, item in value.items():
+            lines.extend(_comment_lines(_map_entry_spec(spec, key), indent + "  "))
+            lines.append(f"{indent}  {key}: {_yaml_scalar(item)}")
+        return lines
+    if spec.name == "counter_effects":
+        lines = []
+        for entry in value:
+            lines.append(f"{indent}  -")
+            for field_spec in _counter_field_specs():
+                if field_spec.name not in entry:
+                    continue
+                lines.extend(_comment_lines(field_spec, indent + "    "))
+                lines.append(f"{indent}    {field_spec.name}: {_yaml_scalar(entry[field_spec.name])}")
+        return lines
     return [f"{indent}  - {_yaml_scalar(item)}" for item in value]
 
 
@@ -2192,7 +2386,7 @@ def _render_section(section: SectionSpec, values: Mapping[str, Any], indent: str
         lines.extend(_comment_lines(spec, indent))
         if isinstance(value, (dict, list)) and value:
             lines.append(f"{indent}{spec.name}:")
-            lines.extend(_render_value(value, indent))
+            lines.extend(_render_value(value, indent, spec))
         else:
             lines.append(f"{indent}{spec.name}: {_yaml_scalar(value)}")
     for sub in section.subsections:
@@ -2205,9 +2399,9 @@ def _render_section(section: SectionSpec, values: Mapping[str, Any], indent: str
         if sub.name == "process_selectors_by_classification":
             lines.append(f"{indent}{sub.name}:")
             for key, entry in dict(sub_values).items():
+                lines.extend(_comment_lines(_selector_role_spec(key), indent + "  "))
                 lines.append(f"{indent}  {key}:")
-                for field_name, field_value in dict(entry).items():
-                    lines.append(f"{indent}    {field_name}: {_yaml_scalar(field_value)}")
+                _render_section(_find_section(("workflows", "process_selector")), entry, indent + "    ", lines)
             continue
         lines.append(f"{indent}{sub.name}:")
         _render_section(sub, sub_values, indent + "  ", lines)
@@ -2225,11 +2419,282 @@ def render_manifest_yaml(preset: str = "template", title: str | None = None) -> 
             continue
         lines.append("")
         lines.append("# " + "-" * 74)
-        lines.extend(f"# {line}" for line in _wrap(f"{section.name}: {section.description}", 98))
+        lines.extend(f"# {line}" for line in _wrap(f"{section.name}: {section.description}", 100))
         lines.append("# " + "-" * 74)
         lines.append(f"{section.name}:")
         _render_section(section, values.get(section.name) or {}, "  ", lines)
     return "\n".join(lines).replace("\n\n\n", "\n\n") + "\n"
+
+
+def manifest_file_sha256(path: str | Path) -> str:
+    """Hash the actual file bytes, without using the manifest loader's cache."""
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def manifest_change_reason(path: str | Path, reviewed_hash: str | None) -> str | None:
+    """Return a blocking reason when a reviewed manifest changes or becomes unreadable."""
+    if not reviewed_hash:
+        return None
+    try:
+        current_hash = manifest_file_sha256(path)
+    except OSError as exc:
+        return f"SUT manifest cannot be read during this run: {exc}. No workflow operations are permitted."
+    if current_hash != reviewed_hash:
+        return "SUT manifest changed during this run. No workflow operations are permitted."
+    return None
+
+
+def manifest_field_specs() -> dict[str, FieldSpec]:
+    """Return shared guidance for fixed fields."""
+    return dict(iter_field_specs())
+
+
+def manifest_field_spec(path: tuple[str, ...]) -> FieldSpec | None:
+    """Resolve shared guidance for fixed and repeated manifest fields."""
+    specs = manifest_field_specs()
+    specs = dict(iter_field_specs())
+    selector_specs = {spec.name: spec for spec in _find_section(("workflows", "process_selector")).fields}
+    counter_specs = {spec.name: spec for spec in _counter_field_specs()}
+    spec = specs.get(".".join(path))
+    if len(path) == 4 and path[:2] == ("workflows", "process_selectors_by_classification"):
+        spec = selector_specs.get(path[-1])
+    if len(path) == 4 and path[:2] == ("execution_policy", "counter_effects"):
+        spec = counter_specs.get(path[-1])
+    if len(path) == 3 and path[:2] == ("workflows", "process_selectors_by_classification"):
+        spec = _selector_role_spec(path[-1])
+    parent = specs.get(".".join(path[:-1]))
+    if spec is None and parent is not None:
+        spec = _map_entry_spec(parent, path[-1])
+    if spec is None:
+        sections: dict[tuple[str, ...], SectionSpec] = {}
+
+        def collect(section: SectionSpec, prefix: tuple[str, ...]) -> None:
+            current = (*prefix, section.name)
+            sections[current] = section
+            for child in section.subsections:
+                collect(child, current)
+
+        for section in MANIFEST_SCHEMA:
+            if section.name:
+                collect(section, ())
+        section = sections.get(path)
+        if section is not None:
+            description = f"{section.name}: {section.description}" if len(path) == 1 else section.description
+            spec = FieldSpec(path[-1], "str_map", description, default="section guidance")
+    return spec
+
+
+def annotate_local_manifest(source: str, *, compact: bool = False) -> str:
+    """Refresh schema prose, optionally consolidating exact copies without block markers."""
+    from helpers.profile_refresh import _document
+
+    original, _ = _document(source)
+    parse_sut_manifest(original)
+    specs = manifest_field_specs()
+    field_spec = manifest_field_spec
+    additions: dict[int, list[str]] = {}
+    removals: set[int] = set()
+
+    def strip_verified_block(match: re.Match[str]) -> str:
+        if source.count("\n", 0, match.start()) in protected:
+            return match.group()
+        block = match.group().splitlines()
+        marker = block[0].split("# BEGIN SUT FIELD ", 1)[1]
+        path, _, digest = marker.partition(" sha256=")
+        body = "\n".join(block[1:-1])
+        if digest:
+            unchanged = hashlib.sha256(body.encode("utf-8")).hexdigest() == digest
+        else:
+            spec = field_spec(tuple(path.split(".")))
+            indent = block[0][: len(block[0]) - len(block[0].lstrip())]
+            unchanged = spec is not None and body == "\n".join(_comment_lines(spec, indent))
+        if not unchanged or block[-1].strip() != "# END SUT FIELD":
+            raise SutManifestError(
+                f"Schema comment block '{path}' was edited. Move owner notes outside the block before refreshing. Nothing saved."
+            )
+        return ""
+
+    def scalar_content_lines(text: str) -> set[int]:
+        return {
+            line
+            for token in yaml.scan(text)
+            if isinstance(token, yaml.tokens.ScalarToken) and token.style in {"|", ">", "'", '"'}
+            for line in range(
+                token.start_mark.line + 1,
+                token.end_mark.line + int(token.style not in {"|", ">"}),
+            )
+        }
+
+    protected = scalar_content_lines(source)
+    clean = re.sub(
+        r"(?m)^[ \t]*# BEGIN SUT FIELD[^\n]*\n(?:[ \t]*#[^\n]*\n)*?^[ \t]*# END SUT FIELD[^\n]*\n",
+        strip_verified_block,
+        source,
+    )
+    protected_clean = scalar_content_lines(clean)
+    if any(
+        clean.count("\n", 0, marker.start()) not in protected_clean
+        for marker in re.finditer(r"(?m)^[ \t]*# (?:BEGIN SUT FIELD\b|END SUT FIELD\b)", clean)
+    ):
+        raise SutManifestError("Unclosed or unmatched schema comment marker. Nothing saved.")
+    newline = "\r\n" if "\r\n" in source else "\n"
+    lines = clean.splitlines(keepends=True)
+
+    def visit(node: Any, path: tuple[str, ...]) -> None:
+        if isinstance(node, yaml.MappingNode):
+            for key, value in node.value:
+                field_path = (*path, key.value)
+                spec = field_spec(field_path)
+                if spec is not None:
+                    indent = " " * key.start_mark.column
+                    comments = _comment_lines(spec, indent)
+                    if compact:
+                        start = key.start_mark.line
+                        while start and lines[start - 1].startswith(indent + "#"):
+                            start -= 1
+                        description_count = len(_wrap(spec.description, 100 - len(indent)))
+                        default_count = (
+                            0
+                            if spec.default_value() in ("follow cu_scope_policy", "section guidance")
+                            else len(_wrap(_default_comment(spec), 100 - len(indent)))
+                        )
+                        legacy = comments[:description_count] + comments[description_count + default_count :]
+                        variants = [comments, legacy]
+                        if field_path == ("capability_claims", "active_profile"):
+                            variants.append(
+                                _comment_lines(
+                                    FieldSpec(
+                                        "active_profile",
+                                        "str",
+                                        "Base CU profile from profiles/ that this SUT claims.",
+                                        default="full_specification_coverage",
+                                    ),
+                                    indent,
+                                )
+                            )
+                        if field_path == ("capability_claims", "supported_facets"):
+                            variants.append(
+                                _comment_lines(
+                                    FieldSpec(
+                                        "supported_facets",
+                                        "str_list",
+                                        "Extra facet names claimed on top of the active profile.",
+                                    ),
+                                    indent,
+                                )
+                            )
+                        if spec.default_value() == "section guidance":
+                            for offset in range(start, key.start_mark.line):
+                                words = []
+                                for end in range(offset, key.start_mark.line):
+                                    text = lines[end].strip()
+                                    if text.startswith(("# ---", "# Local note:")):
+                                        break
+                                    words.append(text.removeprefix("#").strip())
+                                    joined = " ".join(words)
+                                    if joined == spec.description:
+                                        removals.update(range(offset, end + 1))
+                                        break
+                                    if not spec.description.startswith(joined):
+                                        break
+                            if len(field_path) == 1:
+                                removals.update(
+                                    index
+                                    for index in range(start, key.start_mark.line)
+                                    if lines[index].lstrip().startswith("# ---")
+                                )
+                                border = f"{indent}# {'-' * 74}"
+                                additions.setdefault(key.start_mark.line, []).extend([border, *comments, border])
+                            else:
+                                additions.setdefault(key.start_mark.line, []).extend(comments)
+                            visit(value, field_path)
+                            continue
+                        if spec.name == "joining_process_id" and spec.description.startswith("Exact JoiningProcessId."):
+                            variants.append(
+                                _comment_lines(
+                                    FieldSpec(
+                                        "joining_process_id", "str", "Exact JoiningProcessId. Do not commit real IDs."
+                                    ),
+                                    indent,
+                                )
+                            )
+                        if spec.name == "allowed_methods":
+                            variants.append(
+                                _comment_lines(
+                                    FieldSpec(
+                                        "allowed_methods",
+                                        "str_list",
+                                        "Safety permissions only: methods explicitly approved for this SUT. This list never creates or enables tests.",
+                                    ),
+                                    indent,
+                                )
+                            )
+                        if field_path[:2] == ("capability_claims", "cu_overrides"):
+                            old_description = [
+                                f"{indent}# {line}"
+                                for line in _wrap(
+                                    f"Support declaration for {field_path[-1]}. Values: supported, unsupported, manual_required.",
+                                    100 - len(indent),
+                                )
+                            ]
+                            variants.extend(
+                                [
+                                    old_description + [f"{indent}# When omitted: use the parent profile/map policy."],
+                                    old_description + [f"{indent}# When omitted: follow cu_scope_policy."],
+                                ]
+                            )
+                        if spec.default_value() == "inherit profile/map":
+                            variants.append(
+                                comments[:description_count]
+                                + [
+                                    f"{indent}# {line}"
+                                    for line in _wrap(
+                                        f"Schema default: {_yaml_scalar(spec.default_value())}", 100 - len(indent)
+                                    )
+                                ]
+                                + comments[description_count + default_count :]
+                            )
+                        parent = specs.get(".".join(field_path[:-1]))
+                        if parent is not None and isinstance(parent.default_value(), dict):
+                            variants.append(
+                                [
+                                    f"{indent}# Entry: {key.value}. {parent.description} "
+                                    "Inherits the profile/map when omitted."
+                                ]
+                            )
+                        for variant in variants:
+                            for offset in range(start, key.start_mark.line - len(variant) + 1):
+                                if [line.rstrip("\r\n") for line in lines[offset : offset + len(variant)]] == variant:
+                                    removals.update(range(offset, offset + len(variant)))
+                        additions.setdefault(key.start_mark.line, []).extend(comments)
+                    else:
+                        start = key.start_mark.line
+                        while start and lines[start - 1].startswith(indent + "#"):
+                            start -= 1
+                        for offset in range(start, key.start_mark.line - len(comments) + 1):
+                            if [line.rstrip("\r\n") for line in lines[offset : offset + len(comments)]] == comments:
+                                removals.update(range(offset, offset + len(comments)))
+                        digest = hashlib.sha256("\n".join(comments).encode("utf-8")).hexdigest()
+                        additions.setdefault(key.start_mark.line, []).extend(
+                            [
+                                f"{indent}# BEGIN SUT FIELD {'.'.join(field_path)} sha256={digest}",
+                                *comments,
+                                f"{indent}# END SUT FIELD",
+                            ]
+                        )
+                visit(value, field_path)
+        elif isinstance(node, yaml.SequenceNode):
+            for index, entry in enumerate(node.value):
+                visit(entry, (*path, str(index)))
+
+    visit(yaml.compose(clean), ())
+    result = "".join(
+        "".join(comment + newline for comment in additions.get(index, [])) + (line if index not in removals else "")
+        for index, line in enumerate(lines)
+    )
+    if yaml.safe_load(result) != original:
+        raise SutManifestError("Comment refresh changed YAML values. No local file may be saved.")
+    return result
 
 
 def _reference_row(path: str, spec: FieldSpec) -> str:
@@ -2269,9 +2734,11 @@ def render_field_reference() -> str:
         "Rules that the loader enforces:",
         "",
         "- A manifest never contains a secret. Reference a local credentials file or environment variable names.",
-        "- Capability claims are authoritative; discovery observations never silently change them.",
+        "- Capability claims are authoritative. Discovery observations never silently change them.",
         "- Scoring defaults to strict claimed scope.",
         "- `<placeholder>` values must be replaced before an external (non-simulator) run.",
+        "- Schema defaults describe omitted fields, not a requirement that every preset use identical values.",
+        "- Capability definitions in `profiles/` are not SUT manifests or physical-action approvals.",
         "",
         "Outcomes in the final report use the canonical vocabulary "
         "(Passed, Failed, Not Supported, Blocked, Not Tested, Inconclusive). "
@@ -2284,12 +2751,15 @@ def render_field_reference() -> str:
     ]
     lines.extend(_reference_row(path, spec) for path, spec in iter_field_specs())
     lines.extend(
+        _reference_row(f"execution_policy.counter_effects[].{spec.name}", spec) for spec in _counter_field_specs()
+    )
+    lines.extend(
         [
             "",
             "## Built-in presets",
             "",
             "Presets are code, not companion files. They seed generation of the committed "
-            "examples; each run supplies exactly one manifest.",
+            "examples. Each run supplies exactly one manifest.",
             "",
             "| Preset | Name | Lifecycle | Result trigger |",
             "|---|---|---|---|",

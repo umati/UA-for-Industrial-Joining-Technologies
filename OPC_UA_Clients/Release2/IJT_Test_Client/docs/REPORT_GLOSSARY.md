@@ -51,6 +51,31 @@ cited symbol moves, the glossary entry moves with it.
 
 ## 2. Specification test report top-level terms
 
+### Controller qualification disposition
+
+The target runner and **cu-coverage-report.json** distinguish test execution
+from qualification. **PASS** requires complete passing claimed CU
+coverage. **FAIL** records execution failures or errors. **INCOMPLETE** records
+blocked, partial, untested or inconclusive required coverage and returns exit
+code 6, even when pytest otherwise returns zero.
+
+Structured workflow reasons override keyword-based skip classification.
+Counter precondition failures are **Blocked**. An attempted mutation with
+uncertain evidence is **Inconclusive**, not a successful skip. Definite counter
+method rejection is **FAIL**. Claimed CUs excluded by workflow scope are listed
+in `qualification.scope_excluded_claimed_cus` and keep qualification **INCOMPLETE**.
+Classification-only or skipped specification runs are **Not tested**, with exit code 6.
+CI/wrappers must propagate that nonzero exit rather than treating it as successful
+completion. Excel shows a yellow Inconclusive cover and sheet warnings for
+incomplete/not-tested qualification, independently of raw pytest success.
+The **workflow-actions.jsonl** journal records attempted physical workflows and
+run-scoped counter evidence reuse. None of these reports is certification.
+Explicit service rejections such as BadInvalidArgument, BadTypeMismatch,
+BadUserAccessDenied and BadMethodInvalid also fail the requested positive
+counter scenario. That does not identify the server as the sole root cause.
+Timeout/session/communication failures and Uncertain evidence remain
+inconclusive, with no mutation retry.
+
 ### 2.1 `📊 Specification Test Overview` 👔 🛠️ 🧪 📦
 Source: `scripts/reporting/specification_test_summary.py` (`## 📊 Specification Test Overview` heading and KPI table emitted in `render_specification_test_summary()`).
 Rendered as a **four-column KPI strip** (`Server Support Coverage` | `Validation Health` | `Specification Test Action Items` | `Server Scope Notes`) **plus a four-cell context row** beneath it. All KPI labels are plain text.

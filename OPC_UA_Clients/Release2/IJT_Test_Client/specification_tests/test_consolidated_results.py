@@ -141,6 +141,25 @@ async def _get_result_management(client, ns_mr):
     return rm
 
 
+def _require_triggered(outcome) -> None:
+    if outcome.triggered:
+        return
+    reason_code = getattr(outcome, "reason_code", None)
+    if not reason_code:
+        return
+    reason = outcome.skip_reason or "Required result workflow did not produce evidence."
+    if getattr(outcome, "execution_outcome", "") == "failed":
+        pytest.fail(f"{reason_code}: {reason}")
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+
+    raise WorkflowEvidenceUnavailable(
+        reason,
+        reason_code,
+        "environment" if getattr(outcome, "mutation_attempted", False) else "blocked",
+        "combined_results",
+    )
+
+
 async def _get_combined(
     subscription_client,
     result_trigger,
@@ -162,6 +181,7 @@ async def _get_combined(
             include_traces=False,
             send_as_refs=send_as_refs,
         )
+        _require_triggered(outcome)
         progression = getattr(outcome, "result_progression", None)
         if not outcome.triggered or progression is None:
             return None
@@ -176,8 +196,12 @@ async def _get_combined(
             include_traces=False,
             send_as_refs=send_as_refs,
         )
+        _require_triggered(outcome)
         if not outcome.triggered:
             return None
+        progression = getattr(outcome, "result_progression", None)
+        if progression is not None:
+            return progression.final_result if progression.is_complete else None
         progression = await rc.collect_progression(
             classification,
             allow_partial_references=bool(getattr(result_trigger, "allow_partial_referenced_children", False)),

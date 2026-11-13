@@ -11,6 +11,8 @@ No OPC UA server required.
 from __future__ import annotations
 
 import copy
+import re
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -25,10 +27,13 @@ from helpers.sut_manifest import (
     SutManifest,
     SutManifestError,
     _validate_consistency,
+    annotate_local_manifest,
     build_preset,
     iter_field_specs,
     load_capability_claims,
     load_sut_manifest,
+    manifest_change_reason,
+    manifest_file_sha256,
     operational_placeholder_issues,
     parse_sut_manifest,
     preset_data,
@@ -43,6 +48,101 @@ from helpers.sut_manifest import (
 _MANIFEST_DIR = Path(__file__).resolve().parents[2] / "target_server_cu_profiles"
 
 
+def test_local_comment_refresh_preserves_values_owner_notes_and_is_repeatable():
+    source = "# Owner note: keep my choices.\n" + render_manifest_yaml("remote_start_multi_operation")
+    source = source.replace("count: 1", "count: 2").replace("\n", "\r\n")
+    annotated = annotate_local_manifest(source)
+    assert yaml.safe_load(annotated) == yaml.safe_load(source)
+    assert "# Owner note: keep my choices.\r\n" in annotated
+    assert "\r\n" in annotated
+    assert "BEGIN SUT FIELD execution_policy.counter_effects.0.process_policy" in annotated
+    assert "BEGIN SUT FIELD workflows.process_selectors_by_classification.job.identifier_strategy" in annotated
+    assert annotate_local_manifest(annotated) == annotated
+    legacy = re.sub(r" sha256=[0-9a-f]{64}", "", annotated)
+    assert annotate_local_manifest(legacy) == annotated
+
+
+@pytest.mark.parametrize("on_end_marker", [False, True])
+@pytest.mark.parametrize("compact", [False, True])
+def test_local_comment_refresh_refuses_to_discard_notes_inside_schema_blocks(on_end_marker, compact):
+    annotated = annotate_local_manifest(render_manifest_yaml("remote_start_multi_operation"))
+    note = (
+        "# END SUT FIELD Owner note must survive"
+        if on_end_marker
+        else "# Owner note inside: must survive.\n# END SUT FIELD"
+    )
+    edited = annotated.replace("# END SUT FIELD", note, 1)
+    with pytest.raises(SutManifestError, match="was edited"):
+        annotate_local_manifest(edited, compact=compact)
+
+
+def test_compact_comment_refresh_consolidates_schema_prose_but_preserves_local_notes():
+    source = render_manifest_yaml("remote_start_multi_operation")
+    source = source.replace(
+        "\n      count: 1",
+        "\n      # Owner note: two increments were approved.\n      count: 2",
+        1,
+    )
+    source = source.replace("\n", "\r\n")
+    annotated = annotate_local_manifest(source)
+    compact = annotate_local_manifest(annotated, compact=True)
+    assert yaml.safe_load(compact) == yaml.safe_load(source)
+    assert "# Owner note: two increments were approved.\r\n" in compact
+    assert "BEGIN SUT FIELD" not in compact
+    assert compact.count("# Manifest schema version.") == 1
+    assert "Process selector for the job workflow." in compact
+    assert annotate_local_manifest(compact, compact=True) == compact
+
+
+def test_compact_comments_distinguish_inherited_map_policy_from_a_literal_default():
+    source = render_manifest_yaml("remote_start_multi_operation").replace(
+        "    actions: {}", "    actions:\n      basic_result_event: remote_start_multi_operation_job"
+    )
+    source = annotate_local_manifest(source, compact=True).replace(
+        "When omitted: use the parent profile/map policy.",
+        "Schema default: inherit profile/map",
+    )
+    compact = annotate_local_manifest(source, compact=True)
+    assert yaml.safe_load(compact) == yaml.safe_load(source)
+    assert "Schema default: inherit profile/map" not in compact
+    assert "When omitted: use the parent profile/map policy." in compact
+
+
+@pytest.mark.parametrize("compact", [False, True])
+def test_local_comments_refuse_an_unclosed_last_schema_block(compact):
+    source = annotate_local_manifest(render_manifest_yaml("remote_start_multi_operation"))
+    before, after = source.rsplit("# END SUT FIELD", 1)
+    with pytest.raises(SutManifestError, match="Unclosed or unmatched"):
+        annotate_local_manifest(before + after, compact=compact)
+
+
+@pytest.mark.parametrize("style", ["|", ">", "'"])
+@pytest.mark.parametrize("compact", [False, True])
+def test_comment_markers_inside_yaml_strings_are_preserved(style, compact):
+    text = (
+        "description: '\n  # BEGIN SUT FIELD owner-text\n  # END SUT FIELD\n  '\n"
+        if style == "'"
+        else f"description: {style}\n  # BEGIN SUT FIELD owner-text\n  # END SUT FIELD\n"
+    )
+    source = yaml.safe_dump(_minimal()) + text
+    annotated = annotate_local_manifest(source, compact=compact)
+    assert yaml.safe_load(annotated) == yaml.safe_load(source)
+    assert annotate_local_manifest(annotated, compact=compact) == annotated
+
+
+def test_manifest_integrity_checks_current_bytes_and_blocks_missing_files(tmp_path):
+    path = tmp_path / "reviewed.yaml"
+    path.write_bytes(b"reviewed content")
+    digest = manifest_file_sha256(path)
+    assert manifest_change_reason(path, digest) is None
+    path.write_bytes(b"changed content")
+    changed_reason = manifest_change_reason(path, digest)
+    assert changed_reason is not None and "changed during this run" in changed_reason
+    missing_reason = manifest_change_reason(tmp_path / "absent.yaml", digest)
+    assert missing_reason is not None and "cannot be read" in missing_reason
+    assert manifest_change_reason(tmp_path / "absent.yaml", None) is None
+
+
 def _minimal(**overrides) -> dict:
     """Return the smallest valid manifest mapping, with *overrides* merged in."""
     data = {
@@ -54,6 +154,52 @@ def _minimal(**overrides) -> dict:
     }
     data.update(copy.deepcopy(overrides))
     return data
+
+
+def test_portable_automatic_counter_manifest_uses_no_saved_identifiers():
+    manifest = build_preset("remote_start_multi_operation")
+    profile = manifest.to_execution_profile()
+    effect = profile.cu_execution.counter_effects[0]
+    assert effect.process_policy == "discover_unique"
+    assert effect.process_classification == "job"
+    assert not effect.joining_process_id and not effect.selection_name
+    assert profile.workflow_execution.allow_discovered_processes is True
+
+
+@pytest.mark.parametrize(
+    "parent",
+    [
+        {"match_by": "invalid"},
+        {"match_by": "selection_name", "joining_process_id": "saved-id"},
+    ],
+)
+def test_intervention_parent_selector_must_be_valid_and_complete(parent):
+    data = preset_data("remote_start_multi_operation")
+    data["execution_policy"]["intervention"]["parent_process"].update(parent)
+    with pytest.raises(SutManifestError):
+        parse_sut_manifest(data)
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"joining_process_id": "old-id"},
+        {"identifier_strategy": "selection_name_only"},
+        {"process_classification": "undefined"},
+    ],
+)
+def test_automatic_counter_rejects_conflicting_or_nonportable_settings(override):
+    data = preset_data("remote_start_multi_operation")
+    data["execution_policy"]["counter_effects"][0].update(override)
+    with pytest.raises(SutManifestError):
+        parse_sut_manifest(data)
+
+
+def test_automatic_counter_does_not_imply_scope_approval():
+    data = preset_data("remote_start_multi_operation")
+    data["workflows"]["allow_discovered_processes"] = False
+    with pytest.raises(SutManifestError, match="allow_discovered_processes"):
+        parse_sut_manifest(data)
 
 
 def _write(tmp_path: Path, data: dict, name: str = "unit") -> Path:
@@ -1044,25 +1190,40 @@ class TestPresetsAndCommittedManifests:
         assert validate_live_ready(manifest)
 
     def test_simulator_preset_preserves_the_simulator_cu_claims(self):
+        from helpers.profile_loader import load_all_cus_from_facets
+
         overrides = build_preset("simulator").capability_claims.cu_overrides
-        assert len(overrides) == 25
-        assert all(value == "unsupported" for value in overrides.values())
+        assert set(overrides) == load_all_cus_from_facets()
+        assert sum(value == "unsupported" for value in overrides.values()) == 25
         for key in ("acknowledge_results", "set_offline_timer", "get_joint_design_list", "execute_operation"):
             assert overrides[key] == "unsupported"
 
-    def test_remote_start_preset_preserves_the_generic_controller_claims(self):
+    def test_remote_start_preset_uses_reviewed_claims_and_allows_explicit_opt_out(self):
+        from helpers.profile_loader import load_all_cus_from_facets, resolve_claimed_cus
+
         claims = build_preset("remote_start_multi_operation").capability_claims
         assert claims.active_profile == "general_joining_system"
         assert len(claims.supported_facets) == 8
-        assert len(claims.cu_overrides) == 62
+        assert set(claims.cu_overrides) == load_all_cus_from_facets()
+        claimed = resolve_claimed_cus(claims)
+        assert len(claimed) == 74
+        optional = {"consolidated_result_with_references", "engineering_units"}
+        assert optional <= claimed
         assert claims.cu_overrides["job_result"] == "supported"
         assert claims.cu_overrides["intervention_result"] == "supported"
         assert claims.cu_overrides["sync_result"] == "unsupported"
+        unclaimed = replace(claims, cu_overrides={**claims.cu_overrides, **dict.fromkeys(optional, "unsupported")})
+        assert not (resolve_claimed_cus(unclaimed) & optional)
+        assert len(resolve_claimed_cus(unclaimed)) == 72
 
     def test_manual_trigger_preset_keeps_full_coverage_claims(self):
+        from helpers.profile_loader import load_all_cus_from_facets, resolve_claimed_cus
+
         claims = build_preset("manual_trigger").capability_claims
         assert claims.active_profile == "full_specification_coverage"
-        assert claims.cu_overrides == {"start_selected_joining": "manual_required"}
+        assert set(claims.cu_overrides) == load_all_cus_from_facets()
+        assert resolve_claimed_cus(claims) == load_all_cus_from_facets()
+        assert claims.cu_overrides["start_selected_joining"] == "manual_required"
 
     def test_remote_start_preset_matches_its_documented_workflow(self):
         profile = build_preset("remote_start_multi_operation").to_execution_profile()
@@ -1071,9 +1232,9 @@ class TestPresetsAndCommittedManifests:
         assert profile.workflow_execution.max_start_invocations == 6
         assert profile.workflow_execution.consecutive_start_delay_seconds == 0.25
         assert expected.classification == "job"
-        assert expected.final_result_required is False
+        assert expected.final_result_required is True
         assert "job" in profile.selection.joining_processes
-        # Passive observation budget stays short; result completion budget stays long.
+        # Passive observation budget stays short. Result completion budget stays long.
         assert profile.triggers.result.timeout_seconds < expected.timeout_seconds
 
     def test_manual_trigger_preset_waits_for_the_operator(self):

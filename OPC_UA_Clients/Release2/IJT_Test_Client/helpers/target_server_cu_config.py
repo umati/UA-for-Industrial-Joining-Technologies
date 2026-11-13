@@ -376,6 +376,9 @@ class WorkflowExecutionConfig:
 
     approved_workflows: tuple[str, ...] = ()
     max_start_invocations: int = 6
+    allow_discovered_processes: bool = False
+    max_candidates: int = 3
+    max_total_start_invocations: int = 6
     max_start_invocations_by_result_classification: dict[str, int] = field(
         default_factory=lambda: dict(DEFAULT_START_INVOCATIONS_BY_RESULT_CLASSIFICATION)
     )
@@ -402,6 +405,7 @@ class CounterEffectConfig:
     method: str
     count: int = 1
     process_policy: str = "exact_match"
+    process_classification: str = "job"
     match_by: str = "joining_process_id"
     joining_process_id: str = ""
     joining_process_origin_id: str = ""
@@ -667,13 +671,12 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
             item,
             "process_policy",
             "exact_match",
-            VALID_JOINING_PROCESS_SELECTION_POLICIES,
+            frozenset({"exact_match", "discover_unique"}),
             item_context,
         )
-        if process_policy != "exact_match":
-            raise TargetServerConfigError(
-                f"{item_context}: process_policy must be 'exact_match' for a physical counter mutation"
-            )
+        process_classification = require_enum(
+            item, "process_classification", "job", frozenset({"single", "batch", "sync", "job"}), item_context
+        )
         match_by = require_enum(
             item,
             "match_by",
@@ -689,8 +692,10 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
             "joining_process_origin_id": process_origin_id,
             "selection_name": selection_name,
         }
-        if not selector_values[match_by]:
+        if process_policy == "exact_match" and not selector_values[match_by]:
             raise TargetServerConfigError(f"{item_context}: {match_by} is required when selected")
+        if process_policy == "discover_unique" and any(selector_values.values()):
+            raise TargetServerConfigError(f"{item_context}: discover_unique cannot also pin identifier fields")
         identifier_strategy = require_enum(
             item,
             "identifier_strategy",
@@ -698,11 +703,14 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
             VALID_IDENTIFIER_STRATEGIES,
             item_context,
         )
+        if process_policy == "discover_unique" and identifier_strategy not in {"id_only", "id_with_origin"}:
+            raise TargetServerConfigError(f"{item_context}: discover_unique requires an ID-carrying strategy")
         counter_effects.append(
             CounterEffectConfig(
                 method=require_str(item, "method", item_context),
                 count=require_int(item, "count", 1, item_context, min_val=1),
                 process_policy=process_policy,
+                process_classification=process_classification,
                 match_by=match_by,
                 joining_process_id=process_id,
                 joining_process_origin_id=process_origin_id,
@@ -911,6 +919,9 @@ def parse_workflow_execution(raw: dict, context: str = "workflow_execution") -> 
     return WorkflowExecutionConfig(
         approved_workflows=approved,
         max_start_invocations=max_starts,
+        allow_discovered_processes=require_bool(raw, "allow_discovered_processes", False, context),
+        max_candidates=require_int(raw, "max_candidates", 3, context, min_val=1),
+        max_total_start_invocations=require_int(raw, "max_total_start_invocations", 6, context, min_val=1),
         max_start_invocations_by_result_classification=start_limits,
         consecutive_start_delay_seconds=pacing,
         expected_results=er_cfg,
@@ -1004,6 +1015,11 @@ def build_execution_profile(raw: dict, source_path: str = "<in-memory>") -> Targ
     cu_execution = sections["cu_execution"]
     workflow_execution = sections["workflow_execution"]
     approved_workflows = set(workflow_execution.approved_workflows)
+    if (
+        any(effect.process_policy == "discover_unique" for effect in cu_execution.counter_effects)
+        and not workflow_execution.allow_discovered_processes
+    ):
+        raise TargetServerConfigError("discover_unique requires workflow_execution.allow_discovered_processes")
     if cu_execution.identifier_workflows.allow_reset_all and "reset_all_identifiers" not in approved_workflows:
         raise TargetServerConfigError(
             "cu_execution.identifier_workflows.allow_reset_all requires "

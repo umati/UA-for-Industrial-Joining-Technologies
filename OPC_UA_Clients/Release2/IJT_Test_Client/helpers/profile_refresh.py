@@ -83,6 +83,7 @@ def _reference_groups(raw: dict[str, Any]) -> list[list[ProcessReference]]:
     references.extend(
         ProcessReference(("execution_policy", "counter_effects", index), effect)
         for index, effect in enumerate(policy.get("counter_effects", []))
+        if effect.get("process_policy", "exact_match") == "exact_match"
     )
     parent = (policy.get("intervention") or {}).get("parent_process") or {}
     if any(parent.get(key) for key in _IDENTIFIERS):

@@ -80,6 +80,42 @@ def _guide(path, answers, *, processes=None, prompt=None, emit=None):
     )
 
 
+def test_ambiguous_name_payload_cannot_be_kept_or_silently_retargeted(profile):
+    source = _SOURCE.replace("identifier_strategy: id_only", "identifier_strategy: selection_name_only")
+    profile.write_bytes(source.encode())
+    current = {**_PROCESS, "id": "old-job", "origin_id": "old-origin", "selection_name": "old-selection"}
+    other = {**current, "id": "other-job", "origin_id": "other-origin"}
+    output: list[str] = []
+    assert _guide(profile, ["k", "q"], processes=[current, other], emit=output.append) == 1
+    assert profile.read_bytes() == source.encode()
+    assert any("Current identifiers require review" in message for message in output)
+
+
+def test_block_scalar_identifier_repair_refuses_to_rewrite_owner_document(profile):
+    source = _SOURCE.replace(
+        "joining_process_id: old-job # Keep this comment.", "joining_process_id: |-\n        old-job"
+    )
+    profile.write_bytes(source.encode())
+    with pytest.raises(ValueError, match="block scalar"):
+        _guide(profile, ["1"])
+    assert profile.read_bytes() == source.encode()
+
+
+def test_automatic_counter_profile_needs_no_identifier_refresh_or_new_pins(profile):
+    data = yaml.safe_load(_SOURCE)
+    data["workflows"]["allow_discovered_processes"] = True
+    data["workflows"]["process_selectors_by_classification"]["job"] = {"policy": "first_compatible"}
+    effect = data["execution_policy"]["counter_effects"][0]
+    effect.update(process_policy="discover_unique", process_classification="job", joining_process_id="")
+    data["execution_policy"]["intervention"]["parent_process"] = {"match_by": "joining_process_id"}
+    original = yaml.safe_dump(data, sort_keys=False).encode()
+    profile.write_bytes(original)
+    prompt = Mock(side_effect=AssertionError("Automatic selection must not prompt to pin identifiers."))
+    assert _guide(profile, [], prompt=prompt) == 0
+    assert profile.read_bytes() == original
+    prompt.assert_not_called()
+
+
 @pytest.mark.parametrize("newline", ["\n", "\r\n"])
 def test_job_counter_and_parent_are_reviewed_once_and_saved_together(profile, newline):
     original = _SOURCE.replace("\n", newline).encode()
@@ -197,6 +233,19 @@ def test_concurrent_profile_edit_is_preserved(profile):
     with pytest.raises(ValueError, match="Profile changed during review"):
         _guide(profile, [], prompt=answer)
     assert profile.read_text().endswith("# External edit.\n")
+    assert list(profile.parent.iterdir()) == [profile]
+
+
+def test_failed_profile_persistence_preserves_owner_bytes_and_removes_its_temporary_file(profile, monkeypatch):
+    from helpers import profile_refresh
+
+    def fail_fsync(*_):
+        raise OSError("Storage persistence failed")
+
+    monkeypatch.setattr(profile_refresh.os, "fsync", fail_fsync)
+    with pytest.raises(OSError, match="Storage persistence failed"):
+        _guide(profile, ["1", f"REFRESH {profile.name}"])
+    assert profile.read_bytes() == _SOURCE.encode()
     assert list(profile.parent.iterdir()) == [profile]
 
 

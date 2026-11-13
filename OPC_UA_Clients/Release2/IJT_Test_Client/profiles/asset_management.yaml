@@ -2,15 +2,26 @@
 #
 # Extends the general joining system profile with asset-related IJT Base facets:
 # asset topology, optional asset operations, enable-tool, and asset connection.
+#
+# Capability definition, not a controller/runtime configuration.
+# Select with capability_claims.active_profile: asset_management in one SUT manifest.
+# Selection declares CU support. It does not discover features, approve physical
+# actions, or prove compliance. Use reviewed SUT cu_overrides for real exceptions.
+# These definition fields are explicit metadata, not execution defaults.
 
+# Named bundle of facets selected by capability_claims.active_profile.
 profile:
+  # Report-facing label. The file stem, not this label, selects the profile.
   name: "Asset Management"
+  # Human-readable scope. Claimed CUs come from facets and SUT overrides, not this prose.
   description: >
     Full asset management implementation on top of the general joining system.
     Covers asset topology, identification, Machinery building blocks, health and
     service monitoring, optional asset operation methods, enable-tool, and asset
     connection coverage.
 
+  # Facet keys from facets.yaml. Their CU sets are unioned with supported_facets,
+  # then the SUT manifest's cu_overrides are applied. Repeated CUs count once.
   facets:
     - general_joining_system_server_facet
     - asset_management_assets_server_facet

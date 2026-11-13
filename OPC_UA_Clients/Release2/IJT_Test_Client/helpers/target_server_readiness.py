@@ -50,7 +50,7 @@ from helpers.canonical_outcomes import (
     canonical_for_legacy_outcome,
     reason_category,
 )
-from helpers.process_selectors import matching_processes, selection_names, selector_value
+from helpers.process_selectors import counter_candidates, matching_processes, selection_names, selector_value
 from helpers.target_server_cu_config import (
     OUTCOME_BLOCKED,
     OUTCOME_CLAIM_MISMATCH,
@@ -445,8 +445,8 @@ def check_tool_piu_configured(profile: TargetServerCuProfile) -> ReadinessOutcom
     """Check whether a tool ProductInstanceUri is available for workflow execution.
 
     When the profile provides an explicit PIU, returns passed immediately
-    (runtime checks will verify it later).  When selection_policy is first_ready
-    or first_available, returns a soft PASSED (runtime discovery is required).
+    (runtime checks will verify it later). Automatic policies permit runtime
+    discovery, which must find exactly one Tool, not the first of several.
     When exact_match is requested with no PIU, returns a configuration_error.
     """
     check_name = "tool_piu_configured"
@@ -541,6 +541,7 @@ def has_live_process_selector_checks(profile: TargetServerCuProfile) -> bool:
     return (
         any(selection.policy == "exact_match" for selection in selections)
         or bool(profile.cu_execution.counter_effects)
+        and "counter_intervention" in profile.workflow_execution.approved_workflows
         or parent_is_configured
     )
 
@@ -558,6 +559,7 @@ def check_live_process_selectors(profile: TargetServerCuProfile, processes: list
     selectors.extend(
         (f"cu_execution.counter_effects[{index}]", effect)
         for index, effect in enumerate(profile.cu_execution.counter_effects)
+        if "counter_intervention" in profile.workflow_execution.approved_workflows
     )
     parent_process = profile.cu_execution.extension_fields.get("counter_parent_process")
     if isinstance(parent_process, Mapping) and any(
@@ -571,6 +573,10 @@ def check_live_process_selectors(profile: TargetServerCuProfile, processes: list
             selector.get("match_by", "joining_process_id") if isinstance(selector, Mapping) else selector.match_by
         )
         configured_value = selector_value(selector, match_by)
+        dynamic_counter = getattr(selector, "process_policy", "") == "discover_unique"
+        if dynamic_counter:
+            match_by = "process_classification"
+            configured_value = selector.process_classification
         check_name = f"live_selector:{label}"
         if not configured_value:
             checks.append(
@@ -584,7 +590,13 @@ def check_live_process_selectors(profile: TargetServerCuProfile, processes: list
             )
             continue
 
-        matches = matching_processes(processes, selector, match_by)
+        if dynamic_counter:
+            selection = profile.selection.joining_processes.get(
+                selector.process_classification, profile.selection.joining_process
+            )
+            matches = counter_candidates(processes, selector, selection)
+        else:
+            matches = matching_processes(processes, selector, match_by)
         identities = []
         for process in matches:
             getter = (

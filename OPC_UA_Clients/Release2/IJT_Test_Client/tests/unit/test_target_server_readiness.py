@@ -34,6 +34,38 @@ from helpers.target_server_readiness import (
 )
 
 
+@pytest.mark.parametrize(
+    "catalog",
+    [
+        [],
+        [{"id": "new-job", "classification": 5}],
+        [
+            {"id": "job-1", "classification": 5},
+            {"id": "job-2", "classification": 5},
+        ],
+    ],
+)
+def test_approved_unique_counter_discovery_readiness_is_truthful(catalog):
+    profile = build_execution_profile(
+        {
+            "schema_version": 1,
+            "workflow_execution": {"approved_workflows": ["counter_intervention"], "allow_discovered_processes": True},
+            "cu_execution": {
+                "counter_effects": [
+                    {
+                        "method": "IncrementJoiningProcessCounter",
+                        "process_policy": "discover_unique",
+                    }
+                ]
+            },
+        }
+    )
+    checks = check_live_process_selectors(profile, catalog)
+    counter_checks = [check for check in checks if "counter_effects" in check.check_name]
+    assert len(counter_checks) == 1
+    assert counter_checks[0].outcome == (OUTCOME_PASSED if len(catalog) == 1 else OUTCOME_BLOCKED)
+
+
 def test_stale_selector_recovery_names_public_fields_and_quotes_the_actual_profile(tmp_path):
     from helpers.target_server_readiness import PreflightReport, ReadinessOutcome, preflight_repair_lines
 

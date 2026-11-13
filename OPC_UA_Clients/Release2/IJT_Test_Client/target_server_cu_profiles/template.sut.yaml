@@ -9,28 +9,34 @@
 # Regenerate with:  python scripts/generate_sut_manifest_docs.py
 # Check for drift:  python scripts/generate_sut_manifest_docs.py --check
 #
+# "Schema default" describes an omitted field. The YAML value is this file's
+# chosen setting. Preset choices, capability claims and approvals are distinct.
+#
 # Security:
 #   Never put a password, token, or key in this file. Reference a local
 #   credentials file or environment variable names instead.
 #   Do not commit real endpoints, ProductInstanceUris, or process IDs.
 #
 # Placeholders written as <like-this> must be replaced before an external
-# (non-simulator) run; the runner fails fast while any remain.
+# (non-simulator) run. The runner fails fast while any remain.
 #
 # This report describes what this client observed. It is not an OPC Foundation
 # certification and makes no certification claim.
 
 # Manifest schema version. Must be 1 for this release.
+# Schema default: 1
 # REQUIRED
 schema_version: 1
 
 # Human-readable SUT name used in reports.
+# Schema default: ''
 # REQUIRED
 name: Template SUT
 
 # Short description of this SUT and its scope.
+# Schema default: ''
 description: Copy this template, replace every <placeholder>, and keep controller-specific copies
-  outside the repository or sanitized.
+  outside the repository, or remove private details before sharing.
 
 # --------------------------------------------------------------------------
 # lifecycle: Who starts and stops the server under test.
@@ -39,11 +45,13 @@ lifecycle:
 
   # auto_simulator: the runner launches the built-in simulator. external: the SUT is started and owned
   # outside this tool.
+  # Schema default: external
   # Values: auto_simulator, external
   # REQUIRED
   mode: external
 
   # How long to wait for an auto-launched simulator to accept connections.
+  # Schema default: 60.0
   startup_timeout_seconds: 60.0
 
 # --------------------------------------------------------------------------
@@ -52,39 +60,49 @@ lifecycle:
 connection:
 
   # OPC UA endpoint URL of the SUT. Required for external lifecycle runs.
+  # Schema default: ''
   endpoint: opc.tcp://<host>:40451
 
   # OPC UA message security mode.
+  # Schema default: None
   # Values: None, Sign, SignAndEncrypt
   security_mode: None
 
   # OPC UA security policy.
+  # Schema default: None
   # Values: Aes128_Sha256_RsaOaep, Aes256_Sha256_RsaPss, Basic256Sha256, None
   security_policy: None
 
   # Path to the client application certificate (DER/PEM).
+  # Schema default: ''
   client_certificate_path: ''
 
   # Path to the client private key. Never inline key material here.
+  # Schema default: ''
   # Reference only - never place the secret value itself here.
   client_private_key_path: ''
 
   # Path to the expected server certificate, when pinned.
+  # Schema default: ''
   server_certificate_path: ''
 
   # Directory holding trusted issuer/peer certificates.
+  # Schema default: ''
   trust_store_path: ''
 
   # Optional server identity cross-check (warn-only by default).
   expected_server:
 
-    # Expected ApplicationName; empty disables the check.
+    # Expected ApplicationName. Empty disables the check.
+    # Schema default: ''
     application_name: ''
 
-    # Expected application version; empty disables the check.
+    # Expected application version. Empty disables the check.
+    # Schema default: ''
     application_version: ''
 
     # Warn instead of failing when the version differs.
+    # Schema default: true
     warn_only_on_version_drift: true
 
 # --------------------------------------------------------------------------
@@ -95,45 +113,312 @@ authentication:
 
   # anonymous: no user identity. prompt: ask the operator at run time. file: read a local, git-ignored
   # credentials file. environment: read environment/CI secret variables.
+  # Schema default: anonymous
   # Values: anonymous, environment, file, prompt
   # REQUIRED
   source: anonymous
 
   # Non-secret user name. Leave empty for anonymous or prompt.
+  # Schema default: ''
   username: ''
 
   # Path to a local credentials file (git-ignored). Required when source is 'file'.
+  # Schema default: ''
   # Reference only - never place the secret value itself here.
   credentials_file: ''
 
   # Environment variable holding the user name. Used when source is 'environment'.
+  # Schema default: ''
   # Reference only - never place the secret value itself here.
   username_env_var: ''
 
   # Environment variable holding the password. Required when source is 'environment'.
+  # Schema default: ''
   # Reference only - never place the secret value itself here.
   password_env_var: ''
 
 # --------------------------------------------------------------------------
-# capability_claims: Authoritative Conformance Unit (CU) claims for this SUT. These claims define
-# the scored scope; discovery never silently changes them.
+# capability_claims: Authoritative Conformance Unit (CU) claims for this SUT. These claims define the
+# scored scope. Discovery never silently changes them.
 # --------------------------------------------------------------------------
 capability_claims:
 
-  # Base CU profile from profiles/ that this SUT claims.
+  # Capability bundle used by inherit. With explicit, only the reviewed CU rows define scope.
+  # Schema default: full_specification_coverage
   active_profile: full_specification_coverage
 
-  # Extra facet names claimed on top of the active profile.
+  # Additional facet groups used by inherit. With explicit, these do not add CU claims.
+  # Schema default: []
   supported_facets: []
 
-  # Per-CU claim overrides: supported, unsupported, or manual_required.
+  # explicit uses only the CU rows below. New catalogue entries remain unreviewed and disabled until
+  # an owner adds a declaration. Approved tests can continue, but newer catalogue coverage is
+  # incomplete. inherit preserves older partial manifests by using the profile and facets for missing
+  # rows. Permissions remain separate from support declarations.
+  # Schema default: inherit
+  # Values: explicit, inherit
+  cu_scope_policy: explicit
+
+  # Per-CU support declarations. supported requires passing test evidence. unsupported removes that CU
+  # from this profile's declared scope. manual_required still needs evidence after an operator action.
+  # Missing entries follow cu_scope_policy. With explicit, a missing row is unreviewed, not
+  # unsupported. Edit reviewed rows to change scope. Do not change declarations just to obtain PASS.
+  # Schema default: {}
   # Entry values: manual_required, supported, unsupported
-  cu_overrides: {}
+  cu_overrides:
+    # Support for abort joining process.
+    abort_joining_process: supported
+    # Support for acknowledge results.
+    acknowledge_results: supported
+    # Support for asset connection event.
+    asset_connection_event: supported
+    # Support for asset connection state event.
+    asset_connection_state_event: supported
+    # Support for asset enable state event.
+    asset_enable_state_event: supported
+    # Support for asset management.
+    asset_management: supported
+    # Support for asset management accessory.
+    asset_management_accessory: supported
+    # Support for asset management additional information.
+    asset_management_additional_information: supported
+    # Support for asset management battery.
+    asset_management_battery: supported
+    # Support for asset management battery operation cycle counter.
+    asset_management_battery_operation_cycle_counter: supported
+    # Support for asset management cable.
+    asset_management_cable: supported
+    # Support for asset management calibration.
+    asset_management_calibration: supported
+    # Support for asset management controller.
+    asset_management_controller: supported
+    # Support for asset management feeder.
+    asset_management_feeder: supported
+    # Support for asset management health.
+    asset_management_health: supported
+    # Support for asset management machinery building blocks.
+    asset_management_machinery_building_blocks: supported
+    # Support for asset management memory device.
+    asset_management_memory_device: supported
+    # Support for asset management monitoring health.
+    asset_management_monitoring_health: supported
+    # Support for asset management operation counters.
+    asset_management_operation_counters: supported
+    # Support for asset management power supply.
+    asset_management_power_supply: supported
+    # Support for asset management sensor.
+    asset_management_sensor: supported
+    # Support for asset management service.
+    asset_management_service: supported
+    # Support for asset management servo.
+    asset_management_servo: supported
+    # Support for asset management software.
+    asset_management_software: supported
+    # Support for asset management sub component.
+    asset_management_sub_component: supported
+    # Support for asset management tool.
+    asset_management_tool: supported
+    # Support for asset management tool operation cycle counter.
+    asset_management_tool_operation_cycle_counter: supported
+    # Support for asset management virtual station.
+    asset_management_virtual_station: supported
+    # Support for basic result.
+    basic_result: supported
+    # Support for batch result.
+    batch_result: supported
+    # Support for batch result counters.
+    batch_result_counters: supported
+    # Support for consolidated result with references.
+    consolidated_result_with_references: supported
+    # Support for decrement joining process counter.
+    decrement_joining_process_counter: supported
+    # Support for delete joining process.
+    delete_joining_process: supported
+    # Support for delete joint.
+    delete_joint: supported
+    # Support for delete joint component.
+    delete_joint_component: supported
+    # Support for delete joint design.
+    delete_joint_design: supported
+    # Support for deselect joining process.
+    deselect_joining_process: supported
+    # Support for disconnect asset.
+    disconnect_asset: supported
+    # Support for enable tool.
+    enable_tool: supported
+    # Support for engineering units.
+    engineering_units: supported
+    # Support for event condition classes.
+    event_condition_classes: supported
+    # Support for event payload.
+    event_payload: supported
+    # Support for event payload associated entities.
+    event_payload_associated_entities: supported
+    # Support for event payload reported values.
+    event_payload_reported_values: supported
+    # Support for execute operation.
+    execute_operation: supported
+    # Support for feedback methods.
+    feedback_methods: supported
+    # Support for get error information.
+    get_error_information: supported
+    # Support for get identifiers.
+    get_identifiers: supported
+    # Support for get joining process.
+    get_joining_process: supported
+    # Support for get joining process list.
+    get_joining_process_list: supported
+    # Support for get joining process revision list.
+    get_joining_process_revision_list: supported
+    # Support for get joint.
+    get_joint: supported
+    # Support for get joint component.
+    get_joint_component: supported
+    # Support for get joint component list.
+    get_joint_component_list: supported
+    # Support for get joint design.
+    get_joint_design: supported
+    # Support for get joint design list.
+    get_joint_design_list: supported
+    # Support for get joint list.
+    get_joint_list: supported
+    # Support for get joint revision list.
+    get_joint_revision_list: supported
+    # Support for get latest result.
+    get_latest_result: supported
+    # Support for get result by id.
+    get_result_by_id: supported
+    # Support for get result with filter criteria.
+    get_result_with_filter_criteria: supported
+    # Support for get selected joining program.
+    get_selected_joining_program: supported
+    # Support for identifiers event.
+    identifiers_event: supported
+    # Support for increment joining process counter.
+    increment_joining_process_counter: supported
+    # Support for intervention result.
+    intervention_result: supported
+    # Support for io signals methods.
+    io_signals_methods: supported
+    # Support for job result.
+    job_result: supported
+    # Support for joining process management.
+    joining_process_management: supported
+    # Support for joining result errors.
+    joining_result_errors: supported
+    # Support for joining result failure reason.
+    joining_result_failure_reason: supported
+    # Support for joining result overall result values.
+    joining_result_overall_result_values: supported
+    # Support for joining result step results.
+    joining_result_step_results: supported
+    # Support for joining result trace.
+    joining_result_trace: supported
+    # Support for joining system base.
+    joining_system_base: supported
+    # Support for joining system identification.
+    joining_system_identification: supported
+    # Support for joining system machinery building blocks.
+    joining_system_machinery_building_blocks: supported
+    # Support for joint component data.
+    joint_component_data: supported
+    # Support for joint data.
+    joint_data: supported
+    # Support for joint design data.
+    joint_design_data: supported
+    # Support for joint management.
+    joint_management: supported
+    # Support for method input argument.
+    method_input_argument: supported
+    # Support for partial consolidated result.
+    partial_consolidated_result: supported
+    # Support for reboot asset.
+    reboot_asset: supported
+    # Support for request results.
+    request_results: supported
+    # Support for request unacknowledged results.
+    request_unacknowledged_results: supported
+    # Support for requested result event access.
+    requested_result_event_access: supported
+    # Support for requested result variable access.
+    requested_result_variable_access: supported
+    # Support for reset identifiers.
+    reset_identifiers: supported
+    # Support for reset joining process.
+    reset_joining_process: supported
+    # Support for result additional data.
+    result_additional_data: supported
+    # Support for result content.
+    result_content: supported
+    # Support for result event access.
+    result_event_access: supported
+    # Support for result extended meta data.
+    result_extended_meta_data: supported
+    # Support for result external identifiers.
+    result_external_identifiers: supported
+    # Support for result internal identifiers.
+    result_internal_identifiers: supported
+    # Support for result management.
+    result_management: supported
+    # Support for result processing times.
+    result_processing_times: supported
+    # Support for result processing times durations.
+    result_processing_times_durations: supported
+    # Support for result value final tag.
+    result_value_final_tag: supported
+    # Support for result value trace point index.
+    result_value_trace_point_index: supported
+    # Support for result value trace point time offset.
+    result_value_trace_point_time_offset: supported
+    # Support for result variable access.
+    result_variable_access: supported
+    # Support for select joining process.
+    select_joining_process: supported
+    # Support for select joint.
+    select_joint: supported
+    # Support for select process event.
+    select_process_event: supported
+    # Support for self contained consolidated result.
+    self_contained_consolidated_result: supported
+    # Support for send identifiers.
+    send_identifiers: supported
+    # Support for send joining process.
+    send_joining_process: supported
+    # Support for send joint.
+    send_joint: supported
+    # Support for send joint component.
+    send_joint_component: supported
+    # Support for send joint design.
+    send_joint_design: supported
+    # Support for set calibration.
+    set_calibration: supported
+    # Support for set joining process counter.
+    set_joining_process_counter: supported
+    # Support for set joining process mapping.
+    set_joining_process_mapping: supported
+    # Support for set joining process size.
+    set_joining_process_size: supported
+    # Support for set offline timer.
+    set_offline_timer: supported
+    # Support for set time.
+    set_time: supported
+    # Support for single result.
+    single_result: supported
+    # Support for start joining process.
+    start_joining_process: supported
+    # Support for start selected joining.
+    start_selected_joining: supported
+    # Support for sync result.
+    sync_result: supported
+    # Support for sync result counters.
+    sync_result_counters: supported
 
   # Keep true: manifest claims win over discovery observations.
+  # Schema default: true
   claims_are_authoritative: true
 
   # Keep false: discovery must not silently downgrade a claim to unsupported.
+  # Schema default: false
   allow_discovery_to_relax_claims: false
 
 # --------------------------------------------------------------------------
@@ -143,82 +428,129 @@ workflows:
 
   # Workflow names approved for this SUT (e.g. remote_start_multi_operation_job, counter_intervention,
   # remote_abort_job, remote_reset_job).
+  # Schema default: []
   approved: []
 
   # Maximum accepted StartSelectedJoining RPC calls for a multi-operation compound process
   # (Job/Batch/Sync) before stopping. Single/Program processes are always capped at 1 start. Execution
   # exits early as soon as a terminal completed result arrives.
+  # Schema default: 6
   max_start_invocations: 6
+
+  # Explicitly approve compatible processes returned by live discovery as workflow candidates. Does
+  # not authorize methods or override exact_match restrictions. False blocks automatic physical
+  # selection.
+  # Schema default: false
+  allow_discovered_processes: false
+
+  # Maximum candidates attempted per workflow.
+  # Schema default: 3
+  max_candidates: 3
+
+  # Maximum attempted StartSelectedJoining calls across all candidates in one workflow. Failed or
+  # uncertain calls also consume this budget.
+  # Schema default: 6
+  max_total_start_invocations: 6
 
   # Maximum accepted StartSelectedJoining calls while waiting for each result classification.
   # Supported keys are single, batch, sync, and job. Every value is also capped by
   # max_start_invocations.
+  # Schema default: {single: 1, batch: 3, sync: 3, job: 6}
   max_start_invocations_by_result_classification:
+    # Entry for single. Maximum accepted StartSelectedJoining calls while waiting for each result
+    # classification. Supported keys are single, batch, sync, and job. Every value is also capped by
+    # max_start_invocations.
+    # Schema default: 1
     single: 1
+    # Entry for batch. Maximum accepted StartSelectedJoining calls while waiting for each result
+    # classification. Supported keys are single, batch, sync, and job. Every value is also capped by
+    # max_start_invocations.
+    # Schema default: 3
     batch: 3
+    # Entry for sync. Maximum accepted StartSelectedJoining calls while waiting for each result
+    # classification. Supported keys are single, batch, sync, and job. Every value is also capped by
+    # max_start_invocations.
+    # Schema default: 3
     sync: 3
+    # Entry for job. Maximum accepted StartSelectedJoining calls while waiting for each result
+    # classification. Supported keys are single, batch, sync, and job. Every value is also capped by
+    # max_start_invocations.
+    # Schema default: 6
     job: 6
 
   # Pacing delay in seconds between consecutive StartSelectedJoining invocations for compound
   # processes (Job/Batch/Sync). Allows controller state settlement and event drain (default: 0.25s).
   # Not applied to single operations. Queue inspection and this drain reduce extra-start races but
   # cannot eliminate the non-atomic check-to-start window.
+  # Schema default: 0.25
   consecutive_start_delay_seconds: 0.25
 
   # How the Tool under test is discovered or pinned.
   tool_selector:
 
-    # Tool selection policy.
+    # Automatic policies require exactly one Tool. With several Tools, configure the intended
+    # ProductInstanceUri. exact_match always requires that identity. Policy names do not rank Tool
+    # readiness.
+    # Schema default: first_ready
     # Values: exact_match, first_available, first_compatible, first_ready
     policy: first_ready
 
-    # Exact Tool ProductInstanceUri. Leave empty for runtime discovery. Do not commit real serial
-    # numbers.
+    # Exact Tool ProductInstanceUri. Leave empty only for single-Tool discovery. Do not commit real
+    # serial numbers.
+    # Schema default: ''
     product_instance_uri: ''
 
-    # Optional tags used to narrow tool selection.
+    # Tool tags retained in configuration. Current Tool discovery does not filter by these tags.
+    # Schema default: []
     capability_tags: []
 
   # Default joining-process selection for all result classifications.
   process_selector:
 
     # Joining process selection policy. Non-exact policies order direct standard-classification
-    # matches first and may then try a Job process as bounded evidence for Batch or Sync results; only
-    # a completed requested-classification result proves support. all_compatible exercises every
-    # ordered candidate, while the other non-exact policies stop after the first proof. exact_match
-    # pins an advertised identifier; a result-specific exact selector may intentionally cross
+    # matches first and may then try a Job process as bounded evidence for Batch or Sync results. Only
+    # a completed requested-classification result proves support. all_compatible tests every ordered
+    # candidate, while the other non-exact policies stop after the first proof. exact_match pins an
+    # advertised identifier. A result-specific exact selector may intentionally cross
     # process-classification metadata, but still requires result-stream proof. Names and vendor fields
     # never prove capability.
+    # Schema default: first_compatible
     # Values: all_compatible, exact_match, first_available, first_compatible, first_ready
     policy: first_compatible
 
-    # Exact matching key used when policy is exact_match. JoiningProcessId is the portable default;
+    # Exact matching key used when policy is exact_match. JoiningProcessId is the portable default.
     # SelectionName and JoiningProcessOriginId are explicit controller-specific alternatives. A match
     # must identify exactly one current process.
+    # Schema default: joining_process_id
     # Values: joining_process_id, joining_process_origin_id, selection_name
     match_by: joining_process_id
 
-    # Exact JoiningProcessId. Do not commit real IDs.
+    # Exact JoiningProcessId. Do not commit real IDs. With automatic discovery, leave it empty to use
+    # current advertised IDs. With exact_match, configure the selected key.
+    # Schema default: ''
     joining_process_id: ''
 
     # Exact JoiningProcessOriginId value when match_by selects it.
+    # Schema default: ''
     joining_process_origin_id: ''
 
     # Exact controller-specific SelectionName value when match_by selects it.
+    # Schema default: ''
     selection_name: ''
 
     # Strategy for populating JoiningProcessIdentificationDataType: id_only (default/portable, sends
-    # JoiningProcessId only with empty OriginId and SelectionName; recommended for generic profiles),
+    # JoiningProcessId only with empty OriginId and SelectionName, recommended for generic profiles),
     # id_with_origin (sends JoiningProcessId and OriginId), id_with_selection_name (sends
-    # JoiningProcessId and SelectionName, e.g. Atlas Copco SequenceIndex_1; use in local uncommitted
-    # manifests), selection_name_only (sends only an advertised SelectionName with empty ID and
-    # OriginId; requires a unique live target and never constructs vendor-specific names),
-    # all_available (sends all three identifiers; use only when hardware evidence proves all are
-    # required).
+    # JoiningProcessId and an advertised SelectionName, use only when the controller needs both),
+    # selection_name_only (sends only an advertised SelectionName with empty ID and OriginId, requires
+    # a unique live target and never constructs vendor-specific names), all_available (sends all three
+    # identifiers, use only when hardware evidence proves all are required).
+    # Schema default: id_only
     # Values: all_available, id_only, id_with_origin, id_with_selection_name, selection_name_only
     identifier_strategy: id_only
 
     # Optional tags used to narrow process selection.
+    # Schema default: []
     capability_tags: []
 
   # Optional per-classification process selectors (single, batch, job, sync ...). Classification is
@@ -232,48 +564,60 @@ workflows:
   expected_results:
 
     # Primary/final result classification.
+    # Schema default: single
     # Values: any, batch, intervention, job, single, stitching, sync, text
     classification: single
 
     # Result classifications emitted before or alongside the final result.
+    # Schema default: []
     intermediate_classifications: []
 
     # Require a final result before the workflow counts as complete.
+    # Schema default: true
     final_result_required: true
 
     # How captured results resolve a referenced child ResultId. terminal_required waits for
-    # IsPartial=false; partial_allowed accepts the latest partial update for open or effectively
+    # IsPartial=false. partial_allowed accepts the latest partial update for open or effectively
     # infinite batches.
+    # Schema default: terminal_required
     # Values: partial_allowed, terminal_required
     referenced_child_completion_policy: terminal_required
 
     # Expected ResultState (OPC 40001-101 Machinery Result) for terminal completion: 1 (COMPLETED), 3
     # (ABORTED), or 4 (FAILED).
+    # Schema default: 1
     expected_terminal_result_state: 1
 
     # When true, abort workflows reject terminal results evaluated as OK (1).
+    # Schema default: false
     reject_ok_evaluation_on_abort: false
 
   # What the runner restores after a workflow.
   cleanup:
 
     # Cleanup policy after the run.
+    # Schema default: best_effort_with_evidence
     # Values: best_effort_with_evidence, no_cleanup, strict_cleanup
     policy: best_effort_with_evidence
 
     # Deselect the joining process after the run.
+    # Schema default: true
     deselect_process: true
 
     # Reset identifiers after the run.
+    # Schema default: false
     reset_identifiers: false
 
-  # Reuse immutable joining-workflow evidence within one runner invocation.
+  # Reuse only complete, immutable evidence within this run when the endpoint, Tool, current process
+  # list, workflow bounds and selection policy still match.
   evidence_reuse:
 
-    # Reuse one provenance-keyed capture across compatible CU assertions.
+    # Reuse completed matching results for related CU tests within this run.
+    # Schema default: false
     enabled: false
 
     # Evidence lifetime. current_run never persists evidence across runner invocations.
+    # Schema default: current_run
     # Values: current_run
     scope: current_run
 
@@ -286,26 +630,31 @@ triggers:
   result:
 
     # Result trigger mode (simulator, remote start, manual operator, or passive).
+    # Schema default: none
     # Values: manual_trigger, none, observe_only, simulate_methods, start_selected_joining
     mode: none
 
     # Deselect the joining process after each joining operation.
+    # Schema default: false
     deselect_after_joining: false
 
   # Event evidence trigger.
   event:
 
     # Event trigger mode.
+    # Schema default: observe_only
     # Values: manual_trigger, none, observe_only, simulate_methods, workflow_actions
     mode: observe_only
 
     # Event CU key to approved workflow name. Used only by workflow_actions mode.
+    # Schema default: {}
     actions: {}
 
   # Condition evidence trigger.
   condition:
 
     # Condition trigger mode.
+    # Schema default: observe_only
     # Values: manual_trigger, none, observe_only, simulate_methods
     mode: observe_only
 
@@ -315,104 +664,132 @@ triggers:
 execution_policy:
 
   # Execution mode for this SUT.
+  # Schema default: automated
   # Values: automated, guided, preflight_only
   default_mode: preflight_only
 
   # Allow operator prompts and waits.
+  # Schema default: false
   allow_manual_steps: false
 
   # What to do when a claimed CU's runtime preconditions are missing.
+  # Schema default: blocked
   # Values: blocked, failed, skip
   precondition_failure_policy: blocked
 
   # Per-method status classification overrides (method BrowseName -> accepted|warning|fail).
+  # Schema default: {}
   method_status_policies: {}
 
-  # Explicit counter-effect scenarios. Every entry has these fields: method is the OPC UA BrowseName;
-  # count is a positive bounded change; process_policy must be exact_match because physical counter
-  # mutations may affect only one explicitly reviewed process; match_by selects one exact current-list
-  # key (joining_process_id by default, or an explicitly configured joining_process_origin_id or
-  # selection_name); identifier_strategy separately controls which identifiers are sent to the method;
+  # Explicit counter-effect scenarios. Every entry has these fields: method is the OPC UA BrowseName.
+  # count is a positive limited change. process_policy defaults to exact_match. Opt-in discover_unique
+  # resolves exactly one current process of process_classification (single, batch, sync, or job,
+  # default job), respecting exact workflow restrictions. It requires allow_discovered_processes and
+  # an ID-carrying identifier_strategy. Never retries an attempted mutation. No persistent IDs or
+  # vendor names are needed in this mode. match_by selects one exact current-list key
+  # (joining_process_id by default, or an explicitly configured joining_process_origin_id or
+  # selection_name). identifier_strategy separately controls which identifiers are sent to the method.
   # expected_result_classification optionally requires a partial or final affected-result update that
-  # explicitly references the completed InterventionResult; accepted values are single, batch, sync,
+  # explicitly references the completed InterventionResult. Accepted values are single, batch, sync,
   # job, stitching, intervention, or text.
+  # Schema default: []
   counter_effects: []
 
   # Which state-changing OPC UA methods may be called on this SUT.
   state_changing_methods:
 
     # Safety default for state-changing method calls.
+    # Schema default: require_explicit_opt_in
     # Values: allow_all, deny_all, require_explicit_opt_in
     default_policy: require_explicit_opt_in
 
     # Safety permissions only: methods explicitly approved for this SUT. This list never creates or
-    # enables tests.
+    # enables tests. Workflow approvals and setup are also required. A claimed CU without the required
+    # permission remains blocked, not unsupported.
+    # Schema default: []
     allowed_methods: []
 
   # Explicit approvals for operations that change or disturb the SUT.
   risk_approvals:
 
     # Allow EnableAsset(false) on a real tool. Tests always restore true.
+    # Schema default: false
     allow_disable_asset: false
 
     # when_disabled: only re-enable when found disabled. always: reassert before every workflow.
+    # Schema default: when_disabled
     # Values: always, when_disabled
     enable_asset_policy: when_disabled
 
     # Allow abort/reset style methods that disturb production state.
+    # Schema default: false
     allow_destructive_methods: false
 
     # Who approved these risk settings (name or role).
+    # Schema default: ''
     approved_by: ''
 
     # Change request, ticket, or document reference.
+    # Schema default: ''
     approval_reference: ''
 
   # Method used to generate InterventionResult evidence, when applicable.
   intervention:
 
     # Intervention method BrowseName. Must also appear in allowed_methods.
+    # Schema default: ''
     method: ''
 
     # Counter value for counter-style intervention methods.
+    # Schema default: 1
     count: 1
 
     # Message recorded with the intervention.
+    # Schema default: ''
     message: ''
 
     # Parent batch/job process some controllers require before counter or abort methods. match_by
-    # chooses the single exact key; the default is joining_process_id.
+    # chooses the single exact key. The default is joining_process_id.
     parent_process:
 
       # Exact parent-process matching key.
+      # Schema default: joining_process_id
       # Values: joining_process_id, joining_process_origin_id, selection_name
       match_by: joining_process_id
 
       # Parent process ID.
+      # Schema default: ''
       joining_process_id: ''
 
       # Parent process origin ID when match_by selects it.
+      # Schema default: ''
       joining_process_origin_id: ''
 
       # Parent process selection name when match_by selects it.
+      # Schema default: ''
       selection_name: ''
 
-  # Safety contract for structured and text identifier round trips.
+  # Use per-run unique identifiers and reset only values created by the active workflow. ResetAll
+  # requires its own approved workflow and is never used as cleanup.
   identifier_workflows:
 
     # Allow approved identifier workflows to mutate test-owned identifiers.
+    # Schema default: false
     enabled: false
 
     # How identifier workflows create collision-safe values.
+    # Schema default: run_unique
     # Values: run_unique
     value_policy: run_unique
 
     # Cleanup may reset only identifiers created by the current test workflow.
+    # Schema default: selective_test_owned_only
     # Values: selective_test_owned_only
     cleanup_policy: selective_test_owned_only
 
-    # Allow broad ResetAll only through the separately approved reset_all_identifiers workflow; never
+    # Allow broad ResetAll only through the separately approved reset_all_identifiers workflow. Never
     # use it as cleanup.
+    # Schema default: false
     allow_reset_all: false
 
   # Configuration for the RequestResults method filter strategy and parameter ranges.
@@ -422,53 +799,64 @@ execution_policy:
     # Timestamp mode transmits both sequence arguments as zero. Both mode populates all five
     # arguments, but conforming servers use timestamps only when both sequence arguments are zero (OPC
     # 40450-1).
+    # Schema default: sequence_number
     # Values: both, sequence_number, timestamp
     filter_strategy: sequence_number
 
     # Configured inclusive lower sequence bound for sequence_number or both mode (1..UInt64 max).
     # Active result tests adjust the transmitted window when needed to include the result they just
     # triggered. Timestamp mode ignores this setting and transmits 0.
+    # Schema default: 1
     from_sequence_number: 1
 
     # Configured inclusive upper sequence bound for sequence_number or both mode (at least
-    # from_sequence_number, up to UInt64 max; default: 50, providing a safe 50-result compliance
+    # from_sequence_number, up to UInt64 max, default: 50, providing a safe 50-result compliance
     # window). Active result tests dynamically shift this window to cover recent history ending at the
     # triggered sequence number. Timestamp mode ignores this setting and transmits 0.
+    # Schema default: 50
     to_sequence_number: 50
 
     # Inclusive lower timestamp for timestamp or both mode, as ISO 8601. Use Z or an explicit UTC
-    # offset; a timestamp without an offset is interpreted as UTC. When both timestamps are valid,
+    # offset. A timestamp without an offset is interpreted as UTC. When both timestamps are valid,
     # from_time must not be later than to_time. Invalid text uses the safe runtime lower default.
+    # Schema default: '2000-01-01T00:00:00Z'
     from_time: '2000-01-01T00:00:00Z'
 
     # Inclusive upper timestamp for timestamp or both mode, as ISO 8601. Use Z or an explicit UTC
-    # offset; a timestamp without an offset is interpreted as UTC. Invalid text uses the safe runtime
+    # offset. A timestamp without an offset is interpreted as UTC. Invalid text uses the safe runtime
     # upper default. Conforming servers ignore both timestamps when sequence bounds are non-zero.
+    # Schema default: '9999-01-01T00:00:00Z'
     to_time: '9999-01-01T00:00:00Z'
 
     # RequestedMinimumDurationBetweenResults as a finite, non-negative number of milliseconds. It is
-    # sent as the OPC UA Duration/Double argument; 100.0 ms is the recommended default interval.
+    # sent as the OPC UA Duration/Double argument. 100.0 ms is the recommended default interval.
+    # Schema default: 100.0
     min_duration_ms: 100.0
 
 # --------------------------------------------------------------------------
-# timeouts: Separated time budgets. Passive observation, active result completion, whole-workflow,
-# and operator budgets are independent so one slow phase cannot mask another.
+# timeouts: Separated time budgets. Passive observation, active result completion, whole-workflow, and
+# operator budgets are independent so one slow phase cannot mask another.
 # --------------------------------------------------------------------------
 timeouts:
 
   # Budget for evidence the client did not trigger itself (observe_only).
+  # Schema default: 5.0
   passive_observation_seconds: 5.0
 
   # Budget for result completion after the client started a joining operation.
+  # Schema default: 60.0
   active_result_seconds: 60.0
 
   # Budget for a complete workflow, including setup and cleanup.
+  # Schema default: 120.0
   workflow_seconds: 120.0
 
   # Budget for a physical operator action (manual trigger modes).
+  # Schema default: 300.0
   operator_seconds: 300.0
 
   # Budget for a single OPC UA method call or read.
+  # Schema default: 15.0
   method_call_seconds: 15.0
 
 # --------------------------------------------------------------------------
@@ -478,10 +866,12 @@ scoring:
 
   # strict_profile: strict claimed scope (default). diagnostic: report everything, no gate.
   # acceptance: zero failed CUs and zero claim mismatches in claimed scope.
+  # Schema default: strict_profile
   # Values: acceptance, diagnostic, strict_profile
   mode: strict_profile
 
-  # Keep true: score only what this manifest claims; unclaimed gaps stay informational.
+  # Keep true: score only what this manifest claims. Unclaimed gaps stay informational.
+  # Schema default: true
   claimed_scope_only: true
 
 # --------------------------------------------------------------------------
@@ -490,15 +880,20 @@ scoring:
 reporting:
 
   # Directory for evidence reports, relative to the runner root or absolute.
+  # Schema default: test-results/target-server-cu
   output_dir: test-results/target-server-cu
 
-  # Redact hostnames, serial numbers, PIUs, and process IDs in shared artifacts.
+  # Remove private host names, serial numbers, Tool IDs and process IDs from shared reports.
+  # Schema default: true
   sanitize_shared_artifacts: true
 
-  # Keep unredacted local debug artifacts. Keep false for shared or committed runs.
+  # Keep private local debug reports with real names and IDs. Leave false for shared or committed
+  # runs.
+  # Schema default: false
   keep_local_exact_debug_artifacts: false
 
-  # Extra field names to redact in shared artifacts.
+  # Extra field names whose values must be hidden in shared reports.
+  # Schema default: [endpoint, product_instance_uri, joining_process_id, serial_number]
   redact_fields:
     - endpoint
     - product_instance_uri

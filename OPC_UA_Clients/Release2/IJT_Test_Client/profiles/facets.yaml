@@ -8,15 +8,28 @@
 # Those rows intentionally repeat CUs already present in their child facets so
 # the report matches the specification headings without changing the unique
 # 123-CU full specification coverage set.
+#
+# Capability catalogue, not a controller/runtime configuration.
+# Facet names are selected by profile.facets or capability_claims.supported_facets.
+# Selection declares CU support. It does not discover features, approve physical
+# actions, or prove compliance. Use reviewed SUT cu_overrides for real exceptions.
+# These definition fields are explicit metadata, not execution defaults.
 
+# Facet-key to specification metadata and CU membership mapping.
 facets:
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   result_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Result Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.2"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Result management baseline: result objects, result access methods, result
       event access, and basic result metadata.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - result_management
       - single_result
@@ -31,12 +44,18 @@ facets:
       - result_additional_data
       - result_extended_meta_data
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   joining_result_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Joining Result Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.3"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Joining-result payload details such as failure reason, result values,
       step results, errors, and trace data.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - joining_result_failure_reason
       - joining_result_overall_result_values
@@ -46,32 +65,50 @@ facets:
       - result_value_trace_point_time_offset
       - result_value_trace_point_index
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   sync_result_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Sync Result Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.4"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Synchronisation result support and related result counters.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - sync_result
       - sync_result_counters
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   batch_result_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Batch Result Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.5"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Batch and intervention result support with related result counters.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - batch_result
       - batch_result_counters
       - intervention_result
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   stored_result_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Stored Result Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.6"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Stored/requested result workflows including result requests,
       requested-result access, acknowledgements, and unacknowledged-result
       requests.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - request_results
       - requested_result_variable_access
@@ -79,12 +116,18 @@ facets:
       - acknowledge_results
       - request_unacknowledged_results
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   asset_management_assets_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Asset Management Assets Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.7"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Asset topology, asset identification, Machinery building blocks, health,
       service, calibration, and individual IJT asset type coverage.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - asset_management
       - asset_management_controller
@@ -110,22 +153,34 @@ facets:
       - asset_management_additional_information
       - asset_management_machinery_building_blocks
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   identifiers_methods_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Identifiers Methods Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.8"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       SendIdentifiers, GetIdentifiers, and ResetIdentifiers methods for
       attaching external entity identifiers to results.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - send_identifiers
       - get_identifiers
       - reset_identifiers
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   additional_asset_methods_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Additional Asset Methods Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.9"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Optional asset operation methods beyond the asset topology baseline.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - disconnect_asset
       - set_calibration
@@ -137,12 +192,18 @@ facets:
       - get_error_information
       - execute_operation
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   event_management_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Event Management Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.10"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Joining system event payload, condition classes, asset connection events,
       identifier events, process selection events, and event content fields.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - event_payload
       - event_condition_classes
@@ -153,43 +214,67 @@ facets:
       - identifiers_event
       - select_process_event
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   enable_tool_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Enable Tool Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.11"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       EnableAsset/enable-tool workflow support and corresponding asset enable
       state event coverage.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - enable_tool
       - asset_enable_state_event
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   asset_connection_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Asset Connection Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.12"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Asset connection facet for DisconnectAsset and asset connection event
       coverage.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - disconnect_asset
       - asset_connection_event
       - asset_connection_state_event
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   joining_process_base_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Joining Process Base Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.13"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       JoiningProcessManagement base object and list access for joining process
       definitions.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - joining_process_management
       - get_joining_process_list
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   general_process_operations_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT General Process Operations Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.14"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Selecting, starting, aborting, resetting, and reading the selected joining
       process.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - abort_joining_process
       - start_selected_joining
@@ -198,23 +283,35 @@ facets:
       - reset_joining_process
       - get_selected_joining_program
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   sequential_process_operations_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Sequential Process Operations Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.15"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Sequential joining process execution and process counter/size operations.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - increment_joining_process_counter
       - decrement_joining_process_counter
       - set_joining_process_size
       - start_joining_process
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   additional_process_methods_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Additional Process Methods Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.16"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Optional joining process definition, mapping, counter, delete, and
       revision-list methods.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - delete_joining_process
       - send_joining_process
@@ -223,12 +320,18 @@ facets:
       - set_joining_process_mapping
       - get_joining_process_revision_list
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   joint_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Joint Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.17"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Joint management base object and methods for sending, listing, selecting,
       reading, deleting, and revising joints.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - joint_management
       - send_joint
@@ -239,11 +342,17 @@ facets:
       - delete_joint
       - get_joint_revision_list
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   joint_design_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Joint Design Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.18"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Joint design send, list, read, data, and delete coverage.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - send_joint_design
       - get_joint_design_list
@@ -251,11 +360,17 @@ facets:
       - joint_design_data
       - delete_joint_design
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   joint_component_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "IJT Joint Component Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.19"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Joint component send, list, read, data, and delete coverage.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - send_joint_component
       - get_joint_component_list
@@ -263,25 +378,38 @@ facets:
       - joint_component_data
       - delete_joint_component
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   basic_joining_system_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "Basic Joining System Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.20"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Minimum conformance requirement for any OPC UA IJT server: JoiningSystem
       structure, identification, and Machinery building blocks.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - joining_system_base
       - joining_system_identification
       - joining_system_machinery_building_blocks
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   general_joining_system_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "General Joining System Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.21"
+    # Reporting hint: rollup groups existing CUs. Membership still comes from conformance_units.
     kind: "rollup"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       General joining system rollup combining the basic, result, event,
       identifier, and joining-process-base facets with result identifiers,
       result content, and method input argument coverage.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - joining_system_base
       - joining_system_identification
@@ -323,13 +451,20 @@ facets:
       - result_content
       - method_input_argument
 
+  # Facet key referenced by profile.facets and capability_claims.supported_facets.
   joining_system_selectable_features_server_facet:
+    # Report-facing specification label. Selection uses the facet key above.
     display_name: "Joining System Selectable Features Server Facet"
+    # OPC 40450-1 section identifying this facet. Not a runtime namespace or version.
     spec_section: "11.2.2.22"
+    # Reporting hint: rollup groups existing CUs. Membership still comes from conformance_units.
     kind: "rollup"
+    # Human-readable scope. Only conformance_units determines this facet's CU membership.
     description: >
       Rollup of selectable/optional IJT feature facets beyond the general
       joining system baseline.
+    # Stable CU keys from helpers/cu_registry.py. Selected facets are unioned,
+    # then SUT cu_overrides are applied. Repeated CUs count once.
     conformance_units:
       - sync_result
       - sync_result_counters

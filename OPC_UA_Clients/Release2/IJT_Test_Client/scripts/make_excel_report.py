@@ -890,7 +890,7 @@ def _write_row(ws, row: int, values: list, status: str, alternate: bool) -> None
 # ── Sheet builders ────────────────────────────────────────────────────────────
 
 
-def _write_failure_banner(ws, row: int) -> None:
+def _write_failure_banner(ws, row: int, run_result: str = "failed") -> None:
     ws.cell(row=row, column=1, value="Run result").font = Font(bold=True)
     cell = ws.cell(
         row=row,
@@ -898,9 +898,14 @@ def _write_failure_banner(ws, row: int) -> None:
         value=(
             "Failed - this workbook was generated for diagnostics after a failed test run. "
             "Coverage may be partial; review the Failures sheet and runner output first."
+        )
+        if run_result == "failed"
+        else (
+            "Inconclusive - required qualification evidence is incomplete or was not tested. "
+            "This workbook is not a compliance PASS. Review the target report and unresolved CU coverage."
         ),
     )
-    cell.fill = _fill(_LIGHT_RED)
+    cell.fill = _fill(_LIGHT_RED if run_result == "failed" else _LIGHT_YELLOW)
     cell.font = Font(bold=True)
     cell.alignment = Alignment(wrap_text=True, vertical="top")
 
@@ -921,8 +926,8 @@ def _build_cover(
 
     statuses = [case.status for case in cases]
     failed = statuses.count("failed") + statuses.count("error")
-    status = "Passed" if failed == 0 and run_result != "failed" else "Failed"
-    _status_emoji = "🟢" if status == "Passed" else "🔴"
+    status = "Failed" if failed or run_result == "failed" else "Passed" if run_result == "passed" else "Inconclusive"
+    _status_emoji = "🟢" if status == "Passed" else "🔴" if status == "Failed" else "🟡"
     ws.merge_cells("A1:G1")
     title = ws["A1"]
     if context:
@@ -940,11 +945,19 @@ def _build_cover(
     else:
         title.value = f"{_status_emoji} {status} · conformance profile unavailable"
     title.font = Font(bold=True, size=24)
-    title.fill = _fill(_LIGHT_GREEN if status == "Passed" else _LIGHT_RED)
+    title.fill = _fill(_LIGHT_GREEN if status == "Passed" else _LIGHT_RED if status == "Failed" else _LIGHT_YELLOW)
     title.alignment = Alignment(horizontal="center")
 
-    if run_result == "failed":
-        _write_failure_banner(ws, 3)
+    if run_result in {"failed", "incomplete", "not_tested"}:
+        _write_failure_banner(ws, 3, run_result)
+
+    unreviewed = (target_run or {}).get("qualification", {}).get("unreviewed_cus", [])
+    if unreviewed:
+        ws.merge_cells("A4:G4")
+        ws["A4"] = "Unreviewed catalogue CUs (new tests disabled): " + ", ".join(unreviewed)
+        ws["A4"].fill = _fill(_LIGHT_YELLOW)
+        ws["A4"].alignment = Alignment(wrap_text=True, vertical="center")
+        ws.row_dimensions[4].height = 42
 
     row = 5
     _apply_header(ws, row, ["Metric", "Value", "Context"], [28, 24, 70])
@@ -1050,8 +1063,8 @@ def _build_summary(wb: openpyxl.Workbook, cases: list[TestCase], run_ts: str, ru
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = f"Generated: {run_ts}"
     ws["A2"].font = Font(italic=True, size=10)
-    if run_result == "failed":
-        _write_failure_banner(ws, 3)
+    if run_result in {"failed", "incomplete", "not_tested"}:
+        _write_failure_banner(ws, 3, run_result)
 
     # Overall counts
     statuses = [c.status for c in cases]
@@ -1219,8 +1232,8 @@ def _build_profile_coverage(
         "Skip diagnostics may overlap with Specification Test Action Items."
     )
     ws["A2"].alignment = Alignment(wrap_text=True)
-    if run_result == "failed":
-        _write_failure_banner(ws, 3)
+    if run_result in {"failed", "incomplete", "not_tested"}:
+        _write_failure_banner(ws, 3, run_result)
 
     active = capabilities.active_profile if capabilities else ""
     server = capabilities.server_name if capabilities else "Server under test"
@@ -1551,9 +1564,9 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--run-result",
-        choices=["passed", "failed", "unknown"],
+        choices=["passed", "failed", "incomplete", "not_tested", "unknown"],
         default=os.environ.get("IJT_RUN_RESULT", "unknown"),
-        help="Overall runner result; failed adds a diagnostic warning banner to the workbook",
+        help="Overall qualification result; failed or unresolved runs add a diagnostic warning banner",
     )
     p.add_argument(
         "--target-report",
@@ -1599,6 +1612,9 @@ def main() -> int:
         else None
     )
     target_run = _load_json(target_report_path) if target_report_path else {}
+    qualification = (target_run or {}).get("qualification") or {}
+    if args.run_result != "failed" and qualification.get("outcome") in {"failed", "incomplete", "not_tested", "passed"}:
+        args.run_result = qualification["outcome"]
     facets = _load_facets()
     profiles = _load_profiles()
     baseline_path = Path(args.baseline)

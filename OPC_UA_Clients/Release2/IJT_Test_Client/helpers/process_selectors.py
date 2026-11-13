@@ -59,3 +59,29 @@ def process_matches(process: Any, selector: Any, match_by: str | None = None) ->
 def matching_processes(processes: list[Any], selector: Any, match_by: str | None = None) -> list[Any]:
     """Return all exact matches; callers must reject zero or ambiguous results."""
     return [process for process in processes if process_matches(process, selector, match_by)]
+
+
+def counter_candidates(processes: list[Any], effect: Any, selection: Any = None) -> list[Any]:
+    """Resolve counter scope without overriding explicit workflow restrictions."""
+    if effect.process_policy == "exact_match":
+        return matching_processes(processes, effect)
+    from helpers.namespaces import joining_process_classification_value, parse_joining_process_classification
+
+    required = joining_process_classification_value(effect.process_classification)
+    candidates = []
+    for process in processes:
+        metadata = (
+            process.get("JoiningProcessMetaData", process)
+            if isinstance(process, Mapping)
+            else getattr(process, "JoiningProcessMetaData", process)
+        )
+        raw = (
+            metadata.get("classification", metadata.get("Classification"))
+            if isinstance(metadata, Mapping)
+            else getattr(metadata, "Classification", None)
+        )
+        if required is not None and parse_joining_process_classification(raw) == required:
+            candidates.append(process)
+    if selection is not None and selection.policy == "exact_match":
+        candidates = matching_processes(candidates, selection)
+    return candidates

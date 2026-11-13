@@ -3,13 +3,24 @@
 # The minimal set of conformance units that every IJT server must implement.
 # Maps to the "Basic Joining System Server Facet" from the OPC UA IJT spec.
 # Use this as a starting point for embedded or stripped-down implementations.
+#
+# Capability definition, not a controller/runtime configuration.
+# Select with capability_claims.active_profile: basic_joining_system in one SUT manifest.
+# Selection declares CU support. It does not discover features, approve physical
+# actions, or prove compliance. Use reviewed SUT cu_overrides for real exceptions.
+# These definition fields are explicit metadata, not execution defaults.
 
+# Named bundle of facets selected by capability_claims.active_profile.
 profile:
+  # Report-facing label. The file stem, not this label, selects the profile.
   name: "Basic Joining System"
+  # Human-readable scope. Claimed CUs come from facets and SUT overrides, not this prose.
   description: >
     Mandatory baseline for any OPC UA IJT server. Covers JoiningSystem
     structure, Identification AddIn, and MachineryBuildingBlocks. Does not
     include result management, asset management, or process management.
 
+  # Facet keys from facets.yaml. Their CU sets are unioned with supported_facets,
+  # then the SUT manifest's cu_overrides are applied. Repeated CUs count once.
   facets:
     - basic_joining_system_server_facet

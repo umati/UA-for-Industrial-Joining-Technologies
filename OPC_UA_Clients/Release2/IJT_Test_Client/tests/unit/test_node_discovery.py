@@ -59,11 +59,12 @@ class FakeClient:
         return self.objects_node
 
 
-def ref(name, ns=2, node_id=100, type_id=None):
+def ref(name, ns=2, node_id=100, type_id=None, node_class=ua.NodeClass.Object):
     return SimpleNamespace(
         BrowseName=ua.QualifiedName(name, ns),
         NodeId=ua.NodeId(node_id, ns),
         TypeDefinition=ua.NodeId(type_id or 0, ns),
+        NodeClass=node_class,
     )
 
 
@@ -526,15 +527,27 @@ async def test_find_joining_system_returns_none_when_objects_browse_fails(monkey
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "requested,second_piu,expected",
+    "requested,second_piu,catalog,binding,expected",
     [
-        (None, "TOOL-PIU-2", "TOOL-PIU-1"),
-        ("TOOL-PIU-2", "TOOL-PIU-2", "TOOL-PIU-2"),
-        ("missing", "TOOL-PIU-2", ""),
-        ("TOOL-PIU-1", "TOOL-PIU-1", ""),
+        (None, "TOOL-PIU-2", "single", None, "TOOL-PIU-1"),
+        (None, "TOOL-PIU-2", "multiple", None, ""),
+        (None, None, "multiple", None, ""),
+        (None, "TOOL-PIU-2", "property", None, "TOOL-PIU-1"),
+        (None, "TOOL-PIU-2", "duplicate", None, "TOOL-PIU-1"),
+        ("TOOL-PIU-2", "TOOL-PIU-2", "multiple", None, "TOOL-PIU-2"),
+        ("missing", "TOOL-PIU-2", "multiple", None, ""),
+        ("TOOL-PIU-1", "TOOL-PIU-1", "multiple", None, ""),
+        (None, "TOOL-PIU-2", "multiple", "TOOL-PIU-2", "TOOL-PIU-2"),
+        ("TOOL-PIU-1", "TOOL-PIU-2", "multiple", "TOOL-PIU-2", "TOOL-PIU-1"),
     ],
 )
-async def test_read_tool_product_instance_uri_follows_dynamic_tool_path(monkeypatch, requested, second_piu, expected):
+async def test_read_tool_product_instance_uri_follows_dynamic_tool_path(
+    monkeypatch, caplog, requested, second_piu, catalog, binding, expected
+):
+    monkeypatch.delenv("OPCUA_TARGET_SERVER_PROFILE", raising=False)
+    if binding is not None:
+        monkeypatch.setenv("OPCUA_TARGET_SERVER_PROFILE", "reviewed-controller.yaml")
+        monkeypatch.setenv("OPCUA_TOOL_PRODUCT_INSTANCE_URI", binding)
     js = object()
     am = object()
     assets = object()
@@ -564,7 +577,14 @@ async def test_read_tool_product_instance_uri_follows_dynamic_tool_path(monkeypa
         return mapping.get((parent, name))
 
     async def fake_browse(node, timeout=node_discovery._BROWSE_TIMEOUT):
-        return [tool_ref, second_ref] if node is tools else []
+        if node is not tools:
+            return []
+        return {
+            "single": [tool_ref],
+            "multiple": [tool_ref, second_ref],
+            "property": [ref("ToolCount", node_id=103, node_class=ua.NodeClass.Variable), tool_ref],
+            "duplicate": [tool_ref, tool_ref],
+        }[catalog]
 
     def fake_node_from_ref(source, node_id):
         assert source is tools
@@ -580,6 +600,8 @@ async def test_read_tool_product_instance_uri_follows_dynamic_tool_path(monkeypa
     )
 
     assert result == expected
+    if requested is None and binding is None and catalog == "multiple":
+        assert "requires exactly one Tool, found 2" in caplog.text
 
 
 @pytest.mark.asyncio
