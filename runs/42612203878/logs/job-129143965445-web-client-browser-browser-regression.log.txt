@@ -1,0 +1,409 @@
+﻿2026-11-09T11:52:31.1589287Z Current runner version: '2.338.2'
+2026-11-09T11:52:31.1626721Z ##[group]Runner Image Provisioner
+2026-11-09T11:52:31.1628800Z Hosted Compute Agent
+2026-11-09T11:52:31.1629931Z Version: 20261028.624
+2026-11-09T11:52:31.1631120Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-09T11:52:31.1632374Z Build Date: 2026-10-28T21:51:42Z
+2026-11-09T11:52:31.1633589Z Worker ID: {f06d4d43-9242-4dd4-81da-e69d10fb49c7}
+2026-11-09T11:52:31.1635640Z Region: centralus
+2026-11-09T11:52:31.1636615Z Cloud: Azure
+2026-11-09T11:52:31.1637728Z ##[endgroup]
+2026-11-09T11:52:31.1640870Z ##[group]Operating System
+2026-11-09T11:52:31.1642034Z Ubuntu
+2026-11-09T11:52:31.1643069Z 26.04.1
+2026-11-09T11:52:31.1644073Z LTS
+2026-11-09T11:52:31.1645052Z ##[endgroup]
+2026-11-09T11:52:31.1645996Z ##[group]Runner Image
+2026-11-09T11:52:31.1647047Z Image: ubuntu-26.04
+2026-11-09T11:52:31.1648321Z Version: 20261101.186.1
+2026-11-09T11:52:31.1650811Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-09T11:52:31.1653915Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
+2026-11-09T11:52:31.1655695Z ##[endgroup]
+2026-11-09T11:52:31.1658173Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T11:52:31.1661523Z Contents: read
+2026-11-09T11:52:31.1662624Z Metadata: read
+2026-11-09T11:52:31.1663635Z Packages: read
+2026-11-09T11:52:31.1664573Z ##[endgroup]
+2026-11-09T11:52:31.1668026Z Secret source: Actions
+2026-11-09T11:52:31.1669996Z Cache mode: write
+2026-11-09T11:52:31.1671647Z Prepare workflow directory
+2026-11-09T11:52:31.2307395Z Prepare all required actions
+2026-11-09T11:52:31.2382155Z Getting action download info
+2026-11-09T11:52:31.4643616Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T11:52:31.6184533Z Download action repository 'docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550' (SHA:8aa5831fb8d48d8f76594c7ddde61ae58019f550)
+2026-11-09T11:52:32.1109860Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-09T11:52:32.2695760Z Complete job name: Web Client Browser - Browser Regression
+2026-11-09T11:52:32.3623195Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T11:52:32.3624346Z with:
+2026-11-09T11:52:32.3624833Z   persist-credentials: false
+2026-11-09T11:52:32.3625519Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-09T11:52:32.3629897Z   token: ***
+2026-11-09T11:52:32.3630401Z   ssh-strict: true
+2026-11-09T11:52:32.3630880Z   ssh-user: git
+2026-11-09T11:52:32.3631355Z   clean: true
+2026-11-09T11:52:32.3631841Z   sparse-checkout-cone-mode: true
+2026-11-09T11:52:32.3632414Z   fetch-depth: 1
+2026-11-09T11:52:32.3632889Z   fetch-tags: false
+2026-11-09T11:52:32.3633378Z   show-progress: true
+2026-11-09T11:52:32.3633872Z   lfs: false
+2026-11-09T11:52:32.3634328Z   submodules: false
+2026-11-09T11:52:32.3635460Z   set-safe-directory: true
+2026-11-09T11:52:32.3636232Z   allow-unsafe-pr-checkout: false
+2026-11-09T11:52:32.3637214Z env:
+2026-11-09T11:52:32.3637717Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T11:52:32.3638712Z ##[endgroup]
+2026-11-09T11:52:32.6549949Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-09T11:52:32.6552807Z ##[group]Getting Git version info
+2026-11-09T11:52:32.6554904Z Working directory is '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-09T11:52:32.6557291Z [command]/usr/bin/git version
+2026-11-09T11:52:32.6558608Z git version 2.56.0
+2026-11-09T11:52:32.6579212Z ##[endgroup]
+2026-11-09T11:52:32.6590966Z Temporarily overriding HOME='/home/runner/work/_temp/039647ab-8a51-4734-bea4-e2cd23948751' before making global git config changes
+2026-11-09T11:52:32.6595824Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T11:52:32.6599094Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-09T11:52:32.6668533Z Deleting the contents of '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-09T11:52:32.6671444Z ##[group]Determining repository object format
+2026-11-09T11:52:32.6673180Z ##[endgroup]
+2026-11-09T11:52:32.6674513Z ##[group]Initializing the repository
+2026-11-09T11:52:32.6679246Z [command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-09T11:52:32.6806329Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T11:52:32.6808853Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T11:52:32.6811548Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T11:52:32.6813472Z hint: call:
+2026-11-09T11:52:32.6814942Z hint:
+2026-11-09T11:52:32.6816315Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T11:52:32.6818347Z hint:
+2026-11-09T11:52:32.6819875Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T11:52:32.6822069Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T11:52:32.6823704Z hint:
+2026-11-09T11:52:32.6824868Z hint: 	git branch -m <name>
+2026-11-09T11:52:32.6826003Z hint:
+2026-11-09T11:52:32.6827559Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T11:52:32.6830705Z Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-09T11:52:32.6839255Z [command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-09T11:52:32.6895407Z ##[endgroup]
+2026-11-09T11:52:32.6897004Z ##[group]Disabling automatic garbage collection
+2026-11-09T11:52:32.6899844Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T11:52:32.6935012Z ##[endgroup]
+2026-11-09T11:52:32.6936286Z ##[group]Setting up auth
+2026-11-09T11:52:32.6937261Z Removing SSH command configuration
+2026-11-09T11:52:32.6943072Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T11:52:32.6983588Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T11:52:32.7515893Z Removing HTTP extra header
+2026-11-09T11:52:32.7521136Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T11:52:32.7558058Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T11:52:32.7833437Z Removing includeIf entries pointing to credentials config files
+2026-11-09T11:52:32.7839438Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T11:52:32.7881627Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T11:52:32.8156832Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-91bdfddb-05b9-48a2-b72b-a72f65e3887a.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+2026-11-09T11:52:32.8195431Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-91bdfddb-05b9-48a2-b72b-a72f65e3887a.config
+2026-11-09T11:52:32.8228261Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-91bdfddb-05b9-48a2-b72b-a72f65e3887a.config
+2026-11-09T11:52:32.8262603Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-91bdfddb-05b9-48a2-b72b-a72f65e3887a.config
+2026-11-09T11:52:32.8294263Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-91bdfddb-05b9-48a2-b72b-a72f65e3887a.config
+2026-11-09T11:52:32.8324257Z ##[endgroup]
+2026-11-09T11:52:32.8325112Z ##[group]Fetching the repository
+2026-11-09T11:52:32.8331035Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +63bceef6ecf0650a70ef7e36c5a7841cfd13de5c:refs/remotes/origin/main
+2026-11-09T11:52:33.7704909Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-09T11:52:33.7708602Z  * [new ref]         63bceef6ecf0650a70ef7e36c5a7841cfd13de5c -> origin/main
+2026-11-09T11:52:33.7718472Z [command]/usr/bin/git branch --list --remote origin/main
+2026-11-09T11:52:33.7747663Z   origin/main
+2026-11-09T11:52:33.7756825Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-11-09T11:52:33.7782116Z 63bceef6ecf0650a70ef7e36c5a7841cfd13de5c
+2026-11-09T11:52:33.7788241Z ##[endgroup]
+2026-11-09T11:52:33.7790569Z ##[group]Determining the checkout info
+2026-11-09T11:52:33.7792461Z ##[endgroup]
+2026-11-09T11:52:33.7793740Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T11:52:33.7850310Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T11:52:33.7884376Z ##[group]Checking out the ref
+2026-11-09T11:52:33.7887390Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-09T11:52:34.0315765Z Switched to a new branch 'main'
+2026-11-09T11:52:34.0322017Z branch 'main' set up to track 'origin/main'.
+2026-11-09T11:52:34.0343431Z ##[endgroup]
+2026-11-09T11:52:34.0394503Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T11:52:34.0423990Z 63bceef6ecf0650a70ef7e36c5a7841cfd13de5c
+2026-11-09T11:52:34.0434476Z ##[group]Removing auth
+2026-11-09T11:52:34.0436398Z Removing SSH command configuration
+2026-11-09T11:52:34.0439768Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T11:52:34.0473307Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T11:52:34.0760636Z Removing HTTP extra header
+2026-11-09T11:52:34.0764109Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T11:52:34.0798089Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T11:52:34.1070161Z Removing includeIf entries pointing to credentials config files
+2026-11-09T11:52:34.1073405Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T11:52:34.1105438Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-09T11:52:34.1120375Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-09T11:52:34.1125345Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T11:52:34.1127693Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T11:52:34.1133828Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-09T11:52:34.1144918Z /home/runner/work/_temp/git-credentials-91bdfddb-05b9-48a2-b72b-a72f65e3887a.config
+2026-11-09T11:52:34.1161261Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-91bdfddb\-05b9\-48a2\-b72b\-a72f65e3887a\.config
+2026-11-09T11:52:34.1200940Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-09T11:52:34.1224279Z /home/runner/work/_temp/git-credentials-91bdfddb-05b9-48a2-b72b-a72f65e3887a.config
+2026-11-09T11:52:34.1236877Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-91bdfddb\-05b9\-48a2\-b72b\-a72f65e3887a\.config
+2026-11-09T11:52:34.1274192Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T11:52:34.1299746Z /github/runner_temp/git-credentials-91bdfddb-05b9-48a2-b72b-a72f65e3887a.config
+2026-11-09T11:52:34.1309326Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-91bdfddb\-05b9\-48a2\-b72b\-a72f65e3887a\.config
+2026-11-09T11:52:34.1343198Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T11:52:34.1367201Z /github/runner_temp/git-credentials-91bdfddb-05b9-48a2-b72b-a72f65e3887a.config
+2026-11-09T11:52:34.1376259Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-91bdfddb\-05b9\-48a2\-b72b\-a72f65e3887a\.config
+2026-11-09T11:52:34.1410838Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T11:52:34.1681980Z Removing credentials config '/home/runner/work/_temp/git-credentials-91bdfddb-05b9-48a2-b72b-a72f65e3887a.config'
+2026-11-09T11:52:34.1689540Z ##[endgroup]
+2026-11-09T11:52:34.2074405Z ##[group]Run docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550
+2026-11-09T11:52:34.2076114Z with:
+2026-11-09T11:52:34.2076954Z   registry: ghcr.io
+2026-11-09T11:52:34.2078241Z   username: mohitkumaragarwal
+2026-11-09T11:52:34.2087971Z   password: ***
+2026-11-09T11:52:34.2088937Z   logout: true
+2026-11-09T11:52:34.2089820Z env:
+2026-11-09T11:52:34.2090729Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T11:52:34.2091958Z ##[endgroup]
+2026-11-09T11:52:34.4276682Z Logging into ghcr.io...
+2026-11-09T11:52:34.8666993Z Login Succeeded!
+2026-11-09T11:52:34.8863783Z ##[group]Run set -euo pipefail
+2026-11-09T11:52:34.8864998Z set -euo pipefail
+2026-11-09T11:52:34.8866575Z # No tag polling, no inferred identity. resolve-browser-image already
+2026-11-09T11:52:34.8868794Z # pulled this digest on its runner and validated its metadata
+2026-11-09T11:52:34.8870724Z # fingerprint; this pull is a per-runner cache warm-up so the
+2026-11-09T11:52:34.8872384Z # subsequent docker run is local.
+2026-11-09T11:52:34.8873763Z if ! [[ "$IMG" =~ @sha256:[0-9a-f]{64}$ ]]; then
+2026-11-09T11:52:34.8875543Z   echo "::error::IJT_BROWSER_CI_IMAGE is not digest-qualified: ${IMG}" >&2
+2026-11-09T11:52:34.8877198Z   exit 1
+2026-11-09T11:52:34.8878172Z fi
+2026-11-09T11:52:34.8879048Z docker pull "$IMG"
+2026-11-09T11:52:34.8880557Z docker image inspect "$IMG" --format 'id={{.Id}} created={{.Created}}'
+2026-11-09T11:52:34.8939639Z shell: /usr/bin/bash -e {0}
+2026-11-09T11:52:34.8940691Z env:
+2026-11-09T11:52:34.8941604Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T11:52:34.8944498Z   IMG: ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:0735147a5a787a23be9c99d2ef24b15c8c4730b82cca19eb216ea22548929667
+2026-11-09T11:52:34.8947205Z ##[endgroup]
+2026-11-09T11:52:35.4085463Z ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:0735147a5a787a23be9c99d2ef24b15c8c4730b82cca19eb216ea22548929667: Pulling from umati/ua-for-industrial-joining-technologies/ijt-browser-ci
+2026-11-09T11:52:35.8139509Z 3b3a554d6789: Pulling fs layer
+2026-11-09T11:52:35.8140458Z 0e3a5761d5a6: Pulling fs layer
+2026-11-09T11:52:35.8141114Z 28235b9ae26d: Pulling fs layer
+2026-11-09T11:52:35.8141822Z 4f4fb700ef54: Pulling fs layer
+2026-11-09T11:52:35.8142541Z 364ce804f562: Pulling fs layer
+2026-11-09T11:52:35.8143241Z 47403ff54ca2: Pulling fs layer
+2026-11-09T11:52:35.8143913Z 4fe282b9a402: Pulling fs layer
+2026-11-09T11:52:35.8145956Z 6d33c4675b8c: Pulling fs layer
+2026-11-09T11:52:35.8150135Z 36e4a004e29d: Pulling fs layer
+2026-11-09T11:52:35.8150652Z bc360da2c591: Pulling fs layer
+2026-11-09T11:52:35.8151371Z 8a614ab6366e: Pulling fs layer
+2026-11-09T11:52:35.8152314Z 1d4acddd42a4: Pulling fs layer
+2026-11-09T11:52:35.8153265Z 84c4d63ccf34: Pulling fs layer
+2026-11-09T11:52:35.8154084Z 22013549f7e6: Pulling fs layer
+2026-11-09T11:52:35.8154928Z cef19d9e1ef6: Pulling fs layer
+2026-11-09T11:52:35.8155732Z b449c02e207d: Pulling fs layer
+2026-11-09T11:52:35.8156288Z 7d391633002d: Pulling fs layer
+2026-11-09T11:52:35.8256152Z 44136fa355b3: Already exists
+2026-11-09T11:52:35.8276278Z 4f4fb700ef54: Already exists
+2026-11-09T11:52:36.0280940Z a853057a06c1: Download complete
+2026-11-09T11:52:36.0313381Z 28235b9ae26d: Download complete
+2026-11-09T11:52:36.0353699Z 36e4a004e29d: Download complete
+2026-11-09T11:52:36.0357580Z bc360da2c591: Download complete
+2026-11-09T11:52:36.0366836Z 84c4d63ccf34: Download complete
+2026-11-09T11:52:36.0373722Z 4fe282b9a402: Download complete
+2026-11-09T11:52:36.0385877Z 22013549f7e6: Download complete
+2026-11-09T11:52:36.0402041Z 47403ff54ca2: Download complete
+2026-11-09T11:52:36.1297045Z 364ce804f562: Download complete
+2026-11-09T11:52:36.1308755Z 698b3b23aaa7: Download complete
+2026-11-09T11:52:36.1323196Z 0e3a5761d5a6: Download complete
+2026-11-09T11:52:36.2247180Z 3b3a554d6789: Download complete
+2026-11-09T11:52:36.4243373Z 7d391633002d: Download complete
+2026-11-09T11:52:36.7245744Z 8a614ab6366e: Download complete
+2026-11-09T11:52:37.1243043Z 6d33c4675b8c: Download complete
+2026-11-09T11:52:37.9224796Z 1d4acddd42a4: Download complete
+2026-11-09T11:52:40.3228971Z b449c02e207d: Download complete
+2026-11-09T11:52:40.6465642Z 6d33c4675b8c: Pull complete
+2026-11-09T11:52:41.0396831Z 3b3a554d6789: Pull complete
+2026-11-09T11:52:41.1374375Z 0e3a5761d5a6: Pull complete
+2026-11-09T11:52:41.8373961Z 8a614ab6366e: Pull complete
+2026-11-09T11:52:42.4308239Z 364ce804f562: Pull complete
+2026-11-09T11:52:42.9228755Z cef19d9e1ef6: Download complete
+2026-11-09T11:52:42.9299875Z bc360da2c591: Pull complete
+2026-11-09T11:52:42.9334849Z 22013549f7e6: Pull complete
+2026-11-09T11:52:43.1257668Z 36e4a004e29d: Pull complete
+2026-11-09T11:52:43.1305175Z 47403ff54ca2: Pull complete
+2026-11-09T11:52:43.1318177Z 7d391633002d: Pull complete
+2026-11-09T11:52:47.0261066Z 84c4d63ccf34: Pull complete
+2026-11-09T11:52:47.0275793Z 4fe282b9a402: Pull complete
+2026-11-09T11:52:47.0286231Z 1d4acddd42a4: Pull complete
+2026-11-09T11:52:52.9267655Z cef19d9e1ef6: Pull complete
+2026-11-09T11:52:57.4268544Z b449c02e207d: Pull complete
+2026-11-09T11:52:57.8228833Z 4f4fb700ef54: Pull complete
+2026-11-09T11:52:57.8262864Z 28235b9ae26d: Pull complete
+2026-11-09T11:52:57.8370098Z Digest: sha256:0735147a5a787a23be9c99d2ef24b15c8c4730b82cca19eb216ea22548929667
+2026-11-09T11:52:57.8380199Z Status: Downloaded newer image for ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:0735147a5a787a23be9c99d2ef24b15c8c4730b82cca19eb216ea22548929667
+2026-11-09T11:52:57.8616107Z ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:0735147a5a787a23be9c99d2ef24b15c8c4730b82cca19eb216ea22548929667
+2026-11-09T11:52:58.2547468Z id=sha256:0735147a5a787a23be9c99d2ef24b15c8c4730b82cca19eb216ea22548929667 created=2026-11-09T11:39:32.927495352Z
+2026-11-09T11:52:58.3218260Z ##[group]Run set -euo pipefail
+2026-11-09T11:52:58.3218638Z set -euo pipefail
+2026-11-09T11:52:58.3219000Z # GitHub metadata envs are propagated so the in-container Python
+2026-11-09T11:52:58.3219711Z # runner can stamp reports/summaries with the run identity. They are
+2026-11-09T11:52:58.3220205Z # informational only; the run still executes under --network=none.
+2026-11-09T11:52:58.3220587Z docker run --rm --init \
+2026-11-09T11:52:58.3220850Z   --network=none \
+2026-11-09T11:52:58.3221098Z   --user "$(id -u):$(id -g)" \
+2026-11-09T11:52:58.3221361Z   -w /workspace \
+2026-11-09T11:52:58.3221628Z   -v "${GITHUB_WORKSPACE}:/workspace" \
+2026-11-09T11:52:58.3221923Z   -e CI=1 \
+2026-11-09T11:52:58.3222142Z   -e IS_DOCKER=true \
+2026-11-09T11:52:58.3222412Z   -e HOME=/opt/ijt-browser-ci/home \
+2026-11-09T11:52:58.3222794Z   -e npm_config_cache=/opt/ijt-browser-ci/npm-cache \
+2026-11-09T11:52:58.3223139Z   -e npm_config_offline=true \
+2026-11-09T11:52:58.3223459Z   -e PIP_CACHE_DIR=/opt/ijt-browser-ci/pip-cache \
+2026-11-09T11:52:58.3223805Z   -e PIP_NO_INDEX=1 \
+2026-11-09T11:52:58.3224124Z   -e PIP_FIND_LINKS=/opt/ijt-browser-ci/pip-wheelhouse \
+2026-11-09T11:52:58.3224470Z   -e SKIP_VENV_INSTALL=1 \
+2026-11-09T11:52:58.3224777Z   -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+2026-11-09T11:52:58.3225118Z   -e IJT_PLAYWRIGHT_SHARD="$SHARD" \
+2026-11-09T11:52:58.3225428Z   -e GITHUB_RUN_ID="${GITHUB_RUN_ID}" \
+2026-11-09T11:52:58.3225758Z   -e GITHUB_RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT}" \
+2026-11-09T11:52:58.3226078Z   -e GITHUB_SHA="${GITHUB_SHA}" \
+2026-11-09T11:52:58.3226391Z   -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+2026-11-09T11:52:58.3226751Z   -e GITHUB_SERVER_URL="${GITHUB_SERVER_URL}" \
+2026-11-09T11:52:58.3227052Z   "$IMG" \
+2026-11-09T11:52:58.3227361Z   bash -lc "python run_all_tests.py --suite \"$SUITE\" --verbose"
+2026-11-09T11:52:58.3275816Z shell: /usr/bin/bash -e {0}
+2026-11-09T11:52:58.3276074Z env:
+2026-11-09T11:52:58.3276297Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T11:52:58.3276979Z   IMG: ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:0735147a5a787a23be9c99d2ef24b15c8c4730b82cca19eb216ea22548929667
+2026-11-09T11:52:58.3277653Z   SUITE: web-client-e2e-regression
+2026-11-09T11:52:58.3278033Z   SHARD: 
+2026-11-09T11:52:58.3278217Z ##[endgroup]
+2026-11-09T11:53:01.6135471Z 
+2026-11-09T11:53:01.6136418Z ╔════════════════════════════════════════════════════════════════╗
+2026-11-09T11:53:01.6137309Z ║  IJT Repository Test Runner                                    ║
+2026-11-09T11:53:01.6138464Z ╚════════════════════════════════════════════════════════════════╝
+2026-11-09T11:53:01.6139388Z 11:53:01 [INFO    ] Python    : 3.14.10
+2026-11-09T11:53:01.6207614Z 11:53:01 [INFO    ] Platform  : Linux-7.0.0-1019-azure-x86_64-with-glibc2.39
+2026-11-09T11:53:01.6208890Z 11:53:01 [INFO    ] Repo root : /workspace
+2026-11-09T11:53:01.6209601Z 11:53:01 [INFO    ] CI        : True
+2026-11-09T11:53:01.6210181Z 11:53:01 [INFO    ] Private modules: auto
+2026-11-09T11:53:01.6210799Z 11:53:01 [INFO    ] Timeout   : 600s per suite
+2026-11-09T11:53:01.6566817Z 11:53:01 [WARNING ] Tool unavailable: dotnet (dotnet --version) -- dependent suites will fail naturally.
+2026-11-09T11:53:01.6571831Z 11:53:01 [WARNING ] Tool unavailable: docker (docker --version) -- dependent suites will fail naturally.
+2026-11-09T11:53:01.9351016Z 11:53:01 [INFO    ] Running single suite: web-client-e2e-regression
+2026-11-09T11:54:12.7323456Z ▶ webclient runner (e2e-regression)  [cwd=/workspace/OPC_UA_Clients/Release2/IJT_Web_Client]
+2026-11-09T11:54:12.7326870Z ──────────────────────────────────────────────────────────────────────────────
+2026-11-09T11:54:12.7327420Z 
+2026-11-09T11:54:12.7328198Z added 282 packages in 4s
+2026-11-09T11:54:12.7328516Z 
+2026-11-09T11:54:12.7328688Z Running 1 test using 1 worker
+2026-11-09T11:54:12.7329165Z ·
+2026-11-09T11:54:12.7329771Z   1 passed (52.8s)
+2026-11-09T11:54:12.7330001Z 
+2026-11-09T11:54:12.7330188Z =================================================================
+2026-11-09T11:54:12.7330899Z   IJT Web Client — Cross-Platform Test Runner
+2026-11-09T11:54:12.7331464Z =================================================================
+2026-11-09T11:54:12.7332015Z   [INFO] Python  : /usr/local/bin/python
+2026-11-09T11:54:12.7332627Z   [INFO] Root    : /workspace/OPC_UA_Clients/Release2/IJT_Web_Client
+2026-11-09T11:54:12.7333249Z   [INFO] OS      : linux / x86_64
+2026-11-09T11:54:12.7333863Z   [INFO] OPC UA  : not reachable (opc.tcp://localhost:40480)
+2026-11-09T11:54:12.7334533Z   [INFO] WS      : not reachable (ws://localhost:8010)
+2026-11-09T11:54:12.7335106Z   [INFO] Docker  : not available
+2026-11-09T11:54:12.7335397Z 
+2026-11-09T11:54:12.7335597Z =================================================================
+2026-11-09T11:54:12.7336193Z   STAGE 1  Install / verify Python test dependencies
+2026-11-09T11:54:12.7336759Z =================================================================
+2026-11-09T11:54:12.7337472Z   [INFO] SKIP_VENV_INSTALL=1 — skipping pip install
+2026-11-09T11:54:12.7338099Z 
+2026-11-09T11:54:12.7338286Z CMD: python dependency probe
+2026-11-09T11:54:12.7338571Z 
+2026-11-09T11:54:12.7338759Z =================================================================
+2026-11-09T11:54:12.7339362Z   STAGE 1c  npm install (node_modules missing or empty)
+2026-11-09T11:54:12.7339944Z =================================================================
+2026-11-09T11:54:12.7340785Z   [INFO] Missing npm requirements: package:@playwright/test, package:playwright, bin:playwright
+2026-11-09T11:54:12.7341474Z 
+2026-11-09T11:54:12.7341631Z CMD: npm dependencies
+2026-11-09T11:54:12.7341859Z 
+2026-11-09T11:54:12.7342054Z =================================================================
+2026-11-09T11:54:12.7342867Z   STAGE 5  Install Playwright browsers
+2026-11-09T11:54:12.7343375Z =================================================================
+2026-11-09T11:54:12.7343757Z 
+2026-11-09T11:54:12.7343935Z CMD: playwright chromium availability
+2026-11-09T11:54:12.7344716Z   [INFO] [server] Launching simulator on port 40480 (attempt 1/2, copied to /tmp/ijt-sim/40480)
+2026-11-09T11:54:12.7345545Z   [INFO] Waiting up to 30s for port 40480 ...
+2026-11-09T11:54:12.7346080Z   [PASS] OPC UA server ready on :40480
+2026-11-09T11:54:12.7346684Z   [INFO] Starting WebSocket backend for Playwright E2E on :8010
+2026-11-09T11:54:12.7347319Z   [PASS] WebSocket backend ready on :8010
+2026-11-09T11:54:12.7347652Z 
+2026-11-09T11:54:12.7348280Z =================================================================
+2026-11-09T11:54:12.7348946Z   STAGE 7b  Playwright E2E — regression
+2026-11-09T11:54:12.7349456Z =================================================================
+2026-11-09T11:54:12.7349842Z 
+2026-11-09T11:54:12.7350003Z CMD: playwright regression
+2026-11-09T11:54:12.7350272Z 
+2026-11-09T11:54:12.7350448Z =================================================================
+2026-11-09T11:54:12.7351037Z   TEST SUMMARY
+2026-11-09T11:54:12.7351414Z =================================================================
+2026-11-09T11:54:12.7352003Z   [PASS]  pip-install                         exit=0  0.0s
+2026-11-09T11:54:12.7352572Z          ^ skipped via SKIP_VENV_INSTALL
+2026-11-09T11:54:12.7353117Z   [PASS]  npm-install                         exit=0  4.1s
+2026-11-09T11:54:12.7353745Z   [PASS]  playwright-install                  exit=0  0.3s
+2026-11-09T11:54:12.7354323Z          ^ chromium browser already installed
+2026-11-09T11:54:12.7354938Z   [PASS]  playwright-regression               exit=0  53.4s
+2026-11-09T11:54:12.7355374Z 
+2026-11-09T11:54:12.7355517Z   Total time: 70.6s
+2026-11-09T11:54:12.7355744Z 
+2026-11-09T11:54:12.7355895Z   ALL TESTS PASSED
+2026-11-09T11:54:12.7356540Z =================================================================
+2026-11-09T11:54:12.7356927Z 
+2026-11-09T11:54:12.7356933Z 
+2026-11-09T11:54:12.7357071Z [stderr]
+2026-11-09T11:54:12.7358083Z npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+2026-11-09T11:54:12.7359228Z npm warn install-scripts   tesseract.js@7.0.0 (postinstall: opencollective-postinstall || true)
+2026-11-09T11:54:12.7360059Z npm warn install-scripts
+2026-11-09T11:54:12.7360957Z npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+2026-11-09T11:54:12.7362131Z [WebServer]  WARN  Checking for updates failed (use `--debug` to see full error)
+2026-11-09T11:54:12.7363007Z   ✔ web-client-e2e-regression (70.8s)
+2026-11-09T11:54:12.7363724Z 11:54:12 [INFO    ] Timing JSON: /workspace/test-results/timing/timing-aggregate.json
+2026-11-09T11:54:12.8242573Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-09T11:54:12.8243017Z with:
+2026-11-09T11:54:12.8243303Z   name: results-live-webclient-web-client-e2e-regression
+2026-11-09T11:54:12.8243710Z   path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
+2026-11-09T11:54:12.8244058Z   retention-days: 14
+2026-11-09T11:54:12.8244274Z   if-no-files-found: warn
+2026-11-09T11:54:12.8244500Z   compression-level: 6
+2026-11-09T11:54:12.8244795Z   overwrite: false
+2026-11-09T11:54:12.8245033Z   include-hidden-files: false
+2026-11-09T11:54:12.8245264Z   archive: true
+2026-11-09T11:54:12.8245452Z env:
+2026-11-09T11:54:12.8245650Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T11:54:12.8245916Z ##[endgroup]
+2026-11-09T11:54:12.9859400Z With the provided path, there will be 9 files uploaded
+2026-11-09T11:54:12.9860323Z Artifact name is valid!
+2026-11-09T11:54:12.9860751Z Root directory input is valid!
+2026-11-09T11:54:13.2795275Z Uploading artifact: results-live-webclient-web-client-e2e-regression.zip
+2026-11-09T11:54:13.2835865Z Beginning upload of artifact content to blob storage
+2026-11-09T11:54:13.5196598Z Uploaded bytes 16375
+2026-11-09T11:54:13.5609690Z Finished uploading artifact content to blob storage!
+2026-11-09T11:54:13.5610894Z SHA256 digest of uploaded artifact is a6107467b3c8b8df64f05a372c7e98a3dc8c756fea9281c280103d8c2777208f
+2026-11-09T11:54:13.5612000Z Finalizing artifact upload
+2026-11-09T11:54:13.9788086Z Artifact results-live-webclient-web-client-e2e-regression successfully finalized. Artifact ID 13670499042
+2026-11-09T11:54:13.9789423Z Artifact results-live-webclient-web-client-e2e-regression has been successfully uploaded! Final size is 16375 bytes. Artifact ID is 13670499042
+2026-11-09T11:54:13.9792270Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/42612203878/artifacts/13670499042
+2026-11-09T11:54:13.9981311Z Post job cleanup.
+2026-11-09T11:54:14.2201143Z ##[group]Logout from ghcr.io
+2026-11-09T11:54:14.2280357Z [command]/usr/bin/docker logout ghcr.io
+2026-11-09T11:54:14.2495819Z Removing login credentials for ghcr.io
+2026-11-09T11:54:14.2532722Z ##[endgroup]
+2026-11-09T11:54:14.2533835Z ##[group]Post cache
+2026-11-09T11:54:14.2534488Z State not set
+2026-11-09T11:54:14.2535120Z ##[endgroup]
+2026-11-09T11:54:14.2773379Z Post job cleanup.
+2026-11-09T11:54:14.3665992Z [command]/usr/bin/git version
+2026-11-09T11:54:14.3732873Z git version 2.56.0
+2026-11-09T11:54:14.3776632Z Temporarily overriding HOME='/home/runner/work/_temp/217e6c92-737a-4dd7-a69b-4620c0150927' before making global git config changes
+2026-11-09T11:54:14.3778543Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T11:54:14.3783900Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-09T11:54:14.3829355Z Removing SSH command configuration
+2026-11-09T11:54:14.3838227Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T11:54:14.3907072Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T11:54:14.4256167Z Removing HTTP extra header
+2026-11-09T11:54:14.4269880Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T11:54:14.4339232Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T11:54:14.4650913Z Removing includeIf entries pointing to credentials config files
+2026-11-09T11:54:14.4660023Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T11:54:14.4697226Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T11:54:14.5119552Z Cleaning up orphan processes

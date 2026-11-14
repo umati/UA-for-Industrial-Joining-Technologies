@@ -1,0 +1,314 @@
+﻿2026-11-09T07:35:45.1629643Z Current runner version: '2.338.2'
+2026-11-09T07:35:45.1646569Z ##[group]Runner Image Provisioner
+2026-11-09T07:35:45.1647028Z Hosted Compute Agent
+2026-11-09T07:35:45.1647476Z Version: 20261103.629
+2026-11-09T07:35:45.1647815Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-09T07:35:45.1648233Z Build Date: 2026-11-03T17:26:59Z
+2026-11-09T07:35:45.1648652Z Worker ID: {1d3feda7-7a16-45b6-8bf9-7638f6141693}
+2026-11-09T07:35:45.1649023Z Region: centralus
+2026-11-09T07:35:45.1649349Z Cloud: Azure
+2026-11-09T07:35:45.1649644Z ##[endgroup]
+2026-11-09T07:35:45.1650317Z ##[group]Operating System
+2026-11-09T07:35:45.1650692Z Microsoft Windows Server 2025
+2026-11-09T07:35:45.1651012Z 10.0.26100
+2026-11-09T07:35:45.1651412Z Datacenter
+2026-11-09T07:35:45.1651691Z ##[endgroup]
+2026-11-09T07:35:45.1651969Z ##[group]Runner Image
+2026-11-09T07:35:45.1652293Z Image: windows-2025-vs2026
+2026-11-09T07:35:45.1652613Z Version: 20261103.298.1
+2026-11-09T07:35:45.1653495Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261103.298/images/windows/Windows2025-VS2026-Readme.md
+2026-11-09T07:35:45.1654361Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261103.298
+2026-11-09T07:35:45.1654887Z ##[endgroup]
+2026-11-09T07:35:45.1655861Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T07:35:45.1656992Z Contents: read
+2026-11-09T07:35:45.1657300Z Metadata: read
+2026-11-09T07:35:45.1657611Z ##[endgroup]
+2026-11-09T07:35:45.1658819Z Secret source: Actions
+2026-11-09T07:35:45.1659314Z Cache mode: write
+2026-11-09T07:35:45.1659679Z Prepare workflow directory
+2026-11-09T07:35:45.1929989Z Prepare all required actions
+2026-11-09T07:35:45.1960906Z Getting action download info
+2026-11-09T07:35:45.4166834Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T07:35:45.5029823Z Download action repository 'actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68' (SHA:a98b56852c35b8e3190ac28c8c2271da59106c68)
+2026-11-09T07:35:45.8684642Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-09T07:35:46.0277324Z Complete job name: C# Client - Live Tests (port 40464)
+2026-11-09T07:35:46.1251981Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T07:35:46.1252778Z with:
+2026-11-09T07:35:46.1253002Z   persist-credentials: false
+2026-11-09T07:35:46.1253344Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-09T07:35:46.1256098Z   token: ***
+2026-11-09T07:35:46.1256311Z   ssh-strict: true
+2026-11-09T07:35:46.1256530Z   ssh-user: git
+2026-11-09T07:35:46.1256746Z   clean: true
+2026-11-09T07:35:46.1256968Z   sparse-checkout-cone-mode: true
+2026-11-09T07:35:46.1257240Z   fetch-depth: 1
+2026-11-09T07:35:46.1257462Z   fetch-tags: false
+2026-11-09T07:35:46.1257688Z   show-progress: true
+2026-11-09T07:35:46.1257915Z   lfs: false
+2026-11-09T07:35:46.1258144Z   submodules: false
+2026-11-09T07:35:46.1258383Z   set-safe-directory: true
+2026-11-09T07:35:46.1258645Z   allow-unsafe-pr-checkout: false
+2026-11-09T07:35:46.1259016Z env:
+2026-11-09T07:35:46.1259232Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T07:35:46.1259555Z ##[endgroup]
+2026-11-09T07:35:46.2345537Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-09T07:35:46.2348258Z ##[group]Getting Git version info
+2026-11-09T07:35:46.2349536Z Working directory is 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-09T07:35:46.2756009Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-09T07:35:46.5345578Z git version 2.56.0.windows.4
+2026-11-09T07:35:46.5379936Z ##[endgroup]
+2026-11-09T07:35:46.5390102Z Temporarily overriding HOME='D:\a\_temp\1c33280a-da31-4654-bcea-b0937a89c6e5' before making global git config changes
+2026-11-09T07:35:46.5390906Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T07:35:46.5397066Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-09T07:35:46.5841382Z Deleting the contents of 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-09T07:35:46.5844204Z ##[group]Determining repository object format
+2026-11-09T07:35:46.5845672Z ##[endgroup]
+2026-11-09T07:35:46.5846418Z ##[group]Initializing the repository
+2026-11-09T07:35:46.5851166Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-09T07:35:46.6420397Z Initialized empty Git repository in D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-09T07:35:46.6461513Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-09T07:35:46.6991841Z ##[endgroup]
+2026-11-09T07:35:46.6992523Z ##[group]Disabling automatic garbage collection
+2026-11-09T07:35:46.6999182Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-09T07:35:46.7318172Z ##[endgroup]
+2026-11-09T07:35:46.7319122Z ##[group]Setting up auth
+2026-11-09T07:35:46.7319784Z Removing SSH command configuration
+2026-11-09T07:35:46.7325682Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T07:35:46.7594986Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-09T07:35:47.7845817Z Removing HTTP extra header
+2026-11-09T07:35:47.7852517Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T07:35:47.8092493Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-09T07:35:48.2120451Z Removing includeIf entries pointing to credentials config files
+2026-11-09T07:35:48.2121134Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T07:35:48.2360920Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-09T07:35:48.5973027Z [command]"C:\Program Files\Git\bin\git.exe" config --file D:\a\_temp\git-credentials-b8606630-d4c0-439d-9fc2-afe22b8ed61e.config http.https://github.com/.extraheader "AUTHORIZATION: basic [REDACTED_AUTH]"
+2026-11-09T07:35:48.6267271Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D:\a\_temp\git-credentials-b8606630-d4c0-439d-9fc2-afe22b8ed61e.config
+2026-11-09T07:35:48.6519511Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D:\a\_temp\git-credentials-b8606630-d4c0-439d-9fc2-afe22b8ed61e.config
+2026-11-09T07:35:48.6794164Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-b8606630-d4c0-439d-9fc2-afe22b8ed61e.config
+2026-11-09T07:35:48.7030601Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-b8606630-d4c0-439d-9fc2-afe22b8ed61e.config
+2026-11-09T07:35:48.7262034Z ##[endgroup]
+2026-11-09T07:35:48.7262260Z ##[group]Fetching the repository
+2026-11-09T07:35:48.7270460Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +38324e47523b4bedd07672332f76e8740cd0fcbf:refs/remotes/origin/main
+2026-11-09T07:35:50.6439212Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-09T07:35:50.6439860Z  * [new ref]         38324e47523b4bedd07672332f76e8740cd0fcbf -> origin/main
+2026-11-09T07:35:50.6474713Z [command]"C:\Program Files\Git\bin\git.exe" branch --list --remote origin/main
+2026-11-09T07:35:50.6775784Z   origin/main
+2026-11-09T07:35:50.6803310Z [command]"C:\Program Files\Git\bin\git.exe" rev-parse refs/remotes/origin/main
+2026-11-09T07:35:50.7070302Z 38324e47523b4bedd07672332f76e8740cd0fcbf
+2026-11-09T07:35:50.7091491Z ##[endgroup]
+2026-11-09T07:35:50.7091801Z ##[group]Determining the checkout info
+2026-11-09T07:35:50.7092229Z ##[endgroup]
+2026-11-09T07:35:50.7097163Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-09T07:35:50.7415940Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-09T07:35:50.7643130Z ##[group]Checking out the ref
+2026-11-09T07:35:50.7643437Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B main refs/remotes/origin/main
+2026-11-09T07:35:51.0768365Z Switched to a new branch 'main'
+2026-11-09T07:35:51.0845134Z branch 'main' set up to track 'origin/main'.
+2026-11-09T07:35:51.0919871Z ##[endgroup]
+2026-11-09T07:35:51.1256068Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-09T07:35:51.1472866Z 38324e47523b4bedd07672332f76e8740cd0fcbf
+2026-11-09T07:35:51.1500110Z ##[group]Removing auth
+2026-11-09T07:35:51.1500380Z Removing SSH command configuration
+2026-11-09T07:35:51.1505714Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T07:35:51.1739579Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-09T07:35:51.5549122Z Removing HTTP extra header
+2026-11-09T07:35:51.5555732Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T07:35:51.5794455Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-09T07:35:51.9405338Z Removing includeIf entries pointing to credentials config files
+2026-11-09T07:35:51.9415883Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T07:35:51.9629999Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-09T07:35:51.9630698Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-09T07:35:51.9631168Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T07:35:51.9631412Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T07:35:51.9658495Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-09T07:35:51.9864037Z D:\a\_temp\git-credentials-b8606630-d4c0-439d-9fc2-afe22b8ed61e.config
+2026-11-09T07:35:51.9890950Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D\:\\a\\_temp\\git\-credentials\-b8606630\-d4c0\-439d\-9fc2\-afe22b8ed61e\.config
+2026-11-09T07:35:52.0177838Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-09T07:35:52.0341301Z D:\a\_temp\git-credentials-b8606630-d4c0-439d-9fc2-afe22b8ed61e.config
+2026-11-09T07:35:52.0369399Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D\:\\a\\_temp\\git\-credentials\-b8606630\-d4c0\-439d\-9fc2\-afe22b8ed61e\.config
+2026-11-09T07:35:52.0602877Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T07:35:52.0806285Z /github/runner_temp/git-credentials-b8606630-d4c0-439d-9fc2-afe22b8ed61e.config
+2026-11-09T07:35:52.0831179Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-b8606630\-d4c0\-439d\-9fc2\-afe22b8ed61e\.config
+2026-11-09T07:35:52.1058901Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T07:35:52.1256340Z /github/runner_temp/git-credentials-b8606630-d4c0-439d-9fc2-afe22b8ed61e.config
+2026-11-09T07:35:52.1280950Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-b8606630\-d4c0\-439d\-9fc2\-afe22b8ed61e\.config
+2026-11-09T07:35:52.1505463Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-09T07:35:52.5186843Z Removing credentials config 'D:\a\_temp\git-credentials-b8606630-d4c0-439d-9fc2-afe22b8ed61e.config'
+2026-11-09T07:35:52.5196003Z ##[endgroup]
+2026-11-09T07:35:52.5453010Z ##[group]Run Expand-Archive `
+2026-11-09T07:35:52.5453234Z Expand-Archive `
+2026-11-09T07:35:52.5453446Z   -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+2026-11-09T07:35:52.5453684Z   -DestinationPath "OPC_UA_Servers\Release2\" `
+2026-11-09T07:35:52.5453860Z   -Force
+2026-11-09T07:35:52.5990554Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-09T07:35:52.5990742Z env:
+2026-11-09T07:35:52.5990866Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T07:35:52.5991006Z ##[endgroup]
+2026-11-09T07:35:53.2351251Z ##[group]Run python scripts/start_server_on_port.py `
+2026-11-09T07:35:53.2351508Z python scripts/start_server_on_port.py `
+2026-11-09T07:35:53.2351670Z   --port 40464 `
+2026-11-09T07:35:53.2351907Z   --diagnostics-dir OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/readiness
+2026-11-09T07:35:53.2397271Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-09T07:35:53.2397462Z env:
+2026-11-09T07:35:53.2397580Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T07:35:53.2397720Z ##[endgroup]
+2026-11-09T07:35:56.3933254Z ==> Starting OPC UA server on port 40464
+2026-11-09T07:35:56.3933576Z     Source : OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator
+2026-11-09T07:35:56.3933802Z     Copy   : D:\a\_temp\ijt-sim\server_40464
+2026-11-09T07:35:56.3933955Z     Server directory copied.
+2026-11-09T07:35:56.3934130Z     Patched serverEndpointTCPPort: 40451 -> 40464
+2026-11-09T07:35:56.3934354Z     EXE: opcua_ijt_demo_application.exe
+2026-11-09T07:35:56.3934513Z     Server started (PID 8828)
+2026-11-09T07:35:56.3934883Z     Port 40464 ready after 2.1s � server ready.
+2026-11-09T07:35:56.3935089Z     Exported SERVER_PID, OPCUA_SERVER_PORT, OPCUA_SERVER_URL to GITHUB_ENV.
+2026-11-09T07:35:56.4787448Z ##[group]Run actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+2026-11-09T07:35:56.4787683Z with:
+2026-11-09T07:35:56.4787795Z   dotnet-version: 10.0.x
+2026-11-09T07:35:56.4787916Z   cache: false
+2026-11-09T07:35:56.4788009Z env:
+2026-11-09T07:35:56.4788123Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T07:35:56.4788262Z   SERVER_PID: 8828
+2026-11-09T07:35:56.4788366Z   OPCUA_SERVER_PORT: 40464
+2026-11-09T07:35:56.4788690Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-09T07:35:56.4788839Z ##[endgroup]
+2026-11-09T07:35:56.6279612Z [command]"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -Sta -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command & 'D:\a\_actions\actions\setup-dotnet\a98b56852c35b8e3190ac28c8c2271da59106c68\externals\install-dotnet.ps1' -SkipNonVersionedFiles -Runtime dotnet -Channel LTS
+2026-11-09T07:35:57.6733244Z dotnet-install: .NET Core Runtime with version '10.0.14' is already installed.
+2026-11-09T07:35:57.7518619Z [command]"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -Sta -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command & 'D:\a\_actions\actions\setup-dotnet\a98b56852c35b8e3190ac28c8c2271da59106c68\externals\install-dotnet.ps1' -SkipNonVersionedFiles -Channel 10.0
+2026-11-09T07:35:58.4803341Z dotnet-install: .NET Core SDK with version '10.0.403' is already installed.
+2026-11-09T07:35:58.5505935Z ##[group]Run New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-09T07:35:58.5506301Z New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-09T07:35:58.5506729Z '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Live" tests="0"/></testsuites>' | Out-File test-results\tests.xml -Encoding UTF8
+2026-11-09T07:35:58.5551862Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-09T07:35:58.5552048Z env:
+2026-11-09T07:35:58.5552164Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T07:35:58.5552304Z   SERVER_PID: 8828
+2026-11-09T07:35:58.5552410Z   OPCUA_SERVER_PORT: 40464
+2026-11-09T07:35:58.5552557Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-09T07:35:58.5552718Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-09T07:35:58.5552846Z ##[endgroup]
+2026-11-09T07:35:58.8238447Z ##[group]Run $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+2026-11-09T07:35:58.8238862Z $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+2026-11-09T07:35:58.8239211Z $lockFiles = Get-ChildItem -Path . -Recurse -Filter "packages.lock.json" -File -ErrorAction SilentlyContinue
+2026-11-09T07:35:58.8239492Z if ($lockFiles.Count -gt 0) {
+2026-11-09T07:35:58.8239690Z   Write-Host "Lock files detected — using locked mode restore."
+2026-11-09T07:35:58.8239893Z   dotnet restore $target --locked-mode
+2026-11-09T07:35:58.8240036Z } else {
+2026-11-09T07:35:58.8240175Z   Write-Host "No lock files yet — using normal restore."
+2026-11-09T07:35:58.8240349Z   dotnet restore $target
+2026-11-09T07:35:58.8240470Z }
+2026-11-09T07:35:58.8283810Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-09T07:35:58.8283985Z env:
+2026-11-09T07:35:58.8284130Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T07:35:58.8284268Z   SERVER_PID: 8828
+2026-11-09T07:35:58.8284389Z   OPCUA_SERVER_PORT: 40464
+2026-11-09T07:35:58.8284541Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-09T07:35:58.8284699Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-09T07:35:58.8284827Z ##[endgroup]
+2026-11-09T07:35:59.0459652Z Lock files detected — using locked mode restore.
+2026-11-09T07:36:03.4342923Z   Determining projects to restore...
+2026-11-09T07:36:14.6093680Z Attempting to cancel the build...
+2026-11-09T07:36:14.7630063Z C:\Program Files\dotnet\sdk\10.0.403\NuGet.targets(198,5): error : Restore canceled! [D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj]
+2026-11-09T07:36:14.8354202Z ##[error]The operation was canceled.
+2026-11-09T07:36:14.9399753Z ##[group]Run New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-09T07:36:14.9400266Z New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-09T07:36:14.9401294Z $trx   = "test-results\tests.trx"
+2026-11-09T07:36:14.9401506Z $junit = "test-results\tests.xml"
+2026-11-09T07:36:14.9401701Z if (Test-Path $trx) {
+2026-11-09T07:36:14.9401882Z   [xml]$x = Get-Content $trx
+2026-11-09T07:36:14.9402176Z   $ns = @{ t = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010" }
+2026-11-09T07:36:14.9402655Z   $results = Select-Xml -Xml $x -XPath "//t:UnitTestResult" -Namespace $ns | Select-Object -ExpandProperty Node
+2026-11-09T07:36:14.9403099Z   $passed  = ($results | Where-Object { $_.outcome -eq "Passed"  }).Count
+2026-11-09T07:36:14.9403442Z   $failed  = ($results | Where-Object { $_.outcome -eq "Failed"  }).Count
+2026-11-09T07:36:14.9403829Z   $skipped = ($results | Where-Object { $_.outcome -eq "NotExecuted" }).Count
+2026-11-09T07:36:14.9404120Z   $total   = $results.Count
+2026-11-09T07:36:14.9404340Z   $xml  = '<?xml version="1.0" encoding="UTF-8"?>' + "`n"
+2026-11-09T07:36:14.9404676Z   $xml += "<testsuites tests=`"$total`" failures=`"$failed`" skipped=`"$skipped`">`n"
+2026-11-09T07:36:14.9405145Z   $xml += "  <testsuite name=`"IJT_CSharp_Client.Tests.Live`" tests=`"$total`" failures=`"$failed`" skipped=`"$skipped`">`n"
+2026-11-09T07:36:14.9405519Z   foreach ($r in $results) {
+2026-11-09T07:36:14.9405790Z     $name = [System.Security.SecurityElement]::Escape($r.testName)
+2026-11-09T07:36:14.9406066Z     $outcome = $r.outcome
+2026-11-09T07:36:14.9406267Z     if ($outcome -eq "Passed") {
+2026-11-09T07:36:14.9406555Z       $xml += "    <testcase name=`"$name`" classname=`"IJT`" />`n"
+2026-11-09T07:36:14.9408975Z     } elseif ($outcome -eq "NotExecuted") {
+2026-11-09T07:36:14.9409244Z       $msgRaw = ([string]$r.Output.ErrorInfo.Message).Trim()
+2026-11-09T07:36:14.9409625Z       if ([string]::IsNullOrWhiteSpace($msgRaw)) { $msgRaw = "Test skipped by xUnit" }
+2026-11-09T07:36:14.9409986Z       $msg = [System.Security.SecurityElement]::Escape($msgRaw)
+2026-11-09T07:36:14.9410416Z       $xml += "    <testcase name=`"$name`" classname=`"IJT`"><skipped message=`"$msg`">$msg</skipped></testcase>`n"
+2026-11-09T07:36:14.9410784Z     } else {
+2026-11-09T07:36:14.9411063Z       $msg = [System.Security.SecurityElement]::Escape($r.Output.ErrorInfo.Message)
+2026-11-09T07:36:14.9411525Z       $xml += "    <testcase name=`"$name`" classname=`"IJT`"><failure>$msg</failure></testcase>`n"
+2026-11-09T07:36:14.9411849Z     }
+2026-11-09T07:36:14.9411983Z   }
+2026-11-09T07:36:14.9412142Z   $xml += "  </testsuite>`n</testsuites>"
+2026-11-09T07:36:14.9412379Z   $xml | Out-File $junit -Encoding UTF8
+2026-11-09T07:36:14.9413720Z   Write-Host "Converted TRX → JUnit: $total tests, $failed failures, $skipped skipped"
+2026-11-09T07:36:14.9413963Z } else {
+2026-11-09T07:36:14.9414102Z   Write-Host "No TRX file found — creating empty JUnit"
+2026-11-09T07:36:14.9414478Z   '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Live" tests="0"/></testsuites>' | Out-File $junit -Encoding UTF8
+2026-11-09T07:36:14.9414801Z }
+2026-11-09T07:36:14.9480854Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-09T07:36:14.9481161Z env:
+2026-11-09T07:36:14.9481340Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T07:36:14.9481573Z   SERVER_PID: 8828
+2026-11-09T07:36:14.9481745Z   OPCUA_SERVER_PORT: 40464
+2026-11-09T07:36:14.9481970Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-09T07:36:14.9483443Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-09T07:36:14.9483667Z ##[endgroup]
+2026-11-09T07:36:15.3735639Z No TRX file found - creating empty JUnit
+2026-11-09T07:36:15.5319582Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-09T07:36:15.5320153Z with:
+2026-11-09T07:36:15.5320322Z   name: results-csharp-live
+2026-11-09T07:36:15.5320580Z   path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
+2026-11-09T07:36:15.5320854Z   retention-days: 14
+2026-11-09T07:36:15.5321019Z   if-no-files-found: warn
+2026-11-09T07:36:15.5321199Z   compression-level: 6
+2026-11-09T07:36:15.5321367Z   overwrite: false
+2026-11-09T07:36:15.5321529Z   include-hidden-files: false
+2026-11-09T07:36:15.5321706Z   archive: true
+2026-11-09T07:36:15.5321846Z env:
+2026-11-09T07:36:15.5322009Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T07:36:15.5322233Z   SERVER_PID: 8828
+2026-11-09T07:36:15.5322393Z   OPCUA_SERVER_PORT: 40464
+2026-11-09T07:36:15.5322629Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-09T07:36:15.5322865Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-09T07:36:15.5323060Z ##[endgroup]
+2026-11-09T07:36:15.8207975Z With the provided path, there will be 2 files uploaded
+2026-11-09T07:36:15.8210814Z Artifact name is valid!
+2026-11-09T07:36:15.8211762Z Root directory input is valid!
+2026-11-09T07:36:16.1022640Z Uploading artifact: results-csharp-live.zip
+2026-11-09T07:36:16.1046109Z Beginning upload of artifact content to blob storage
+2026-11-09T07:36:16.2709810Z Uploaded bytes 740
+2026-11-09T07:36:16.3132142Z Finished uploading artifact content to blob storage!
+2026-11-09T07:36:16.3132666Z SHA256 digest of uploaded artifact is ca5f1d4c06f5f8e969eecd0bcfb1e278c1dc75c7bd08182fc5838f3dee47a367
+2026-11-09T07:36:16.3133231Z Finalizing artifact upload
+2026-11-09T07:36:16.7874097Z Artifact results-csharp-live successfully finalized. Artifact ID 13657042148
+2026-11-09T07:36:16.7874563Z Artifact results-csharp-live has been successfully uploaded! Final size is 740 bytes. Artifact ID is 13657042148
+2026-11-09T07:36:16.7881282Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/42580322746/artifacts/13657042148
+2026-11-09T07:36:16.9199922Z ##[group]Run python scripts/start_server_on_port.py --port 40464 --stop
+2026-11-09T07:36:16.9200253Z python scripts/start_server_on_port.py --port 40464 --stop
+2026-11-09T07:36:16.9258752Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-09T07:36:16.9259070Z env:
+2026-11-09T07:36:16.9259243Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-09T07:36:16.9259472Z   SERVER_PID: 8828
+2026-11-09T07:36:16.9259640Z   OPCUA_SERVER_PORT: 40464
+2026-11-09T07:36:16.9259873Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-09T07:36:16.9260131Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-09T07:36:16.9260342Z ##[endgroup]
+2026-11-09T07:36:17.3227312Z     Stopped server PID 8828
+2026-11-09T07:36:17.3227632Z     Removed D:\a\_temp\ijt-sim\server_40464
+2026-11-09T07:36:17.5015985Z Post job cleanup.
+2026-11-09T07:36:17.7973653Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-09T07:36:17.8208277Z git version 2.56.0.windows.4
+2026-11-09T07:36:17.8252639Z Temporarily overriding HOME='D:\a\_temp\8bfadb81-f15a-4ea3-aa5f-fb52fa7dad5c' before making global git config changes
+2026-11-09T07:36:17.8253055Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T07:36:17.8259085Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-09T07:36:17.8495476Z Removing SSH command configuration
+2026-11-09T07:36:17.8501727Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T07:36:17.8742848Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-09T07:36:18.2277062Z Removing HTTP extra header
+2026-11-09T07:36:18.2284472Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T07:36:18.2557251Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-09T07:36:18.6216807Z Removing includeIf entries pointing to credentials config files
+2026-11-09T07:36:18.6225453Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T07:36:18.6460110Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-09T07:36:19.0050861Z Cleaning up orphan processes

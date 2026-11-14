@@ -1,0 +1,1048 @@
+﻿2026-11-10T19:30:51.1397358Z Current runner version: '2.338.2'
+2026-11-10T19:30:51.1422415Z ##[group]Runner Image Provisioner
+2026-11-10T19:30:51.1423135Z Hosted Compute Agent
+2026-11-10T19:30:51.1423595Z Version: 20261103.629
+2026-11-10T19:30:51.1424109Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-10T19:30:51.1424685Z Build Date: 2026-11-03T17:26:59Z
+2026-11-10T19:30:51.1425242Z Worker ID: {d6931b3c-55dd-4a1d-bde0-42395abd9fe0}
+2026-11-10T19:30:51.1425911Z Region: westus3
+2026-11-10T19:30:51.1426419Z Cloud: Azure
+2026-11-10T19:30:51.1426824Z ##[endgroup]
+2026-11-10T19:30:51.1427932Z ##[group]Operating System
+2026-11-10T19:30:51.1428425Z Microsoft Windows Server 2025
+2026-11-10T19:30:51.1428931Z 10.0.26100
+2026-11-10T19:30:51.1429378Z Datacenter
+2026-11-10T19:30:51.1429821Z ##[endgroup]
+2026-11-10T19:30:51.1430256Z ##[group]Runner Image
+2026-11-10T19:30:51.1430758Z Image: windows-2025-vs2026
+2026-11-10T19:30:51.1431231Z Version: 20261103.298.1
+2026-11-10T19:30:51.1432676Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261103.298/images/windows/Windows2025-VS2026-Readme.md
+2026-11-10T19:30:51.1433947Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261103.298
+2026-11-10T19:30:51.1434789Z ##[endgroup]
+2026-11-10T19:30:51.1435658Z ##[group]GITHUB_TOKEN Permissions
+2026-11-10T19:30:51.1437344Z Contents: read
+2026-11-10T19:30:51.1437786Z Metadata: read
+2026-11-10T19:30:51.1438338Z ##[endgroup]
+2026-11-10T19:30:51.1440747Z Secret source: Actions
+2026-11-10T19:30:51.1441575Z Cache mode: write
+2026-11-10T19:30:51.1442195Z Prepare workflow directory
+2026-11-10T19:30:51.1846234Z Prepare all required actions
+2026-11-10T19:30:51.1886930Z Getting action download info
+2026-11-10T19:30:51.5106506Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-10T19:30:51.7647990Z Download action repository 'actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73' (SHA:0f4a354dd5547a28c70b7853dbd95d5b67886e73)
+2026-11-10T19:30:52.4000481Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-10T19:30:52.6010155Z Complete job name: C# Client - Live Tests (port 40464)
+2026-11-10T19:30:52.7364184Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-10T19:30:52.7365799Z with:
+2026-11-10T19:30:52.7366362Z   persist-credentials: false
+2026-11-10T19:30:52.7367151Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-10T19:30:52.7372854Z   token: ***
+2026-11-10T19:30:52.7373405Z   ssh-strict: true
+2026-11-10T19:30:52.7373754Z   ssh-user: git
+2026-11-10T19:30:52.7374090Z   clean: true
+2026-11-10T19:30:52.7374578Z   sparse-checkout-cone-mode: true
+2026-11-10T19:30:52.7375003Z   fetch-depth: 1
+2026-11-10T19:30:52.7375340Z   fetch-tags: false
+2026-11-10T19:30:52.7375693Z   show-progress: true
+2026-11-10T19:30:52.7376060Z   lfs: false
+2026-11-10T19:30:52.7376730Z   submodules: false
+2026-11-10T19:30:52.7377082Z   set-safe-directory: true
+2026-11-10T19:30:52.7377477Z   allow-unsafe-pr-checkout: false
+2026-11-10T19:30:52.7378206Z env:
+2026-11-10T19:30:52.7378544Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:30:52.7379026Z ##[endgroup]
+2026-11-10T19:30:52.8703358Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-10T19:30:52.8705050Z ##[group]Getting Git version info
+2026-11-10T19:30:52.8706318Z Working directory is 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-10T19:30:52.9475723Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-10T19:30:53.3739671Z git version 2.56.0.windows.4
+2026-11-10T19:30:53.3841785Z ##[endgroup]
+2026-11-10T19:30:53.3858839Z Temporarily overriding HOME='D:\a\_temp\c06741ca-9f7a-482a-a085-c3bf2d8682e0' before making global git config changes
+2026-11-10T19:30:53.3860380Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-10T19:30:53.3871936Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-10T19:30:53.4652279Z Deleting the contents of 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-10T19:30:53.4657412Z ##[group]Determining repository object format
+2026-11-10T19:30:53.4659172Z ##[endgroup]
+2026-11-10T19:30:53.4659935Z ##[group]Initializing the repository
+2026-11-10T19:30:53.4667983Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-10T19:30:53.6574934Z Initialized empty Git repository in D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-10T19:30:53.6622051Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-10T19:30:53.8011602Z ##[endgroup]
+2026-11-10T19:30:53.8012529Z ##[group]Disabling automatic garbage collection
+2026-11-10T19:30:53.8018497Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-10T19:30:53.8359149Z ##[endgroup]
+2026-11-10T19:30:53.8360823Z ##[group]Setting up auth
+2026-11-10T19:30:53.8361708Z Removing SSH command configuration
+2026-11-10T19:30:53.8369997Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-10T19:30:53.8714119Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-10T19:30:56.2031214Z Removing HTTP extra header
+2026-11-10T19:30:56.2039572Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-10T19:30:56.2378747Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-10T19:30:56.7995063Z Removing includeIf entries pointing to credentials config files
+2026-11-10T19:30:56.8002360Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-10T19:30:56.8337527Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-10T19:30:57.3410455Z [command]"C:\Program Files\Git\bin\git.exe" config --file D:\a\_temp\git-credentials-156635bb-09cf-475c-85c1-367fcd4cff90.config http.https://github.com/.extraheader "AUTHORIZATION: basic [REDACTED_AUTH]"
+2026-11-10T19:30:57.3767510Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D:\a\_temp\git-credentials-156635bb-09cf-475c-85c1-367fcd4cff90.config
+2026-11-10T19:30:57.4119045Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D:\a\_temp\git-credentials-156635bb-09cf-475c-85c1-367fcd4cff90.config
+2026-11-10T19:30:57.6181384Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-156635bb-09cf-475c-85c1-367fcd4cff90.config
+2026-11-10T19:30:57.6512394Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-156635bb-09cf-475c-85c1-367fcd4cff90.config
+2026-11-10T19:30:57.6816650Z ##[endgroup]
+2026-11-10T19:30:57.6817046Z ##[group]Fetching the repository
+2026-11-10T19:30:57.6826863Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +3d8e9c6c04c5085c8e996eed545820c854578b4c:refs/remotes/origin/main
+2026-11-10T19:31:00.0055812Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-10T19:31:00.0057043Z  * [new ref]         3d8e9c6c04c5085c8e996eed545820c854578b4c -> origin/main
+2026-11-10T19:31:00.0107329Z [command]"C:\Program Files\Git\bin\git.exe" branch --list --remote origin/main
+2026-11-10T19:31:00.0537098Z   origin/main
+2026-11-10T19:31:00.0580189Z [command]"C:\Program Files\Git\bin\git.exe" rev-parse refs/remotes/origin/main
+2026-11-10T19:31:00.0987431Z 3d8e9c6c04c5085c8e996eed545820c854578b4c
+2026-11-10T19:31:00.1020802Z ##[endgroup]
+2026-11-10T19:31:00.1021251Z ##[group]Determining the checkout info
+2026-11-10T19:31:00.1021781Z ##[endgroup]
+2026-11-10T19:31:00.1029710Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-10T19:31:00.1452310Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-10T19:31:00.1862208Z ##[group]Checking out the ref
+2026-11-10T19:31:00.1871800Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B main refs/remotes/origin/main
+2026-11-10T19:31:00.6298393Z Switched to a new branch 'main'
+2026-11-10T19:31:00.6519422Z branch 'main' set up to track 'origin/main'.
+2026-11-10T19:31:00.8956875Z ##[endgroup]
+2026-11-10T19:31:00.8965644Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-10T19:31:00.9260930Z 3d8e9c6c04c5085c8e996eed545820c854578b4c
+2026-11-10T19:31:00.9300601Z ##[group]Removing auth
+2026-11-10T19:31:00.9301309Z Removing SSH command configuration
+2026-11-10T19:31:00.9309209Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-10T19:31:00.9640797Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-10T19:31:01.4814059Z Removing HTTP extra header
+2026-11-10T19:31:01.4821229Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-10T19:31:01.5168120Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-10T19:31:02.0176582Z Removing includeIf entries pointing to credentials config files
+2026-11-10T19:31:02.0184493Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-10T19:31:02.0478566Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-10T19:31:02.0479944Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-10T19:31:02.0480687Z includeif.gitdir:/github/workspace/.git.path
+2026-11-10T19:31:02.0481092Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-10T19:31:02.0519472Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-10T19:31:02.0823178Z D:\a\_temp\git-credentials-156635bb-09cf-475c-85c1-367fcd4cff90.config
+2026-11-10T19:31:02.0864565Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D\:\\a\\_temp\\git\-credentials\-156635bb\-09cf\-475c\-85c1\-367fcd4cff90\.config
+2026-11-10T19:31:02.1264812Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-10T19:31:02.1489231Z D:\a\_temp\git-credentials-156635bb-09cf-475c-85c1-367fcd4cff90.config
+2026-11-10T19:31:02.1529620Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D\:\\a\\_temp\\git\-credentials\-156635bb\-09cf\-475c\-85c1\-367fcd4cff90\.config
+2026-11-10T19:31:02.1857091Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-10T19:31:02.2146480Z /github/runner_temp/git-credentials-156635bb-09cf-475c-85c1-367fcd4cff90.config
+2026-11-10T19:31:02.2185722Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-156635bb\-09cf\-475c\-85c1\-367fcd4cff90\.config
+2026-11-10T19:31:02.2515148Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-10T19:31:02.2801421Z /github/runner_temp/git-credentials-156635bb-09cf-475c-85c1-367fcd4cff90.config
+2026-11-10T19:31:02.2841466Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-156635bb\-09cf\-475c\-85c1\-367fcd4cff90\.config
+2026-11-10T19:31:02.3181678Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-10T19:31:02.8360494Z Removing credentials config 'D:\a\_temp\git-credentials-156635bb-09cf-475c-85c1-367fcd4cff90.config'
+2026-11-10T19:31:02.8371813Z ##[endgroup]
+2026-11-10T19:31:02.8722485Z ##[group]Run Expand-Archive `
+2026-11-10T19:31:02.8722827Z Expand-Archive `
+2026-11-10T19:31:02.8723152Z   -Path "OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator.zip" `
+2026-11-10T19:31:02.8723507Z   -DestinationPath "OPC_UA_Servers\Release2\" `
+2026-11-10T19:31:02.8723778Z   -Force
+2026-11-10T19:31:03.5200854Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-10T19:31:03.5201159Z env:
+2026-11-10T19:31:03.5201344Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:31:03.5201552Z ##[endgroup]
+2026-11-10T19:31:04.5262777Z ##[group]Run python scripts/start_server_on_port.py `
+2026-11-10T19:31:04.5263147Z python scripts/start_server_on_port.py `
+2026-11-10T19:31:04.5263389Z   --port 40464 `
+2026-11-10T19:31:04.5263727Z   --diagnostics-dir OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/readiness
+2026-11-10T19:31:04.5319389Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-10T19:31:04.5319680Z env:
+2026-11-10T19:31:04.5319859Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:31:04.5320064Z ##[endgroup]
+2026-11-10T19:31:08.9664300Z ==> Starting OPC UA server on port 40464
+2026-11-10T19:31:08.9664647Z     Source : OPC_UA_Servers\Release2\OPC_UA_IJT_Server_Simulator
+2026-11-10T19:31:08.9664967Z     Copy   : D:\a\_temp\ijt-sim\server_40464
+2026-11-10T19:31:08.9665201Z     Server directory copied.
+2026-11-10T19:31:08.9665419Z     Patched serverEndpointTCPPort: 40451 -> 40464
+2026-11-10T19:31:08.9666261Z     EXE: opcua_ijt_demo_application.exe
+2026-11-10T19:31:08.9666572Z     Server started (PID 4208)
+2026-11-10T19:31:08.9667179Z     Port 40464 ready after 2.2s � server ready.
+2026-11-10T19:31:08.9667598Z     Exported SERVER_PID, OPCUA_SERVER_PORT, OPCUA_SERVER_URL to GITHUB_ENV.
+2026-11-10T19:31:09.0765528Z ##[group]Run actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73
+2026-11-10T19:31:09.0765886Z with:
+2026-11-10T19:31:09.0766043Z   dotnet-version: 10.0.x
+2026-11-10T19:31:09.0766229Z   skip-lts-prepass: false
+2026-11-10T19:31:09.0766398Z   cache: false
+2026-11-10T19:31:09.0766538Z env:
+2026-11-10T19:31:09.0766688Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:31:09.0766894Z   SERVER_PID: 4208
+2026-11-10T19:31:09.0767294Z   OPCUA_SERVER_PORT: 40464
+2026-11-10T19:31:09.0767519Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-10T19:31:09.0767737Z ##[endgroup]
+2026-11-10T19:31:09.3381189Z [command]"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -Sta -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command & 'D:\a\_actions\actions\setup-dotnet\0f4a354dd5547a28c70b7853dbd95d5b67886e73\externals\install-dotnet.ps1' -SkipNonVersionedFiles -Runtime dotnet -Channel LTS
+2026-11-10T19:31:11.5628730Z dotnet-install: Downloaded file https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.15/dotnet-runtime-10.0.15-win-x64.zip size is 36980907 bytes.
+2026-11-10T19:31:11.5632331Z dotnet-install: Either downloaded or local package size can not be measured. One of them may be corrupted.
+2026-11-10T19:31:11.5654824Z dotnet-install: Extracting the archive.
+2026-11-10T19:31:12.8770899Z dotnet-install: Note that the script does not ensure your Windows version is supported during the installation.
+2026-11-10T19:31:12.8773870Z dotnet-install: To check the list of supported versions, go to https://learn.microsoft.com/dotnet/core/install/windows#supported-versions
+2026-11-10T19:31:12.8778993Z dotnet-install: Installed version is 10.0.15
+2026-11-10T19:31:12.8784657Z dotnet-install: Installation finished
+2026-11-10T19:31:12.9825413Z [command]"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -Sta -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command & 'D:\a\_actions\actions\setup-dotnet\0f4a354dd5547a28c70b7853dbd95d5b67886e73\externals\install-dotnet.ps1' -SkipNonVersionedFiles -Channel 10.0
+2026-11-10T19:31:21.4628596Z dotnet-install: Downloaded file https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.404/dotnet-sdk-10.0.404-win-x64.zip size is 303618098 bytes.
+2026-11-10T19:31:21.4634257Z dotnet-install: Either downloaded or local package size can not be measured. One of them may be corrupted.
+2026-11-10T19:31:21.4658636Z dotnet-install: Extracting the archive.
+2026-11-10T19:31:46.0807768Z dotnet-install: Note that the script does not ensure your Windows version is supported during the installation.
+2026-11-10T19:31:46.0809747Z dotnet-install: To check the list of supported versions, go to https://learn.microsoft.com/dotnet/core/install/windows#supported-versions
+2026-11-10T19:31:46.0813901Z dotnet-install: Installed version is 10.0.404
+2026-11-10T19:31:46.0818104Z dotnet-install: Installation finished
+2026-11-10T19:31:46.1394465Z ##[group]Run New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-10T19:31:46.1394977Z New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-10T19:31:46.1395619Z '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Live" tests="0"/></testsuites>' | Out-File test-results\tests.xml -Encoding UTF8
+2026-11-10T19:31:46.1455519Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-10T19:31:46.1455799Z env:
+2026-11-10T19:31:46.1455993Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:31:46.1456209Z   SERVER_PID: 4208
+2026-11-10T19:31:46.1456376Z   OPCUA_SERVER_PORT: 40464
+2026-11-10T19:31:46.1456593Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-10T19:31:46.1456828Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-10T19:31:46.1457022Z ##[endgroup]
+2026-11-10T19:31:46.5254853Z ##[group]Run $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+2026-11-10T19:31:46.5255415Z $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+2026-11-10T19:31:46.5255930Z $lockFiles = Get-ChildItem -Path . -Recurse -Filter "packages.lock.json" -File -ErrorAction SilentlyContinue
+2026-11-10T19:31:46.5256339Z if ($lockFiles.Count -gt 0) {
+2026-11-10T19:31:46.5256632Z   Write-Host "Lock files detected — using locked mode restore."
+2026-11-10T19:31:46.5256938Z   dotnet restore $target --locked-mode
+2026-11-10T19:31:46.5257154Z } else {
+2026-11-10T19:31:46.5258029Z   Write-Host "No lock files yet — using normal restore."
+2026-11-10T19:31:46.5258285Z   dotnet restore $target
+2026-11-10T19:31:46.5258464Z }
+2026-11-10T19:31:46.5318576Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-10T19:31:46.5318871Z env:
+2026-11-10T19:31:46.5319116Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:31:46.5319331Z   SERVER_PID: 4208
+2026-11-10T19:31:46.5319497Z   OPCUA_SERVER_PORT: 40464
+2026-11-10T19:31:46.5319725Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-10T19:31:46.5319979Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-10T19:31:46.5320177Z ##[endgroup]
+2026-11-10T19:31:46.8517991Z Lock files detected — using locked mode restore.
+2026-11-10T19:31:48.9261291Z   Determining projects to restore...
+2026-11-10T19:32:49.4446813Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.DI\UAModel.DI.csproj (in 59 sec).
+2026-11-10T19:32:49.4487835Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.MachineryResult\UAModel.MachineryResult.csproj (in 59 sec).
+2026-11-10T19:32:49.4689566Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.Machinery\UAModel.Machinery.csproj (in 59 sec).
+2026-11-10T19:32:49.4691293Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.IJTTightening\UAModel.IJTTightening.csproj (in 59 sec).
+2026-11-10T19:32:49.4900926Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.AMB\UAModel.AMB.csproj (in 15 ms).
+2026-11-10T19:32:49.4902837Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.IA\UAModel.IA.csproj (in 16 ms).
+2026-11-10T19:32:49.4994970Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.IJTBase\UAModel.IJTBase.csproj (in 34 ms).
+2026-11-10T19:33:00.2386274Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\IJT_CSharp_Client.csproj (in 10.74 sec).
+2026-11-10T19:33:04.6833143Z   Restored D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj (in 15.22 sec).
+2026-11-10T19:33:04.7667588Z ##[group]Run $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+2026-11-10T19:33:04.7668131Z $target = "Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj"
+2026-11-10T19:33:04.7668604Z $output = dotnet list $target package --vulnerable --include-transitive --no-restore 2>&1
+2026-11-10T19:33:04.7668957Z $scanExit = $LASTEXITCODE
+2026-11-10T19:33:04.7669161Z Write-Host $output
+2026-11-10T19:33:04.7669419Z if ($output -match "has the following vulnerable packages") {
+2026-11-10T19:33:04.7669800Z   Write-Host "##[warning]Vulnerable NuGet packages detected (nightly scan)."
+2026-11-10T19:33:04.7670104Z   exit 0
+2026-11-10T19:33:04.7670250Z }
+2026-11-10T19:33:04.7670399Z if ($scanExit -ne 0) {
+2026-11-10T19:33:04.7670586Z   exit $scanExit
+2026-11-10T19:33:04.7670747Z }
+2026-11-10T19:33:04.7728010Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-10T19:33:04.7728295Z env:
+2026-11-10T19:33:04.7728465Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:33:04.7728677Z   SERVER_PID: 4208
+2026-11-10T19:33:04.7729020Z   OPCUA_SERVER_PORT: 40464
+2026-11-10T19:33:04.7729247Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-10T19:33:04.7729490Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-10T19:33:04.7729696Z ##[endgroup]
+2026-11-10T19:33:07.7302386Z  The following sources were used:    https://api.nuget.org/v3/index.json  The given project `IJT_CSharp_Client.Tests` has no vulnerable packages given the current sources.
+2026-11-10T19:33:07.8038823Z ##[group]Run dotnet build Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj --no-restore --configuration Release
+2026-11-10T19:33:07.8039707Z dotnet build Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj --no-restore --configuration Release
+2026-11-10T19:33:07.8093553Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-10T19:33:07.8093823Z env:
+2026-11-10T19:33:07.8093987Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:33:07.8094191Z   SERVER_PID: 4208
+2026-11-10T19:33:07.8094364Z   OPCUA_SERVER_PORT: 40464
+2026-11-10T19:33:07.8094578Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-10T19:33:07.8094811Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-10T19:33:07.8095003Z ##[endgroup]
+2026-11-10T19:33:16.3512862Z   UAModel.AMB -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.AMB\bin\Release\net10.0\UAModel.AMB.dll
+2026-11-10T19:33:18.4558933Z   UAModel.MachineryResult -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.MachineryResult\bin\Release\net10.0\UAModel.MachineryResult.dll
+2026-11-10T19:33:19.0888257Z   UAModel.DI -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.DI\bin\Release\net10.0\UAModel.DI.dll
+2026-11-10T19:33:20.8000475Z   UAModel.IA -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.IA\bin\Release\net10.0\UAModel.IA.dll
+2026-11-10T19:33:22.9109535Z   UAModel.Machinery -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.Machinery\bin\Release\net10.0\UAModel.Machinery.dll
+2026-11-10T19:33:29.6301839Z   UAModel.IJTBase -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.IJTBase\bin\Release\net10.0\UAModel.IJTBase.dll
+2026-11-10T19:33:30.2812768Z   UAModel.IJTTightening -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Types\UAModel.IJTTightening\bin\Release\net10.0\UAModel.IJTTightening.dll
+2026-11-10T19:33:31.5141278Z   IJT_CSharp_Client -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\bin\Release\net10.0\IJT_CSharp_Client.dll
+2026-11-10T19:33:36.7477202Z   IJT_CSharp_Client.Tests -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\IJT_CSharp_Client.Tests.dll
+2026-11-10T19:33:36.7606644Z 
+2026-11-10T19:33:36.7613551Z Build succeeded.
+2026-11-10T19:33:36.7614181Z     0 Warning(s)
+2026-11-10T19:33:36.7614430Z     0 Error(s)
+2026-11-10T19:33:36.7616152Z 
+2026-11-10T19:33:36.7617153Z Time Elapsed 00:00:28.50
+2026-11-10T19:33:37.4145316Z ##[group]Run New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-10T19:33:37.4145850Z New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-10T19:33:37.4146245Z dotnet test Tests\IJT_CSharp_Client.Tests\IJT_CSharp_Client.Tests.csproj `
+2026-11-10T19:33:37.4146548Z   --no-build `
+2026-11-10T19:33:37.4146720Z   --no-restore `
+2026-11-10T19:33:37.4147094Z   --configuration Release `
+2026-11-10T19:33:37.4147298Z   --filter "Category=Live" `
+2026-11-10T19:33:37.4147511Z   --logger "trx;LogFileName=tests.trx" `
+2026-11-10T19:33:37.4147747Z   --logger "console;verbosity=normal" `
+2026-11-10T19:33:37.4147975Z   --results-directory test-results `
+2026-11-10T19:33:37.4148201Z   --blame-hang --blame-hang-timeout 120s
+2026-11-10T19:33:37.4202136Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-10T19:33:37.4202429Z env:
+2026-11-10T19:33:37.4202588Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:33:37.4202788Z   SERVER_PID: 4208
+2026-11-10T19:33:37.4202937Z   OPCUA_SERVER_PORT: 40464
+2026-11-10T19:33:37.4203149Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-10T19:33:37.4203391Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-10T19:33:37.4203587Z   IJT_AUTO_ACCEPT: true
+2026-11-10T19:33:37.4203743Z ##[endgroup]
+2026-11-10T19:33:38.3793010Z Test run for D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\IJT_CSharp_Client.Tests.dll (.NETCoreApp,Version=v10.0)
+2026-11-10T19:33:38.5545213Z A total of 1 test files matched the specified pattern.
+2026-11-10T19:33:39.2361350Z [xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.1+0f7d528729 (64-bit .NET 10.0.15)
+2026-11-10T19:33:39.3645088Z [xUnit.net 00:00:00.15]   Discovering: IJT_CSharp_Client.Tests
+2026-11-10T19:33:39.5289288Z [xUnit.net 00:00:00.31]   Discovered:  IJT_CSharp_Client.Tests
+2026-11-10T19:33:39.5931747Z [xUnit.net 00:00:00.38]   Starting:    IJT_CSharp_Client.Tests
+2026-11-10T19:33:39.6484118Z 19:33:39.646 INFO [ServerFixture] OPC UA probe succeeded on port 40464 (attempt 1/30).
+2026-11-10T19:33:39.6485030Z 19:33:39.647 INFO [ServerFixture] OPC UA server already ready on port 40464 - reusing existing server.
+2026-11-10T19:33:39.8688889Z 19:33:39.866 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:33:39.8690034Z 19:33:39.866 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:33:44.4052367Z 19:33:44.404 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:33:44.4056350Z 19:33:44.405 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:33:44.4329212Z 19:33:44.432 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:33:44.4330492Z 19:33:44.432 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:33:44.4805380Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.Connect_ToLiveServer_Succeeds [4 s]
+2026-11-10T19:33:48.5346287Z 19:33:48.534 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:33:48.5347292Z 19:33:48.534 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:33:48.5378093Z 19:33:48.537 INFO [AssetManagement] 
+2026-11-10T19:33:48.5378809Z -- SendTextIdentifiers () --------------------
+2026-11-10T19:33:48.5576374Z 19:33:48.557 INFO [AssetManagement] OK SendTextIdentifiers called.
+2026-11-10T19:33:48.5597025Z 19:33:48.559 INFO [JsonSerializer] -- SendTextIdentifiers --
+2026-11-10T19:33:48.5624086Z 19:33:48.562 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:33:48.5625091Z   |  2
+2026-11-10T19:33:48.5625340Z   +--
+2026-11-10T19:33:48.5643747Z 19:33:48.563 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:33:48.5644592Z   |  "ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-10T19:33:48.5645173Z   +--
+2026-11-10T19:33:48.5698248Z 19:33:48.568 INFO [JoiningProcessManagement] 
+2026-11-10T19:33:48.5715019Z -- GetJoiningProcessList (uri=) ----------------
+2026-11-10T19:33:48.5716860Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.SendTextIdentifiers_DoesNotThrow [4 s]
+2026-11-10T19:33:48.6261898Z 19:33:48.625 INFO [JoiningProcessManagement] OK GetJoiningProcessList: 5 process(es)  Status=0  StatusMessage=""
+2026-11-10T19:33:48.6263919Z 19:33:48.625 INFO [JoiningProcessManagement]   -> Full list -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\joining_process\joining_process_list.json
+2026-11-10T19:33:48.6326288Z 19:33:48.632 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:33:48.6327119Z 19:33:48.632 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:33:50.0780588Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.GetJoiningProcessList_ReturnsList [61 ms]
+2026-11-10T19:33:52.7233311Z 19:33:52.722 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:33:52.7234133Z 19:33:52.722 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:33:52.7250704Z 19:33:52.724 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:33:52.7771648Z 19:33:52.776 INFO [EventSubscriber] OK Event subscription created (SubId=2198351313).
+2026-11-10T19:33:53.2955799Z 19:33:53.295 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:33:53.3008470Z 19:33:53.300 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:33:53.3009342Z 19:33:53.300 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:33:53.3039788Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.Subscribe_ThenUnsubscribe_DoesNotThrow [4 s]
+2026-11-10T19:33:57.3990364Z 19:33:57.398 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:33:57.3991533Z 19:33:57.398 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:33:57.4008435Z 19:33:57.400 INFO [ResultManagement] 
+2026-11-10T19:33:57.4008902Z -- Subscribing to Result variable -------------------
+2026-11-10T19:33:57.4271340Z 19:33:57.426 INFO [ResultManagement] OK Subscribed to Result variable (ns=1;s=TighteningSystem/ResultManagement/Results/Result).
+2026-11-10T19:33:57.4293752Z 19:33:57.428 INFO [ResultManagement] OK Result variable subscription stopped.
+2026-11-10T19:33:57.4351965Z 19:33:57.434 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:33:57.4353316Z 19:33:57.434 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:33:57.4361236Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.SubscribeResultVariable_DoesNotThrow [4 s]
+2026-11-10T19:34:01.5336044Z 19:34:01.533 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:01.5337257Z 19:34:01.533 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:01.5356796Z 19:34:01.535 INFO [AssetManagement] 
+2026-11-10T19:34:01.5357864Z -- GetIdentifiers () ------------------------
+2026-11-10T19:34:01.5392334Z 19:34:01.538 INFO [AssetManagement] OK GetIdentifiers: 0 entity/entities  Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-10T19:34:01.5395249Z 19:34:01.539 INFO [AssetManagement]   -> Full list -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\entity_list\entity_list.json
+2026-11-10T19:34:01.5430734Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.GetIdentifiers_DoesNotThrow [4 s]
+2026-11-10T19:34:01.5436780Z 19:34:01.543 INFO [AssetManagement] 
+2026-11-10T19:34:01.5437548Z -- ResetIdentifiers () ----------------------
+2026-11-10T19:34:01.5461529Z 19:34:01.545 INFO [AssetManagement] OK ResetIdentifiers called.
+2026-11-10T19:34:01.5463577Z 19:34:01.546 INFO [JsonSerializer] -- ResetIdentifiers --
+2026-11-10T19:34:01.5463992Z 19:34:01.546 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:34:01.5464292Z   |  2
+2026-11-10T19:34:01.5464469Z   +--
+2026-11-10T19:34:01.5464744Z 19:34:01.546 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:34:01.5465396Z   |  "ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-10T19:34:01.5466225Z   +--
+2026-11-10T19:34:01.5505523Z 19:34:01.550 INFO [ResultManagement] 
+2026-11-10T19:34:01.5506296Z -- GetResultById (id=) ----------------------
+2026-11-10T19:34:01.5558348Z 19:34:01.555 WARN [ResultManagement] WARN GetResultById: server reported method error.  ResultHandle=0  Error=-1
+2026-11-10T19:34:01.5560247Z 19:34:01.555 INFO [ResultManagement]   -> Full result -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\results\20261110_193401_555.json
+2026-11-10T19:34:01.5599696Z 19:34:01.559 INFO [AssetManagement] 
+2026-11-10T19:34:01.5600345Z -- EnableAsset (, True) ----------------------
+2026-11-10T19:34:01.5613691Z 19:34:01.561 INFO [AssetManagement] OK EnableAsset called.
+2026-11-10T19:34:01.5614280Z 19:34:01.561 INFO [JsonSerializer] -- EnableAsset --
+2026-11-10T19:34:01.5614732Z 19:34:01.561 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:34:01.5615249Z   |  2
+2026-11-10T19:34:01.5615450Z   +--
+2026-11-10T19:34:01.5615772Z 19:34:01.561 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:34:01.5616730Z   |  "ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-10T19:34:01.5617304Z   +--
+2026-11-10T19:34:01.5664465Z 19:34:01.566 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:01.5665208Z 19:34:01.566 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:03.0547882Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.ResetIdentifiers_DoesNotThrow [6 ms]
+2026-11-10T19:34:03.0548730Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.GetResultById_WithEmptyId_DoesNotThrow [9 ms]
+2026-11-10T19:34:03.0549299Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.EnableAsset_DoesNotThrow [4 ms]
+2026-11-10T19:34:05.6826642Z 19:34:05.682 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:05.6827724Z 19:34:05.682 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:05.6878249Z 19:34:05.687 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:34:05.7095199Z 19:34:05.709 INFO [EventSubscriber] OK Event subscription created (SubId=2198351317).
+2026-11-10T19:34:06.7506685Z 19:34:06.750 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:34:06.7555575Z 19:34:06.754 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:06.7559632Z 19:34:06.754 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:06.7572326Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.EventSubscription_ReceivesResultEvent_WithinTimeout [5 s]
+2026-11-10T19:34:10.8457505Z 19:34:10.845 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:10.8458921Z 19:34:10.845 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:10.8480060Z 19:34:10.847 INFO [JoiningProcessManagement] 
+2026-11-10T19:34:10.8481048Z -- SelectJoiningProcess (id=) ------------------
+2026-11-10T19:34:10.8507929Z 19:34:10.850 INFO [JoiningProcessManagement] OK SelectJoiningProcess called.
+2026-11-10T19:34:10.8509009Z 19:34:10.850 INFO [JsonSerializer] -- SelectJoiningProcess --
+2026-11-10T19:34:10.8509595Z 19:34:10.850 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:34:10.8510004Z   |  2
+2026-11-10T19:34:10.8510939Z   +--
+2026-11-10T19:34:10.8511296Z 19:34:10.850 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:34:10.8512127Z   |  "ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-10T19:34:10.8512723Z   +--
+2026-11-10T19:34:10.8545470Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.SelectJoiningProcess_WithEmptyId_DoesNotThrow [4 s]
+2026-11-10T19:34:10.8562196Z 19:34:10.855 INFO [ResultManagement] 
+2026-11-10T19:34:10.8563199Z -- GetLatestResult ----------------------------------
+2026-11-10T19:34:10.8862169Z 19:34:10.885 INFO [ResultManagement] OK Result received.  ResultHandle=0  Error=0
+2026-11-10T19:34:10.8864909Z 19:34:10.885 INFO [ResultManagement]   -> Full result -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\results\Single_Tightening_Result_4_7B2687BD-89E7-3748-B999-0E02777D1F9A_20261110_193410_885.json
+2026-11-10T19:34:10.8918455Z 19:34:10.891 INFO [AssetManagement] 
+2026-11-10T19:34:10.8925219Z -- SendIdentifiers (1 entities) -------------
+2026-11-10T19:34:10.8962291Z 19:34:10.896 INFO [AssetManagement] OK SendIdentifiers called (1 entities).
+2026-11-10T19:34:10.8963126Z 19:34:10.896 INFO [JsonSerializer] -- SendIdentifiers --
+2026-11-10T19:34:10.8963634Z 19:34:10.896 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:34:10.8964022Z   |  2
+2026-11-10T19:34:10.8964281Z   +--
+2026-11-10T19:34:10.8964638Z 19:34:10.896 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:34:10.8965154Z   |  "ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-10T19:34:10.8965714Z   +--
+2026-11-10T19:34:10.9011459Z 19:34:10.900 INFO [JoiningProcessManagement] 
+2026-11-10T19:34:10.9019877Z -- GetSelectedJoiningProgram ------------------------
+2026-11-10T19:34:10.9031763Z 19:34:10.902 INFO [JoiningProcessManagement] OK GetSelectedJoiningProgram: Status=2  StatusMessage="ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-10T19:34:10.9034618Z 19:34:10.902 INFO [JoiningProcessManagement]   -> Full program -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\joining_process\selected_joining_program.json
+2026-11-10T19:34:10.9085431Z 19:34:10.908 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:10.9086638Z 19:34:10.908 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:12.3562760Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.GetLatestResult_ReturnsResult [35 ms]
+2026-11-10T19:34:12.3563502Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.SendIdentifiers_WithDemoEntities_DoesNotThrow [9 ms]
+2026-11-10T19:34:12.3564217Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.GetSelectedJoiningProgram_DoesNotThrow [6 ms]
+2026-11-10T19:34:15.0242138Z 19:34:15.023 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:15.0243123Z 19:34:15.023 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:15.0264665Z 19:34:15.026 INFO [AssetManagement] 
+2026-11-10T19:34:15.0265332Z -- Subscribing to all Asset variables ----
+2026-11-10T19:34:15.0402242Z 19:34:15.040 INFO [AssetManagement]   Asset: Controllers/TighteningController - subscribed
+2026-11-10T19:34:15.0509051Z 19:34:15.050 INFO [AssetManagement]   Asset: Tools/TighteningTool - subscribed
+2026-11-10T19:34:15.0599476Z 19:34:15.059 INFO [AssetManagement]   Asset: Servos/TighteningController_Servo - subscribed
+2026-11-10T19:34:15.0701792Z 19:34:15.069 INFO [AssetManagement]   Asset: MemoryDevices/MemoryDevice - subscribed
+2026-11-10T19:34:15.0792809Z 19:34:15.079 INFO [AssetManagement]   Asset: Sensors/TorqueSensor - subscribed
+2026-11-10T19:34:15.0884306Z 19:34:15.088 INFO [AssetManagement]   Asset: Cables/Cable - subscribed
+2026-11-10T19:34:15.0974136Z 19:34:15.097 INFO [AssetManagement]   Asset: Batteries/ToolBattery - subscribed
+2026-11-10T19:34:15.1063538Z 19:34:15.106 INFO [AssetManagement]   Asset: PowerSupplies/PowerSupply - subscribed
+2026-11-10T19:34:15.1154080Z 19:34:15.115 INFO [AssetManagement]   Asset: Feeders/Feeder - subscribed
+2026-11-10T19:34:15.1241120Z 19:34:15.123 INFO [AssetManagement]   Asset: Accessories/Accessory - subscribed
+2026-11-10T19:34:15.1328104Z 19:34:15.132 INFO [AssetManagement]   Asset: SubComponents/SubComponent - subscribed
+2026-11-10T19:34:15.1348089Z 19:34:15.134 INFO [AssetManagement]   Asset: SoftwareComponents/Software - subscribed
+2026-11-10T19:34:15.1367741Z 19:34:15.136 INFO [AssetManagement]   Asset: VirtualStations/VirtualStation - subscribed
+2026-11-10T19:34:15.1729373Z 19:34:15.172 INFO [AssetManagement] OK Subscribed to 717 asset variable(s) across 13 asset(s).
+2026-11-10T19:34:15.1746233Z 19:34:15.174 INFO [AssetManagement] OK Asset variable subscription stopped.
+2026-11-10T19:34:15.1810667Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationTests.SubscribeAssetVariables_DoesNotThrow [4 s]
+2026-11-10T19:34:15.1820360Z 19:34:15.181 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:15.1821535Z 19:34:15.181 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:19.2909305Z 19:34:19.290 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:19.2910001Z 19:34:19.290 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:19.3139214Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SendIdentifiers_WithEntityDataType_ThenGetIdentifiers_ReturnsData [4 s]
+2026-11-10T19:34:20.3300737Z 19:34:20.329 INFO [ResultManagement] 
+2026-11-10T19:34:20.3301450Z -- GetLatestResult ----------------------------------
+2026-11-10T19:34:20.3326938Z 19:34:20.332 INFO [ResultManagement] OK Result received.  ResultHandle=0  Error=0
+2026-11-10T19:34:20.3328812Z 19:34:20.332 INFO [ResultManagement]   -> Full result -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\results\Single_Tightening_Result_5_3159A645-1021-0643-B551-C4D69A7A6CFD_20261110_193420_332.json
+2026-11-10T19:34:20.3408642Z 19:34:20.340 INFO [JoiningProcessManagement] 
+2026-11-10T19:34:20.3433462Z -- SetJoiningProcessSize (0952E9B4-05F6-4B43-B66C-B8027FBE966A) ------
+2026-11-10T19:34:20.3443441Z 19:34:20.344 INFO [JoiningProcessManagement] OK SetJoiningProcessSize called.
+2026-11-10T19:34:20.3444108Z 19:34:20.344 INFO [JsonSerializer] -- SetJoiningProcessSize --
+2026-11-10T19:34:20.3445833Z 19:34:20.344 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:34:20.3446342Z   |  5
+2026-11-10T19:34:20.3447240Z   +--
+2026-11-10T19:34:20.3447701Z 19:34:20.344 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:34:20.3448312Z   |  "Size applies only to a batch joining process."
+2026-11-10T19:34:20.3448778Z   +--
+2026-11-10T19:34:20.3508779Z 19:34:20.350 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:20.3509895Z 19:34:20.350 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:20.8161471Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.FullFlow_GetLatestResult_ViaManagementClass_ConsistentWithDirectCall [1 s]
+2026-11-10T19:34:20.8164370Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SetJoiningProcessSize_Value10_DoesNotThrow [8 ms]
+2026-11-10T19:34:24.4323617Z 19:34:24.432 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:24.4324320Z 19:34:24.432 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:24.4352088Z 19:34:24.435 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:34:24.4536398Z 19:34:24.453 INFO [EventSubscriber] OK Event subscription created (SubId=2198351321).
+2026-11-10T19:34:24.4554336Z 19:34:24.455 INFO [SimulationManagement] 
+2026-11-10T19:34:24.4554761Z -- SimulateEvents (eventType=1) --
+2026-11-10T19:34:24.4595601Z 19:34:24.459 INFO [SimulationManagement] OK SimulateEvents fired (eventType=1).
+2026-11-10T19:34:25.4651170Z 19:34:25.464 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:34:25.4690609Z 19:34:25.468 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:25.4691628Z 19:34:25.468 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:25.4692766Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateEvent_ThenEventReceived_ViaSubscription [5 s]
+2026-11-10T19:34:29.5648418Z 19:34:29.564 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:29.5649375Z 19:34:29.564 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:29.5692769Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.AssetManagementNode_IsBrowseableUnderJoiningSystem [4 s]
+2026-11-10T19:34:29.5705463Z 19:34:29.569 INFO [JoiningProcessManagement] 
+2026-11-10T19:34:29.5707284Z -- IncrementJoiningProcessCounter (0952E9B4-05F6-4B43-B66C-B8027FBE966A) ------
+2026-11-10T19:34:29.5729431Z 19:34:29.572 INFO [JoiningProcessManagement] OK IncrementJoiningProcessCounter called.
+2026-11-10T19:34:29.5730227Z 19:34:29.572 INFO [JsonSerializer] -- IncrementJoiningProcessCounter --
+2026-11-10T19:34:29.5731008Z 19:34:29.572 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:34:29.5731463Z   |  5
+2026-11-10T19:34:29.5731695Z   +--
+2026-11-10T19:34:29.5732026Z 19:34:29.572 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:34:29.5732562Z   |  "Counter applies only to a batch or job joining process."
+2026-11-10T19:34:29.5732984Z   +--
+2026-11-10T19:34:29.5769839Z 19:34:29.576 INFO [JoiningProcessManagement] 
+2026-11-10T19:34:29.5770769Z -- StartJoiningProcess (0952E9B4-05F6-4B43-B66C-B8027FBE966A) ------
+2026-11-10T19:34:29.5790334Z 19:34:29.578 INFO [JoiningProcessManagement] OK StartJoiningProcess called.
+2026-11-10T19:34:29.5790975Z 19:34:29.578 INFO [JsonSerializer] -- StartJoiningProcess --
+2026-11-10T19:34:29.5791459Z 19:34:29.578 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:34:29.5791849Z   |  0
+2026-11-10T19:34:29.5792037Z   +--
+2026-11-10T19:34:29.5792340Z 19:34:29.578 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:34:29.5792689Z   |  ""
+2026-11-10T19:34:29.5792872Z   +--
+2026-11-10T19:34:29.6075725Z 19:34:29.607 INFO [JointManagement] 
+2026-11-10T19:34:29.6076506Z -- SelectJoint (uri=www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D, jointId=Joint_1) --------------
+2026-11-10T19:34:29.6117865Z 19:34:29.611 INFO [JsonSerializer] -- SelectJoint --
+2026-11-10T19:34:29.6118388Z 19:34:29.611 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:34:29.6118765Z   |  0
+2026-11-10T19:34:29.6118943Z   +--
+2026-11-10T19:34:29.6119213Z 19:34:29.611 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:34:29.6119492Z   |  ""
+2026-11-10T19:34:29.6119614Z   +--
+2026-11-10T19:34:29.6216334Z 19:34:29.621 INFO [AssetManagement] 
+2026-11-10T19:34:29.6217767Z -- GetIOSignals (www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D) --------------------------
+2026-11-10T19:34:29.6249153Z 19:34:29.624 INFO [AssetManagement] OK GetIOSignals: 0 signal(s)  Status=2  StatusMessage="ProductInstanceUri NOT FOUND. Please provide a valid ProductInstanceUri of a Tool or a Virtual Station."
+2026-11-10T19:34:29.6251481Z 19:34:29.624 INFO [AssetManagement]   -> Full signal list -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\io_signals\io_signals.json
+2026-11-10T19:34:29.6429216Z 19:34:29.642 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:29.6430345Z 19:34:29.642 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:31.0706964Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.IncrementJoiningProcessCounter_Count1_DoesNotThrow [6 ms]
+2026-11-10T19:34:31.0708258Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.StartJoiningProcess_ValidIds_DoesNotThrow [5 ms]
+2026-11-10T19:34:31.0709080Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.FullFlow_SendIdentifiers_ResetIdentifiers_GetIdentifiers_MethodCallsSucceed [13 ms]
+2026-11-10T19:34:31.0709899Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetIdentifiers_AfterSendTextIdentifiers_EntityListContainsData [10 ms]
+2026-11-10T19:34:31.0710607Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SelectJoint_ViaManagementClass_DoesNotThrow [7 ms]
+2026-11-10T19:34:31.0711286Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.EnableAsset_WithToolUri_ReturnsOutputsWithStatusField [5 ms]
+2026-11-10T19:34:31.0712001Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetIOSignals_EmptyFilter_ExecutesAndLogsSuccessfully [6 ms]
+2026-11-10T19:34:31.0712761Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.FullFlow_GetJoiningProcessList_SelectFirst_GetSelectedProgram_RoundTrip [13 ms]
+2026-11-10T19:34:33.7317342Z 19:34:33.731 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:33.7318194Z 19:34:33.731 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:33.7325749Z 19:34:33.732 INFO [ResultManagement] 
+2026-11-10T19:34:33.7326180Z -- Subscribing to Result variable -------------------
+2026-11-10T19:34:33.7591316Z 19:34:33.758 INFO [ResultManagement] OK Subscribed to Result variable (ns=1;s=TighteningSystem/ResultManagement/Results/Result).
+2026-11-10T19:34:33.7608037Z 19:34:33.760 INFO [ResultManagement] OK Result variable subscription stopped.
+2026-11-10T19:34:33.7651830Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SubscribeResultVariable_IsResultVarSubscribedBecomesTrue_ThenFalse [4 s]
+2026-11-10T19:34:33.7663459Z 19:34:33.766 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:33.7664474Z 19:34:33.766 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:37.8546527Z 19:34:37.854 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:37.8547354Z 19:34:37.854 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:38.0918905Z 19:34:38.090 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:38.0920546Z 19:34:38.090 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:38.0923691Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SubscribeResultVariable_ThenTrigger_DataChangeNotificationReceived [4 s]
+2026-11-10T19:34:42.2122659Z 19:34:42.211 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:42.2123227Z 19:34:42.211 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:42.2149143Z 19:34:42.214 INFO [SimulationManagement] 
+2026-11-10T19:34:42.2149767Z -- SimulateBatchOrSyncResult (class=2, children=2, traces=True, refs=True) --
+2026-11-10T19:34:42.3222009Z 19:34:42.321 INFO [SimulationManagement] OK SimulateBatch_Or_Sync_Result fired (classification=SYNC).
+2026-11-10T19:34:42.3263255Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateBatchOrSyncResult_Sync_DoesNotThrow [4 s]
+2026-11-10T19:34:43.8359854Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetLatestResult_AfterTrigger_Returns_ExpectedOutputCount [1 s]
+2026-11-10T19:34:43.8361168Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.IjtBaseNamespaceIndex_IsNonZero_AfterConnect [< 1 ms]
+2026-11-10T19:34:44.4439434Z 19:34:44.443 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:44.4440278Z 19:34:44.443 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:45.3375743Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetLatestResult_AfterTrigger_ResultBody_IsResultDataType [1 s]
+2026-11-10T19:34:45.3376545Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulationsNode_IsBrowseableUnderJoiningSystem [3 ms]
+2026-11-10T19:34:48.5508351Z 19:34:48.550 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:48.5509023Z 19:34:48.550 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:48.5511891Z 19:34:48.551 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:34:48.5773454Z 19:34:48.577 INFO [EventSubscriber] OK Event subscription created (SubId=2198351327).
+2026-11-10T19:34:49.5720829Z 19:34:49.571 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:34:49.5755549Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.Subscribe_ThenTriggerResult_EventArgs_AllFields_IsNonEmpty [5 s]
+2026-11-10T19:34:49.5757360Z 19:34:49.575 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:49.5758480Z 19:34:49.575 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:53.6741624Z 19:34:53.673 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:53.6742515Z 19:34:53.673 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:53.6833616Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJointList_WithToolUri_ReturnsSameCountAsEmptyUri [4 s]
+2026-11-10T19:34:53.6881740Z 19:34:53.688 INFO [JoiningProcessManagement] 
+2026-11-10T19:34:53.6882233Z -- DeselectJoiningProcess () ------
+2026-11-10T19:34:53.6905458Z 19:34:53.690 INFO [JoiningProcessManagement] OK DeselectJoiningProcess called.
+2026-11-10T19:34:53.6906165Z 19:34:53.690 INFO [JsonSerializer] -- DeselectJoiningProcess --
+2026-11-10T19:34:53.6906691Z 19:34:53.690 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:34:53.6907259Z   |  2
+2026-11-10T19:34:53.6907476Z   +--
+2026-11-10T19:34:53.6907812Z 19:34:53.690 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:34:53.6908572Z   |  "ProductInstanceUri is NULL or EMPTY. Please provide a valid ProductInstanceUri for this method."
+2026-11-10T19:34:53.6909167Z   +--
+2026-11-10T19:34:53.6935446Z 19:34:53.693 INFO [JoiningProcessManagement] 
+2026-11-10T19:34:53.6936035Z -- ResetJoiningProcess (0952E9B4-05F6-4B43-B66C-B8027FBE966A) ------
+2026-11-10T19:34:53.6956507Z 19:34:53.695 INFO [JoiningProcessManagement] OK ResetJoiningProcess called.
+2026-11-10T19:34:53.6957353Z 19:34:53.695 INFO [JsonSerializer] -- ResetJoiningProcess --
+2026-11-10T19:34:53.6957860Z 19:34:53.695 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:34:53.6958192Z   |  5
+2026-11-10T19:34:53.6958400Z   +--
+2026-11-10T19:34:53.6958700Z 19:34:53.695 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:34:53.6959202Z   |  "Counter applies only to a batch or job joining process."
+2026-11-10T19:34:53.6959590Z   +--
+2026-11-10T19:34:53.7000180Z 19:34:53.699 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:53.7001251Z 19:34:53.699 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:55.1851586Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoint_WithNonExistentId_ReturnsStatus4 [4 ms]
+2026-11-10T19:34:55.1852795Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.DeselectJoiningProcess_EmptyUri_DoesNotThrow [4 ms]
+2026-11-10T19:34:55.1853948Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.ResetJoiningProcess_ValidIds_DoesNotThrow [4 ms]
+2026-11-10T19:34:57.7943621Z 19:34:57.794 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:34:57.7944475Z 19:34:57.794 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:34:57.7947605Z 19:34:57.794 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:34:57.8072053Z 19:34:57.807 INFO [EventSubscriber] OK Event subscription created (SubId=2198351329).
+2026-11-10T19:34:58.8153105Z 19:34:58.814 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:34:58.8186689Z 19:34:58.818 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:34:58.8187708Z 19:34:58.818 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:34:58.8188766Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.Subscribe_ThenTriggerResult_EventArgs_ResultId_IsNonEmpty [5 s]
+2026-11-10T19:35:02.9091712Z 19:35:02.908 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:02.9093528Z 19:35:02.908 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:02.9107524Z 19:35:02.910 INFO [JoiningProcessManagement] 
+2026-11-10T19:35:02.9108404Z -- DecrementJoiningProcessCounter (0952E9B4-05F6-4B43-B66C-B8027FBE966A) ------
+2026-11-10T19:35:02.9132688Z 19:35:02.913 INFO [JoiningProcessManagement] OK DecrementJoiningProcessCounter called.
+2026-11-10T19:35:02.9133458Z 19:35:02.913 INFO [JsonSerializer] -- DecrementJoiningProcessCounter --
+2026-11-10T19:35:02.9134213Z 19:35:02.913 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:35:02.9134442Z   |  5
+2026-11-10T19:35:02.9134575Z   +--
+2026-11-10T19:35:02.9134775Z 19:35:02.913 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:35:02.9135094Z   |  "Counter applies only to a batch or job joining process."
+2026-11-10T19:35:02.9135352Z   +--
+2026-11-10T19:35:02.9159605Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.DecrementJoiningProcessCounter_Count1_DoesNotThrow [4 s]
+2026-11-10T19:35:03.9593422Z 19:35:03.959 INFO [SimulationManagement] 
+2026-11-10T19:35:03.9593979Z -- SimulateSingleResult (type=2, traces=True) --
+2026-11-10T19:35:03.9626013Z 19:35:03.962 INFO [SimulationManagement] OK SimulateSingleResult fired (type=2, includeTraces=True). Result will arrive via ResultReady event subscription.
+2026-11-10T19:35:03.9708632Z 19:35:03.970 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:03.9709398Z 19:35:03.970 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:04.4201496Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SendTextIdentifiers_ThreeIds_ReturnsStatus0 [8 ms]
+2026-11-10T19:35:04.4202481Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoiningProcessList_ThenSelectFirst_RoundTripSucceeds [8 ms]
+2026-11-10T19:35:04.4203259Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.ResetIdentifiers_AfterSend_GetIdentifiers_StillReturnsOutputs [13 ms]
+2026-11-10T19:35:04.4204039Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetLatestResult_AfterTrigger_ResultMetaData_HasNonEmptyResultId [1 s]
+2026-11-10T19:35:04.4204774Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateSingleResult_Type2_WithTraces_DoesNotThrow [7 ms]
+2026-11-10T19:35:04.4205462Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoiningProcessList_SimulatorHasThreeProcesses [4 ms]
+2026-11-10T19:35:08.0585500Z 19:35:08.058 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:08.0586452Z 19:35:08.058 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:08.0588058Z 19:35:08.058 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:35:08.0833958Z 19:35:08.083 INFO [EventSubscriber] OK Event subscription created (SubId=2198351331).
+2026-11-10T19:35:09.0751078Z 19:35:09.074 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:35:09.0787694Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.Subscribe_ThenTriggerResult_EventArgs_SequenceNumber_IsPositive [5 s]
+2026-11-10T19:35:09.0790924Z 19:35:09.078 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:09.0791800Z 19:35:09.078 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:13.2009347Z 19:35:13.200 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:13.2010226Z 19:35:13.200 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:13.2013312Z 19:35:13.201 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:35:13.2135129Z 19:35:13.213 INFO [EventSubscriber] OK Event subscription created (SubId=2198351333).
+2026-11-10T19:35:13.2148395Z 19:35:13.214 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:35:13.2187543Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.Subscribe_Events_IsSubscribedBecomesTrue_ThenFalseAfterUnsubscribe [4 s]
+2026-11-10T19:35:13.2188616Z 19:35:13.218 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:13.2189392Z 19:35:13.218 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:17.3094850Z 19:35:17.309 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:17.3096045Z 19:35:17.309 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:17.3128082Z 19:35:17.312 INFO [SimulationManagement] 
+2026-11-10T19:35:17.3128865Z -- SimulateBulkResults (type=0, from=1, to=10, interval=200ms) --
+2026-11-10T19:35:17.3156194Z 19:35:17.315 INFO [SimulationManagement] OK SimulateBulkResults started on server: 10 results, ~200ms each.
+2026-11-10T19:35:17.3182662Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateBulkResults_10Results_DoesNotThrow [4 s]
+2026-11-10T19:35:18.4472932Z 19:35:18.447 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:18.4473475Z 19:35:18.447 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:18.8335061Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoiningProcessList_WithControllerUri_Returns3Processes [5 ms]
+2026-11-10T19:35:18.8336707Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetLatestResult_AfterTrigger_ReturnsAtLeastTwoOutputs [1 s]
+2026-11-10T19:35:18.8337767Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateBatchResult_TwoChildren_DoesNotThrow [7 ms]
+2026-11-10T19:35:18.8338985Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetSelectedJoiningProgram_AfterSelectProgram4Steps_ReturnsAtLeast1Output [6 ms]
+2026-11-10T19:35:22.5406877Z 19:35:22.540 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:22.5407416Z 19:35:22.540 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:22.5410902Z 19:35:22.540 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:35:22.5579272Z 19:35:22.557 INFO [EventSubscriber] OK Event subscription created (SubId=2198351335).
+2026-11-10T19:35:22.5583469Z 19:35:22.558 INFO [ResultManagement] 
+2026-11-10T19:35:22.5584513Z -- Subscribing to Result variable -------------------
+2026-11-10T19:35:22.5738818Z 19:35:22.573 INFO [ResultManagement] OK Subscribed to Result variable (ns=1;s=TighteningSystem/ResultManagement/Results/Result).
+2026-11-10T19:35:22.5744806Z 19:35:22.574 INFO [AssetManagement] 
+2026-11-10T19:35:22.5745209Z -- Subscribing to all Asset variables ----
+2026-11-10T19:35:22.5845432Z 19:35:22.584 INFO [AssetManagement]   Asset: Controllers/TighteningController - subscribed
+2026-11-10T19:35:22.5943548Z 19:35:22.594 INFO [AssetManagement]   Asset: Tools/TighteningTool - subscribed
+2026-11-10T19:35:22.6030421Z 19:35:22.602 INFO [AssetManagement]   Asset: Servos/TighteningController_Servo - subscribed
+2026-11-10T19:35:22.6115454Z 19:35:22.611 INFO [AssetManagement]   Asset: MemoryDevices/MemoryDevice - subscribed
+2026-11-10T19:35:22.6201327Z 19:35:22.619 INFO [AssetManagement]   Asset: Sensors/TorqueSensor - subscribed
+2026-11-10T19:35:22.6288252Z 19:35:22.628 INFO [AssetManagement]   Asset: Cables/Cable - subscribed
+2026-11-10T19:35:22.6374422Z 19:35:22.637 INFO [AssetManagement]   Asset: Batteries/ToolBattery - subscribed
+2026-11-10T19:35:22.6458516Z 19:35:22.645 INFO [AssetManagement]   Asset: PowerSupplies/PowerSupply - subscribed
+2026-11-10T19:35:22.6546858Z 19:35:22.654 INFO [AssetManagement]   Asset: Feeders/Feeder - subscribed
+2026-11-10T19:35:22.6630438Z 19:35:22.662 INFO [AssetManagement]   Asset: Accessories/Accessory - subscribed
+2026-11-10T19:35:22.6715138Z 19:35:22.671 INFO [AssetManagement]   Asset: SubComponents/SubComponent - subscribed
+2026-11-10T19:35:22.6734838Z 19:35:22.673 INFO [AssetManagement]   Asset: SoftwareComponents/Software - subscribed
+2026-11-10T19:35:22.6753524Z 19:35:22.675 INFO [AssetManagement]   Asset: VirtualStations/VirtualStation - subscribed
+2026-11-10T19:35:22.7089611Z 19:35:22.708 INFO [AssetManagement] OK Subscribed to 717 asset variable(s) across 13 asset(s).
+2026-11-10T19:35:22.7102956Z 19:35:22.710 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:35:22.7116078Z 19:35:22.711 INFO [ResultManagement] OK Result variable subscription stopped.
+2026-11-10T19:35:22.7132529Z 19:35:22.713 INFO [AssetManagement] OK Asset variable subscription stopped.
+2026-11-10T19:35:22.7178837Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.AllThreeSubscriptions_ToggleOnThenOff_StateConsistent [4 s]
+2026-11-10T19:35:22.7183021Z 19:35:22.718 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:22.7183833Z 19:35:22.718 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:26.8090611Z 19:35:26.808 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:26.8091703Z 19:35:26.808 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:26.8112121Z 19:35:26.811 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:35:26.8249349Z 19:35:26.824 INFO [EventSubscriber] OK Event subscription created (SubId=2198351341).
+2026-11-10T19:35:26.8253552Z 19:35:26.825 INFO [SimulationManagement] 
+2026-11-10T19:35:26.8254261Z -- SimulateSingleResult (type=0, traces=True) --
+2026-11-10T19:35:26.8273169Z 19:35:26.827 INFO [SimulationManagement] OK SimulateSingleResult fired (type=0, includeTraces=True). Result will arrive via ResultReady event subscription.
+2026-11-10T19:35:27.8320357Z 19:35:27.831 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:35:27.8354872Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateSingleResult_ThenResultReceived_ViaSubscription [5 s]
+2026-11-10T19:35:27.8355955Z 19:35:27.835 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:27.8356682Z 19:35:27.835 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:31.9472647Z 19:35:31.946 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:31.9474033Z 19:35:31.946 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:31.9488021Z 19:35:31.948 INFO [JointManagement] 
+2026-11-10T19:35:31.9488411Z -- GetJointList (uri=) ------------------------
+2026-11-10T19:35:31.9539662Z 19:35:31.953 INFO [JointManagement] OK GetJointList: 2 joint(s)  Status=0  StatusMessage=""
+2026-11-10T19:35:31.9541393Z 19:35:31.953 INFO [JointManagement]   -> Full list -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\joint\joint_list.json
+2026-11-10T19:35:31.9566573Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJointList_ViaManagementClass_DoesNotThrow [4 s]
+2026-11-10T19:35:32.0649590Z 19:35:32.064 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:32.0650406Z 19:35:32.064 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:33.4573326Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateSingleResult_Type0_WithTraces_DoesNotThrow [3 ms]
+2026-11-10T19:35:33.4574617Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJointList_ReturnsAtLeastOneOutput [4 ms]
+2026-11-10T19:35:33.4575853Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateSingleResult_Type0_WithoutTraces_DoesNotThrow [97 ms]
+2026-11-10T19:35:36.1815775Z 19:35:36.181 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:36.1816334Z 19:35:36.181 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:36.1819455Z 19:35:36.181 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:35:36.1948766Z 19:35:36.194 INFO [EventSubscriber] OK Event subscription created (SubId=2198351343).
+2026-11-10T19:35:37.2041246Z 19:35:37.203 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:35:37.2076252Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.Subscribe_ThenTriggerSystemEvent_JoiningSystemEventArgs_ReceivedWithFields [5 s]
+2026-11-10T19:35:37.2077412Z 19:35:37.207 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:37.2078172Z 19:35:37.207 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:41.3237526Z 19:35:41.323 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:41.3239653Z 19:35:41.323 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:41.3254485Z 19:35:41.325 INFO [AssetManagement] 
+2026-11-10T19:35:41.3255241Z -- SetIOSignals (www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D, 1 signals) ----------
+2026-11-10T19:35:41.3306712Z 19:35:41.330 INFO [AssetManagement] OK SetIOSignals: 1 signal(s) sent.  Status=2  StatusMessage="ProductInstanceUri NOT FOUND. Please provide a valid ProductInstanceUri of a Tool or a Virtual Station."
+2026-11-10T19:35:41.3308078Z 19:35:41.330 INFO [AssetManagement]   -> Per-signal statuses -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\io_signals\io_signals.json
+2026-11-10T19:35:41.3328812Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SetIOSignals_SingleSignal_DoesNotThrow [4 s]
+2026-11-10T19:35:41.3390087Z 19:35:41.338 INFO [JointManagement] 
+2026-11-10T19:35:41.3391091Z -- GetJoint (uri=www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D, jointId=Joint_1) ----------------
+2026-11-10T19:35:41.3419014Z 19:35:41.341 INFO [JointManagement] OK GetJoint: JointId=Joint_1  Status=0  StatusMessage=""
+2026-11-10T19:35:41.3420531Z 19:35:41.341 INFO [JointManagement]   -> Full joint -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\joint\joint.json
+2026-11-10T19:35:41.3451880Z 19:35:41.344 INFO [JoiningProcessManagement] 
+2026-11-10T19:35:41.3452604Z -- AbortJoiningProcess (0952E9B4-05F6-4B43-B66C-B8027FBE966A) ------
+2026-11-10T19:35:41.3472922Z 19:35:41.347 ERROR [JoiningProcessManagement] ERROR Unexpected error in AbortJoiningProcessAsync
+2026-11-10T19:35:41.3508807Z System.ArgumentException: The OPC UA SDK does not support a Variant input for CLR type 'Opc.Ua.LocalizedText'. (Parameter 'value')
+2026-11-10T19:35:41.3511001Z    at IJT_CSharp_Client.Client.JoiningSystem.ToVariant(Object value) in D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Client\JoiningSystem.cs:line 441
+2026-11-10T19:35:41.3511872Z    at System.Linq.Enumerable.ArraySelectIterator`2.ToArray()
+2026-11-10T19:35:41.3512384Z    at IJT_CSharp_Client.Client.JoiningSystem.CallMethodAsync(NodeId objectId, NodeId methodId, Object[] inputArgs)
+2026-11-10T19:35:41.3513811Z    at IJT_CSharp_Client.Client.JoiningProcessManagement.AbortJoiningProcessAsync(String productInstanceUri, String joiningProcessId, String joiningProcessOriginId, String abortMessage) in D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Client\JoiningProcessManagement.cs:line 259
+2026-11-10T19:35:41.3552699Z 19:35:41.355 INFO [SimulationManagement] 
+2026-11-10T19:35:41.3553657Z -- SimulateBatchOrSyncResult (class=3, children=3, traces=True, refs=True) --
+2026-11-10T19:35:41.5674242Z 19:35:41.567 INFO [SimulationManagement] OK SimulateBatch_Or_Sync_Result fired (classification=BATCH).
+2026-11-10T19:35:41.5716822Z 19:35:41.571 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:41.5717589Z 19:35:41.571 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:42.8338497Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SelectJoiningProcess_WithProgram4StepsId_ReturnsStatus0 [4 ms]
+2026-11-10T19:35:42.8339773Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.MachineryResultNamespaceIndex_IsNonZero_AfterConnect [< 1 ms]
+2026-11-10T19:35:42.8340957Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoint_ViaManagementClass_KnownJoint_DoesNotThrow [6 ms]
+2026-11-10T19:35:42.8342324Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.AbortJoiningProcess_WithMessage_DoesNotThrow [8 ms]
+2026-11-10T19:35:42.8343425Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateBatchOrSyncResult_Batch_DoesNotThrow [215 ms]
+2026-11-10T19:35:42.8344457Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.Session_IsConnected_AfterConnect [< 1 ms]
+2026-11-10T19:35:45.6870673Z 19:35:45.686 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:45.6871215Z 19:35:45.686 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:45.6879376Z 19:35:45.687 INFO [AssetManagement] 
+2026-11-10T19:35:45.6879998Z -- Subscribing to all Asset variables ----
+2026-11-10T19:35:45.6979567Z 19:35:45.697 INFO [AssetManagement]   Asset: Controllers/TighteningController - subscribed
+2026-11-10T19:35:45.7076646Z 19:35:45.707 INFO [AssetManagement]   Asset: Tools/TighteningTool - subscribed
+2026-11-10T19:35:45.7160143Z 19:35:45.715 INFO [AssetManagement]   Asset: Servos/TighteningController_Servo - subscribed
+2026-11-10T19:35:45.7243936Z 19:35:45.724 INFO [AssetManagement]   Asset: MemoryDevices/MemoryDevice - subscribed
+2026-11-10T19:35:45.7326256Z 19:35:45.732 INFO [AssetManagement]   Asset: Sensors/TorqueSensor - subscribed
+2026-11-10T19:35:45.7410521Z 19:35:45.740 INFO [AssetManagement]   Asset: Cables/Cable - subscribed
+2026-11-10T19:35:45.7495199Z 19:35:45.749 INFO [AssetManagement]   Asset: Batteries/ToolBattery - subscribed
+2026-11-10T19:35:45.7577622Z 19:35:45.757 INFO [AssetManagement]   Asset: PowerSupplies/PowerSupply - subscribed
+2026-11-10T19:35:45.7662214Z 19:35:45.766 INFO [AssetManagement]   Asset: Feeders/Feeder - subscribed
+2026-11-10T19:35:45.7745360Z 19:35:45.774 INFO [AssetManagement]   Asset: Accessories/Accessory - subscribed
+2026-11-10T19:35:45.7828850Z 19:35:45.782 INFO [AssetManagement]   Asset: SubComponents/SubComponent - subscribed
+2026-11-10T19:35:45.7847960Z 19:35:45.784 INFO [AssetManagement]   Asset: SoftwareComponents/Software - subscribed
+2026-11-10T19:35:45.7866583Z 19:35:45.786 INFO [AssetManagement]   Asset: VirtualStations/VirtualStation - subscribed
+2026-11-10T19:35:45.8096359Z 19:35:45.809 INFO [AssetManagement] OK Subscribed to 717 asset variable(s) across 13 asset(s).
+2026-11-10T19:35:45.8108941Z 19:35:45.810 INFO [AssetManagement] OK Asset variable subscription stopped.
+2026-11-10T19:35:45.8150651Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SubscribeAssetVariables_IsAssetVarSubscribedBecomesTrue_ThenFalse [4 s]
+2026-11-10T19:35:45.8151728Z 19:35:45.814 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:45.8152520Z 19:35:45.814 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:49.8991218Z 19:35:49.898 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:49.8992082Z 19:35:49.898 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:49.8998892Z 19:35:49.899 INFO [AssetManagement] 
+2026-11-10T19:35:49.8999661Z -- Subscribing to all Asset variables ----
+2026-11-10T19:35:49.9096665Z 19:35:49.909 INFO [AssetManagement]   Asset: Controllers/TighteningController - subscribed
+2026-11-10T19:35:49.9193984Z 19:35:49.919 INFO [AssetManagement]   Asset: Tools/TighteningTool - subscribed
+2026-11-10T19:35:49.9276785Z 19:35:49.927 INFO [AssetManagement]   Asset: Servos/TighteningController_Servo - subscribed
+2026-11-10T19:35:49.9358737Z 19:35:49.935 INFO [AssetManagement]   Asset: MemoryDevices/MemoryDevice - subscribed
+2026-11-10T19:35:49.9442690Z 19:35:49.944 INFO [AssetManagement]   Asset: Sensors/TorqueSensor - subscribed
+2026-11-10T19:35:49.9525904Z 19:35:49.952 INFO [AssetManagement]   Asset: Cables/Cable - subscribed
+2026-11-10T19:35:49.9610381Z 19:35:49.960 INFO [AssetManagement]   Asset: Batteries/ToolBattery - subscribed
+2026-11-10T19:35:49.9697623Z 19:35:49.969 INFO [AssetManagement]   Asset: PowerSupplies/PowerSupply - subscribed
+2026-11-10T19:35:49.9785405Z 19:35:49.978 INFO [AssetManagement]   Asset: Feeders/Feeder - subscribed
+2026-11-10T19:35:49.9869702Z 19:35:49.986 INFO [AssetManagement]   Asset: Accessories/Accessory - subscribed
+2026-11-10T19:35:49.9955055Z 19:35:49.995 INFO [AssetManagement]   Asset: SubComponents/SubComponent - subscribed
+2026-11-10T19:35:49.9973976Z 19:35:49.997 INFO [AssetManagement]   Asset: SoftwareComponents/Software - subscribed
+2026-11-10T19:35:49.9992141Z 19:35:49.999 INFO [AssetManagement]   Asset: VirtualStations/VirtualStation - subscribed
+2026-11-10T19:35:50.0092083Z 19:35:50.009 INFO [AssetManagement] OK Subscribed to 717 asset variable(s) across 13 asset(s).
+2026-11-10T19:35:50.0101583Z 19:35:50.010 INFO [AssetManagement] OK Asset variable subscription stopped.
+2026-11-10T19:35:50.0134032Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SubscribeAssetVariables_AttachesToIdentificationVariables [4 s]
+2026-11-10T19:35:50.0136912Z 19:35:50.013 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:50.0137695Z 19:35:50.013 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:54.1192049Z 19:35:54.118 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:54.1192893Z 19:35:54.118 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:54.1324623Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoiningProcessList_ProcessesHaveNonEmptyIds [4 s]
+2026-11-10T19:35:54.1387368Z 19:35:54.138 INFO [JointManagement] 
+2026-11-10T19:35:54.1387991Z -- SendJoint (jointId=LiveTest_MgmtClass_Lifecycle) --------------------------
+2026-11-10T19:35:54.1417850Z 19:35:54.141 INFO [JointManagement] OK SendJoint called.
+2026-11-10T19:35:54.1418402Z 19:35:54.141 INFO [JsonSerializer] -- SendJoint --
+2026-11-10T19:35:54.1418991Z 19:35:54.141 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:35:54.1419290Z   |  0
+2026-11-10T19:35:54.1419676Z   +--
+2026-11-10T19:35:54.1419887Z 19:35:54.141 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:35:54.1420118Z   |  ""
+2026-11-10T19:35:54.1420246Z   +--
+2026-11-10T19:35:54.1431782Z 19:35:54.143 INFO [JointManagement] 
+2026-11-10T19:35:54.1432592Z -- GetJoint (uri=www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D, jointId=LiveTest_MgmtClass_Lifecycle) ----------------
+2026-11-10T19:35:54.1446379Z 19:35:54.144 INFO [JointManagement] OK GetJoint: JointId=LiveTest_MgmtClass_Lifecycle  Status=0  StatusMessage=""
+2026-11-10T19:35:54.1448176Z 19:35:54.144 INFO [JointManagement]   -> Full joint -> D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\Tests\IJT_CSharp_Client.Tests\bin\Release\net10.0\logs\joint\joint.json
+2026-11-10T19:35:54.1459573Z 19:35:54.145 INFO [JointManagement] 
+2026-11-10T19:35:54.1461015Z -- DeleteJoint (uri=www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D, jointId=LiveTest_MgmtClass_Lifecycle) --------------
+2026-11-10T19:35:54.1475125Z 19:35:54.147 INFO [JsonSerializer] -- DeleteJoint --
+2026-11-10T19:35:54.1475595Z 19:35:54.147 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:35:54.1475935Z   |  0
+2026-11-10T19:35:54.1476126Z   +--
+2026-11-10T19:35:54.1476415Z 19:35:54.147 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:35:54.1476750Z   |  ""
+2026-11-10T19:35:54.1476935Z   +--
+2026-11-10T19:35:54.1517286Z 19:35:54.151 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:54.1518055Z 19:35:54.151 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:55.6469858Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetResultById_WithEmptyId_ReturnsOutputsWithoutException [5 ms]
+2026-11-10T19:35:55.6471188Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SendJoint_ThenGetJoint_ViaManagementClass_FullLifecycle [11 ms]
+2026-11-10T19:35:58.2679017Z 19:35:58.267 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:35:58.2679816Z 19:35:58.267 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:35:58.2683134Z 19:35:58.268 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:35:58.2816533Z 19:35:58.281 INFO [EventSubscriber] OK Event subscription created (SubId=2198351349).
+2026-11-10T19:35:59.7901792Z 19:35:59.789 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:35:59.8000775Z 19:35:59.793 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:35:59.8001520Z 19:35:59.793 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:35:59.8003216Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.FullFlow_Subscribe_Trigger_EventReceived_GetLatestResult_ResultIdsMatch [5 s]
+2026-11-10T19:36:03.8851261Z 19:36:03.884 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:36:03.8852461Z 19:36:03.884 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:36:03.8865168Z 19:36:03.886 INFO [JoiningProcessManagement] 
+2026-11-10T19:36:03.8866117Z -- SetJoiningProcessCounter (0952E9B4-05F6-4B43-B66C-B8027FBE966A) ------
+2026-11-10T19:36:03.8888525Z 19:36:03.888 INFO [JoiningProcessManagement] OK SetJoiningProcessCounter called.
+2026-11-10T19:36:03.8889392Z 19:36:03.888 INFO [JsonSerializer] -- SetJoiningProcessCounter --
+2026-11-10T19:36:03.8890114Z 19:36:03.888 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:36:03.8890339Z   |  5
+2026-11-10T19:36:03.8890475Z   +--
+2026-11-10T19:36:03.8890679Z 19:36:03.888 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:36:03.8891009Z   |  "Counter applies only to a batch or job joining process."
+2026-11-10T19:36:03.8891253Z   +--
+2026-11-10T19:36:03.8911477Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SetJoiningProcessCounter_Value5_DoesNotThrow [4 s]
+2026-11-10T19:36:03.9164247Z 19:36:03.916 INFO [SimulationManagement] 
+2026-11-10T19:36:03.9164738Z -- SimulateBulkEvents (eventType=1, count=10) --
+2026-11-10T19:36:03.9187716Z 19:36:03.918 INFO [SimulationManagement] OK SimulateBulkEvents fired (10 events of type 1).
+2026-11-10T19:36:03.9313613Z 19:36:03.931 INFO [SimulationManagement] 
+2026-11-10T19:36:03.9314785Z -- SimulateSingleResult (type=0, traces=True) --
+2026-11-10T19:36:03.9326201Z 19:36:03.932 INFO [SimulationManagement] OK SimulateSingleResult fired (type=0, includeTraces=True). Result will arrive via ResultReady event subscription.
+2026-11-10T19:36:03.9365912Z 19:36:03.936 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:36:03.9366649Z 19:36:03.936 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:36:05.3919907Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SendIdentifiers_WithProgramEntityType_ReturnsStatus0 [7 ms]
+2026-11-10T19:36:05.3921372Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SendTextIdentifiers_ThenGetIdentifiers_ReturnsNonEmptyOutputs [9 ms]
+2026-11-10T19:36:05.3922638Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoint_WithJointDataType_JointIdMatchesRequest [4 ms]
+2026-11-10T19:36:05.3923989Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateBulkEvents_10Events_DoesNotThrow [6 ms]
+2026-11-10T19:36:05.3925055Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SendJoint_NewJoint_ReturnsStatus0 [8 ms]
+2026-11-10T19:36:05.3926072Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateSingleResult_Type0_DoesNotThrow [5 ms]
+2026-11-10T19:36:08.0494936Z 19:36:08.049 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:36:08.0495605Z 19:36:08.049 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:36:08.0498758Z 19:36:08.049 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:36:08.0609394Z 19:36:08.060 INFO [EventSubscriber] OK Event subscription created (SubId=2198351351).
+2026-11-10T19:36:09.0652750Z 19:36:09.064 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:36:09.0685940Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.Subscribe_ThenTriggerResult_EventArgs_EventTime_IsRecent [5 s]
+2026-11-10T19:36:09.0687655Z 19:36:09.068 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:36:09.0688405Z 19:36:09.068 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:36:13.1555309Z 19:36:13.155 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:36:13.1555955Z 19:36:13.155 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:36:13.1602974Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoint_WithKnownJoint1_ReturnsStatus0 [4 s]
+2026-11-10T19:36:13.1613096Z 19:36:13.161 INFO [AssetManagement] 
+2026-11-10T19:36:13.1614502Z -- SetTime (www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D, 2026-11-10T19:36:13.1600921Z) --------------------------
+2026-11-10T19:36:13.1642491Z 19:36:13.164 INFO [JsonSerializer] -- SetTime --
+2026-11-10T19:36:13.1643369Z 19:36:13.164 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:36:13.1643846Z   |  2
+2026-11-10T19:36:13.1644214Z   +--
+2026-11-10T19:36:13.1644602Z 19:36:13.164 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:36:13.1645862Z   |  "ProductInstanceUri NOT FOUND. Please provide a valid ProductInstanceUri of a Tool or a Virtual Station."
+2026-11-10T19:36:13.1646575Z   +--
+2026-11-10T19:36:13.1912688Z 19:36:13.191 INFO [JoiningProcessManagement] 
+2026-11-10T19:36:13.1913454Z -- StartSelectedJoining (www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D) ------
+2026-11-10T19:36:13.1933445Z 19:36:13.193 INFO [JoiningProcessManagement] OK StartSelectedJoining called.
+2026-11-10T19:36:13.1934864Z 19:36:13.193 INFO [JsonSerializer] -- StartSelectedJoining --
+2026-11-10T19:36:13.1935251Z 19:36:13.193 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:36:13.1935504Z   |  2
+2026-11-10T19:36:13.1935670Z   +--
+2026-11-10T19:36:13.1935872Z 19:36:13.193 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:36:13.1936177Z   |  "No asset matches the supplied productInstanceUri."
+2026-11-10T19:36:13.1936405Z   +--
+2026-11-10T19:36:13.2243225Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SetTime_UtcNow_DoesNotThrow [6 ms]
+2026-11-10T19:36:13.2245580Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.FullFlow_SendJoint_GetJoint_SelectJoint_DeleteJoint [12 ms]
+2026-11-10T19:36:13.2246765Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SendJoint_ThenGetJoint_ConfirmsCreation [7 ms]
+2026-11-10T19:36:13.2247915Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.StartSelectedJoining_AfterSelectJoint_DoesNotThrow [7 ms]
+2026-11-10T19:36:13.2249121Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SendJoint_ThenDeleteJoint_BothReturnStatus0 [5 ms]
+2026-11-10T19:36:13.2250326Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SendIdentifiers_TwoEntitiesDifferentTypes_ReturnsStatus0 [7 ms]
+2026-11-10T19:36:13.2251527Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SelectJoint_WithKnownJoint_ReturnsStatus0 [3 ms]
+2026-11-10T19:36:13.2253437Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.ResetIdentifiers_AfterSend_CompletesWithoutException [9 ms]
+2026-11-10T19:36:13.2254944Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.JoiningSystemNode_IsDiscoveredByTypeDefinition [< 1 ms]
+2026-11-10T19:36:13.2279990Z 19:36:13.227 INFO [AssetManagement] 
+2026-11-10T19:36:13.2280774Z -- SetTime (www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D, 2026-11-10T19:36:13.2278347Z) --------------------------
+2026-11-10T19:36:13.2291522Z 19:36:13.229 INFO [JsonSerializer] -- SetTime --
+2026-11-10T19:36:13.2291983Z 19:36:13.229 INFO [JsonSerializer]   +-- Status
+2026-11-10T19:36:13.2292567Z   |  2
+2026-11-10T19:36:13.2292773Z   +--
+2026-11-10T19:36:13.2293089Z 19:36:13.229 INFO [JsonSerializer]   +-- StatusMessage
+2026-11-10T19:36:13.2294128Z   |  "ProductInstanceUri NOT FOUND. Please provide a valid ProductInstanceUri of a Tool or a Virtual Station."
+2026-11-10T19:36:13.2294796Z   +--
+2026-11-10T19:36:14.2722880Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoiningProcessList_WithToolUri_Returns3Processes [4 ms]
+2026-11-10T19:36:14.2724194Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SetTime_NullDateTime_UsesUtcNow_DoesNotThrow [3 ms]
+2026-11-10T19:36:14.2725453Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetSelectedJoiningProgram_ReturnsAtLeastOneOutput [5 ms]
+2026-11-10T19:36:14.2726688Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJointList_SimulatorReturnsAtLeastTwoJoints [3 ms]
+2026-11-10T19:36:14.2728159Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoint_WithKnownJoint2_ReturnsStatus0 [3 ms]
+2026-11-10T19:36:14.2729276Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetJoiningProcessList_ReturnsAtLeastOneOutput [4 ms]
+2026-11-10T19:36:14.2730482Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.GetResultById_WithRealId_ReturnsResultWithMatchingId [1 s]
+2026-11-10T19:36:14.2732763Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.JoiningProcessManagementNode_IsBrowseableUnderJoiningSystem [2 ms]
+2026-11-10T19:36:14.2733564Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.ResultManagementNode_IsBrowseableUnderJoiningSystem [2 ms]
+2026-11-10T19:36:14.2822224Z 19:36:14.281 INFO [SimulationManagement] 
+2026-11-10T19:36:14.2822724Z -- SimulateJobResult (sendAsRefs=True) --
+2026-11-10T19:36:14.2844771Z 19:36:14.284 INFO [SimulationManagement] OK SimulateJobResult fired (sendAsReferences=True).
+2026-11-10T19:36:14.3150244Z 19:36:14.314 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:36:14.3150905Z 19:36:14.314 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:36:15.7726769Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateJobResult_DoesNotThrow [7 ms]
+2026-11-10T19:36:15.7727564Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateJobResult_ViaFacade_DoesNotThrow [7 ms]
+2026-11-10T19:36:15.7728349Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.EnableAsset_Enable_ReturnsOutputsWithoutException [7 ms]
+2026-11-10T19:36:15.7729098Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SelectJoiningProcess_ReturnsAtLeastOneOutput [5 ms]
+2026-11-10T19:36:15.7729940Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SelectJoiningProcess_WithProgram1StepIdAndSelectionName_ReturnsStatus0 [4 ms]
+2026-11-10T19:36:15.7730847Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.EnableAsset_DisableThenReenable_BothSucceedWithoutException [8 ms]
+2026-11-10T19:36:18.4351344Z 19:36:18.434 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:36:18.4351975Z 19:36:18.434 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:36:18.4354527Z 19:36:18.435 INFO [EventSubscriber] -- Subscribing to IJT events -----------------------
+2026-11-10T19:36:18.4625022Z 19:36:18.462 INFO [EventSubscriber] OK Event subscription created (SubId=2198351353).
+2026-11-10T19:36:19.4629087Z 19:36:19.462 INFO [EventSubscriber] OK Event subscription removed.
+2026-11-10T19:36:19.4662171Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.Subscribe_ThenTriggerResult_EventArgs_Classification_IsNonEmpty [5 s]
+2026-11-10T19:36:19.4663745Z 19:36:19.466 WARN [JoiningSystem] DEV ONLY - AutoAcceptUntrustedCertificates enabled.
+2026-11-10T19:36:19.4664570Z 19:36:19.466 INFO [JoiningSystem] Discovering endpoints at opc.tcp://localhost:40464 ...
+2026-11-10T19:36:23.5715539Z 19:36:23.571 INFO [JoiningSystem] Connected - IJTBase ns=7, IJTTightening ns=8, MachineryResult ns=6
+2026-11-10T19:36:23.5716552Z 19:36:23.571 INFO [JoiningSystem] JoiningSystem node: ns=1;s=Objects/TighteningSystem
+2026-11-10T19:36:23.5738476Z 19:36:23.573 INFO [SimulationManagement] 
+2026-11-10T19:36:23.5738966Z -- SimulateEvents (eventType=1) --
+2026-11-10T19:36:23.5757871Z 19:36:23.575 INFO [SimulationManagement] OK SimulateEvents fired (eventType=1).
+2026-11-10T19:36:23.5854852Z [xUnit.net 00:02:44.37]   Finished:    IJT_CSharp_Client.Tests
+2026-11-10T19:36:23.6340687Z Data collector 'Blame' message: All tests finished running, Sequence file will not be generated.
+2026-11-10T19:36:23.6649133Z   Passed IJT_CSharp_Client.Tests.LiveIntegrationDetailedTests.SimulateEvent_Type1_DoesNotThrow [4 s]
+2026-11-10T19:36:23.6925881Z Results File: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_CSharp_Client\test-results\tests.trx
+2026-11-10T19:36:23.6930134Z 
+2026-11-10T19:36:23.6970137Z Test Run Successful.
+2026-11-10T19:36:23.6970381Z Total tests: 110
+2026-11-10T19:36:23.6970543Z      Passed: 110
+2026-11-10T19:36:23.6972028Z  Total time: 2.7519 Minutes
+2026-11-10T19:36:23.7950056Z ##[group]Run New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-10T19:36:23.7950642Z New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-10T19:36:23.7950982Z $trx   = "test-results\tests.trx"
+2026-11-10T19:36:23.7951209Z $junit = "test-results\tests.xml"
+2026-11-10T19:36:23.7951422Z if (Test-Path $trx) {
+2026-11-10T19:36:23.7951624Z   [xml]$x = Get-Content $trx
+2026-11-10T19:36:23.7951926Z   $ns = @{ t = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010" }
+2026-11-10T19:36:23.7952478Z   $results = Select-Xml -Xml $x -XPath "//t:UnitTestResult" -Namespace $ns | Select-Object -ExpandProperty Node
+2026-11-10T19:36:23.7953141Z   $passed  = ($results | Where-Object { $_.outcome -eq "Passed"  }).Count
+2026-11-10T19:36:23.7953495Z   $failed  = ($results | Where-Object { $_.outcome -eq "Failed"  }).Count
+2026-11-10T19:36:23.7953885Z   $skipped = ($results | Where-Object { $_.outcome -eq "NotExecuted" }).Count
+2026-11-10T19:36:23.7954190Z   $total   = $results.Count
+2026-11-10T19:36:23.7954424Z   $xml  = '<?xml version="1.0" encoding="UTF-8"?>' + "`n"
+2026-11-10T19:36:23.7954773Z   $xml += "<testsuites tests=`"$total`" failures=`"$failed`" skipped=`"$skipped`">`n"
+2026-11-10T19:36:23.7955336Z   $xml += "  <testsuite name=`"IJT_CSharp_Client.Tests.Live`" tests=`"$total`" failures=`"$failed`" skipped=`"$skipped`">`n"
+2026-11-10T19:36:23.7955855Z   foreach ($r in $results) {
+2026-11-10T19:36:23.7956205Z     $name = [System.Security.SecurityElement]::Escape($r.testName)
+2026-11-10T19:36:23.7956549Z     $outcome = $r.outcome
+2026-11-10T19:36:23.7966495Z     if ($outcome -eq "Passed") {
+2026-11-10T19:36:23.7966970Z       $xml += "    <testcase name=`"$name`" classname=`"IJT`" />`n"
+2026-11-10T19:36:23.7967273Z     } elseif ($outcome -eq "NotExecuted") {
+2026-11-10T19:36:23.7967567Z       $msgRaw = ([string]$r.Output.ErrorInfo.Message).Trim()
+2026-11-10T19:36:23.7967947Z       if ([string]::IsNullOrWhiteSpace($msgRaw)) { $msgRaw = "Test skipped by xUnit" }
+2026-11-10T19:36:23.7968325Z       $msg = [System.Security.SecurityElement]::Escape($msgRaw)
+2026-11-10T19:36:23.7968754Z       $xml += "    <testcase name=`"$name`" classname=`"IJT`"><skipped message=`"$msg`">$msg</skipped></testcase>`n"
+2026-11-10T19:36:23.7969120Z     } else {
+2026-11-10T19:36:23.7969399Z       $msg = [System.Security.SecurityElement]::Escape($r.Output.ErrorInfo.Message)
+2026-11-10T19:36:23.7969854Z       $xml += "    <testcase name=`"$name`" classname=`"IJT`"><failure>$msg</failure></testcase>`n"
+2026-11-10T19:36:23.7970162Z     }
+2026-11-10T19:36:23.7970302Z   }
+2026-11-10T19:36:23.7970470Z   $xml += "  </testsuite>`n</testsuites>"
+2026-11-10T19:36:23.7970708Z   $xml | Out-File $junit -Encoding UTF8
+2026-11-10T19:36:23.7971065Z   Write-Host "Converted TRX → JUnit: $total tests, $failed failures, $skipped skipped"
+2026-11-10T19:36:23.7971409Z } else {
+2026-11-10T19:36:23.7971617Z   Write-Host "No TRX file found — creating empty JUnit"
+2026-11-10T19:36:23.7972159Z   '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Live" tests="0"/></testsuites>' | Out-File $junit -Encoding UTF8
+2026-11-10T19:36:23.7972629Z }
+2026-11-10T19:36:23.8032049Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-10T19:36:23.8032335Z env:
+2026-11-10T19:36:23.8032500Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:36:23.8032710Z   SERVER_PID: 4208
+2026-11-10T19:36:23.8032870Z   OPCUA_SERVER_PORT: 40464
+2026-11-10T19:36:23.8033082Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-10T19:36:23.8034809Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-10T19:36:23.8035085Z ##[endgroup]
+2026-11-10T19:36:24.2732682Z Converted TRX → JUnit: 110 tests, 0 failures, 0 skipped
+2026-11-10T19:36:24.3332556Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-10T19:36:24.3332967Z with:
+2026-11-10T19:36:24.3333155Z   name: results-csharp-live
+2026-11-10T19:36:24.3333659Z   path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
+2026-11-10T19:36:24.3333922Z   retention-days: 14
+2026-11-10T19:36:24.3334088Z   if-no-files-found: warn
+2026-11-10T19:36:24.3334262Z   compression-level: 6
+2026-11-10T19:36:24.3334426Z   overwrite: false
+2026-11-10T19:36:24.3334809Z   include-hidden-files: false
+2026-11-10T19:36:24.3334985Z   archive: true
+2026-11-10T19:36:24.3335125Z env:
+2026-11-10T19:36:24.3335283Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:36:24.3335486Z   SERVER_PID: 4208
+2026-11-10T19:36:24.3335654Z   OPCUA_SERVER_PORT: 40464
+2026-11-10T19:36:24.3335879Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-10T19:36:24.3336119Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-10T19:36:24.3336313Z ##[endgroup]
+2026-11-10T19:36:24.4915057Z With the provided path, there will be 3 files uploaded
+2026-11-10T19:36:24.4919160Z Artifact name is valid!
+2026-11-10T19:36:24.4920089Z Root directory input is valid!
+2026-11-10T19:36:24.8702647Z Uploading artifact: results-csharp-live.zip
+2026-11-10T19:36:24.8734218Z Beginning upload of artifact content to blob storage
+2026-11-10T19:36:25.1548051Z Uploaded bytes 30781
+2026-11-10T19:36:25.2135939Z Finished uploading artifact content to blob storage!
+2026-11-10T19:36:25.2136616Z SHA256 digest of uploaded artifact is 955f21bdf64f78d6bc30eed1cfaf89db4f26795b765a6a6cd87bbbcb9ffb2703
+2026-11-10T19:36:25.2137443Z Finalizing artifact upload
+2026-11-10T19:36:25.9206002Z Artifact results-csharp-live successfully finalized. Artifact ID 13797675001
+2026-11-10T19:36:25.9206697Z Artifact results-csharp-live has been successfully uploaded! Final size is 30781 bytes. Artifact ID is 13797675001
+2026-11-10T19:36:25.9214484Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/42885999753/artifacts/13797675001
+2026-11-10T19:36:25.9475440Z ##[group]Run python scripts/start_server_on_port.py --port 40464 --stop
+2026-11-10T19:36:25.9475951Z python scripts/start_server_on_port.py --port 40464 --stop
+2026-11-10T19:36:25.9532208Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-10T19:36:25.9532488Z env:
+2026-11-10T19:36:25.9532656Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-10T19:36:25.9532865Z   SERVER_PID: 4208
+2026-11-10T19:36:25.9533043Z   OPCUA_SERVER_PORT: 40464
+2026-11-10T19:36:25.9533257Z   OPCUA_SERVER_URL: opc.tcp://localhost:40464
+2026-11-10T19:36:25.9533486Z   DOTNET_ROOT: C:\Program Files\dotnet
+2026-11-10T19:36:25.9533674Z ##[endgroup]
+2026-11-10T19:36:26.9861346Z     Stopped server PID 4208
+2026-11-10T19:36:26.9861800Z     Removed D:\a\_temp\ijt-sim\server_40464
+2026-11-10T19:36:27.1025335Z Post job cleanup.
+2026-11-10T19:36:27.2676431Z Post job cleanup.
+2026-11-10T19:36:27.4452789Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-10T19:36:27.4758450Z git version 2.56.0.windows.4
+2026-11-10T19:36:27.4816581Z Temporarily overriding HOME='D:\a\_temp\c2434333-99cd-47ff-9fee-bf99428ac109' before making global git config changes
+2026-11-10T19:36:27.4825233Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-10T19:36:27.4825986Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-10T19:36:27.5151951Z Removing SSH command configuration
+2026-11-10T19:36:27.5162478Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-10T19:36:27.5504767Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-10T19:36:28.1551410Z Removing HTTP extra header
+2026-11-10T19:36:28.1560473Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-10T19:36:28.1885304Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-10T19:36:29.1856654Z Removing includeIf entries pointing to credentials config files
+2026-11-10T19:36:29.1869079Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-10T19:36:29.2193126Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-10T19:36:29.8693041Z Cleaning up orphan processes
+2026-11-10T19:36:29.8878361Z Terminate orphan process: pid (8100) (dotnet)
+2026-11-10T19:36:29.8930761Z Terminate orphan process: pid (8364) (dotnet)
+2026-11-10T19:36:29.9046279Z Terminate orphan process: pid (5900) (dotnet)
+2026-11-10T19:36:29.9228701Z Terminate orphan process: pid (9124) (VBCSCompiler)
+2026-11-10T19:36:29.9290657Z Terminate orphan process: pid (7860) (conhost)

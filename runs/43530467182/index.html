@@ -1,0 +1,2115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>CI #1377 | IJT</title>
+  <style>
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --panel-alt: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --pass: #238636;
+  --fail: #da3633;
+  --warn: #9e6a03;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f8fa;
+    --panel: #ffffff;
+    --panel-alt: #f3f4f6;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #57606a;
+    --accent: #0969da;
+    --pass: #1a7f37;
+    --fail: #cf222e;
+    --warn: #9a6700;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.container { max-width: 1380px; margin: 0 auto; padding: 20px 24px 48px; }
+.topbar {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.topbar-title { font-weight: 600; font-size: 1.05rem; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); text-decoration: none; }
+.btn-primary { background: var(--pass); color: #fff; border-color: transparent; }
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.badge-pass {
+  background: rgba(35, 134, 54, 0.2);
+  color: #3fb950;
+  border: 1px solid var(--pass);
+}
+.badge-fail {
+  background: rgba(218, 54, 51, 0.2);
+  color: #f85149;
+  border: 1px solid var(--fail);
+}
+.badge-warn {
+  background: rgba(158, 106, 3, 0.2);
+  color: #d29922;
+  border: 1px solid var(--warn);
+}
+.badge-neutral {
+  background: var(--panel-alt);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 16px;
+}
+.tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.92rem;
+}
+.tab-btn.active {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--border);
+}
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+th { background: var(--panel-alt); font-weight: 600; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--panel-alt);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+pre.code-block, pre.log-pre {
+  background: #010409;
+  color: #e6edf3;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 8px 0;
+}
+.logs-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .logs-layout { grid-template-columns: 1fr; }
+}
+.job-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.job-item.active { border-color: var(--accent); font-weight: 600; }
+.step-details {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: var(--panel);
+}
+.step-details summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.alert {
+  padding: 10px 14px;
+  border-left: 4px solid var(--accent);
+  background: var(--panel-alt);
+  border-radius: 4px;
+  margin: 10px 0;
+}
+.meta-row {
+  color: var(--muted);
+  font-size: 0.88rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">
+      🔬 OPC UA IJT Public CI/CD Observability Portal
+    </div>
+    <div class="btn-row">
+      <a class="btn" href="../../index.html">Runs</a><a class="btn" href="../../latest/ci/index.html">CI</a><a class="btn" href="../../latest/integration/index.html">System Tests</a><a class="btn" href="https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/43530467182" target="_blank" rel="noopener">🔗 View on GitHub Actions</a>
+    </div>
+  </header>
+  <main class="container">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <h1 style="margin:0;font-size:1.35rem;">
+          CI #1377
+        </h1>
+        <span class="badge badge-warn">⚠️ Cancelled</span>
+      </div>
+      <div class="meta-row">
+        <span><strong>Run ID:</strong> <code>43530467182</code></span>
+        <span><strong>Branch:</strong> <code>main</code></span>
+        <span><strong>Commit:</strong> <code>560c9c4c</code></span>
+        <span><strong>Trigger:</strong> <code>push</code></span>
+        <span><strong>Published (UTC):</strong> <code>2026-11-13 23:54:47 UTC</code></span>
+        <span>
+          <strong>Jobs Harvested:</strong> 16 (13 failed)
+        </span>
+      </div>
+    </div>
+
+    <nav class="tabs">
+      <button type="button" class="tab-btn active"
+              onclick="selectTab('summary')" id="tab-btn-summary">
+        Summary
+      </button>
+      <button type="button" class="tab-btn"
+              onclick="selectTab('logs')" id="tab-btn-logs">
+        Logs (16)
+      </button>
+      <button type="button" class="tab-btn"
+              onclick="selectTab('artifacts')" id="tab-btn-artifacts">
+        Files
+      </button>
+    </nav>
+
+    <section class="tab-pane active" id="tab-pane-summary">
+      <div class="card">
+        <h2 id="ijt-opc-ua-ci">IJT OPC UA — CI</h2>
+<blockquote>✅ <strong>1 / 13 Jobs Passed · 0 Skipped</strong><br/><strong>Branch:</strong> <code>main</code> &nbsp;·&nbsp; <strong>Commit:</strong> <code>560c9c4c</code> &nbsp;·&nbsp; <strong>Run:</strong> <a href="https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/43530467182">#1377</a></blockquote>
+<blockquote>Full report below: <a href="#ci-outcome-overview">Outcome</a> · <a href="#ci-validation-results">Validation</a> · <a href="#ci-code-quality-checks">Code Quality</a> · <a href="#ci-source-dependency-security">Security</a> · <a href="#ci-infrastructure">Infrastructure</a> · <a href="#ci-performance-timings">Timing</a> · <a href="#ci-skip-details">Skip Details</a></blockquote>
+<hr/>
+<a id="ci-outcome-overview"></a>
+<h3 id="test-outcome-overview">📊 Test Outcome Overview</h3>
+<blockquote>✅ <strong>Status:</strong> 0 Failed Jobs &nbsp;·&nbsp; 0 Coverage Warnings &nbsp;·&nbsp; 0 Skip-Budget Warnings &nbsp;·&nbsp; 0 Artifact Warnings</blockquote>
+<div class="table-wrap"><table><thead><tr>
+<th>🚦</th>
+<th>Outcome</th>
+<th>Count</th>
+</tr></thead><tbody>
+<tr>
+<td>✅</td>
+<td>Passed</td>
+<td>0</td>
+</tr>
+<tr>
+<td>❌</td>
+<td>Failed</td>
+<td>0</td>
+</tr>
+<tr>
+<td>⏭️</td>
+<td>Skipped</td>
+<td>0</td>
+</tr>
+<tr>
+<td>🧮</td>
+<td>Total</td>
+<td>0</td>
+</tr>
+<tr>
+<td>🛠️</td>
+<td>Jobs</td>
+<td>1 / 13</td>
+</tr>
+</tbody></table></div>
+<hr/>
+<a id="ci-validation-results"></a>
+<h3 id="validation-results-8-checks">🧪 Validation Results — 8 checks</h3>
+<div class="table-wrap"><table><thead><tr>
+<th>Component</th>
+<th>Validation Scope</th>
+<th>Test Cases</th>
+<th>Skipped</th>
+<th>Coverage / Threshold</th>
+</tr></thead><tbody>
+<tr>
+<td>Web Client — Python</td>
+<td>Ubuntu Release 2 Python unit suite</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+</tr>
+<tr>
+<td>Web Client — JavaScript</td>
+<td>Ubuntu Release 2 JavaScript unit suite</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+</tr>
+<tr>
+<td>Console Client — Python</td>
+<td>Ubuntu Python unit suite</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+</tr>
+<tr>
+<td>Performance Client — Python</td>
+<td>Ubuntu Python unit suite</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+</tr>
+<tr>
+<td>Node Client — Legacy JavaScript</td>
+<td>Ubuntu Release 1 JavaScript unit suite</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+</tr>
+<tr>
+<td>C# Client — Unit (xUnit)</td>
+<td>Windows C# xUnit unit suite</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+</tr>
+<tr>
+<td>Test Client — Python (Unit)</td>
+<td>Ubuntu Python unit suite</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+</tr>
+<tr>
+<td>OPC UA Server — Smoke</td>
+<td>Windows native server smoke check</td>
+<td>Not Reported</td>
+<td>Not Reported</td>
+<td>➖ Not Applicable</td>
+</tr>
+</tbody></table></div>
+<hr/>
+<a id="ci-code-quality-checks"></a>
+<h3 id="code-quality-checks-6-components">🧹 Code Quality Checks — 6 components</h3>
+<div class="table-wrap"><table><thead><tr>
+<th>🚦</th>
+<th>Component</th>
+<th>Validation Scope</th>
+<th>Lint / Format</th>
+<th>Type Check / Build</th>
+</tr></thead><tbody>
+<tr>
+<td>⏭️</td>
+<td>Web Client</td>
+<td>Python and JavaScript static quality</td>
+<td>⏭️ ruff (Not Reported)<br/>⏭️ eslint (Not Reported)</td>
+<td>⏭️ mypy (Not Reported)</td>
+</tr>
+<tr>
+<td>⏭️</td>
+<td>Console Client</td>
+<td>Python static quality</td>
+<td>⏭️ ruff (Not Run)</td>
+<td>⏭️ mypy (Not Run)</td>
+</tr>
+<tr>
+<td>⏭️</td>
+<td>Performance Client</td>
+<td>Python static quality</td>
+<td>⏭️ ruff (Not Reported)</td>
+<td>⏭️ mypy (Not Reported)</td>
+</tr>
+<tr>
+<td>⏭️</td>
+<td>Node Client — Legacy JavaScript</td>
+<td>JavaScript static quality</td>
+<td>⏭️ eslint (Not Run)</td>
+<td>➖ Not Applicable</td>
+</tr>
+<tr>
+<td>⏭️</td>
+<td>C# Client</td>
+<td>Build and formatting quality</td>
+<td>⏭️ build (Not Run)<br/>⏭️ format (Not Run)</td>
+<td>➖ Not Applicable</td>
+</tr>
+<tr>
+<td>⏭️</td>
+<td>Test Client</td>
+<td>Python static quality</td>
+<td>⏭️ ruff (Not Reported)</td>
+<td>⏭️ mypy (Not Reported)</td>
+</tr>
+</tbody></table></div>
+<hr/>
+<a id="ci-source-dependency-security"></a>
+<h3 id="source-and-dependency-security-5-components">🔒 Source and Dependency Security — 5 components</h3>
+<ul>
+<li><strong>Audit and Code Scanning</strong></li>
+<li>Bandit scans Python source for security issues.</li>
+<li>pip-audit, npm audit, and NuGet audit scan package dependencies for known vulnerabilities.</li>
+<li><strong>Related Security Checks</strong></li>
+<li>CI Infrastructure runs zizmor for GitHub Actions workflow security.</li>
+<li>Pre-commit Hooks runs zizmor (High+) for workflow security on every PR.</li>
+<li>Security — CodeQL runs semantic code analysis.</li>
+</ul>
+<div class="table-wrap"><table><thead><tr>
+<th>🚦</th>
+<th>Component</th>
+<th>Security Scan</th>
+<th>Dependency Audit</th>
+</tr></thead><tbody>
+<tr>
+<td>⏭️</td>
+<td>Web Client</td>
+<td>⏭️ bandit (Not Reported)</td>
+<td>⏭️ pip-audit (Not Reported)<br/>⏭️ npm-audit (Not Reported)</td>
+</tr>
+<tr>
+<td>⏭️</td>
+<td>Console Client</td>
+<td>⏭️ bandit (Not Reported)</td>
+<td>⏭️ pip-audit (Not Reported)</td>
+</tr>
+<tr>
+<td>⏭️</td>
+<td>Node Client — Legacy JavaScript</td>
+<td>➖ Out of scope — legacy check</td>
+<td>⏭️ npm-audit (Not Reported)</td>
+</tr>
+<tr>
+<td>🚫</td>
+<td>C# Client</td>
+<td>ℹ️ CodeQL source scan runs in Security workflow</td>
+<td>🚫 nuget</td>
+</tr>
+<tr>
+<td>⏭️</td>
+<td>Test Client</td>
+<td>⏭️ bandit (Not Reported)</td>
+<td>⏭️ pip-audit (Not Reported)</td>
+</tr>
+</tbody></table></div>
+<hr/>
+<a id="ci-infrastructure"></a>
+<h3 id="ci-infrastructure-4-checks">⚙️ CI Infrastructure — 4 checks</h3>
+<div class="table-wrap"><table><thead><tr>
+<th>Check</th>
+<th>Status</th>
+</tr></thead><tbody>
+<tr>
+<td>Web Client — Docker Smoke (HTTP + WebSocket)</td>
+<td>🚫</td>
+</tr>
+<tr>
+<td>GHA Workflow Lint (actionlint)</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>GHA Security Audit (zizmor)</td>
+<td>🚫</td>
+</tr>
+<tr>
+<td>Pre-commit Hooks</td>
+<td>🚫</td>
+</tr>
+</tbody></table></div>
+<hr/>
+<a id="ci-performance-timings"></a>
+<h3 id="timing">⏱️ Timing</h3>
+<div class="table-wrap"><table><thead><tr>
+<th>Job</th>
+<th>Duration</th>
+<th>Status</th>
+</tr></thead><tbody>
+<tr>
+<td>C# Client - Unit Tests</td>
+<td>12.0 s</td>
+<td>Unknown ⚠️</td>
+</tr>
+<tr>
+<td>Console Client</td>
+<td>9.0 s</td>
+<td>Unknown ⚠️</td>
+</tr>
+<tr>
+<td>GHA Security Audit (zizmor)</td>
+<td>9.0 s</td>
+<td>Unknown ⚠️</td>
+</tr>
+<tr>
+<td>Node Client</td>
+<td>9.0 s</td>
+<td>Unknown ⚠️</td>
+</tr>
+<tr>
+<td>C# Client - NuGet Vuln Scan</td>
+<td>7.0 s</td>
+<td>Unknown ⚠️</td>
+</tr>
+<tr>
+<td>OPC UA Server - Windows Smoke</td>
+<td>7.0 s</td>
+<td>Unknown ⚠️</td>
+</tr>
+<tr>
+<td>Performance Client</td>
+<td>7.0 s</td>
+<td>Unknown ⚠️</td>
+</tr>
+<tr>
+<td>Test Client</td>
+<td>7.0 s</td>
+<td>Unknown ⚠️</td>
+</tr>
+<tr>
+<td>Web Client - Docker Smoke</td>
+<td>7.0 s</td>
+<td>Unknown ⚠️</td>
+</tr>
+<tr>
+<td>Web Client - JavaScript</td>
+<td>7.0 s</td>
+<td>Unknown ⚠️</td>
+</tr>
+</tbody></table></div>
+<hr/>
+<a id="ci-raw-data"></a>
+<h3 id="where-to-find-raw-data">Where to find raw data</h3>
+<ul>
+<li>JUnit XML</li>
+<li>Coverage XML</li>
+<li>ESLint JSON</li>
+<li>Bandit JSON</li>
+<li>pip-audit / npm-audit JSON</li>
+<li>Failed-test detail: Failed Tests section of this summary</li>
+</ul>
+<a id="ci-coverage-legend"></a>
+<h3 id="coverage-legend">Coverage Legend</h3>
+<div class="table-wrap"><table><thead><tr>
+<th>Icon</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td>✅</td>
+<td>Meets the declared threshold</td>
+</tr>
+<tr>
+<td>⚠️</td>
+<td>Below threshold but at least 80%</td>
+</tr>
+<tr>
+<td>❌</td>
+<td>Below 80%</td>
+</tr>
+</tbody></table></div>
+<p>Thresholds come from <code>pyproject.toml</code>, <code>vitest.config.mjs</code>, and the C# coverage gate.</p>
+<hr/>
+<a id="ci-skip-details"></a>
+<h3 id="skip-details-0-suites-0-skips">⏭️ Skip Details — 0 suites, 0 skips</h3>
+<p>No skipped tests reported.</p>
+<hr/>
+<a id="ci-per-client-quick-index"></a>
+<h3 id="per-client-quick-index-6-entries">📚 Per-Client Quick Index — 6 entries</h3>
+<div class="table-wrap"><table><thead><tr>
+<th>Client / Component</th>
+<th>Appears In</th>
+</tr></thead><tbody>
+<tr>
+<td>Web Client</td>
+<td><a href="#ci-validation-results">Validation Results</a> · <a href="#ci-code-quality-checks">Code Quality Checks</a> · <a href="#ci-source-dependency-security">Source and Dependency Security</a> · <a href="#ci-performance-timings">Timing</a></td>
+</tr>
+<tr>
+<td>Console Client</td>
+<td><a href="#ci-validation-results">Validation Results</a> · <a href="#ci-code-quality-checks">Code Quality Checks</a> · <a href="#ci-source-dependency-security">Source and Dependency Security</a> · <a href="#ci-performance-timings">Timing</a></td>
+</tr>
+<tr>
+<td>Node Client — Legacy JavaScript</td>
+<td><a href="#ci-validation-results">Validation Results</a> · <a href="#ci-code-quality-checks">Code Quality Checks</a> · <a href="#ci-source-dependency-security">Source and Dependency Security</a> · <a href="#ci-performance-timings">Timing</a></td>
+</tr>
+<tr>
+<td>C# Client</td>
+<td><a href="#ci-validation-results">Validation Results</a> · <a href="#ci-code-quality-checks">Code Quality Checks</a> · <a href="#ci-source-dependency-security">Source and Dependency Security</a> · <a href="#ci-performance-timings">Timing</a></td>
+</tr>
+<tr>
+<td>Test Client</td>
+<td><a href="#ci-validation-results">Validation Results</a> · <a href="#ci-code-quality-checks">Code Quality Checks</a> · <a href="#ci-source-dependency-security">Source and Dependency Security</a> · <a href="#ci-performance-timings">Timing</a></td>
+</tr>
+<tr>
+<td>OPC UA Server</td>
+<td><a href="#ci-validation-results">Validation Results</a> · <a href="#ci-infrastructure">CI Infrastructure</a> · <a href="#ci-performance-timings">Timing</a></td>
+</tr>
+</tbody></table></div>
+<hr/>
+<p>Reports (no sign-in): <a href="https://umati.github.io/UA-for-Industrial-Joining-Technologies/">Runs</a> · <a href="https://umati.github.io/UA-for-Industrial-Joining-Technologies/runs/43530467182/">CI</a> · <a href="https://umati.github.io/UA-for-Industrial-Joining-Technologies/latest/integration/">System Tests</a></p>
+      </div>
+    </section>
+
+    <section class="tab-pane" id="tab-pane-logs">
+      <div class="logs-layout"><div><button type="button" class="job-item active" onclick="selectJob(0)" id="job-btn-0"><span>❌ All checks passed</span><span style="color:var(--muted);font-size:0.8rem;">3s</span></button><button type="button" class="job-item" onclick="selectJob(1)" id="job-btn-1"><span>⚠️ C# Client - NuGet Vuln Scan</span><span style="color:var(--muted);font-size:0.8rem;">7s</span></button><button type="button" class="job-item" onclick="selectJob(2)" id="job-btn-2"><span>⚠️ C# Client - Unit Tests</span><span style="color:var(--muted);font-size:0.8rem;">12s</span></button><button type="button" class="job-item" onclick="selectJob(3)" id="job-btn-3"><span>⚠️ Console Client</span><span style="color:var(--muted);font-size:0.8rem;">9s</span></button><button type="button" class="job-item" onclick="selectJob(4)" id="job-btn-4"><span>⚠️ GHA Security Audit (zizmor)</span><span style="color:var(--muted);font-size:0.8rem;">9s</span></button><button type="button" class="job-item" onclick="selectJob(5)" id="job-btn-5"><span>⚠️ Node Client</span><span style="color:var(--muted);font-size:0.8rem;">9s</span></button><button type="button" class="job-item" onclick="selectJob(6)" id="job-btn-6"><span>⚠️ OPC UA Server - Windows Smoke</span><span style="color:var(--muted);font-size:0.8rem;">7s</span></button><button type="button" class="job-item" onclick="selectJob(7)" id="job-btn-7"><span>⚠️ Performance Client</span><span style="color:var(--muted);font-size:0.8rem;">7s</span></button><button type="button" class="job-item" onclick="selectJob(8)" id="job-btn-8"><span>⚠️ Pre-commit hooks (all files)</span><span style="color:var(--muted);font-size:0.8rem;">6s</span></button><button type="button" class="job-item" onclick="selectJob(9)" id="job-btn-9"><span>⚠️ Test Client</span><span style="color:var(--muted);font-size:0.8rem;">7s</span></button><button type="button" class="job-item" onclick="selectJob(10)" id="job-btn-10"><span>⚠️ Web Client - Docker Smoke</span><span style="color:var(--muted);font-size:0.8rem;">7s</span></button><button type="button" class="job-item" onclick="selectJob(11)" id="job-btn-11"><span>⚠️ Web Client - JavaScript</span><span style="color:var(--muted);font-size:0.8rem;">7s</span></button><button type="button" class="job-item" onclick="selectJob(12)" id="job-btn-12"><span>⚠️ Web Client - Python</span><span style="color:var(--muted);font-size:0.8rem;">7s</span></button><button type="button" class="job-item" onclick="selectJob(13)" id="job-btn-13"><span>✅ Enable full CI matrix</span><span style="color:var(--muted);font-size:0.8rem;">4s</span></button><button type="button" class="job-item" onclick="selectJob(14)" id="job-btn-14"><span>✅ GHA Workflow Lint (actionlint)</span><span style="color:var(--muted);font-size:0.8rem;">5s</span></button><button type="button" class="job-item" onclick="selectJob(15)" id="job-btn-15"><span>✅ 📋 CI Report</span><span style="color:var(--muted);font-size:0.8rem;">13s</span></button></div><div><div class="job-pane" id="job-pane-0" style="display:block;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>❌ All checks passed (46 lines)</strong><a class="btn" href="logs/job-132246699547-all-checks-passed.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details"><summary><span>✅ Step 1: Set up job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">﻿2026-11-13T23:54:23.4270622Z Current runner version: &#x27;2.338.2&#x27;</pre></details><details class="step-details" open><summary><span>❌ Step 2: Check all jobs passed (skipped = success)</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 3: Complete job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {3ca25ac2-09d0-4565-854c-cac8b0d1e719}
+Region: eastus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+26.04.1
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-26.04
+Version: 20261111.196.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261111.196/images/ubuntu/Ubuntu2604-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261111.196
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Complete job name: All checks passed
+##[group]Run echo &quot;Job results: $RESULTS&quot;
+echo &quot;Job results: $RESULTS&quot;
+if echo &quot;$RESULTS&quot; | grep -qE &#x27;\b(failure|cancelled)\b&#x27;; then
+  echo &quot;One or more required jobs failed or were cancelled.&quot;
+  exit 1
+fi
+echo &quot;All required checks passed (skipped jobs count as success).&quot;
+shell: /usr/bin/bash -e {0}
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RESULTS: success cancelled cancelled cancelled cancelled cancelled cancelled cancelled cancelled cancelled cancelled success cancelled cancelled
+##[endgroup]
+Job results: success cancelled cancelled cancelled cancelled cancelled cancelled cancelled cancelled cancelled cancelled success cancelled cancelled
+One or more required jobs failed or were cancelled.
+##[error]Process completed with exit code 1.
+Cleaning up orphan processes</pre></details></div><div class="job-pane" id="job-pane-1" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ C# Client - NuGet Vuln Scan (1 lines)</strong><a class="btn" href="logs/job-132246616699-c-client-nuget-vuln-scan.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details" open><summary><span>ℹ️ Step 1: Console Output</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">[Console log unavailable for job &#x27;C# Client - NuGet Vuln Scan&#x27; (id=132246616699): HTTP Error 404: The specified blob does not exist.]</pre></details></div><div class="job-pane" id="job-pane-2" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ C# Client - Unit Tests (202 lines)</strong><a class="btn" href="logs/job-132246616383-c-client-unit-tests.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details"><summary><span>✅ Step 1: Set up job</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">﻿2026-11-13T23:54:10.5664350Z Current runner version: &#x27;2.338.2&#x27;
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {5b12a881-fb12-4343-9192-d87f8937b55f}
+Region: northcentralus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Microsoft Windows Server 2025
+10.0.26100
+Datacenter
+##[endgroup]
+##[group]Runner Image
+Image: windows-2025-vs2026
+Version: 20261103.298.1
+Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261103.298/images/windows/Windows2025-VS2026-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261103.298
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository &#x27;actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1&#x27; (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository &#x27;actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73&#x27; (SHA:0f4a354dd5547a28c70b7853dbd95d5b67886e73)</pre></details><details class="step-details" open><summary><span>⚠️ Step 2: Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">4s</span></summary><pre class="log-pre">Download action repository &#x27;actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9&#x27; (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+Complete job name: C# Client - Unit Tests
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  persist-credentials: false
+  repository: umati/UA-for-Industrial-Joining-Technologies
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+##[group]Getting Git version info
+Working directory is &#x27;D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies&#x27;
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; version
+git version 2.56.0.windows.4
+##[endgroup]
+Temporarily overriding HOME=&#x27;D:\a\_temp\6f97c63f-7ef7-481e-af33-01970b50a514&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+Deleting the contents of &#x27;D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies&#x27;
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; init D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+Initialized empty Git repository in D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --name-only --get-regexp core\.sshCommand
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; submodule foreach --recursive &quot;sh -c \&quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :\&quot;&quot;
+Removing HTTP extra header
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; submodule foreach --recursive &quot;sh -c \&quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :\&quot;&quot;
+Removing includeIf entries pointing to credentials config files
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; submodule foreach --recursive &quot;git config --local --show-origin --name-only --get-regexp remote.origin.url&quot;</pre></details><details class="step-details"><summary><span>⏭️ Step 3: Run actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 4: Prepare C# test-result artifacts</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 5: Restore NuGet Packages</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 6: Build (zero warnings)</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 7: OPC UA Security build contract</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 8: Run xUnit Unit Tests</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details" open><summary><span>❌ Step 9: Collect Coverage Report</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 10: Format Check</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details" open><summary><span>❌ Step 11: Convert TRX to JUnit XML</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --file D:\a\_temp\git-credentials-dd505c63-9734-4799-a412-067dc7fc6a38.config http.https://github.com/.extraheader &quot;AUTHORIZATION: basic [REDACTED_AUTH]&quot;
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D:\a\_temp\git-credentials-dd505c63-9734-4799-a412-067dc7fc6a38.config
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D:\a\_temp\git-credentials-dd505c63-9734-4799-a412-067dc7fc6a38.config
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-dd505c63-9734-4799-a412-067dc7fc6a38.config
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-dd505c63-9734-4799-a412-067dc7fc6a38.config
+##[endgroup]
+##[group]Fetching the repository
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +560c9c4c06e2cc86795ec6b4485b5f80f5a12403:refs/remotes/origin/main
+##[error]The operation was canceled.
+##[group]Run # Coverlet writes to test-results/&lt;GUID&gt;/coverage.cobertura.xml — copy to canonical path.
+# Coverlet writes to test-results/&lt;GUID&gt;/coverage.cobertura.xml — copy to canonical path.
+$covXml = Get-ChildItem test-results -Recurse -Filter &quot;coverage.cobertura.xml&quot; | Select-Object -First 1
+if ($covXml) {
+  Copy-Item $covXml.FullName test-results\coverage\cobertura.xml -Force
+  [xml]$cov = Get-Content test-results\coverage\cobertura.xml
+  $pct = [math]::Round([double]$cov.coverage.&#x27;line-rate&#x27; * 100, 1)
+  Write-Host &quot;C# line coverage: $pct%&quot;
+  &quot;pct=$pct&quot; | Out-File $Env:GITHUB_OUTPUT -Append
+} else {
+  Write-Host &quot;Coverage XML not generated (tests may have failed or --collect flag not picked up)&quot;
+  &quot;pct=&quot; | Out-File $Env:GITHUB_OUTPUT -Append
+}
+shell: C:\Program Files\PowerShell\7\pwsh.EXE -command &quot;. &#x27;{0}&#x27;&quot;
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+##[error]An error occurred trying to start process &#x27;C:\Program Files\PowerShell\7\pwsh.EXE&#x27; with working directory &#x27;D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients/Release2/IJT_CSharp_Client&#x27;. The directory name is invalid.
+##[group]Run New-Item -ItemType Directory -Force -Path test-results | Out-Null
+New-Item -ItemType Directory -Force -Path test-results | Out-Null
+$trx   = &quot;test-results\tests.trx&quot;
+$junit = &quot;test-results\tests.xml&quot;
+if (Test-Path $trx) {
+  [xml]$x = Get-Content $trx
+  $ns = @{ t = &quot;http://microsoft.com/schemas/VisualStudio/TeamTest/2010&quot; }
+  $results = Select-Xml -Xml $x -XPath &quot;//t:UnitTestResult&quot; -Namespace $ns | Select-Object -ExpandProperty Node
+  $passed  = ($results | Where-Object { $_.outcome -eq &quot;Passed&quot;  }).Count
+  $failed  = ($results | Where-Object { $_.outcome -eq &quot;Failed&quot;  }).Count
+  $skipped = ($results | Where-Object { $_.outcome -eq &quot;NotExecuted&quot; }).Count
+  $total   = $results.Count
+  $xml  = &#x27;&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#x27; + &quot;`n&quot;
+  $xml += &quot;&lt;testsuites tests=`&quot;$total`&quot; failures=`&quot;$failed`&quot; skipped=`&quot;$skipped`&quot;&gt;`n&quot;
+  $xml += &quot;  &lt;testsuite name=`&quot;IJT_CSharp_Client.Tests.Unit`&quot; tests=`&quot;$total`&quot; failures=`&quot;$failed`&quot; skipped=`&quot;$skipped`&quot;&gt;`n&quot;
+  foreach ($r in $results) {
+    $name = [System.Security.SecurityElement]::Escape($r.testName)
+    $outcome = $r.outcome
+    if ($outcome -eq &quot;Passed&quot;) {
+      $xml += &quot;    &lt;testcase name=`&quot;$name`&quot; classname=`&quot;IJT`&quot; /&gt;`n&quot;
+    } elseif ($outcome -eq &quot;NotExecuted&quot;) {
+      $msgRaw = ([string]$r.Output.ErrorInfo.Message).Trim()
+      if ([string]::IsNullOrWhiteSpace($msgRaw)) { $msgRaw = &quot;Test skipped by xUnit&quot; }
+      $msg = [System.Security.SecurityElement]::Escape($msgRaw)
+      $xml += &quot;    &lt;testcase name=`&quot;$name`&quot; classname=`&quot;IJT`&quot;&gt;&lt;skipped message=`&quot;$msg`&quot;&gt;$msg&lt;/skipped&gt;&lt;/testcase&gt;`n&quot;
+    } else {
+      $msg = [System.Security.SecurityElement]::Escape($r.Output.ErrorInfo.Message)
+      $xml += &quot;    &lt;testcase name=`&quot;$name`&quot; classname=`&quot;IJT`&quot;&gt;&lt;failure&gt;$msg&lt;/failure&gt;&lt;/testcase&gt;`n&quot;
+    }
+  }
+  $xml += &quot;  &lt;/testsuite&gt;`n&lt;/testsuites&gt;&quot;
+  $xml | Out-File $junit -Encoding UTF8
+  Write-Host &quot;Converted TRX → JUnit: $total tests, $failed failures, $skipped skipped&quot;
+} else {
+  Write-Host &quot;No TRX file found — creating empty JUnit&quot;
+  &#x27;&lt;?xml version=&quot;1.0&quot;?&gt;&lt;testsuites tests=&quot;0&quot; failures=&quot;0&quot;&gt;&lt;testsuite name=&quot;IJT_CSharp_Client.Tests.Unit&quot; tests=&quot;0&quot;/&gt;&lt;/testsuites&gt;&#x27; | Out-File $junit -Encoding UTF8
+}
+shell: C:\Program Files\PowerShell\7\pwsh.EXE -command &quot;. &#x27;{0}&#x27;&quot;
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]</pre></details><details class="step-details"><summary><span>✅ Step 12: Upload Artifacts</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 13: Fail if Any Check Failed</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 26: Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">3s</span></summary><pre class="log-pre">##[error]An error occurred trying to start process &#x27;C:\Program Files\PowerShell\7\pwsh.EXE&#x27; with working directory &#x27;D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients/Release2/IJT_CSharp_Client&#x27;. The directory name is invalid.
+##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+with:
+  name: results-csharp-unit
+  path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
+  retention-days: 14
+  if-no-files-found: warn
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+  archive: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+##[warning]No files were found with the provided path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/. No artifacts will be uploaded.
+Post job cleanup.
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; version
+git version 2.56.0.windows.4
+Temporarily overriding HOME=&#x27;D:\a\_temp\d5c05ae1-7888-4876-b6b7-d5564a22ca3b&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+Removing SSH command configuration
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --name-only --get-regexp core\.sshCommand
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; submodule foreach --recursive &quot;sh -c \&quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :\&quot;&quot;
+Removing HTTP extra header
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; submodule foreach --recursive &quot;sh -c \&quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :\&quot;&quot;
+Removing includeIf entries pointing to credentials config files
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/.git.path
+includeif.gitdir:/github/workspace/.git/worktrees/*.path
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+D:\a\_temp\git-credentials-dd505c63-9734-4799-a412-067dc7fc6a38.config
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D\:\\a\\_temp\\git\-credentials\-dd505c63\-9734\-4799\-a412\-067dc7fc6a38\.config
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+D:\a\_temp\git-credentials-dd505c63-9734-4799-a412-067dc7fc6a38.config
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D\:\\a\\_temp\\git\-credentials\-dd505c63\-9734\-4799\-a412\-067dc7fc6a38\.config
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --get-all includeif.gitdir:/github/workspace/.git.path
+/github/runner_temp/git-credentials-dd505c63-9734-4799-a412-067dc7fc6a38.config
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-dd505c63\-9734\-4799\-a412\-067dc7fc6a38\.config
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+/github/runner_temp/git-credentials-dd505c63-9734-4799-a412-067dc7fc6a38.config</pre></details><details class="step-details"><summary><span>✅ Step 27: Complete job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">[command]&quot;C:\Program Files\Git\bin\git.exe&quot; config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-dd505c63\-9734\-4799\-a412\-067dc7fc6a38\.config
+[command]&quot;C:\Program Files\Git\bin\git.exe&quot; submodule foreach --recursive &quot;git config --local --show-origin --name-only --get-regexp remote.origin.url&quot;
+Removing credentials config &#x27;D:\a\_temp\git-credentials-dd505c63-9734-4799-a412-067dc7fc6a38.config&#x27;
+Evaluate and set job outputs
+Set output &#x27;build_result&#x27;
+Set output &#x27;format_result&#x27;
+Cleaning up orphan processes</pre></details></div><div class="job-pane" id="job-pane-3" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ Console Client (169 lines)</strong><a class="btn" href="logs/job-132246616666-console-client.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details"><summary><span>✅ Step 1: Set up job</span><span style="color:var(--muted);font-size:0.8rem;">4s</span></summary><pre class="log-pre">﻿2026-11-13T23:54:10.4088329Z Current runner version: &#x27;2.338.2&#x27;
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261028.624
+Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+Build Date: 2026-10-28T21:51:42Z
+Worker ID: {3e4909d1-cffb-49be-a5d6-d7b6502d7efd}
+Region: centralus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+26.04.1
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-26.04
+Version: 20261101.186.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository &#x27;actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1&#x27; (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository &#x27;actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0&#x27; (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+Download action repository &#x27;umati/UA-for-Industrial-Joining-Technologies@560c9c4c06e2cc86795ec6b4485b5f80f5a12403&#x27; (SHA:560c9c4c06e2cc86795ec6b4485b5f80f5a12403)
+Download action repository &#x27;actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9&#x27; (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)</pre></details><details class="step-details" open><summary><span>⚠️ Step 2: Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">Complete job name: Console Client
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  persist-credentials: false
+  repository: umati/UA-for-Industrial-Joining-Technologies
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+##[group]Getting Git version info
+Working directory is &#x27;/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies&#x27;
+[command]/usr/bin/git version
+git version 2.56.0
+##[endgroup]
+Temporarily overriding HOME=&#x27;/home/runner/work/_temp/ede0d840-b2f6-4721-a223-c261d8b62d8c&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+Deleting the contents of &#x27;/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies&#x27;
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+hint: Using &#x27;master&#x27; as the name for the initial branch. This default branch name
+hint: will change to &quot;main&quot; in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch &lt;name&gt;
+hint:
+hint: Names commonly chosen instead of &#x27;master&#x27; are &#x27;main&#x27;, &#x27;trunk&#x27; and
+hint: &#x27;development&#x27;. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m &lt;name&gt;
+hint:
+hint: Disable this message with &quot;git config set advice.defaultBranchName false&quot;
+Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+[command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-f081d1c9-ce0a-4bbd-890e-1b60bafb0dbf.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-f081d1c9-ce0a-4bbd-890e-1b60bafb0dbf.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-f081d1c9-ce0a-4bbd-890e-1b60bafb0dbf.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-f081d1c9-ce0a-4bbd-890e-1b60bafb0dbf.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-f081d1c9-ce0a-4bbd-890e-1b60bafb0dbf.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +560c9c4c06e2cc86795ec6b4485b5f80f5a12403:refs/remotes/origin/main</pre></details><details class="step-details"><summary><span>⏭️ Step 3: Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 4: Run umati/UA-for-Industrial-Joining-Technologies/.github/actions/setup-uv-pypi@560c9c4c06e2cc86795ec6b4485b5f80f5a12403</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 5: Install Python Dependencies</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 6: Run mkdir -p test-results</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 7: Python Unit Tests</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 8: Bandit (Python Security)</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 9: pip-audit (Python Dependency Audit Report)</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 10: Ruff (Python Linting)</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 11: mypy (Type Checking)</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 12: Upload Artifacts</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 13: Fail if Any Check Failed</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 26: Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 27: Complete job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+ * [new ref]         560c9c4c06e2cc86795ec6b4485b5f80f5a12403 -&gt; origin/main
+[command]/usr/bin/git branch --list --remote origin/main
+  origin/main
+[command]/usr/bin/git rev-parse refs/remotes/origin/main
+560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+[command]/usr/bin/git sparse-checkout disable
+[command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+##[error]The operation was canceled.
+##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+with:
+  name: results-console-client
+  path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/
+  retention-days: 14
+  if-no-files-found: warn
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+  archive: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+##[warning]No files were found with the provided path: OPC_UA_Clients/Release2/IJT_Console_Client/test-results/. No artifacts will be uploaded.
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.0
+Temporarily overriding HOME=&#x27;/home/runner/work/_temp/9a6cbebe-8abc-4629-a56f-07b91e4cd437&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/.git.path
+includeif.gitdir:/github/workspace/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+/home/runner/work/_temp/git-credentials-f081d1c9-ce0a-4bbd-890e-1b60bafb0dbf.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-f081d1c9\-ce0a\-4bbd\-890e\-1b60bafb0dbf\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-f081d1c9-ce0a-4bbd-890e-1b60bafb0dbf.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-f081d1c9\-ce0a\-4bbd\-890e\-1b60bafb0dbf\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+/github/runner_temp/git-credentials-f081d1c9-ce0a-4bbd-890e-1b60bafb0dbf.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-f081d1c9\-ce0a\-4bbd\-890e\-1b60bafb0dbf\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+/github/runner_temp/git-credentials-f081d1c9-ce0a-4bbd-890e-1b60bafb0dbf.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-f081d1c9\-ce0a\-4bbd\-890e\-1b60bafb0dbf\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config &#x27;/home/runner/work/_temp/git-credentials-f081d1c9-ce0a-4bbd-890e-1b60bafb0dbf.config&#x27;
+Evaluate and set job outputs
+Set output &#x27;mypy_result&#x27;
+Set output &#x27;ruff_result&#x27;
+Cleaning up orphan processes</pre></details></div><div class="job-pane" id="job-pane-4" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ GHA Security Audit (zizmor) (241 lines)</strong><a class="btn" href="logs/job-132246616557-gha-security-audit-zizmor.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details"><summary><span>✅ Step 1: Set up job</span><span style="color:var(--muted);font-size:0.8rem;">2s</span></summary><pre class="log-pre">﻿2026-11-13T23:54:10.9374968Z Current runner version: &#x27;2.338.2&#x27;
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {9d4c56e6-f2f5-4788-ad8a-4655dd10f264}
+Region: eastus3
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+26.04.1
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-26.04
+Version: 20261111.196.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261111.196/images/ubuntu/Ubuntu2604-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261111.196
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+SecurityEvents: write
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository &#x27;actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1&#x27; (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository &#x27;zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd&#x27; (SHA:45d7276c9ca790aabd705e31ca99c6185c3e76dd)
+Getting action download info
+Download action repository &#x27;github/codeql-action@9b3254085494b55a0f7c4c2b3d2d52cc712ce370&#x27; (SHA:9b3254085494b55a0f7c4c2b3d2d52cc712ce370)</pre></details><details class="step-details"><summary><span>✅ Step 2: Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">2s</span></summary><pre class="log-pre">Complete job name: GHA Security Audit (zizmor)
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  persist-credentials: false
+  repository: umati/UA-for-Industrial-Joining-Technologies
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+##[group]Getting Git version info
+Working directory is &#x27;/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies&#x27;
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME=&#x27;/home/runner/work/_temp/30e8ea43-61a9-4748-8714-05ebed543b16&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+Deleting the contents of &#x27;/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies&#x27;
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+hint: Using &#x27;master&#x27; as the name for the initial branch. This default branch name
+hint: will change to &quot;main&quot; in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch &lt;name&gt;
+hint:
+hint: Names commonly chosen instead of &#x27;master&#x27; are &#x27;main&#x27;, &#x27;trunk&#x27; and
+hint: &#x27;development&#x27;. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m &lt;name&gt;
+hint:
+hint: Disable this message with &quot;git config set advice.defaultBranchName false&quot;
+Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+[command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-d5fe57ee-773b-4827-ac03-b532b0400911.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-d5fe57ee-773b-4827-ac03-b532b0400911.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-d5fe57ee-773b-4827-ac03-b532b0400911.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-d5fe57ee-773b-4827-ac03-b532b0400911.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-d5fe57ee-773b-4827-ac03-b532b0400911.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +560c9c4c06e2cc86795ec6b4485b5f80f5a12403:refs/remotes/origin/main</pre></details><details class="step-details" open><summary><span>⚠️ Step 3: Run zizmor (GHA security audit → SARIF upload)</span><span style="color:var(--muted);font-size:0.8rem;">3s</span></summary><pre class="log-pre">From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+ * [new ref]         560c9c4c06e2cc86795ec6b4485b5f80f5a12403 -&gt; origin/main
+[command]/usr/bin/git branch --list --remote origin/main
+  origin/main
+[command]/usr/bin/git rev-parse refs/remotes/origin/main
+560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+[command]/usr/bin/git sparse-checkout disable
+[command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+Switched to a new branch &#x27;main&#x27;
+branch &#x27;main&#x27; set up to track &#x27;origin/main&#x27;.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/.git.path
+includeif.gitdir:/github/workspace/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+/home/runner/work/_temp/git-credentials-d5fe57ee-773b-4827-ac03-b532b0400911.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-d5fe57ee\-773b\-4827\-ac03\-b532b0400911\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-d5fe57ee-773b-4827-ac03-b532b0400911.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-d5fe57ee\-773b\-4827\-ac03\-b532b0400911\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+/github/runner_temp/git-credentials-d5fe57ee-773b-4827-ac03-b532b0400911.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-d5fe57ee\-773b\-4827\-ac03\-b532b0400911\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+/github/runner_temp/git-credentials-d5fe57ee-773b-4827-ac03-b532b0400911.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-d5fe57ee\-773b\-4827\-ac03\-b532b0400911\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config &#x27;/home/runner/work/_temp/git-credentials-d5fe57ee-773b-4827-ac03-b532b0400911.config&#x27;
+##[endgroup]
+##[group]Run zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd
+with:
+  inputs: .github/workflows/
+  version: 1.32.0
+  collect: default
+  online-audits: true
+  persona: regular
+  token: ***
+  advanced-security: true
+  color: true
+  annotations: false
+  fail-on-no-inputs: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+##[start-action display=Run zizmor;id=__zizmorcore_zizmor-action.run-zizmor]
+##[group]Run &quot;${GITHUB_ACTION_PATH}/action.sh&quot;
+&quot;${GITHUB_ACTION_PATH}/action.sh&quot;
+shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GHA_ZIZMOR_INPUTS: .github/workflows/
+  GHA_ZIZMOR_COLLECT: default
+  GHA_ZIZMOR_ONLINE_AUDITS: true
+  GHA_ZIZMOR_PERSONA: regular
+  GHA_ZIZMOR_MIN_SEVERITY: 
+  GHA_ZIZMOR_MIN_CONFIDENCE: 
+  GHA_ZIZMOR_VERSION: 1.32.0
+  GHA_ZIZMOR_TOKEN: ***
+  GHA_ZIZMOR_ADVANCED_SECURITY: true
+  GHA_ZIZMOR_COLOR: true
+  GHA_ZIZMOR_ANNOTATIONS: false
+  GHA_ZIZMOR_CONFIG: 
+  GHA_ZIZMOR_FAIL_ON_NO_INPUTS: true
+##[endgroup]
+ INFO zizmor: 🌈 zizmor v1.32.0
+ INFO audit: zizmor: 🌈 completed .github/workflows/build-browser-ci-image.yml</pre></details><details class="step-details"><summary><span>✅ Step 5: Post Run zizmor (GHA security audit → SARIF upload)</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 6: Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre"> INFO audit: zizmor: 🌈 completed .github/workflows/ci.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/codeql.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/dependency-security.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/integration.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/internal-private-envelope.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/maintenance-retention.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/publish-public-reports.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/web-client-compatibility-smoke.yml
+{
+  &quot;$schema&quot;: &quot;https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/schemas/sarif-schema-2.1.0.json&quot;,
+  &quot;runs&quot;: [
+    {
+      &quot;invocations&quot;: [
+        {
+          &quot;executionSuccessful&quot;: true
+        }
+      ],
+      &quot;results&quot;: [],
+      &quot;tool&quot;: {
+        &quot;driver&quot;: {
+          &quot;downloadUri&quot;: &quot;https://github.com/zizmorcore/zizmor&quot;,
+          &quot;informationUri&quot;: &quot;https://docs.zizmor.sh&quot;,
+          &quot;name&quot;: &quot;zizmor&quot;,
+          &quot;semanticVersion&quot;: &quot;1.32.0&quot;,
+          &quot;version&quot;: &quot;1.32.0&quot;
+        }
+      }
+    }
+  ],
+  &quot;version&quot;: &quot;2.1.0&quot;
+}::debug::zizmor exited with code 0
+##[error]The operation was canceled.
+##[end-action id=__zizmorcore_zizmor-action.run-zizmor;outcome=cancelled;conclusion=cancelled;duration_ms=3506]
+##[start-action display=Upload SARIF file to GitHub Advanced Security;id=__zizmorcore_zizmor-action.__github_codeql-action]
+##[end-action id=__zizmorcore_zizmor-action.__github_codeql-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+Post job cleanup.</pre></details><details class="step-details"><summary><span>✅ Step 7: Complete job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME=&#x27;/home/runner/work/_temp/c3ade7ab-9408-45e0-b6e8-ded184049a0f&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes</pre></details></div><div class="job-pane" id="job-pane-5" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ Node Client (201 lines)</strong><a class="btn" href="logs/job-132246616441-node-client.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details"><summary><span>✅ Step 1: Set up job</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">﻿2026-11-13T23:54:10.3554004Z Current runner version: &#x27;2.338.2&#x27;
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {4555b844-1fbe-4569-9c63-3f3e5339523b}
+Region: eastus2
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+26.04.1
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-26.04
+Version: 20261111.196.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261111.196/images/ubuntu/Ubuntu2604-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261111.196
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository &#x27;actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1&#x27; (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository &#x27;actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1&#x27; (SHA:949feb2413d6458794dcd2491c4babbbce0c15c1)
+Download action repository &#x27;actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9&#x27; (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)</pre></details><details class="step-details"><summary><span>✅ Step 2: Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">Complete job name: Node Client
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  persist-credentials: false
+  repository: umati/UA-for-Industrial-Joining-Technologies
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+##[group]Getting Git version info
+Working directory is &#x27;/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies&#x27;
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME=&#x27;/home/runner/work/_temp/b664f77f-9d9c-4e57-b55b-a81054d564da&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+Deleting the contents of &#x27;/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies&#x27;
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+hint: Using &#x27;master&#x27; as the name for the initial branch. This default branch name
+hint: will change to &quot;main&quot; in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch &lt;name&gt;
+hint:
+hint: Names commonly chosen instead of &#x27;master&#x27; are &#x27;main&#x27;, &#x27;trunk&#x27; and
+hint: &#x27;development&#x27;. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m &lt;name&gt;
+hint:
+hint: Disable this message with &quot;git config set advice.defaultBranchName false&quot;
+Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+[command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-13d6d40b-4ae9-4319-899a-d358b52093a2.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-13d6d40b-4ae9-4319-899a-d358b52093a2.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-13d6d40b-4ae9-4319-899a-d358b52093a2.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-13d6d40b-4ae9-4319-899a-d358b52093a2.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-13d6d40b-4ae9-4319-899a-d358b52093a2.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +560c9c4c06e2cc86795ec6b4485b5f80f5a12403:refs/remotes/origin/main</pre></details><details class="step-details" open><summary><span>⚠️ Step 3: Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1</span><span style="color:var(--muted);font-size:0.8rem;">4s</span></summary><pre class="log-pre">From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+ * [new ref]         560c9c4c06e2cc86795ec6b4485b5f80f5a12403 -&gt; origin/main
+[command]/usr/bin/git branch --list --remote origin/main
+  origin/main
+[command]/usr/bin/git rev-parse refs/remotes/origin/main
+560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+[command]/usr/bin/git sparse-checkout disable
+[command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+Switched to a new branch &#x27;main&#x27;
+branch &#x27;main&#x27; set up to track &#x27;origin/main&#x27;.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/.git.path
+includeif.gitdir:/github/workspace/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+/home/runner/work/_temp/git-credentials-13d6d40b-4ae9-4319-899a-d358b52093a2.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-13d6d40b\-4ae9\-4319\-899a\-d358b52093a2\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-13d6d40b-4ae9-4319-899a-d358b52093a2.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-13d6d40b\-4ae9\-4319\-899a\-d358b52093a2\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+/github/runner_temp/git-credentials-13d6d40b-4ae9-4319-899a-d358b52093a2.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-13d6d40b\-4ae9\-4319\-899a\-d358b52093a2\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+/github/runner_temp/git-credentials-13d6d40b-4ae9-4319-899a-d358b52093a2.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-13d6d40b\-4ae9\-4319\-899a\-d358b52093a2\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config &#x27;/home/runner/work/_temp/git-credentials-13d6d40b-4ae9-4319-899a-d358b52093a2.config&#x27;
+##[endgroup]
+##[group]Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+with:
+  node-version-file: .nvmrc
+  check-latest: true
+  token: ***
+  package-manager-cache: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+Node version file is not TOML file
+Resolved .nvmrc as 24
+Attempt to resolve the latest version from manifest...
+Resolved as &#x27;24.22.3&#x27;
+Attempting to download 24.22.3...
+Acquiring 24.22.3 - x64 from https://github.com/actions/node-versions/releases/download/24.22.3-43134179821/node-24.22.3-linux-x64.tar.gz
+Extracting ...
+[command]/usr/bin/tar xz --strip 1 --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/2c68d594-163b-471e-a55e-be58fd0fa953 -f /home/runner/work/_temp/f98db477-587a-4b65-b897-74ddda06636f
+Adding to the cache ...</pre></details><details class="step-details"><summary><span>⏭️ Step 4: Install JS Dependencies</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 5: Run mkdir -p test-results</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 6: JS Unit Tests</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 7: ESLint</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 8: npm Audit (JS Security)</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 9: Upload Artifacts</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 10: Fail if Any Check Failed</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>⏭️ Step 19: Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 20: Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 21: Complete job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">##[error]The operation was canceled.
+##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+with:
+  name: results-node-client
+  path: OPC_UA_Clients/Release1/IJT_Node_Client/test-results/
+  retention-days: 14
+  if-no-files-found: warn
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+  archive: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+##[warning]No files were found with the provided path: OPC_UA_Clients/Release1/IJT_Node_Client/test-results/. No artifacts will be uploaded.
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME=&#x27;/home/runner/work/_temp/0db841b2-3543-48c4-8b4e-8a4abd6c9296&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Evaluate and set job outputs
+Set output &#x27;eslint_result&#x27;
+Cleaning up orphan processes</pre></details></div><div class="job-pane" id="job-pane-6" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ OPC UA Server - Windows Smoke (1 lines)</strong><a class="btn" href="logs/job-132246616652-opc-ua-server-windows-smoke.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details" open><summary><span>ℹ️ Step 1: Console Output</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">[Console log unavailable for job &#x27;OPC UA Server - Windows Smoke&#x27; (id=132246616652): HTTP Error 404: The specified blob does not exist.]</pre></details></div><div class="job-pane" id="job-pane-7" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ Performance Client (1 lines)</strong><a class="btn" href="logs/job-132246616635-performance-client.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details" open><summary><span>ℹ️ Step 1: Console Output</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">[Console log unavailable for job &#x27;Performance Client&#x27; (id=132246616635): HTTP Error 404: The specified blob does not exist.]</pre></details></div><div class="job-pane" id="job-pane-8" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ Pre-commit hooks (all files) (34 lines)</strong><a class="btn" href="logs/job-132246616681-pre-commit-hooks-all-files.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details" open><summary><span>⚠️ Step 1: Set up job</span><span style="color:var(--muted);font-size:0.8rem;">4s</span></summary><pre class="log-pre">﻿2026-11-13T23:54:14.3347838Z Current runner version: &#x27;2.338.2&#x27;
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261028.624
+Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+Build Date: 2026-10-28T21:51:42Z
+Worker ID: {7473cf93-7e2d-4dc4-bfb1-b34eae3d9d78}
+Region: westus2
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+26.04.1
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-26.04
+Version: 20261101.186.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository &#x27;actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1&#x27; (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository &#x27;actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0&#x27; (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+Download action repository &#x27;umati/UA-for-Industrial-Joining-Technologies@560c9c4c06e2cc86795ec6b4485b5f80f5a12403&#x27; (SHA:560c9c4c06e2cc86795ec6b4485b5f80f5a12403)
+##[error]A task was canceled.</pre></details></div><div class="job-pane" id="job-pane-9" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ Test Client (1 lines)</strong><a class="btn" href="logs/job-132246616678-test-client.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details" open><summary><span>ℹ️ Step 1: Console Output</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">[Console log unavailable for job &#x27;Test Client&#x27; (id=132246616678): HTTP Error 404: The specified blob does not exist.]</pre></details></div><div class="job-pane" id="job-pane-10" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ Web Client - Docker Smoke (1 lines)</strong><a class="btn" href="logs/job-132246616674-web-client-docker-smoke.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details" open><summary><span>ℹ️ Step 1: Console Output</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">[Console log unavailable for job &#x27;Web Client - Docker Smoke&#x27; (id=132246616674): HTTP Error 404: The specified blob does not exist.]</pre></details></div><div class="job-pane" id="job-pane-11" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ Web Client - JavaScript (1 lines)</strong><a class="btn" href="logs/job-132246616728-web-client-javascript.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details" open><summary><span>ℹ️ Step 1: Console Output</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">[Console log unavailable for job &#x27;Web Client - JavaScript&#x27; (id=132246616728): HTTP Error 404: The specified blob does not exist.]</pre></details></div><div class="job-pane" id="job-pane-12" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>⚠️ Web Client - Python (1 lines)</strong><a class="btn" href="logs/job-132246616701-web-client-python.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details" open><summary><span>ℹ️ Step 1: Console Output</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">[Console log unavailable for job &#x27;Web Client - Python&#x27; (id=132246616701): HTTP Error 404: The specified blob does not exist.]</pre></details></div><div class="job-pane" id="job-pane-13" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>✅ Enable full CI matrix (57 lines)</strong><a class="btn" href="logs/job-132246583367-enable-full-ci-matrix.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details"><summary><span>✅ Step 1: Set up job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">﻿2026-11-13T23:54:05.6102060Z Current runner version: &#x27;2.338.2&#x27;</pre></details><details class="step-details"><summary><span>✅ Step 2: All jobs enabled</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 3: Complete job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {d648664e-2189-4377-81ad-f986784fe185}
+Region: westcentralus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+26.04.1
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-26.04
+Version: 20261111.196.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261111.196/images/ubuntu/Ubuntu2604-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261111.196
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Complete job name: Enable full CI matrix
+##[group]Run {
+{
+  echo &quot;web=true&quot;
+  echo &quot;console=true&quot;
+  echo &quot;performance=true&quot;
+  echo &quot;node=true&quot;
+  echo &quot;docker=true&quot;
+  echo &quot;testclient=true&quot;
+  echo &quot;csharp=true&quot;
+  echo &quot;server=true&quot;
+  echo &quot;workflows=true&quot;
+} &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+shell: /usr/bin/bash -e {0}
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+Evaluate and set job outputs
+Set output &#x27;web&#x27;
+Set output &#x27;console&#x27;
+Set output &#x27;performance&#x27;
+Set output &#x27;node&#x27;
+Set output &#x27;docker&#x27;
+Set output &#x27;testclient&#x27;
+Set output &#x27;csharp&#x27;
+Set output &#x27;server&#x27;
+Set output &#x27;workflows&#x27;
+Cleaning up orphan processes</pre></details></div><div class="job-pane" id="job-pane-14" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>✅ GHA Workflow Lint (actionlint) (179 lines)</strong><a class="btn" href="logs/job-132246616673-gha-workflow-lint-actionlint.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details"><summary><span>✅ Step 1: Set up job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">﻿2026-11-13T23:54:10.1043200Z Current runner version: &#x27;2.338.2&#x27;</pre></details><details class="step-details"><summary><span>✅ Step 2: Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {59a3ff9a-8960-4d11-9688-b180f4f227fd}
+Region: eastus2
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+26.04.1
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-26.04
+Version: 20261111.196.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261111.196/images/ubuntu/Ubuntu2604-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261111.196
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository &#x27;actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1&#x27; (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Complete job name: GHA Workflow Lint (actionlint)
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  persist-credentials: false
+  repository: umati/UA-for-Industrial-Joining-Technologies
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+##[group]Getting Git version info
+Working directory is &#x27;/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies&#x27;
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME=&#x27;/home/runner/work/_temp/eb6fd042-2430-48f9-88d5-56ebf75a588b&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+Deleting the contents of &#x27;/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies&#x27;
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+hint: Using &#x27;master&#x27; as the name for the initial branch. This default branch name
+hint: will change to &quot;main&quot; in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch &lt;name&gt;
+hint:
+hint: Names commonly chosen instead of &#x27;master&#x27; are &#x27;main&#x27;, &#x27;trunk&#x27; and
+hint: &#x27;development&#x27;. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m &lt;name&gt;
+hint:
+hint: Disable this message with &quot;git config set advice.defaultBranchName false&quot;
+Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+[command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-edaa12af-46c9-46a5-a277-c9fa47abbc79.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-edaa12af-46c9-46a5-a277-c9fa47abbc79.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-edaa12af-46c9-46a5-a277-c9fa47abbc79.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-edaa12af-46c9-46a5-a277-c9fa47abbc79.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-edaa12af-46c9-46a5-a277-c9fa47abbc79.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +560c9c4c06e2cc86795ec6b4485b5f80f5a12403:refs/remotes/origin/main</pre></details><details class="step-details"><summary><span>✅ Step 3: Install actionlint</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+ * [new ref]         560c9c4c06e2cc86795ec6b4485b5f80f5a12403 -&gt; origin/main
+[command]/usr/bin/git branch --list --remote origin/main
+  origin/main
+[command]/usr/bin/git rev-parse refs/remotes/origin/main
+560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+[command]/usr/bin/git sparse-checkout disable
+[command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+Switched to a new branch &#x27;main&#x27;
+branch &#x27;main&#x27; set up to track &#x27;origin/main&#x27;.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/.git.path
+includeif.gitdir:/github/workspace/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+/home/runner/work/_temp/git-credentials-edaa12af-46c9-46a5-a277-c9fa47abbc79.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-edaa12af\-46c9\-46a5\-a277\-c9fa47abbc79\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-edaa12af-46c9-46a5-a277-c9fa47abbc79.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-edaa12af\-46c9\-46a5\-a277\-c9fa47abbc79\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+/github/runner_temp/git-credentials-edaa12af-46c9-46a5-a277-c9fa47abbc79.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-edaa12af\-46c9\-46a5\-a277\-c9fa47abbc79\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+/github/runner_temp/git-credentials-edaa12af-46c9-46a5-a277-c9fa47abbc79.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-edaa12af\-46c9\-46a5\-a277\-c9fa47abbc79\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config &#x27;/home/runner/work/_temp/git-credentials-edaa12af-46c9-46a5-a277-c9fa47abbc79.config&#x27;
+##[endgroup]
+##[group]Run curl -sSfL --retry 5 --retry-delay 2 --retry-all-errors --retry-connrefused \
+curl -sSfL --retry 5 --retry-delay 2 --retry-all-errors --retry-connrefused \
+  -o actionlint.tar.gz \
+  https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+tar xzf actionlint.tar.gz actionlint
+shell: /usr/bin/bash -e {0}
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]</pre></details><details class="step-details"><summary><span>✅ Step 4: Run actionlint</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">##[group]Run ./actionlint -color
+./actionlint -color
+shell: /usr/bin/bash -e {0}
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]</pre></details><details class="step-details"><summary><span>✅ Step 8: Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 9: Complete job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME=&#x27;/home/runner/work/_temp/fae3b994-de83-461b-8839-5a5e536d197a&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes</pre></details></div><div class="job-pane" id="job-pane-15" style="display:none;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;"><strong>✅ 📋 CI Report (350 lines)</strong><a class="btn" href="logs/job-132246699523-ci-report.log.txt" download>📥 Download Raw Job Log (.log.txt)</a></div><details class="step-details"><summary><span>✅ Step 1: Set up job</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">﻿2026-11-13T23:54:23.6175954Z Current runner version: &#x27;2.338.2&#x27;
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {32f8e206-289f-4281-a05d-9d2817c3e37a}
+Region: eastus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+26.04.1
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-26.04
+Version: 20261111.196.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261111.196/images/ubuntu/Ubuntu2604-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261111.196
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Actions: read
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository &#x27;actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1&#x27; (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)</pre></details><details class="step-details"><summary><span>✅ Step 2: Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">2s</span></summary><pre class="log-pre">Download action repository &#x27;actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0&#x27; (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+Download action repository &#x27;actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333&#x27; (SHA:9000827ccba6bdab643e8b6fd33ac0654aef8333)
+Download action repository &#x27;actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9&#x27; (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+Complete job name: 📋 CI Report
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  persist-credentials: false
+  repository: umati/UA-for-Industrial-Joining-Technologies
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+##[group]Getting Git version info
+Working directory is &#x27;/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies&#x27;
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME=&#x27;/home/runner/work/_temp/a65aa248-e103-4442-ab04-57afd0ac7eaa&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+Deleting the contents of &#x27;/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies&#x27;
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+hint: Using &#x27;master&#x27; as the name for the initial branch. This default branch name
+hint: will change to &quot;main&quot; in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch &lt;name&gt;
+hint:
+hint: Names commonly chosen instead of &#x27;master&#x27; are &#x27;main&#x27;, &#x27;trunk&#x27; and
+hint: &#x27;development&#x27;. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m &lt;name&gt;
+hint:
+hint: Disable this message with &quot;git config set advice.defaultBranchName false&quot;
+Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+[command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-b2c04048-c116-4ad3-8a4d-bac6753038db.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-b2c04048-c116-4ad3-8a4d-bac6753038db.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-b2c04048-c116-4ad3-8a4d-bac6753038db.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-b2c04048-c116-4ad3-8a4d-bac6753038db.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-b2c04048-c116-4ad3-8a4d-bac6753038db.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +560c9c4c06e2cc86795ec6b4485b5f80f5a12403:refs/remotes/origin/main
+From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+ * [new ref]         560c9c4c06e2cc86795ec6b4485b5f80f5a12403 -&gt; origin/main
+[command]/usr/bin/git branch --list --remote origin/main
+  origin/main
+[command]/usr/bin/git rev-parse refs/remotes/origin/main
+560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+[command]/usr/bin/git sparse-checkout disable
+[command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+Switched to a new branch &#x27;main&#x27;
+branch &#x27;main&#x27; set up to track &#x27;origin/main&#x27;.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;</pre></details><details class="step-details"><summary><span>✅ Step 3: Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 4: Install reporting dependencies</span><span style="color:var(--muted);font-size:0.8rem;">3s</span></summary><pre class="log-pre">Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/.git.path
+includeif.gitdir:/github/workspace/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+/home/runner/work/_temp/git-credentials-b2c04048-c116-4ad3-8a4d-bac6753038db.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-b2c04048\-c116\-4ad3\-8a4d\-bac6753038db\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-b2c04048-c116-4ad3-8a4d-bac6753038db.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-b2c04048\-c116\-4ad3\-8a4d\-bac6753038db\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+/github/runner_temp/git-credentials-b2c04048-c116-4ad3-8a4d-bac6753038db.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-b2c04048\-c116\-4ad3\-8a4d\-bac6753038db\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+/github/runner_temp/git-credentials-b2c04048-c116-4ad3-8a4d-bac6753038db.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-b2c04048\-c116\-4ad3\-8a4d\-bac6753038db\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config &#x27;/home/runner/work/_temp/git-credentials-b2c04048-c116-4ad3-8a4d-bac6753038db.config&#x27;
+##[endgroup]
+##[group]Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+with:
+  python-version-file: .python-version
+  check-latest: false
+  token: ***
+  mirror: https://raw.githubusercontent.com/actions/python-versions/main
+  update-environment: true
+  allow-prereleases: false
+  freethreaded: false
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+##[endgroup]
+Resolved .python-version as 3.14
+##[group]Installed versions
+Successfully set up CPython (3.14.10)
+##[endgroup]
+##[group]Run python3 -m pip install --quiet --upgrade pip
+python3 -m pip install --quiet --upgrade pip
+python3 -m pip install --quiet -r reporting/requirements.txt
+shell: /usr/bin/bash -e {0}
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+##[endgroup]</pre></details><details class="step-details"><summary><span>✅ Step 5: Download All Test Artifacts</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 6: Generate Summary Table</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">##[group]Run actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+with:
+  path: all-results/
+  merge-multiple: false
+  repository: umati/UA-for-Industrial-Joining-Technologies
+  run-id: 43530467182
+  skip-decompress: false
+  digest-mismatch: error
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+##[endgroup]
+Found 0 artifact(s)
+No input name, artifact-ids or pattern filtered specified, downloading all artifacts
+An extra directory with the artifact name will be created for each download
+Total of 0 artifact(s) downloaded
+Download artifact has finished successfully
+##[group]Run python3 reporting/ci_run_summary.py
+python3 reporting/ci_run_summary.py
+shell: /usr/bin/bash -e {0}
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+  WEB_PY_RESULT: cancelled
+  WEB_JS_RESULT: cancelled
+  CONSOLE_RESULT: cancelled
+  PERF_CLIENT_RESULT: cancelled
+  NODE_RESULT: cancelled
+  DOCKER_RESULT: cancelled
+  CS_UNIT_RESULT: cancelled
+  CS_VULN_RESULT: cancelled
+  TC_RESULT: cancelled
+  SS_WIN_RESULT: cancelled
+  AL_RESULT: success
+  ZZ_RESULT: cancelled
+  PC_RESULT: cancelled
+  WEB_PY_RUFF: 
+  WEB_PY_MYPY: 
+  WEB_JS_ESLINT: 
+  CONSOLE_RUFF: skipped
+  CONSOLE_MYPY: skipped
+  PERF_CLIENT_RUFF: 
+  PERF_CLIENT_MYPY: 
+  NODE_ESLINT: skipped
+  CS_BUILD: skipped
+  CS_FORMAT: skipped
+  CS_VULN: cancelled
+  TC_RUFF: 
+  TC_MYPY: 
+  GH_SHA: 560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+  GH_BRANCH: main
+  GH_RUN_NUMBER: 1377
+  GH_RUN_URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/43530467182
+  GH_REPOSITORY: umati/UA-for-Industrial-Joining-Technologies
+  GH_RUN_ID: 43530467182
+  GH_API_URL: https://api.github.com
+  GH_TOKEN: ***
+  REPORT_JOB_NAME: 📋 CI Report
+  SUMMARY_MARKDOWN_OUT: timing-results/summary.md
+##[endgroup]</pre></details><details class="step-details"><summary><span>✅ Step 7: Collect Timing JSON</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">Summary written.
+##[group]Run python3 scripts/reporting/collect_timing.py
+python3 scripts/reporting/collect_timing.py
+shell: /usr/bin/bash -e {0}
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+  TIMING_WORKFLOW_NAME: CI — Unit, Static, and Smoke Gates
+  TIMING_OUTPUT_DIR: timing-results
+  GH_REPOSITORY: umati/UA-for-Industrial-Joining-Technologies
+  GH_RUN_ID: 43530467182
+  GH_RUN_NUMBER: 1377
+  GH_SHA: 560c9c4c06e2cc86795ec6b4485b5f80f5a12403
+  GH_BRANCH: main
+  GH_RUN_URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/43530467182
+  GH_API_URL: https://api.github.com
+  GH_TOKEN: ***
+  REPORT_JOB_NAME: 📋 CI Report
+##[endgroup]</pre></details><details class="step-details"><summary><span>✅ Step 8: Export Summary Markdown and Append Public Portal Links</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 9: Upload Timing Artifacts</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">timing aggregate: timing-results/timing-aggregate.json
+timing per-job dir: timing-results/jobs
+##[group]Run if [ ! -s timing-results/summary.md ]; then
+if [ ! -s timing-results/summary.md ]; then
+  echo &quot;::error::timing-results/summary.md is missing. The summary step must set SUMMARY_MARKDOWN_OUT; GITHUB_STEP_SUMMARY is per-step and cannot be copied later.&quot;
+  exit 1
+fi
+if [ &quot;$GH_EVENT_NAME&quot; != &quot;pull_request&quot; ] &amp;&amp; [ &quot;$GH_BRANCH&quot; = &quot;main&quot; ]; then
+  {
+    echo &quot;&quot;
+    echo &quot;---&quot;
+    echo &quot;Reports (no sign-in): [Runs](https://umati.github.io/UA-for-Industrial-Joining-Technologies/) · [CI](https://umati.github.io/UA-for-Industrial-Joining-Technologies/runs/${GH_RUN_ID}/) · [System Tests](https://umati.github.io/UA-for-Industrial-Joining-Technologies/latest/integration/)&quot;
+  } | tee -a timing-results/summary.md &gt;&gt; &quot;$GITHUB_STEP_SUMMARY&quot;
+fi
+shell: /usr/bin/bash -e {0}
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+  GH_BRANCH: main
+  GH_EVENT_NAME: push
+  GH_RUN_ID: 43530467182
+##[endgroup]
+##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+with:
+  name: timing-ci
+  path: timing-results/
+  retention-days: 14
+  if-no-files-found: warn
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+  archive: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+##[endgroup]</pre></details><details class="step-details"><summary><span>✅ Step 17: Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre"></pre></details><details class="step-details"><summary><span>✅ Step 18: Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span><span style="color:var(--muted);font-size:0.8rem;">1s</span></summary><pre class="log-pre">With the provided path, there will be 18 files uploaded
+Artifact name is valid!
+Root directory input is valid!
+Uploading artifact: timing-ci.zip
+Beginning upload of artifact content to blob storage
+Uploaded bytes 18569
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact is d680bfba3cedfd0942d6f46e2e4a82efa326c3058970cdeca4c20f7f0bec46f5
+Finalizing artifact upload
+Artifact timing-ci successfully finalized. Artifact ID 14086678934
+Artifact timing-ci has been successfully uploaded! Final size is 18569 bytes. Artifact ID is 14086678934
+Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/43530467182/artifacts/14086678934
+Post job cleanup.
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME=&#x27;/home/runner/work/_temp/6b36a19b-24a2-42bd-b94f-216c6db74ae8&#x27; before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand</pre></details><details class="step-details"><summary><span>✅ Step 19: Complete job</span><span style="color:var(--muted);font-size:0.8rem;">0s</span></summary><pre class="log-pre">[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;core\.sshCommand&#x27; &amp;&amp; git config --local --unset-all &#x27;core.sshCommand&#x27; || :&quot;
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c &quot;git config --local --name-only --get-regexp &#x27;http\.https\:\/\/github\.com\/\.extraheader&#x27; &amp;&amp; git config --local --unset-all &#x27;http.https://github.com/.extraheader&#x27; || :&quot;
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes</pre></details></div></div></div>
+    </section>
+
+    <section class="tab-pane" id="tab-pane-artifacts">
+      <div class="card">
+        <h2 style="margin-top:0;">Files</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Description</th>
+                <th>Size</th>
+                <th>SHA-256 (12c)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><a href="summary.md" download><code>summary.md</code></a></td><td>Raw GitHub-Flavored Markdown Run Summary</td><td>7.3 KB</td><td><code>d1bd2155204b</code></td></tr><tr><td><a href="timing.json" download><code>timing.json</code></a></td><td>Schema-v1 Workflow &amp; Job Timing Artifact</td><td>24.5 KB</td><td><code>8116c2195361</code></td></tr><tr><td><a href="logs/job-132246699547-all-checks-passed.log.txt" download><code>logs/job-132246699547-all-checks-passed.log.txt</code></a></td><td>Sanitized Raw Console Log — All checks passed</td><td>2.9 KB</td><td><code>a61f91f78735</code></td></tr><tr><td><a href="logs/job-132246616699-c-client-nuget-vuln-scan.log.txt" download><code>logs/job-132246616699-c-client-nuget-vuln-scan.log.txt</code></a></td><td>Sanitized Raw Console Log — C# Client - NuGet Vuln Scan</td><td>134 B</td><td><code>0f9bf0e4ec36</code></td></tr><tr><td><a href="logs/job-132246616383-c-client-unit-tests.log.txt" download><code>logs/job-132246616383-c-client-unit-tests.log.txt</code></a></td><td>Sanitized Raw Console Log — C# Client - Unit Tests</td><td>19.3 KB</td><td><code>2c783930ee3f</code></td></tr><tr><td><a href="logs/job-132246616666-console-client.log.txt" download><code>logs/job-132246616666-console-client.log.txt</code></a></td><td>Sanitized Raw Console Log — Console Client</td><td>15.5 KB</td><td><code>ced3a207614a</code></td></tr><tr><td><a href="logs/job-132246616557-gha-security-audit-zizmor.log.txt" download><code>logs/job-132246616557-gha-security-audit-zizmor.log.txt</code></a></td><td>Sanitized Raw Console Log — GHA Security Audit (zizmor)</td><td>20.6 KB</td><td><code>20ae783a3507</code></td></tr><tr><td><a href="logs/job-132246616441-node-client.log.txt" download><code>logs/job-132246616441-node-client.log.txt</code></a></td><td>Sanitized Raw Console Log — Node Client</td><td>18.1 KB</td><td><code>f4d9d616a18c</code></td></tr><tr><td><a href="logs/job-132246616652-opc-ua-server-windows-smoke.log.txt" download><code>logs/job-132246616652-opc-ua-server-windows-smoke.log.txt</code></a></td><td>Sanitized Raw Console Log — OPC UA Server - Windows Smoke</td><td>136 B</td><td><code>b6ceeb7692a7</code></td></tr><tr><td><a href="logs/job-132246616635-performance-client.log.txt" download><code>logs/job-132246616635-performance-client.log.txt</code></a></td><td>Sanitized Raw Console Log — Performance Client</td><td>125 B</td><td><code>4cf53f9c79e6</code></td></tr><tr><td><a href="logs/job-132246616681-pre-commit-hooks-all-files.log.txt" download><code>logs/job-132246616681-pre-commit-hooks-all-files.log.txt</code></a></td><td>Sanitized Raw Console Log — Pre-commit hooks (all files)</td><td>2.2 KB</td><td><code>13bd2d3fb22a</code></td></tr><tr><td><a href="logs/job-132246616678-test-client.log.txt" download><code>logs/job-132246616678-test-client.log.txt</code></a></td><td>Sanitized Raw Console Log — Test Client</td><td>118 B</td><td><code>dc81f226c5a5</code></td></tr><tr><td><a href="logs/job-132246616674-web-client-docker-smoke.log.txt" download><code>logs/job-132246616674-web-client-docker-smoke.log.txt</code></a></td><td>Sanitized Raw Console Log — Web Client - Docker Smoke</td><td>132 B</td><td><code>5223aab18b4a</code></td></tr><tr><td><a href="logs/job-132246616728-web-client-javascript.log.txt" download><code>logs/job-132246616728-web-client-javascript.log.txt</code></a></td><td>Sanitized Raw Console Log — Web Client - JavaScript</td><td>130 B</td><td><code>4bbf509e8433</code></td></tr><tr><td><a href="logs/job-132246616701-web-client-python.log.txt" download><code>logs/job-132246616701-web-client-python.log.txt</code></a></td><td>Sanitized Raw Console Log — Web Client - Python</td><td>126 B</td><td><code>055c78b1522a</code></td></tr><tr><td><a href="logs/job-132246583367-enable-full-ci-matrix.log.txt" download><code>logs/job-132246583367-enable-full-ci-matrix.log.txt</code></a></td><td>Sanitized Raw Console Log — Enable full CI matrix</td><td>3.0 KB</td><td><code>4a9e3259ca35</code></td></tr><tr><td><a href="logs/job-132246616673-gha-workflow-lint-actionlint.log.txt" download><code>logs/job-132246616673-gha-workflow-lint-actionlint.log.txt</code></a></td><td>Sanitized Raw Console Log — GHA Workflow Lint (actionlint)</td><td>16.4 KB</td><td><code>9eb2d68bc3d1</code></td></tr><tr><td><a href="logs/job-132246699523-ci-report.log.txt" download><code>logs/job-132246699523-ci-report.log.txt</code></a></td><td>Sanitized Raw Console Log — 📋 CI Report</td><td>28.4 KB</td><td><code>f0cc3e33397a</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>
+    function selectTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      const btn = document.getElementById('tab-btn-' + name);
+      const pane = document.getElementById('tab-pane-' + name);
+      if (btn && pane) {
+        btn.classList.add('active');
+        pane.classList.add('active');
+      }
+    }
+    function selectJob(idx) {
+      document.querySelectorAll('.job-item').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.job-pane').forEach(p => p.style.display = 'none');
+      const btn = document.getElementById('job-btn-' + idx);
+      const pane = document.getElementById('job-pane-' + idx);
+      if (btn && pane) {
+        btn.classList.add('active');
+        pane.style.display = 'block';
+      }
+    }
+    if (window.location.hash === '#logs') selectTab('logs');
+    if (window.location.hash === '#artifacts') selectTab('artifacts');
+  </script>
+</body>
+</html>
