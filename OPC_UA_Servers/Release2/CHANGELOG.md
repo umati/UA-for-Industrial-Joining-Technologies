@@ -1,5 +1,13 @@
 # OPC UA IJT Server Simulator Change Log
 
+## 2026-11-15
+
+1. Updated the Windows and Linux simulator packages to the 1.19.0 version series.
+2. Improved asset validation across joining process, joint, and asset methods. Calls with an unknown `ProductInstanceUri` are now rejected before any counter, selection, or joint state changes occur or results and events are published.
+3. Preserved optional empty `ProductInstanceUri` support for `GetJoiningProcessList`, `GetJointList`, and `GetJoint` (defaulting to the primary controller), while still rejecting unknown non-empty values.
+4. Improved server startup, shutdown, and asset lifecycle reliability during restarts and configuration updates.
+5. Multiple bug fixes, stability improvements, and optimizations.
+
 ## 2026-11-02
 
 1. Refreshed the Windows and Linux simulator packages using the updated build tools.
