@@ -145,11 +145,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     }
 
     /// <summary>
-    /// Reads the runtime Tool ProductInstanceUri from the address space.
+    /// Reads a runtime asset ProductInstanceUri (e.g. under "Tools" or "Controllers") from the address space.
     /// Hardcoded simulator examples can drift from rebuilt packages; PIU-scoped
     /// method tests should use the server's visible asset value.
     /// </summary>
-    private static async Task<string> ReadRequiredToolProductInstanceUri(JoiningSystem session)
+    private static async Task<string> ReadRequiredAssetProductInstanceUri(JoiningSystem session, string assetFolder)
     {
         var productInstanceUri = await WithTimeout(async () =>
         {
@@ -159,13 +159,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             var assets = await session.BrowseChildAsync(assetManagement, IJTBase.BrowseNames.Assets);
             if (assets.IsNull) return string.Empty;
 
-            var tools = await session.BrowseChildAsync(assets, "Tools");
-            if (tools.IsNull) return string.Empty;
+            var folder = await session.BrowseChildAsync(assets, assetFolder);
+            if (folder.IsNull) return string.Empty;
 
-            foreach (var toolRef in await session.BrowseChildrenAsync(tools, (uint)NodeClass.Object))
+            foreach (var assetRef in await session.BrowseChildrenAsync(folder, (uint)NodeClass.Object))
             {
-                var toolNode = (NodeId)toolRef.NodeId;
-                var identification = await session.BrowseChildAsync(toolNode, "Identification");
+                var assetNode = (NodeId)assetRef.NodeId;
+                var identification = await session.BrowseChildAsync(assetNode, "Identification");
                 if (identification.IsNull) continue;
 
                 var piuNode = await session.BrowseChildAsync(
@@ -179,13 +179,19 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             }
 
             return string.Empty;
-        }, 10, "read Tool ProductInstanceUri").ConfigureAwait(false);
+        }, 10, $"read {assetFolder} ProductInstanceUri").ConfigureAwait(false);
 
         Skip.IfNot(
             !string.IsNullOrWhiteSpace(productInstanceUri),
-            "Tool ProductInstanceUri not available; skipping PIU-scoped positive-flow test");
+            $"{assetFolder} ProductInstanceUri not available; skipping PIU-scoped positive-flow test");
         return productInstanceUri;
     }
+
+    private static Task<string> ReadRequiredToolProductInstanceUri(JoiningSystem session) =>
+        ReadRequiredAssetProductInstanceUri(session, "Tools");
+
+    private static Task<string> ReadRequiredControllerProductInstanceUri(JoiningSystem session) =>
+        ReadRequiredAssetProductInstanceUri(session, "Controllers");
 
     /// <summary>
     /// Triggers <c>SimulateSingleResultAsync(resultType, includeTraces)</c> on the server.
@@ -1007,6 +1013,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jpmNode = await WithTimeout(
             async () => await session.BrowseChildAsync(session.NodeId, IJTBase.BrowseNames.JoiningProcessManagement),
@@ -1021,7 +1028,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             joiningProcessId: "TEST-JP-LIVE-001",
             selectionName: "live-integration-test");
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, methodId, SimToolUri, new ExtensionObject(jpId)),
+            async () => await session.CallMethodAsync(jpmNode, methodId, simToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcessAsync").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
@@ -1035,6 +1042,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jpmNode = await WithTimeout(
             async () => await session.BrowseChildAsync(session.NodeId, IJTBase.BrowseNames.JoiningProcessManagement),
@@ -1054,7 +1062,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!methodId.IsNull, "GetSelectedJoiningProgramAsync method not found; skipping");
 
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, methodId, SimToolUri),
+            async () => await session.CallMethodAsync(jpmNode, methodId, simToolUri),
             15, "GetSelectedJoiningProgramAsync").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
@@ -1068,6 +1076,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jpmNode = await WithTimeout(
             async () => await session.BrowseChildAsync(session.NodeId, IJTBase.BrowseNames.JoiningProcessManagement),
@@ -1088,7 +1097,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var jpId = IJTBase.JoiningProcessIdentificationDataType.Create(
             joiningProcessId: SimProgram4StepsId);
         var selectEx = await Record.ExceptionAsync(() =>
-            WithTimeout(async () => await session.CallMethodAsync(jpmNode, selectMethodId, SimToolUri, new ExtensionObject(jpId)),
+            WithTimeout(async () => await session.CallMethodAsync(jpmNode, selectMethodId, simToolUri, new ExtensionObject(jpId)),
                 15, "SelectJoiningProcessAsync")).ConfigureAwait(false);
         Assert.Null(selectEx);
     }
@@ -1315,8 +1324,6 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
     // Simulator constants — these match the IJT demo server's pre-configured data
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private const string SimToolUri = "www.atlascopco.com/81CEF400-5A85-4043-A33C-7107DD4C3B0D";
-    private const string SimControllerUri = "www.atlascopco.com/32CBC18F-DE66-4341-A258-142A515502E0";
     private const string SimProgram4StepsId = "0952E9B4-05F6-4B43-B66C-B8027FBE966A";
     private const string SimProgramOneStepId = "7C73882A-006D-4E0D-B2FB-8BDFC0C9EEF0";
     private const string SimJoint1Id = "Joint_1";
@@ -1422,6 +1429,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -1434,7 +1442,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             async () => await session.CallMethodAsync(jmNode, methodId, string.Empty),
             10, "GetJointListAsync(empty)").ConfigureAwait(false);
         var toolOutputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, methodId, SimToolUri),
+            async () => await session.CallMethodAsync(jmNode, methodId, simToolUri),
             10, "GetJointListAsync(toolUri)").ConfigureAwait(false);
 
         var emptyCount = IjtJsonSerializer.CountItems(emptyOutputs.Count > 0 ? emptyOutputs[0] : null);
@@ -1449,6 +1457,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -1458,7 +1467,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!methodId.IsNull, "GetJointAsync method not found; skipping");
 
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, methodId, SimToolUri, SimJoint1Id),
+            async () => await session.CallMethodAsync(jmNode, methodId, simToolUri, SimJoint1Id),
             10, "GetJointAsync(Joint_1)").ConfigureAwait(false);
 
         Assert.True(outputs.Count >= 2, $"GetJointAsync must return at least [JointData, Status], got {outputs.Count}");
@@ -1471,6 +1480,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -1480,7 +1490,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!methodId.IsNull, "GetJointAsync method not found; skipping");
 
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, methodId, SimToolUri, SimJoint2Id),
+            async () => await session.CallMethodAsync(jmNode, methodId, simToolUri, SimJoint2Id),
             10, "GetJointAsync(Joint_2)").ConfigureAwait(false);
 
         Assert.Equal(0, ReadStatus(outputs));
@@ -1492,6 +1502,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -1501,7 +1512,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!methodId.IsNull, "GetJointAsync method not found; skipping");
 
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, methodId, SimToolUri, SimJoint1Id),
+            async () => await session.CallMethodAsync(jmNode, methodId, simToolUri, SimJoint1Id),
             10, "GetJointAsync(Joint_1)").ConfigureAwait(false);
         Skip.IfNot(outputs.Count >= 1 && outputs[0] is not null, "GetJointAsync returned no joint data; skipping");
 
@@ -1518,6 +1529,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -1527,7 +1539,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!methodId.IsNull, "GetJointAsync method not found; skipping");
 
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, methodId, SimToolUri, "NonExistentJoint_XYZ"),
+            async () => await session.CallMethodAsync(jmNode, methodId, simToolUri, "NonExistentJoint_XYZ"),
             10, "GetJointAsync(nonexistent)").ConfigureAwait(false);
 
         Assert.True(outputs.Count >= 2, "GetJointAsync must return at least [JointData, Status] even for unknown ID");
@@ -1541,6 +1553,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -1550,7 +1563,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!methodId.IsNull, "SelectJointAsync method not found; skipping");
 
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, methodId, SimToolUri, SimJoint1Id, SimJoint1Id),
+            async () => await session.CallMethodAsync(jmNode, methodId, simToolUri, SimJoint1Id, SimJoint1Id),
             10, "SelectJointAsync(Joint_1)").ConfigureAwait(false);
 
         Assert.True(outputs.Count >= 1, "SelectJointAsync must return at least 1 output (Status)");
@@ -1563,6 +1576,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -1578,7 +1592,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var ext = new ExtensionObject(joint);
 
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, sendMethodId, SimToolUri, ext),
+            async () => await session.CallMethodAsync(jmNode, sendMethodId, simToolUri, ext),
             10, "SendJointAsync").ConfigureAwait(false);
 
         // Best-effort cleanup — delete the test joint regardless of send result
@@ -1587,7 +1601,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             try
             {
                 await WithTimeout(
-                    async () => await session.CallMethodAsync(jmNode, delMethodId, SimToolUri, testJointId, testJointId),
+                    async () => await session.CallMethodAsync(jmNode, delMethodId, simToolUri, testJointId, testJointId),
                     10, "DeleteJointAsync cleanup").ConfigureAwait(false);
             }
             catch { /* ignore cleanup failures */ }
@@ -1603,6 +1617,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -1619,11 +1634,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var joint = IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "RoundTripDesign");
 
         await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, sendId, SimToolUri, new ExtensionObject(joint)),
+            async () => await session.CallMethodAsync(jmNode, sendId, simToolUri, new ExtensionObject(joint)),
             10, "SendJointAsync").ConfigureAwait(false);
 
         var getOutputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, getId, SimToolUri, testJointId),
+            async () => await session.CallMethodAsync(jmNode, getId, simToolUri, testJointId),
             10, $"GetJointAsync({testJointId})").ConfigureAwait(false);
 
         // Cleanup
@@ -1632,7 +1647,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
             try
             {
                 await WithTimeout(
-                    async () => await session.CallMethodAsync(jmNode, deleteId, SimToolUri, testJointId, testJointId),
+                    async () => await session.CallMethodAsync(jmNode, deleteId, simToolUri, testJointId, testJointId),
                     10, "DeleteJointAsync cleanup").ConfigureAwait(false);
             }
             catch { /* ignore */ }
@@ -1650,6 +1665,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -1665,11 +1681,11 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var joint = IJTBase.JointDataType.Create(jointId: testJointId, jointDesignId: "DeleteDesign");
 
         var sendOutputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, sendId, SimToolUri, new ExtensionObject(joint)),
+            async () => await session.CallMethodAsync(jmNode, sendId, simToolUri, new ExtensionObject(joint)),
             10, "SendJointAsync").ConfigureAwait(false);
 
         var deleteOutputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, deleteId, SimToolUri, testJointId, testJointId),
+            async () => await session.CallMethodAsync(jmNode, deleteId, simToolUri, testJointId, testJointId),
             10, "DeleteJointAsync").ConfigureAwait(false);
 
         Assert.Equal(0, ReadStatus(sendOutputs, statusIdx: 0));
@@ -1682,6 +1698,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -1710,31 +1727,31 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 
         // Step 1 — Send (create)
         var sendOut = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, sendId, SimToolUri, new ExtensionObject(joint)),
+            async () => await session.CallMethodAsync(jmNode, sendId, simToolUri, new ExtensionObject(joint)),
             10, "SendJointAsync").ConfigureAwait(false);
         Assert.Equal(0, ReadStatus(sendOut, statusIdx: 0));
 
         // Step 2 — Get (verify it exists)
         var getOut = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, getId, SimToolUri, testJointId),
+            async () => await session.CallMethodAsync(jmNode, getId, simToolUri, testJointId),
             10, "GetJointAsync").ConfigureAwait(false);
         Assert.Equal(0, ReadStatus(getOut));
 
         // Step 3 — Select
         var selectOut = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, selectId, SimToolUri, testJointId, testJointId),
+            async () => await session.CallMethodAsync(jmNode, selectId, simToolUri, testJointId, testJointId),
             10, "SelectJointAsync").ConfigureAwait(false);
         Assert.Equal(0, ReadStatus(selectOut, statusIdx: 0));
 
         // Step 4 — Delete (cleanup)
         var deleteOut = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, deleteId, SimToolUri, testJointId, testJointId),
+            async () => await session.CallMethodAsync(jmNode, deleteId, simToolUri, testJointId, testJointId),
             10, "DeleteJointAsync").ConfigureAwait(false);
         Assert.Equal(0, ReadStatus(deleteOut, statusIdx: 0));
 
         // Step 5 — Verify deleted: GetJointAsync should return Status != 0
         var getAfterDelete = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, getId, SimToolUri, testJointId),
+            async () => await session.CallMethodAsync(jmNode, getId, simToolUri, testJointId),
             10, "GetJointAsync after delete").ConfigureAwait(false);
         Assert.NotEqual(0, ReadStatus(getAfterDelete));
     }
@@ -1758,9 +1775,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var ex = await Record.ExceptionAsync(() =>
-            WithTimeout(async () => await session.JointManagement.GetJointAsync(SimToolUri, SimJoint1Id),
+            WithTimeout(async () => await session.JointManagement.GetJointAsync(simToolUri, SimJoint1Id),
                 10, "JointManagement.GetJointAsync")).ConfigureAwait(false);
         Assert.Null(ex);
     }
@@ -1771,9 +1789,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var ex = await Record.ExceptionAsync(() =>
-            WithTimeout(async () => await session.JointManagement.SelectJointAsync(SimToolUri, SimJoint1Id, SimJoint1Id),
+            WithTimeout(async () => await session.JointManagement.SelectJointAsync(simToolUri, SimJoint1Id, SimJoint1Id),
                 10, "JointManagement.SelectJointAsync")).ConfigureAwait(false);
         Assert.Null(ex);
     }
@@ -1784,23 +1803,24 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         const string testId = "LiveTest_MgmtClass_Lifecycle";
 
         var sendEx = await Record.ExceptionAsync(() =>
-            WithTimeout(async () => await session.JointManagement.SendJointAsync(SimToolUri, testId, "TestDesign"),
+            WithTimeout(async () => await session.JointManagement.SendJointAsync(simToolUri, testId, "TestDesign"),
                 10, "SendJointAsync")).ConfigureAwait(false);
         Assert.Null(sendEx);
 
         var getEx = await Record.ExceptionAsync(() =>
-            WithTimeout(async () => await session.JointManagement.GetJointAsync(SimToolUri, testId),
+            WithTimeout(async () => await session.JointManagement.GetJointAsync(simToolUri, testId),
                 10, "GetJointAsync")).ConfigureAwait(false);
         Assert.Null(getEx);
 
         // Cleanup — best effort
         try
         {
-            await WithTimeout(async () => await session.JointManagement.DeleteJointAsync(SimToolUri, testId, testId),
+            await WithTimeout(async () => await session.JointManagement.DeleteJointAsync(simToolUri, testId, testId),
                 10, "DeleteJointAsync cleanup").ConfigureAwait(false);
         }
         catch { /* ignore */ }
@@ -1864,6 +1884,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
         Skip.IfNot(!jpmNode.IsNull, "JoiningProcessManagement node not found; skipping");
@@ -1873,7 +1894,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!methodId.IsNull, "GetJoiningProcessListAsync method not found; skipping");
 
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, methodId, SimToolUri),
+            async () => await session.CallMethodAsync(jpmNode, methodId, simToolUri),
             15, "GetJoiningProcessListAsync(toolUri)").ConfigureAwait(false);
         Skip.IfNot(outputs.Count >= 1, "No outputs; skipping");
 
@@ -1888,6 +1909,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simControllerUri = await ReadRequiredControllerProductInstanceUri(session);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
         Skip.IfNot(!jpmNode.IsNull, "JoiningProcessManagement node not found; skipping");
@@ -1897,7 +1919,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!methodId.IsNull, "GetJoiningProcessListAsync method not found; skipping");
 
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, methodId, SimControllerUri),
+            async () => await session.CallMethodAsync(jpmNode, methodId, simControllerUri),
             15, "GetJoiningProcessListAsync(controllerUri)").ConfigureAwait(false);
         Skip.IfNot(outputs.Count >= 1, "No outputs; skipping");
 
@@ -1912,6 +1934,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
         Skip.IfNot(!jpmNode.IsNull, "JoiningProcessManagement node not found; skipping");
@@ -1923,7 +1946,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var jpId = IJTBase.JoiningProcessIdentificationDataType.Create(
             joiningProcessId: SimProgram4StepsId);
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, methodId, SimToolUri, new ExtensionObject(jpId)),
+            async () => await session.CallMethodAsync(jpmNode, methodId, simToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcessAsync(Program_4_Steps)").ConfigureAwait(false);
 
         Assert.True(outputs.Count >= 1, "SelectJoiningProcessAsync must return at least 1 output (Status)");
@@ -1936,6 +1959,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
         Skip.IfNot(!jpmNode.IsNull, "JoiningProcessManagement node not found; skipping");
@@ -1947,7 +1971,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         var jpId = IJTBase.JoiningProcessIdentificationDataType.Create(
             joiningProcessId: SimProgramOneStepId, selectionName: "ProgramIndex_1");
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, methodId, SimToolUri, new ExtensionObject(jpId)),
+            async () => await session.CallMethodAsync(jpmNode, methodId, simToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcessAsync(Program_One_Step+selectionName)").ConfigureAwait(false);
 
         Assert.Equal(0, ReadStatus(outputs, statusIdx: 0));
@@ -1959,6 +1983,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
         Skip.IfNot(!jpmNode.IsNull, "JoiningProcessManagement node not found; skipping");
@@ -1974,12 +1999,12 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         // First select a known process
         var jpId = IJTBase.JoiningProcessIdentificationDataType.Create(joiningProcessId: SimProgram4StepsId);
         await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, selectId, SimToolUri, new ExtensionObject(jpId)),
+            async () => await session.CallMethodAsync(jpmNode, selectId, simToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcessAsync").ConfigureAwait(false);
 
         // Then retrieve the selected program
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, getSelectedId, SimToolUri),
+            async () => await session.CallMethodAsync(jpmNode, getSelectedId, simToolUri),
             15, "GetSelectedJoiningProgramAsync").ConfigureAwait(false);
 
         Assert.NotNull(outputs);
@@ -1992,6 +2017,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jpmNode = await BrowseJpmNode(session).ConfigureAwait(false);
         Skip.IfNot(!jpmNode.IsNull, "JoiningProcessManagement node not found; skipping");
@@ -2008,7 +2034,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 
         // Step 1 — get list, extract first process ID
         var listOutputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, listId, SimToolUri),
+            async () => await session.CallMethodAsync(jpmNode, listId, simToolUri),
             15, "GetJoiningProcessListAsync").ConfigureAwait(false);
         Skip.IfNot(listOutputs.Count >= 1, "No list output; skipping round-trip");
 
@@ -2018,13 +2044,13 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
 
         // Step 2 — select
         var selectOut = await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, selectId, SimToolUri, new ExtensionObject(jpId)),
+            async () => await session.CallMethodAsync(jpmNode, selectId, simToolUri, new ExtensionObject(jpId)),
             15, "SelectJoiningProcessAsync").ConfigureAwait(false);
         Assert.Equal(0, ReadStatus(selectOut, statusIdx: 0));
 
         // Step 3 — get selected program and verify it returns something
         var progOutputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jpmNode, getProgId, SimToolUri),
+            async () => await session.CallMethodAsync(jpmNode, getProgId, simToolUri),
             15, "GetSelectedJoiningProgramAsync").ConfigureAwait(false);
         Assert.True(progOutputs.Count >= 1, "GetSelectedJoiningProgramAsync must return ≥1 output after select");
     }
@@ -2039,6 +2065,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var methodSetNode = await BrowseAssetMethodSetNode(session).ConfigureAwait(false);
         Skip.IfNot(!methodSetNode.IsNull, "AssetManagement MethodSet not found; skipping");
@@ -2051,7 +2078,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         // arguments remain readable.  The method-level StatusCode is Good or Uncertain; the
         // application error is communicated via the methodStatusCode output argument.
         var outputs = await WithTimeout(
-            async () => await session.CallMethodAsync(methodSetNode, methodId, SimToolUri, true),
+            async () => await session.CallMethodAsync(methodSetNode, methodId, simToolUri, true),
             10, "EnableAssetAsync(toolUri, true)").ConfigureAwait(false);
 
         // Status field must be present; value depends on whether the URI is registered in the simulator
@@ -2331,9 +2358,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         await WithTimeout(
-            async () => await session.JoiningProcessManagement.StartJoiningProcessAsync(SimToolUri, SimProgram4StepsId),
+            async () => await session.JoiningProcessManagement.StartJoiningProcessAsync(simToolUri, SimProgram4StepsId),
             10, "StartJoiningProcessAsync").ConfigureAwait(false);
     }
 
@@ -2343,9 +2371,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         await WithTimeout(
-            async () => await session.JoiningProcessManagement.AbortJoiningProcessAsync(SimToolUri, SimProgram4StepsId, "", "Test abort"),
+            async () => await session.JoiningProcessManagement.AbortJoiningProcessAsync(simToolUri, SimProgram4StepsId, "", "Test abort"),
             10, "AbortJoiningProcessAsync").ConfigureAwait(false);
     }
 
@@ -2367,9 +2396,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         await WithTimeout(
-            async () => await session.JoiningProcessManagement.ResetJoiningProcessAsync(SimToolUri, SimProgram4StepsId),
+            async () => await session.JoiningProcessManagement.ResetJoiningProcessAsync(simToolUri, SimProgram4StepsId),
             10, "ResetJoiningProcessAsync").ConfigureAwait(false);
     }
 
@@ -2379,9 +2409,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         await WithTimeout(
-            async () => await session.JoiningProcessManagement.IncrementJoiningProcessCounterAsync(SimToolUri, SimProgram4StepsId, 1),
+            async () => await session.JoiningProcessManagement.IncrementJoiningProcessCounterAsync(simToolUri, SimProgram4StepsId, 1),
             10, "IncrementJoiningProcessCounterAsync").ConfigureAwait(false);
     }
 
@@ -2391,9 +2422,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         await WithTimeout(
-            async () => await session.JoiningProcessManagement.DecrementJoiningProcessCounterAsync(SimToolUri, SimProgram4StepsId, 1),
+            async () => await session.JoiningProcessManagement.DecrementJoiningProcessCounterAsync(simToolUri, SimProgram4StepsId, 1),
             10, "DecrementJoiningProcessCounterAsync").ConfigureAwait(false);
     }
 
@@ -2403,9 +2435,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         await WithTimeout(
-            async () => await session.JoiningProcessManagement.SetJoiningProcessCounterAsync(SimToolUri, SimProgram4StepsId, 5),
+            async () => await session.JoiningProcessManagement.SetJoiningProcessCounterAsync(simToolUri, SimProgram4StepsId, 5),
             10, "SetJoiningProcessCounterAsync").ConfigureAwait(false);
     }
 
@@ -2415,9 +2448,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         await WithTimeout(
-            async () => await session.JoiningProcessManagement.SetJoiningProcessSizeAsync(SimToolUri, SimProgram4StepsId, 10),
+            async () => await session.JoiningProcessManagement.SetJoiningProcessSizeAsync(simToolUri, SimProgram4StepsId, 10),
             10, "SetJoiningProcessSizeAsync").ConfigureAwait(false);
     }
 
@@ -2427,6 +2461,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var jmNode = await BrowseJointManagementNode(session).ConfigureAwait(false);
         Skip.IfNot(!jmNode.IsNull, "JointManagement node not found; skipping");
@@ -2437,14 +2472,14 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(!selectJointId.IsNull, "SelectJointAsync method not found; skipping");
 
         var selectOutputs = await WithTimeout(
-            async () => await session.CallMethodAsync(jmNode, selectJointId, SimToolUri, SimJoint1Id, ""),
+            async () => await session.CallMethodAsync(jmNode, selectJointId, simToolUri, SimJoint1Id, ""),
             10, "SelectJointAsync(Joint_1)").ConfigureAwait(false);
 
         var selectStatus = ReadStatus(selectOutputs, statusIdx: 0);
         Skip.If(selectStatus != 0, $"SelectJointAsync returned non-OK status {selectStatus}; skipping StartSelectedJoiningAsync test");
 
         await WithTimeout(
-            async () => await session.JoiningProcessManagement.StartSelectedJoiningAsync(SimToolUri, false),
+            async () => await session.JoiningProcessManagement.StartSelectedJoiningAsync(simToolUri, false),
             10, "StartSelectedJoiningAsync").ConfigureAwait(false);
     }
 
@@ -2458,9 +2493,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         await WithTimeout(
-            async () => await session.AssetManagement.SetTimeAsync(SimToolUri, DateTime.UtcNow),
+            async () => await session.AssetManagement.SetTimeAsync(simToolUri, DateTime.UtcNow),
             10, "SetTimeAsync(UtcNow)").ConfigureAwait(false);
     }
 
@@ -2470,9 +2506,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         await WithTimeout(
-            async () => await session.AssetManagement.SetTimeAsync(SimToolUri, null),
+            async () => await session.AssetManagement.SetTimeAsync(simToolUri, null),
             10, "SetTimeAsync(null)").ConfigureAwait(false);
     }
 
@@ -2482,9 +2519,10 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         await WithTimeout(
-            async () => await session.AssetManagement.GetIOSignalsAsync(SimToolUri),
+            async () => await session.AssetManagement.GetIOSignalsAsync(simToolUri),
             15, "GetIOSignalsAsync(empty filter)").ConfigureAwait(false);
 
         Assert.True(File.Exists(IjtFileLogger.IOSignalsLogPath),
@@ -2497,6 +2535,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         Skip.IfNot(_fixture.IsAvailable, "OPC UA server not available");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var session = await OpenReusableSessionAsync(cts.Token).ConfigureAwait(false);
+        var simToolUri = await ReadRequiredToolProductInstanceUri(session);
 
         var signal = new IJTBase.SignalDataType
         {
@@ -2505,7 +2544,7 @@ public sealed class LiveIntegrationDetailedTests(OpcUaServerFixture fixture)
         };
 
         await WithTimeout(
-            async () => await session.AssetManagement.SetIOSignalsAsync(SimToolUri, new List<SignalDataType> { signal }),
+            async () => await session.AssetManagement.SetIOSignalsAsync(simToolUri, new List<SignalDataType> { signal }),
             10, "SetIOSignalsAsync(1 signal)").ConfigureAwait(false);
     }
 
