@@ -801,6 +801,43 @@ def _run_csharp_nuget_audit(
         return 1
 
 
+def _run_csharp_format_check(
+    timeout_seconds: float = 300.0, *, output: list[str] | None = None
+) -> int:
+    """Verify C# client solution formatting matches dotnet format rules."""
+    audit_log = _AuditLog(output)
+    csharp_sln = (
+        REPO_ROOT / "OPC_UA_Clients" / "Release2" / "IJT_CSharp_Client" / "IJT_CSharp_Client.sln"
+    )
+    if not csharp_sln.exists():
+        audit_log.error("[format] C# format: required solution %s not found", csharp_sln)
+        return 1
+
+    dotnet = find_cmd("dotnet.exe", "dotnet")
+    if dotnet is None:
+        audit_log.error(
+            "[format] C# format: dotnet not found in PATH. "
+            "Install .NET SDK to enable C# format verification."
+        )
+        return 1
+
+    audit_log.info("[format] C# format: dotnet format --verify-no-changes")
+    cmd = [dotnet, "format", str(csharp_sln), "--verify-no-changes"]
+    try:
+        completed = _safe_subprocess_run(
+            cmd,
+            cwd=REPO_ROOT,
+            timeout=timeout_seconds,
+            capture_output=True,
+        )
+        if completed.returncode != 0:
+            _emit_audit_output(completed, output)
+        return completed.returncode
+    except subprocess.TimeoutExpired:
+        audit_log.warning("[format] C# format: dotnet format check timed out")
+        return 1
+
+
 def _run_all_npm_lock_audits(*, output: list[str] | None = None) -> int:
     """Run npm lock audits sequentially across JS projects to prevent registry rate-limiting."""
     failed = False
@@ -879,6 +916,16 @@ def _run_all_audits_concurrently(
                 "C# Client",
                 ("dotnet.exe", "dotnet"),
                 _run_csharp_nuget_audit,
+            ),
+        )
+    )
+    tasks.append(
+        (
+            "C# format",
+            _system_task(
+                "C# format",
+                ("dotnet.exe", "dotnet"),
+                _run_csharp_format_check,
             ),
         )
     )
