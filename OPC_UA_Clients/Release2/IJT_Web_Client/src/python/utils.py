@@ -139,8 +139,21 @@ async def log_result_event_details(
 
     if end_time and end_time.tzinfo is None:
         end_time = pytz.utc.localize(end_time)
+    elif end_time:
+        end_time = end_time.astimezone(pytz.utc)
+    if event_time and event_time.tzinfo is None:
+        event_time = pytz.utc.localize(event_time)
+    elif event_time:
+        event_time = event_time.astimezone(pytz.utc)
 
-    latency_ms = (client_received_time - end_time).total_seconds() * 1000 + skew_ms if end_time else None
+    raw_latency_ms = (client_received_time - end_time).total_seconds() * 1000 + skew_ms if end_time else None
+    latency_ms = raw_latency_ms if (raw_latency_ms is not None and raw_latency_ms >= 0.0) else None
+    server_processing_ms = (
+        (event_time - end_time).total_seconds() * 1000 if (event_time and end_time and event_time >= end_time) else None
+    )
+    transport_ms = (client_received_time - event_time).total_seconds() * 1000 + skew_ms if event_time else None
+    if transport_ms is not None and transport_ms < 0.0:
+        transport_ms = None
 
     formatted_event_time = format_local_time(event_time) if event_time else "Unavailable"
     formatted_client_time = format_local_time(client_received_time)
@@ -163,8 +176,18 @@ async def log_result_event_details(
 
     if latency_ms is not None:
         ijt_log.info(f"{'*** Total Result Transfer Time (EndTime → Client)':<{label_width}} : {latency_ms:.3f} ms")
+        if server_processing_ms is not None:
+            ijt_log.info(
+                f"{'    Server Processing (EndTime → EventTime)':<{label_width}} : {server_processing_ms:.3f} ms"
+            )
+        if transport_ms is not None:
+            ijt_log.info(f"{'    Transport + Client (EventTime → Client)':<{label_width}} : {transport_ms:.3f} ms")
         if abs(skew_ms) > 1.0:
             ijt_log.info(f"{'    (Calibrated Clock Skew)':<{label_width}} : {skew_ms:+.1f} ms")
+    elif raw_latency_ms is not None:
+        ijt_log.warning(
+            f"{'*** Total Result Transfer Time (EndTime → Client)':<{label_width}} : Excluded (negative {raw_latency_ms:.3f} ms)"
+        )
     else:
         ijt_log.info(f"{'*** Total Result Transfer Time (EndTime → Client)':<{label_width}} : Unavailable")
     ijt_log.info("-" * 80)

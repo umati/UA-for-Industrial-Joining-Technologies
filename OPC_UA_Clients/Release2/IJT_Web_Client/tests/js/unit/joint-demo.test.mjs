@@ -41,19 +41,19 @@ describe('JointDemo ProductInstanceUri resolution', () => {
   it('prefers the detected server tool over the bundled company sample URI', () => {
     const demo = makeDemo({
       settingsProductId: 'www.company.com/ProductABC123',
-      detectedProductInstanceUri: 'www.atlascopco.com/53F22F10-B313-4B1D-924C-3A3EC7FCA002',
+      detectedProductInstanceUri: 'urn:example:tool:1',
     })
 
-    expect(demo._getProductUri()).toBe('www.atlascopco.com/53F22F10-B313-4B1D-924C-3A3EC7FCA002')
+    expect(demo._getProductUri()).toBe('urn:example:tool:1')
   })
 
   it('prefers the detected server tool over the bundled cable sample URI', () => {
     const demo = makeDemo({
       settingsProductId: 'www.atlascopco.com/CABLE-B0000000-',
-      detectedProductInstanceUri: 'www.atlascopco.com/53F22F10-B313-4B1D-924C-3A3EC7FCA002',
+      detectedProductInstanceUri: 'urn:example:tool:1',
     })
 
-    expect(demo._getProductUri()).toBe('www.atlascopco.com/53F22F10-B313-4B1D-924C-3A3EC7FCA002')
+    expect(demo._getProductUri()).toBe('urn:example:tool:1')
   })
 
   it('keeps a sample Settings URI as a last-resort fallback when no server tool is loaded', () => {
@@ -75,10 +75,10 @@ describe('JointDemo ProductInstanceUri resolution', () => {
   it('allows demo method calls once server discovery resolves the tool URI', () => {
     const demo = makeDemo({
       settingsProductId: 'www.atlascopco.com/CABLE-B0000000-',
-      detectedProductInstanceUri: 'www.atlascopco.com/53F22F10-B313-4B1D-924C-3A3EC7FCA002',
+      detectedProductInstanceUri: 'urn:example:tool:1',
     })
 
-    expect(demo._callableProductUri()).toBe('www.atlascopco.com/53F22F10-B313-4B1D-924C-3A3EC7FCA002')
+    expect(demo._callableProductUri()).toBe('urn:example:tool:1')
   })
 
   it('uses server-discovered joint IDs before Settings defaults', () => {

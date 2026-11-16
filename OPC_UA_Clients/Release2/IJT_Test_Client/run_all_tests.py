@@ -326,6 +326,7 @@ class _StepResult:
         self.ok: bool = False
         self.skipped: bool = False
         self.warn: bool = False  # advisory: ran with issues but does not block the suite
+        self.incomplete: bool = False
         self.note: str = ""
         self.duration: float = 0.0
 
@@ -334,6 +335,8 @@ class _StepResult:
         dots = "." * max(0, width - len(self.label))
         if self.skipped:
             status = _c(_ANSI_YELLOW, "SKIP")
+        elif self.incomplete:
+            status = _c(_ANSI_YELLOW, "INCOMPLETE")
         elif self.warn:
             status = _c(_ANSI_YELLOW, "WARN")
         elif self.ok:
@@ -342,6 +345,30 @@ class _StepResult:
             status = _c(_ANSI_RED, "FAIL")
         suffix = f"  ({self.note})" if self.note else ""
         _log(f"  {self.label} {dots} {status} ({self.duration:.1f}s){suffix}")
+
+
+def _summarize_results(results: list[_StepResult]) -> tuple[dict[str, int], str, int]:
+    """Count runner-step outcomes and resolve failure/incomplete exit precedence."""
+    passed = sum(1 for r in results if r.ok and not r.skipped and not r.warn and not r.incomplete)
+    warned = sum(1 for r in results if r.warn and not r.skipped and not r.incomplete)
+    failed = sum(1 for r in results if not r.ok and not r.skipped and not r.warn and not r.incomplete)
+    skipped = sum(1 for r in results if r.skipped)
+    incomplete = sum(1 for r in results if r.incomplete and not r.skipped)
+    counts = {
+        "passed": passed,
+        "warned": warned,
+        "failed": failed,
+        "skipped": skipped,
+        "incomplete": incomplete,
+    }
+
+    if failed:
+        return counts, "FAIL", 1
+    if incomplete:
+        from helpers.cu_coverage_report import INCOMPLETE_EXIT_CODE
+
+        return counts, "INCOMPLETE", INCOMPLETE_EXIT_CODE
+    return counts, "PASS", 0
 
 
 # ---------------------------------------------------------------------------
@@ -1666,7 +1693,13 @@ def _resolve_junit_xml_path(explicit_junit_xml: str | None) -> Path | None:
     return None
 
 
-def _step_excel_report(xml_path: Path, out_path: Path, *, tests_passed: bool) -> _StepResult:
+def _step_excel_report(
+    xml_path: Path,
+    out_path: Path,
+    *,
+    tests_passed: bool,
+    qualification_incomplete: bool = False,
+) -> _StepResult:
     """Generate Excel report from JUnit XML. Failures here are advisory only."""
     result = _StepResult("[POST] Excel report")
     t0 = time.monotonic()
@@ -1695,7 +1728,7 @@ def _step_excel_report(xml_path: Path, out_path: Path, *, tests_passed: bool) ->
         "--out",
         str(out_path),
         "--run-result",
-        "passed" if tests_passed else "failed",
+        "incomplete" if qualification_incomplete else "passed" if tests_passed else "failed",
         "--write-baseline",
     ]
     if capabilities_path:
@@ -1724,23 +1757,21 @@ def _maybe_generate_excel(
     excel_out: str | None,
     *,
     target_evidence_mode: bool = False,
-) -> _StepResult:
+    qualification_incomplete: bool = False,
+) -> _StepResult | None:
     """Generate (or skip) Excel report according to selected mode.
 
     This is the *simulator* workbook step: it writes ``test-results/report.xlsx``
     and refreshes the shared regression baseline ``test-results/report-baseline.json``.
     A Target Server (``--profile``/``--endpoint``) run must never feed its own
-    results into that baseline, so it is skipped here — the target run generates
-    its own ``report-controller.xlsx`` inside its evidence directory instead.
+    results into that baseline, so return None without a redundant summary row.
+    The target run reports its own ``report-controller.xlsx`` generation instead.
     """
+    if target_evidence_mode:
+        return None
+
     result = _StepResult("[POST] Excel report")
     t0 = time.monotonic()
-
-    if target_evidence_mode:
-        result.skipped = True
-        result.note = "target run writes its own report-controller.xlsx (simulator baseline untouched)"
-        result.duration = time.monotonic() - t0
-        return result
 
     if excel_mode == "never":
         result.skipped = True
@@ -1748,9 +1779,13 @@ def _maybe_generate_excel(
         result.duration = time.monotonic() - t0
         return result
 
-    if excel_mode == "on-success" and not tests_passed:
+    if excel_mode == "on-success" and (not tests_passed or qualification_incomplete):
         result.skipped = True
-        result.note = "tests failed; skipped (--excel=on-success)"
+        result.note = (
+            "qualification incomplete; skipped (--excel=on-success)"
+            if qualification_incomplete
+            else "tests failed; skipped (--excel=on-success)"
+        )
         result.duration = time.monotonic() - t0
         return result
 
@@ -1762,7 +1797,12 @@ def _maybe_generate_excel(
         return result
 
     out_path = Path(excel_out) if excel_out else _DEFAULT_EXCEL_OUT
-    return _step_excel_report(xml_path, out_path, tests_passed=tests_passed)
+    return _step_excel_report(
+        xml_path,
+        out_path,
+        tests_passed=tests_passed,
+        qualification_incomplete=qualification_incomplete,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1785,6 +1825,7 @@ def _step_target_run(plan: RunPlan, *, excel_mode: str = "always", excel_out: st
     a target run honours them and writes its workbook inside its own evidence
     directory instead of overwriting shared simulator artifacts.
     """
+    from helpers.cu_coverage_report import INCOMPLETE_EXIT_CODE
     from helpers.target_server_execution import run_automated, run_preflight
 
     label = "[TARGET SERVER] preflight" if plan.preflight_only else "[TARGET SERVER] CU run"
@@ -1824,7 +1865,12 @@ def _step_target_run(plan: RunPlan, *, excel_mode: str = "always", excel_out: st
 
     result.duration = time.monotonic() - t0
     result.ok = rc == 0
-    result.note = f"evidence: {output_dir}"
+    result.incomplete = rc == INCOMPLETE_EXIT_CODE
+    result.note = (
+        f"execution completed; qualification INCOMPLETE (exit {rc}); evidence: {output_dir}"
+        if result.incomplete
+        else f"evidence: {output_dir}"
+    )
     return result
 
 
@@ -2004,16 +2050,17 @@ def _subcommand_refresh_profile(profile_path: str) -> int:
         _section(f"refresh-profile - {endpoint}")
         _log("  Reading GetJoiningProcessList only; no controller state changes or test workloads.")
         security = connection_security_from_manifest(manifest)
-        tool_uri = manifest.data["workflows"]["tool_selector"]["product_instance_uri"]
-        data = asyncio.run(
-            async_discover_target_server(
-                endpoint,
-                timeout=15.0,
-                security=security,
-                prompt=default_credential_prompt,
-                expected_tool_uri=tool_uri,
-            )
-        )
+        tool_selector = manifest.data["workflows"]["tool_selector"]
+        tool_uri = tool_selector["product_instance_uri"]
+        discover_kwargs: dict = {
+            "timeout": 15.0,
+            "security": security,
+            "prompt": default_credential_prompt,
+            "expected_tool_uri": tool_uri,
+        }
+        if tool_selector.get("policy", "first_ready") != "first_ready":
+            discover_kwargs["tool_policy"] = tool_selector["policy"]
+        data = asyncio.run(async_discover_target_server(endpoint, **discover_kwargs))
         if data.get("error"):
             raise ValueError(f"Discovery failed: {data['error']}")
         if not data.get("tools"):
@@ -2485,27 +2532,36 @@ def main() -> int:
     for r in results:
         r.print_line()
 
-    passed = sum(1 for r in results if r.ok and not r.skipped and not r.warn)
-    warned = sum(1 for r in results if r.warn and not r.skipped)
-    failed = sum(1 for r in results if not r.ok and not r.skipped and not r.warn)
-    skipped = sum(1 for r in results if r.skipped)
+    counts, overall_status, exit_code = _summarize_results(results)
+    passed = counts["passed"]
+    warned = counts["warned"]
+    failed = counts["failed"]
+    skipped = counts["skipped"]
+    incomplete = counts["incomplete"]
     any_failed = failed > 0
+    any_incomplete = incomplete > 0
 
     excel_result = _maybe_generate_excel(
         args.excel,
-        tests_passed=not any_failed,
+        tests_passed=not any_failed and not any_incomplete,
         explicit_junit_xml=args.junit_xml,
         excel_out=args.excel_out,
         target_evidence_mode=run_target and plan.target_evidence_mode,
+        qualification_incomplete=any_incomplete and not any_failed,
     )
-    excel_result.print_line()
+    if excel_result is not None:
+        excel_result.print_line()
 
     _divider()
 
     elapsed = time.monotonic() - t_start
-    overall = _c(_ANSI_RED, "FAIL") if any_failed else _c(_ANSI_GREEN, "PASS")
+    overall_colour = (
+        _ANSI_RED if overall_status == "FAIL" else _ANSI_YELLOW if overall_status == "INCOMPLETE" else _ANSI_GREEN
+    )
+    overall = _c(overall_colour, overall_status)
     _log(
-        f"  Result: {overall}  passed={passed}  warned={warned}  failed={failed}  skipped={skipped}  (elapsed: {elapsed:.1f}s)"
+        f"  Result: {overall}  passed={passed}  warned={warned}  failed={failed}  "
+        f"incomplete={incomplete}  skipped={skipped}  (elapsed: {elapsed:.1f}s)"
     )
     _log("  (Result counts runner steps above, not individual tests; live test and CU counts are reported separately.)")
     # Print skip-reason breakdown for the legacy simulator/plain-pytest Phase 2 path
@@ -2518,7 +2574,7 @@ def main() -> int:
     _log("")
 
     _cleanup_caches(_HERE)
-    return 1 if any_failed else 0
+    return exit_code
 
 
 def _force_rmtree(path: Path) -> None:

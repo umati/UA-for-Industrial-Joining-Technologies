@@ -29,6 +29,59 @@ from helpers.trigger import (
     make_result_trigger,
 )
 
+
+@pytest.mark.parametrize("methods", [(), ("EnableAsset",)])
+def test_simulator_counter_setup_refuses_empty_or_unrelated_method_authority(methods):
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+
+    folder = MagicMock(call_method=AsyncMock())
+    trigger = SimulatorResultTrigger(MagicMock(), folder, 2)
+    with pytest.raises(WorkflowEvidenceUnavailable) as error:
+        trigger.authorize_counter_methods(*methods)
+    assert error.value.ijt_properties["ijt_reason_code"] == "simulator_counter_route_required"
+    folder.call_method.assert_not_awaited()
+
+
+def test_simulator_counter_setup_refuses_changed_manifest_before_dispatch(tmp_path, monkeypatch):
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+    from helpers.sut_manifest import manifest_file_sha256
+
+    path = tmp_path / "reviewed-simulator.yaml"
+    path.write_bytes(b"reviewed simulator authority")
+    monkeypatch.setattr("helpers.profile_loader.selected_manifest_path", lambda: path)
+    monkeypatch.setenv("OPCUA_TARGET_MANIFEST_SHA256", manifest_file_sha256(path))
+    path.write_bytes(b"owner changed simulator authority")
+    folder = MagicMock(call_method=AsyncMock())
+    trigger = SimulatorResultTrigger(MagicMock(), folder, 2)
+    with pytest.raises(WorkflowEvidenceUnavailable) as error:
+        trigger.authorize_counter_methods("IncrementJoiningProcessCounter")
+    assert error.value.ijt_properties["ijt_reason_code"] == "manifest_changed"
+    folder.call_method.assert_not_awaited()
+
+
+@pytest.mark.parametrize("disposition", ["failed", "blocked", "inconclusive"])
+def test_controlled_workflow_requirement_preserves_failure_and_unavailable_causes(disposition):
+    from types import SimpleNamespace
+
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+    from helpers.trigger import require_workflow_outcome
+
+    outcome = SimpleNamespace(
+        triggered=False,
+        reason_code="original",
+        skip_reason="Original workflow detail",
+        execution_outcome=disposition,
+        mutation_attempted=disposition == "inconclusive",
+    )
+    if disposition == "failed":
+        with pytest.raises(AssertionError, match="original"):
+            require_workflow_outcome(outcome, "approved_action")
+    else:
+        with pytest.raises(WorkflowEvidenceUnavailable) as error:
+            require_workflow_outcome(outcome, "approved_action")
+        assert error.value.ijt_properties["ijt_reason_code"] == "original"
+
+
 # ---------------------------------------------------------------------------
 # TriggerOutcome dataclass
 # ---------------------------------------------------------------------------

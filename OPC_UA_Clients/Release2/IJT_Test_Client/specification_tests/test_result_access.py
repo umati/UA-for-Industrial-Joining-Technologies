@@ -591,12 +591,40 @@ async def _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indice
         include_traces=False,
     )
     if not outcome.triggered:
+        from helpers.result_collector import retained_single_result
+
+        retained_single_result(outcome)
         pytest.skip(outcome.skip_reason)
 
     rm = await _get_result_management(opcua_client, ns_mr)
     handle, result_data = await _call_get_latest_result(rm, ns_mr, timeout_ms=_OPCUA_TIMEOUT_MS)
     if result_data is None:
         pytest.fail("GetLatestResult returned no result data after a successful trigger")
+    if getattr(result_trigger, "owns_result_subscription", False):
+        from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+        from helpers.result_collector import ResultCollector, get_result_id
+
+        progression = getattr(outcome, "process_progression", None) or getattr(outcome, "result_progression", None)
+        if progression is None or progression.final_result is None:
+            raise WorkflowEvidenceUnavailable(
+                "The trigger retained no owned parent result for GetLatestResult attribution.",
+                "result_evidence_incomplete",
+                "inconclusive",
+                "result_access",
+            )
+        owned_ids = {
+            get_result_id(result)
+            for result in ResultCollector.related_capture(progression).all_results
+            if get_result_id(result)
+        }
+        if not extract_result_id(result_data) or extract_result_id(result_data) not in owned_ids:
+            raise WorkflowEvidenceUnavailable(
+                "GetLatestResult did not return a result from the owned fresh process. "
+                "A later external result cannot validate this experiment.",
+                "result_access_observation_unattributed",
+                "inconclusive",
+                "result_access",
+            )
     return rm, handle, result_data
 
 
@@ -1873,6 +1901,27 @@ _EVENT_SUBSCRIPTION_WAIT_SECS = 30.0
 # ---------------------------------------------------------------------------
 
 
+async def _resolve_anchor_result_for_range(opcua_client: Any, rm: Any, result_trigger: Any, ns_indices: dict) -> Any:
+    """Return latest stored result data via GetLatestResult, triggering once only if empty."""
+    ns_mr = ns_indices.get(NS_MACH_RESULT)
+    if ns_mr is not None:
+        glr_node = await find_child_by_browse_name(rm, BN.GET_LATEST_RESULT, ns_mr)
+        if glr_node is not None:
+            try:
+                raw = await asyncio.wait_for(
+                    rm.call_method(glr_node.nodeid, ua.Variant(1000, ua.VariantType.Int32)),
+                    timeout=_METHOD_WALL_TIMEOUT,
+                )
+                result_data = raw[1] if isinstance(raw, (list, tuple)) and len(raw) > 1 else raw
+                if _extract_sequence_number(result_data) is not None:
+                    return result_data
+            except (ua.UaError, asyncio.TimeoutError):
+                pass
+
+    _rm, _handle, triggered_data = await _trigger_single_and_get_latest(opcua_client, result_trigger, ns_indices)
+    return triggered_data
+
+
 @pytest.mark.requires_cu(CU.REQUEST_RESULTS)
 async def test_request_results_with_default_range_completes_without_crash(opcua_client, result_trigger, ns_indices):
     """RR-2: RequestResults with default sequence/time range must not crash the server.
@@ -1894,7 +1943,8 @@ async def test_request_results_with_default_range_completes_without_crash(opcua_
     if rr_node is None:
         pytest.fail("RequestResults method is missing although CU.REQUEST_RESULTS is enabled")
 
-    rr_args = _get_request_results_args()
+    anchor_data = await _resolve_anchor_result_for_range(opcua_client, rm, result_trigger, ns_indices)
+    rr_args = _get_request_results_args(anchor_data)
     try:
         response = await _call_request_results(rm, rr_node, rr_args)
     except ua.UaError as exc:

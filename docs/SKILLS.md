@@ -293,6 +293,11 @@ The invariant is unit-tested in `tests/unit/test_runner_step_result.py` in both 
 
 **Summary line format**: `Result: PASS  passed=12  warned=1  failed=0  skipped=1`
 
+The Test Client additionally prints `incomplete=N` and can report
+`Result: INCOMPLETE` with exit code 6 when execution did not prove the required
+claimed scope. This is distinct from a failed step and must not be counted as
+PASS. See its [qualification glossary](../OPC_UA_Clients/Release2/IJT_Test_Client/docs/REPORT_GLOSSARY.md#controller-qualification-disposition).
+
 These counts are **runner steps** (lint, unit stage, live stage, …), not individual tests. The Test Client reports unique live test totals and per-Conformance-Unit test counts separately, after its `Result:` line and in its target-server summaries (see [test-results.md](../OPC_UA_Clients/Release2/IJT_Test_Client/docs/test-results.md#test-counts-runner-steps-vs-live-tests-vs-cus)). Keep the `Result:` line format stable because the root runner parses it.
 
 Docstring coverage (`interrogate`) thresholds — calibrated against real codebase with venvs excluded:

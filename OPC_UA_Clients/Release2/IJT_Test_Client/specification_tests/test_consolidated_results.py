@@ -70,7 +70,9 @@ Covered conformance units:
 """
 
 import asyncio
+import copy
 import logging
+from typing import Any
 
 import pytest
 from asyncua import ua
@@ -86,7 +88,7 @@ from helpers.namespaces import (
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
 from helpers.opcua_status import require_server_rejection
 from helpers.result_collector import ResultCollector
-from helpers.result_validator import ConsolidatedResultValidator
+from helpers.result_validator import ConsolidatedResultValidator, check_result_expectations
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -144,9 +146,11 @@ async def _get_result_management(client, ns_mr):
 def _require_triggered(outcome) -> None:
     if outcome.triggered:
         return
-    reason_code = getattr(outcome, "reason_code", None)
-    if not reason_code:
+    from helpers.target_server_triggers import TargetServerTriggerOutcome
+
+    if not isinstance(outcome, TargetServerTriggerOutcome) and not getattr(outcome, "reason_code", None):
         return
+    reason_code = getattr(outcome, "reason_code", None) or "result_workflow_unavailable"
     reason = outcome.skip_reason or "Required result workflow did not produce evidence."
     if getattr(outcome, "execution_outcome", "") == "failed":
         pytest.fail(f"{reason_code}: {reason}")
@@ -155,9 +159,22 @@ def _require_triggered(outcome) -> None:
     raise WorkflowEvidenceUnavailable(
         reason,
         reason_code,
-        "environment" if getattr(outcome, "mutation_attempted", False) else "blocked",
+        "inconclusive" if getattr(outcome, "mutation_attempted", False) else "blocked",
         "combined_results",
     )
+
+
+def _require_progression(progression, *, require_partials: bool = False):
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+
+    if progression is None or not progression.is_complete or (require_partials and not progression.partial_results):
+        raise WorkflowEvidenceUnavailable(
+            "The workflow did not capture complete required result evidence.",
+            "result_evidence_incomplete",
+            "inconclusive",
+            "combined_results",
+        )
+    return progression
 
 
 async def _get_combined(
@@ -169,11 +186,14 @@ async def _get_combined(
     send_as_refs: bool = True,
 ) -> object:
     """Return complete progression evidence, reusing an identical run when enabled."""
+    expectation_context = (
+        "counter_intervention" if classification == ResultClassification.INTERVENTION_RESULT else "joining"
+    )
     get_cached = getattr(result_trigger, "get_reusable_progression", None)
     if get_cached is not None:
         cached = await get_cached(classification, num_children)
         if cached is not None:
-            return cached.final_result
+            return check_result_expectations(cached.final_result, result_trigger, context=expectation_context)
     if getattr(result_trigger, "owns_result_subscription", False):
         outcome = await result_trigger.trigger_batch_or_sync(
             classification=classification,
@@ -183,12 +203,11 @@ async def _get_combined(
         )
         _require_triggered(outcome)
         progression = getattr(outcome, "result_progression", None)
-        if not outcome.triggered or progression is None:
-            return None
+        progression = _require_progression(progression)
         remember = getattr(result_trigger, "remember_result_progression", None)
         if remember is not None:
             remember(progression)
-        return progression.final_result if progression.is_complete else None
+        return check_result_expectations(progression.final_result, result_trigger, context=expectation_context)
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_batch_or_sync(
             classification=classification,
@@ -201,7 +220,9 @@ async def _get_combined(
             return None
         progression = getattr(outcome, "result_progression", None)
         if progression is not None:
-            return progression.final_result if progression.is_complete else None
+            return check_result_expectations(
+                _require_progression(progression).final_result, result_trigger, context=expectation_context
+            )
         progression = await rc.collect_progression(
             classification,
             allow_partial_references=bool(getattr(result_trigger, "allow_partial_referenced_children", False)),
@@ -209,7 +230,7 @@ async def _get_combined(
         remember = getattr(result_trigger, "remember_result_progression", None)
         if remember is not None:
             remember(progression)
-        return progression.final_result if progression.is_complete else None
+        return check_result_expectations(_require_progression(progression).final_result, result_trigger)
 
 
 async def _get_partial(
@@ -224,7 +245,7 @@ async def _get_partial(
     if get_cached is not None:
         cached = await get_cached(classification, num_children, require_partials=True)
         if cached is not None and cached.partial_results:
-            return cached.partial_results[0]
+            return check_result_expectations(cached.partial_results[0], result_trigger)
     if getattr(result_trigger, "owns_result_subscription", False):
         outcome = await result_trigger.trigger_batch_or_sync(
             classification=classification,
@@ -233,13 +254,13 @@ async def _get_partial(
             send_as_refs=True,
             require_partials=True,
         )
+        _require_triggered(outcome)
         progression = getattr(outcome, "result_progression", None)
-        if not outcome.triggered or progression is None:
-            return None
+        progression = _require_progression(progression, require_partials=True)
         remember = getattr(result_trigger, "remember_result_progression", None)
         if remember is not None:
             remember(progression)
-        return progression.partial_results[0] if progression.is_complete and progression.partial_results else None
+        return check_result_expectations(progression.partial_results[0], result_trigger)
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_batch_or_sync(
             classification=classification,
@@ -247,6 +268,7 @@ async def _get_partial(
             include_traces=False,
             send_as_refs=True,
         )
+        _require_triggered(outcome)
         if not outcome.triggered:
             return None
         progression = await rc.collect_progression(
@@ -257,9 +279,9 @@ async def _get_partial(
         remember = getattr(result_trigger, "remember_result_progression", None)
         if remember is not None:
             remember(progression)
-        if progression.is_complete and progression.partial_results:
-            return progression.partial_results[0]
-        return None
+        return check_result_expectations(
+            _require_progression(progression, require_partials=True).partial_results[0], result_trigger
+        )
 
 
 async def _get_job(
@@ -272,29 +294,29 @@ async def _get_job(
     if get_cached is not None:
         cached = await get_cached(ResultClassification.JOB_RESULT)
         if cached is not None:
-            return cached.final_result
+            return check_result_expectations(cached.final_result, result_trigger)
     if getattr(result_trigger, "owns_result_subscription", False):
         outcome = await result_trigger.trigger_job(send_as_refs=True)
+        _require_triggered(outcome)
         progression = getattr(outcome, "result_progression", None)
-        if not outcome.triggered or progression is None:
-            return None
+        progression = _require_progression(progression)
         remember = getattr(result_trigger, "remember_result_progression", None)
         if remember is not None:
             remember(progression)
-        return progression.final_result if progression.is_complete else None
+        return check_result_expectations(progression.final_result, result_trigger)
     async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
         outcome = await result_trigger.trigger_job(send_as_refs=True)
+        _require_triggered(outcome)
         if not outcome.triggered:
             return None
         progression = await rc.collect_progression(
             ResultClassification.JOB_RESULT,
             allow_partial_references=bool(getattr(result_trigger, "allow_partial_referenced_children", False)),
-            require_reference_closure=not result_trigger.is_simulator,
         )
         remember = getattr(result_trigger, "remember_result_progression", None)
         if remember is not None:
             remember(progression)
-        return progression.final_result if (progression.is_complete or result_trigger.is_simulator) else None
+        return check_result_expectations(_require_progression(progression).final_result, result_trigger)
 
 
 def _get_classification(result_data) -> int | None:
@@ -459,6 +481,93 @@ def _iter_joining_result_payloads(item):
     if isinstance(content, (list, tuple)):
         for child in content:
             yield from _iter_joining_result_payloads(child)
+
+
+async def _measurement_sub_results(
+    client: Any, ns_indices: dict[str, int], result_data: Any, result_trigger: Any = None
+) -> list[Any]:
+    """Resolve exact child references for content checks without changing event evidence."""
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+    from helpers.method_caller import find_and_call_method
+
+    children = getattr(result_data, "ResultContent", None)
+    if not isinstance(children, (list, tuple)) or not children:
+        children = getattr(result_data, "References", None) or []
+    resolved_by_id: dict[str, Any] = {}
+    management = None
+
+    def unavailable(result_id, detail):
+        logger.warning("Measurement content unavailable for ResultId=%s: %s", result_id, detail)
+        return WorkflowEvidenceUnavailable(
+            f"Cannot inspect referenced result '{result_id}': {detail}",
+            "referenced_result_unavailable",
+            "inconclusive",
+            "combined_results",
+        )
+
+    async def resolve(raw, ancestors):
+        nonlocal management
+        child = _unwrap_sub_result(raw)
+        result_id = _result_id_from_result_or_reference(child)
+        if result_id and result_id in ancestors:
+            pytest.fail(f"Cyclic result-content reference at ResultId='{result_id}'")
+        if result_id in resolved_by_id:
+            return resolved_by_id[result_id]
+        content = getattr(child, "ResultContent", None)
+        if result_id and not content:
+            ns_result = ns_indices.get(NS_MACH_RESULT)
+            if ns_result is None:
+                raise unavailable(result_id, "Machinery/Result namespace is unavailable")
+            if management is None:
+                joining_system = await find_joining_system(client)
+                if joining_system is None:
+                    raise unavailable(result_id, "JoiningSystem is unavailable")
+                management = await find_child_by_browse_name(joining_system, BN.RESULT_MANAGEMENT, ns_result)
+                if management is None:
+                    raise unavailable(result_id, "ResultManagement is unavailable")
+            call = await find_and_call_method(
+                management,
+                BN.GET_RESULT_BY_ID,
+                ns_result,
+                ua.Variant(result_id, ua.VariantType.String),
+                ua.Variant(_OPCUA_SHORT_TIMEOUT_MS, ua.VariantType.Int32),
+                timeout=_OPCUA_SHORT_TIMEOUT_MS / 1000,
+            )
+            if not call.success:
+                raise unavailable(result_id, call.error or "GetResultById failed")
+            output = call.output_list
+            assert len(output) == 3, f"GetResultById({result_id}) returned an invalid output shape"
+            error = _unwrap_sub_result(output[2])
+            assert isinstance(error, int), f"GetResultById({result_id}) returned an invalid Error value"
+            if error:
+                raise unavailable(result_id, f"GetResultById returned Error={error}")
+            returned = _unwrap_sub_result(output[1])
+            assert _result_id_from_result_or_reference(returned) == result_id, (
+                f"GetResultById({result_id}) returned a different or missing ResultId"
+            )
+            expected_classification = _get_classification(child)
+            if expected_classification is None:
+                expected_classification = getattr(child, "Classification", None)
+            if expected_classification is not None:
+                assert _get_classification(returned) == int(expected_classification), (
+                    f"GetResultById({result_id}) returned a different Classification"
+                )
+            child = returned
+            content = getattr(child, "ResultContent", None)
+        if isinstance(content, (list, tuple)) and content:
+            child = copy.copy(child)
+            path = ancestors | {result_id} if result_id else ancestors
+            child.ResultContent = [await resolve(item, path) for item in content]
+        if result_id:
+            resolved_by_id[result_id] = child
+            check_result_expectations(child, result_trigger)
+        return child
+
+    try:
+        async with asyncio.timeout(_COMBINED_WALL_TIMEOUT):
+            return [await resolve(child, {_result_id_from_result_or_reference(result_data)}) for child in children]
+    except TimeoutError as exc:
+        raise unavailable(_result_id_from_result_or_reference(result_data), "content retrieval timed out") from exc
 
 
 def _has_final_tag_in_result(sub_result) -> bool:
@@ -716,6 +825,7 @@ async def test_batch_result_counters_contains_batch_size_or_count(subscription_c
 
 
 @pytest.mark.requires_cu(CU.INTERVENTION_RESULT)
+@pytest.mark.workbook_ref("Intervention Result", 4)
 async def test_intervention_result_has_intervention_classification(subscription_client, result_trigger, ns_indices):
     """The Server supports Intervention Results where Classification is INTERVENTION_RESULT. Each instance includes InterventionType with an appropriate value."""
     result_data = await _get_combined(
@@ -725,13 +835,13 @@ async def test_intervention_result_has_intervention_classification(subscription_
         pytest.skip("INTERVENTION_RESULT not supported by this server — skipping")
 
     cls_int = _get_classification(result_data)
-    if cls_int is None:
-        pytest.skip("ResultMetaData.Classification absent in returned result")
-
-    _check_classification_or_skip(result_data, ResultClassification.INTERVENTION_RESULT, "INTERVENTION")
+    assert cls_int == ResultClassification.INTERVENTION_RESULT, (
+        f"Expected INTERVENTION_RESULT classification, received {cls_int!r}"
+    )
 
 
 @pytest.mark.requires_cu(CU.INTERVENTION_RESULT)
+@pytest.mark.workbook_ref("Intervention Result", 6)
 async def test_intervention_result_meta_data_has_non_zero_intervention_type(
     subscription_client, result_trigger, ns_indices
 ):
@@ -743,23 +853,16 @@ async def test_intervention_result_meta_data_has_non_zero_intervention_type(
         pytest.skip("INTERVENTION_RESULT not supported — skipping InterventionType check")
 
     meta = getattr(result_data, "ResultMetaData", None)
-    if meta is None:
-        pytest.skip("ResultMetaData absent in intervention result")
+    assert meta is not None, "ResultMetaData absent in delivered intervention result"
 
     intervention_type = getattr(meta, "InterventionType", None)
-    if intervention_type is None:
-        pytest.skip("InterventionType absent in ResultMetaData — optional per spec; skipping")
+    assert intervention_type is not None, "InterventionType absent in delivered intervention result"
 
     try:
         it_int = int(intervention_type)
     except (TypeError, ValueError):
         pytest.fail(f"InterventionType={intervention_type!r} cannot be converted to an integer")
 
-    if it_int == 0:
-        pytest.skip(
-            "InterventionType=0 — simulator does not set a non-zero InterventionType; "
-            "known simulator deviation; verify against a spec-compliant server."
-        )
     assert it_int > 0, f"InterventionType={it_int!r} is not a positive value — must indicate a valid intervention type"
 
 
@@ -801,7 +904,9 @@ async def test_job_result_contains_multiple_sub_results(subscription_client, res
 
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
-async def test_batch_result_sub_results_contain_final_tagged_values(subscription_client, result_trigger, ns_indices):
+async def test_batch_result_sub_results_contain_final_tagged_values(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
     """The Server supports instances where StepResultValues[] or OverallResultValues[] contains ValueTag=FINAL."""
     result_data = await _get_combined(
         subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
@@ -809,15 +914,12 @@ async def test_batch_result_sub_results_contain_final_tagged_values(subscription
     if result_data is None:
         pytest.skip("Could not retrieve batch result for FINAL tag check")
 
-    rc = getattr(result_data, "ResultContent", None)
+    rc = await _measurement_sub_results(opcua_client, ns_indices, result_data, result_trigger)
     if not isinstance(rc, (list, tuple)) or len(rc) == 0:
         pytest.skip("ResultContent absent or empty — cannot check ValueTag on sub-results")
 
     results_with_final = [sub for sub in rc if _has_final_tag_in_result(sub)]
-    if not results_with_final:
-        pytest.skip(
-            "No sub-result contains a FINAL-tagged value — server may not populate ValueTag in combined results"
-        )
+    assert results_with_final, "No sub-result contains a FINAL-tagged value"
 
 
 # ─── self_contained_consolidated_result ───
@@ -1101,8 +1203,12 @@ async def test_batch_result_content_contains_at_least_one_sub_result(subscriptio
 @pytest.mark.parametrize(
     "classification,description",
     [
-        (ResultClassification.SYNC_RESULT, "sync"),
-        (ResultClassification.BATCH_RESULT, "batch"),
+        pytest.param(
+            ResultClassification.SYNC_RESULT, "sync", marks=pytest.mark.requires_dependency_cu(CU.SYNC_RESULT)
+        ),
+        pytest.param(
+            ResultClassification.BATCH_RESULT, "batch", marks=pytest.mark.requires_dependency_cu(CU.BATCH_RESULT)
+        ),
     ],
 )
 async def test_combined_result_carries_correct_classification_value(
@@ -1129,8 +1235,8 @@ async def test_combined_result_carries_correct_classification_value(
 # ---------------------------------------------------------------------------
 
 # PhysicalQuantity enum values (OPC 40450-1 §9 PhysicalQuantityEnumeration)
-_PHYSICAL_QUANTITY_TORQUE: int = 1  # Torque physical quantity
-_PHYSICAL_QUANTITY_ANGLE: int = 2  # Angle physical quantity
+_PHYSICAL_QUANTITY_TORQUE: int = 2
+_PHYSICAL_QUANTITY_ANGLE: int = 3
 
 # Counter type constants beyond existing ones (OPC 40450-1 Table 228)
 _COUNTER_TYPE_RETRY_COUNT: int = 4  # retry count counter
@@ -1671,7 +1777,9 @@ async def test_job_result_get_result_by_id_returns_job_result(
 
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
-async def test_single_result_has_final_tagged_torque_or_angle_value(subscription_client, result_trigger, ns_indices):
+async def test_single_result_has_final_tagged_torque_or_angle_value(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
     """At least one sub-result in a BATCH_RESULT must have a FINAL-tagged Torque or Angle value."""
     result_data = await _get_combined(
         subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
@@ -1679,7 +1787,7 @@ async def test_single_result_has_final_tagged_torque_or_angle_value(subscription
     if result_data is None:
         pytest.skip("Could not retrieve batch result for final-tag check")
 
-    rc = getattr(result_data, "ResultContent", None)
+    rc = await _measurement_sub_results(opcua_client, ns_indices, result_data, result_trigger)
     if not isinstance(rc, (list, tuple)) or len(rc) == 0:
         pytest.skip("No inline sub-results available for final-tag check")
 
@@ -1729,7 +1837,9 @@ async def test_single_result_has_final_tagged_torque_or_angle_value(subscription
 
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
-async def test_each_step_has_at_most_one_final_per_physical_quantity(subscription_client, result_trigger, ns_indices):
+async def test_each_step_has_at_most_one_final_per_physical_quantity(
+    subscription_client, opcua_client, result_trigger, ns_indices
+):
     """Within a single step, no PhysicalQuantity may appear more than once with ValueTag=FINAL."""
     result_data = await _get_combined(
         subscription_client, result_trigger, ns_indices, ResultClassification.BATCH_RESULT, send_as_refs=False
@@ -1737,7 +1847,7 @@ async def test_each_step_has_at_most_one_final_per_physical_quantity(subscriptio
     if result_data is None:
         pytest.skip("Could not retrieve batch result")
 
-    rc = getattr(result_data, "ResultContent", None)
+    rc = await _measurement_sub_results(opcua_client, ns_indices, result_data, result_trigger)
     if not isinstance(rc, (list, tuple)) or len(rc) == 0:
         pytest.skip("No inline sub-results available")
 
@@ -1773,7 +1883,7 @@ async def test_each_step_has_at_most_one_final_per_physical_quantity(subscriptio
 
 @pytest.mark.requires_cu(CU.RESULT_VALUE_FINAL_TAG)
 @pytest.mark.negative
-async def test_final_tag_present_in_consecutive_results(subscription_client, result_trigger, ns_indices):
+async def test_final_tag_present_in_consecutive_results(subscription_client, opcua_client, result_trigger, ns_indices):
     """All inline sub-results in a BATCH_RESULT (3 children) must each have at least one FINAL-tagged value."""
     result_data = await _get_combined(
         subscription_client,
@@ -1786,7 +1896,7 @@ async def test_final_tag_present_in_consecutive_results(subscription_client, res
     if result_data is None:
         pytest.skip("Could not retrieve batch result with 3 sub-results")
 
-    rc = getattr(result_data, "ResultContent", None)
+    rc = await _measurement_sub_results(opcua_client, ns_indices, result_data, result_trigger)
     if not isinstance(rc, (list, tuple)) or len(rc) == 0:
         pytest.skip("No inline sub-results available")
 
@@ -1898,7 +2008,13 @@ async def test_self_contained_parent_evaluation_consistent_with_sub_results(
 
 @pytest.mark.requires_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
 @pytest.mark.negative
-@pytest.mark.parametrize("classification", [ResultClassification.BATCH_RESULT, ResultClassification.SYNC_RESULT])
+@pytest.mark.parametrize(
+    "classification",
+    [
+        pytest.param(ResultClassification.BATCH_RESULT, marks=pytest.mark.requires_dependency_cu(CU.BATCH_RESULT)),
+        pytest.param(ResultClassification.SYNC_RESULT, marks=pytest.mark.requires_dependency_cu(CU.SYNC_RESULT)),
+    ],
+)
 async def test_self_contained_sub_results_have_non_empty_result_content(
     subscription_client, result_trigger, ns_indices, classification
 ):
@@ -1956,7 +2072,13 @@ async def test_references_mode_classification_is_combined_type(subscription_clie
 
 
 @pytest.mark.requires_cu(CU.CONSOLIDATED_RESULT_WITH_REFERENCES)
-@pytest.mark.parametrize("classification", [ResultClassification.BATCH_RESULT, ResultClassification.SYNC_RESULT])
+@pytest.mark.parametrize(
+    "classification",
+    [
+        pytest.param(ResultClassification.BATCH_RESULT, marks=pytest.mark.requires_dependency_cu(CU.BATCH_RESULT)),
+        pytest.param(ResultClassification.SYNC_RESULT, marks=pytest.mark.requires_dependency_cu(CU.SYNC_RESULT)),
+    ],
+)
 async def test_references_mode_child_stubs_have_required_metadata_and_empty_content(
     subscription_client, result_trigger, ns_indices, classification
 ):
@@ -2123,7 +2245,14 @@ async def test_no_single_result_has_is_partial_true(opcua_client, result_trigger
 
 
 @pytest.mark.requires_cu(CU.RESULT_CONTENT)
-@pytest.mark.parametrize("classification", [ResultClassification.BATCH_RESULT, ResultClassification.SYNC_RESULT])
+@pytest.mark.requires_dependency_cu(CU.SELF_CONTAINED_CONSOLIDATED_RESULT)
+@pytest.mark.parametrize(
+    "classification",
+    [
+        pytest.param(ResultClassification.BATCH_RESULT, marks=pytest.mark.requires_dependency_cu(CU.BATCH_RESULT)),
+        pytest.param(ResultClassification.SYNC_RESULT, marks=pytest.mark.requires_dependency_cu(CU.SYNC_RESULT)),
+    ],
+)
 async def test_consolidated_sub_result_type_matches_its_classification(
     subscription_client, result_trigger, ns_indices, classification
 ):

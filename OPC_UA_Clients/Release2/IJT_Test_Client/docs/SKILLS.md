@@ -18,9 +18,11 @@ python run_all_tests.py
 python run_all_tests.py --excel=never
 ```
 
-Use `run_all_tests.py` as the only test runner entry point. Pass `--profile FILE`
+Use `run_all_tests.py` as the canonical qualification entry point. Pass `--profile FILE`
 to validate against a real Target Server instead of the simulator (see
 [`docs/TARGET_SERVER_CU_GUIDE.md`](TARGET_SERVER_CU_GUIDE.md)).
+Direct pytest is supported for focused developer diagnostics, but does not
+bypass manifest integrity, method permissions or physical-workflow approvals.
 
 See [`docs/test-results.md`](test-results.md) for report formats, skip/xfail explanations, and Excel output details.
 
@@ -40,10 +42,10 @@ unit stage and is currently 95%.
 - The live CU coverage report includes workbook traceability for the checked-in Test Cases workbook: 369 expected TC header rows grouped by official CU, positive/negative classification, CTT-automation/review/spec-link metadata, and optional exact row links from `@pytest.mark.workbook_ref("Sheet", [row])`.
 - Unit-only and collect-only pytest sessions must not write or overwrite the live CU coverage report.
 - Excel generation mode is controlled by `--excel {never,on-success,always}`.
-- Default is `always` locally and in CI; the Excel post-step is non-fatal. When tests fail, the workbook is diagnostic and includes a red warning banner.
+- Default is `always` locally and in CI; the simulator Excel post-step is non-fatal. When tests fail, the workbook is diagnostic and includes a red warning banner.
 - Excel output path defaults to `test-results/report.xlsx` and can be overridden with `--excel-out FILE`. A `--profile`/`--endpoint` target run always writes its own `<output-dir>/report-controller.xlsx` and copies it to `--excel-out FILE` only when that flag is explicitly passed.
 - For target runs the workbook step is *not* non-fatal: only the declared policy skips (`--excel=never`, `--excel=on-success` after failures) are benign. A completed spec run whose JUnit XML or run-scoped CU coverage JSON is missing fails the target run instead of reporting a benign skip.
-- Excel and GitHub Actions summaries include explicit Validation Health and Server Support Coverage metrics, change from `test-results/report-baseline.json`, capability support, Action Items, Scope Notes, Facet Breakdown, CU Detail, and diagnostics when the live CU coverage report is present. The 0–100 composite score is an internal-only trend field in the baseline JSON.
+- Excel and GitHub Actions summaries include explicit Validation Health and Server Support Coverage metrics, capability support, Action Items, Scope Notes, Facet Breakdown, CU Detail, and diagnostics when the live CU coverage report is present. `test-results/report-baseline.json` is an internal trend snapshot; reports do not render baseline-driven deltas or a public composite grade.
 - Report wording separates `Server capability profile`, `Reference IJT facet`, `Reference full CU set`, `Server Supported CUs`, `Server Support %`, `Supported CUs Validated %`, `Result`, `Status`, and `Primary Reason` for public clarity.
 - `report-baseline.json` is local/job-local in the current implementation; do not add GitHub Actions cache or cross-run baseline download without a separate security review.
 - Missing phase1 tools are auto-installed locally by default; CI keeps auto-install off by default for reproducibility.
@@ -118,6 +120,7 @@ simulator set is not required. Non-Good values are not treated as valid samples.
 | **include_traces = True** | All SimulateSingleResult calls should pass `True` for include_traces |
 | **Choose result packaging explicitly** | `send_as_refs=True` requests reference stubs; `False` requests inline children. Combined-result tests check both modes; do not force reference mode in every call. |
 | **ResultState values** | Machinery Result NodeSet uses `1=Completed`, `2=Processing`, `3=Aborted`, `4=Failed`; do not use stale `1=Processing`, `2=Completed` mappings |
+| **Presentation is not identity** | Do not infer result classification or counter scope from human-readable metadata descriptions. Use standard classifications, owned result relationships and the reviewed counter selector; an explicitly configured `counter_name` remains an exact match. |
 | **node.session not node.server** | asyncua 1.2+ renamed the attribute — use `node.session` |
 | **Annotate empty accumulators** | `check_untyped_defs = true`; dynamic OPC UA lists such as `all_values = []` need explicit types, usually `list[Any]` |
 | **Bandit `nosec` IDs only** | Keep `# nosec Bxxx` comments to valid Bandit IDs only; put explanations on a separate comment line to avoid `Test in comment` warnings |
@@ -138,10 +141,18 @@ claim that a physical Controller has been validated.
 | `specification_tests/test_result_trace_data.py` | Required fields are checked on every step trace. Point counts must be UInt32 values, not coerced strings or Booleans; Values must be arrays with lengths matching NumberOfTracePoints. |
 
 Choose `send_as_refs` to match the assertion: inline children carry full payloads,
-while reference stubs carry metadata and empty content. Exact generated counts,
-counter values and partial-event sequences belong only in simulator-gated tests.
+while reference stubs carry metadata and empty content. Exact simulator-generated
+counts, counter values and partial-event sequences belong only in simulator-gated tests.
+Configured controller counter-delta obligations still require their own before/after
+proof; a successful method call or InterventionResult does not replace it.
 Keep generic optional-capability checks separate, retain mutation opt-ins and
 target-server authorization, and treat cleanup failures as test failures.
+
+Shared result collection subscribes to Machinery `ResultReadyEventType`, including
+its IJT subtypes, so mixed-domain Job children such as quality and vision results
+are not excluded. These children use Machinery metadata without an IJT
+`Classification`. They can close their referenced result evidence when completed,
+but cannot confirm a joining operation or satisfy an IJT classification check.
 
 Positive simulator counter/reset/size checks use an exposed Batch, not the first
 entry from GetJoiningProcessList (which may be a Program). Their function-scoped
@@ -245,6 +256,8 @@ IJT_Test_Client/
 ├── helpers/
 │   ├── namespaces.py             ← ALL type IDs and BrowseName constants
 │   ├── cu_coverage_report.py     ← pytest plugin for CU coverage JSON
+│   ├── counter_obligations.py   ← mapped Increment Counter and Intervention evidence obligations
+│   ├── evidence_provider_contract.py ← provider ownership and lifecycle contract; not a fixture implementation
 │   ├── method_signature.py       ← NodeSet-derived method InputArguments guards
 │   ├── workbook_traceability.py  ← checked-in Test Cases workbook row metadata
 │   ├── identifier_utils.py       ← shared identifier conformance helpers
@@ -259,7 +272,7 @@ IJT_Test_Client/
 │   ├── target_server_triggers.py   ← StartSelectedJoiningResultTrigger, ManualResultTrigger, ManualEventTrigger
 │   ├── target_server_execution.py  ← canonical preflight/automated run + evidence logic (used by run_all_tests.py)
 │   └── runner_plan.py              ← typed immutable RunPlan: resolves phases + endpoint/capabilities precedence once per run_all_tests.py invocation
-├── common/                       ← connection + namespace registration tests
+├── common/                       ← connection + namespace registration checks
 ├── assets/                       ← asset structure, interfaces, health, counters
 ├── results/                      ← result management structure + retrieval + simulation
 │   └── data_types/               ← ResultMetaData field validation
@@ -268,6 +281,11 @@ IJT_Test_Client/
 ├── joining_process/              ← JoiningProcessManagement structure + methods
 ├── joint/                        ← JointManagement structure + methods
 ├── specification_tests/          ← Specification Unit tests (asset, result, event, joining process, joint)
+│   ├── test_asset_management.py
+│   ├── test_result_access.py
+│   ├── test_events.py
+│   ├── test_joining_process.py
+│   └── test_joint_management.py
 ├── target_server_cu_profiles/       ← SUT manifests, one file per system under test (placeholder examples)
 │   ├── README.md                 ← Manifest usage, commands, privacy rules
 │   ├── template.sut.yaml             ← Generated, fully commented template with safe defaults
@@ -307,8 +325,8 @@ IJT_Test_Client/
 Target Server CU execution checks an OPC UA IJT server under test (SUT). The SUT
 can be the simulator, a product/device server, or another IJT server endpoint.
 
-This path is additive. Simulator behavior, test count, report schemas, skip/fail
-semantics, and CU coverage outputs are unchanged.
+It uses the same specification suite; the target profile selects applicability,
+approved evidence routes and qualification requirements.
 
 ### Evidence Kinds
 

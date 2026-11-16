@@ -222,6 +222,7 @@ class PreflightReport:
                     "reason_category": c.reason_category,
                     "detail": c.detail,
                     "check_name": c.check_name,
+                    **({"evidence": c.evidence} if c.evidence else {}),
                 }
                 for c in self.checks
             ],
@@ -446,7 +447,7 @@ def check_tool_piu_configured(profile: TargetServerCuProfile) -> ReadinessOutcom
 
     When the profile provides an explicit PIU, returns passed immediately
     (runtime checks will verify it later). Automatic policies permit runtime
-    discovery, which must find exactly one Tool, not the first of several.
+    discovery according to policy (first_ready, first_available, or discover_unique).
     When exact_match is requested with no PIU, returns a configuration_error.
     """
     check_name = "tool_piu_configured"

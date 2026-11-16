@@ -24,6 +24,7 @@ then a result triggered, then the result event checked for IsExternal=True entit
 """
 
 import logging
+import uuid
 
 import pytest
 from asyncua import ua
@@ -51,7 +52,7 @@ from helpers.node_discovery import (
     find_joining_system,
     find_method_set,
 )
-from helpers.result_collector import ResultCollector
+from helpers.result_collector import collect_single_evidence
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -110,13 +111,11 @@ async def _get_result_and_associated_entities(subscription_client, result_trigge
     """Trigger a result and return (result_data, associated_entities_list) via events.
 
     Subscribes BEFORE triggering to eliminate race conditions.
-    Returns (None, None) on trigger or collection failure.
+    Preserves typed workflow failures instead of treating them as absent capability.
     """
-    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
-        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-        if not outcome.triggered:
-            return None, None
-        result_data = await rc.collect_single()
+    result_data = await collect_single_evidence(
+        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT, fresh=True
+    )
 
     if result_data is None:
         return None, None
@@ -127,6 +126,38 @@ async def _get_result_and_associated_entities(subscription_client, result_trigge
         associated = getattr(result_data, "AssociatedEntities", None)
 
     return result_data, (list(associated) if associated is not None else [])
+
+
+async def _get_external_identifiers_result_and_entities(subscription_client, result_trigger, ns_indices):
+    """Collect a result with multiple external EntityDataType identifiers on Target Servers."""
+    workflow = getattr(result_trigger, "run_identifier_result_workflow", None)
+    if not getattr(result_trigger, "is_simulator", True) and workflow is not None:
+        tag = uuid.uuid4().hex[:8].upper()
+        multi_specs = [
+            ("IJT_PRODUCT", f"PROD-{tag}", int(_EntityType.PRODUCT), True),
+            ("IJT_PART", f"PART-{tag}", int(_EntityType.PART), True),
+            ("IJT_MODEL", f"MODEL-{tag}", int(_EntityType.MODEL), True),
+            ("IJT_ORDER", f"ORDER-{tag}", int(_EntityType.ORDER), True),
+        ]
+        outcome, result_data = await workflow(
+            subscription_client,
+            ns_indices,
+            structured=True,
+            entities_spec=multi_specs,
+            cache_key="multi_external_entities",
+        )
+        if not outcome.triggered:
+            if getattr(outcome, "claim_mismatch", False):
+                pytest.fail(outcome.skip_reason or "Claimed external identifier result workflow failed")
+            pytest.skip(outcome.skip_reason)
+        if result_data is None:
+            return None, None
+        meta = getattr(result_data, "ResultMetaData", None)
+        associated = getattr(meta, "AssociatedEntities", None) if meta else None
+        if associated is None:
+            associated = getattr(result_data, "AssociatedEntities", None)
+        return result_data, (list(associated) if associated is not None else [])
+    return await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
 
 
 def _skip_if_no_result(result_data, result_trigger) -> None:
@@ -274,34 +305,45 @@ async def test_external_identifiers_sent_via_send_identifiers_appear_in_result(
     if ns_di is None or ns_ijt is None:
         pytest.skip("Required namespaces not registered on server")
 
-    ns_app = ns_indices.get(NS_APP)
-    _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_app)
-    product_instance_uri = await _read_required_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_app)
-
     test_id = _make_test_vin()
-    try:
-        send_result = await find_and_call_method(
-            ms,
-            BN.SEND_IDENTIFIERS,
-            ns_ijt,
-            ua.Variant(product_instance_uri, ua.VariantType.String),
-            ua.Variant([_make_external_entity(test_id)], ua.VariantType.ExtensionObject),  # EntityList
-            timeout=_METHOD_TIMEOUT,
+    workflow = getattr(result_trigger, "run_identifier_result_workflow", None)
+    if not getattr(result_trigger, "is_simulator", True) and workflow is not None:
+        outcome, result_data = await workflow(
+            subscription_client,
+            ns_indices,
+            structured=True,
+            entities_spec=[("IJT_VIN", test_id, int(_EntityType.VEHICLE), True)],
         )
-    except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"Cannot encode SendIdentifiers EntityDataType input: {exc}")
-
-    if not send_result.success:
-        err_str = str(send_result.error) if send_result.error else "unknown error"
-        if _is_unsupported_identifier_error(err_str):
-            pytest.skip(f"SendIdentifiers method not supported on this server: {err_str}")
-        pytest.fail(f"SendIdentifiers rejected structured identifier {test_id!r}: {err_str}")
-
-    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
-        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered:
-            pytest.skip(f"Simulator trigger failed: {getattr(outcome, 'skip_reason', 'unknown')}")
-        result_data = await rc.collect_single()
+            if getattr(outcome, "claim_mismatch", False):
+                pytest.fail(outcome.skip_reason or "Claimed SendIdentifiers result workflow failed")
+            pytest.skip(outcome.skip_reason)
+    else:
+        ns_app = ns_indices.get(NS_APP)
+        _am, ms = await _get_asset_management_method_set(opcua_client, ns_ijt, ns_di, ns_app=ns_app)
+        product_instance_uri = await _read_required_product_instance_uri(opcua_client, ns_ijt, ns_di, ns_app)
+
+        try:
+            send_result = await find_and_call_method(
+                ms,
+                BN.SEND_IDENTIFIERS,
+                ns_ijt,
+                ua.Variant(product_instance_uri, ua.VariantType.String),
+                ua.Variant([_make_external_entity(test_id)], ua.VariantType.ExtensionObject),  # EntityList
+                timeout=_METHOD_TIMEOUT,
+            )
+        except Exception as exc:  # noqa: BLE001
+            pytest.skip(f"Cannot encode SendIdentifiers EntityDataType input: {exc}")
+
+        if not send_result.success:
+            err_str = str(send_result.error) if send_result.error else "unknown error"
+            if _is_unsupported_identifier_error(err_str):
+                pytest.skip(f"SendIdentifiers method not supported on this server: {err_str}")
+            pytest.fail(f"SendIdentifiers rejected structured identifier {test_id!r}: {err_str}")
+
+        result_data = await collect_single_evidence(
+            subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT, fresh=True
+        )
     if result_data is None:
         pytest.skip("No result event received after SendIdentifiers + trigger")
 
@@ -340,7 +382,9 @@ async def test_external_identifier_entity_type_is_valid_external_type(subscripti
     UNDEFINED is accepted because untyped text identifiers (SendTextIdentifiers) carry no
     semantic type. Preservation of an explicitly supplied type is verified separately by
     test_external_identifiers_sent_via_send_identifiers_appear_in_result."""
-    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
+    result_data, entities = await _get_external_identifiers_result_and_entities(
+        subscription_client, result_trigger, ns_indices
+    )
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
@@ -539,7 +583,9 @@ async def test_external_entity_types_have_is_external_flag_true(subscription_cli
     """Entities in AssociatedEntities that carry external product / part / vehicle
     identifiers must have IsExternal = True — their identity originates from an
     external system such as a MES, WMS, or ERP."""
-    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
+    result_data, entities = await _get_external_identifiers_result_and_entities(
+        subscription_client, result_trigger, ns_indices
+    )
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
@@ -589,7 +635,9 @@ async def test_external_entity_types_have_is_external_flag_true(subscription_cli
 async def test_multiple_external_entity_types_can_coexist(subscription_client, result_trigger, ns_indices):
     """A single result may carry both a PRODUCT and a PART external entity in
     AssociatedEntities — the spec permits multiple external entity types simultaneously."""
-    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
+    result_data, entities = await _get_external_identifiers_result_and_entities(
+        subscription_client, result_trigger, ns_indices
+    )
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:
@@ -623,7 +671,9 @@ async def test_multiple_external_entity_types_can_coexist(subscription_client, r
 async def test_external_entity_id_is_non_empty_trimmed_string(subscription_client, result_trigger, ns_indices):
     """Every external entity in AssociatedEntities must have a non-empty EntityId with
     no leading or trailing whitespace — the spec defines EntityId as a TrimmedString."""
-    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
+    result_data, entities = await _get_external_identifiers_result_and_entities(
+        subscription_client, result_trigger, ns_indices
+    )
     _skip_if_no_result(result_data, result_trigger)
 
     external_entities = [e for e in entities if getattr(e, "IsExternal", False) is True]
@@ -682,7 +732,9 @@ async def test_external_entity_type_and_id_combination_is_unique_within_result(
     """No two entries in AssociatedEntities must have the same (EntityType, EntityId)
     combination — duplicate registrations are not meaningful and indicate a server
     data quality problem."""
-    result_data, entities = await _get_result_and_associated_entities(subscription_client, result_trigger, ns_indices)
+    result_data, entities = await _get_external_identifiers_result_and_entities(
+        subscription_client, result_trigger, ns_indices
+    )
     _skip_if_no_result(result_data, result_trigger)
 
     if not entities:

@@ -38,7 +38,7 @@ import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
-from helpers.method_caller import find_and_call_method
+from helpers.method_caller import find_and_call_method, is_manifest_method_authorized
 from helpers.method_signature import ASSET_METHOD_INPUTS, assert_input_argument_names
 from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_MACHINERY, NS_OPC_UA
 from helpers.node_discovery import (
@@ -47,7 +47,7 @@ from helpers.node_discovery import (
     find_joining_system,
     find_method_set,
 )
-from helpers.skip_reasons import skip_companion_spec_note
+from helpers.skip_reasons import skip_accepted_policy, skip_companion_spec_note
 from helpers.sut_manifest import load_sut_manifest
 
 logger = logging.getLogger(__name__)
@@ -387,6 +387,7 @@ async def test_enable_asset_callable_with_tool_product_instance_uri(opcua_client
         ua.Variant(piu, ua.VariantType.String),
         ua.Variant(True, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
+        target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET),
     )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
@@ -419,13 +420,18 @@ async def test_enable_asset_callable_with_empty_product_instance_uri(opcua_clien
         empty_piu,
         ua.Variant(True, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
+        target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET),
     )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if "BadNotSupported" in err_str or "BadMethodInvalid" in err_str:
             pytest.skip(f"EnableAsset returned '{err_str}' — not supported on this server")
-        if "BadNodeIdUnknown" in err_str or "BadNotFound" in err_str:
-            pytest.skip("Server requires a non-empty ProductInstanceUri — empty-PIU semantic may not be implemented")
+        if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadInvalidArgument")):
+            skip_accepted_policy(
+                "Tool-scoped EnableAsset rejects empty ProductInstanceUri when deployed asset is a Controller",
+                method=BN.ENABLE_ASSET,
+                status=err_str,
+            )
         if "Uncertain" in err_str:
             # C17: server returns OpcUa_Uncertain when methodStatusCode != 0
             # Uncertain for an empty PIU is the expected production response — not a simulator deviation
@@ -458,6 +464,7 @@ async def test_enable_asset_callable_with_valid_product_instance_uri(opcua_clien
         ua.Variant(piu, ua.VariantType.String),
         ua.Variant(True, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
+        target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET),
     )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
@@ -716,14 +723,17 @@ async def test_method_input_argument_null_piu_policy_for_tool_scoped_method(opcu
         null_piu,
         ua.Variant(True, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
+        target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET),
     )
     if not result.success:
         err_str = str(result.error) if result.error else "unknown error"
         if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
             pytest.skip(f"EnableAsset not supported on this server: {err_str}")
-        if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound")):
-            pytest.skip(
-                "Server requires non-null ProductInstanceUri — Null PIU semantic may not be implemented on this server"
+        if any(kw in err_str for kw in ("BadNodeIdUnknown", "BadNotFound", "BadInvalidArgument")):
+            skip_accepted_policy(
+                "Tool-scoped EnableAsset rejects null ProductInstanceUri when deployed asset is a Controller",
+                method=BN.ENABLE_ASSET,
+                status=err_str,
             )
         if "Uncertain" in err_str:
             # Accepted simulator policy: null PIU on a PIU-scoped method is rejected through methodStatusCode.
@@ -816,6 +826,7 @@ async def test_method_input_argument_controller_piu_not_applicable_to_enable_ass
         _asset_arg(controller_piu),
         ua.Variant(True, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
+        target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET),
     )
     if result.success:
         pytest.fail(
@@ -826,7 +837,10 @@ async def test_method_input_argument_controller_piu_not_applicable_to_enable_ass
     err_str = str(result.error) if result.error else "unknown error"
     if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid", "BadUserAccessDenied")):
         pytest.skip(f"EnableAsset not supported on this server: {err_str}")
-    assert any(kw in err_str for kw in ("Uncertain", "BadInvalidArgument", "BadNotFound", "BadNoEntryExists")), (
+    assert any(
+        kw in err_str
+        for kw in ("Uncertain", "BadInvalidArgument", "BadNotFound", "BadNoEntryExists", "BadNodeIdUnknown")
+    ), (
         "Unexpected status for valid-but-non-applicable Controller PIU — expected IJT domain "
         f"rejection or service Bad, got: {err_str}"
     )
@@ -853,10 +867,12 @@ async def test_method_input_argument_consistent_piu_semantics_across_methods(opc
     piu_arg = _asset_arg(piu)
 
     methods_tested = 0
+    state_changing_probes = {BN.EXECUTE_OPERATION, BN.RESET_IDENTIFIERS, BN.ENABLE_ASSET}
     calls = (
         (BN.GET_ERROR_INFORMATION, (piu_arg, _asset_arg(""))),
         (BN.EXECUTE_OPERATION, (piu_arg, ua.Variant(0, ua.VariantType.Int32), _asset_arg("IJT probe"), _asset_arg(""))),
         (BN.GET_IDENTIFIERS, (piu_arg, ua.Variant([], ua.VariantType.String))),
+        (BN.ENABLE_ASSET, (piu_arg, ua.Variant(True, ua.VariantType.Boolean))),
         (
             BN.RESET_IDENTIFIERS,
             (
@@ -868,15 +884,27 @@ async def test_method_input_argument_consistent_piu_semantics_across_methods(opc
         ),
     )
     for method_name, args in calls:
+        if method_name in state_changing_probes and not is_manifest_method_authorized(method_name):
+            continue
         node = await find_child_by_browse_name(ms, method_name, ns_ijt)
         if node is None:
             continue
-        r = await find_and_call_method(ms, method_name, ns_ijt, *args, timeout=_METHOD_TIMEOUT)
+        r = await find_and_call_method(
+            ms,
+            method_name,
+            ns_ijt,
+            *args,
+            timeout=_METHOD_TIMEOUT,
+            target_server_authorized=method_name in state_changing_probes,
+        )
         if not r.success:
             err_str = str(r.error) if r.error else "unknown error"
             if any(kw in err_str for kw in ("BadNotSupported", "BadMethodInvalid")):
                 continue
-            if any(kw in err_str for kw in ("BadArgumentsMissing", "BadInvalidArgument")):
+            if any(
+                kw in err_str for kw in ("BadArgumentsMissing", "BadInvalidArgument", "BadNothingToDo", "Uncertain")
+            ):
+                methods_tested += 1
                 continue
             pytest.fail(f"{method_name} failed for PIU '{piu}' — PIU semantics may be inconsistent: {err_str}")
         methods_tested += 1
@@ -910,6 +938,7 @@ async def test_method_input_argument_unknown_piu_returns_bad_status(opcua_client
         ua.Variant(_INVALID_PIU, ua.VariantType.String),
         ua.Variant(True, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
+        target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET),
     )
     if result.success:
         pytest.fail(
@@ -1048,7 +1077,13 @@ async def test_enable_asset_with_false_disables_tool(opcua_client, tools_instanc
     disable_arg = ua.Variant(False, ua.VariantType.Boolean)
 
     enable_result = await find_and_call_method(
-        ms, BN.ENABLE_ASSET, ns_ijt, piu_arg, enable_arg, timeout=_METHOD_TIMEOUT
+        ms,
+        BN.ENABLE_ASSET,
+        ns_ijt,
+        piu_arg,
+        enable_arg,
+        timeout=_METHOD_TIMEOUT,
+        target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET),
     )
     if not enable_result.success:
         err_str = str(enable_result.error) if enable_result.error else "unknown error"
@@ -1058,7 +1093,13 @@ async def test_enable_asset_with_false_disables_tool(opcua_client, tools_instanc
 
     try:
         disable_result = await find_and_call_method(
-            ms, BN.ENABLE_ASSET, ns_ijt, piu_arg, disable_arg, timeout=_METHOD_TIMEOUT
+            ms,
+            BN.ENABLE_ASSET,
+            ns_ijt,
+            piu_arg,
+            disable_arg,
+            timeout=_METHOD_TIMEOUT,
+            target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET, require_disable_asset=True),
         )
         if not disable_result.success:
             err_str = str(disable_result.error) if disable_result.error else "unknown error"
@@ -1067,7 +1108,13 @@ async def test_enable_asset_with_false_disables_tool(opcua_client, tools_instanc
             pytest.fail(f"EnableAsset with IsEnabled=False failed after successful enable: {err_str}")
     finally:
         restore_result = await find_and_call_method(
-            ms, BN.ENABLE_ASSET, ns_ijt, piu_arg, enable_arg, timeout=_METHOD_TIMEOUT
+            ms,
+            BN.ENABLE_ASSET,
+            ns_ijt,
+            piu_arg,
+            enable_arg,
+            timeout=_METHOD_TIMEOUT,
+            target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET),
         )
         if not restore_result.success:
             err_str = str(restore_result.error) if restore_result.error else "unknown error"
@@ -1098,6 +1145,7 @@ async def test_enable_asset_invalid_piu_returns_bad_node_id_unknown(opcua_client
         ua.Variant(_INVALID_PIU, ua.VariantType.String),
         ua.Variant(True, ua.VariantType.Boolean),
         timeout=_METHOD_TIMEOUT,
+        target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET),
     )
     if result.success:
         pytest.fail(

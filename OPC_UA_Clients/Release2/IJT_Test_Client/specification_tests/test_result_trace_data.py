@@ -37,7 +37,6 @@ from helpers.cu_registry import CU
 from helpers.method_caller import call_method
 from helpers.namespaces import BN, NS_MACH_RESULT, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system
-from helpers.result_collector import ResultCollector
 from helpers.result_navigation import collect_trace_entries_from_content, unwrap_sequence, unwrap_variant
 
 logger = logging.getLogger(__name__)
@@ -72,11 +71,11 @@ async def _get_single_result_with_traces(subscription_client, result_trigger, ns
     Subscribes BEFORE triggering to eliminate race conditions.
     Returns (None, None) on failure.
     """
-    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
-        outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=True)
-        if not outcome.triggered:
-            return None, None
-        result_data = await rc.collect_single()
+    from helpers.result_collector import collect_single_evidence
+
+    result_data = await collect_single_evidence(
+        subscription_client, result_trigger, ns_indices, ResultType.MULTI_STEP_OK_RESULT, include_traces=True
+    )
     if result_data is None:
         return None, None
     content = _unwrap_sequence(getattr(result_data, "ResultContent", None) or [])

@@ -277,7 +277,7 @@ The client supports different operation models to evaluate latency across virtua
    - Available on the IJT Server Simulator (`TighteningSystem -> Simulations -> SimulateResults`).
    - In `--mode active_burst` or `--mode both`, invokes `SimulateSingleResult(type=2, includeTraces=True)` for automated synthetic stress testing without physical hardware.
 2. **Passive Production Mode (`--mode passive`):**
-   - Recommended for physical controllers (Atlas Copco Power Focus, Bosch Rexroth, Desoutter).
+   - Recommended for physical joining controllers.
    - The client calls no methods.
    - It subscribes to `JoiningSystemResultReadyEvent`.
    - External PLCs, robots, or manual operators run the joining.

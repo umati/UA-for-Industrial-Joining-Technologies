@@ -435,8 +435,8 @@ workflows:
     - simulated_conditions
 
   # Maximum accepted StartSelectedJoining RPC calls for a multi-operation compound process
-  # (Job/Batch/Sync) before stopping. Single/Program processes are always capped at 1 start. Execution
-  # exits early as soon as a terminal completed result arrives.
+  # (Job/Batch/Sync) before stopping. Program processes are always capped at 1 start. Execution exits
+  # early when the selected process's own terminal completed result arrives.
   # Schema default: 6
   max_start_invocations: 6
 
@@ -455,53 +455,78 @@ workflows:
   # Schema default: 6
   max_total_start_invocations: 6
 
-  # Maximum accepted StartSelectedJoining calls while waiting for each result classification.
-  # Supported keys are single, batch, sync, and job. Every value is also capped by
-  # max_start_invocations.
+  # Additional start ceilings keyed by the selected process's terminal result classification, not by a
+  # requested child result. These are safety limits, never process sizes. Execution stops INCOMPLETE
+  # if the selected parent cannot finish within the smallest applicable classification, workflow and
+  # total ceilings.
   # Schema default: {single: 1, batch: 3, sync: 3, job: 6}
   max_start_invocations_by_result_classification:
-    # Entry for single. Maximum accepted StartSelectedJoining calls while waiting for each result
-    # classification. Supported keys are single, batch, sync, and job. Every value is also capped by
-    # max_start_invocations.
+    # Entry for single. Additional start ceilings keyed by the selected process's terminal result
+    # classification, not by a requested child result. These are safety limits, never process sizes.
+    # Execution stops INCOMPLETE if the selected parent cannot finish within the smallest applicable
+    # classification, workflow and total ceilings.
     # Schema default: 1
     single: 1
-    # Entry for batch. Maximum accepted StartSelectedJoining calls while waiting for each result
-    # classification. Supported keys are single, batch, sync, and job. Every value is also capped by
-    # max_start_invocations.
+    # Entry for batch. Additional start ceilings keyed by the selected process's terminal result
+    # classification, not by a requested child result. These are safety limits, never process sizes.
+    # Execution stops INCOMPLETE if the selected parent cannot finish within the smallest applicable
+    # classification, workflow and total ceilings.
     # Schema default: 3
     batch: 3
-    # Entry for sync. Maximum accepted StartSelectedJoining calls while waiting for each result
-    # classification. Supported keys are single, batch, sync, and job. Every value is also capped by
-    # max_start_invocations.
+    # Entry for sync. Additional start ceilings keyed by the selected process's terminal result
+    # classification, not by a requested child result. These are safety limits, never process sizes.
+    # Execution stops INCOMPLETE if the selected parent cannot finish within the smallest applicable
+    # classification, workflow and total ceilings.
     # Schema default: 3
     sync: 3
-    # Entry for job. Maximum accepted StartSelectedJoining calls while waiting for each result
-    # classification. Supported keys are single, batch, sync, and job. Every value is also capped by
-    # max_start_invocations.
+    # Entry for job. Additional start ceilings keyed by the selected process's terminal result
+    # classification, not by a requested child result. These are safety limits, never process sizes.
+    # Execution stops INCOMPLETE if the selected parent cannot finish within the smallest applicable
+    # classification, workflow and total ceilings.
     # Schema default: 6
     job: 6
 
-  # Pacing delay in seconds between consecutive StartSelectedJoining invocations for compound
-  # processes (Job/Batch/Sync). Allows controller state settlement and event drain (default: 0.25s).
-  # Not applied to single operations. Queue inspection and this drain reduce extra-start races but
-  # cannot eliminate the non-atomic check-to-start window.
+  # Delay in seconds after successful SelectJoiningProcess calls before workflow actuation, and
+  # between consecutive StartSelectedJoining invocations for compound processes (Job/Batch/Sync).
+  # Allows controller state settlement and event drain (default: 0.25s). Queue inspection and this
+  # delay reduce extra-start races but cannot eliminate the non-atomic check-to-start window.
   # Schema default: 0.25
   consecutive_start_delay_seconds: 0.25
+
+  # Explicitly approved preparation before a new physical-process scenario.
+  preparation:
+
+    # Approve automatic ResetJoiningProcess preparation. Reset method permission and
+    # destructive-method approval are also required. A fresh correlated RESET InterventionResult must
+    # confirm preparation. When disabled, preserve existing scenario prerequisites without a new
+    # confirmation-token gate. This setting never authorizes recovery or repetition of an unresolved
+    # mutation.
+    # Schema default: false
+    enabled: false
 
   # How the Tool under test is discovered or pinned.
   tool_selector:
 
-    # Automatic policies require exactly one Tool. With several Tools, configure the intended
-    # ProductInstanceUri. exact_match always requires that identity. Policy names do not rank Tool
-    # readiness.
+    # Tool selection policy when product_instance_uri is empty. first_ready selects the first
+    # Connected and Enabled Tool in deterministic BrowseName/URI order (preferring Tools with
+    # configured joining processes when several are ready). first_available selects the first Tool
+    # with a ProductInstanceUri regardless of readiness. discover_unique requires a single Tool on the
+    # server. exact_match always requires product_instance_uri to be configured.
     # Schema default: first_ready
-    # Values: exact_match, first_available, first_compatible, first_ready
+    # Values: discover_unique, exact_match, first_available, first_ready
     policy: first_ready
 
-    # Exact Tool ProductInstanceUri. Leave empty only for single-Tool discovery. Do not commit real
-    # serial numbers.
+    # Optional exact Tool ProductInstanceUri override (required when policy is exact_match). Leave
+    # empty to discover a Tool according to policy. Do not commit real serial numbers.
     # Schema default: ''
     product_instance_uri: ''
+
+    # Optional VirtualStation ProductInstanceUri override for counter-result correlation. Requires a
+    # configured Tool ProductInstanceUri when set. Leave empty to auto-discover the VirtualStation
+    # from owned joining results or a unique station on the server. The selected process and fresh
+    # Intervention references are still required. Never commit real controller identities.
+    # Schema default: ''
+    virtual_station_product_instance_uri: ''
 
     # Tool tags retained in configuration. Current Tool discovery does not filter by these tags.
     # Schema default: []
@@ -591,9 +616,24 @@ workflows:
     # Schema default: 1
     expected_terminal_result_state: 1
 
+    # Accepted terminal ResultState values (OPC 40001-101 Machinery Result) for AbortJoiningProcess
+    # workflows: [3] (ABORTED) or [3, 4] when a controller maps aborted sequences to FAILED (4).
+    # Schema default: [3]
+    expected_abort_result_states:
+      - 3
+
     # When true, abort workflows reject terminal results evaluated as OK (1).
     # Schema default: false
     reject_ok_evaluation_on_abort: false
+
+    # Optional SUT entity expectations, not ownership overrides. Each rule has classification (single,
+    # batch, job, sync, stitching, intervention, or text), context (any by default, joining, or
+    # counter_intervention), and EntityType name lists: required, optional, at_least_one_of. Missing
+    # optional types are allowed. Present entries remain validated. Extra types are allowed. Rules
+    # supplement specification checks and cannot authorize another physical operation. Empty preserves
+    # existing behavior.
+    # Schema default: []
+    associated_entities: []
 
   # What the runner restores after a workflow.
   cleanup:
@@ -717,6 +757,9 @@ execution_policy:
       - SelectJoiningProcess
       - StartSelectedJoining
       - DeselectJoiningProcess
+      - SetJoiningProcessCounter
+      - SetJoiningProcessSize
+      - IncrementJoiningProcessCounter
 
   # Explicit approvals for operations that change or disturb the SUT.
   risk_approvals:
@@ -778,8 +821,8 @@ execution_policy:
       # Schema default: ''
       selection_name: ''
 
-  # Use per-run unique identifiers and reset only values created by the active workflow. ResetAll
-  # requires its own approved workflow and is never used as cleanup.
+  # Use per-run unique identifiers with selective test-owned cleanup, plus optional ResetAll when
+  # reset_all_identifiers is approved.
   identifier_workflows:
 
     # Allow approved identifier workflows to mutate test-owned identifiers.
@@ -796,8 +839,9 @@ execution_policy:
     # Values: selective_test_owned_only
     cleanup_policy: selective_test_owned_only
 
-    # Allow broad ResetAll only through the separately approved reset_all_identifiers workflow. Never
-    # use it as cleanup.
+    # Allow ResetIdentifiers(ResetAll=True) when reset_all_identifiers is approved in
+    # workflows.approved (for baseline reset, dedicated ResetAll verification, and full identifier
+    # state reset).
     # Schema default: false
     allow_reset_all: false
 

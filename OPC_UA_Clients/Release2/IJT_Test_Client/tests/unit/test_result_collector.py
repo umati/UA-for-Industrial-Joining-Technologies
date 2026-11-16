@@ -15,17 +15,226 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from asyncua import ua
 
-from helpers.namespaces import NS_IJT_BASE, ResultClassification
+from helpers.namespaces import NS_IJT_BASE, NS_MACH_RESULT, MachineryResultTypes, ResultClassification
 from helpers.result_collector import (
     ResultCollector,
     ResultEventCapture,
     ResultProgression,
+    collect_single_evidence,
     get_classification,
     get_result_id,
     is_partial,
+    parent_result_ids,
     references_result_id,
+    retained_single_result,
     unwrap_result,
 )
+
+
+def _owned_single_progression(*, complete=True, classification=1):
+    result = SimpleNamespace(
+        ResultMetaData=SimpleNamespace(
+            ResultId="owned-single",
+            Classification=classification,
+            IsPartial=False,
+            ResultState=1,
+        )
+    )
+    return ResultProgression(
+        classification=classification,
+        final_result=result,
+        unresolved_reference_ids=() if complete else ("missing-child",),
+        all_results=(result,),
+    )
+
+
+def test_inline_child_reference_cycle_is_bounded_without_losing_owned_root():
+    root = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId="root"), ResultContent=[], References=[])
+    child = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId="child"), ResultContent=[root], References=[])
+    root.ResultContent = [child, child]
+    capture = ResultCollector.related_capture(
+        ResultProgression(classification=4, final_result=root, all_results=(root, child))
+    )
+    assert capture.all_results == (root, child)
+
+
+@pytest.mark.asyncio
+async def test_action_window_cannot_use_preceding_parent_terminal_for_new_experiment():
+    old = SimpleNamespace(
+        ResultMetaData=SimpleNamespace(ResultId="old-parent", Classification=4, IsPartial=False, ResultState=1),
+        ResultContent=[],
+        References=[],
+    )
+    current = SimpleNamespace(
+        ResultMetaData=SimpleNamespace(ResultId="current-parent", Classification=4, IsPartial=True, ResultState=2),
+        ResultContent=[],
+        References=[],
+    )
+    capture = ResultEventCapture(all_results=(old, current))
+    assessment = ResultCollector.progression_from_capture(capture, 4, after_result_count=1)
+    assert assessment.final_result is None
+    assert assessment.partial_results == (current,)
+    collector = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+    collector._collector = MagicMock(dropped_event_count=0)
+    collector._captured_results = [old, current]
+    observed = await collector.collect_progression(4, timeout_s=0, after_result_count=1)
+    assert observed.final_result is None
+
+
+def test_capture_pending_archives_notifications_before_a_new_action():
+    result = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId="before-action"))
+    collector = ResultCollector(MagicMock(), {})
+    collector._collector = MagicMock(
+        collect_pending=MagicMock(return_value=[SimpleNamespace(EventId=b"before", Result=result)]),
+        dropped_event_count=0,
+    )
+    capture = collector.capture_pending()
+    assert capture.all_results == (result,)
+    assert len(capture.source_events) == 1
+
+
+@pytest.mark.parametrize("operation", ["capture", "capture_pending"])
+def test_capture_requires_active_observer(operation):
+    collector = ResultCollector(MagicMock(), {})
+    with pytest.raises(RuntimeError, match="not active"):
+        getattr(collector, operation)()
+
+
+@pytest.mark.asyncio
+async def test_invalid_action_window_offset_cannot_select_old_evidence():
+    with pytest.raises(ValueError, match="nonnegative"):
+        ResultCollector.progression_from_capture(ResultEventCapture(), 4, after_result_count=-1)
+    collector = ResultCollector(MagicMock(), {})
+    with pytest.raises(ValueError, match="nonnegative"):
+        await collector.collect_progression(4, after_result_count=-1)
+
+
+@pytest.mark.parametrize("disposition", ["failed", "inconclusive", "legacy"])
+def test_retained_single_preserves_observed_failure_unavailability_and_legacy_noop(disposition):
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+
+    outcome = SimpleNamespace(
+        triggered=False,
+        execution_outcome="" if disposition == "legacy" else disposition,
+        reason_code="" if disposition == "legacy" else "original-cause",
+        skip_reason="original diagnostic",
+        mutation_attempted=disposition == "inconclusive",
+    )
+    if disposition == "legacy":
+        assert retained_single_result(outcome) is None
+    elif disposition == "failed":
+        with pytest.raises(AssertionError, match="original-cause"):
+            retained_single_result(outcome)
+    else:
+        with pytest.raises(WorkflowEvidenceUnavailable) as error:
+            retained_single_result(outcome)
+        assert error.value.ijt_properties["ijt_canonical_outcome"] == "inconclusive"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("evidence", ["complete", "missing", "partial", "wrong_class"])
+async def test_owned_single_consumer_does_not_wait_for_replay_or_accept_wrong_evidence(evidence):
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+
+    progression = (
+        None
+        if evidence == "missing"
+        else _owned_single_progression(
+            complete=evidence != "partial",
+            classification=4 if evidence == "wrong_class" else 1,
+        )
+    )
+    trigger = SimpleNamespace(
+        owns_result_subscription=True,
+        trigger_single=AsyncMock(return_value=SimpleNamespace(triggered=True, result_progression=progression)),
+    )
+    with patch("helpers.result_collector.ResultCollector") as factory:
+        if evidence == "complete":
+            assert progression is not None
+            assert await collect_single_evidence(object(), trigger, {}, 1, fresh=True) is progression.final_result
+        else:
+            with pytest.raises(WorkflowEvidenceUnavailable):
+                await collect_single_evidence(object(), trigger, {}, 1, fresh=True)
+    factory.assert_not_called()
+    trigger.trigger_single.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_content_reuse_is_allowed_but_fresh_experiment_bypasses_cache():
+    progression = _owned_single_progression()
+    cached = AsyncMock(return_value=progression)
+    trigger = SimpleNamespace(
+        owns_result_subscription=True,
+        get_reusable_progression=cached,
+        trigger_single=AsyncMock(return_value=SimpleNamespace(triggered=True, result_progression=progression)),
+    )
+    assert await collect_single_evidence(object(), trigger, {}, 1) is progression.final_result
+    trigger.trigger_single.assert_not_awaited()
+    assert await collect_single_evidence(object(), trigger, {}, 1, fresh=True) is progression.final_result
+    cached.assert_awaited_once()
+    trigger.trigger_single.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("owned", [False, True])
+async def test_nonowning_adapter_subscribes_first_and_collects_retained_or_live_result(owned):
+    progression = _owned_single_progression() if owned else None
+    outcome = SimpleNamespace(triggered=True, result_progression=progression)
+    trigger = SimpleNamespace(
+        owns_result_subscription=False,
+        is_simulator=True,
+        trigger_single=AsyncMock(return_value=outcome),
+    )
+    collector = ResultCollector(MagicMock(), {})
+    collector.collect_single = AsyncMock(return_value="live-single")
+    with (
+        patch("helpers.result_collector.ResultCollector.__aenter__", new=AsyncMock(return_value=collector)) as enter,
+        patch("helpers.result_collector.ResultCollector.__aexit__", new=AsyncMock(return_value=None)),
+    ):
+        result = await collect_single_evidence(object(), trigger, {}, 1)
+    enter.assert_awaited_once()
+    if owned:
+        assert progression is not None
+        assert result is progression.final_result
+        collector.collect_single.assert_not_awaited()
+    else:
+        assert result == "live-single"
+        collector.collect_single.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_progression_never_adopts_an_unrelated_terminal_or_partial():
+    def result(identity, partial=False):
+        return SimpleNamespace(
+            ResultMetaData=SimpleNamespace(
+                Classification=ResultClassification.JOB_RESULT,
+                ResultId=identity,
+                IsPartial=partial,
+                ResultState=0 if partial else 1,
+            ),
+            ResultContent=[],
+            References=[],
+        )
+
+    foreign = result("foreign")
+    foreign_partial = result("foreign-partial", True)
+    terminal = result("selected")
+    collector = ResultCollector(MagicMock(), {})
+    collector._record_event(SimpleNamespace(Result=foreign))
+    collector._record_event(SimpleNamespace(Result=foreign_partial))
+    stream = MagicMock()
+    stream.collect = AsyncMock(return_value=[SimpleNamespace(Result=terminal)])
+    stream.dropped_event_count = 0
+    collector._collector = stream
+    progression = await collector.collect_progression(
+        ResultClassification.JOB_RESULT,
+        predicate=lambda value: value.ResultMetaData.ResultId == "selected",
+    )
+    assert progression.final_result is terminal
+    assert progression.partial_results == ()
+    assert foreign in progression.all_results
+    assert stream.collect.await_count == 1
+
 
 # ---------------------------------------------------------------------------
 # unwrap_result
@@ -247,6 +456,7 @@ class TestResultCollectorContextManager:
         client = MagicMock()
         client.nodes.server = MagicMock()
         client.get_node = MagicMock(return_value=MagicMock())
+        client.get_namespace_index = AsyncMock(return_value=6)
 
         with patch("helpers.result_collector.EventCollector") as MockEC:
             mock_instance = MagicMock()
@@ -258,7 +468,9 @@ class TestResultCollectorContextManager:
 
         assert result is rc
         assert rc._collector is mock_instance
-        mock_instance.subscribe.assert_awaited_once()
+        client.get_namespace_index.assert_awaited_once_with(NS_MACH_RESULT)
+        client.get_node.assert_called_once_with(ua.NodeId(MachineryResultTypes.RESULT_READY_EVENT_TYPE, 6))
+        mock_instance.subscribe.assert_awaited_once_with(client.nodes.server, client.get_node.return_value)
 
     @pytest.mark.asyncio
     async def test_aexit_unsubscribes_and_clears_collector(self):
@@ -272,7 +484,7 @@ class TestResultCollectorContextManager:
             mock_instance.unsubscribe = AsyncMock()
             MockEC.return_value = mock_instance
 
-            rc = ResultCollector(client, {NS_IJT_BASE: 7})
+            rc = ResultCollector(client, {NS_IJT_BASE: 7, NS_MACH_RESULT: 6})
             await rc.__aenter__()
             await rc.__aexit__(None, None, None)
 
@@ -589,6 +801,27 @@ class TestCollectProgression:
         return rc
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("completed", [True, False])
+    async def test_mixed_domain_child_closes_reference_only_when_completed(self, completed):
+        child = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(
+                ResultId="quality-child", IsPartial=False, ResultState=1 if completed else 2
+            ),
+            ResultContent=[],
+        )
+        stub = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId="quality-child"), ResultContent=[])
+        final = self._result(4, result_id="job", partial=False, state=1, content=[stub])
+        rc = self._active_collector(
+            [SimpleNamespace(EventId=b"quality", Result=child), SimpleNamespace(EventId=b"job", Result=final)]
+        )
+
+        progression = await rc.collect_progression(4, timeout_s=0.02)
+
+        assert progression.is_complete is completed
+        assert progression.unresolved_reference_ids == (() if completed else ("quality-child",))
+        assert get_classification(child) is None
+
+    @pytest.mark.asyncio
     async def test_collects_partial_children_and_completed_final(self):
         partial = self._result(3, result_id="batch-1", partial=True, state=2)
         child = self._result(1, result_id="single-1", partial=False, state=1)
@@ -612,14 +845,58 @@ class TestCollectProgression:
         assert progression.is_complete is True
 
     @pytest.mark.asyncio
-    async def test_rejects_non_completed_non_partial_parent(self):
-        failed = self._result(3, result_id="batch-1", partial=False, state=4)
+    @pytest.mark.parametrize("state", [3, 4])
+    async def test_retains_unexpected_terminal_without_qualifying_or_timing_out(self, state):
+        failed = self._result(3, result_id="batch-1", partial=False, state=state)
         rc = self._active_collector([MagicMock(EventId=b"1", Result=failed)])
 
         progression = await rc.collect_progression(3, timeout_s=0.01)
 
         assert progression.final_result is None
-        assert progression.timed_out is True
+        assert progression.terminal_result is failed
+        assert progression.timed_out is False
+        assert progression.is_complete is False
+
+    @pytest.mark.parametrize("state", [3, 4])
+    def test_retained_unexpected_terminal_keeps_children_and_reference_diagnostics(self, state):
+        child = self._result(1, result_id="single-1", partial=False, state=1)
+        terminal = self._result(
+            3,
+            result_id="batch-1",
+            partial=False,
+            state=state,
+            references=[SimpleNamespace(ResultId="single-1"), SimpleNamespace(ResultId="missing-child")],
+        )
+        progression = ResultCollector.progression_from_capture(ResultEventCapture(all_results=(child, terminal)), 3)
+
+        assert progression.final_result is None
+        assert progression.terminal_result is terminal
+        assert not progression.timed_out
+        assert not progression.is_complete
+        assert progression.unresolved_reference_ids == ("missing-child",)
+        assert child in ResultCollector.related_capture(progression).all_results
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("state", [3, 4])
+    async def test_explicit_expected_terminal_still_qualifies(self, state):
+        terminal = self._result(3, result_id="batch-1", partial=False, state=state)
+        rc = self._active_collector([MagicMock(EventId=b"1", Result=terminal)])
+        progression = await rc.collect_progression(3, timeout_s=0.01, expected_terminal_state=state)
+        assert progression.final_result is terminal
+        assert progression.is_complete
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["collect_combined", "collect_job"])
+    async def test_raw_consumers_report_wrong_terminal_state_instead_of_missing_result(self, method):
+        classification = 3 if method == "collect_combined" else 4
+        terminal = self._result(classification, result_id="failed-result", partial=False, state=4)
+        rc = self._active_collector([MagicMock(EventId=b"failed", Result=terminal)])
+        rc._is_simulator = False
+        with pytest.raises(AssertionError, match="failed-result.*state 4, expected 1"):
+            if method == "collect_combined":
+                await rc.collect_combined(classification, timeout_s=0.01)
+            else:
+                await rc.collect_job(timeout_s=0.01)
 
     @pytest.mark.asyncio
     async def test_collects_required_partial_that_arrives_after_final(self):
@@ -1033,6 +1310,442 @@ class TestIsTerminalCompleted:
 
 
 class TestCollectCorrelatedOperationOutcome:
+    @staticmethod
+    def result(result_id, classification, *, process="", parent="", references=(), partial=False, tool="tool"):
+        return SimpleNamespace(
+            ResultMetaData=SimpleNamespace(
+                ResultId=result_id,
+                Classification=classification,
+                IsPartial=partial,
+                ResultState=2 if partial else 1,
+                AssociatedEntities=[
+                    SimpleNamespace(EntityId=tool),
+                    SimpleNamespace(EntityId=process),
+                    SimpleNamespace(EntityId=parent, EntityType=40),
+                ],
+            ),
+            ResultContent=[],
+            References=[SimpleNamespace(ResultId=value) for value in references],
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("parent_partial", [True, False])
+    async def test_reported_parent_lookup_proves_operation_without_fabricating_fresh_completion(self, parent_partial):
+        single = self.result("fresh-single", 1, process="program", parent="batch")
+        batch = self.result("batch", 3, parent="job-result")
+        job = self.result("job-result", 4, process="job", partial=parent_partial)
+        old = self.result("old-single", 1, process="program", parent="batch")
+        batch.ResultContent = [old, single]
+        job.ResultContent = [batch]
+        reader = AsyncMock(side_effect=lambda result_id: {"batch": batch, "job-result": job}[result_id])
+        rc = TestCollectProgression._active_collector([SimpleNamespace(EventId=b"single", Result=single)])
+        rc._collector.collect_pending = MagicMock(return_value=[])
+        rc._parent_result_reader = reader
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            4,
+            lambda result: any(entity.EntityId == "job" for entity in result.ResultMetaData.AssociatedEntities),
+            0.1,
+            terminal_drain_seconds=0,
+            operation_context_predicate=lambda result: any(
+                entity.EntityId == "tool" for entity in result.ResultMetaData.AssociatedEntities
+            ),
+        )
+
+        assert outcome.operation_confirmed
+        assert outcome.operation_result is single
+        assert outcome.terminal_result is None
+        assert rc._confirmed_operation_ids == {"fresh-single"}
+        assert rc.capture().all_results == (single,)
+        assert len(rc.capture().source_events) == 1
+        assert [call.args[0] for call in reader.await_args_list] == ["batch", "job-result"]
+        assert not ResultCollector.progression_from_capture(rc.capture(), 4).is_complete
+
+        pending = [SimpleNamespace(EventId=b"later-batch", Result=batch)]
+
+        async def collect(**_kwargs):
+            if pending:
+                return [pending.pop(0)]
+            await asyncio.sleep(0.01)
+            return []
+
+        rc._collector.collect = AsyncMock(side_effect=collect)
+        later = await rc.collect_correlated_operation_outcome(
+            4,
+            lambda result: any(entity.EntityId == "job" for entity in result.ResultMetaData.AssociatedEntities),
+            0.03,
+            terminal_drain_seconds=0,
+        )
+        assert later.timed_out
+        assert later.operation_result is None
+        assert rc._confirmed_operation_ids == {"fresh-single"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("problem", ["foreign", "missing", "cycle", "wrong_tool"])
+    async def test_parent_lookup_does_not_relax_ownership_or_loop(self, problem):
+        single = self.result(
+            "single", 1, process="program", parent="batch", tool="other" if problem == "wrong_tool" else "tool"
+        )
+        batch = self.result("batch", 3, parent="job-result")
+        job = self.result("job-result", 4, process="foreign" if problem == "foreign" else "job", partial=True)
+        if problem == "cycle":
+            batch = self.result("batch", 3, parent="batch")
+        reader = AsyncMock(
+            side_effect=lambda result_id: {"batch": batch, "job-result": None if problem == "missing" else job}[
+                result_id
+            ]
+        )
+        rc = TestCollectProgression._active_collector([SimpleNamespace(EventId=b"single", Result=single)])
+        rc._collector.collect_pending = MagicMock(return_value=[])
+        rc._parent_result_reader = reader
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            4,
+            lambda result: any(entity.EntityId == "job" for entity in result.ResultMetaData.AssociatedEntities),
+            0.04,
+            terminal_drain_seconds=0,
+            operation_context_predicate=lambda result: any(
+                entity.EntityId == "tool" for entity in result.ResultMetaData.AssociatedEntities
+            ),
+        )
+
+        assert outcome.timed_out
+        assert not outcome.operation_confirmed
+        assert outcome.terminal_result is None
+        requested = [call.args[0] for call in reader.await_args_list]
+        assert len(requested) == len(set(requested))
+        assert len(requested) <= 2
+
+    @pytest.mark.asyncio
+    async def test_queued_parent_event_is_used_before_lookup_without_issuing_another_start(self):
+        single = self.result("single", 1, process="program", parent="job-result")
+        job = self.result("job-result", 4, process="job", references=["single"])
+        reader = AsyncMock()
+        rc = TestCollectProgression._active_collector([SimpleNamespace(EventId=b"single", Result=single)])
+        rc._collector.collect_pending = MagicMock(return_value=[SimpleNamespace(EventId=b"job", Result=job)])
+        rc._parent_result_reader = reader
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            4,
+            lambda result: any(entity.EntityId == "job" for entity in result.ResultMetaData.AssociatedEntities),
+            0.1,
+            terminal_drain_seconds=0,
+        )
+
+        assert outcome.operation_confirmed
+        assert outcome.operation_result is single
+        assert outcome.terminal_result is job
+        reader.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_other_domain_result_cannot_confirm_joining_operation_or_job(self):
+        quality = self.result("quality", None, process="job")
+        del quality.ResultMetaData.Classification
+        rc = TestCollectProgression._active_collector([SimpleNamespace(EventId=b"quality", Result=quality)])
+
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_timeout_s=0.02,
+            terminal_drain_seconds=0,
+        )
+
+        assert not outcome.operation_confirmed
+        assert outcome.operation_result is None
+        assert outcome.terminal_result is None
+        assert outcome.timed_out
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("links", ["references", "inline", "parent_entities"])
+    @pytest.mark.parametrize("inline_single", [False, True])
+    async def test_sparse_job_retains_owner_ancestry_but_counts_only_new_operations(self, links, inline_single):
+        first = self.result("single-1", 1, process="program", parent="batch")
+        batch = self.result("batch", 3, parent="job-result", partial=True)
+        job = self.result("job-result", 4, process="job", partial=True)
+        if links == "references":
+            batch.References = [SimpleNamespace(ResultId="single-1")]
+            job.References = [SimpleNamespace(ResultId="batch")]
+        elif links == "inline":
+            batch.ResultContent = [first]
+            job.ResultContent = [batch]
+        events = [first, batch, job]
+
+        async def collect(**kwargs):
+            if events:
+                return [SimpleNamespace(Result=events.pop(0))]
+            await asyncio.sleep(kwargs["timeout_s"])
+            return []
+
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        rc._collector = MagicMock(collect=collect, dropped_event_count=0)
+        options = dict(
+            requested_result_classification=4,
+            predicate=lambda result: any(e.EntityId == "job" for e in result.ResultMetaData.AssociatedEntities),
+            operation_predicate=lambda result: any(
+                e.EntityId == "job" for e in result.ResultMetaData.AssociatedEntities
+            ),
+            operation_context_predicate=lambda result: any(
+                e.EntityId == "tool" for e in result.ResultMetaData.AssociatedEntities
+            ),
+            operation_timeout_s=0.02,
+            terminal_drain_seconds=0,
+        )
+        assert (await rc.collect_correlated_operation_outcome(**options)).operation_result is first
+        second = self.result("single-2", 1, process="program", parent="batch")
+        updated = self.result("batch", 3, parent="job-result", partial=True)
+        if inline_single:
+            updated.ResultContent = [second]
+        else:
+            updated.References = [SimpleNamespace(ResultId="single-2")]
+            events.append(second)
+        events.append(updated)
+        outcome = await rc.collect_correlated_operation_outcome(**options)
+        assert outcome.operation_result is second
+        assert outcome.operation_confirmed
+        assert not outcome.timed_out
+        assert rc._confirmed_operation_ids == {"single-1", "single-2"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "problem",
+        [
+            "old_operation",
+            "completed_owner",
+            "aborted_owner",
+            "conflicting_owner",
+            "missing_owner",
+            "foreign_owner",
+            "wrong_tool",
+            "wrong_parent_type",
+            "cycle",
+            "pre_reset_owner",
+        ],
+    )
+    async def test_retained_parent_cannot_bypass_freshness_tool_or_phase_ownership(self, problem):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        root = self.result(
+            "job-result",
+            4,
+            process="foreign-job" if problem == "foreign_owner" else "job",
+            partial=problem not in {"completed_owner", "aborted_owner"},
+        )
+        if problem == "aborted_owner":
+            root.ResultMetaData.ResultState = 3
+        if problem != "missing_owner":
+            rc._record_event(SimpleNamespace(Result=root))
+        if problem == "conflicting_owner":
+            foreign = self.result("foreign-root", 4, process="foreign-job", references=("single",), partial=True)
+            rc._record_event(SimpleNamespace(Result=foreign))
+        single = self.result(
+            "single",
+            1,
+            process="program",
+            parent="job-result",
+            tool="foreign-tool" if problem == "wrong_tool" else "tool",
+        )
+        events = [single]
+        if problem == "old_operation":
+            rc._record_event(SimpleNamespace(Result=single))
+        elif problem == "wrong_parent_type":
+            single.ResultMetaData.AssociatedEntities[-1].EntityType = 27
+        elif problem == "cycle":
+            single.ResultMetaData.AssociatedEntities[-1].EntityId = "cycle-parent"
+            events.append(self.result("cycle-parent", 3, parent="single", partial=True))
+        elif problem == "completed_owner":
+            events.append(root)
+
+        async def collect(**kwargs):
+            if events:
+                return [SimpleNamespace(Result=events.pop(0))]
+            await asyncio.sleep(kwargs["timeout_s"])
+            return []
+
+        rc._collector = MagicMock(collect=collect, dropped_event_count=0)
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda result: any(e.EntityId == "job" for e in result.ResultMetaData.AssociatedEntities),
+            operation_predicate=lambda _: False,
+            operation_context_predicate=lambda result: any(
+                e.EntityId == "tool" for e in result.ResultMetaData.AssociatedEntities
+            ),
+            ownership_after_result_count=len(rc._captured_results) if problem == "pre_reset_owner" else 0,
+            operation_timeout_s=0.02,
+            terminal_drain_seconds=0,
+        )
+        assert outcome.timed_out
+        assert not outcome.operation_confirmed
+        assert outcome.terminal_result is None
+
+    def test_parent_links_require_typed_nonempty_result_identity(self):
+        result = self.result("child", 1)
+        result.ResultMetaData.AssociatedEntities = [
+            ua.Variant(SimpleNamespace(EntityId=ua.Variant(" parent "), EntityType=ua.Variant(40))),
+            SimpleNamespace(EntityId="not-a-parent", EntityType=27),
+            SimpleNamespace(EntityId="not-a-parent", EntityType=True),
+            SimpleNamespace(EntityId="", EntityType=40),
+        ]
+        assert parent_result_ids(result) == frozenset({"parent"})
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("offset", [True, -1, "0"])
+    async def test_invalid_ownership_boundary_is_rejected_before_collection(self, offset):
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        rc._collector = MagicMock()
+        with pytest.raises(ValueError, match="nonnegative"):
+            await rc.collect_correlated_operation_outcome(4, lambda _: True, 0.01, ownership_after_result_count=offset)
+        rc._collector.collect.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("phase", ["collection", "before_pacing"])
+    async def test_loss_detected_after_poll_or_before_pacing_returns_unsettled_outcome(self, phase):
+        result = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(
+                ResultId="operation",
+                Classification=1,
+                IsPartial=False,
+                ResultState=1,
+            )
+        )
+        raw = MagicMock(dropped_event_count=0)
+
+        async def collect(**kwargs):
+            if phase == "collection":
+                raw.dropped_event_count = 1
+                return []
+            return [SimpleNamespace(Result=result)]
+
+        def match(candidate):
+            if phase == "before_pacing":
+                raw.dropped_event_count = 1
+            return True
+
+        raw.collect = collect
+        collector = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        collector._collector = raw
+        outcome = await collector.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=match,
+            operation_timeout_s=0.01,
+            terminal_drain_seconds=0.01,
+        )
+        assert outcome.timed_out
+        assert outcome.queue_overflow_count == 1
+        assert not outcome.operation_confirmed
+
+    @pytest.mark.asyncio
+    async def test_completed_program_terminal_retains_its_unique_operation_identity(self):
+        result = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(
+                ResultId="program-operation",
+                Classification=1,
+                IsPartial=False,
+                ResultState=1,
+            )
+        )
+        collector = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        collector._collector = MagicMock(
+            collect=AsyncMock(return_value=[SimpleNamespace(Result=result)]),
+            dropped_event_count=0,
+        )
+        outcome = await collector.collect_correlated_operation_outcome(
+            requested_result_classification=1,
+            predicate=lambda item: item is result,
+            operation_timeout_s=0.01,
+        )
+        assert outcome.operation_result is result
+        assert outcome.terminal_result is result
+        assert "program-operation" in collector._confirmed_operation_ids
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("during_drain", [False, True])
+    async def test_capture_loss_including_pacing_cannot_authorize_another_start(self, during_drain):
+        from types import SimpleNamespace
+
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        result = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(Classification=1, IsPartial=False, ResultState=1, ResultId="operation")
+        )
+        events = [SimpleNamespace(Result=result)]
+        raw = MagicMock(dropped_event_count=0 if during_drain else 1)
+
+        async def collect(**_kwargs):
+            if events:
+                return [events.pop(0)]
+            raw.dropped_event_count = 1
+            return []
+
+        raw.collect = collect
+        rc._collector = raw
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_timeout_s=0.02,
+            terminal_drain_seconds=0.01,
+        )
+        assert not outcome.operation_confirmed
+        assert outcome.timed_out
+        assert outcome.queue_overflow_count == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("linked", [False, True])
+    @pytest.mark.parametrize("inline", [False, True])
+    async def test_tool_only_child_requires_observed_parent_relationship(self, linked, inline):
+        from types import SimpleNamespace
+
+        child = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(Classification=1, IsPartial=False, ResultState=1, ResultId="child"),
+        )
+        parent = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(Classification=4, IsPartial=True, ResultState=2, ResultId="parent"),
+            References=[SimpleNamespace(ResultId="child")] if linked and not inline else [],
+            ResultContent=[child] if linked and inline else [],
+        )
+        events = ([] if inline else [SimpleNamespace(Result=child)]) + [SimpleNamespace(Result=parent)]
+
+        async def collect(**_kwargs):
+            if events:
+                return [events.pop(0)]
+            await asyncio.sleep(0.001)
+            return []
+
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        rc._collector = MagicMock(collect=collect, dropped_event_count=0)
+        outcome = await rc.collect_correlated_operation_outcome(
+            requested_result_classification=4,
+            predicate=lambda result: result is parent,
+            operation_timeout_s=0.02,
+            terminal_drain_seconds=0,
+        )
+        assert outcome.operation_confirmed is linked
+        assert outcome.timed_out is not linked
+
+    @pytest.mark.asyncio
+    async def test_repeated_result_id_with_new_event_id_cannot_confirm_another_start(self):
+        from types import SimpleNamespace
+
+        rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
+        result = SimpleNamespace(
+            ResultMetaData=SimpleNamespace(Classification=1, IsPartial=False, ResultState=1, ResultId="same-result"),
+        )
+        events = [SimpleNamespace(EventId=b"first", Result=result)]
+
+        async def collect(**_kwargs):
+            if events:
+                return [events.pop(0)]
+            await asyncio.sleep(0.001)
+            return []
+
+        rc._collector = MagicMock(collect=collect, dropped_event_count=0)
+        kwargs = dict(
+            requested_result_classification=4,
+            predicate=lambda _: True,
+            operation_timeout_s=0.02,
+            terminal_drain_seconds=0,
+        )
+        assert (await rc.collect_correlated_operation_outcome(**kwargs)).operation_confirmed
+        events.append(SimpleNamespace(EventId=b"second", Result=result))
+        assert (await rc.collect_correlated_operation_outcome(**kwargs)).timed_out
+
     @pytest.mark.asyncio
     async def test_raises_when_not_active_in_context(self):
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
@@ -1090,7 +1803,7 @@ class TestCollectCorrelatedOperationOutcome:
     @pytest.mark.asyncio
     async def test_returns_immediately_when_terminal_result_arrives(self):
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
-        meta = MagicMock(Classification=4, IsPartial=False, ResultState=1)
+        meta = MagicMock(Classification=4, IsPartial=False, ResultState=1, ResultId="job-terminal")
         job_result = MagicMock(ResultMetaData=meta)
         event = MagicMock(Result=job_result)
         mock_raw_collector = MagicMock()
@@ -1111,12 +1824,12 @@ class TestCollectCorrelatedOperationOutcome:
     async def test_drain_catches_terminal_result_after_intermediate_evidence(self):
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
         # First event: single result (operation confirmed, not terminal for job)
-        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1)
+        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1, ResultId="operation")
         single_result = MagicMock(ResultMetaData=single_meta)
         event1 = MagicMock(Result=single_result)
 
         # Second event during drain: terminal job result
-        job_meta = MagicMock(Classification=4, IsPartial=False, ResultState=1)
+        job_meta = MagicMock(Classification=4, IsPartial=False, ResultState=1, ResultId="job-terminal")
         job_result = MagicMock(ResultMetaData=job_meta)
         event2 = MagicMock(Result=job_result)
 
@@ -1141,7 +1854,7 @@ class TestCollectCorrelatedOperationOutcome:
         import asyncio
 
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
-        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1)
+        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1, ResultId="operation")
         single_result = MagicMock(ResultMetaData=single_meta)
         calls = [single_result]
 
@@ -1188,7 +1901,7 @@ class TestCollectCorrelatedOperationOutcome:
     async def test_collect_correlated_operation_outcome_handles_none_event_results(self):
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
         event_none = MagicMock(Result=None)
-        job_meta = MagicMock(Classification=4, IsPartial=False, ResultState=1)
+        job_meta = MagicMock(Classification=4, IsPartial=False, ResultState=1, ResultId="job-terminal")
         event_job = MagicMock(Result=MagicMock(ResultMetaData=job_meta))
 
         mock_raw = MagicMock()
@@ -1209,7 +1922,7 @@ class TestCollectCorrelatedOperationOutcome:
     async def test_partial_status_does_not_confirm_operation(self):
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
         partial_meta = MagicMock(Classification=4, IsPartial=True, ResultState=2)
-        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1)
+        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1, ResultId="operation")
         events = [
             MagicMock(Result=MagicMock(ResultMetaData=partial_meta)),
             MagicMock(Result=MagicMock(ResultMetaData=single_meta)),
@@ -1267,11 +1980,11 @@ class TestCollectCorrelatedOperationOutcome:
     @pytest.mark.asyncio
     async def test_drain_handles_none_event_result(self):
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
-        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1)
+        single_meta = MagicMock(Classification=1, IsPartial=False, ResultState=1, ResultId="operation")
         single_result = MagicMock(ResultMetaData=single_meta)
         event_single = MagicMock(Result=single_result)
         event_none = MagicMock(Result=None)
-        job_meta = MagicMock(Classification=4, IsPartial=False, ResultState=1)
+        job_meta = MagicMock(Classification=4, IsPartial=False, ResultState=1, ResultId="job-terminal")
         job_result = MagicMock(ResultMetaData=job_meta)
         event_job = MagicMock(Result=job_result)
 
@@ -1300,7 +2013,7 @@ class TestCollectCorrelatedOperationOutcome:
 
         assert rc.collect_pending_terminal(4, lambda _: True) is terminal
 
-    def test_collect_pending_terminal_supports_expected_terminal_state_three(self):
+    def test_collect_pending_terminal_reports_first_terminal_even_when_another_state_is_expected(self):
         from helpers.namespaces import ResultState
 
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
@@ -1314,14 +2027,16 @@ class TestCollectCorrelatedOperationOutcome:
             MagicMock(Result=aborted),
         ]
 
-        assert rc.collect_pending_terminal(4, lambda _: True, expected_terminal_state=3) is aborted
+        assert rc.collect_pending_terminal(4, lambda _: True, expected_terminal_state=3) is completed
 
     @pytest.mark.asyncio
     async def test_collect_correlated_operation_outcome_matches_aborted_terminal_state(self):
         from helpers.namespaces import ResultState
 
         rc = ResultCollector(MagicMock(), {NS_IJT_BASE: 7})
-        aborted_meta = MagicMock(Classification=4, IsPartial=False, ResultState=ResultState.ABORTED)
+        aborted_meta = MagicMock(
+            Classification=4, IsPartial=False, ResultState=ResultState.ABORTED, ResultId="aborted-terminal"
+        )
         aborted_result = MagicMock(ResultMetaData=aborted_meta)
         event = MagicMock(Result=aborted_result)
 

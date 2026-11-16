@@ -263,26 +263,26 @@ describe('MethodGUICreator default arguments', () => {
       detectedJoints: [],
       detectedJoiningProcesses: []
     })
-    const pf8 = new MethodGUICreator({}, {}, {}, sharedSettings, {
-      productInstanceUri: 'urn:pf8:tool',
+    const remote = new MethodGUICreator({}, {}, {}, sharedSettings, {
+      productInstanceUri: 'urn:remote:tool',
       detectedTools: [],
       detectedJoints: [],
       detectedJoiningProcesses: []
     })
 
     expect(local.resolveMetadataDefault({ source: 'productid' })).toBe('urn:local:tool')
-    expect(pf8.resolveMetadataDefault({ source: 'productid' })).toBe('urn:pf8:tool')
-    expect(local.methodState).not.toBe(pf8.methodState)
-    expect(local.settings).toBe(pf8.settings)
+    expect(remote.resolveMetadataDefault({ source: 'productid' })).toBe('urn:remote:tool')
+    expect(local.methodState).not.toBe(remote.methodState)
+    expect(local.settings).toBe(remote.settings)
   })
 
   it('ignores saved ProductInstanceUri values so live discovery stays authoritative', () => {
     const creator = new MethodGUICreator({}, {}, {}, {
-      productId: 'www.atlascopco.com/53F22F10-B313-4B1D-924C-3A3EC7FCA002'
+      productId: 'urn:example:tool:1'
     })
 
     const value = creator.getSavedArgumentValue(
-      { type: { Identifier: 12 }, value: 'www.atlascopco.com/53F22F10-B313-4B1D-924C-3A3EC7FCA002' },
+      { type: { Identifier: 12 }, value: 'urn:example:tool:1' },
       makeArg('ProductInstanceUri', 12)
     )
 

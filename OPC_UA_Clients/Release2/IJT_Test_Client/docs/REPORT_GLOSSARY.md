@@ -68,13 +68,57 @@ Classification-only or skipped specification runs are **Not tested**, with exit 
 CI/wrappers must propagate that nonzero exit rather than treating it as successful
 completion. Excel shows a yellow Inconclusive cover and sheet warnings for
 incomplete/not-tested qualification, independently of raw pytest success.
+The outer runner also labels exit 6 **INCOMPLETE**, counts it separately from
+passed and failed steps, and preserves it when no genuine failure takes precedence.
+The run `assessment` separates `execution_health`, `requirement_qualification`
+and `scope_completeness`. Complete selected CU scope is not complete requirement
+proof. Deselected applicable claimed-CU tests remain a scope gap. Simulator-only
+tests are inapplicable when the resolved result adapter is not the simulator,
+not merely because a target-profile environment variable exists.
+`raw_pytest_exitstatus` preserves execution status before qualification changes
+the process exit code. A qualification failure alone does not change successful
+execution health. Subprocess timeouts and report-production failures still fail
+execution health.
+
+Exact workbook mappings use the CU identity in each worksheet header rather
+than worksheet position. CUs, Facets and Profiles define the main compliance
+scope. Workbook links and additional tests provide supporting coverage.
+An exact row-to-test link is not evidence of Working Group approval or
+certification. Workbook review and runtime execution evidence are separate.
+Missing exact links for every workbook row are not a blanket release gate.
+The Increment Counter and Intervention pilots require
+all applicable mapped obligations. Static exact-mapping counts do not change
+with the executed route. Positive qualification requires a matching executed
+route, with every mapped component or parameter on that route passing. A
+complete equivalent route can supply the same obligation, but cannot erase a
+failed execution or bypass common required components. Setup errors and failed
+executions remain visible even without a route property. Missing negative checks remain incomplete even
+when method presence and positive calls pass. This does not claim exact mapping
+of all workbook obligations.
+
 The **workflow-actions.jsonl** journal records attempted physical workflows and
-run-scoped counter evidence reuse. None of these reports is certification.
+run-scoped counter evidence reuse, plus observed envelopes and context rejection
+reasons. Failed attempts retain their first cause. Unfinished compound state
+is retained by the guarded start/counter paths without an implicit reset or abort.
+That record is not proof of initial controller cleanliness or lifecycle coverage
+of every other mutation adapter.
+The existing guarded workflows retain unresolved state within the current run.
+Historical journals and `.process-state` files are not a cross-run readiness
+gate or permission to resume mutations. The operator must establish controller
+readiness and exclusive ownership before starting a new run.
+None of these reports is certification.
 Explicit service rejections such as BadInvalidArgument, BadTypeMismatch,
 BadUserAccessDenied and BadMethodInvalid also fail the requested positive
 counter scenario. That does not identify the server as the sole root cause.
 Timeout/session/communication failures and Uncertain evidence remain
 inconclusive, with no mutation retry.
+
+Physical settlement and requirement qualification are independent. A reset
+cannot report successful workflow completion from step-one evidence while its
+restarted parent remains active. A wrong observed step or counter delta can
+remain FAILED after the process is safely settled. A missing isolated counter
+update remains INCOMPLETE even if normal owned joining later completes the
+parent. Later joining results do not supply the missing counter-action proof.
 
 ### 2.1 `📊 Specification Test Overview` 👔 🛠️ 🧪 📦
 Source: `scripts/reporting/specification_test_summary.py` (`## 📊 Specification Test Overview` heading and KPI table emitted in `render_specification_test_summary()`).
@@ -86,7 +130,7 @@ The IJT Facet Support summary splits the support icon into its own `🚦` marker
 
 ### 2.2 `Server Support Coverage` 👔 🛠️ 📦
 Source: `scripts/reporting/specification_test_summary.py` — `Server Support Coverage` column header in the `## 📊 Specification Test Overview` KPI table; value is the local `spec_coverage_value` computed in `render_specification_test_summary()`.
-The share of OPC 40100 Joining Test Result CUs (Conformance Units) that the **server under test claims to support** in its SUT manifest (`capability_claims`).
+The share of OPC 40450-1 IJT CUs (Conformance Units) that the **server under test claims to support** in its SUT manifest (`capability_claims`).
 - **Numerator:** CUs the server lists as supported.
 - **Denominator:** CUs in the active profile (facet or full set).
 - Example: 78% means the server says it supports 78% of the CUs in the active profile.

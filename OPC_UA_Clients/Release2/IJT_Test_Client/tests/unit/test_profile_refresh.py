@@ -101,6 +101,56 @@ def test_block_scalar_identifier_repair_refuses_to_rewrite_owner_document(profil
     assert profile.read_bytes() == source.encode()
 
 
+@pytest.mark.parametrize(
+    "source, change",
+    [
+        ("workflows: []\n", ("workflows", "joining_process_id")),
+        ("workflows: {joining_process_id: []}\n", ("workflows", "joining_process_id")),
+        ("[]\n", ("workflows", "joining_process_id")),
+    ],
+)
+def test_refresh_cannot_rewrite_malformed_selector_shape(source, change):
+    from helpers.profile_refresh import _patch_identifiers
+
+    with pytest.raises(ValueError, match="mapping|scalar"):
+        _patch_identifiers(source, {change: "new-process"})
+
+
+def test_shared_secondary_identifier_cannot_bridge_two_distinct_owned_processes():
+    from helpers.profile_refresh import _reference_groups
+
+    raw = {
+        "workflows": {
+            "process_selector": {"policy": "exact_match", "joining_process_id": "first", "selection_name": "shared"},
+            "process_selectors_by_classification": {
+                "job": {"policy": "exact_match", "match_by": "selection_name", "selection_name": "shared"}
+            },
+        },
+        "execution_policy": {
+            "counter_effects": [
+                {"process_policy": "exact_match", "joining_process_id": "second", "selection_name": "shared"}
+            ],
+        },
+    }
+    with pytest.raises(ValueError, match="Ambiguous related references"):
+        _reference_groups(raw)
+
+
+def test_refreshed_selector_must_pass_final_readiness_before_save(profile, monkeypatch):
+    from helpers.target_server_cu_config import OUTCOME_BLOCKED
+    from helpers.target_server_readiness import ReadinessOutcome
+
+    original = profile.read_bytes()
+    monkeypatch.setattr(
+        "helpers.profile_refresh.check_live_process_selectors",
+        lambda *args: [ReadinessOutcome(outcome=OUTCOME_BLOCKED, detail="Target changed during operator review")],
+    )
+    with pytest.raises(ValueError, match="Target changed"):
+        _guide(profile, ["1"])
+    assert profile.read_bytes() == original
+    assert list(profile.parent.iterdir()) == [profile]
+
+
 def test_automatic_counter_profile_needs_no_identifier_refresh_or_new_pins(profile):
     data = yaml.safe_load(_SOURCE)
     data["workflows"]["allow_discovered_processes"] = True

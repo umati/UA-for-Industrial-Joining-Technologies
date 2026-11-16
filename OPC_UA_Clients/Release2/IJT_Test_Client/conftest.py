@@ -51,11 +51,12 @@ from helpers.profile_loader import (
     get_skip_reason,
     load_all_cus_from_facets,
     load_capability_claims,
+    resolve_session_manual_required_cus,
     resolve_session_supported_cus,
     selected_manifest_path,
     unreviewed_cus,
 )
-from helpers.sut_manifest import manifest_change_reason, manifest_file_sha256
+from helpers.sut_manifest import load_sut_manifest, manifest_change_reason, manifest_file_sha256
 
 _session_policy = load_shared_session_policy(__file__)
 connect_opcua_client = _session_policy.connect_client
@@ -105,6 +106,8 @@ def pytest_configure(config):
     """
     global _SUPPORTED_CUS, _WORKFLOW_EXCLUDED_CUS  # noqa: PLW0603  # pylint: disable=global-statement
 
+    logging.getLogger("asyncua").setLevel(logging.ERROR)
+
     config.addinivalue_line(
         "markers",
         "requires_cu(cu_key, ...): skip this test if the given conformance unit "
@@ -117,7 +120,7 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
-        "workbook_ref(sheet, rows): optional exact Test Cases workbook sheet/row traceability for a test",
+        "workbook_ref(sheet, rows, route=None): exact workbook obligations, optionally bound to an executed evidence route",
     )
     config.addinivalue_line("markers", "live: requires a live OPC UA server")
     config.addinivalue_line("markers", "conformance: IJT conformance unit test")
@@ -213,12 +216,28 @@ def pytest_configure(config):
             len(_WORKFLOW_EXCLUDED_CUS),
         )
 
+    loaded_manifest = load_sut_manifest(path) if path is not None else None
+    execution_mode = os.environ.get("OPCUA_TARGET_SERVER_MODE", "").strip() or (
+        str(loaded_manifest.data.get("execution_policy", {}).get("default_mode", "automated"))
+        if loaded_manifest is not None
+        else "automated"
+    )
+    allow_manual_steps = bool(
+        loaded_manifest is not None
+        and loaded_manifest.data.get("execution_policy", {})
+        .get("operator_actions", {})
+        .get("allow_manual_steps", False)
+    )
     config.pluginmanager.register(
         CuCoverageReportRecorder(
             root=_project_root,
             all_cus=load_all_cus_from_facets(),
             supported_cus=_SUPPORTED_CUS,
             unreviewed_cus=_UNREVIEWED_CUS,
+            manual_required_cus=resolve_session_manual_required_cus(path),
+            execution_mode=execution_mode,
+            allow_manual_steps=allow_manual_steps,
+            result_trigger_mode=loaded_manifest.result_trigger_mode if loaded_manifest is not None else "",
         ),
         "ijt-cu-coverage-report",
     )
@@ -989,7 +1008,7 @@ async def result_trigger(opcua_client, subscription_client, joining_system, ns_i
 
 
 @pytest_asyncio.fixture(scope="function")
-async def event_trigger(opcua_client, joining_system, ns_indices):
+async def event_trigger(opcua_client, joining_system, ns_indices, subscription_client):
     """
     Function-scoped EventTrigger.
     Returns SimulatorEventTrigger when the simulator's SimulateEventsAndConditions folder is available.
@@ -1009,6 +1028,7 @@ async def event_trigger(opcua_client, joining_system, ns_indices):
             ns_ijt=ns_indices.get(NS_IJT_BASE),
             ns_di=ns_indices.get(NS_DI),
             allow_waiting=_target_server_mode_allows_waiting(),
+            subscription_client=subscription_client,
         )
 
     from helpers.trigger import make_event_trigger

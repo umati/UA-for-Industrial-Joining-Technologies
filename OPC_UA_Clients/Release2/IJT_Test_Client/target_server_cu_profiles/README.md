@@ -27,6 +27,11 @@ python scripts/generate_sut_manifest_docs.py          # write template, examples
 python scripts/generate_sut_manifest_docs.py --check  # fail if a committed artifact drifted
 ```
 
+The simulator preset explicitly permits counter setup (`SetJoiningProcessCounter`
+and `SetJoiningProcessSize`) and the increment-effect check
+(`IncrementJoiningProcessCounter`). These permissions support the specification
+tests on the disposable simulator; they do not grant any controller permissions.
+
 ---
 
 ## Why there are two YAML directories
@@ -88,27 +93,33 @@ is a dedicated-test-controller regression baseline, with standard stored-result
 and identifier method permissions and asset-disable approval. Review these
 permissions for the installation before execution. The universal template
 does not inherit this broader approval policy.
-Both remote-start and corresponding local copies use bounded
-`first_compatible` discovery, `id_only`, six-start/three-candidate bounds,
-final-result proof, strict cleanup policy and current-run evidence reuse.
+The current remote-start preset uses `first_ready` Tool
+discovery (with automatic VirtualStation discovery from owned joining results),
+bounded `first_ready` / `first_compatible` process discovery, `id_only`,
+eight-start (`24` total) bounds, `1..10` stored-result range checks, Joint
+CRUD round-trip with cleanup, final-result proof, strict cleanup policy and
+current-run evidence reuse. Physical/fault-only CUs declared `manual_required`
+are deferred under `manual_deferred_cus` during unattended `automated` runs
+and verified during `guided` runs.
 Strict cleanup does not imply controller restoration when cleanup actions are
 disabled. The universal template still requires explicit discovery approval.
 
-Keep differences that express real facts: endpoint/security, the exact Tool,
-declared CU support, approved methods/risks and a deliberate result-request
-window. Never copy generic permissions into an owner profile or downgrade
-claims to obtain PASS. The example's claims are an example, not a universal
-vendor capability baseline. Final proof is mandatory in the remote-start
-example even where older versions accepted an intermediate result.
+Keep differences that express real installation facts—often only
+`connection.endpoint` (plus security/authentication or an optional explicit Tool
+URI when pinning a non-first Tool). Never copy generic permissions into an owner
+profile without review or downgrade claims just to obtain PASS. The example's
+claims are a reference baseline, not a universal vendor capability baseline.
+Final proof is mandatory in the remote-start example even where older versions
+accepted an intermediate result.
 
-The generic example also declares `consolidated_result_with_references` and
-`engineering_units` as supported. These are example claims, not observations
-about every controller. Review them before execution and mark a CU
-`unsupported` if it is genuinely not supported. Missing permission or setup
-does not make a supported feature unsupported, that remains a blocked test.
+The generic example declares `consolidated_result_with_references`,
+`joint_management`, `joint_data`, `delete_joint`, and `engineering_units` as
+supported. Review them before execution and mark a CU `unsupported` if a target
+controller genuinely omits that capability. Missing permission or setup does not
+make a supported feature unsupported; that remains a blocked test.
 
-Both files use the scenario name **Remote Start Multi-Operation Job** and the
-same concise description. Controller identity belongs in connection and Tool
+The generic scenario name is **Remote Start Multi-Operation Job**. A corresponding
+local copy can retain that name and description. Controller identity belongs in connection and Tool
 selection fields. Keep pending setup status in project notes or diagnostics,
 not in the scenario name or YAML comments.
 
@@ -191,11 +202,13 @@ CU row means unreviewed, not unsupported. In legacy inherited scope, a missing
 override follows the selected profile and facets. Compare effective claims,
 not just the number of entries.
 
-The generic example permits automatic discovery only when exactly one distinct
-Tool Object is present. It never chooses the first Tool from several.
-An explicit ProductInstanceUri takes precedence and must match exactly one
-Tool. Policies do not rank readiness or filter by `capability_tags`.
-Keep the intended exact Tool binding when several Tools are possible.
+The generic remote-start example uses `first_ready`, which selects a Connected
+and Enabled Tool in deterministic order and prefers Tools advertising processes.
+`discover_unique` is a different policy: it requires exactly one Tool Object
+when no ProductInstanceUri is configured. An explicit ProductInstanceUri takes
+precedence and must match exactly one Tool. Use that exact binding when only one
+particular Tool is approved; readiness-based discovery is not permission to
+operate every Tool. Tool discovery does not filter by `capability_tags`.
 Process discovery remains available within that Tool scope.
 See [Tool and process selection](../docs/TARGET_SERVER_CU_GUIDE.md#which-yaml-file-controls-what).
 

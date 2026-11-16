@@ -125,6 +125,20 @@ def test_passing_preflight_has_no_repair_instructions():
     assert preflight_repair_lines(profile, report) == []
 
 
+def test_exact_selector_without_identity_is_configuration_error_not_discovery_match():
+    profile = build_execution_profile(
+        {
+            "schema_version": 1,
+            "selection": {"joining_process": {"policy": "exact_match"}},
+        }
+    )
+    checks = check_live_process_selectors(profile, [{"id": "available-process", "classification": 5}])
+    assert len(checks) == 1
+    assert checks[0].outcome == OUTCOME_CONFIGURATION_ERROR
+    assert checks[0].reason_code == "configuration_invalid"
+    assert "no configured value" in checks[0].detail
+
+
 # ---------------------------------------------------------------------------
 # ReadinessOutcome dataclass
 # ---------------------------------------------------------------------------

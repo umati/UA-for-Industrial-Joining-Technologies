@@ -14,6 +14,8 @@ import asyncio
 import logging
 import os
 import time
+from collections.abc import Callable
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 
@@ -78,6 +80,70 @@ def is_target_method_call_authorized() -> bool:
 def is_target_state_changing_method(method_name: str) -> bool:
     """Return whether a method can mutate target-server state."""
     return method_name in _TARGET_STATE_CHANGING_METHODS
+
+
+def is_manifest_method_authorized(
+    method_name: str,
+    *,
+    require_disable_asset: bool = False,
+    require_destructive: bool = False,
+) -> bool:
+    """Return True if *method_name* may be called under the active SUT manifest.
+
+    When ``OPCUA_TARGET_SERVER_PROFILE`` is unset (simulator mode), returns True.
+    When set, checks ``execution_policy.state_changing_methods.allowed_methods``
+    plus any requested risk approvals (`allow_disable_asset`, `allow_destructive_methods`).
+    """
+    if method_name not in _TARGET_STATE_CHANGING_METHODS:
+        return True
+    path = os.environ.get("OPCUA_TARGET_SERVER_PROFILE")
+    if not path:
+        return True
+
+    from pathlib import Path
+
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+    from helpers.sut_manifest import load_sut_manifest, manifest_change_reason
+
+    issue = manifest_change_reason(path, os.environ.get("OPCUA_TARGET_MANIFEST_SHA256"))
+    if issue:
+        logger.warning("%s blocked: %s", method_name, issue)
+        raise WorkflowEvidenceUnavailable(issue, "manifest_changed", "blocked", method_name)
+
+    try:
+        profile = load_sut_manifest(Path(path)).to_execution_profile()
+    except Exception:  # noqa: BLE001
+        return False
+
+    if not profile.cu_execution.state_changing_methods.allow_state_changing_method(method_name):
+        return False
+    if require_disable_asset and not profile.cu_execution.extension_fields.get("allow_disable_asset", False):
+        return False
+    if require_destructive and not profile.cu_execution.extension_fields.get("allow_destructive_methods", False):
+        return False
+    return True
+
+
+@contextmanager
+def manifest_authorized_method_scope(
+    method_name: str,
+    *,
+    require_disable_asset: bool = False,
+    require_destructive: bool = False,
+):
+    """Context manager authorizing direct ``UANode.call_method`` when allowed by the SUT manifest."""
+    if not is_manifest_method_authorized(
+        method_name,
+        require_disable_asset=require_disable_asset,
+        require_destructive=require_destructive,
+    ):
+        yield False
+        return
+    token = _TARGET_METHOD_CALL_AUTHORIZED.set(True)
+    try:
+        yield True
+    finally:
+        _TARGET_METHOD_CALL_AUTHORIZED.reset(token)
 
 
 def _enforce_target_method_authorization(method_name: str, authorized: bool) -> None:
@@ -164,6 +230,10 @@ class MethodCallResult:
     error: Exception | None = None
     status_code: int | None = None
     method_name: str = ""
+    service_good_confirmed: bool = False
+    method_status_code: int | None = None
+    input_argument_status_codes: tuple[int, ...] = ()
+    rpc_dispatched: bool | None = None
 
     @property
     def output_list(self) -> list:
@@ -173,6 +243,16 @@ class MethodCallResult:
         if isinstance(self.output, (list, tuple)):
             return list(self.output)
         return [self.output]
+
+
+def call_definitely_rejected(result: MethodCallResult) -> bool:
+    """Only predispatch failure or explicit structural/access rejection proves no mutation."""
+    return result.rpc_dispatched is False or result.status_code in {
+        ua.StatusCodes.BadInvalidArgument,
+        ua.StatusCodes.BadUserAccessDenied,
+        ua.StatusCodes.BadMethodInvalid,
+        ua.StatusCodes.BadTypeMismatch,
+    }
 
 
 async def call_method(
@@ -234,6 +314,100 @@ async def call_method(
     finally:
         if authorization_token is not None:
             _TARGET_METHOD_CALL_AUTHORIZED.reset(authorization_token)
+
+
+async def call_method_preserving_status(
+    parent_node,
+    method_node,
+    *args,
+    timeout: float = 15.0,
+    target_server_authorized: bool = False,
+    before_dispatch: Callable[[], None] | None = None,
+) -> MethodCallResult:
+    """Retain CallMethodResult outputs even for Uncertain or Bad method status."""
+    try:
+        browse_name = await asyncio.wait_for(method_node.read_browse_name(), timeout=timeout)
+    except (ua.UaError, asyncio.TimeoutError) as exc:
+        logger.warning("Cannot resolve method identity before raw Call: %s", exc)
+        return MethodCallResult(success=False, error=exc, rpc_dispatched=False)
+    label = browse_name.Name
+    _enforce_target_method_authorization(label, target_server_authorized)
+    request = ua.CallMethodRequest(
+        ObjectId=parent_node.nodeid,
+        MethodId=method_node.nodeid,
+        InputArguments=[arg if isinstance(arg, ua.Variant) else ua.Variant(arg) for arg in args],
+    )
+    authorization_token = _TARGET_METHOD_CALL_AUTHORIZED.set(True) if target_server_authorized else None
+    try:
+        if before_dispatch is not None:
+            before_dispatch()
+        try:
+            # asyncua's session.call checks the service header, but not each method status.
+            responses = await asyncio.wait_for(parent_node.session.call([request]), timeout=timeout)
+        except (ua.UaError, asyncio.TimeoutError) as exc:
+            raw_code = getattr(exc, "code", None)
+            logger.warning("Raw Call service for %s failed: %s", label, exc)
+            return MethodCallResult(
+                success=False,
+                error=exc,
+                status_code=int(raw_code) if raw_code is not None else None,
+                method_name=label,
+                rpc_dispatched=True,
+            )
+        if len(responses) != 1:
+            error = ValueError(f"Call service returned {len(responses)} method results for one request")
+            logger.error("%s: %s", label, error)
+            return MethodCallResult(
+                success=False,
+                error=error,
+                method_name=label,
+                service_good_confirmed=True,
+                rpc_dispatched=True,
+            )
+        response = responses[0]
+        method_status = response.StatusCode.value
+        outputs = [value.Value for value in response.OutputArguments or ()]
+        if not response.StatusCode.is_good():
+            logger.warning("%s returned method status %s, outputs=%r", label, response.StatusCode, outputs)
+        return MethodCallResult(
+            success=response.StatusCode.is_good(),
+            output=outputs,
+            status_code=method_status,
+            method_name=label,
+            service_good_confirmed=True,
+            method_status_code=method_status,
+            input_argument_status_codes=tuple(status.value for status in response.InputArgumentResults or ()),
+            rpc_dispatched=True,
+        )
+    finally:
+        if authorization_token is not None:
+            _TARGET_METHOD_CALL_AUTHORIZED.reset(authorization_token)
+
+
+async def find_and_call_method_preserving_status(
+    parent_node,
+    method_browse_name: str,
+    method_ns_index: int,
+    *args,
+    timeout: float = 15.0,
+    target_server_authorized: bool = False,
+    before_dispatch: Callable[[], None] | None = None,
+) -> MethodCallResult:
+    """Discover one method and call it without discarding its negative-response outputs."""
+    _enforce_target_method_authorization(method_browse_name, target_server_authorized)
+    method_node = await find_child_by_browse_name(parent_node, method_browse_name, method_ns_index, timeout=timeout)
+    if method_node is None:
+        error = LookupError(f"Method '{method_browse_name}' not found under parent node")
+        logger.warning("%s", error)
+        return MethodCallResult(success=False, error=error, method_name=method_browse_name, rpc_dispatched=False)
+    return await call_method_preserving_status(
+        parent_node,
+        method_node,
+        *args,
+        timeout=timeout,
+        target_server_authorized=target_server_authorized,
+        before_dispatch=before_dispatch,
+    )
 
 
 async def call_method_expect_bad_status(
@@ -372,6 +546,8 @@ async def find_and_call_method(
     *args,
     timeout: float = 15.0,
     target_server_authorized: bool = False,
+    preserve_status: bool = False,
+    before_dispatch: Callable[[], None] | None = None,
 ) -> MethodCallResult:
     """
     Locate a method child by browse name, then invoke it.
@@ -388,6 +564,18 @@ async def find_and_call_method(
         or success=False with a LookupError if the method node is not found,
         or success=False with the ua.UaError / TimeoutError on call failure.
     """
+    if preserve_status:
+        return await find_and_call_method_preserving_status(
+            parent_node,
+            method_browse_name,
+            method_ns_index,
+            *args,
+            timeout=timeout,
+            target_server_authorized=target_server_authorized,
+            before_dispatch=before_dispatch,
+        )
+    if before_dispatch is not None:
+        raise ValueError("Dispatch lifecycle hooks require the status-preserving Call route")
     method_node = await find_child_by_browse_name(parent_node, method_browse_name, method_ns_index, timeout=timeout)
     if method_node is None:
         err = LookupError(f"Method '{method_browse_name}' not found under parent node")

@@ -57,7 +57,7 @@ from helpers.canonical_outcomes import (
     REASON_TOOL_DISCONNECTED,
     REASON_UNSAFE_METHOD_NOT_ENABLED,
 )
-from helpers.namespaces import ResultState
+from helpers.namespaces import ENTITY_TYPE_VALUES, ResultState
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +84,9 @@ VALID_CONDITION_TRIGGER_MODES: frozenset[str] = frozenset(
 
 VALID_SELECTION_POLICIES: frozenset[str] = frozenset(
     {"first_available", "first_ready", "first_compatible", "exact_match"}
+)
+VALID_TOOL_SELECTION_POLICIES: frozenset[str] = frozenset(
+    {"first_ready", "first_available", "discover_unique", "exact_match"}
 )
 VALID_JOINING_PROCESS_SELECTION_POLICIES: frozenset[str] = VALID_SELECTION_POLICIES | {"all_compatible"}
 VALID_IDENTIFIER_STRATEGIES: frozenset[str] = frozenset(
@@ -316,6 +319,7 @@ class ToolSelectionConfig:
     policy: str = "first_ready"
     product_instance_uri: str = ""
     capability_tags: tuple[str, ...] = field(default_factory=tuple)
+    virtual_station_product_instance_uri: str = ""
 
 
 @dataclass(frozen=True)
@@ -341,6 +345,51 @@ class SelectionConfig:
 
 
 @dataclass(frozen=True)
+class AssociatedEntityExpectation:
+    """SUT expectations supplement specification checks without changing ownership."""
+
+    classification: str
+    context: str = "any"
+    required: tuple[str, ...] = ()
+    optional: tuple[str, ...] = ()
+    at_least_one_of: tuple[str, ...] = ()
+
+
+def parse_associated_entity_expectations(raw: Any, context: str) -> tuple[AssociatedEntityExpectation, ...]:
+    if not isinstance(raw, list):
+        raise TargetServerConfigError(f"{context}: must be a list")
+    rules = []
+    seen = set()
+    for index, entry in enumerate(raw):
+        path = f"{context}[{index}]"
+        if not isinstance(entry, dict):
+            raise TargetServerConfigError(f"{path}: must be a mapping")
+        unknown = set(entry) - {"classification", "context", "required", "optional", "at_least_one_of"}
+        if unknown:
+            raise TargetServerConfigError(f"{path}: unknown fields {sorted(unknown)}")
+        classification = require_enum(entry, "classification", "", VALID_RESULT_CLASSIFICATIONS - {"any"}, path)
+        scope = require_enum(entry, "context", "any", frozenset({"any", "joining", "counter_intervention"}), path)
+        key = (classification, scope)
+        if key in seen:
+            raise TargetServerConfigError(f"{path}: duplicate classification/context rule {key}")
+        seen.add(key)
+        lists = {}
+        for field_name in ("required", "optional", "at_least_one_of"):
+            names = tuple(require_str_list(entry, field_name, path))
+            invalid = set(names) - ENTITY_TYPE_VALUES.keys()
+            if invalid:
+                raise TargetServerConfigError(f"{path}.{field_name}: unknown EntityType names {sorted(invalid)}")
+            if len(set(names)) != len(names):
+                raise TargetServerConfigError(f"{path}.{field_name}: duplicate EntityType names")
+            lists[field_name] = names
+        overlap = set(lists["required"]) & set(lists["optional"])
+        if overlap:
+            raise TargetServerConfigError(f"{path}: types cannot be required and optional: {sorted(overlap)}")
+        rules.append(AssociatedEntityExpectation(classification=classification, context=scope, **lists))
+    return tuple(rules)
+
+
+@dataclass(frozen=True)
 class ExpectedResultsConfig:
     """Expected result evidence configuration."""
 
@@ -350,7 +399,9 @@ class ExpectedResultsConfig:
     referenced_child_completion_policy: str = "terminal_required"
     timeout_seconds: float = 60.0
     expected_terminal_result_state: int = 1
+    expected_abort_result_states: tuple[int, ...] = (3,)
     reject_ok_evaluation_on_abort: bool = False
+    associated_entities: tuple[AssociatedEntityExpectation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -371,6 +422,13 @@ class EvidenceReuseConfig:
 
 
 @dataclass(frozen=True)
+class PreparationConfig:
+    """Explicit approval of reset preparation, separate from method permission."""
+
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
 class WorkflowExecutionConfig:
     """Full joining workflow execution configuration."""
 
@@ -386,6 +444,7 @@ class WorkflowExecutionConfig:
     expected_results: ExpectedResultsConfig = field(default_factory=ExpectedResultsConfig)
     cleanup: CleanupConfig = field(default_factory=CleanupConfig)
     evidence_reuse: EvidenceReuseConfig = field(default_factory=EvidenceReuseConfig)
+    preparation: PreparationConfig = field(default_factory=PreparationConfig)
 
 
 @dataclass(frozen=True)
@@ -412,6 +471,10 @@ class CounterEffectConfig:
     selection_name: str = ""
     identifier_strategy: str = "id_only"
     expected_result_classification: str = ""
+    counter_name: str = ""
+    counter_type: int = -1
+    verify_delta: bool = False
+    expected_terminal_result_state: int = 0
 
 
 @dataclass(frozen=True)
@@ -665,6 +728,9 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
         if not isinstance(item, dict):
             raise TargetServerConfigError(f"{item_context}: must be a mapping")
         expected = require_str(item, "expected_result_classification", item_context)
+        verify_delta = require_bool(item, "verify_delta", False, item_context)
+        if verify_delta and not expected:
+            raise TargetServerConfigError(f"{item_context}: verify_delta requires expected_result_classification")
         if expected and expected not in VALID_RESULT_CLASSIFICATIONS - {"any"}:
             raise TargetServerConfigError(f"{item_context}: invalid expected_result_classification '{expected}'")
         process_policy = require_enum(
@@ -705,6 +771,12 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
         )
         if process_policy == "discover_unique" and identifier_strategy not in {"id_only", "id_with_origin"}:
             raise TargetServerConfigError(f"{item_context}: discover_unique requires an ID-carrying strategy")
+        expected_terminal_result_state = require_int(item, "expected_terminal_result_state", 0, item_context, min_val=0)
+        if expected_terminal_result_state not in {0} | set(ResultState.VALID_TERMINAL_STATES):
+            raise TargetServerConfigError(
+                f"{item_context}: expected_terminal_result_state must be 0, 1, 3, or 4; "
+                f"got {expected_terminal_result_state}"
+            )
         counter_effects.append(
             CounterEffectConfig(
                 method=require_str(item, "method", item_context),
@@ -717,6 +789,10 @@ def parse_cu_execution(raw: dict, context: str = "cu_execution") -> CuExecutionC
                 selection_name=selection_name,
                 identifier_strategy=identifier_strategy,
                 expected_result_classification=expected,
+                counter_name=require_str(item, "counter_name", item_context),
+                counter_type=require_int(item, "counter_type", -1, item_context, min_val=-1),
+                verify_delta=verify_delta,
+                expected_terminal_result_state=expected_terminal_result_state,
             )
         )
 
@@ -776,10 +852,22 @@ def parse_triggers(raw: dict, context: str = "triggers") -> TriggersConfig:
 
 
 def _parse_tool_selection(raw: dict, context: str) -> ToolSelectionConfig:
-    policy = require_enum(raw, "policy", "first_ready", VALID_SELECTION_POLICIES, context)
+    policy = require_enum(raw, "policy", "first_ready", VALID_TOOL_SELECTION_POLICIES, context)
     piu = require_str(raw, "product_instance_uri", context)
     tags = tuple(require_str_list(raw, "capability_tags", context))
-    return ToolSelectionConfig(policy=policy, product_instance_uri=piu, capability_tags=tags)
+    station = require_str(raw, "virtual_station_product_instance_uri", context)
+    if station and not piu.strip():
+        raise TargetServerConfigError(
+            f"{context}.virtual_station_product_instance_uri requires a configured Tool ProductInstanceUri"
+        )
+    if station and station.strip().lower() == piu.strip().lower():
+        raise TargetServerConfigError(f"{context}: Tool and VirtualStation ProductInstanceUris must differ")
+    return ToolSelectionConfig(
+        policy=policy,
+        product_instance_uri=piu,
+        capability_tags=tags,
+        virtual_station_product_instance_uri=station,
+    )
 
 
 def _parse_jp_selection(raw: dict, context: str) -> JoiningProcessSelectionConfig:
@@ -850,7 +938,23 @@ def _parse_expected_results(raw: dict, context: str) -> ExpectedResultsConfig:
             f"{context}.expected_terminal_result_state must be one of "
             f"{sorted(ResultState.VALID_TERMINAL_STATES)} (1=COMPLETED, 3=ABORTED, 4=FAILED); got {expected_state}"
         )
+    raw_abort_states = raw.get("expected_abort_result_states", [ResultState.ABORTED])
+    if not isinstance(raw_abort_states, list) or not raw_abort_states:
+        raise TargetServerConfigError(f"{context}.expected_abort_result_states must be a non-empty list of integers")
+    abort_states_list: list[int] = []
+    for idx, item in enumerate(raw_abort_states):
+        if isinstance(item, bool) or not isinstance(item, int) or item not in ResultState.VALID_TERMINAL_STATES:
+            raise TargetServerConfigError(
+                f"{context}.expected_abort_result_states[{idx}] must be one of "
+                f"{sorted(ResultState.VALID_TERMINAL_STATES)} (1=COMPLETED, 3=ABORTED, 4=FAILED); got {item!r}"
+            )
+        if item not in abort_states_list:
+            abort_states_list.append(item)
+    expected_abort_states = tuple(abort_states_list)
     reject_ok_eval = require_bool(raw, "reject_ok_evaluation_on_abort", False, context)
+    entity_expectations = parse_associated_entity_expectations(
+        raw.get("associated_entities", []), f"{context}.associated_entities"
+    )
     return ExpectedResultsConfig(
         classification=classification,
         intermediate_classifications=intermediate,
@@ -858,7 +962,9 @@ def _parse_expected_results(raw: dict, context: str) -> ExpectedResultsConfig:
         referenced_child_completion_policy=child_completion_policy,
         timeout_seconds=timeout,
         expected_terminal_result_state=expected_state,
+        expected_abort_result_states=expected_abort_states,
         reject_ok_evaluation_on_abort=reject_ok_eval,
+        associated_entities=entity_expectations,
     )
 
 
@@ -915,6 +1021,9 @@ def parse_workflow_execution(raw: dict, context: str = "workflow_execution") -> 
             f"{context}.evidence_reuse",
         ),
     )
+    preparation_raw = raw.get("preparation", {})
+    if not isinstance(preparation_raw, dict):
+        raise TargetServerConfigError(f"{context}.preparation must be a mapping")
 
     return WorkflowExecutionConfig(
         approved_workflows=approved,
@@ -927,6 +1036,9 @@ def parse_workflow_execution(raw: dict, context: str = "workflow_execution") -> 
         expected_results=er_cfg,
         cleanup=cleanup_cfg,
         evidence_reuse=reuse_cfg,
+        preparation=PreparationConfig(
+            enabled=require_bool(preparation_raw, "enabled", False, f"{context}.preparation"),
+        ),
     )
 
 

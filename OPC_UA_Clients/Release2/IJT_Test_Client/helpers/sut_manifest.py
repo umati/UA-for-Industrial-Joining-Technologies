@@ -69,8 +69,8 @@ from helpers.target_server_cu_config import (
     VALID_RESULT_CLASSIFICATIONS,
     VALID_RESULT_TRIGGER_MODES,
     VALID_SCORING_MODES,
-    VALID_SELECTION_POLICIES,
     VALID_STATE_CHANGING_POLICIES,
+    VALID_TOOL_SELECTION_POLICIES,
     TargetServerConfigError,
     TargetServerCuProfile,
     build_execution_profile,
@@ -167,7 +167,7 @@ class SectionSpec:
 
 
 def _empty_for(kind: str) -> Any:
-    if kind in {"str_list", "mapping_list"}:
+    if kind in {"str_list", "int_list", "mapping_list"}:
         return []
     if kind in {"str_map", "int_map", "mapping"}:
         return {}
@@ -371,8 +371,8 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                 "max_start_invocations",
                 "int",
                 "Maximum accepted StartSelectedJoining RPC calls for a multi-operation compound process "
-                "(Job/Batch/Sync) before stopping. Single/Program processes are always capped at 1 start. "
-                "Execution exits early as soon as a terminal completed result arrives.",
+                "(Job/Batch/Sync) before stopping. Program processes are always capped at 1 start. "
+                "Execution exits early when the selected process's own terminal completed result arrives.",
                 default=6,
                 min_value=1,
             ),
@@ -396,9 +396,10 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                 "max_start_invocations_by_result_classification",
                 "int_map",
                 (
-                    "Maximum accepted StartSelectedJoining calls while waiting for each result "
-                    "classification. Supported keys are single, batch, sync, and job. Every value "
-                    "is also capped by max_start_invocations."
+                    "Additional start ceilings keyed by the selected process's terminal result classification, "
+                    "not by a requested child result. These are safety limits, never process sizes. "
+                    "Execution stops INCOMPLETE if the selected parent cannot finish within the smallest "
+                    "applicable classification, workflow and total ceilings."
                 ),
                 default={"single": 1, "batch": 3, "sync": 3, "job": 6},
                 min_value=1,
@@ -406,15 +407,31 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
             FieldSpec(
                 "consecutive_start_delay_seconds",
                 "number",
-                "Pacing delay in seconds between consecutive StartSelectedJoining invocations for "
-                "compound processes (Job/Batch/Sync). Allows controller state settlement and event drain "
-                "(default: 0.25s). Not applied to single operations. Queue inspection and this drain "
-                "reduce extra-start races but cannot eliminate the non-atomic check-to-start window.",
+                "Delay in seconds after successful SelectJoiningProcess calls before workflow actuation, "
+                "and between consecutive StartSelectedJoining invocations for compound processes "
+                "(Job/Batch/Sync). Allows controller state settlement and event drain (default: 0.25s). "
+                "Queue inspection and this delay reduce extra-start races but cannot eliminate the "
+                "non-atomic check-to-start window.",
                 default=0.25,
                 min_value=0.0,
             ),
         ),
         subsections=(
+            SectionSpec(
+                name="preparation",
+                description="Explicitly approved preparation before a new physical-process scenario.",
+                fields=(
+                    FieldSpec(
+                        "enabled",
+                        "bool",
+                        "Approve automatic ResetJoiningProcess preparation. Reset method permission and destructive-method approval are also required. "
+                        "A fresh correlated RESET InterventionResult must confirm preparation. "
+                        "When disabled, preserve existing scenario prerequisites without a new confirmation-token gate. "
+                        "This setting never authorizes recovery or repetition of an unresolved mutation.",
+                        default=False,
+                    ),
+                ),
+            ),
             SectionSpec(
                 name="tool_selector",
                 description="How the Tool under test is discovered or pinned.",
@@ -422,17 +439,27 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                     FieldSpec(
                         "policy",
                         "str",
-                        "Automatic policies require exactly one Tool. With several Tools, configure the intended "
-                        "ProductInstanceUri. exact_match always requires that identity. "
-                        "Policy names do not rank Tool readiness.",
+                        "Tool selection policy when product_instance_uri is empty. first_ready selects the first "
+                        "Connected and Enabled Tool in deterministic BrowseName/URI order (preferring Tools with "
+                        "configured joining processes when several are ready). first_available selects the first Tool "
+                        "with a ProductInstanceUri regardless of readiness. discover_unique requires a single Tool on "
+                        "the server. exact_match always requires product_instance_uri to be configured.",
                         default="first_ready",
-                        choices=VALID_SELECTION_POLICIES,
+                        choices=VALID_TOOL_SELECTION_POLICIES,
                     ),
                     FieldSpec(
                         "product_instance_uri",
                         "str",
-                        "Exact Tool ProductInstanceUri. Leave empty only for single-Tool discovery. "
-                        "Do not commit real serial numbers.",
+                        "Optional exact Tool ProductInstanceUri override (required when policy is exact_match). "
+                        "Leave empty to discover a Tool according to policy. Do not commit real serial numbers.",
+                    ),
+                    FieldSpec(
+                        "virtual_station_product_instance_uri",
+                        "str",
+                        "Optional VirtualStation ProductInstanceUri override for counter-result correlation. Requires "
+                        "a configured Tool ProductInstanceUri when set. Leave empty to auto-discover the VirtualStation "
+                        "from owned joining results or a unique station on the server. The selected process and fresh "
+                        "Intervention references are still required. Never commit real controller identities.",
                     ),
                     FieldSpec(
                         "capability_tags",
@@ -553,10 +580,26 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         default=1,
                     ),
                     FieldSpec(
+                        "expected_abort_result_states",
+                        "int_list",
+                        "Accepted terminal ResultState values (OPC 40001-101 Machinery Result) for AbortJoiningProcess workflows: [3] (ABORTED) or [3, 4] when a controller maps aborted sequences to FAILED (4).",
+                        default=[3],
+                    ),
+                    FieldSpec(
                         "reject_ok_evaluation_on_abort",
                         "bool",
                         "When true, abort workflows reject terminal results evaluated as OK (1).",
                         default=False,
+                    ),
+                    FieldSpec(
+                        "associated_entities",
+                        "mapping_list",
+                        "Optional SUT entity expectations, not ownership overrides. Each rule has classification "
+                        "(single, batch, job, sync, stitching, intervention, or text), context "
+                        "(any by default, joining, or counter_intervention), and EntityType name lists: "
+                        "required, optional, at_least_one_of. Missing optional types are allowed. Present entries "
+                        "remain validated. Extra types are allowed. Rules supplement specification checks and "
+                        "cannot authorize another physical operation. Empty preserves existing behavior.",
                     ),
                 ),
             ),
@@ -790,8 +833,8 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
             SectionSpec(
                 name="identifier_workflows",
                 description=(
-                    "Use per-run unique identifiers and reset only values created by the active workflow. "
-                    "ResetAll requires its own approved workflow and is never used as cleanup."
+                    "Use per-run unique identifiers with selective test-owned cleanup, "
+                    "plus optional ResetAll when reset_all_identifiers is approved."
                 ),
                 fields=(
                     FieldSpec(
@@ -818,8 +861,9 @@ MANIFEST_SCHEMA: tuple[SectionSpec, ...] = (
                         "allow_reset_all",
                         "bool",
                         (
-                            "Allow broad ResetAll only through the separately approved "
-                            "reset_all_identifiers workflow. Never use it as cleanup."
+                            "Allow ResetIdentifiers(ResetAll=True) when reset_all_identifiers "
+                            "is approved in workflows.approved (for baseline reset, dedicated "
+                            "ResetAll verification, and full identifier state reset)."
                         ),
                         default=False,
                     ),
@@ -1040,6 +1084,13 @@ def _validate_scalar(value: Any, spec: FieldSpec, path: str) -> Any:
         for index, item in enumerate(value):
             if not isinstance(item, str):
                 raise SutManifestError(f"{path}[{index}]: must be a string, got {type(item).__name__}")
+        return list(value)
+    if spec.kind == "int_list":
+        if not isinstance(value, list):
+            raise SutManifestError(f"{path}: must be a list, got {type(value).__name__}")
+        for index, item in enumerate(value):
+            if isinstance(item, bool) or not isinstance(item, int):
+                raise SutManifestError(f"{path}[{index}]: must be an integer, got {type(item).__name__}")
         return list(value)
     if spec.kind == "str_map":
         if not isinstance(value, dict):
@@ -1448,6 +1499,7 @@ class SutManifest:
                 },
                 "cleanup": dict(workflows["cleanup"]),
                 "evidence_reuse": dict(workflows["evidence_reuse"]),
+                "preparation": dict(workflows["preparation"]),
             },
             "reporting": {
                 "output_dir": data["reporting"]["output_dir"],
@@ -1639,6 +1691,10 @@ def _validate_consistency(manifest: SutManifest) -> None:
         "selection_name",
         "identifier_strategy",
         "expected_result_classification",
+        "counter_name",
+        "counter_type",
+        "verify_delta",
+        "expected_terminal_result_state",
     }
     for index, effect in enumerate(counter_effects):
         path = f"execution_policy.counter_effects[{index}]"
@@ -1655,6 +1711,22 @@ def _validate_consistency(manifest: SutManifest) -> None:
                 "execution_policy.state_changing_methods.allowed_methods"
             )
         count = effect.get("count", 1)
+        if not isinstance(effect.get("verify_delta", False), bool):
+            raise SutManifestError(f"{path}.verify_delta must be a boolean")
+        if effect.get("verify_delta", False) and not effect.get("expected_result_classification"):
+            raise SutManifestError(f"{path}.verify_delta requires expected_result_classification")
+        if not isinstance(effect.get("counter_name", ""), str):
+            raise SutManifestError(f"{path}.counter_name must be a string")
+        counter_type = effect.get("counter_type", -1)
+        if isinstance(counter_type, bool) or not isinstance(counter_type, int) or counter_type < -1:
+            raise SutManifestError(f"{path}.counter_type must be -1 or a nonnegative integer")
+        expected_terminal_state = effect.get("expected_terminal_result_state", 0)
+        if (
+            isinstance(expected_terminal_state, bool)
+            or not isinstance(expected_terminal_state, int)
+            or expected_terminal_state not in {0, 1, 3, 4}
+        ):
+            raise SutManifestError(f"{path}.expected_terminal_result_state must be 0, 1, 3, or 4")
         if isinstance(count, bool) or not isinstance(count, int) or count < 1:
             raise SutManifestError(f"{path}.count must be a positive integer")
         process_policy = effect.get("process_policy", "exact_match")
@@ -1699,6 +1771,14 @@ def _validate_consistency(manifest: SutManifest) -> None:
         )
 
     workflows = manifest.data["workflows"]
+    tool = workflows["tool_selector"]
+    station = tool["virtual_station_product_instance_uri"]
+    if station and not tool["product_instance_uri"].strip():
+        raise SutManifestError(
+            "workflows.tool_selector.virtual_station_product_instance_uri requires a configured Tool ProductInstanceUri"
+        )
+    if station and station.strip().lower() == tool["product_instance_uri"].strip().lower():
+        raise SutManifestError("workflows.tool_selector: Tool and VirtualStation ProductInstanceUris must differ")
     start_limits = workflows["max_start_invocations_by_result_classification"]
     supported_start_limit_keys = {"single", "batch", "sync", "job"}
     unknown_start_limit_keys = sorted(set(start_limits) - supported_start_limit_keys)
@@ -1723,6 +1803,29 @@ def _validate_consistency(manifest: SutManifest) -> None:
     invalid = sorted(set(intermediate) - (VALID_RESULT_CLASSIFICATIONS - {"any"}))
     if invalid:
         raise SutManifestError(f"workflows.expected_results.intermediate_classifications: invalid values {invalid}")
+    state_val = expected.get("expected_terminal_result_state")
+    if isinstance(state_val, bool) or not isinstance(state_val, int) or state_val not in {1, 3, 4}:
+        raise SutManifestError(
+            "workflows.expected_results.expected_terminal_result_state must be one of [1, 3, 4] "
+            f"(1=COMPLETED, 3=ABORTED, 4=FAILED); got {state_val!r}"
+        )
+    abort_states = expected.get("expected_abort_result_states")
+    if not isinstance(abort_states, list) or not abort_states:
+        raise SutManifestError("workflows.expected_results.expected_abort_result_states must be a non-empty list")
+    for idx, item in enumerate(abort_states):
+        if isinstance(item, bool) or not isinstance(item, int) or item not in {1, 3, 4}:
+            raise SutManifestError(
+                f"workflows.expected_results.expected_abort_result_states[{idx}] must be one of [1, 3, 4] "
+                f"(1=COMPLETED, 3=ABORTED, 4=FAILED); got {item!r}"
+            )
+    from helpers.target_server_cu_config import parse_associated_entity_expectations
+
+    try:
+        parse_associated_entity_expectations(
+            expected["associated_entities"], "workflows.expected_results.associated_entities"
+        )
+    except TargetServerConfigError as exc:
+        raise SutManifestError(str(exc)) from exc
 
     rr = policy.get("request_results") or {}
     strat = rr.get("filter_strategy", "sequence_number")
@@ -1891,6 +1994,8 @@ _REMOTE_START_FACETS: tuple[str, ...] = (
 #: These extend the historical controller scope, not discovery observations.
 _REMOTE_START_CU_OVERRIDES: dict[str, str] = {
     "acknowledge_results": "unsupported",
+    "asset_connection_event": "manual_required",
+    "asset_connection_state_event": "manual_required",
     "asset_management_accessory": "unsupported",
     "asset_management_battery": "unsupported",
     "asset_management_battery_operation_cycle_counter": "unsupported",
@@ -1905,12 +2010,14 @@ _REMOTE_START_CU_OVERRIDES: dict[str, str] = {
     "asset_management_software": "unsupported",
     "asset_management_sub_component": "unsupported",
     "consolidated_result_with_references": "supported",
-    "delete_joint": "unsupported",
+    "delete_joint": "supported",
     "delete_joint_component": "unsupported",
     "delete_joint_design": "unsupported",
     "deselect_joining_process": "unsupported",
     "disconnect_asset": "unsupported",
     "engineering_units": "supported",
+    "event_condition_classes": "manual_required",
+    "event_payload_reported_values": "manual_required",
     "execute_operation": "unsupported",
     "feedback_methods": "unsupported",
     "get_error_information": "unsupported",
@@ -1928,10 +2035,11 @@ _REMOTE_START_CU_OVERRIDES: dict[str, str] = {
     "intervention_result": "supported",
     "io_signals_methods": "unsupported",
     "job_result": "supported",
+    "joining_result_errors": "manual_required",
     "joint_component_data": "unsupported",
-    "joint_data": "unsupported",
+    "joint_data": "supported",
     "joint_design_data": "unsupported",
-    "joint_management": "unsupported",
+    "joint_management": "supported",
     "partial_consolidated_result": "supported",
     "reboot_asset": "unsupported",
     "request_results": "supported",
@@ -2004,6 +2112,9 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
                     "SelectJoiningProcess",
                     "StartSelectedJoining",
                     "DeselectJoiningProcess",
+                    "SetJoiningProcessCounter",
+                    "SetJoiningProcessSize",
+                    "IncrementJoiningProcessCounter",
                 ],
             },
         },
@@ -2025,12 +2136,25 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
             "cu_overrides": dict(_REMOTE_START_CU_OVERRIDES),
         },
         "workflows": {
-            "approved": ["remote_start_multi_operation_job", "counter_intervention"],
-            "max_start_invocations": 6,
+            "approved": [
+                "remote_start_multi_operation_job",
+                "counter_intervention",
+                "remote_abort_job",
+                "remote_reset_job",
+                "select_process_event",
+                "asset_enable_state_event",
+                "structured_identifier_round_trip",
+                "text_identifier_round_trip",
+                "reset_all_identifiers",
+            ],
+            "max_start_invocations": 8,
             "allow_discovered_processes": True,
             "max_candidates": 3,
-            "max_total_start_invocations": 6,
-            "consecutive_start_delay_seconds": 0.25,
+            "max_total_start_invocations": 24,
+            "max_start_invocations_by_result_classification": {
+                "job": 8,
+            },
+            "consecutive_start_delay_seconds": 1.0,
             "process_selector": {
                 "policy": "first_compatible",
                 "joining_process_id": "",
@@ -2061,13 +2185,38 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
                 "classification": "job",
                 "intermediate_classifications": ["single", "batch", "sync", "intervention"],
                 "final_result_required": True,
+                "expected_abort_result_states": [3, 4],
+                "associated_entities": [
+                    {
+                        "classification": "single",
+                        "context": "joining",
+                        "required": ["TOOL"],
+                        "optional": ["CONTROLLER", "MEMORY_DEVICE", "VIRTUAL_STATION"],
+                    },
+                    *[
+                        {
+                            "classification": classification,
+                            "context": "counter_intervention",
+                            "required": [],
+                            "optional": ["TOOL", "CONTROLLER", "MEMORY_DEVICE", "VIRTUAL_STATION"],
+                        }
+                        for classification in ("intervention", "batch", "job")
+                    ],
+                ],
             },
             "cleanup": {"policy": "strict_cleanup", "deselect_process": False},
             "evidence_reuse": {"enabled": True, "scope": "current_run"},
         },
         "triggers": {
             "result": {"mode": "start_selected_joining", "deselect_after_joining": False},
-            "event": {"mode": "none"},
+            "event": {
+                "mode": "workflow_actions",
+                "actions": {
+                    "select_process_event": "select_process_event",
+                    "asset_enable_state_event": "asset_enable_state_event",
+                    "identifiers_event": "structured_identifier_round_trip",
+                },
+            },
             "condition": {"mode": "none"},
         },
         "execution_policy": {
@@ -2082,6 +2231,8 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
                     "StartSelectedJoining",
                     "IncrementJoiningProcessCounter",
                     "DecrementJoiningProcessCounter",
+                    "SetJoiningProcessCounter",
+                    "SetJoiningProcessSize",
                     "AbortJoiningProcess",
                     "ResetJoiningProcess",
                     "RequestResults",
@@ -2092,9 +2243,17 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
                     "SendIdentifiers",
                     "SendTextIdentifiers",
                     "ResetIdentifiers",
+                    "SetTime",
+                    "SendJoint",
+                    "SelectJoint",
+                    "DeleteJoint",
                 ],
             },
             "intervention": {"method": "IncrementJoiningProcessCounter", "count": 1},
+            "identifier_workflows": {
+                "enabled": True,
+                "allow_reset_all": True,
+            },
             "counter_effects": [
                 {
                     "method": "IncrementJoiningProcessCounter",
@@ -2107,8 +2266,30 @@ _PRESETS: Mapping[str, dict[str, Any]] = {
                     "selection_name": "",
                     "identifier_strategy": "id_only",
                     "expected_result_classification": "batch",
-                }
+                    "verify_delta": True,
+                    "counter_type": 3,
+                    "expected_terminal_result_state": 4,
+                },
+                {
+                    "method": "DecrementJoiningProcessCounter",
+                    "count": 1,
+                    "process_policy": "discover_unique",
+                    "process_classification": "job",
+                    "match_by": "joining_process_id",
+                    "joining_process_id": "",
+                    "joining_process_origin_id": "",
+                    "selection_name": "",
+                    "identifier_strategy": "id_only",
+                    "expected_result_classification": "batch",
+                    "verify_delta": True,
+                    "counter_type": 3,
+                    "expected_terminal_result_state": 0,
+                },
             ],
+            "request_results": {
+                "from_sequence_number": 1,
+                "to_sequence_number": 10,
+            },
             "risk_approvals": {
                 "allow_disable_asset": True,
                 "enable_asset_policy": "always",
@@ -2332,6 +2513,63 @@ def _counter_field_specs() -> tuple[FieldSpec, ...]:
             "Require a correlated partial or final affected result referencing the completed InterventionResult. Empty requires only InterventionResult.",
             choices=VALID_RESULT_CLASSIFICATIONS - {"any"},
         ),
+        FieldSpec(
+            "counter_name",
+            "str",
+            "Exact ResultCounter.Name for delta evidence. Empty requires an otherwise unique counter.",
+        ),
+        FieldSpec(
+            "verify_delta",
+            "bool",
+            "Qualify one before/after counter experiment and finish its owned process even when the first "
+            "consumer only tests the method or InterventionResult. Later tests reuse that evidence. "
+            "Requires expected_result_classification and existing joining-start approvals and ceilings. "
+            "False preserves method-only requests, while a delta test can still request qualification.",
+            default=False,
+        ),
+        FieldSpec(
+            "counter_type",
+            "int",
+            "Exact ResultCounter.CounterType for delta evidence. -1 means no type filter, not a protocol counter type. "
+            "Do not assume a vendor-specific type value. A baseline must resolve exactly one counter.",
+            default=-1,
+            min_value=-1,
+        ),
+        FieldSpec(
+            "expected_terminal_result_state",
+            "int",
+            "Expected terminal ResultState (1 COMPLETED, 3 ABORTED, or 4 FAILED) for the intervened compound process "
+            "when counter modification alters final process evaluation (e.g. 4 when bypassing a bolt marks the "
+            "batch/job NOK). 0 inherits workflows.expected_results.expected_terminal_result_state.",
+            default=0,
+            min_value=0,
+        ),
+    )
+
+
+def _associated_entity_field_specs() -> tuple[FieldSpec, ...]:
+    return (
+        FieldSpec(
+            "classification",
+            "str",
+            "Result classification to which this rule applies.",
+            choices=VALID_RESULT_CLASSIFICATIONS - {"any"},
+            required=True,
+        ),
+        FieldSpec(
+            "context",
+            "str",
+            "Workflow context for this rule. any applies in both contexts.",
+            default="any",
+            choices=frozenset({"any", "joining", "counter_intervention"}),
+        ),
+        FieldSpec("required", "str_list", "Standard EntityType names that must be present with non-empty EntityIds."),
+        FieldSpec(
+            "optional", "str_list", "Standard EntityType names allowed to be absent. Present entries remain validated."
+        ),
+        FieldSpec(
+            "at_least_one_of", "str_list", "Require at least one listed standard EntityType. Empty adds no requirement."
+        ),
     )
 
 
@@ -2366,11 +2604,12 @@ def _render_value(value: Any, indent: str, spec: FieldSpec) -> list[str]:
             lines.extend(_comment_lines(_map_entry_spec(spec, key), indent + "  "))
             lines.append(f"{indent}  {key}: {_yaml_scalar(item)}")
         return lines
-    if spec.name == "counter_effects":
+    if spec.name in {"counter_effects", "associated_entities"}:
         lines = []
+        fields = _counter_field_specs() if spec.name == "counter_effects" else _associated_entity_field_specs()
         for entry in value:
             lines.append(f"{indent}  -")
-            for field_spec in _counter_field_specs():
+            for field_spec in fields:
                 if field_spec.name not in entry:
                     continue
                 lines.extend(_comment_lines(field_spec, indent + "    "))
@@ -2460,6 +2699,8 @@ def manifest_field_spec(path: tuple[str, ...]) -> FieldSpec | None:
         spec = selector_specs.get(path[-1])
     if len(path) == 4 and path[:2] == ("execution_policy", "counter_effects"):
         spec = counter_specs.get(path[-1])
+    if len(path) == 5 and path[:3] == ("workflows", "expected_results", "associated_entities"):
+        spec = {field.name: field for field in _associated_entity_field_specs()}.get(path[-1])
     if len(path) == 3 and path[:2] == ("workflows", "process_selectors_by_classification"):
         spec = _selector_role_spec(path[-1])
     parent = specs.get(".".join(path[:-1]))
@@ -2700,6 +2941,7 @@ def annotate_local_manifest(source: str, *, compact: bool = False) -> str:
 def _reference_row(path: str, spec: FieldSpec) -> str:
     kind = {
         "str_list": "list of strings",
+        "int_list": "list of integers",
         "str_map": "mapping",
         "int_map": "mapping",
         "mapping_list": "list of mappings",
@@ -2752,6 +2994,10 @@ def render_field_reference() -> str:
     lines.extend(_reference_row(path, spec) for path, spec in iter_field_specs())
     lines.extend(
         _reference_row(f"execution_policy.counter_effects[].{spec.name}", spec) for spec in _counter_field_specs()
+    )
+    lines.extend(
+        _reference_row(f"workflows.expected_results.associated_entities[].{spec.name}", spec)
+        for spec in _associated_entity_field_specs()
     )
     lines.extend(
         [

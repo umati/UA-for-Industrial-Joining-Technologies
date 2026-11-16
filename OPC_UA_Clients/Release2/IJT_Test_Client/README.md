@@ -12,7 +12,9 @@ IJT specification test client for specification testing of OPC UA IJT servers ag
 - Internet connection for first-time dependency installation
 - An OPC UA IJT server for specification tests: use the checked-in simulator or your own controller
 
-**Default endpoint:** `opc.tcp://localhost:40451`
+**Endpoints:** raw pytest defaults to `opc.tcp://localhost:40451`; the runner's
+auto-launched simulator uses its dedicated `opc.tcp://localhost:40462` endpoint.
+A controller manifest uses its configured endpoint or an explicit override.
 
 ## Quick Start
 
@@ -24,7 +26,7 @@ No manual uv installation or shell activation is needed.
 python run_all_tests.py
 ```
 
-`run_all_tests.py` is the single documented entry point for this test client — it
+`run_all_tests.py` is the canonical entry point for this test client — it
 runs static analysis, then the full specification_tests/ suite against either the
 checked-in simulator (auto-launched) or a real Target Server, if configured. Both
 are "OPC UA Servers Under Test": they run the identical specification suite. A
@@ -36,8 +38,10 @@ full Target Server option reference.
 
 For repeated controller runs, enable
 [bounded automatic process discovery](docs/TARGET_SERVER_CU_GUIDE.md#repeat-runs-without-updating-process-ids).
-Explicit YAML target restrictions remain supported. Required blocked or missing
-coverage produces **INCOMPLETE**, not PASS, even when pytest has no failures.
+Explicit YAML target restrictions remain supported. Required blocked or missing `supported` coverage produces **INCOMPLETE**, not
+PASS, even when pytest has no failures (`manual_required` CUs are recorded as
+`manual_deferred_cus` in unattended `automated` runs and required in `guided`
+runs).
 Generated SUTs use an explicit complete CU table. New catalogue entries remain
 unreviewed and disabled until their support is declared. Previously approved
 tests can continue, but the newer catalogue cannot receive PASS without review.
@@ -70,7 +74,7 @@ target, capability or approval settings. Copy the relevant example or use
 `init-profile` to seed one from live discovery, then review its claims and
 permissions before execution:
 ```bash
-python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output controller.sut.yaml
+python run_all_tests.py init-profile --endpoint opc.tcp://<host>:40451 --output target_server_cu_profiles/controller.local.sut.yaml
 ```
 
 Optional read-only discovery (safe, no state change, no manifest needed):
@@ -81,14 +85,14 @@ python run_all_tests.py inspect --endpoint opc.tcp://<host>:40451
 To check profile classification before executing specification tests:
 
 ```bash
-python run_all_tests.py run --profile controller.sut.yaml --endpoint opc.tcp://<host>:40451 --preflight-only
+python run_all_tests.py run --profile target_server_cu_profiles/controller.local.sut.yaml --endpoint opc.tcp://<host>:40451 --preflight-only
 ```
 
 If recreating controller programs or sequences makes an exact process selector
 stale, refresh the existing local manifest instead of copying IDs by hand:
 
 ```bash
-python run_all_tests.py refresh-profile --profile controller.sut.yaml
+python run_all_tests.py refresh-profile --profile target_server_cu_profiles/controller.local.sut.yaml
 ```
 
 The guide reads the profile's live catalog using its security settings, groups

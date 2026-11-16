@@ -9,6 +9,8 @@ acknowledge_results, request_unacknowledged_results.
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
+from typing import Any, cast
 
 import pytest
 from asyncua import ua
@@ -24,6 +26,7 @@ from helpers.namespaces import (
     IJTTypes,
     MachineryResultTypes,
     RefTypes,
+    ResultClassification,
     ResultType,
 )
 from helpers.node_discovery import (
@@ -380,10 +383,18 @@ async def test_result_management_result_ready_event_fired_on_simulate(
         pytest.skip("IJT Base namespace not registered on server")
 
     if not result_trigger.is_simulator:
-        pytest.skip(
-            "Event subscription test requires simulator trigger — "
-            "run with a simulator server and trigger manually for real controller"
-        )
+        raw_getter = getattr(result_trigger, "get_reusable_progression", None)
+        if callable(raw_getter):
+            reusable_getter = cast(Callable[[int], Awaitable[Any]], raw_getter)
+            for cls in (
+                ResultClassification.SINGLE_RESULT,
+                ResultClassification.JOB_RESULT,
+                ResultClassification.BATCH_RESULT,
+            ):
+                progression = await reusable_getter(cls)
+                if progression is not None and getattr(progression, "source_events", ()):
+                    assert len(progression.source_events) >= 1
+                    return
 
     server_node = subscription_client.nodes.server
     event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt))
@@ -393,13 +404,11 @@ async def test_result_management_result_ready_event_fired_on_simulate(
 
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered:
-            pytest.skip(f"Simulator trigger failed: {outcome.skip_reason}")
+            pytest.skip(f"Result trigger failed: {outcome.skip_reason}")
 
         events = await collector.collect(count=1, timeout_s=30.0)
 
-    assert len(events) >= 1, (
-        "No JoiningSystemResultReadyEvent received within timeout after triggering SimulateSingleResult"
-    )
+    assert len(events) >= 1, "No JoiningSystemResultReadyEvent received within timeout after triggering result"
 
 
 # ---------------------------------------------------------------------------

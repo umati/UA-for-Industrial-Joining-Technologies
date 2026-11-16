@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 
 from asyncua import ua
 
+from helpers.method_caller import MethodCallResult
 from helpers.namespaces import BN
 from helpers.node_discovery import find_child_by_browse_name
 
@@ -100,6 +101,24 @@ class TriggerOutcome:
     inconclusive: bool = False
 
 
+def require_workflow_outcome(outcome: TriggerOutcome, workflow: str) -> None:
+    """Retain controlled-workflow causes without confusing unavailable evidence with SUT violations."""
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+
+    if outcome.triggered:
+        return
+    reason_code = getattr(outcome, "reason_code", "") or "workflow_evidence_unavailable"
+    diagnostic = outcome.skip_reason or "The configured workflow did not provide its required evidence."
+    if getattr(outcome, "execution_outcome", "") == "failed":
+        raise AssertionError(f"{reason_code}: {diagnostic}")
+    raise WorkflowEvidenceUnavailable(
+        diagnostic,
+        reason_code,
+        "inconclusive" if getattr(outcome, "mutation_attempted", False) else "blocked",
+        workflow,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Abstract base classes
 # ---------------------------------------------------------------------------
@@ -111,6 +130,13 @@ class ResultTrigger(ABC):
     Concrete subclasses either call SimulateXxx OPC UA methods (simulator) or
     return an "external trigger required" outcome (real controller).
     """
+
+    associated_entity_expectations: tuple = ()
+
+    def validate_result_expectations(self, result_data, *, context="joining") -> None:
+        from helpers.result_validator import assert_associated_entity_expectations
+
+        assert_associated_entity_expectations(result_data, self.associated_entity_expectations, context=context)
 
     @property
     @abstractmethod
@@ -329,6 +355,62 @@ class SimulatorResultTrigger(ResultTrigger):
         self._client = client
         self._folder = simulate_results_folder_node
         self._ns_app = ns_app
+
+    def authorize_counter_methods(self, *method_names: str) -> None:
+        """Check the resolved simulator route and every required permission before setup."""
+        from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+        from helpers.profile_loader import selected_manifest_path
+        from helpers.sut_manifest import load_sut_manifest, manifest_change_reason
+
+        supported = {BN.SET_JOINING_PROCESS_COUNTER, BN.SET_JOINING_PROCESS_SIZE, BN.INCREMENT_JOINING_PROCESS_COUNTER}
+        if not self.is_simulator or not method_names or not set(method_names) <= supported:
+            raise WorkflowEvidenceUnavailable(
+                "Counter setup requires the simulator counter adapter.",
+                "simulator_counter_route_required",
+                "blocked",
+                "simulator_counter",
+            )
+        path = selected_manifest_path()
+        if path is None:
+            return
+        issue = manifest_change_reason(path, os.environ.get("OPCUA_TARGET_MANIFEST_SHA256"))
+        if issue:
+            raise WorkflowEvidenceUnavailable(issue, "manifest_changed", "blocked", "simulator_counter")
+        profile = load_sut_manifest(path).to_execution_profile()
+        if profile.triggers.result.mode != "simulate_methods":
+            raise WorkflowEvidenceUnavailable(
+                "The active execution plan does not select the simulator result adapter.",
+                "simulator_counter_route_required",
+                "blocked",
+                "simulator_counter",
+            )
+        denied = [
+            method
+            for method in method_names
+            if not profile.cu_execution.state_changing_methods.allow_state_changing_method(method)
+        ]
+        if denied:
+            raise WorkflowEvidenceUnavailable(
+                "Simulator counter methods are not authorized by the SUT manifest: " + ", ".join(denied),
+                "method_not_authorized",
+                "blocked",
+                "simulator_counter",
+            )
+
+    async def call_counter_method(self, parent_node, method_name: str, ns_ijt: int, *args) -> MethodCallResult:
+        """Invoke a simulator counter method only after checking its actual permission."""
+        from helpers.method_caller import find_and_call_method
+
+        self.authorize_counter_methods(method_name)
+        return await find_and_call_method(
+            parent_node,
+            method_name,
+            ns_ijt,
+            *args,
+            timeout=self.active_result_timeout_s,
+            target_server_authorized=True,
+            preserve_status=True,
+        )
 
     async def _find_method(self, browse_name: str):
         """Locate a method node under the SimulateResults folder by BrowseName."""

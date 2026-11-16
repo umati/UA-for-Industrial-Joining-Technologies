@@ -242,7 +242,8 @@ async def test_battery_capacity_physical_quantity_is_other(batteries_folder, ns_
     assert other_label == "OTHER", f"{label}.PhysicalQuantity.EnumStrings[0] = {other_label!r}, expected 'OTHER'"
 
 
-@pytest.mark.requires_cu(CU.ASSET_MANAGEMENT_BATTERY, CU.ENGINEERING_UNITS)
+@pytest.mark.requires_cu(CU.ENGINEERING_UNITS)
+@pytest.mark.requires_dependency_cu(CU.ASSET_MANAGEMENT_BATTERY)
 async def test_battery_capacity_engineering_unit_is_ampere_hour(batteries_folder, ns_indices):
     """
     Battery Capacity must use engineering unit Ah (UNECE 4279624), not A (UNECE 4279632).

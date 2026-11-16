@@ -30,9 +30,11 @@ class WorkflowEvidenceUnavailable(pytest.skip.Exception):
         super().__init__(reason)
         self.ijt_properties = {
             "ijt_reason_code": reason_code,
-            "ijt_outcome": outcome,
+            "ijt_outcome": "environment" if outcome == "inconclusive" else outcome,
             "ijt_workflow": workflow,
         }
+        if outcome == "inconclusive":
+            self.ijt_properties["ijt_canonical_outcome"] = "inconclusive"
 
 
 def qualification_disposition(coverage: object) -> dict:
@@ -48,24 +50,38 @@ def qualification_disposition(coverage: object) -> dict:
         return {"outcome": "incomplete", "issues": ["No claimed coverage was recorded."]}
     failed = []
     incomplete = []
+    manual_deferred = []
     excluded = []
+    manual_required_set = set(coverage.get("manual_required_cus") or ()) | {
+        key for key, row in rows.items() if row.get("manual_required") is True
+    }
+    automated_defer_manual = coverage.get("execution_mode", "automated") == "automated" and not bool(
+        coverage.get("allow_manual_steps", False)
+    )
     for key, row in rows.items():
         if not row.get("claimed"):
             continue
         if row.get("scope_excluded", False):
             excluded.append(key)
-        if row.get("failed", 0) or row.get("error", 0):
+        if row.get("failed", 0) or row.get("error", 0) or row.get("requirement_outcome") == "failed":
             failed.append(key)
         elif (
             row.get("scope_excluded", False)
+            or row.get("requirement_outcome", "passed") != "passed"
             or row.get("compliance") != "supported"
             or type(row.get("passed")) is not int
             or row["passed"] < 1
         ):
-            incomplete.append(key)
+            if key in manual_required_set and automated_defer_manual and not row.get("scope_excluded", False):
+                manual_deferred.append(key)
+            else:
+                incomplete.append(key)
     for key in coverage.get("supported_cus") or ():
         if key not in rows:
-            incomplete.append(key)
+            if key in manual_required_set and automated_defer_manual:
+                manual_deferred.append(key)
+            else:
+                incomplete.append(key)
     pending = coverage.get("unreviewed_cus", [])
     if not isinstance(pending, list) or any(not isinstance(key, str) for key in pending):
         return {
@@ -76,12 +92,41 @@ def qualification_disposition(coverage: object) -> dict:
     unreviewed = sorted(
         set(pending) | {key for key, row in rows.items() if row.get("declaration_state") == "unreviewed"}
     )
-    return {
-        "outcome": "failed" if failed else "incomplete" if incomplete or unreviewed else "passed",
+    deselected = sorted(key for key in coverage.get("deselected_cus", []) if key in rows and rows[key].get("claimed"))
+    result = {
+        "outcome": "failed" if failed else "incomplete" if incomplete or unreviewed or deselected else "passed",
         "failed_cus": failed,
         "incomplete_cus": incomplete,
         "scope_excluded_claimed_cus": excluded,
         "unreviewed_cus": unreviewed,
+        "scope_deselected_claimed_cus": deselected,
+    }
+    if manual_deferred:
+        result["manual_deferred_cus"] = sorted(set(manual_deferred))
+    return result
+
+
+def run_assessment(coverage: dict, execution_exit_code: int) -> dict[str, str]:
+    """Keep test execution, requirement evidence, and claimed selection separate."""
+    raw_exitstatus = coverage.get("raw_pytest_exitstatus")
+    if type(raw_exitstatus) is int and execution_exit_code in {0, 1, INCOMPLETE_EXIT_CODE}:
+        execution_exit_code = raw_exitstatus
+    qualification = qualification_disposition(coverage)
+    manual_deferred = set(qualification.get("manual_deferred_cus") or ())
+    rows = coverage.get("by_cu", {})
+    if not isinstance(rows, dict) or any(not isinstance(row, dict) for row in rows.values()):
+        rows = {}
+    claimed = coverage.get("supported_cus") or [key for key, row in rows.items() if row.get("claimed")]
+    scope_complete = bool(claimed) and all(
+        key in manual_deferred
+        or (key in rows and rows[key].get("test_count", 0) > 0 and not rows[key].get("scope_excluded", False))
+        for key in claimed
+    )
+    scope_complete = scope_complete and not set(claimed).intersection(coverage.get("deselected_cus", []))
+    return {
+        "execution_health": "passed" if execution_exit_code in {0, INCOMPLETE_EXIT_CODE} else "failed",
+        "requirement_qualification": qualification["outcome"],
+        "scope_completeness": "complete" if scope_complete else "incomplete",
     }
 
 
@@ -152,7 +197,10 @@ def _marker_workbook_refs(item) -> list[dict[str, object]]:
         if not sheet:
             continue
         for row in _normalize_rows(rows):
-            refs.append({"sheet": str(sheet), "row": row, "ref": workbook_ref_id(str(sheet), row)})
+            ref = {"sheet": str(sheet), "row": row, "ref": workbook_ref_id(str(sheet), row)}
+            if marker.kwargs.get("route"):
+                ref["route"] = str(marker.kwargs["route"])
+            refs.append(ref)
     return refs
 
 
@@ -257,18 +305,29 @@ class CuCoverageReportRecorder:
         all_cus: Iterable[str],
         supported_cus: Iterable[str] | None,
         unreviewed_cus: Iterable[str] = (),
+        manual_required_cus: Iterable[str] = (),
+        execution_mode: str = "automated",
+        allow_manual_steps: bool = False,
+        result_trigger_mode: str = "",
     ):
         self.root = root
         self.all_cus = sorted(set(all_cus))
         self.supported_cus = None if supported_cus is None else sorted(set(supported_cus))
         self.unreviewed_cus = sorted(set(unreviewed_cus))
+        self.manual_required_cus = sorted(set(manual_required_cus))
+        self.execution_mode = execution_mode or "automated"
+        self.allow_manual_steps = bool(allow_manual_steps)
+        self.result_trigger_mode = result_trigger_mode
         self.items_by_nodeid: dict[str, dict] = {}
         self.results_by_nodeid: dict[str, dict] = {}
+        self.deselected_cus: set[str] = set()
         configured = os.environ.get("IJT_CU_COVERAGE_REPORT_FILE")
         self.output_path = Path(configured) if configured else root / "test-results" / "cu-coverage-report.json"
 
     def pytest_collection_modifyitems(self, session, config, items):  # noqa: D401
         for item in items:
+            if self._is_inapplicable_simulation(item):
+                continue
             cus = _marker_cus(item)
             if not cus:
                 continue
@@ -280,6 +339,17 @@ class CuCoverageReportRecorder:
                 "dependency_cus": _marker_dependency_cus(item),
                 "workbook_refs": _marker_workbook_refs(item),
             }
+
+    def pytest_deselected(self, items):
+        for item in items:
+            if self._is_inapplicable_simulation(item):
+                continue
+            self.deselected_cus.update(_marker_cus(item))
+
+    def _is_inapplicable_simulation(self, item) -> bool:
+        return self.result_trigger_mode in {"start_selected_joining", "manual_trigger", "observe_only", "none"} and any(
+            item.iter_markers("simulation")
+        )
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_makereport(self, item, call):
@@ -316,12 +386,18 @@ class CuCoverageReportRecorder:
             **{key: value for key, value in item.items() if key != "dependency_cus"},
             "cus": cus,
             "outcome": outcome,
-            "canonical_outcome": canonical_for_pytest_outcome(outcome, claimed=self._is_claimed(cus)).value,
+            "canonical_outcome": (
+                "inconclusive"
+                if outcome not in {"failed", "error", "passed"}
+                and properties.get("ijt_canonical_outcome") == "inconclusive"
+                else canonical_for_pytest_outcome(outcome, claimed=self._is_claimed(cus)).value
+            ),
             "phase": report.when,
             "duration_s": round(float(getattr(report, "duration", 0.0)), 6),
             "reason": reason,
             "reason_code": properties.get("ijt_reason_code", ""),
             "workflow": properties.get("ijt_workflow", ""),
+            "evidence_route": properties.get("ijt_evidence_route", ""),
             "scope_excluded": properties.get("ijt_scope_excluded") == "true",
         }
 
@@ -362,14 +438,21 @@ class CuCoverageReportRecorder:
                 tests_by_cu[cu_key].append(entry)
 
         exact_refs_by_row: dict[str, set[str]] = defaultdict(set)
+        exact_routes_by_row: dict[str, dict[str, set[str]]] = defaultdict(dict)
         for item in self.items_by_nodeid.values():
             for ref in item.get("workbook_refs", []):
                 ref_id = str(ref.get("ref", ""))
                 if ref_id:
                     exact_refs_by_row[ref_id].add(item["nodeid"])
+                    if ref.get("route"):
+                        exact_routes_by_row[ref_id].setdefault(item["nodeid"], set()).add(str(ref["route"]))
 
         try:
-            workbook = workbook_traceability_report(tests_by_cu=tests_by_cu, exact_refs_by_row=exact_refs_by_row)
+            workbook = workbook_traceability_report(
+                tests_by_cu=tests_by_cu,
+                exact_refs_by_row=exact_refs_by_row,
+                exact_routes_by_row=exact_routes_by_row,
+            )
         except Exception as exc:  # noqa: BLE001
             workbook = {
                 "schema": "ijt-workbook-traceability/v1",
@@ -388,6 +471,7 @@ class CuCoverageReportRecorder:
                 "compliance": compliance,
                 "canonical_outcome": canonical_for_report_outcome(compliance, claimed=claimed).value,
                 "claimed": claimed,
+                "manual_required": cu_key in self.manual_required_cus,
                 "declaration_state": "unreviewed" if cu_key in self.unreviewed_cus else "declared",
                 "scope_excluded": bool(tests) and all(test.get("scope_excluded", False) for test in tests),
                 "test_count": len(tests),
@@ -405,13 +489,40 @@ class CuCoverageReportRecorder:
                 "untested": outcomes.count("untested"),
                 "tests": [test["nodeid"] for test in tests],
             }
+            if cu_key in {"increment_joining_process_counter", "intervention_result"}:
+                cases = workbook_cu.get("cases", [])
+                by_cu[cu_key]["requirement_outcome"] = (
+                    "failed"
+                    if any(outcome in {"failed", "error"} for outcome in outcomes)
+                    or any(case.get("outcome") == "failed" for case in cases)
+                    else "passed"
+                    if cases and all(case.get("outcome") == "passed" for case in cases)
+                    else "incomplete"
+                )
+                requirement_outcome = by_cu[cu_key]["requirement_outcome"]
+                if requirement_outcome == "failed":
+                    by_cu[cu_key]["compliance"] = "action_needed"
+                elif requirement_outcome == "incomplete" and compliance == "supported":
+                    by_cu[cu_key]["compliance"] = "partial"
+                by_cu[cu_key]["canonical_outcome"] = canonical_for_report_outcome(
+                    by_cu[cu_key]["compliance"], claimed=claimed
+                ).value
+            if by_cu[cu_key]["canonical_outcome"] != "failed" and any(
+                test.get("canonical_outcome") == "inconclusive" for test in tests
+            ):
+                by_cu[cu_key]["canonical_outcome"] = "inconclusive"
 
         payload = {
             "schema": "ijt-cu-coverage-report/v1",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "exitstatus": int(exitstatus),
+            "raw_pytest_exitstatus": int(exitstatus),
             "supported_cus": self.supported_cus,
+            "manual_required_cus": self.manual_required_cus,
+            "execution_mode": self.execution_mode,
+            "allow_manual_steps": self.allow_manual_steps,
             "unreviewed_cus": self.unreviewed_cus,
+            "deselected_cus": sorted(self.deselected_cus),
             "summary": {
                 "official_cu_count": len(self.all_cus),
                 "extension_cu_count": len(extension_cus),
@@ -429,6 +540,7 @@ class CuCoverageReportRecorder:
             "tests": results,
         }
         payload["qualification"] = qualification_disposition(payload)
+        payload["assessment"] = run_assessment(payload, int(exitstatus))
         if os.environ.get("OPCUA_TARGET_SERVER_PROFILE") and int(exitstatus) == 0:
             disposition = payload["qualification"]["outcome"]
             if disposition != "passed":

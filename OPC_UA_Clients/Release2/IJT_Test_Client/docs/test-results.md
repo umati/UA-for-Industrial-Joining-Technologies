@@ -4,7 +4,8 @@ This document explains how to read test reports and what each test status means.
 
 ## Report Locations
 
-After a `run_all_tests.py` run the following files are produced:
+Artifacts depend on the stages actually executed and the selected report policy.
+The following files are produced when their corresponding stages run:
 
 | File | Format | Contents |
 |---|---|---|
@@ -12,7 +13,7 @@ After a `run_all_tests.py` run the following files are produced:
 | `test-results/pytest-unit.xml` | JUnit XML | Unit test results from `run_all_tests.py` Phase 1 |
 | `test-results/mypy.txt` | Text | Blocking local Phase 1 type-check output from `python -m mypy . --ignore-missing-imports --no-error-summary` |
 | `test-results/report.xlsx` | Excel | Human-readable coloured summary by test area, full detail, filtered views |
-| `test-results/report-baseline.json` | JSON | Internal trend snapshot written after each report render; generated locally/job-locally and ignored by git |
+| `test-results/report-baseline.json` | JSON | Internal trend snapshot updated by the simulator runner or an explicitly requested baseline write; local/job-local and ignored by git |
 | `test-results/smoke-sanity.xml` | JUnit XML | Quick server reachability smoke test (CI only) |
 | `test-results/cu-coverage-report.json` | JSON | Machine-readable CU coverage report by test, Conformance Unit, raw support outcome, conservative status, and workbook row traceability |
 | `test-results/cu-coverage-report-unit.json` | JSON | Unit-stage plugin output; kept separate so the main CU report name is reserved for live specification test runs |
@@ -24,7 +25,7 @@ gets a unique timestamped directory under the configured output path:
 
 ```
 test-results/target-server-cu/<profile-name>/<YYYYMMDD-HHMMSS>/
-test-results/target-server-cu/<profile-name>/latest/   ← symlink/junction to newest run
+test-results/target-server-cu/<profile-name>/latest/   ← optional link to newest run
 ```
 
 | File | Format | Contents |
@@ -34,12 +35,19 @@ test-results/target-server-cu/<profile-name>/latest/   ← symlink/junction to n
 | `target-server-cu-summary.md` | Markdown | GitHub-compatible Markdown summary table with a `Test Counts` section |
 | `spec-tests.xml` | JUnit XML | Run-scoped specification-test outcomes |
 | `cu-coverage-report.json` | JSON | Run-scoped CU support/blocked/Not Supported classifications |
+| `workflow-actions.jsonl` | JSON Lines | Guarded workflow actions, observed result context and diagnostics; present when the workflow journal is used |
 | `report-controller.xlsx` | Excel | Controller workbook. Copied to `--excel-out FILE` only when explicitly passed |
 | `model-inventory.json` | JSON | Read-only address-space + packaged model contract inventory |
 | `latest-run.json` | JSON | Pointer to this run directory (always machine-discoverable) |
 
 Each run directory is self-contained and immutable after the run completes.
-Prior runs are preserved; only the `latest` symlink advances.
+Preflight-only, classification-only and early-failed runs may lack specification
+JUnit, CU coverage, inventory or workbook artifacts; consult the run report
+rather than assuming every table entry exists.
+Prior runs are preserved. The `latest` link is refreshed when supported; it may
+be unavailable, for example on Windows without symlink privileges. Use the
+printed timestamped directory and its `latest-run.json` rather than assuming
+the convenience link exists.
 
 Target Server CU evidence is written only when `--profile`/`--endpoint` is used.
 It is never written during plain simulator runs.
@@ -47,6 +55,19 @@ It is never written during plain simulator runs.
 > `report.html` is **not** produced by `run_all_tests.py`. Use the manual `pytest --html=...` command below when an HTML report is required.
 
 In CI, report files are uploaded as run artifacts.
+
+### Execution success versus qualification
+
+A successful pytest process or green unit stage is not a controller qualification.
+Target runs distinguish execution health, requirement qualification and selected
+scope completeness. Missing, blocked or inconclusive required claimed coverage
+remains **INCOMPLETE / exit 6**, including classification-only runs with no
+specification-test execution. Failed requirements remain failures even if the
+physical workflow later settles safely.
+
+The outer Test Client runner preserves exit 6 and reports `incomplete=N`
+separately from failed steps. See the [report glossary](REPORT_GLOSSARY.md#controller-qualification-disposition)
+for qualification policy and the canonical outcome vocabulary.
 
 ---
 
@@ -67,7 +88,7 @@ python scripts/make_excel_report.py --xml test-results/pytest-live.xml --out tes
 python scripts/make_excel_report.py --xml test-results/pytest-live.xml --out test-results/custom-report.xlsx
 ```
 
-**Generate Excel automatically from `run_all_tests.py` (non-fatal post-step):**
+**Generate Excel automatically from `run_all_tests.py`:**
 ```bash
 # default behavior: always generate report.xlsx when JUnit XML is available
 python run_all_tests.py
@@ -82,9 +103,18 @@ python run_all_tests.py --excel-out test-results/controller-report.xlsx
 If the test run fails, `report.xlsx` is still generated for diagnostics when
 JUnit XML is available. In that case the workbook includes a red warning banner
 and should not be treated as a clean specification test report.
-`report-baseline.json` is overwritten after each render as an internal trend
-artifact. The renderer does not read it and the report contains no
-baseline-driven delta UI.
+The plain simulator runner's Excel post-step is non-fatal. Target runs instead
+require their run-scoped JUnit and CU evidence and fail if the required controller
+workbook cannot be produced. Only the explicit `--excel=never` policy or
+`--excel=on-success` after an unsuccessful run benignly skips that target workbook.
+Target runs print `Controller Excel report: PASS` with the workbook path, or
+`SKIP`/`FAIL` with the actual reason. They omit the unrelated simulator Excel
+post-step from the final runner summary rather than suggesting controller Excel
+generation was skipped.
+`report-baseline.json` is updated only when the renderer is invoked with
+`--write-baseline`, as the simulator runner does. Target runs do not update the
+shared simulator baseline. The renderer does not read this internal trend
+artifact and the report contains no baseline-driven delta UI.
 
 **Write the CU coverage report to a custom location:**
 ```bash
@@ -243,7 +273,10 @@ not presented as warnings.
 
 ### Test counts: runner steps vs live tests vs CUs
 
-`run_all_tests.py` ends with `Result: PASS passed=N warned=M`. Those numbers
+`run_all_tests.py` ends with a `Result:` line containing runner-step counts,
+including `passed`, `warned`, `failed`, `incomplete` and `skipped`. The result
+can be `PASS`, `FAIL` or `INCOMPLETE`; a nonzero incomplete count is not a pass.
+Those numbers
 count **runner steps** (lint, unit stage, live stage and so on), not individual
 tests. Test counts are reported separately from the same artifacts, by
 `helpers/cu_test_counts.py`:

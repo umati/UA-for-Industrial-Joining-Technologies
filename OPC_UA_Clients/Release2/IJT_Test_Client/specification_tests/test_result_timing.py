@@ -23,7 +23,6 @@ import pytest
 
 from helpers.cu_registry import CU
 from helpers.namespaces import ResultType
-from helpers.result_collector import ResultCollector
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -37,11 +36,11 @@ async def _get_result_with_meta(
     include_traces: bool = False,
 ):
     """Trigger a result and return (result_data, meta) via IJTResultEventType events."""
-    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
-        outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
-        if not outcome.triggered:
-            return None, None
-        result_data = await rc.collect_single()
+    from helpers.result_collector import collect_single_evidence
+
+    result_data = await collect_single_evidence(
+        subscription_client, result_trigger, ns_indices, result_type, include_traces=include_traces
+    )
     if result_data is None:
         return None, None
     meta = getattr(result_data, "ResultMetaData", None)
@@ -521,12 +520,14 @@ async def test_duration_values_are_consistent_across_result_types(subscription_c
     """AcquisitionDuration and ProcessingDuration, when present, must consistently be
     non-negative for both one-step and multi-step result types."""
     failures = []
+    checked_results = 0
     for result_type in (ResultType.ONE_STEP_OK_RESULT, ResultType.MULTI_STEP_OK_RESULT):
         result_data, meta = await _get_result_with_meta(
             subscription_client, result_trigger, ns_indices, result_type=result_type
         )
         if result_data is None or meta is None:
             continue
+        checked_results += 1
         pt = getattr(meta, "ProcessingTimes", None)
         if pt is None:
             continue
@@ -538,6 +539,6 @@ async def test_duration_values_are_consistent_across_result_types(subscription_c
             if val_ms < 0:
                 failures.append(f"result_type={result_type}: ProcessingTimes.{field_name}={val_ms:.3f} ms is negative")
 
-    if not failures and not result_trigger.is_simulator:
+    if checked_results == 0 and not result_trigger.is_simulator:
         pytest.skip("No results collected for consistency check (external trigger)")
     assert not failures, "Duration values must be non-negative:\n  " + "\n  ".join(failures)

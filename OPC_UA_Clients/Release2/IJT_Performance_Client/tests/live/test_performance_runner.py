@@ -65,17 +65,19 @@ def test_live_single_server_result_transfer_time(tmp_path: Path, record_property
     md_out = str(tmp_path / "perf-single-server.md")
     json_out = str(tmp_path / "perf-single-server.json")
 
-    # Collect several results (target: 3 samples) with active burst simulation
+    # Collect 20 results with a 1.0s inter-result gap (aligned with Console & Test Clients)
     exit_code = main(
         [
             "-e",
             server_url,
             "-d",
-            "10.0",
+            "30.0",
             "-s",
-            "3",
+            "20",
             "-b",
-            "3",
+            "20",
+            "--burst-delay",
+            "1.0",
             "--mode",
             "both",
             "--fail-p90",
@@ -100,6 +102,7 @@ def test_live_single_server_result_transfer_time(tmp_path: Path, record_property
     transport = metrics["statistics"]["network_transport_time_ms"]
     server = metrics["statistics"]["server_processing_time_ms"]
     verdict = metrics["verdict"]
+    assert tot["mean"] < 500.0, f"Mean total transfer time {tot['mean']:.2f} ms exceeds 500 ms target"
     record_property("perf_sample_count", str(tot["count"]))
     record_property("perf_mean_total_ms", f"{tot['mean']:.2f}")
     record_property("perf_p90_total_ms", f"{tot['p90']:.2f}")
@@ -108,7 +111,7 @@ def test_live_single_server_result_transfer_time(tmp_path: Path, record_property
     record_property("perf_p90_transport_ms", f"{transport['p90']:.2f}")
     record_property("perf_p90_server_ms", f"{server['p90']:.2f}")
     record_property("perf_primary_bottleneck", verdict["primary_bottleneck"])
-    record_property("perf_threshold_mean_ms", "250")
+    record_property("perf_threshold_mean_ms", "500")
     record_property("perf_threshold_p90_ms", "500")
 
 

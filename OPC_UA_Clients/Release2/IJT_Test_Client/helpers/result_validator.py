@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from helpers.namespaces import ResultClassification, ResultEvaluation
+from helpers.namespaces import ENTITY_TYPE_VALUES, ResultClassification, ResultEvaluation, result_classification_name
 
 # ---------------------------------------------------------------------------
 # Valid ranges for ResultValueDataType enumerations (OPC 40450-1 §9)
@@ -54,7 +54,7 @@ _VALID_ERROR_TYPES: set[int] = set(range(7))
 # 32=PROCESS, 33=CONFIGURATION, 34=SOCKET, 35=CHANNEL, 36=STATION,
 # 37=PRODUCTION_LINE, 38=LOCATION, 39=USER, 40=PARENT, 41=VIRTUAL_STATION,
 # 42=JOINT_COMPONENT
-_VALID_ENTITY_TYPES: set[int] = set(range(43))  # 0–42 per OPC 40450-1 v100 spec
+_VALID_ENTITY_TYPES: set[int] = set(ENTITY_TYPE_VALUES.values())
 _ENTITY_TYPE_STRICT_MAX: int = 42  # warn but do not fail above this; spec may extend it
 
 # EntityTypes that represent a JoiningProcess reference in AssociatedEntities.
@@ -98,6 +98,69 @@ class ValidationContext:
 
     def __str__(self) -> str:
         return self.path
+
+
+def assert_associated_entity_expectations(result_data, rules, *, context="joining") -> None:
+    """Check configured expectations on full envelopes, never on child-reference stubs."""
+    if not rules:
+        return
+    from helpers.result_collector import get_classification, unwrap_result
+
+    pending = [result_data]
+    visited = set()
+    vr = ValidationResult()
+    while pending:
+        result = unwrap_result(pending.pop())
+        if result is None or id(result) in visited:
+            continue
+        visited.add(id(result))
+        classification = result_classification_name(get_classification(result))
+        matching = [
+            rule for rule in rules if rule.classification == classification and rule.context in ("any", context)
+        ]
+        if matching:
+            meta = getattr(result, "ResultMetaData", None)
+            entities = getattr(meta, "AssociatedEntities", None) or ()
+            present = set()
+            path = f"{context}.{classification}.AssociatedEntities"
+            expected_names = {
+                name for rule in matching for name in (*rule.required, *rule.optional, *rule.at_least_one_of)
+            }
+            expected_types = {ENTITY_TYPE_VALUES[name] for name in expected_names}
+            for raw in entities:
+                entity = unwrap_result(raw)
+                raw_type = unwrap_result(getattr(entity, "EntityType", None))
+                try:
+                    entity_type = int(raw_type)
+                except (TypeError, ValueError):
+                    vr.add(path, f"Invalid EntityType {raw_type!r}")
+                    continue
+                present.add(entity_type)
+                if entity_type in expected_types:
+                    entity_id = unwrap_result(getattr(entity, "EntityId", None))
+                    if not isinstance(entity_id, str) or not entity_id.strip():
+                        vr.add(path, f"Present EntityType={entity_type} must have a non-empty EntityId")
+            for rule in matching:
+                missing = [name for name in rule.required if ENTITY_TYPE_VALUES[name] not in present]
+                if missing:
+                    vr.add(path, f"Missing configured required entity types: {missing}")
+                if rule.at_least_one_of and not any(
+                    ENTITY_TYPE_VALUES[name] in present for name in rule.at_least_one_of
+                ):
+                    vr.add(path, f"Expected at least one entity type from {list(rule.at_least_one_of)}")
+        for raw in getattr(result, "ResultContent", None) or ():
+            child = unwrap_result(raw)
+            if getattr(child, "ResultContent", None):
+                pending.append(child)
+    vr.assert_no_failures()
+
+
+def check_result_expectations(result_data, result_trigger, *, context="joining"):
+    """Apply the owning trigger's SUT expectations without replacing the result."""
+    checker = getattr(result_trigger, "validate_result_expectations", None)
+    if checker is not None and result_data is not None:
+        checker(result_data, context=context)
+    return result_data
 
 
 # ---------------------------------------------------------------------------

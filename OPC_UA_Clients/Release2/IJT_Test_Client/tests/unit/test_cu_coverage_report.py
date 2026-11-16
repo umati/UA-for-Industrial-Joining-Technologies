@@ -16,7 +16,143 @@ from helpers.cu_coverage_report import (
     _rollup_outcome,
     _skip_text,
     qualification_disposition,
+    run_assessment,
 )
+
+
+def test_pilot_cannot_qualify_from_presence_while_exact_obligations_are_missing():
+    coverage: dict = {
+        "by_cu": {
+            "increment_joining_process_counter": {
+                "claimed": True,
+                "compliance": "supported",
+                "passed": 5,
+                "test_count": 5,
+                "requirement_outcome": "incomplete",
+            }
+        }
+    }
+    assert qualification_disposition(coverage)["outcome"] == "incomplete"
+    assert run_assessment(coverage, 0) == {
+        "execution_health": "passed",
+        "requirement_qualification": "incomplete",
+        "scope_completeness": "complete",
+    }
+    coverage["deselected_cus"] = ["increment_joining_process_counter"]
+    assert run_assessment(coverage, 6)["scope_completeness"] == "incomplete"
+    assert run_assessment(coverage, 1)["execution_health"] == "failed"
+
+
+@pytest.mark.parametrize("route", ["simulator_direct", "target_workflow"])
+def test_exact_counter_effect_mapping_is_bound_to_the_executed_route(report_tmp_path, monkeypatch, route):
+    output = report_tmp_path / "coverage.json"
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(output))
+    monkeypatch.delenv("OPCUA_TARGET_SERVER_PROFILE", raising=False)
+    recorder = CuCoverageReportRecorder(
+        root=report_tmp_path,
+        all_cus=["increment_joining_process_counter"],
+        supported_cus=["increment_joining_process_counter"],
+    )
+    recorder.items_by_nodeid["effect"] = {
+        "nodeid": "effect",
+        "path": "test_counter.py",
+        "name": "effect",
+        "cus": ["increment_joining_process_counter"],
+        "workbook_refs": [
+            {"sheet": "Increment JP Counter", "row": 6, "ref": "Increment JP Counter!R6", "route": "simulator_direct"}
+        ],
+    }
+    report = _Report(nodeid="effect", passed=True)
+    report.user_properties = [("ijt_evidence_route", route)]
+    recorder.pytest_runtest_logreport(report)
+    recorder.pytest_sessionfinish(None, 0)
+    payload = json.loads(output.read_text())
+    functional = payload["workbook"]["by_cu"]["increment_joining_process_counter"]["cases"][1]
+    assert functional["outcome"] == ("passed" if route == "simulator_direct" else "incomplete")
+    assert payload["summary"]["workbook_exact_case_count"] == 1
+    assert payload["qualification"]["outcome"] == "incomplete"
+    assert payload["by_cu"]["increment_joining_process_counter"]["compliance"] == "partial"
+
+
+@pytest.mark.parametrize(("phase", "route"), [("setup", ""), ("call", "target_workflow")])
+def test_route_binding_never_hides_a_failed_counter_execution(report_tmp_path, monkeypatch, phase, route):
+    monkeypatch.delenv("OPCUA_TARGET_SERVER_PROFILE", raising=False)
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(report_tmp_path / "coverage.json"))
+    recorder = CuCoverageReportRecorder(
+        root=report_tmp_path,
+        all_cus=["increment_joining_process_counter"],
+        supported_cus=["increment_joining_process_counter"],
+    )
+    recorder.items_by_nodeid["effect"] = {
+        "nodeid": "effect",
+        "path": "test_counter.py",
+        "name": "effect",
+        "cus": ["increment_joining_process_counter"],
+        "workbook_refs": [{"ref": "Increment JP Counter!R6", "route": "simulator_direct"}],
+    }
+    report = _Report(nodeid="effect", when=phase, failed=True)
+    report.user_properties = [("ijt_evidence_route", route)] if route else []
+    recorder.pytest_runtest_logreport(report)
+    recorder.pytest_sessionfinish(None, 1)
+    payload = json.loads(recorder.output_path.read_text())
+    assert payload["workbook"]["by_cu"]["increment_joining_process_counter"]["cases"][1]["outcome"] == "failed"
+    assert payload["by_cu"]["increment_joining_process_counter"]["requirement_outcome"] == "failed"
+    assert payload["summary"]["workbook_exact_case_count"] == 1
+    assert payload["qualification"]["outcome"] == "failed"
+
+
+@pytest.mark.parametrize("final_exitstatus", [1, 6])
+def test_assessment_preserves_raw_execution_status_after_qualification_override(final_exitstatus):
+    coverage = {
+        "raw_pytest_exitstatus": 0,
+        "by_cu": {
+            "intervention_result": {
+                "claimed": True,
+                "passed": 1,
+                "test_count": 1,
+                "compliance": "partial",
+                "requirement_outcome": "failed" if final_exitstatus == 1 else "incomplete",
+            }
+        },
+    }
+    assessment = run_assessment(coverage, final_exitstatus)
+    assert assessment["execution_health"] == "passed"
+    assert assessment["requirement_qualification"] == ("failed" if final_exitstatus == 1 else "incomplete")
+    assert run_assessment(coverage, -1)["execution_health"] == "failed"
+
+
+@pytest.mark.parametrize("route", ["", "simulate_methods", "start_selected_joining"])
+def test_scope_deselection_uses_applicability_from_resolved_trigger_mode(report_tmp_path, monkeypatch, route):
+    monkeypatch.delenv("OPCUA_TARGET_SERVER_PROFILE", raising=False)
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(report_tmp_path / "coverage.json"))
+    recorder = CuCoverageReportRecorder(
+        root=report_tmp_path,
+        all_cus=["single_result"],
+        supported_cus=["single_result"],
+        result_trigger_mode=route,
+    )
+    selected = _Item(
+        nodeid="applicable",
+        fspath=report_tmp_path / "test_scope.py",
+        name="applicable",
+        markers=[_Marker("single_result")],
+    )
+    excluded = _Item(
+        nodeid="simulated",
+        fspath=report_tmp_path / "test_scope.py",
+        name="simulated",
+        markers=[_Marker("single_result"), _Marker(name="simulation")],
+    )
+    recorder.pytest_collection_modifyitems(None, None, [selected, excluded])
+    recorder.pytest_deselected([excluded])
+    recorder.pytest_runtest_logreport(_Report(nodeid="applicable", passed=True))
+    recorder.pytest_sessionfinish(None, 0)
+    payload = json.loads(recorder.output_path.read_text())
+    assert payload["deselected_cus"] == ([] if route == "start_selected_joining" else ["single_result"])
+    assert payload["by_cu"]["single_result"]["test_count"] == (1 if route == "start_selected_joining" else 2)
+    assert payload["assessment"]["scope_completeness"] == (
+        "complete" if route == "start_selected_joining" else "incomplete"
+    )
 
 
 @pytest.mark.parametrize("compliance", ["blocked", "partial", "untested", "not_supported"])
@@ -112,6 +248,54 @@ def test_unreviewed_row_cannot_be_hidden_by_missing_top_level_metadata():
     assert result["unreviewed_cus"] == ["future_cu"]
 
 
+@pytest.mark.parametrize("rows", [[], {"known": "invalid row"}])
+def test_malformed_report_rows_cannot_become_complete_scope(rows):
+    assessment = run_assessment({"by_cu": rows, "supported_cus": ["known"]}, 0)
+    assert assessment["scope_completeness"] == "incomplete"
+    assert assessment["requirement_qualification"] == "incomplete"
+
+
+def test_later_skipped_phase_cannot_erase_failed_test(report_tmp_path, monkeypatch):
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(report_tmp_path / "preserved-failure.json"))
+    recorder = CuCoverageReportRecorder(
+        root=report_tmp_path, all_cus=["single_result"], supported_cus=["single_result"]
+    )
+    recorder.items_by_nodeid["test"] = {"nodeid": "test", "cus": ["single_result"], "name": "test", "path": "test.py"}
+    recorder.pytest_runtest_logreport(_Report(nodeid="test", when="call", failed=True))
+    recorder.pytest_runtest_logreport(
+        _Report(nodeid="test", when="teardown", skipped=True, longrepr="cleanup unavailable")
+    )
+    assert recorder.results_by_nodeid["test"]["outcome"] == "failed"
+    assert recorder.results_by_nodeid["test"]["phase"] == "call"
+
+
+def test_partial_cu_retains_canonical_inconclusive_action_evidence(report_tmp_path, monkeypatch):
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(report_tmp_path / "inconclusive-cause.json"))
+    recorder = CuCoverageReportRecorder(
+        root=report_tmp_path, all_cus=["single_result"], supported_cus=["single_result"]
+    )
+    for nodeid in ("content", "action"):
+        recorder.items_by_nodeid[nodeid] = {
+            "nodeid": nodeid,
+            "cus": ["single_result"],
+            "name": nodeid,
+            "path": "test.py",
+        }
+    recorder.pytest_runtest_logreport(_Report(nodeid="content", passed=True))
+    report = _Report(nodeid="action", skipped=True, longrepr="Accepted action was not observed")
+    report.user_properties = [
+        ("ijt_outcome", "environment"),
+        ("ijt_canonical_outcome", "inconclusive"),
+        ("ijt_reason_code", "operation_evidence_timeout"),
+    ]
+    recorder.pytest_runtest_logreport(report)
+    recorder.pytest_sessionfinish(None, 0)
+    payload = json.loads(recorder.output_path.read_text())
+    assert payload["by_cu"]["single_result"]["canonical_outcome"] == "inconclusive"
+    assert payload["by_cu"]["single_result"]["compliance"] == "partial"
+    assert payload["qualification"]["outcome"] == "incomplete"
+
+
 def test_unreviewed_additions_preserve_approved_results_but_do_not_qualify_newer_catalogue(
     report_tmp_path,
     monkeypatch,
@@ -156,6 +340,8 @@ def test_external_session_with_blocked_claim_returns_incomplete(report_tmp_path,
     coverage = json.loads(recorder.output_path.read_text())
     assert coverage["qualification"]["outcome"] == "incomplete"
     assert coverage["exitstatus"] == 6
+    assert coverage["raw_pytest_exitstatus"] == 0
+    assert coverage["assessment"] == run_assessment(coverage, session.exitstatus)
 
 
 class _Marker:
@@ -197,6 +383,41 @@ class _Report:
         self.longrepr = longrepr
         self.longreprtext = longreprtext
         self.user_properties: list[tuple[str, object]] = []
+
+
+@pytest.mark.parametrize("route", ["simulator_direct", "target_workflow"])
+def test_recorder_preserves_both_exact_route_markers_on_one_test(report_tmp_path, monkeypatch, route):
+    class WorkbookMarker(_Marker):
+        def __init__(self, evidence_route):
+            super().__init__("Increment JP Counter", 6, name="workbook_ref")
+            self.kwargs = {"route": evidence_route}
+
+    monkeypatch.delenv("OPCUA_TARGET_SERVER_PROFILE", raising=False)
+    monkeypatch.setenv("IJT_CU_COVERAGE_REPORT_FILE", str(report_tmp_path / "dual-route.json"))
+    recorder = CuCoverageReportRecorder(
+        root=report_tmp_path,
+        all_cus=["increment_joining_process_counter"],
+        supported_cus=["increment_joining_process_counter"],
+    )
+    item = _Item(
+        nodeid="effect",
+        fspath=report_tmp_path / "test_counter.py",
+        name="effect",
+        markers=[
+            _Marker("increment_joining_process_counter"),
+            WorkbookMarker("simulator_direct"),
+            WorkbookMarker("target_workflow"),
+        ],
+    )
+    recorder.pytest_collection_modifyitems(None, None, [item])
+    report = _Report(nodeid="effect", passed=True)
+    report.user_properties = [("ijt_evidence_route", route)]
+    recorder.pytest_runtest_logreport(report)
+    recorder.pytest_sessionfinish(None, 0)
+    payload = json.loads(recorder.output_path.read_text())
+    functional = payload["workbook"]["by_cu"]["increment_joining_process_counter"]["cases"][1]
+    assert functional["outcome"] == "passed"
+    assert payload["summary"]["workbook_exact_case_count"] == 1
 
 
 @pytest.fixture
@@ -870,3 +1091,64 @@ def test_recorder_marks_a_claimed_but_unsupported_cu_as_failed(report_tmp_path, 
     assert entry["canonical_outcome"] == "failed"  # claimed behaviour missing -> Failed
     assert payload["tests"][0]["outcome"] == "not_supported"
     assert payload["tests"][0]["canonical_outcome"] == "failed"
+
+
+def test_manual_required_cus_defer_in_automated_mode_but_remain_incomplete_in_guided_mode():
+    base_by_cu = {
+        "supported_cu": {
+            "claimed": True,
+            "manual_required": False,
+            "compliance": "supported",
+            "passed": 2,
+            "test_count": 2,
+        },
+        "physical_event_cu": {
+            "claimed": True,
+            "manual_required": True,
+            "compliance": "blocked",
+            "passed": 0,
+            "blocked": 2,
+            "test_count": 2,
+        },
+    }
+    automated = {
+        "execution_mode": "automated",
+        "allow_manual_steps": False,
+        "supported_cus": ["supported_cu", "physical_event_cu"],
+        "manual_required_cus": ["physical_event_cu"],
+        "by_cu": base_by_cu,
+    }
+    disp_auto = qualification_disposition(automated)
+    assert disp_auto["outcome"] == "passed"
+    assert disp_auto["incomplete_cus"] == []
+    assert disp_auto["manual_deferred_cus"] == ["physical_event_cu"]
+    assert run_assessment(automated, 0) == {
+        "execution_health": "passed",
+        "requirement_qualification": "passed",
+        "scope_completeness": "complete",
+    }
+
+    guided = {
+        **automated,
+        "execution_mode": "guided",
+        "allow_manual_steps": True,
+    }
+    disp_guided = qualification_disposition(guided)
+    assert disp_guided["outcome"] == "incomplete"
+    assert disp_guided["incomplete_cus"] == ["physical_event_cu"]
+    assert "manual_deferred_cus" not in disp_guided
+
+    failing_manual = {
+        **automated,
+        "by_cu": {
+            **base_by_cu,
+            "physical_event_cu": {
+                **base_by_cu["physical_event_cu"],
+                "failed": 1,
+                "compliance": "action_needed",
+            },
+        },
+    }
+    disp_failed = qualification_disposition(failing_manual)
+    assert disp_failed["outcome"] == "failed"
+    assert disp_failed["failed_cus"] == ["physical_event_cu"]

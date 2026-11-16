@@ -17,7 +17,7 @@ from asyncua import ua
 from helpers.cu_registry import CU
 from helpers.method_caller import call_method
 from helpers.method_signature import JOINT_METHOD_INPUTS, assert_input_argument_names
-from helpers.namespaces import NS_APP, NS_DI, NS_IJT_BASE, ResultClassification, ResultType
+from helpers.namespaces import NS_APP, NS_DI, NS_IJT_BASE, ResultType
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system, read_tool_product_instance_uri
 from helpers.result_collector import ResultCollector
 from helpers.result_navigation import (
@@ -79,33 +79,12 @@ _KNOWN_ANGLE_EU_IDENTIFIERS: frozenset[int] = frozenset(
 
 
 async def _trigger_and_get_result(subscription_client, result_trigger, ns_indices, result_type, include_traces=False):
-    """Return complete SingleResult evidence, reusing an identical run when enabled."""
-    get_cached = getattr(result_trigger, "get_reusable_progression", None)
-    if get_cached is not None:
-        cached = await get_cached(ResultClassification.SINGLE_RESULT, 1)
-        if cached is not None:
-            return cached.final_result
-    if getattr(result_trigger, "owns_result_subscription", False):
-        outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
-        progression = getattr(outcome, "result_progression", None)
-        if not outcome.triggered or progression is None:
-            return None
-        remember = getattr(result_trigger, "remember_result_progression", None)
-        if remember is not None:
-            remember(progression)
-        return progression.final_result if progression.is_complete else None
-    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
-        outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
-        if not outcome.triggered:
-            return None
-        progression = await rc.collect_progression(
-            ResultClassification.SINGLE_RESULT,
-            allow_partial_references=bool(getattr(result_trigger, "allow_partial_referenced_children", False)),
-        )
-        remember = getattr(result_trigger, "remember_result_progression", None)
-        if remember is not None:
-            remember(progression)
-        return progression.final_result if progression.is_complete else None
+    """Consume the same owned-evidence and typed-failure contract as other result families."""
+    from helpers.result_collector import collect_single_evidence
+
+    return await collect_single_evidence(
+        subscription_client, result_trigger, ns_indices, result_type, include_traces=include_traces
+    )
 
 
 def _collect_all_result_values(result_data) -> list:
@@ -351,7 +330,7 @@ async def test_engineering_units_are_consistent_within_same_physical_quantity(
         outcome = await result_trigger.trigger_single(result_type=result_type, include_traces=False)
         if not outcome.triggered:
             pytest.skip(outcome.skip_reason if hasattr(outcome, "skip_reason") else "Trigger failed")
-        result_data = await rc.collect_single()
+        result_data = await rc.collect_triggered_single(outcome)
     if result_data is None:
         pytest.skip(f"No result received for {description} result type")
 

@@ -48,6 +48,67 @@ from helpers.sut_manifest import (
 _MANIFEST_DIR = Path(__file__).resolve().parents[2] / "target_server_cu_profiles"
 
 
+def test_manifest_entity_expectations_round_trip_without_changing_defaults():
+    raw = preset_data("remote_start_multi_operation")
+    rules = [{"classification": "intervention", "context": "counter_intervention", "optional": ["TOOL"]}]
+    raw["workflows"]["expected_results"]["associated_entities"] = rules
+    manifest = parse_sut_manifest(raw)
+    assert manifest.to_execution_profile().workflow_execution.expected_results.associated_entities[0].optional == (
+        "TOOL",
+    )
+    assert manifest.to_dict()["workflows"]["expected_results"]["associated_entities"] == rules
+    assert preset_data("simulator")["workflows"]["expected_results"].get("associated_entities", []) == []
+
+
+def test_remote_preset_has_editable_entity_rules_and_unbound_station():
+    profile = build_preset("remote_start_multi_operation").to_execution_profile()
+    assert profile.selection.tool.virtual_station_product_instance_uri == ""
+    rules = profile.workflow_execution.expected_results.associated_entities
+    assert rules[0].classification == "single"
+    assert rules[0].required == ("TOOL",)
+    assert {rule.classification for rule in rules[1:]} == {"intervention", "batch", "job"}
+    assert all("TOOL" in rule.optional for rule in rules[1:])
+    assert profile.cu_execution.counter_effects[0].verify_delta
+
+
+@pytest.mark.parametrize("tool", [{"policy": "first_ready"}, {"policy": "exact_match"}])
+def test_manifest_rejects_station_without_configured_tool(tool):
+    raw = preset_data("remote_start_multi_operation")
+    raw["workflows"]["tool_selector"] = {**tool, "virtual_station_product_instance_uri": "station"}
+    with pytest.raises(SutManifestError, match="configured Tool ProductInstanceUri"):
+        parse_sut_manifest(raw)
+
+
+def test_manifest_allows_station_with_first_ready_when_tool_uri_configured():
+    raw = preset_data("remote_start_multi_operation")
+    raw["workflows"]["tool_selector"] = {
+        "policy": "first_ready",
+        "product_instance_uri": "tool",
+        "virtual_station_product_instance_uri": "station",
+    }
+    manifest = parse_sut_manifest(raw)
+    assert manifest.to_execution_profile().selection.tool.virtual_station_product_instance_uri == "station"
+
+
+@pytest.mark.parametrize("value", ["true", 1, None, True])
+def test_manifest_counter_qualification_requires_boolean_and_result_source(value):
+    raw = preset_data("remote_start_multi_operation")
+    effect = raw["execution_policy"]["counter_effects"][0]
+    effect["verify_delta"] = value
+    effect["expected_result_classification"] = ""
+    with pytest.raises(SutManifestError, match="verify_delta"):
+        parse_sut_manifest(raw)
+
+
+def test_manifest_rejects_unknown_entity_type_before_connecting():
+    raw = preset_data("remote_start_multi_operation")
+    raw["workflows"]["expected_results"]["associated_entities"] = [
+        {"classification": "intervention", "optional": ["MISSPELLED_TOOL"]}
+    ]
+    with pytest.raises(SutManifestError, match="unknown EntityType names"):
+        parse_sut_manifest(raw)
+
+
 def test_local_comment_refresh_preserves_values_owner_notes_and_is_repeatable():
     source = "# Owner note: keep my choices.\n" + render_manifest_yaml("remote_start_multi_operation")
     source = source.replace("count: 1", "count: 2").replace("\n", "\r\n")
@@ -157,13 +218,31 @@ def _minimal(**overrides) -> dict:
 
 
 def test_portable_automatic_counter_manifest_uses_no_saved_identifiers():
+    from types import SimpleNamespace
+
+    from helpers.counter_obligations import counter_snapshot
+
     manifest = build_preset("remote_start_multi_operation")
     profile = manifest.to_execution_profile()
     effect = profile.cu_execution.counter_effects[0]
     assert effect.process_policy == "discover_unique"
     assert effect.process_classification == "job"
+    assert effect.expected_result_classification == "batch"
+    assert effect.counter_type == 3
     assert not effect.joining_process_id and not effect.selection_name
     assert profile.workflow_execution.allow_discovered_processes is True
+    batch_result = SimpleNamespace(
+        ResultMetaData=SimpleNamespace(
+            ResultId="batch-1",
+            ResultCounters=[
+                SimpleNamespace(Name="Batch Size", CounterType=2, CounterValue=2),
+                SimpleNamespace(Name="Batch Counter", CounterType=3, CounterValue=1),
+            ],
+        )
+    )
+    assert counter_snapshot(batch_result, counter_name=effect.counter_name, counter_type=effect.counter_type) == {
+        ("Batch Counter", 3): 1
+    }
 
 
 @pytest.mark.parametrize(
@@ -200,6 +279,32 @@ def test_automatic_counter_does_not_imply_scope_approval():
     data["workflows"]["allow_discovered_processes"] = False
     with pytest.raises(SutManifestError, match="allow_discovered_processes"):
         parse_sut_manifest(data)
+
+
+@pytest.mark.parametrize("field, value", [("counter_name", 17), ("counter_type", True), ("counter_type", -2)])
+def test_consistency_validation_rejects_invalid_counter_identity_selector(field, value):
+    manifest = build_preset("remote_start_multi_operation")
+    manifest.data["execution_policy"]["counter_effects"][0][field] = value
+    with pytest.raises(SutManifestError, match=field):
+        _validate_consistency(manifest)
+
+
+def test_consistency_validation_rejects_invalid_intervention_parent_match_strategy():
+    manifest = build_preset("remote_start_multi_operation")
+    manifest.data["execution_policy"]["intervention"]["parent_process"]["match_by"] = "invalid"
+    with pytest.raises(SutManifestError, match="match_by"):
+        _validate_consistency(manifest)
+
+
+def test_comment_formatter_cannot_save_prose_that_changes_execution_settings(monkeypatch):
+    source = render_manifest_yaml("remote_start_multi_operation")
+
+    def invalid_comments(spec, indent):
+        return [indent + "unauthorized_setting: changed"]
+
+    monkeypatch.setattr("helpers.sut_manifest._comment_lines", invalid_comments)
+    with pytest.raises(SutManifestError, match="changed YAML values"):
+        annotate_local_manifest(source)
 
 
 def _write(tmp_path: Path, data: dict, name: str = "unit") -> Path:
@@ -240,6 +345,7 @@ class TestSchemaAndRoundTrip:
                 "int",
                 "number",
                 "str_list",
+                "int_list",
                 "str_map",
                 "int_map",
                 "mapping_list",
@@ -816,6 +922,22 @@ class TestClaimsAndWorkflows:
                 )
             )
 
+    def test_expected_abort_result_states_validation_and_preset_default(self):
+        default_profile = parse_sut_manifest(_minimal()).to_execution_profile()
+        assert default_profile.workflow_execution.expected_results.expected_abort_result_states == (3,)
+
+        remote_states = (
+            build_preset("remote_start_multi_operation")
+            .to_execution_profile()
+            .workflow_execution.expected_results.expected_abort_result_states
+        )
+        assert 3 in remote_states
+        assert set(remote_states) <= {3, 4}
+
+        for invalid in ([], [0], [2], [5], [-1], [True], "not-a-list"):
+            with pytest.raises(SutManifestError, match="expected_abort_result_states"):
+                parse_sut_manifest(_minimal(workflows={"expected_results": {"expected_abort_result_states": invalid}}))
+
 
 # ---------------------------------------------------------------------------
 # Execution policy and risk approvals
@@ -1206,15 +1328,16 @@ class TestPresetsAndCommittedManifests:
         assert len(claims.supported_facets) == 8
         assert set(claims.cu_overrides) == load_all_cus_from_facets()
         claimed = resolve_claimed_cus(claims)
-        assert len(claimed) == 74
+        assert len(claimed) == 77
         optional = {"consolidated_result_with_references", "engineering_units"}
         assert optional <= claimed
         assert claims.cu_overrides["job_result"] == "supported"
         assert claims.cu_overrides["intervention_result"] == "supported"
+        assert claims.cu_overrides["joint_management"] == "supported"
         assert claims.cu_overrides["sync_result"] == "unsupported"
         unclaimed = replace(claims, cu_overrides={**claims.cu_overrides, **dict.fromkeys(optional, "unsupported")})
         assert not (resolve_claimed_cus(unclaimed) & optional)
-        assert len(resolve_claimed_cus(unclaimed)) == 72
+        assert len(resolve_claimed_cus(unclaimed)) == 75
 
     def test_manual_trigger_preset_keeps_full_coverage_claims(self):
         from helpers.profile_loader import load_all_cus_from_facets, resolve_claimed_cus
@@ -1229,8 +1352,9 @@ class TestPresetsAndCommittedManifests:
         profile = build_preset("remote_start_multi_operation").to_execution_profile()
         expected = profile.workflow_execution.expected_results
         assert profile.triggers.result.mode == "start_selected_joining"
-        assert profile.workflow_execution.max_start_invocations == 6
-        assert profile.workflow_execution.consecutive_start_delay_seconds == 0.25
+        assert profile.workflow_execution.max_start_invocations == 8
+        assert profile.workflow_execution.max_total_start_invocations == 24
+        assert profile.workflow_execution.consecutive_start_delay_seconds == 1.0
         assert expected.classification == "job"
         assert expected.final_result_required is True
         assert "job" in profile.selection.joining_processes

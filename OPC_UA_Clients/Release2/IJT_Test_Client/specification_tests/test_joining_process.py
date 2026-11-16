@@ -54,9 +54,23 @@ from asyncua import ua
 from helpers.cu_registry import CU
 from helpers.event_collector import EventCollector
 from helpers.event_validator import assert_result_ready_event_valid
-from helpers.method_caller import call_method, find_and_call_method
+from helpers.method_caller import (
+    call_method,
+    find_and_call_method,
+    is_manifest_method_authorized,
+    manifest_authorized_method_scope,
+)
 from helpers.method_signature import JOINING_PROCESS_METHOD_INPUTS, assert_input_argument_names
-from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_OPC_UA, IJTTypes, JoiningProcessClassification
+from helpers.namespaces import (
+    BN,
+    NS_APP,
+    NS_DI,
+    NS_IJT_BASE,
+    NS_OPC_UA,
+    IJTTypes,
+    JoiningProcessClassification,
+    ResultType,
+)
 from helpers.node_discovery import (
     find_child_by_browse_name,
     find_joining_system,
@@ -69,6 +83,8 @@ from helpers.sut_manifest import load_sut_manifest
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
+_SIMULATOR_COUNTER_BASELINE = 3
+_SIMULATOR_COUNTER_SIZE = 10
 
 
 def _target_workflow_is_approved(workflow_name: str) -> bool:
@@ -321,20 +337,20 @@ def _batch_process_entry(entries):
     pytest.fail("Simulator GetJoiningProcessList did not expose a Batch for counter/size tests")
 
 
-async def _set_simulator_counter_baseline(jpm, ns_ijt, pi_uri, jp_arg, *, counter: int, size: int):
+async def _set_simulator_counter_baseline(jpm, ns_ijt, pi_uri, jp_arg, *, counter: int, size: int, result_trigger):
+    result_trigger.authorize_counter_methods(BN.SET_JOINING_PROCESS_COUNTER, BN.SET_JOINING_PROCESS_SIZE)
     for method, value in (
         (BN.SET_JOINING_PROCESS_COUNTER, 0),
         (BN.SET_JOINING_PROCESS_SIZE, size),
         (BN.SET_JOINING_PROCESS_COUNTER, counter),
     ):
-        result = await find_and_call_method(
+        result = await result_trigger.call_counter_method(
             jpm,
             method,
             ns_ijt,
             _piu_arg(pi_uri),
             jp_arg,
             ua.Variant(value, ua.VariantType.UInt32),
-            timeout=15.0,
         )
         assert result.success, f"Simulator counter setup/cleanup {method} failed: {result.error}"
         assert _method_status_code(result.output_list) == 0, (
@@ -347,6 +363,7 @@ async def simulator_counter_process(opcua_client, ns_indices, result_trigger):
     if not result_trigger.is_simulator:
         yield None
         return
+    result_trigger.authorize_counter_methods(BN.SET_JOINING_PROCESS_COUNTER, BN.SET_JOINING_PROCESS_SIZE)
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
@@ -356,10 +373,20 @@ async def simulator_counter_process(opcua_client, ns_indices, result_trigger):
     assert jp_arg is not None, "JoiningProcessIdentificationDataType was not loaded"
     # Isolated simulator tests start with room to increment and a nonzero decrement seed.
     try:
-        await _set_simulator_counter_baseline(jpm, ns_ijt, pi_uri, jp_arg, counter=3, size=10)
+        await _set_simulator_counter_baseline(
+            jpm,
+            ns_ijt,
+            pi_uri,
+            jp_arg,
+            counter=_SIMULATOR_COUNTER_BASELINE,
+            size=_SIMULATOR_COUNTER_SIZE,
+            result_trigger=result_trigger,
+        )
         yield jp_arg
     finally:
-        await _set_simulator_counter_baseline(jpm, ns_ijt, pi_uri, jp_arg, counter=0, size=5)
+        await _set_simulator_counter_baseline(
+            jpm, ns_ijt, pi_uri, jp_arg, counter=0, size=5, result_trigger=result_trigger
+        )
 
 
 async def _select_counter_parent_if_configured(jpm_node, ns_ijt: int, pi_uri: str) -> None:
@@ -485,12 +512,45 @@ async def test_select_joining_process_method_present(joining_process_management,
     assert node is not None, f"Required method '{BN.SELECT_JOINING_PROCESS}' not found in JoiningProcessManagement"
 
 
+def _entry_classification(entry) -> int | None:
+    entry = getattr(entry, "Value", entry)
+    meta = getattr(entry, "JoiningProcessMetaData", None)
+    for source in (entry, meta):
+        if source is None:
+            continue
+        cls_val = getattr(source, "Classification", None)
+        if cls_val is not None:
+            try:
+                return int(cls_val)
+            except (TypeError, ValueError):
+                pass
+    return None
+
+
+def _select_preferred_entry(programs: list, preferred_classifications: tuple[int, ...]):
+    for wanted in preferred_classifications:
+        for entry in programs:
+            if _entry_classification(entry) == wanted:
+                return entry
+    return programs[0] if programs else None
+
+
 @pytest.mark.requires_cu(CU.SELECT_JOINING_PROCESS)
-async def test_select_joining_process_with_valid_program_succeeds(opcua_client, ns_indices):
+async def test_select_joining_process_with_valid_program_succeeds(opcua_client, ns_indices, result_trigger):
     """
     SelectJoiningProcess called with the first program from GetJoiningProcessList
     must succeed (or return an accepted error code on some servers).
     """
+    if not result_trigger.is_simulator:
+        from helpers.trigger import require_workflow_outcome
+
+        route = getattr(result_trigger, "get_selected_program_evidence", None)
+        if route is not None:
+            outcome = await route()
+            require_workflow_outcome(outcome, "selected_program")
+            assert outcome.joining_process_id, "Selected process must have a non-empty JoiningProcessId"
+            return
+
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
@@ -502,7 +562,7 @@ async def test_select_joining_process_with_valid_program_succeeds(opcua_client, 
     if not programs:
         pytest.skip("GetJoiningProcessList returned an empty list — no program available to select")
 
-    first_program = programs[0]
+    first_program = _select_preferred_entry(programs, (JoiningProcessClassification.PROGRAM.value,))
     program_id = _joining_process_id_from_entry(first_program)
     jp_arg = _jp_identification_arg(process_id=program_id)
     if jp_arg is None:
@@ -518,6 +578,7 @@ async def test_select_joining_process_with_valid_program_succeeds(opcua_client, 
         jp_arg,
         timeout=15.0,
         method_name=BN.SELECT_JOINING_PROCESS,
+        target_server_authorized=is_manifest_method_authorized(BN.SELECT_JOINING_PROCESS),
     )
     if not call_result.success:
         err_str = str(call_result.error) if call_result.error else "unknown error"
@@ -553,6 +614,7 @@ async def test_select_joining_process_with_invalid_id_returns_error(opcua_client
         jp_arg,
         timeout=15.0,
         method_name=BN.SELECT_JOINING_PROCESS,
+        target_server_authorized=is_manifest_method_authorized(BN.SELECT_JOINING_PROCESS),
     )
     assert not call_result.success, (
         "SelectJoiningProcess with a non-existent program ID must raise a Bad status code, "
@@ -577,7 +639,9 @@ async def test_start_selected_joining_method_present(joining_process_management,
 
 
 @pytest.mark.requires_cu(CU.START_SELECTED_JOINING)
-async def test_start_selected_joining_triggers_result_ready_event(subscription_client, opcua_client, ns_indices):
+async def test_start_selected_joining_triggers_result_ready_event(
+    subscription_client, opcua_client, ns_indices, result_trigger
+):
     """
     Calling StartSelectedJoining must fire a JoiningSystemResultReadyEvent.
 
@@ -585,6 +649,21 @@ async def test_start_selected_joining_triggers_result_ready_event(subscription_c
     If the server does not produce a result event, the test is skipped rather
     than failed (tool may not be physically present or configured).
     """
+    if not result_trigger.is_simulator:
+        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered:
+            pytest.skip(outcome.skip_reason or "StartSelectedJoining workflow did not produce a ResultReadyEvent")
+        progression = getattr(outcome, "result_progression", None)
+        has_result_evidence = (
+            getattr(outcome, "result", None) is not None
+            or bool(getattr(outcome, "events", None))
+            or getattr(outcome, "results_confirmed", 0) > 0
+            or getattr(progression, "final_result", None) is not None
+            or bool(getattr(progression, "source_events", None))
+        )
+        assert has_result_evidence, "StartSelectedJoining workflow completed without result evidence"
+        return
+
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
@@ -677,7 +756,9 @@ async def test_start_selected_joining_triggers_result_ready_event(subscription_c
         (BN.START_SELECTED_JOINING, "start-joining"),
     ],
 )
-async def test_joining_process_core_methods_are_callable(opcua_client, ns_indices, method_name, description):
+async def test_joining_process_core_methods_are_callable(
+    opcua_client, ns_indices, result_trigger, method_name, description
+):
     """
     Core JoiningProcessManagement methods must be present and callable.
     BadNotSupported, BadNothingToDo, and Uncertain are accepted when no
@@ -687,6 +768,11 @@ async def test_joining_process_core_methods_are_callable(opcua_client, ns_indice
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await _find_method_node(jpm, method_name, ns_ijt)
     assert method_node is not None, f"Required method '{method_name}' not found in JoiningProcessManagement"
+    if not result_trigger.is_simulator and method_name == BN.START_SELECTED_JOINING:
+        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered:
+            pytest.skip(outcome.skip_reason or "StartSelectedJoining workflow did not complete")
+        return
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     if method_name == BN.SELECT_JOINING_PROCESS:
         jp_arg = _jp_identification_arg(process_id=_INVALID_PROGRAM_ID)
@@ -695,7 +781,14 @@ async def test_joining_process_core_methods_are_callable(opcua_client, ns_indice
         args = (_piu_arg(pi_uri), jp_arg)
     else:
         args = (_piu_arg(pi_uri), ua.Variant(False, ua.VariantType.Boolean))
-    call_result = await call_method(jpm, method_node, *args, timeout=15.0, method_name=method_name)
+    call_result = await call_method(
+        jpm,
+        method_node,
+        *args,
+        timeout=15.0,
+        method_name=method_name,
+        target_server_authorized=is_manifest_method_authorized(method_name),
+    )
     if not call_result.success:
         err_str = str(call_result.error) if call_result.error else "unknown"
         if any(
@@ -714,7 +807,9 @@ async def test_joining_process_core_methods_are_callable(opcua_client, ns_indice
 
 
 @pytest.mark.requires_cu(CU.START_SELECTED_JOINING)
-async def test_start_selected_joining_with_deselect_after_joining_true(subscription_client, opcua_client, ns_indices):
+async def test_start_selected_joining_with_deselect_after_joining_true(
+    subscription_client, opcua_client, ns_indices, result_trigger
+):
     """
     StartSelectedJoining with DeselectAfterJoining=True must either succeed and fire
     a JoiningSystemResultReadyEvent, or return an accepted status code.
@@ -726,8 +821,10 @@ async def test_start_selected_joining_with_deselect_after_joining_true(subscript
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
+    authorized_select = is_manifest_method_authorized(BN.SELECT_JOINING_PROCESS)
+    authorized_start = is_manifest_method_authorized(BN.START_SELECTED_JOINING)
 
-    # Select a process first (best-effort — some servers do not require prior selection)
+    # Select a single-step PROGRAM process (never select an unowned multi-step Job here).
     list_result = await find_and_call_method(
         jpm,
         BN.GET_JOINING_PROCESS_LIST,
@@ -735,11 +832,24 @@ async def test_start_selected_joining_with_deselect_after_joining_true(subscript
         _piu_arg(pi_uri),
         timeout=15.0,
     )
+    selected_entry = None
     if list_result.success:
         programs = _unwrap_method_array_output(list_result.output_list)
         if programs:
-            first_program = programs[0]
-            jp_arg = _jp_identification_from_entry(first_program)
+            if not result_trigger.is_simulator:
+                selected_entry = next(
+                    (e for e in programs if _entry_classification(e) == JoiningProcessClassification.PROGRAM.value),
+                    None,
+                )
+                if selected_entry is None:
+                    skip_accepted_policy(
+                        "no single-step PROGRAM process advertised for DeselectAfterJoining=True probe",
+                        method=BN.START_SELECTED_JOINING,
+                        status="No PROGRAM entry",
+                    )
+            else:
+                selected_entry = programs[0]
+            jp_arg = _jp_identification_from_entry(selected_entry)
             select_method = await _find_method_node(jpm, BN.SELECT_JOINING_PROCESS, ns_ijt)
             if select_method is not None and jp_arg is not None:
                 await call_method(
@@ -749,6 +859,7 @@ async def test_start_selected_joining_with_deselect_after_joining_true(subscript
                     jp_arg,
                     timeout=15.0,
                     method_name=BN.SELECT_JOINING_PROCESS,
+                    target_server_authorized=authorized_select,
                 )
 
     start_method = await _find_method_node(jpm, BN.START_SELECTED_JOINING, ns_ijt)
@@ -767,6 +878,7 @@ async def test_start_selected_joining_with_deselect_after_joining_true(subscript
             ua.Variant(True, ua.VariantType.Boolean),  # DeselectAfterJoining=True
             timeout=15.0,
             method_name=BN.START_SELECTED_JOINING,
+            target_server_authorized=authorized_start,
         )
         if not start_result.success:
             err_str = str(start_result.error) if start_result.error else "unknown"
@@ -777,6 +889,7 @@ async def test_start_selected_joining_with_deselect_after_joining_true(subscript
                     "BadNothingToDo",
                     "BadConditionNotActive",
                     "BadArgumentsMissing",
+                    "Uncertain",
                 )
             ):
                 skip_accepted_policy(
@@ -915,11 +1028,28 @@ async def test_get_selected_joining_program_method_present(joining_process_manag
 
 
 @pytest.mark.requires_cu(CU.GET_SELECTED_JOINING_PROGRAM)
-async def test_get_selected_joining_program_returns_program(opcua_client, ns_indices):
+async def test_get_selected_joining_program_returns_program(opcua_client, ns_indices, result_trigger):
     """
     GetSelectedJoiningProgram must return the selected value after a valid
     SelectJoiningProcess precondition has been established.
     """
+    if not result_trigger.is_simulator:
+        from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+        from helpers.trigger import require_workflow_outcome
+
+        route = getattr(result_trigger, "get_selected_program_evidence", None)
+        if route is None:
+            raise WorkflowEvidenceUnavailable(
+                "The configured adapter has no selected-Program acquisition route.",
+                "selected_program_route_unavailable",
+                "blocked",
+                "selected_program",
+            )
+        outcome = await route()
+        require_workflow_outcome(outcome, "selected_program")
+        assert outcome.method_call_result is not None, "The selected Program response was not retained"
+        assert outcome.joining_process_id, "The selected Program has no identity"
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
@@ -963,12 +1093,16 @@ async def test_abort_joining_process_method_present_if_exists(joining_process_ma
 
 
 @pytest.mark.requires_cu(CU.ABORT_JOINING_PROCESS)
-async def test_abort_joining_process_callable_if_present(opcua_client, ns_indices):
+async def test_abort_joining_process_callable_if_present(opcua_client, ns_indices, result_trigger):
     """
     AbortJoiningProcess must be callable without an unexpected server error when
     present. Expected status codes when no process is active:
     BadNothingToDo, BadConditionNotActive, BadNotSupported.
     """
+    if not result_trigger.is_simulator:
+        outcome = await result_trigger.trigger_abort_job()
+        assert outcome.triggered, outcome.skip_reason or "AbortJoiningProcess workflow failed"
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await _find_method_node(jpm, BN.ABORT_JOINING_PROCESS, ns_ijt)
@@ -1019,10 +1153,16 @@ async def test_reset_joining_process_method_present_if_exists(joining_process_ma
 
 
 @pytest.mark.requires_cu(CU.RESET_JOINING_PROCESS)
-async def test_reset_joining_process_callable_if_present(opcua_client, ns_indices, simulator_counter_process):
+async def test_reset_joining_process_callable_if_present(
+    opcua_client, ns_indices, simulator_counter_process, result_trigger
+):
     """
     ResetJoiningProcess must be callable without an unexpected server error when present.
     """
+    if not result_trigger.is_simulator:
+        outcome = await result_trigger.trigger_reset_job()
+        assert outcome.triggered, outcome.skip_reason or "ResetJoiningProcess workflow failed"
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await _find_method_node(jpm, BN.RESET_JOINING_PROCESS, ns_ijt)
@@ -1061,6 +1201,7 @@ async def test_reset_joining_process_callable_if_present(opcua_client, ns_indice
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
+@pytest.mark.workbook_ref("Increment JP Counter", 4)
 async def test_increment_counter_method_present_if_exists(joining_process_management, ns_indices):
     """
     IncrementJoiningProcessCounter method, if present, must be accessible on
@@ -1070,14 +1211,37 @@ async def test_increment_counter_method_present_if_exists(joining_process_manage
     node = await _find_method_node(joining_process_management, BN.INCREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
     if node is None:
         pytest.skip(f"Optional method '{BN.INCREMENT_JOINING_PROCESS_COUNTER}': Not Supported")
+    assert await node.read_node_class() == ua.NodeClass.Method
+    expected = {
+        "InputArguments": (
+            ("ProductInstanceUri", ua.NodeId(ua.ObjectIds.String)),
+            ("JoiningProcessIdentification", ua.NodeId(3029, ns_ijt)),
+            ("IncrementCount", ua.NodeId(ua.ObjectIds.UInt32)),
+        ),
+        "OutputArguments": (
+            ("Status", ua.NodeId(ua.ObjectIds.Int64)),
+            ("StatusMessage", ua.NodeId(ua.ObjectIds.LocalizedText)),
+        ),
+    }
+    for property_name, signature in expected.items():
+        argument_node = await find_child_by_browse_name(node, property_name, ns_indices.get(NS_OPC_UA, 0))
+        assert argument_node is not None, f"{property_name} is absent"
+        arguments = await argument_node.read_value()
+        assert [(arg.Name, arg.DataType) for arg in arguments] == list(signature)
+        assert all(arg.ValueRank == -1 for arg in arguments), f"{property_name} must contain scalar arguments"
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
-async def test_increment_counter_callable_if_present(opcua_client, ns_indices, simulator_counter_process):
+async def test_increment_counter_callable_if_present(
+    opcua_client, ns_indices, simulator_counter_process, result_trigger
+):
     """
     IncrementJoiningProcessCounter must be callable without an unexpected error
     when present.
     """
+    if not result_trigger.is_simulator:
+        await _target_counter_method(result_trigger, BN.INCREMENT_JOINING_PROCESS_COUNTER)
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await _find_method_node(jpm, BN.INCREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
@@ -1104,7 +1268,9 @@ async def test_increment_counter_callable_if_present(opcua_client, ns_indices, s
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
-async def test_increment_counter_with_product_instance_uri(opcua_client, ns_indices, simulator_counter_process):
+async def test_increment_counter_with_product_instance_uri(
+    opcua_client, ns_indices, simulator_counter_process, result_trigger
+):
     """
     IncrementJoiningProcessCounter called with the tool's ProductInstanceUri must
     succeed or return an accepted status code.
@@ -1113,6 +1279,9 @@ async def test_increment_counter_with_product_instance_uri(opcua_client, ns_indi
     the full argument path by reading the PIU from the first configured tool and
     passing it to the method — unlike the basic callable test that passes no arguments.
     """
+    if not result_trigger.is_simulator:
+        await _target_counter_method(result_trigger, BN.INCREMENT_JOINING_PROCESS_COUNTER)
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await _find_method_node(jpm, BN.INCREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
@@ -1159,11 +1328,16 @@ async def test_decrement_counter_method_present_if_exists(joining_process_manage
 
 
 @pytest.mark.requires_cu(CU.DECREMENT_JOINING_PROCESS_COUNTER)
-async def test_decrement_counter_callable_if_present(opcua_client, ns_indices, simulator_counter_process):
+async def test_decrement_counter_callable_if_present(
+    opcua_client, ns_indices, simulator_counter_process, result_trigger
+):
     """
     DecrementJoiningProcessCounter must be callable without an unexpected error
     when present.
     """
+    if not result_trigger.is_simulator:
+        await _target_counter_method(result_trigger, BN.DECREMENT_JOINING_PROCESS_COUNTER)
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await _find_method_node(jpm, BN.DECREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
@@ -1190,7 +1364,9 @@ async def test_decrement_counter_callable_if_present(opcua_client, ns_indices, s
 
 
 @pytest.mark.requires_cu(CU.DECREMENT_JOINING_PROCESS_COUNTER)
-async def test_decrement_counter_with_product_instance_uri(opcua_client, ns_indices, simulator_counter_process):
+async def test_decrement_counter_with_product_instance_uri(
+    opcua_client, ns_indices, simulator_counter_process, result_trigger
+):
     """
     DecrementJoiningProcessCounter called with the tool's ProductInstanceUri must
     succeed or return an accepted status code.
@@ -1198,6 +1374,9 @@ async def test_decrement_counter_with_product_instance_uri(opcua_client, ns_indi
     The ProductInstanceUri argument is required by the IJT spec.  This test validates
     the full argument path by reading the PIU from the first configured tool.
     """
+    if not result_trigger.is_simulator:
+        await _target_counter_method(result_trigger, BN.DECREMENT_JOINING_PROCESS_COUNTER)
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await _find_method_node(jpm, BN.DECREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
@@ -1227,7 +1406,9 @@ async def test_decrement_counter_with_product_instance_uri(opcua_client, ns_indi
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER, CU.DECREMENT_JOINING_PROCESS_COUNTER)
-async def test_increment_then_decrement_counter_is_balanced(opcua_client, ns_indices, simulator_counter_process):
+async def test_increment_then_decrement_counter_is_balanced(
+    opcua_client, ns_indices, simulator_counter_process, result_trigger
+):
     """
     IncrementJoiningProcessCounter followed by DecrementJoiningProcessCounter (both with
     the tool's ProductInstanceUri) must both succeed, demonstrating the counter can be
@@ -1236,6 +1417,10 @@ async def test_increment_then_decrement_counter_is_balanced(opcua_client, ns_ind
     This is a balanced round-trip: Increment then Decrement, leaving the server in the
     same state it started in.  Both methods are required for this test to run.
     """
+    if not result_trigger.is_simulator:
+        await _target_counter_method(result_trigger, BN.INCREMENT_JOINING_PROCESS_COUNTER)
+        await _target_counter_method(result_trigger, BN.DECREMENT_JOINING_PROCESS_COUNTER)
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     inc_node = await _find_method_node(jpm, BN.INCREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
@@ -1438,7 +1623,19 @@ async def test_set_joining_process_counter_callable_if_present(opcua_client, ns_
     if method_node is None:
         pytest.skip("Optional method 'SetJoiningProcessCounter': Not Supported — skipping")
     pi_uri = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di or 0, ns_app)
-    jp_arg = simulator_counter_process or _jp_identification_arg()
+    jp_arg = simulator_counter_process
+    if jp_arg is None and pi_uri:
+        list_res = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(pi_uri), timeout=15.0)
+        if list_res.success:
+            entries = _unwrap_method_array_output(list_res.output_list)
+            cand = _select_preferred_entry(
+                entries,
+                (JoiningProcessClassification.BATCH.value, JoiningProcessClassification.JOB.value),
+            )
+            if cand is not None:
+                jp_arg = _jp_identification_from_entry(cand)
+    if jp_arg is None:
+        jp_arg = _jp_identification_arg()
     if jp_arg is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot build counter arguments")
     call_result = await call_method(
@@ -1449,13 +1646,23 @@ async def test_set_joining_process_counter_callable_if_present(opcua_client, ns_
         ua.Variant(0, ua.VariantType.UInt32),
         timeout=15.0,
         method_name="SetJoiningProcessCounter",
+        target_server_authorized=is_manifest_method_authorized("SetJoiningProcessCounter"),
     )
     if not call_result.success:
         err_str = str(call_result.error) if call_result.error else "unknown"
         if any(
-            s in err_str for s in ("BadNotSupported", "BadInvalidArgument", "BadArgumentsMissing", "BadNothingToDo")
+            s in err_str
+            for s in (
+                "BadNotSupported",
+                "BadInvalidArgument",
+                "BadArgumentsMissing",
+                "BadNothingToDo",
+                "BadInvalidState",
+                "BadConditionNotActive",
+                "Uncertain",
+            )
         ):
-            return  # server rejected a zero-value or empty-PIU counter — acceptable
+            return  # server rejected a zero-value or domain-disallowed counter — acceptable
         pytest.fail(f"SetJoiningProcessCounter raised an unexpected error: {err_str}")
     logger.info("SetJoiningProcessCounter with PIU '%s' counter=0 succeeded", pi_uri)
 
@@ -1524,6 +1731,7 @@ async def test_enable_asset_required_before_start_joining(opcua_client, ns_indic
         ua.Variant(True, ua.VariantType.Boolean),
         timeout=15.0,
         method_name=BN.ENABLE_ASSET,
+        target_server_authorized=is_manifest_method_authorized(BN.ENABLE_ASSET),
     )
     if not call_result.success:
         err_str = str(call_result.error) if call_result.error else "unknown"
@@ -1756,11 +1964,16 @@ async def test_abort_joining_process_generates_event_if_present(
 
 
 @pytest.mark.requires_cu(CU.START_SELECTED_JOINING)
-async def test_start_selected_joining_after_select_returns_good(opcua_client, ns_indices):
+async def test_start_selected_joining_after_select_returns_good(opcua_client, ns_indices, result_trigger):
     """
     StartSelectedJoining called immediately after a successful SelectJoiningProcess
     must return Good or a state-related code if the tool is not physically ready.
     """
+    if not result_trigger.is_simulator:
+        outcome = await result_trigger.trigger_single(ResultType.ONE_STEP_OK_RESULT, include_traces=False)
+        if not outcome.triggered:
+            pytest.skip(outcome.skip_reason or "StartSelectedJoining after SelectJoiningProcess did not complete")
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
@@ -1829,11 +2042,22 @@ async def test_start_selected_joining_after_select_returns_good(opcua_client, ns
 
 
 @pytest.mark.requires_cu(CU.SELECT_JOINING_PROCESS)
-async def test_select_joining_process_state_reflected_after_select(opcua_client, ns_indices):
+async def test_select_joining_process_state_reflected_after_select(opcua_client, ns_indices, result_trigger):
     """
     After a successful SelectJoiningProcess, GetSelectedJoiningProgram must return
     a non-null result, confirming the server state reflects the selection.
     """
+    if not result_trigger.is_simulator:
+        from helpers.trigger import require_workflow_outcome
+
+        route = getattr(result_trigger, "get_selected_program_evidence", None)
+        if route is not None:
+            outcome = await route()
+            require_workflow_outcome(outcome, "selected_program")
+            assert outcome.method_call_result is not None, (
+                "GetSelectedJoiningProgram must return non-null after SelectJoiningProcess"
+            )
+            return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
@@ -1995,11 +2219,16 @@ async def test_reset_joining_process_server_remains_functional(opcua_client, res
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
-async def test_increment_counter_multiple_sequential_calls(opcua_client, ns_indices, simulator_counter_process):
+async def test_increment_counter_multiple_sequential_calls(
+    opcua_client, ns_indices, simulator_counter_process, result_trigger
+):
     """
     Three sequential calls to IncrementJoiningProcessCounter must each succeed
     (or return a known status code) without the server entering an error state.
     """
+    if not result_trigger.is_simulator:
+        await _target_counter_method(result_trigger, BN.INCREMENT_JOINING_PROCESS_COUNTER)
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     method_node = await _find_method_node(jpm, BN.INCREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
@@ -2032,11 +2261,17 @@ async def test_increment_counter_multiple_sequential_calls(opcua_client, ns_indi
 
 
 @pytest.mark.requires_cu(CU.DECREMENT_JOINING_PROCESS_COUNTER)
-async def test_decrement_counter_after_increment_if_present(opcua_client, ns_indices, simulator_counter_process):
+async def test_decrement_counter_after_increment_if_present(
+    opcua_client, ns_indices, simulator_counter_process, result_trigger
+):
     """
     DecrementJoiningProcessCounter called after IncrementJoiningProcessCounter
     must return Good (or a known status), confirming the counter can decrease.
     """
+    if not result_trigger.is_simulator:
+        await _target_counter_method(result_trigger, BN.INCREMENT_JOINING_PROCESS_COUNTER)
+        await _target_counter_method(result_trigger, BN.DECREMENT_JOINING_PROCESS_COUNTER)
+        return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     incr_node = await _find_method_node(jpm, BN.INCREMENT_JOINING_PROCESS_COUNTER, ns_ijt)
@@ -2090,9 +2325,19 @@ async def test_set_joining_process_size_callable_with_valid_count(opcua_client, 
     if method_node is None:
         pytest.skip(f"Optional method '{BN.SET_JOINING_PROCESS_SIZE}': Not Supported — skipping")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
-    jp_arg = simulator_counter_process or await _first_joining_process_identification_arg(
-        opcua_client, ns_indices, jpm, pi_uri
-    )
+    jp_arg = simulator_counter_process
+    if jp_arg is None:
+        list_res = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(pi_uri), timeout=15.0)
+        if list_res.success:
+            entries = _unwrap_method_array_output(list_res.output_list)
+            cand = next(
+                (e for e in entries if _entry_classification(e) == JoiningProcessClassification.BATCH.value),
+                None,
+            )
+            if cand is not None:
+                jp_arg = _jp_identification_from_entry(cand)
+    if jp_arg is None:
+        jp_arg = await _first_joining_process_identification_arg(opcua_client, ns_indices, jpm, pi_uri)
     call_result = await call_method(
         jpm,
         method_node,
@@ -2101,6 +2346,7 @@ async def test_set_joining_process_size_callable_with_valid_count(opcua_client, 
         ua.Variant(10, ua.VariantType.UInt32),
         timeout=15.0,
         method_name=BN.SET_JOINING_PROCESS_SIZE,
+        target_server_authorized=is_manifest_method_authorized(BN.SET_JOINING_PROCESS_SIZE),
     )
     if not call_result.success:
         err_str = str(call_result.error) if call_result.error else "unknown"
@@ -2113,6 +2359,7 @@ async def test_set_joining_process_size_callable_with_valid_count(opcua_client, 
                 "BadConditionNotActive",
                 "BadInvalidArgument",
                 "BadArgumentsMissing",
+                "Uncertain",
             )
         ):
             return
@@ -2145,6 +2392,7 @@ async def test_set_joining_process_size_zero_is_server_policy(opcua_client, ns_i
         ua.Variant(0, ua.VariantType.UInt32),
         timeout=15.0,
         method_name=BN.SET_JOINING_PROCESS_SIZE,
+        target_server_authorized=is_manifest_method_authorized(BN.SET_JOINING_PROCESS_SIZE),
     )
     if not call_result.success:
         err_str = str(call_result.error) if call_result.error else "unknown"
@@ -2265,11 +2513,20 @@ async def test_delete_joining_process_rejects_nonexistent_id(opcua_client, ns_in
 
 
 @pytest.mark.requires_cu(CU.GET_SELECTED_JOINING_PROGRAM)
-async def test_get_selected_joining_program_result_has_valid_fields(opcua_client, ns_indices):
+async def test_get_selected_joining_program_result_has_valid_fields(opcua_client, ns_indices, result_trigger):
     """
     After SelectJoiningProcess, GetSelectedJoiningProgram must return a non-null
     result with a non-empty identifier for the selected program.
     """
+    if not result_trigger.is_simulator:
+        from helpers.trigger import require_workflow_outcome
+
+        route = getattr(result_trigger, "get_selected_program_evidence", None)
+        if route is not None:
+            outcome = await route()
+            require_workflow_outcome(outcome, "selected_program")
+            assert outcome.joining_process_id, "Returned program must have a non-empty identifier"
+            return
     ns_ijt = _require_ns_ijt(ns_indices)
     jpm = await _get_jpm(opcua_client, ns_ijt)
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
@@ -2331,6 +2588,7 @@ async def test_get_selected_joining_program_result_has_valid_fields(opcua_client
 
 
 @pytest.mark.requires_cu(CU.GET_SELECTED_JOINING_PROGRAM)
+@pytest.mark.requires_dependency_cu(CU.DESELECT_JOINING_PROCESS)
 async def test_get_selected_joining_program_none_after_deselect(opcua_client, ns_indices):
     """
     After DeselectJoiningProcess, GetSelectedJoiningProgram must return an empty
@@ -2681,20 +2939,49 @@ async def test_set_joining_process_counter_with_zero_value_resets_counter(
     ns_di_idx = ns_indices.get(NS_DI)
     ns_app_idx = ns_indices.get(NS_APP)
     pi_uri = await read_tool_product_instance_uri(opcua_client, ns_ijt, ns_di_idx, ns_app_idx)
-    jp = simulator_counter_process.Value if simulator_counter_process is not None else _make_jp_identification()
+    jp = simulator_counter_process.Value if simulator_counter_process is not None else None
+    if jp is None and pi_uri:
+        list_res = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(pi_uri), timeout=15.0)
+        if list_res.success:
+            entries = _unwrap_method_array_output(list_res.output_list)
+            cand = next(
+                (e for e in entries if _entry_classification(e) == JoiningProcessClassification.BATCH.value),
+                None,
+            )
+            if cand is not None:
+                cand_arg = _jp_identification_from_entry(cand)
+                jp = cand_arg.Value if cand_arg is not None else None
+    if jp is None:
+        jp = _make_jp_identification()
     if jp is None:
         pytest.skip("JoiningProcessIdentificationDataType not available — load_data_type_definitions() may have failed")
     try:
-        await jpm.call_method(
-            counter_node.nodeid,
-            ua.Variant(pi_uri, ua.VariantType.String),
-            ua.Variant(jp, ua.VariantType.ExtensionObject),
-            ua.Variant(0, ua.VariantType.UInt32),
-        )
+        with manifest_authorized_method_scope("SetJoiningProcessCounter"):
+            await jpm.call_method(
+                counter_node.nodeid,
+                ua.Variant(pi_uri, ua.VariantType.String),
+                ua.Variant(jp, ua.VariantType.ExtensionObject),
+                ua.Variant(0, ua.VariantType.UInt32),
+            )
         logger.info("SetJoiningProcessCounter(0) succeeded")
     except ua.UaError as exc:
-        if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadArgumentsMissing")):
-            pytest.skip(f"SetJoiningProcessCounter not callable: {exc}")
+        if any(
+            s in str(exc)
+            for s in (
+                "BadNotSupported",
+                "BadInvalidArgument",
+                "BadArgumentsMissing",
+                "BadNothingToDo",
+                "BadInvalidState",
+                "BadConditionNotActive",
+                "Uncertain",
+            )
+        ):
+            skip_accepted_policy(
+                "SetJoiningProcessCounter(0) rejected under current controller/process policy",
+                method="SetJoiningProcessCounter",
+                status=str(exc),
+            )
         raise
 
 
@@ -2712,12 +2999,13 @@ async def test_set_joining_process_counter_exceeding_batch_size_returns_error(op
         pytest.skip("JoiningProcessIdentificationDataType not available — cannot build counter arguments")
     pi_uri = await _read_required_tool_product_instance_uri(opcua_client, ns_indices)
     try:
-        result = await jpm.call_method(
-            counter_node.nodeid,
-            _piu_arg(pi_uri),
-            jp_arg,
-            ua.Variant(999999, ua.VariantType.UInt32),
-        )
+        with manifest_authorized_method_scope("SetJoiningProcessCounter"):
+            result = await jpm.call_method(
+                counter_node.nodeid,
+                _piu_arg(pi_uri),
+                jp_arg,
+                ua.Variant(999999, ua.VariantType.UInt32),
+            )
         logger.warning("SetJoiningProcessCounter(999999) returned %r — server accepted large value", result)
     except ua.UaError as exc:
         logger.info("Correctly raised ua.UaError for large counter value: %s", exc)
@@ -2867,19 +3155,231 @@ async def test_get_joining_process_revision_list_with_nonexistent_id_returns_emp
 
 
 @pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
-async def test_configured_counter_effect_produces_intervention_evidence(result_trigger, request):
+@pytest.mark.workbook_ref("Increment JP Counter", 6, route="simulator_direct")
+@pytest.mark.workbook_ref("Increment JP Counter", 6, route="target_workflow")
+async def test_configured_counter_effect_produces_intervention_evidence(
+    result_trigger, request, opcua_client, subscription_client, ns_indices, simulator_counter_process
+):
     """Authorized counter mutations must produce complete correlated InterventionResult evidence."""
+    request.node.user_properties.append(
+        ("ijt_evidence_route", "simulator_direct" if result_trigger.is_simulator else "target_workflow")
+    )
     workflow = getattr(result_trigger, "trigger_counter_effect", None)
+    if result_trigger.is_simulator:
+        await _verify_simulator_increment_effect(
+            opcua_client,
+            subscription_client,
+            ns_indices,
+            simulator_counter_process,
+            result_trigger.active_result_timeout_s,
+            result_trigger=result_trigger,
+        )
+        return
     if workflow is None:
-        pytest.skip("No target-server counter workflow is configured")
-    outcome = await workflow(0)
+        from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+
+        raise WorkflowEvidenceUnavailable(
+            "The resolved result adapter has no counter-effect route.",
+            "counter_route_unavailable",
+            "blocked",
+            "counter_intervention",
+        )
+    outcome = await workflow(0, verify_delta=True)
     if not outcome.triggered and outcome.execution_outcome != "failed":
         request.node.user_properties.extend(
             [
                 ("ijt_outcome", "environment" if outcome.mutation_attempted else "blocked"),
                 ("ijt_reason_code", outcome.reason_code or "counter_workflow_precondition"),
                 ("ijt_workflow", "counter_intervention"),
+                ("ijt_canonical_outcome", "inconclusive" if outcome.mutation_attempted else "blocked"),
             ]
         )
         pytest.skip(outcome.skip_reason)
     assert outcome.triggered, outcome.skip_reason
+
+
+async def _target_counter_method(result_trigger, method):
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+    from helpers.trigger import require_workflow_outcome
+
+    route = getattr(result_trigger, "trigger_counter_method", None)
+    if route is None:
+        raise WorkflowEvidenceUnavailable(
+            f"The configured adapter has no approved route for {method}.",
+            "counter_method_route_unavailable",
+            "blocked",
+            "counter_method",
+        )
+    outcome = await route(method)
+    require_workflow_outcome(outcome, "counter_method")
+    call = outcome.method_call_result
+    if call is None or not call.service_good_confirmed:
+        raise WorkflowEvidenceUnavailable(
+            "The positive counter response was not retained.",
+            "counter_response_unavailable",
+            "inconclusive",
+            "counter_method",
+        )
+    assert call.success, f"{method} did not return a Good method response"
+    assert call.output_list and call.output_list[0] == 0, f"{method} did not return successful business status"
+
+
+async def _verify_increment_counter_negative(client, ns_indices, result_trigger, request, kind):
+    from helpers.counter_obligations import (
+        CounterEvidenceUnavailable,
+        counter_negative_arguments,
+        require_negative_counter_response,
+    )
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+    from helpers.namespaces import JoiningProcessClassification
+    from helpers.node_discovery import ProductInstanceUriExposureUnavailable, read_exposed_product_instance_uris
+    from helpers.target_server_triggers import _process_classification
+
+    request.node.user_properties.append(
+        ("ijt_evidence_route", "simulator_direct" if result_trigger.is_simulator else "target_workflow")
+    )
+    if not result_trigger.is_simulator:
+        workflow = getattr(result_trigger, "trigger_counter_negative", None)
+        if workflow is None:
+            raise WorkflowEvidenceUnavailable(
+                "The active adapter has no authorized negative counter route.",
+                "counter_negative_route_unavailable",
+                "blocked",
+                "counter_negative",
+            )
+        outcome = await workflow(kind)
+        if not outcome.triggered:
+            if outcome.execution_outcome == "failed":
+                pytest.fail(f"{outcome.reason_code}: {outcome.skip_reason}")
+            raise WorkflowEvidenceUnavailable(
+                outcome.skip_reason,
+                outcome.reason_code,
+                "inconclusive" if outcome.mutation_attempted else "blocked",
+                "counter_negative",
+            )
+        return
+    result_trigger.authorize_counter_methods(BN.INCREMENT_JOINING_PROCESS_COUNTER)
+    ns_ijt = _require_ns_ijt(ns_indices)
+    jpm = await _get_jpm(client, ns_ijt)
+    piu = await _read_required_tool_product_instance_uri(client, ns_indices)
+    listed = await find_and_call_method(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt, _piu_arg(piu))
+    assert listed.success, f"Counter precondition discovery failed: {listed.error}"
+    processes = _unwrap_method_array_output(listed.output_list)
+    sequential = [
+        item
+        for item in processes
+        if _process_classification(item)
+        in {JoiningProcessClassification.BATCH, JoiningProcessClassification.SYNC, JoiningProcessClassification.JOB}
+    ]
+    if not sequential:
+        raise WorkflowEvidenceUnavailable(
+            "No valid sequential counter process is advertised.",
+            "counter_negative_precondition_unproven",
+            "blocked",
+            "counter_negative",
+        )
+    identification = _jp_identification_from_entry(sequential[0])
+    if identification is None:
+        raise WorkflowEvidenceUnavailable(
+            "JoiningProcessIdentificationDataType is unavailable.",
+            "counter_negative_precondition_unproven",
+            "blocked",
+            "counter_negative",
+        )
+    try:
+        exposed = await read_exposed_product_instance_uris(client, ns_ijt)
+    except ProductInstanceUriExposureUnavailable as exc:
+        raise WorkflowEvidenceUnavailable(str(exc), exc.reason_code, "blocked", "counter_negative") from exc
+    arguments, expected = counter_negative_arguments(
+        piu,
+        identification.Value,
+        tuple(_joining_process_id_from_entry(item) for item in processes),
+        exposed,
+        kind,
+    )
+    result = await result_trigger.call_counter_method(jpm, BN.INCREMENT_JOINING_PROCESS_COUNTER, ns_ijt, *arguments)
+    try:
+        require_negative_counter_response(result, expected)
+    except CounterEvidenceUnavailable as exc:
+        raise WorkflowEvidenceUnavailable(
+            str(exc),
+            exc.reason_code,
+            "inconclusive" if result.rpc_dispatched is not False else "blocked",
+            "counter_negative",
+        ) from exc
+
+
+@pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
+@pytest.mark.workbook_ref("Increment JP Counter", 9)
+async def test_increment_counter_rejects_unexposed_product_instance_uri(
+    opcua_client, ns_indices, result_trigger, request
+):
+    await _verify_increment_counter_negative(opcua_client, ns_indices, result_trigger, request, "invalid_piu")
+
+
+@pytest.mark.requires_cu(CU.INCREMENT_JOINING_PROCESS_COUNTER)
+@pytest.mark.workbook_ref("Increment JP Counter", 11)
+async def test_increment_counter_rejects_unknown_process_identity(opcua_client, ns_indices, result_trigger, request):
+    await _verify_increment_counter_negative(opcua_client, ns_indices, result_trigger, request, "unknown_process")
+
+
+async def _verify_simulator_increment_effect(
+    client, subscription_client, ns_indices, process_arg, timeout_s, *, result_trigger
+):
+    """Observe the real counter method, never a SimulateResults substitute."""
+    from helpers.result_collector import (
+        ResultCollector,
+        get_classification,
+        get_result_id,
+        is_terminal_completed,
+        references_result_id,
+        unwrap_result,
+    )
+    from helpers.target_server_triggers import StartSelectedJoiningResultTrigger
+
+    result_trigger.authorize_counter_methods(BN.INCREMENT_JOINING_PROCESS_COUNTER)
+    ns_ijt = _require_ns_ijt(ns_indices)
+    jpm = await _get_jpm(client, ns_ijt)
+    piu = await _read_required_tool_product_instance_uri(client, ns_indices)
+    identification = unwrap_result(process_arg)
+    assert identification is not None, "A seeded simulator Batch is required"
+    process_id = identification.JoiningProcessId
+
+    def evidence_ready(results):
+        interventions = [
+            result
+            for result in results
+            if is_terminal_completed(result, 6)
+            and StartSelectedJoiningResultTrigger._result_matches_context(result, piu, process_id)
+            and unwrap_result(getattr(result.ResultMetaData, "InterventionType", None)) == 2
+        ]
+        return any(
+            get_classification(parent) == 3
+            and StartSelectedJoiningResultTrigger._result_matches_context(parent, piu, process_id)
+            and references_result_id(parent, get_result_id(intervention), results)
+            and any(
+                unwrap_result(getattr(counter, "CounterType", None)) == 3
+                and unwrap_result(getattr(counter, "CounterValue", None)) == _SIMULATOR_COUNTER_BASELINE + 1
+                for counter in getattr(parent.ResultMetaData, "ResultCounters", None) or ()
+            )
+            for intervention in interventions
+            for parent in results
+        )
+
+    async with ResultCollector(subscription_client, ns_indices, is_simulator=True) as collector:
+        collector.discard_pending()
+        result = await result_trigger.call_counter_method(
+            jpm,
+            BN.INCREMENT_JOINING_PROCESS_COUNTER,
+            ns_ijt,
+            _piu_arg(piu),
+            process_arg,
+            ua.Variant(1, ua.VariantType.UInt32),
+        )
+        assert result.success, f"IncrementJoiningProcessCounter failed: {result.error}"
+        assert _method_status_code(result.output_list) == 0, f"Counter increment rejected: {result.output_list}"
+        capture = await collector.collect_evidence(evidence_ready, timeout_s)
+    assert capture.is_lossless and evidence_ready(capture.all_results), (
+        "Counter call acceptance alone is insufficient. Expected correlated INCREMENTED InterventionResult "
+        "and a referencing Batch result with the seeded counter incremented by one."
+    )

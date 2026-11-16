@@ -146,3 +146,44 @@ def test_dependency_exclusion_does_not_mark_primary_cu_scope_excluded(monkeypatc
     with pytest.raises(pytest.skip.Exception):
         conftest.pytest_runtest_setup(item)
     assert (("ijt_scope_excluded", "true") in item.user_properties) is primary_excluded
+
+
+def test_pytest_configure_suppresses_asyncua_browsename_collision_warnings(reviewed_config):
+    import logging
+
+    config, _ = reviewed_config
+    logger = logging.getLogger("asyncua")
+    previous = logger.level
+    logger.setLevel(logging.WARNING)
+    try:
+        conftest.pytest_configure(config)
+        assert logger.level == logging.ERROR
+    finally:
+        logger.setLevel(previous)
+
+
+def test_consolidated_parametrized_sync_variants_declare_sync_dependency_cu():
+    from helpers.cu_registry import CU
+    from helpers.namespaces import ResultClassification
+    from specification_tests import test_consolidated_results as mod
+
+    functions = (
+        mod.test_combined_result_carries_correct_classification_value,
+        mod.test_self_contained_sub_results_have_non_empty_result_content,
+        mod.test_references_mode_child_stubs_have_required_metadata_and_empty_content,
+        mod.test_consolidated_sub_result_type_matches_its_classification,
+    )
+    expected_cu = {
+        ResultClassification.SYNC_RESULT: CU.SYNC_RESULT,
+        ResultClassification.BATCH_RESULT: CU.BATCH_RESULT,
+    }
+    for fn in functions:
+        marks = getattr(fn, "pytestmark", ())
+        parametrize = next(mark for mark in marks if mark.name == "parametrize")
+        params = parametrize.args[1]
+        assert len(params) == 2
+        for param in params:
+            cls_value = param.values[0]
+            dep_marks = [mark for mark in param.marks if mark.name == "requires_dependency_cu"]
+            assert len(dep_marks) == 1
+            assert dep_marks[0].args == (expected_cu[cls_value],)

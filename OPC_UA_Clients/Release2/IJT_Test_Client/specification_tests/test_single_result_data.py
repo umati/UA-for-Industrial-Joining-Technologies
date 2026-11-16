@@ -13,7 +13,8 @@ single joining operation.
 # pylint: disable=too-many-lines
 
 import logging
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, cast
 
 import pytest
 from asyncua import ua
@@ -125,6 +126,8 @@ async def _get_result(
     ns_indices,
     result_type: int = ResultType.MULTI_STEP_OK_RESULT,
     include_traces: bool = True,
+    *,
+    fresh: bool = False,
 ):
     """Trigger a result and collect it via IJTResultEventType events.
 
@@ -133,11 +136,16 @@ async def _get_result(
     - A simulator trigger call failed (caller should call ``pytest.skip``).
     - No result event arrived within timeout.
     """
-    async with ResultCollector(subscription_client, ns_indices, is_simulator=result_trigger.is_simulator) as rc:
-        outcome = await result_trigger.trigger_single(result_type, include_traces=include_traces)
-        if not outcome.triggered:
-            return None, None
-        result_data = await rc.collect_single()
+    from helpers.result_collector import collect_single_evidence
+
+    result_data = await collect_single_evidence(
+        subscription_client,
+        result_trigger,
+        ns_indices,
+        result_type,
+        include_traces=include_traces,
+        fresh=fresh,
+    )
 
     if result_data is None:
         return None, None
@@ -278,7 +286,7 @@ async def test_single_result_sequence_number_increments(subscription_client, res
         outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
         if not outcome.triggered:
             pytest.skip("Second simulator trigger failed — cannot verify monotonic sequence")
-        rd_second = await rc.collect_single()
+        rd_second = await rc.collect_triggered_single(outcome)
 
     if rd_second is None:
         pytest.skip("No second result event received within timeout")
@@ -941,6 +949,8 @@ async def test_single_result_ids_are_unique_between_consecutive_operations(
         result_trigger,
         ns_indices,
         result_type=ResultType.MULTI_STEP_OK_RESULT,
+        include_traces=False,
+        fresh=True,
     )
     _skip_if_no_result(result_data_b, result_trigger)
     if meta_b is None:
@@ -1103,22 +1113,55 @@ async def test_basic_result_sequence_number_monotonically_increasing_across_five
     if ns_mr is None:
         pytest.skip("Machinery/Result namespace not registered on server")
 
-    sequence_numbers = []
-    for _ in range(5):
-        _, meta = await _get_result(
-            subscription_client,
-            result_trigger,
-            ns_indices,
-            result_type=ResultType.MULTI_STEP_OK_RESULT,
-        )
-        if meta is None:
-            pytest.skip("ResultMetaData absent — cannot collect five sequence numbers")
-        seq = getattr(meta, "SequenceNumber", None)
-        if seq is None:
-            pytest.skip("SequenceNumber absent — optional per spec")
-        sequence_numbers.append(int(seq))
-        if not result_trigger.is_simulator:
-            break  # external trigger: single observation is sufficient
+    sequence_numbers: list[int] = []
+    if not result_trigger.is_simulator:
+        raw_getter = getattr(result_trigger, "get_reusable_progression", None)
+        progression = None
+        if callable(raw_getter):
+            reusable_getter = cast(Callable[[int], Awaitable[Any]], raw_getter)
+            for cls in (
+                ResultClassification.JOB_RESULT,
+                ResultClassification.BATCH_RESULT,
+                ResultClassification.SINGLE_RESULT,
+            ):
+                candidate = await reusable_getter(cls)
+                if candidate is not None and len(getattr(candidate, "all_results", ())) >= 2:
+                    progression = candidate
+                    break
+        if progression is None:
+            outcome = await result_trigger.trigger_job()
+            progression = getattr(outcome, "result_progression", None)
+        all_results = list(getattr(progression, "all_results", ()) or ())
+        seen_ids: set[str] = set()
+        for res in all_results:
+            meta = getattr(res, "ResultMetaData", None)
+            if meta is None:
+                continue
+            cls_val = getattr(meta, "Classification", None)
+            if cls_val is not None and int(cls_val) != int(ResultClassification.SINGLE_RESULT):
+                continue
+            rid = str(getattr(meta, "ResultId", "") or "")
+            if rid and rid in seen_ids:
+                continue
+            if rid:
+                seen_ids.add(rid)
+            seq = getattr(meta, "SequenceNumber", None)
+            if seq is not None:
+                sequence_numbers.append(int(seq))
+    else:
+        for _ in range(5):
+            _, meta = await _get_result(
+                subscription_client,
+                result_trigger,
+                ns_indices,
+                result_type=ResultType.MULTI_STEP_OK_RESULT,
+            )
+            if meta is None:
+                pytest.skip("ResultMetaData absent — cannot collect five sequence numbers")
+            seq = getattr(meta, "SequenceNumber", None)
+            if seq is None:
+                pytest.skip("SequenceNumber absent — optional per spec")
+            sequence_numbers.append(int(seq))
 
     if len(sequence_numbers) < 2:
         pytest.skip("Fewer than two sequence numbers collected — monotonicity cannot be checked")
@@ -1583,28 +1626,55 @@ async def test_multiple_results_produce_separate_events_with_distinct_ids(
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     if ns_ijt is None:
         pytest.skip("IJT Base namespace not registered on server")
+
     if not result_trigger.is_simulator:
-        pytest.skip("Three-operation sequence requires simulator — skipping for external trigger")
-
-    server_node = subscription_client.nodes.server
-    event_type_node = subscription_client.get_node(
-        ua.NodeId(IJTTypes.JOINING_RESULT_READY_EVENT_TYPE, ns_ijt)
-        if hasattr(IJTTypes, "JOINING_RESULT_READY_EVENT_TYPE")
-        else ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt)
-    )
-
-    async with EventCollector(subscription_client) as collector:
-        await collector.subscribe(server_node, event_type_node)
-        for _ in range(3):
-            outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
-            if not outcome.triggered:
-                pytest.skip(outcome.skip_reason or "Simulator trigger failed during multi-result test")
-        events = await collector.collect(count=3, timeout_s=30.0)
-
-    if len(events) < 3:
-        pytest.skip(
-            f"Only {len(events)} of 3 expected events received within timeout — server may be throttling events"
+        raw_getter = getattr(result_trigger, "get_reusable_progression", None)
+        progression = None
+        if callable(raw_getter):
+            reusable_getter = cast(Callable[[int], Awaitable[Any]], raw_getter)
+            for cls in (
+                ResultClassification.JOB_RESULT,
+                ResultClassification.BATCH_RESULT,
+                ResultClassification.SINGLE_RESULT,
+            ):
+                candidate = await reusable_getter(cls)
+                if candidate is not None and len(getattr(candidate, "source_events", ())) >= 2:
+                    progression = candidate
+                    break
+        if progression is None:
+            outcome = await result_trigger.trigger_job()
+            progression = getattr(outcome, "result_progression", None)
+        raw_events = list(getattr(progression, "source_events", ()) or ())
+        events = []
+        for ev in raw_events:
+            res_field = getattr(ev, "Result", None)
+            meta = getattr(res_field, "ResultMetaData", None) if res_field else None
+            cls_val = getattr(meta, "Classification", None) if meta is not None else None
+            if cls_val is not None and int(cls_val) != int(ResultClassification.SINGLE_RESULT):
+                continue
+            events.append(ev)
+        if len(events) < 2:
+            pytest.skip(f"Only {len(events)} distinct single-result events available from target progression")
+    else:
+        server_node = subscription_client.nodes.server
+        event_type_node = subscription_client.get_node(
+            ua.NodeId(IJTTypes.JOINING_RESULT_READY_EVENT_TYPE, ns_ijt)
+            if hasattr(IJTTypes, "JOINING_RESULT_READY_EVENT_TYPE")
+            else ua.NodeId(IJTTypes.JOINING_SYSTEM_RESULT_READY_EVENT_TYPE, ns_ijt)
         )
+
+        async with EventCollector(subscription_client) as collector:
+            await collector.subscribe(server_node, event_type_node)
+            for _ in range(3):
+                outcome = await result_trigger.trigger_single(ResultType.MULTI_STEP_OK_RESULT, include_traces=False)
+                if not outcome.triggered:
+                    pytest.skip(outcome.skip_reason or "Simulator trigger failed during multi-result test")
+            events = await collector.collect(count=3, timeout_s=30.0)
+
+        if len(events) < 3:
+            pytest.skip(
+                f"Only {len(events)} of 3 expected events received within timeout — server may be throttling events"
+            )
 
     event_ids = []
     result_ids = []
@@ -1626,6 +1696,26 @@ async def test_multiple_results_produce_separate_events_with_distinct_ids(
         assert len(set(result_ids)) == len(result_ids), (
             f"ResultIds are not all distinct across {len(result_ids)} events: {result_ids!r}"
         )
+
+
+@pytest.mark.requires_cu(CU.JOINING_RESULT_ERRORS)
+async def test_error_information_data_type_present_in_address_space(opcua_client, ns_indices):
+    """ErrorInformationDataType must be present in the IJT Base namespace with DataType NodeClass."""
+    ns_ijt = ns_indices.get(NS_IJT_BASE)
+    if ns_ijt is None:
+        pytest.skip("IJT Base namespace not registered on server")
+    dtype_id = getattr(IJTTypes, "ERROR_INFORMATION_DATA_TYPE", None)
+    if dtype_id is None:
+        pytest.skip("ERROR_INFORMATION_DATA_TYPE constant not available")
+    node = opcua_client.get_node(ua.NodeId(dtype_id, ns_ijt))
+    node_class = await node.read_node_class()
+    assert node_class == ua.NodeClass.DataType, (
+        f"ErrorInformationDataType NodeClass must be DataType, got {node_class!r}"
+    )
+    browse_name = await node.read_browse_name()
+    assert browse_name.Name == "ErrorInformationDataType", (
+        f"Unexpected BrowseName {browse_name!r} for ErrorInformationDataType"
+    )
 
 
 @pytest.mark.negative

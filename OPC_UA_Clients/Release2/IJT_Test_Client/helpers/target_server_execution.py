@@ -23,7 +23,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from helpers.cu_coverage_report import INCOMPLETE_EXIT_CODE, qualification_disposition
+from helpers.cu_coverage_report import INCOMPLETE_EXIT_CODE, qualification_disposition, run_assessment
 from helpers.cu_test_counts import (
     TestCountSummary,
     load_test_count_summary,
@@ -328,9 +328,14 @@ def _write_human_summary(
         "",
     ]
     test_counts = _spec_test_counts(extra)
+    for key, value in (extra or {}).get("assessment", {}).items():
+        lines.append(f"  {key.replace('_', ' ').capitalize()}: {str(value).upper()}")
     excluded = (extra or {}).get("qualification", {}).get("scope_excluded_claimed_cus", [])
     if excluded:
         lines.append("  Claimed CUs excluded by workflow scope (not qualified): " + ", ".join(excluded))
+    manual_deferred = (extra or {}).get("qualification", {}).get("manual_deferred_cus", [])
+    if manual_deferred:
+        lines.append("  Manual-required CUs deferred in automated mode: " + ", ".join(manual_deferred))
     unreviewed = (extra or {}).get("qualification", {}).get("unreviewed_cus", [])
     if unreviewed:
         lines.append("  Unreviewed catalogue CUs (new tests disabled): " + ", ".join(unreviewed))
@@ -385,11 +390,18 @@ def _write_markdown_summary(
             "- **Claimed CUs excluded by workflow scope (not qualified):** "
             + ", ".join(f"`{key}`" for key in excluded),
         ]
+    manual_deferred = (extra or {}).get("qualification", {}).get("manual_deferred_cus", [])
+    if manual_deferred:
+        lines[8:8] = [
+            "- **Manual-required CUs deferred in automated mode:** " + ", ".join(f"`{key}`" for key in manual_deferred),
+        ]
     unreviewed = (extra or {}).get("qualification", {}).get("unreviewed_cus", [])
     if unreviewed:
         lines[8:8] = [
             "- **Unreviewed catalogue CUs (new tests disabled):** " + ", ".join(f"`{key}`" for key in unreviewed),
         ]
+    for key, value in (extra or {}).get("assessment", {}).items():
+        lines.insert(8, f"- **{key.replace('_', ' ').capitalize()}:** `{str(value).upper()}`")
     for check in preflight_report.checks:
         status_icon = (
             "✅" if check.outcome == OUTCOME_PASSED else ("⚠️" if check.outcome == OUTCOME_MANUAL_REQUIRED else "❌")
@@ -556,6 +568,7 @@ async def async_discover_target_server(
     security: ConnectionSecurity | None = None,
     prompt: CredentialPrompt | None = None,
     expected_tool_uri: str | None = None,
+    tool_policy: str = "first_ready",
 ) -> dict:
     """Connect to a target OPC UA server, discover Tools and Joining Processes, and return structured metadata.
 
@@ -597,14 +610,16 @@ async def async_discover_target_server(
             return discovery_data
 
         # 1. Discover Tool PIU
-        if expected_tool_uri is None:
-            piu = await read_tool_product_instance_uri(client, ns_ijt, ns_di)
-        else:
-            piu = await read_tool_product_instance_uri(client, ns_ijt, ns_di, expected_tool_uri=expected_tool_uri)
+        tool_kwargs: dict = {}
+        if expected_tool_uri is not None:
+            tool_kwargs["expected_tool_uri"] = expected_tool_uri
+        if tool_policy != "first_ready":
+            tool_kwargs["policy"] = tool_policy
+        piu = await read_tool_product_instance_uri(client, ns_ijt, ns_di, **tool_kwargs)
         if not piu:
             discovery_data["error"] = (
                 "No unique matching Tool ProductInstanceUri discovered; "
-                "configure the intended Tool when several exist. Catalog was not requested."
+                "verify Tool readiness or configure the intended Tool when several exist. Catalog was not requested."
             )
             return discovery_data
         if piu:
@@ -923,6 +938,7 @@ def _build_spec_test_env(
     else:
         env.pop("OPCUA_TARGET_INTERACTIVE_PROMPTS", None)
     runtime_selection = {
+        "OPCUA_TOOL_SELECTION_POLICY": profile.selection.tool.policy,
         "OPCUA_TOOL_PRODUCT_INSTANCE_URI": profile.selection.tool.product_instance_uri,
         "OPCUA_TOOL_PIU": profile.selection.tool.product_instance_uri,
         "OPCUA_JOINING_PROCESS_ID": profile.selection.joining_process.joining_process_id,
@@ -1091,6 +1107,7 @@ def run_live_spec_tests(
     output_dir.mkdir(parents=True, exist_ok=True)
     junit_xml = output_dir / "spec-tests.xml"
     cu_report = output_dir / "cu-coverage-report.json"
+    env["OPCUA_TARGET_SERVER_MODE"] = mode
     env["IJT_CU_COVERAGE_REPORT_FILE"] = str(cu_report)
     env["IJT_WORKFLOW_ACTIONS_FILE"] = str(output_dir / "workflow-actions.jsonl")
 
@@ -1154,11 +1171,20 @@ def run_live_spec_tests(
 
     elapsed = time.monotonic() - t0
     qualification = {"outcome": "incomplete", "issues": ["Missing run-scoped CU coverage."]}
+    assessment = {
+        "execution_health": "passed" if rc in {0, INCOMPLETE_EXIT_CODE} else "failed",
+        "requirement_qualification": "incomplete",
+        "scope_completeness": "incomplete",
+    }
     if cu_report.exists():
         try:
-            qualification = qualification_disposition(json.loads(cu_report.read_text(encoding="utf-8")))
+            coverage = json.loads(cu_report.read_text(encoding="utf-8"))
+            qualification = qualification_disposition(coverage)
+            assessment = run_assessment(coverage, rc) if isinstance(coverage, dict) else assessment
         except (OSError, ValueError, TypeError) as exc:
             qualification = {"outcome": "incomplete", "issues": [f"Unreadable CU coverage: {exc}"]}
+    if timed_out or error_msg:
+        assessment["execution_health"] = "failed"
     if rc in {0, INCOMPLETE_EXIT_CODE}:
         rc = (
             1
@@ -1172,6 +1198,7 @@ def run_live_spec_tests(
         "status": "timeout" if timed_out else ("error" if error_msg else "completed"),
         "outcome": "passed" if rc == 0 else "incomplete" if rc == INCOMPLETE_EXIT_CODE else "failed",
         "qualification": qualification,
+        "assessment": assessment,
         "exit_code": rc,
         "elapsed_seconds": round(elapsed, 1),
         "endpoint": endpoint,
@@ -1225,15 +1252,15 @@ def _add_live_process_selector_checks(
         prompt = _interactive_credential_prompt
 
     try:
-        data = asyncio.run(
-            async_discover_target_server(
-                profile.target.endpoint,
-                timeout=15.0,
-                security=security,
-                prompt=prompt,
-                expected_tool_uri=profile.selection.tool.product_instance_uri or None,
-            )
-        )
+        discover_kwargs: dict = {
+            "timeout": 15.0,
+            "security": security,
+            "prompt": prompt,
+            "expected_tool_uri": profile.selection.tool.product_instance_uri or None,
+        }
+        if profile.selection.tool.policy != "first_ready":
+            discover_kwargs["tool_policy"] = profile.selection.tool.policy
+        data = asyncio.run(async_discover_target_server(profile.target.endpoint, **discover_kwargs))
     except Exception as exc:  # noqa: BLE001 - represent connection/discovery failure in preflight evidence
         report.add(
             ReadinessOutcome(
@@ -1298,12 +1325,12 @@ def run_preflight(
     """
     _section("Configuration preflight")
     cfg_report = run_config_preflight(profile)
-
     # Add TCP reachability probe for configured endpoint
-    tcp_check = check_endpoint_reachable(profile.target.endpoint)
-    cfg_report.add(tcp_check)
-    if tcp_check.passed and not cfg_report.blocking_checks:
-        _add_live_process_selector_checks(profile, cfg_report, interactive_prompts=interactive_prompts)
+    if not cfg_report.blocking_checks:
+        tcp_check = check_endpoint_reachable(profile.target.endpoint)
+        cfg_report.add(tcp_check)
+        if tcp_check.passed:
+            _add_live_process_selector_checks(profile, cfg_report, interactive_prompts=interactive_prompts)
 
     for check in cfg_report.checks:
         _print_check(check)
@@ -1564,14 +1591,14 @@ def run_automated(
 
     if outcome_summary == "CLASSIFICATION_ONLY":
         spec_rc = INCOMPLETE_EXIT_CODE
-    if blocking and spec_rc == 0:
-        spec_rc = INCOMPLETE_EXIT_CODE
-        outcome_summary = "INCOMPLETE"
     if inventory_failed:
         spec_rc = 1
         outcome_summary = "MODEL_INVENTORY_FAILED"
 
     extra["qualification"] = dict((spec_meta or {}).get("qualification") or {})
+    extra["assessment"] = dict((spec_meta or {}).get("assessment") or {})
+    if inventory_failed:
+        extra["assessment"]["execution_health"] = "failed"
     extra["qualification"].update(
         {
             "outcome": (
@@ -1605,16 +1632,16 @@ def run_automated(
             output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra
         )
         if excel_meta["status"] == EXCEL_STATUS_GENERATED:
-            _log(f"  Excel report:    {excel_meta['path']}")
+            _log(f"  Controller Excel report: PASS ({excel_meta['path']})")
             if excel_meta.get("copied_to"):
                 _log(f"  Excel copy:      {excel_meta['copied_to']}")
         elif is_benign_excel_skip(excel_meta):
-            _log(f"  Excel report:    skipped — {excel_meta['reason']}")
+            _log(f"  Controller Excel report: SKIP ({excel_meta['reason']})")
         else:
             _log(
                 _c(
                     _ANSI_RED,
-                    f"  Excel report:    {excel_meta['status']} — {excel_meta.get('reason') or 'no reason reported'}",
+                    f"  Controller Excel report: FAIL ({excel_meta.get('reason') or 'no reason reported'})",
                 )
             )
             _log(
@@ -1639,6 +1666,23 @@ def run_automated(
             "blocked_workflows": [check.check_name for check in blocking],
         }
     )
+    extra["assessment"].update(
+        {
+            "execution_health": (
+                "not_tested"
+                if not spec_meta or spec_meta.get("status") == "skipped"
+                else "failed"
+                if inventory_failed or outcome_summary == "COVERAGE_EVIDENCE_FAILED"
+                else extra["assessment"].get(
+                    "execution_health", "passed" if spec_rc in {0, INCOMPLETE_EXIT_CODE} else "failed"
+                )
+            ),
+            "requirement_qualification": extra["qualification"]["outcome"],
+            "scope_completeness": extra["assessment"].get("scope_completeness", "incomplete"),
+        }
+    )
+    for key, value in extra["assessment"].items():
+        _log(f"  {key.replace('_', ' ').capitalize()}: {str(value).upper()}")
     _write_evidence_report(output_dir, profile, cfg_report, mode, run_start, extra)
     _write_human_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra)
     _write_markdown_summary(output_dir, profile, cfg_report, mode, run_start, outcome_summary, extra)
@@ -1661,10 +1705,5 @@ def run_automated(
         )
         return 1
 
-    if spec_meta and spec_meta.get("status") == "skipped":
-        _log(_c(_ANSI_YELLOW, "  Target Server CU classification complete (spec tests skipped)."))
-    elif spec_meta is None and not skip_spec_tests:
-        _log(_c(_ANSI_YELLOW, "  Target Server CU classification complete (no endpoint configured)."))
-    else:
-        _log(_c(_ANSI_GREEN, "  Target Server CU run complete."))
+    _log(_c(_ANSI_GREEN, "  Target Server CU run complete."))
     return 0

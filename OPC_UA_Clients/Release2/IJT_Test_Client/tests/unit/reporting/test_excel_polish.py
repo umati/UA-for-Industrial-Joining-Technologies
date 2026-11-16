@@ -56,6 +56,33 @@ def _minimal_cases() -> list[make_excel_report.TestCase]:
     ]
 
 
+def test_cover_separates_successful_execution_from_incomplete_qualification():
+    workbook = openpyxl.Workbook()
+    make_excel_report._build_cover(
+        workbook,
+        [],
+        "offline",
+        "incomplete",
+        None,
+        {},
+        {
+            "assessment": {
+                "execution_health": "passed",
+                "requirement_qualification": "incomplete",
+                "scope_completeness": "complete",
+            }
+        },
+    )
+    sheet = workbook[_COVER_SHEET]
+    metrics = {row[0].value: row[1].value for row in sheet.iter_rows(min_row=5, max_row=7)}
+    assert metrics == {
+        "Execution health": "PASSED",
+        "Requirement qualification": "INCOMPLETE",
+        "Scope completeness": "COMPLETE",
+    }
+    assert "not a compliance PASS" in sheet["B3"].value
+
+
 def _minimal_context() -> dict:
     return {
         "server_supported_count": 2,

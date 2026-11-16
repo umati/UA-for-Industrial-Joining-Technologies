@@ -145,6 +145,26 @@ def resolve_claimed_cus(claims: CapabilityClaims) -> FrozenSet[str]:
     return frozenset(claimed)
 
 
+def resolve_manual_required_cus(claims: CapabilityClaims) -> FrozenSet[str]:
+    """Return the frozenset of conformance units explicitly declared ``manual_required``."""
+    return frozenset(key for key, value in claims.cu_overrides.items() if value == "manual_required")
+
+
+def resolve_session_manual_required_cus(
+    manifest_path: Path | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> FrozenSet[str]:
+    """Return ``manual_required`` CUs for the selected session manifest, or empty frozenset."""
+    explicit_path = manifest_path if manifest_path is not None else selected_manifest_path(env)
+    if explicit_path is None or not explicit_path.exists():
+        return frozenset()
+    try:
+        return resolve_manual_required_cus(load_capability_claims(explicit_path))
+    except Exception:  # noqa: BLE001
+        return frozenset()
+
+
 def complete_cu_overrides(claims: CapabilityClaims) -> dict[str, str]:
     """List the entire CU catalogue without changing claims or existing dispositions."""
     catalogue = load_all_cus_from_facets()

@@ -1,7 +1,7 @@
 """
 Unit tests for _StepResult (run_all_tests.py runner infrastructure).
 
-Guards the PASS / WARN / FAIL / SKIP state model so advisory tools
+Guards the PASS / WARN / FAIL / SKIP / INCOMPLETE state model so advisory tools
 like Semgrep can never accidentally block the suite.
 
 Key invariants tested:
@@ -9,6 +9,7 @@ Key invariants tested:
   - ok=False   → shows as FAIL, counted in failed (blocks suite)
   - ok=True    → shows as PASS, counted in passed
   - skipped=True → shows as SKIP, excluded from all outcome counts
+  - incomplete=True → shows as INCOMPLETE, excluded from pass/fail and exits 6
   - Semgrep parse-failure path produces warn=True (non-blocking by design)
 """
 
@@ -18,6 +19,7 @@ import importlib
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -94,11 +96,12 @@ def test_ad_hoc_endpoint_evidence_dir_is_a_legal_windows_name(tmp_path):
 
 
 def test_default_state_is_fail():
-    """Freshly created _StepResult defaults to FAIL (ok=False, warn=False, skipped=False)."""
+    """Freshly created _StepResult defaults to FAIL with no advisory states."""
     r = _StepResult("label")
     assert not r.ok
     assert not r.warn
     assert not r.skipped
+    assert not r.incomplete
 
 
 def test_pass_state():
@@ -274,19 +277,16 @@ def test_phase1_mypy_blocks_on_type_errors():
 
 
 def _counts(results: list) -> dict:
-    """Replicate the exact counter logic from Test Client main()."""
-    passed = sum(1 for r in results if r.ok and not r.skipped and not r.warn)
-    warned = sum(1 for r in results if r.warn and not r.skipped)
-    failed = sum(1 for r in results if not r.ok and not r.skipped and not r.warn)
-    skipped = sum(1 for r in results if r.skipped)
-    return {"passed": passed, "warned": warned, "failed": failed, "skipped": skipped}
+    """Use the exact outcome aggregation used by Test Client main()."""
+    return _mod._summarize_results(results)[0]
 
 
-def _make(*, ok: bool = False, warn: bool = False, skipped: bool = False):
+def _make(*, ok: bool = False, warn: bool = False, skipped: bool = False, incomplete: bool = False):
     r = _StepResult("x")
     r.ok = ok
     r.warn = warn
     r.skipped = skipped
+    r.incomplete = incomplete
     return r
 
 
@@ -328,6 +328,74 @@ def test_counter_mixed_suite_warn_does_not_cause_suite_fail():
     assert c["passed"] == 3
     any_failed = c["failed"] > 0
     assert not any_failed
+
+
+def test_target_incomplete_exit_is_counted_and_rendered_distinctly(tmp_path):
+    from helpers import target_server_execution
+
+    profile = SimpleNamespace(source_path=str(tmp_path / "profile.sut.yaml"))
+    plan = SimpleNamespace(
+        preflight_only=False,
+        profile=profile,
+        output_dir=tmp_path,
+        endpoint="opc.tcp://offline-test:4840",
+        endpoint_source="test",
+        capabilities_file=None,
+        capabilities_source="unset",
+        mode="automated",
+        interactive_prompts=False,
+        skip_spec_tests=False,
+        spec_tests_timeout=1,
+        verbose=False,
+    )
+    evidence_dir = tmp_path / "evidence"
+
+    with (
+        patch.object(_mod, "_make_unique_run_dir", return_value=evidence_dir),
+        patch.object(target_server_execution, "run_automated", return_value=6),
+    ):
+        result = _mod._step_target_run(plan)
+
+    assert result.incomplete
+    assert not result.ok
+    assert "execution completed" in result.note
+    assert "qualification INCOMPLETE (exit 6)" in result.note
+    assert str(evidence_dir) in result.note
+
+    messages: list[str] = []
+    with patch.object(_mod, "_log", messages.append):
+        result.print_line()
+    assert "INCOMPLETE" in messages[0]
+
+    counts, status, exit_code = _mod._summarize_results([result])
+    assert counts == {"passed": 0, "warned": 0, "failed": 0, "skipped": 0, "incomplete": 1}
+    assert status == "INCOMPLETE"
+    assert exit_code == 6
+
+
+def test_incomplete_state_is_excluded_from_passed_and_failed_counts():
+    counts, status, exit_code = _mod._summarize_results([_make(ok=True, incomplete=True)])
+    assert counts["passed"] == 0
+    assert counts["failed"] == 0
+    assert counts["incomplete"] == 1
+    assert status == "INCOMPLETE"
+    assert exit_code == 6
+
+
+def test_incomplete_state_takes_precedence_over_advisory_warning():
+    counts, status, exit_code = _mod._summarize_results([_make(warn=True, incomplete=True)])
+    assert counts["warned"] == 0
+    assert counts["incomplete"] == 1
+    assert status == "INCOMPLETE"
+    assert exit_code == 6
+
+
+def test_real_failure_takes_precedence_over_incomplete_result():
+    counts, status, exit_code = _mod._summarize_results([_make(incomplete=True), _make()])
+    assert counts["incomplete"] == 1
+    assert counts["failed"] == 1
+    assert status == "FAIL"
+    assert exit_code == 1
 
 
 # ---------------------------------------------------------------------------
@@ -635,7 +703,42 @@ def test_excel_on_success_skipped_after_failures():
     assert "on-success" in result.note
 
 
-def test_target_evidence_run_does_not_touch_shared_simulator_workbook():
+def test_excel_on_success_skips_incomplete_qualification():
+    result = _mod._maybe_generate_excel(
+        "on-success",
+        tests_passed=True,
+        explicit_junit_xml=None,
+        excel_out=None,
+        qualification_incomplete=True,
+    )
+    assert result.skipped
+    assert "qualification incomplete" in result.note
+
+
+def test_excel_report_receives_incomplete_qualification(tmp_path):
+    xml = tmp_path / "pytest-live.xml"
+    xml.write_text("<testsuite/>", encoding="utf-8")
+    captured: dict = {}
+
+    def _fake_step(xml_path, out_path, *, tests_passed, qualification_incomplete=False):
+        captured["tests_passed"] = tests_passed
+        captured["qualification_incomplete"] = qualification_incomplete
+        return _StepResult("[POST] Excel report")
+
+    with patch.object(_mod, "_step_excel_report", _fake_step):
+        _mod._maybe_generate_excel(
+            "always",
+            tests_passed=False,
+            explicit_junit_xml=str(xml),
+            excel_out=str(tmp_path / "report.xlsx"),
+            qualification_incomplete=True,
+        )
+
+    assert captured == {"tests_passed": False, "qualification_incomplete": True}
+
+
+@pytest.mark.parametrize("excel_mode", ["always", "never", "on-success"])
+def test_target_evidence_run_does_not_touch_shared_simulator_workbook(excel_mode, capsys):
     """A --profile/--endpoint run must not regenerate test-results/report.xlsx nor
     rewrite the shared report-baseline.json from target-server results."""
     called = {"ran": False}
@@ -646,15 +749,15 @@ def test_target_evidence_run_does_not_touch_shared_simulator_workbook():
 
     with patch.object(_mod, "_step_excel_report", _fail_if_called):
         result = _mod._maybe_generate_excel(
-            "always",
+            excel_mode,
             tests_passed=True,
             explicit_junit_xml=None,
             excel_out=None,
             target_evidence_mode=True,
         )
-    assert result.skipped
+    assert result is None
     assert called["ran"] is False
-    assert "report-controller.xlsx" in result.note
+    assert "Excel report" not in capsys.readouterr().out
 
 
 def test_simulator_excel_step_still_runs_when_not_target_mode(tmp_path):
@@ -662,8 +765,10 @@ def test_simulator_excel_step_still_runs_when_not_target_mode(tmp_path):
     xml.write_text("<testsuite/>", encoding="utf-8")
     captured: dict = {}
 
-    def _fake_step(xml_path, out_path, *, tests_passed):
+    def _fake_step(xml_path, out_path, *, tests_passed, qualification_incomplete=False):
         captured["out"] = out_path
+        captured["tests_passed"] = tests_passed
+        captured["qualification_incomplete"] = qualification_incomplete
         r = _StepResult("[POST] Excel report")
         r.ok = True
         return r
@@ -677,6 +782,8 @@ def test_simulator_excel_step_still_runs_when_not_target_mode(tmp_path):
         )
     assert result.ok
     assert captured["out"] == Path(tmp_path / "custom.xlsx")
+    assert captured["tests_passed"]
+    assert not captured["qualification_incomplete"]
 
 
 def test_simulator_excel_step_writes_shared_baseline():
@@ -690,6 +797,24 @@ def test_simulator_excel_step_writes_shared_baseline():
     with patch.object(_mod, "_run", _fake_run):
         _mod._step_excel_report(Path("x.xml"), Path("out.xlsx"), tests_passed=True)
     assert "--write-baseline" in captured["cmd"]
+
+
+def test_excel_report_marks_incomplete_qualification():
+    captured: dict = {}
+
+    def _fake_run(cmd, cwd=None):
+        captured["cmd"] = cmd
+        return 0, ""
+
+    with patch.object(_mod, "_run", _fake_run):
+        _mod._step_excel_report(
+            Path("x.xml"),
+            Path("out.xlsx"),
+            tests_passed=False,
+            qualification_incomplete=True,
+        )
+    result_index = captured["cmd"].index("--run-result")
+    assert captured["cmd"][result_index + 1] == "incomplete"
 
 
 # ---------------------------------------------------------------------------

@@ -68,6 +68,51 @@ def ref(name, ns=2, node_id=100, type_id=None, node_class=ua.NodeClass.Object):
     )
 
 
+@pytest.mark.asyncio
+async def test_piu_absence_inventory_covers_other_joining_systems_and_variable_children(monkeypatch):
+    objects = FakeNode(refs=[ref("FirstSystem", node_id=1), ref("SecondSystem", node_id=2)])
+    first = FakeNode(refs=[ref("ProductInstanceUri", node_id=3, node_class=ua.NodeClass.Variable)])
+    second = FakeNode(refs=[ref("Identification", node_id=4, node_class=ua.NodeClass.Variable)])
+    identification = FakeNode(refs=[ref("ProductInstanceUri", node_id=5, node_class=ua.NodeClass.Variable)])
+    nodes = {
+        1: first,
+        2: second,
+        3: FakeNode(value="urn:first-tool"),
+        4: identification,
+        5: FakeNode(value="urn:second-tool"),
+    }
+    monkeypatch.setattr(node_discovery, "_node_from_ref", lambda _node, node_id: nodes[node_id.Identifier])
+    assert await node_discovery.read_exposed_product_instance_uris(FakeClient(objects), 2) == frozenset(
+        {"urn:first-tool", "urn:second-tool"}
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("problem", ["cycle", "invalid_value", "remote", "deadline"])
+async def test_piu_inventory_refuses_incomplete_exposure_and_handles_cycles(monkeypatch, problem):
+    objects = FakeNode()
+    child_ref = ref("ProductInstanceUri", node_id=1, node_class=ua.NodeClass.Variable)
+    child = FakeNode(value="" if problem == "invalid_value" else "urn:tool")
+    objects.refs = [child_ref]
+    if problem == "remote":
+        child_ref.NodeId = ua.ExpandedNodeId(1, 2, ServerIndex=1)
+    if problem == "cycle":
+        child.refs = [ref("Objects", node_id=2)]
+    monkeypatch.setattr(
+        node_discovery, "_node_from_ref", lambda _node, node_id: objects if node_id.Identifier == 2 else child
+    )
+    if problem == "deadline":
+        fake_loop = SimpleNamespace(time=MagicMock(side_effect=[0, 61]))
+        monkeypatch.setattr(node_discovery.asyncio, "get_running_loop", lambda: fake_loop)
+    if problem == "cycle":
+        assert await node_discovery.read_exposed_product_instance_uris(FakeClient(objects), 2) == frozenset(
+            {"urn:tool"}
+        )
+    else:
+        with pytest.raises(node_discovery.ProductInstanceUriExposureUnavailable):
+            await node_discovery.read_exposed_product_instance_uris(FakeClient(objects), 2)
+
+
 class TestRefTypeNodeId:
     def test_returns_nodeid_with_namespace_zero(self):
         node_id = _ref_type_nodeid(33)
@@ -527,24 +572,29 @@ async def test_find_joining_system_returns_none_when_objects_browse_fails(monkey
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "requested,second_piu,catalog,binding,expected",
+    "requested,second_piu,catalog,binding,policy,expected",
     [
-        (None, "TOOL-PIU-2", "single", None, "TOOL-PIU-1"),
-        (None, "TOOL-PIU-2", "multiple", None, ""),
-        (None, None, "multiple", None, ""),
-        (None, "TOOL-PIU-2", "property", None, "TOOL-PIU-1"),
-        (None, "TOOL-PIU-2", "duplicate", None, "TOOL-PIU-1"),
-        ("TOOL-PIU-2", "TOOL-PIU-2", "multiple", None, "TOOL-PIU-2"),
-        ("missing", "TOOL-PIU-2", "multiple", None, ""),
-        ("TOOL-PIU-1", "TOOL-PIU-1", "multiple", None, ""),
-        (None, "TOOL-PIU-2", "multiple", "TOOL-PIU-2", "TOOL-PIU-2"),
-        ("TOOL-PIU-1", "TOOL-PIU-2", "multiple", "TOOL-PIU-2", "TOOL-PIU-1"),
+        (None, "TOOL-PIU-2", "single", None, None, "TOOL-PIU-1"),
+        (None, "TOOL-PIU-2", "multiple", None, None, "TOOL-PIU-1"),
+        (None, None, "multiple", None, None, "TOOL-PIU-1"),
+        (None, "TOOL-PIU-2", "multiple", None, "discover_unique", ""),
+        (None, None, "multiple", None, "discover_unique", ""),
+        (None, "TOOL-PIU-2", "single", None, "exact_match", ""),
+        (None, "TOOL-PIU-2", "property", None, None, "TOOL-PIU-1"),
+        (None, "TOOL-PIU-2", "duplicate", None, None, "TOOL-PIU-1"),
+        ("TOOL-PIU-2", "TOOL-PIU-2", "multiple", None, None, "TOOL-PIU-2"),
+        ("missing", "TOOL-PIU-2", "multiple", None, None, ""),
+        ("TOOL-PIU-1", "TOOL-PIU-1", "multiple", None, None, ""),
+        (None, "TOOL-PIU-1", "multiple", None, None, ""),
+        (None, "TOOL-PIU-2", "multiple", "TOOL-PIU-2", None, "TOOL-PIU-2"),
+        ("TOOL-PIU-1", "TOOL-PIU-2", "multiple", "TOOL-PIU-2", None, "TOOL-PIU-1"),
     ],
 )
 async def test_read_tool_product_instance_uri_follows_dynamic_tool_path(
-    monkeypatch, caplog, requested, second_piu, catalog, binding, expected
+    monkeypatch, caplog, requested, second_piu, catalog, binding, policy, expected
 ):
     monkeypatch.delenv("OPCUA_TARGET_SERVER_PROFILE", raising=False)
+    monkeypatch.delenv("OPCUA_TOOL_SELECTION_POLICY", raising=False)
     if binding is not None:
         monkeypatch.setenv("OPCUA_TARGET_SERVER_PROFILE", "reviewed-controller.yaml")
         monkeypatch.setenv("OPCUA_TOOL_PRODUCT_INSTANCE_URI", binding)
@@ -596,12 +646,91 @@ async def test_read_tool_product_instance_uri_follows_dynamic_tool_path(
     monkeypatch.setattr(node_discovery, "_node_from_ref", fake_node_from_ref)
 
     result = await node_discovery.read_tool_product_instance_uri(
-        object(), ns_ijt=7, ns_di=5, expected_tool_uri=requested
+        object(), ns_ijt=7, ns_di=5, expected_tool_uri=requested, policy=policy
     )
 
     assert result == expected
-    if requested is None and binding is None and catalog == "multiple":
+    if requested is None and binding is None and catalog == "multiple" and policy == "discover_unique":
         assert "requires exactly one Tool, found 2" in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "tool1_state,tool2_state,tool1_procs,tool2_procs,policy,expected",
+    [
+        ((False, True), (True, True), ["P1"], ["P2"], "first_ready", "TOOL-PIU-2"),
+        ((True, False), (True, True), ["P1"], ["P2"], "first_ready", "TOOL-PIU-2"),
+        ((True, True), (True, True), [], ["P2"], "first_ready", "TOOL-PIU-2"),
+        ((True, True), (True, True), ["P1"], ["P2"], "first_ready", "TOOL-PIU-1"),
+        ((False, False), (False, False), ["P1"], ["P2"], "first_ready", ""),
+        ((False, False), (True, True), ["P1"], ["P2"], "first_available", "TOOL-PIU-1"),
+    ],
+)
+async def test_read_tool_product_instance_uri_ranks_readiness_and_processes(
+    monkeypatch, tool1_state, tool2_state, tool1_procs, tool2_procs, policy, expected
+):
+    monkeypatch.delenv("OPCUA_TARGET_SERVER_PROFILE", raising=False)
+    monkeypatch.delenv("OPCUA_TOOL_SELECTION_POLICY", raising=False)
+    js = object()
+    am = object()
+    assets = object()
+    tools = object()
+    tool1 = object()
+    tool2 = object()
+    ident1 = object()
+    ident2 = object()
+    params1 = object()
+    params2 = object()
+    pi1 = FakeNode(value="TOOL-PIU-1")
+    pi2 = FakeNode(value="TOOL-PIU-2")
+    conn1 = FakeNode(value=tool1_state[0])
+    en1 = FakeNode(value=tool1_state[1])
+    conn2 = FakeNode(value=tool2_state[0])
+    en2 = FakeNode(value=tool2_state[1])
+    gjpl = FakeNode()
+    gjpl.nodeid = ua.NodeId(999, 7)
+
+    class FakeJpm:
+        async def call_method(self, _nodeid, piu_variant):
+            return [tool1_procs if piu_variant.Value == "TOOL-PIU-1" else tool2_procs]
+
+    jpm = FakeJpm()
+    ref1 = ref("ToolA", node_id=101)
+    ref2 = ref("ToolB", node_id=102)
+
+    async def fake_find_joining_system(_client):
+        return js
+
+    async def fake_find_child(parent, name, ns_index, timeout=node_discovery._BROWSE_TIMEOUT):
+        mapping = {
+            (js, "AssetManagement"): am,
+            (js, "JoiningProcessManagement"): jpm if ns_index == 7 else None,
+            (jpm, "GetJoiningProcessList"): gjpl if ns_index == 7 else None,
+            (am, "Assets"): assets,
+            (assets, "Tools"): tools,
+            (tool1, "Identification"): ident1,
+            (tool2, "Identification"): ident2,
+            (ident1, "ProductInstanceUri"): pi1 if ns_index == 5 else None,
+            (ident2, "ProductInstanceUri"): pi2 if ns_index == 5 else None,
+            (tool1, "Parameters"): params1 if ns_index == 7 else None,
+            (tool2, "Parameters"): params2 if ns_index == 7 else None,
+            (params1, "Connected"): conn1 if ns_index == 7 else None,
+            (params1, "Enabled"): en1 if ns_index == 7 else None,
+            (params2, "Connected"): conn2 if ns_index == 7 else None,
+            (params2, "Enabled"): en2 if ns_index == 7 else None,
+        }
+        return mapping.get((parent, name))
+
+    async def fake_browse(node, timeout=node_discovery._BROWSE_TIMEOUT):
+        return [ref2, ref1] if node is tools else []
+
+    monkeypatch.setattr(node_discovery, "find_joining_system", fake_find_joining_system)
+    monkeypatch.setattr(node_discovery, "find_child_by_browse_name", fake_find_child)
+    monkeypatch.setattr(node_discovery, "_browse_refs", fake_browse)
+    monkeypatch.setattr(node_discovery, "_node_from_ref", lambda _src, nid: tool1 if nid == ref1.NodeId else tool2)
+
+    result = await node_discovery.read_tool_product_instance_uri(object(), ns_ijt=7, ns_di=5, policy=policy)
+    assert result == expected
 
 
 @pytest.mark.asyncio

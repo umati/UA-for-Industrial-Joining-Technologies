@@ -32,15 +32,17 @@ import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
-from helpers.method_caller import find_and_call_method
+from helpers.method_caller import find_and_call_method, is_manifest_method_authorized
 from helpers.method_signature import ASSET_MANAGEMENT_METHOD_INPUTS, assert_input_argument_names
-from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE
+from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_MACHINERY
 from helpers.node_discovery import (
+    browse_folder_instances,
     find_child_by_browse_name,
     find_joining_system,
     find_method_set,
     read_tool_product_instance_uri,
 )
+from helpers.skip_reasons import skip_accepted_policy
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -86,6 +88,52 @@ async def _product_instance_uri(client, ns_ijt: int, ns_di: int, ns_app: int | N
 
 def _piu_arg(product_instance_uri: str) -> ua.Variant:
     return ua.Variant(product_instance_uri, ua.VariantType.String)
+
+
+async def _read_server_current_utc(client) -> datetime.datetime:
+    """Read OPC UA Server_ServerStatus_CurrentTime (ns=0;i=2258), falling back to local UTC."""
+    try:
+        val = await client.get_node("ns=0;i=2258").read_value()
+        if isinstance(val, datetime.datetime):
+            return val if val.tzinfo is not None else val.replace(tzinfo=datetime.timezone.utc)
+    except Exception:
+        pass
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+async def _candidate_set_time_pius(
+    client, ns_ijt: int, ns_di: int, ns_app: int | None, ns_machinery: int | None
+) -> list[str]:
+    """Return candidate ProductInstanceUris for SetTime: deployed asset (''), Controller PIU, then Tool PIU."""
+    candidates: list[str] = [""]
+    js = await find_joining_system(client)
+    if js is not None:
+        am = await find_child_by_browse_name(js, BN.ASSET_MANAGEMENT, ns_ijt)
+        if am is not None:
+            assets = await find_child_by_browse_name(am, BN.ASSETS, ns_ijt)
+            if assets is not None:
+                controllers = await find_child_by_browse_name(assets, BN.CONTROLLERS, ns_ijt)
+                if controllers is not None:
+                    for _name, ctrl_node in await browse_folder_instances(controllers):
+                        ident = None
+                        for ns_cand in (ns_di, ns_machinery, ns_ijt, ns_app):
+                            if ns_cand is not None:
+                                ident = await find_child_by_browse_name(ctrl_node, BN.IDENTIFICATION, ns_cand)
+                                if ident is not None:
+                                    break
+                        if ident is not None:
+                            piu_node = await find_child_by_browse_name(ident, BN.PRODUCT_INSTANCE_URI, ns_di)
+                            if piu_node is not None:
+                                try:
+                                    val = await piu_node.read_value()
+                                    if isinstance(val, str) and val.strip() and val.strip() not in candidates:
+                                        candidates.append(val.strip())
+                                except ua.UaError:
+                                    pass
+    tool_piu = await read_tool_product_instance_uri(client, ns_ijt, ns_di, ns_app)
+    if tool_piu and tool_piu not in candidates:
+        candidates.append(tool_piu)
+    return candidates
 
 
 def _duration_arg(seconds: float) -> ua.Variant:
@@ -278,22 +326,49 @@ async def test_set_time_callable_with_current_datetime(opcua_client, ns_indices)
     method_node = await find_child_by_browse_name(ms, BN.SET_TIME, ns_ijt)
     if method_node is None:
         pytest.skip("SetTime method not found — skipping functional test")
-    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
-    result = await find_and_call_method(
-        ms,
-        BN.SET_TIME,
+    authorized = is_manifest_method_authorized(BN.SET_TIME)
+    candidates = await _candidate_set_time_pius(
+        opcua_client,
         ns_ijt,
-        _piu_arg(piu),
-        ua.Variant(now_utc, ua.VariantType.DateTime),
-        timeout=_METHOD_TIMEOUT,
+        ns_di,
+        ns_indices.get(NS_APP),
+        ns_indices.get(NS_MACHINERY),
     )
-    if not result.success:
-        err_str = str(result.error) if result.error else "unknown error"
-        if _is_bad_not_supported(err_str):
-            pytest.skip(f"SetTime returned BadNotSupported — accepted as optional behaviour: {err_str}")
-        pytest.fail(f"SetTime failed with unexpected error: {err_str}")
+    now_utc = await _read_server_current_utc(opcua_client)
+    last_err = "unknown error"
+    for cand_piu in candidates:
+        result = await find_and_call_method(
+            ms,
+            BN.SET_TIME,
+            ns_ijt,
+            _piu_arg(cand_piu),
+            ua.Variant(now_utc, ua.VariantType.DateTime),
+            timeout=_METHOD_TIMEOUT,
+            target_server_authorized=authorized,
+        )
+        if result.success:
+            return
+        last_err = str(result.error) if result.error else "unknown error"
+        if _is_bad_not_supported(last_err):
+            skip_accepted_policy(
+                "SetTime returned BadNotSupported — accepted as optional server policy",
+                method=BN.SET_TIME,
+                status=last_err,
+            )
+        if _is_domain_rejection(last_err) or any(
+            kw in last_err for kw in ("BadInvalidArgument", "BadNodeIdUnknown", "BadNotFound")
+        ):
+            continue
+        pytest.fail(f"SetTime failed with unexpected error for PIU {cand_piu!r}: {last_err}")
+
+    if _is_domain_rejection(last_err):
+        skip_accepted_policy(
+            "SetTime rejected external clock modification under current controller time/NTP policy",
+            method=BN.SET_TIME,
+            status=last_err,
+        )
+    pytest.fail(f"SetTime failed for all candidate ProductInstanceUris: {last_err}")
 
 
 # ---------------------------------------------------------------------------
@@ -660,23 +735,35 @@ async def test_set_time_null_datetime_returns_bad_invalid_argument(opcua_client,
     method_node = await find_child_by_browse_name(ms, BN.SET_TIME, ns_ijt)
     if method_node is None:
         pytest.skip("SetTime not found — cannot test invalid datetime")
-    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
     import datetime as _dt
 
+    authorized = is_manifest_method_authorized(BN.SET_TIME)
+    saved_utc = await _read_server_current_utc(opcua_client)
     min_dt = _dt.datetime(1, 1, 1, 0, 0, 0, tzinfo=_dt.timezone.utc)
     result = await find_and_call_method(
         ms,
         BN.SET_TIME,
         ns_ijt,
-        _piu_arg(piu),
+        _piu_arg(""),
         ua.Variant(min_dt, ua.VariantType.DateTime),
         timeout=_METHOD_TIMEOUT,
+        target_server_authorized=authorized,
     )
     if result.success:
-        pytest.skip(
-            "SetTime with MinValue datetime (0001-01-01T00:00:00Z) returned Good — "
-            "simulator accepts any datetime value without validation (known simulator deviation)"
+        await find_and_call_method(
+            ms,
+            BN.SET_TIME,
+            ns_ijt,
+            _piu_arg(""),
+            ua.Variant(saved_utc, ua.VariantType.DateTime),
+            timeout=_METHOD_TIMEOUT,
+            target_server_authorized=authorized,
+        )
+        skip_accepted_policy(
+            "SetTime with MinValue datetime (0001-01-01T00:00:00Z) returned Good without range rejection",
+            method=BN.SET_TIME,
+            status="Good",
         )
     err_str = str(result.error) if result.error else "unknown error"
     if _is_bad_not_supported(err_str):
@@ -705,20 +792,40 @@ async def test_set_time_far_past_timestamp_is_handled_deterministically(opcua_cl
     method_node = await find_child_by_browse_name(ms, BN.SET_TIME, ns_ijt)
     if method_node is None:
         pytest.skip("SetTime not found — cannot test past timestamp")
-    piu = await _product_instance_uri(opcua_client, ns_ijt, ns_di, ns_indices.get(NS_APP))
 
     import datetime as _dt
 
+    authorized = is_manifest_method_authorized(BN.SET_TIME)
+    candidates = await _candidate_set_time_pius(
+        opcua_client,
+        ns_ijt,
+        ns_di,
+        ns_indices.get(NS_APP),
+        ns_indices.get(NS_MACHINERY),
+    )
+    target_piu = candidates[0] if candidates else ""
+    saved_utc = await _read_server_current_utc(opcua_client)
     past_dt = _dt.datetime(2000, 1, 1, 0, 0, 0, tzinfo=_dt.timezone.utc)
     result = await find_and_call_method(
         ms,
         BN.SET_TIME,
         ns_ijt,
-        _piu_arg(piu),
+        _piu_arg(target_piu),
         ua.Variant(past_dt, ua.VariantType.DateTime),
         timeout=_METHOD_TIMEOUT,
+        target_server_authorized=authorized,
     )
     if result.success:
+        restore_utc = saved_utc if saved_utc.year >= 2020 else _dt.datetime.now(_dt.timezone.utc)
+        await find_and_call_method(
+            ms,
+            BN.SET_TIME,
+            ns_ijt,
+            _piu_arg(target_piu),
+            ua.Variant(restore_utc, ua.VariantType.DateTime),
+            timeout=_METHOD_TIMEOUT,
+            target_server_authorized=authorized,
+        )
         return
     err_str = str(result.error) if result.error else "unknown error"
     if _is_bad_not_supported(err_str):

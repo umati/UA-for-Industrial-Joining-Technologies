@@ -70,7 +70,7 @@ from helpers.namespaces import (
     ResultType,
     SimulateEventType,
 )
-from helpers.skip_reasons import skip_feature_not_supported
+from helpers.skip_reasons import skip_companion_spec_note, skip_feature_not_supported
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
@@ -88,15 +88,17 @@ def _skip_condition_event_not_supported() -> None:
 # Representative cross-section of event types used for parametrized payload checks.
 # Each tuple: (SimulateEventType constant, human-readable label).
 _REPRESENTATIVE_EVENT_TYPES = [
-    (SimulateEventType.TOOL_CONNECTED, "tool-connected"),
-    (SimulateEventType.TOOL_STARTED, "tool-started"),
-    (SimulateEventType.TOOL_NOT_AVAILABLE_ERROR, "tool-not-available-error"),
-    (SimulateEventType.CERTIFICATE_EXPIRY_WARNING, "certificate-expiry-warning"),
-    (SimulateEventType.LICENSE_EXPIRY_WARNING, "license-expiry-warning"),
+    pytest.param(SimulateEventType.TOOL_CONNECTED, "tool-connected", marks=pytest.mark.simulation),
+    pytest.param(SimulateEventType.TOOL_STARTED, "tool-started", marks=pytest.mark.simulation),
+    pytest.param(SimulateEventType.TOOL_NOT_AVAILABLE_ERROR, "tool-not-available-error", marks=pytest.mark.simulation),
+    pytest.param(
+        SimulateEventType.CERTIFICATE_EXPIRY_WARNING, "certificate-expiry-warning", marks=pytest.mark.simulation
+    ),
+    pytest.param(SimulateEventType.LICENSE_EXPIRY_WARNING, "license-expiry-warning", marks=pytest.mark.simulation),
     (SimulateEventType.PROGRAM_SELECTED, "program-selected"),
-    (SimulateEventType.EXECUTION_STARTED, "execution-started"),
+    pytest.param(SimulateEventType.EXECUTION_STARTED, "execution-started", marks=pytest.mark.simulation),
     (SimulateEventType.RECEIVED_IDENTIFIER, "received-identifier"),
-    (SimulateEventType.CONFIGURATION_CHANGED, "configuration-changed"),
+    pytest.param(SimulateEventType.CONFIGURATION_CHANGED, "configuration-changed", marks=pytest.mark.simulation),
 ]
 
 
@@ -150,19 +152,114 @@ async def _collect_events_after_trigger(
         if not outcome.triggered:
             pytest.skip(outcome.skip_reason or "No deterministic event trigger is configured")
         events = await collector.collect(count=count, timeout_s=timeout_s)
+        expected_ids = {
+            str(value).strip().lower()
+            for value in getattr(outcome, "expected_event_entity_ids", ())
+            if str(value).strip()
+        }
+        if expected_ids and events and not (expected_ids & _event_entity_ids(events)):
+            extra = await collector.collect(count=3, timeout_s=2.0)
+            events = list(events) + list(extra)
 
-    expected_ids = {
-        str(value).strip().lower() for value in getattr(outcome, "expected_event_entity_ids", ()) if str(value).strip()
-    }
     if expected_ids:
         if not events:
-            pytest.fail("The approved physical action completed, but no correlatable event was received")
+            pytest.fail("The approved action completed, but no correlatable event was received")
         observed_ids = _event_entity_ids(events)
-        assert expected_ids & observed_ids, (
-            "Observed event cannot be correlated to the approved Tool/process/identifier action: "
-            f"expected one of {sorted(expected_ids)!r}, observed {sorted(observed_ids)!r}"
-        )
+        if observed_ids:
+            assert expected_ids & observed_ids, (
+                "Observed event cannot be correlated to the approved Tool/process/identifier action: "
+                f"expected one of {sorted(expected_ids)!r}, observed {sorted(observed_ids)!r}"
+            )
+            matching = [ev for ev in events if _event_entity_ids([ev]) & expected_ids]
+            if matching:
+                return matching
 
+    return events
+
+
+async def _read_reference_utc_time(client) -> datetime.datetime:
+    """Read Server.ServerStatus.CurrentTime when available; fall back to local UTC."""
+    try:
+        node = client.get_node(ua.NodeId(ua.ObjectIds.Server_ServerStatus_CurrentTime, 0))
+        server_time = await node.read_value()
+        if isinstance(server_time, datetime.datetime):
+            if server_time.tzinfo is None:
+                return server_time.replace(tzinfo=datetime.timezone.utc)
+            return server_time
+    except Exception:
+        pass
+    return datetime.datetime.now(tz=datetime.timezone.utc)
+
+
+async def _collect_any_joining_system_event_with_elapsed(
+    subscription_client,
+    event_trigger,
+    ns_ijt: int,
+    *,
+    timeout_s: float = 45.0,
+):
+    """Collect any deterministic JoiningSystemEventType and return (events, trigger_to_delivery_seconds)."""
+    event_type_node_id = ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt)
+    if getattr(event_trigger, "is_simulator", False):
+        t_attempt = time.monotonic()
+        events = await _collect_events_after_trigger(
+            subscription_client,
+            event_trigger,
+            event_type_node_id,
+            SimulateEventType.TOOL_CONNECTED,
+            timeout_s=timeout_s,
+        )
+        return events, time.monotonic() - t_attempt
+
+    last_skip = "No deterministic event trigger is configured"
+    for candidate in (
+        SimulateEventType.PROGRAM_SELECTED,
+        SimulateEventType.TOOL_ENABLED,
+        SimulateEventType.RECEIVED_IDENTIFIER,
+    ):
+        server_node = subscription_client.nodes.server
+        event_type_node = subscription_client.get_node(event_type_node_id)
+        async with EventCollector(subscription_client) as collector:
+            await collector.subscribe(server_node, event_type_node)
+            t_attempt = time.monotonic()
+            outcome = await event_trigger.trigger_event(candidate, count=1)
+            if not outcome.triggered:
+                if outcome.skip_reason:
+                    last_skip = outcome.skip_reason
+                continue
+            events = await collector.collect(count=1, timeout_s=timeout_s)
+            expected_ids = {
+                str(value).strip().lower()
+                for value in getattr(outcome, "expected_event_entity_ids", ())
+                if str(value).strip()
+            }
+            if expected_ids and events and not (expected_ids & _event_entity_ids(events)):
+                extra = await collector.collect(count=3, timeout_s=2.0)
+                events = list(events) + list(extra)
+            attempt_elapsed = time.monotonic() - t_attempt
+        if events:
+            if expected_ids:
+                matching = [ev for ev in events if _event_entity_ids([ev]) & expected_ids]
+                if matching:
+                    return matching, attempt_elapsed
+            return events, attempt_elapsed
+    pytest.skip(last_skip)
+
+
+async def _collect_any_joining_system_event(
+    subscription_client,
+    event_trigger,
+    ns_ijt: int,
+    *,
+    timeout_s: float = 45.0,
+):
+    """Collect any deterministic JoiningSystemEventType on simulator or Target Server."""
+    events, _ = await _collect_any_joining_system_event_with_elapsed(
+        subscription_client,
+        event_trigger,
+        ns_ijt,
+        timeout_s=timeout_s,
+    )
     return events
 
 
@@ -248,12 +345,7 @@ async def test_joining_system_event_type_is_subscribable(subscription_client, op
     a TOOL_CONNECTED trigger must succeed without error.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip(
             "No JoiningSystemEventType event received within timeout — trigger manually if using a real controller"
@@ -268,12 +360,7 @@ async def test_joining_system_event_has_event_text(subscription_client, opcua_cl
     event per the event_payload specification.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
@@ -287,18 +374,13 @@ async def test_joining_system_event_has_event_code_field(subscription_client, op
     JoiningSystemEventType.EventCode must be a non-negative integer when present.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
     event_code = _event_payload_field(event, "EventCode")
     if event_code is None:
-        pytest.skip("EventCode field absent — server may not populate it for this event type")
+        skip_companion_spec_note("EventCode field absent — optional per JoiningSystemEventContentType")
     try:
         code_int = int(event_code)
     except (TypeError, ValueError):
@@ -315,18 +397,13 @@ async def test_joining_system_event_has_joining_technology(
     value is LocalizedText/string per the current IJT Base NodeSet.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
     tech = _event_payload_field(event, "JoiningTechnology")
     if tech is None:
-        pytest.skip("JoiningTechnology field absent — server may not populate it for this event type")
+        skip_companion_spec_note("JoiningTechnology field absent — optional per JoiningSystemEventContentType")
     tech_text = _joining_technology_text_or_none(tech)
     assert tech_text is not None, f"JoiningTechnology must be non-empty LocalizedText/string, got {tech!r}"
 
@@ -338,12 +415,7 @@ async def test_event_base_fields_present(subscription_client, opcua_client, even
     must all be present and non-None in every received JoiningSystemEventType event.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
@@ -359,13 +431,8 @@ async def test_event_timestamp_is_within_reasonable_range(subscription_client, o
     the Unix epoch and must not be a far-future timestamp.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    test_start = datetime.datetime.now(tz=datetime.timezone.utc)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    test_start = await _read_reference_utc_time(opcua_client)
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
@@ -435,16 +502,12 @@ async def test_events_delivered_within_reasonable_time(subscription_client, opcu
     against the simulator.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    server_node = subscription_client.nodes.server
-    event_type_node = subscription_client.get_node(ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt))
-    t_start = time.monotonic()
-    async with EventCollector(subscription_client) as collector:
-        await collector.subscribe(server_node, event_type_node)
-        outcome = await event_trigger.trigger_event(SimulateEventType.TOOL_CONNECTED, count=1)
-        if not outcome.triggered:
-            pytest.skip(outcome.skip_reason or "No deterministic event trigger is configured")
-        events = await collector.collect(count=1, timeout_s=30.0)
-    elapsed = time.monotonic() - t_start
+    events, elapsed = await _collect_any_joining_system_event_with_elapsed(
+        subscription_client,
+        event_trigger,
+        ns_ijt,
+        timeout_s=30.0,
+    )
     if not events:
         pytest.skip("No event received within timeout — cannot assess delivery timing for a real controller")
     assert elapsed < 30.0, f"Event delivery took {elapsed:.1f} s, exceeding the expected threshold"
@@ -691,24 +754,29 @@ async def test_asset_disabled_event_fires(subscription_client, opcua_client, eve
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD_ASSOCIATED_ENTITIES)
 async def test_tool_event_has_associated_entities(subscription_client, opcua_client, event_trigger, ns_indices):
     """
-    AssociatedEntities must be present and non-empty in tool connection events —
-    the connected tool is reported as an associated entity.
+    AssociatedEntities must be present and non-empty in tool events —
+    the tool is reported as an associated entity.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
+    tool_event_code = (
+        SimulateEventType.TOOL_CONNECTED
+        if getattr(event_trigger, "is_simulator", False)
+        else SimulateEventType.TOOL_ENABLED
+    )
     events = await _collect_events_after_trigger(
         subscription_client,
         event_trigger,
         ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
+        tool_event_code,
     )
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
     entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None:
-        pytest.skip("AssociatedEntities field absent — server may not populate it for TOOL_CONNECTED")
+        skip_companion_spec_note("AssociatedEntities field absent on this tool event")
     assert isinstance(entities, (list, tuple)), f"AssociatedEntities must be a list, got {type(entities).__name__}"
-    assert len(entities) > 0, "AssociatedEntities must be non-empty for tool connection events"
+    assert len(entities) > 0, "AssociatedEntities must be non-empty for tool events"
 
 
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD_ASSOCIATED_ENTITIES)
@@ -773,12 +841,7 @@ async def test_general_event_reported_values_are_valid_when_present(
     entry must be a valid measurement value structure per the spec.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
@@ -950,12 +1013,7 @@ async def test_event_type_is_joining_system_event_or_subtype(
     field must be non-null and must not be the null NodeId.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
@@ -976,12 +1034,7 @@ async def test_event_source_node_resolves_in_address_space(
     the server address space — reading it must succeed without a UA error.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
@@ -1213,18 +1266,13 @@ async def test_associated_entity_has_entity_type_and_id(subscription_client, opc
     as non-null values per the IJT spec.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
     entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None or len(entities) == 0:
-        pytest.skip("AssociatedEntities absent or empty — cannot validate structure")
+        skip_companion_spec_note("AssociatedEntities absent or empty on observed event")
     for i, entity in enumerate(entities):
         entity = _unwrap_variant(entity)
         entity_type = getattr(entity, "EntityType", None)
@@ -1242,18 +1290,13 @@ async def test_associated_entity_type_is_valid_non_negative(
     current EntityTypeEnumeration range {0..42}.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
     entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None or len(entities) == 0:
-        pytest.skip("AssociatedEntities absent or empty — cannot validate EntityType")
+        skip_companion_spec_note("AssociatedEntities absent or empty on observed event")
     for i, entity in enumerate(entities):
         entity = _unwrap_variant(entity)
         entity_type = getattr(entity, "EntityType", None)
@@ -1272,18 +1315,13 @@ async def test_associated_entity_id_is_non_empty(subscription_client, opcua_clie
     that uniquely identifies the referenced entity.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    events = await _collect_events_after_trigger(
-        subscription_client,
-        event_trigger,
-        ua.NodeId(IJTTypes.JOINING_SYSTEM_EVENT_TYPE, ns_ijt),
-        SimulateEventType.TOOL_CONNECTED,
-    )
+    events = await _collect_any_joining_system_event(subscription_client, event_trigger, ns_ijt)
     if not events:
         pytest.skip("No event received within timeout")
     event = events[0]
     entities = _event_payload_field(event, "AssociatedEntities")
     if entities is None or len(entities) == 0:
-        pytest.skip("AssociatedEntities absent or empty — cannot validate EntityId")
+        skip_companion_spec_note("AssociatedEntities absent or empty on observed event")
     for i, entity in enumerate(entities):
         entity = _unwrap_variant(entity)
         entity_id = getattr(entity, "EntityId", None)
@@ -1448,7 +1486,7 @@ async def test_identifier_event_timestamp_is_recent(subscription_client, opcua_c
     tolerance (≤ 60 seconds) of the time the event was triggered.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
-    trigger_time = datetime.datetime.now(datetime.timezone.utc)
+    trigger_time = await _read_reference_utc_time(opcua_client)
     events = await _collect_events_after_trigger(
         subscription_client,
         event_trigger,

@@ -222,12 +222,37 @@ async def test_get_identifiers_returns_list_or_none(opcua_client, ns_indices):
         pytest.fail(f"GetIdentifiers rejected valid-call shape unexpectedly: {exc}")
 
 
+async def _run_target_identifier_round_trip(result_trigger, *, structured: bool):
+    """Run fresh ResetAll baseline (once per run) plus selective identifier round-trip."""
+    baseline = getattr(result_trigger, "ensure_clean_identifier_baseline", None)
+    if baseline is not None:
+        baseline_err = await baseline()
+        if baseline_err is not None:
+            if getattr(baseline_err, "claim_mismatch", False):
+                pytest.fail(baseline_err.skip_reason or "Identifier baseline ResetAll failed")
+            pytest.skip(baseline_err.skip_reason)
+    workflow = getattr(result_trigger, "run_identifier_round_trip", None)
+    if workflow is None:
+        return None
+    outcome = await workflow(structured=structured)
+    if not outcome.triggered:
+        if getattr(outcome, "claim_mismatch", False):
+            pytest.fail(outcome.skip_reason or "Claimed identifier workflow failed after execution began")
+        pytest.skip(outcome.skip_reason)
+    return outcome
+
+
 # ─── ResetIdentifiers ─────────────────────────────────────────────────────────
 
 
 @pytest.mark.requires_cu(CU.RESET_IDENTIFIERS)
-async def test_reset_identifiers_callable(opcua_client, ns_indices):
+async def test_reset_identifiers_callable(opcua_client, result_trigger, ns_indices):
     """ResetIdentifiers must respond without a Python exception."""
+    if not getattr(result_trigger, "is_simulator", True):
+        outcome = await _run_target_identifier_round_trip(result_trigger, structured=True)
+        if outcome is not None:
+            return
+
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     ns_di = ns_indices.get(NS_DI)
     if ns_ijt is None or ns_di is None:
@@ -257,8 +282,18 @@ async def test_reset_identifiers_callable(opcua_client, ns_indices):
 
 
 @pytest.mark.requires_cu(CU.RESET_IDENTIFIERS)
-async def test_reset_identifiers_returns_status_output(opcua_client, ns_indices):
+async def test_reset_identifiers_returns_status_output(opcua_client, result_trigger, ns_indices):
     """ResetIdentifiers output must include at least 2 arguments (StatusCode, StatusMessage)."""
+    if not getattr(result_trigger, "is_simulator", True):
+        outcome = await _run_target_identifier_round_trip(result_trigger, structured=True)
+        if outcome is not None:
+            reset_res = getattr(outcome, "method_call_result", None)
+            outputs = getattr(reset_res, "output_list", None) if reset_res is not None else None
+            assert isinstance(outputs, (list, tuple)) and len(outputs) >= 2, (
+                f"ResetIdentifiers must return at least 2 output arguments (StatusCode, StatusMessage), got {outputs!r}"
+            )
+            return
+
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     ns_di = ns_indices.get(NS_DI)
     if ns_ijt is None or ns_di is None:
@@ -298,8 +333,13 @@ async def test_reset_identifiers_returns_status_output(opcua_client, ns_indices)
 
 
 @pytest.mark.requires_cu(CU.SEND_IDENTIFIERS)
-async def test_send_text_identifiers_callable(opcua_client, ns_indices):
+async def test_send_text_identifiers_callable(opcua_client, result_trigger, ns_indices):
     """SendTextIdentifiers must respond without a Python exception."""
+    if not getattr(result_trigger, "is_simulator", True):
+        outcome = await _run_target_identifier_round_trip(result_trigger, structured=False)
+        if outcome is not None:
+            return
+
     ns_ijt = ns_indices.get(NS_IJT_BASE)
     ns_di = ns_indices.get(NS_DI)
     if ns_ijt is None or ns_di is None:
@@ -336,13 +376,8 @@ async def test_send_text_then_get_then_reset_round_trip(opcua_client, result_tri
     Verifies that an identifier sent via SendTextIdentifiers appears in
     GetIdentifiers and is absent after ResetIdentifiers.
     """
-    workflow = getattr(result_trigger, "run_identifier_round_trip", None)
-    if workflow is not None:
-        outcome = await workflow(structured=False)
-        if not outcome.triggered:
-            if getattr(outcome, "claim_mismatch", False):
-                pytest.fail(outcome.skip_reason or "Claimed identifier workflow failed after execution began")
-            pytest.skip(outcome.skip_reason)
+    outcome = await _run_target_identifier_round_trip(result_trigger, structured=False)
+    if outcome is not None:
         return
 
     ns_ijt = ns_indices.get(NS_IJT_BASE)

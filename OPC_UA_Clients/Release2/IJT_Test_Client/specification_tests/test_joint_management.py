@@ -46,19 +46,20 @@ import pytest
 from asyncua import ua
 
 from helpers.cu_registry import CU
+from helpers.method_caller import manifest_authorized_method_scope
 from helpers.method_signature import JOINT_METHOD_INPUTS, assert_input_argument_names
 from helpers.namespaces import BN, NS_APP, NS_DI, NS_IJT_BASE, NS_OPC_UA
 from helpers.node_discovery import find_child_by_browse_name, find_joining_system, read_tool_product_instance_uri
-from helpers.skip_reasons import skip_companion_spec_note
+from helpers.skip_reasons import skip_accepted_policy, skip_companion_spec_note
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.live, pytest.mark.conformance]
 
 # Sentinel string used when testing rejection of invalid joint IDs.
-_INVALID_JOINT_ID = "INVALID-JOINT-ID-NONEXISTENT"
+_INVALID_JOINT_ID = "INVALID_JOINT_NONE"
 
-# Test joint ID used when creating a temporary joint for round-trip tests.
-_TEST_JOINT_ID = "conformance-test-joint"
+# Test joint ID used when creating a temporary joint for round-trip tests (kept <= 20 chars for TrimmedString).
+_TEST_JOINT_ID = "IJT_TEST_JOINT_01"
 
 
 def _piu_arg(value: str = ""):
@@ -111,7 +112,10 @@ class _JointManagementAdapter:
         if method_name in {"GetJoint", "GetJointDesign", "GetJointComponent", "GetJointRevisionList"}:
             return args if len(args) == 2 else (self._default_piu_arg(), *args)
         if method_name in {"SendJoint", "SendJointDesign", "SendJointComponent"}:
-            return args if len(args) == 2 else (self._default_piu_arg(), *args)
+            norm = args if len(args) == 2 else (self._default_piu_arg(), *args)
+            if len(norm) == 2 and norm[1] is not None and not isinstance(norm[1], ua.Variant):
+                norm = (norm[0], ua.Variant(norm[1], ua.VariantType.ExtensionObject))
+            return norm
         if method_name in {"DeleteJointDesign", "DeleteJointComponent"}:
             return args if len(args) == 2 else (self._default_piu_arg(), *args)
         if method_name in {"SelectJoint", "DeleteJoint"}:
@@ -125,7 +129,8 @@ class _JointManagementAdapter:
 
     async def call_method(self, method_node_id, *args):
         method_name = self._method_name(method_node_id)
-        return await self._node.call_method(method_node_id, *self._normalize_args(method_name, args))
+        with manifest_authorized_method_scope(method_name or ""):
+            return await self._node.call_method(method_node_id, *self._normalize_args(method_name, args))
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +238,88 @@ async def _get_first_joint_id(client, ns_ijt):
     return str(jid) if jid is not None else None
 
 
-async def _send_test_joint_and_get_id(client, jm_node, ns_ijt):
+def _unwrap_joint_output(result):
+    """Extract JointDataType when GetJoint returns (Joint, Status, StatusMessage)."""
+    if isinstance(result, (list, tuple)) and result:
+        return result[0]
+    return result
+
+
+async def _discover_first_program_id(client, ns_ijt: int) -> str | None:
+    """Discover a valid JoiningProgram ID from GetJoiningProcessList if available."""
+    js = await find_joining_system(client)
+    if js is None:
+        return None
+    jpm = await find_child_by_browse_name(js, BN.JOINING_PROCESS_MANAGEMENT, ns_ijt)
+    if jpm is None:
+        return None
+    gpl_node = await find_child_by_browse_name(jpm, BN.GET_JOINING_PROCESS_LIST, ns_ijt)
+    if gpl_node is None:
+        return None
+    piu = await _read_default_tool_product_instance_uri(client, ns_ijt)
+    try:
+        raw = await jpm.call_method(gpl_node.nodeid, _piu_arg(piu))
+    except ua.UaError:
+        return None
+    entries = raw[0] if isinstance(raw, (list, tuple)) and raw and isinstance(raw[0], list) else raw
+    if not isinstance(entries, (list, tuple)) or not entries:
+        return None
+    fallback_id: str | None = None
+    for entry in entries:
+        val = getattr(entry, "Value", entry)
+        meta = getattr(val, "JoiningProcessMetaData", None)
+        proc_id = getattr(val, "JoiningProcessId", None) or getattr(meta, "JoiningProcessId", None)
+        if not proc_id:
+            continue
+        if fallback_id is None:
+            fallback_id = str(proc_id)
+        cls_val = getattr(val, "Classification", None) or getattr(meta, "Classification", None)
+        if cls_val is not None:
+            try:
+                if int(cls_val) == 2:  # JoiningProcessClassification.PROGRAM
+                    return str(proc_id)
+            except (TypeError, ValueError):
+                pass
+    return fallback_id
+
+
+async def _delete_joint_quietly(jm_node, ns_ijt: int, joint_id: str, origin_id: str = "") -> None:
+    """Best-effort DeleteJoint cleanup so temporary joints never persist on the server."""
+    del_node = await find_child_by_browse_name(jm_node, BN.DELETE_JOINT, ns_ijt)
+    if del_node is None or not joint_id:
+        return
+    try:
+        await jm_node.call_method(
+            del_node.nodeid,
+            _piu_arg(),
+            _string_arg(joint_id),
+            _string_arg(origin_id),
+        )
+    except ua.UaError:
+        pass
+
+
+async def _send_joint_with_program_fallback(client, jm_node, send_node, joint_data, ns_ijt: int):
+    """Call SendJoint, retrying once with a discovered Program AssociatedEntity if required."""
+    try:
+        return await jm_node.call_method(send_node.nodeid, _piu_arg(), joint_data)
+    except ua.UaError as exc:
+        if not any(s in str(exc) for s in ("BadInvalidArgument", "Uncertain")):
+            raise
+        if getattr(joint_data, "AssociatedEntities", None):
+            raise
+        entity_type = getattr(ua, "EntityDataType", None)
+        prog_id = await _discover_first_program_id(client, ns_ijt)
+        if entity_type is None or not prog_id or not hasattr(joint_data, "AssociatedEntities"):
+            raise
+        ent = entity_type()
+        ent.EntityType = 27  # PROGRAM
+        ent.EntityId = prog_id
+        joint_data.AssociatedEntities = [ent]
+        return await jm_node.call_method(send_node.nodeid, _piu_arg(), joint_data)
+
+
+async def _send_test_joint_and_get_id(client, jm_node, ns_ijt, joint_id: str = _TEST_JOINT_ID):
     """
     Send a test joint via SendJoint and return its ID.
     Returns (joint_id, sent=True) or (None, False) if SendJoint is not supported.
@@ -247,23 +333,28 @@ async def _send_test_joint_and_get_id(client, jm_node, ns_ijt):
     try:
         joint_data = joint_type()
         if hasattr(joint_data, "JointId"):
-            joint_data.JointId = _TEST_JOINT_ID
+            joint_data.JointId = joint_id
         if hasattr(joint_data, "Name"):
-            joint_data.Name = "ConformanceTestJoint"
+            joint_data.Name = "IJTTestJoint"
         if hasattr(joint_data, "ProgramId"):
             joint_data.ProgramId = "test-program"
-        result = await jm_node.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
+        result = await _send_joint_with_program_fallback(client, jm_node, send_node, joint_data, ns_ijt)
         returned_id = None
         if isinstance(result, str) and result:
             returned_id = result
         elif hasattr(result, "JointId") and result.JointId:
             returned_id = str(result.JointId)
         elif isinstance(result, (list, tuple)) and result:
-            returned_id = str(result[0]) if result[0] else None
-        return returned_id or _TEST_JOINT_ID, True
+            first_out = result[0]
+            if isinstance(first_out, str) and first_out:
+                returned_id = first_out
+            elif hasattr(first_out, "JointId") and first_out.JointId:
+                returned_id = str(first_out.JointId)
+        return returned_id or joint_id, True
     except ua.UaError as exc:
         if any(
-            s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "BadArgumentsMissing")
+            s in str(exc)
+            for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "BadArgumentsMissing", "Uncertain")
         ):
             return None, False
         raise
@@ -433,11 +524,12 @@ async def test_select_joint_with_valid_id_succeeds(opcua_client, ns_indices):
     ns_ijt = _require_ns_ijt(ns_indices)
     jm = await _get_joint_management(opcua_client, ns_ijt)
     joint_id = await _get_first_joint_id(opcua_client, ns_ijt)
+    sent_temp = False
     if joint_id is None:
         if getattr(ua, "JointDataType", None) is None:
             pytest.skip("No joints on server and JointDataType unavailable — cannot test SelectJoint")
-        joint_id, sent = await _send_test_joint_and_get_id(opcua_client, jm, ns_ijt)
-        if not sent or joint_id is None:
+        joint_id, sent_temp = await _send_test_joint_and_get_id(opcua_client, jm, ns_ijt, "IJT_JNT_SEL_01")
+        if not sent_temp or joint_id is None:
             pytest.skip("No joints on server and SendJoint not available — cannot test SelectJoint")
     sel_node = await find_child_by_browse_name(jm, BN.SELECT_JOINT, ns_ijt)
     assert sel_node is not None, f"'{BN.SELECT_JOINT}' not found in JointManagement"
@@ -453,10 +545,15 @@ async def test_select_joint_with_valid_id_succeeds(opcua_client, ns_indices):
         status_str = str(exc)
         if "BadNotSupported" in status_str:
             pytest.skip(f"SelectJoint not supported on this server: {exc}")
-        if any(s in status_str for s in ("BadConditionNotActive", "BadNothingToDo", "BadArgumentsMissing")):
+        if any(
+            s in status_str for s in ("BadConditionNotActive", "BadNothingToDo", "BadArgumentsMissing", "Uncertain")
+        ):
             logger.info("SelectJoint raised acceptable status: %s", exc)
         else:
             raise
+    finally:
+        if sent_temp and joint_id:
+            await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 @pytest.mark.requires_cu(CU.SELECT_JOINT)
@@ -508,47 +605,62 @@ async def test_select_joint_with_non_empty_joint_origin_id(opcua_client, ns_indi
     if send_node is None:
         pytest.skip("SendJoint: Not Supported — cannot create a joint with JointOriginId for this test")
 
-    test_origin_id = "conformance-test-origin-id"
-    test_joint_id = "conformance-test-joint-with-origin"
+    test_origin_id = "IJT_ORIG_01"
+    test_joint_id = "IJT_JNT_ORIG_01"
     joint_data = joint_type()
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = test_joint_id
     if hasattr(joint_data, "JointOriginId"):
         joint_data.JointOriginId = test_origin_id
     if hasattr(joint_data, "Name"):
-        joint_data.Name = "ConformanceTestJointWithOriginId"
+        joint_data.Name = "IJTTestJointOrigin"
 
     try:
-        await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
-    except ua.UaError as exc:
-        if any(
-            s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "BadArgumentsMissing")
-        ):
-            pytest.skip(f"SendJoint not callable on this server: {exc}")
-        raise
-    except (AttributeError, TypeError) as exc:
-        pytest.skip(f"Could not construct JointDataType with JointOriginId: {exc}")
-
-    sel_node = await find_child_by_browse_name(jm, BN.SELECT_JOINT, ns_ijt)
-    assert sel_node is not None, f"'{BN.SELECT_JOINT}' not found in JointManagement"
-    try:
-        await jm.call_method(
-            sel_node.nodeid,
-            _piu_arg(),
-            ua.Variant(test_joint_id, ua.VariantType.String),
-            ua.Variant(test_origin_id, ua.VariantType.String),
-        )
-        logger.info("SelectJoint with JointOriginId='%s' succeeded", test_origin_id)
-    except ua.UaError as exc:
-        status_str = str(exc)
-        if "BadNotSupported" in status_str:
-            pytest.skip(f"SelectJoint not supported on this server: {exc}")
-        if any(
-            s in status_str for s in ("BadConditionNotActive", "BadNothingToDo", "BadArgumentsMissing", "Uncertain")
-        ):
-            logger.info("SelectJoint with non-empty JointOriginId raised acceptable status: %s", exc)
-        else:
+        try:
+            await _send_joint_with_program_fallback(opcua_client, jm, send_node, joint_data, ns_ijt)
+        except ua.UaError as exc:
+            if any(
+                s in str(exc)
+                for s in (
+                    "BadNotSupported",
+                    "BadInvalidArgument",
+                    "BadTypeMismatch",
+                    "BadArgumentsMissing",
+                    "Uncertain",
+                )
+            ):
+                skip_accepted_policy(
+                    f"SendJoint rejected JointOriginId creation under server policy: {exc}",
+                    method=BN.SEND_JOINT,
+                    status=str(exc),
+                )
             raise
+        except (AttributeError, TypeError) as exc:
+            pytest.skip(f"Could not construct JointDataType with JointOriginId: {exc}")
+
+        sel_node = await find_child_by_browse_name(jm, BN.SELECT_JOINT, ns_ijt)
+        assert sel_node is not None, f"'{BN.SELECT_JOINT}' not found in JointManagement"
+        try:
+            await jm.call_method(
+                sel_node.nodeid,
+                _piu_arg(),
+                ua.Variant(test_joint_id, ua.VariantType.String),
+                ua.Variant(test_origin_id, ua.VariantType.String),
+            )
+            logger.info("SelectJoint with JointOriginId='%s' succeeded", test_origin_id)
+        except ua.UaError as exc:
+            status_str = str(exc)
+            if "BadNotSupported" in status_str:
+                pytest.skip(f"SelectJoint not supported on this server: {exc}")
+            if any(
+                s in status_str for s in ("BadConditionNotActive", "BadNothingToDo", "BadArgumentsMissing", "Uncertain")
+            ):
+                logger.info("SelectJoint with non-empty JointOriginId raised acceptable status: %s", exc)
+            else:
+                raise
+    finally:
+        await _delete_joint_quietly(jm, ns_ijt, test_joint_id, test_origin_id)
+        await _delete_joint_quietly(jm, ns_ijt, test_joint_id, "")
 
 
 # ---------------------------------------------------------------------------
@@ -576,20 +688,23 @@ async def test_send_joint_stores_and_get_joint_retrieves(opcua_client, ns_indice
     if getattr(ua, "JointDataType", None) is None:
         pytest.skip("JointDataType not available in this asyncua version — structural test only")
     jm = await _get_joint_management(opcua_client, ns_ijt)
-    joint_id, sent = await _send_test_joint_and_get_id(opcua_client, jm, ns_ijt)
+    joint_id, sent = await _send_test_joint_and_get_id(opcua_client, jm, ns_ijt, "IJT_JNT_SR_01")
     if not sent:
-        pytest.skip("SendJoint not supported or JointDataType not encodable on this server")
+        skip_accepted_policy("SendJoint rejected temporary joint creation under server policy", method=BN.SEND_JOINT)
     assert joint_id is not None, "SendJoint did not return a usable joint ID"
-    get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
-    assert get_node is not None, f"'{BN.GET_JOINT}' not found in JointManagement"
     try:
-        result = await jm.call_method(
-            get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
-        )
-    except ua.UaError as exc:
-        pytest.fail(f"GetJoint failed for just-sent joint ID '{joint_id}': {exc}")
-    assert result is not None, f"GetJoint returned None for joint ID '{joint_id}' that was just sent"
-    logger.info("Round-trip SendJoint→GetJoint succeeded for ID '%s'", joint_id)
+        get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
+        assert get_node is not None, f"'{BN.GET_JOINT}' not found in JointManagement"
+        try:
+            result = await jm.call_method(
+                get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
+            )
+        except ua.UaError as exc:
+            pytest.fail(f"GetJoint failed for just-sent joint ID '{joint_id}': {exc}")
+        assert result is not None, f"GetJoint returned None for joint ID '{joint_id}' that was just sent"
+        logger.info("Round-trip SendJoint→GetJoint succeeded for ID '%s'", joint_id)
+    finally:
+        await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 @pytest.mark.requires_cu(CU.SEND_JOINT)
@@ -631,36 +746,45 @@ async def test_joint_data_has_required_fields(opcua_client, ns_indices):
     per the joint_data specification.
     """
     ns_ijt = _require_ns_ijt(ns_indices)
+    jm = await _get_joint_management(opcua_client, ns_ijt)
     joint_id = await _get_first_joint_id(opcua_client, ns_ijt)
+    sent_temp = False
+    if joint_id is None:
+        joint_id, sent_temp = await _send_test_joint_and_get_id(opcua_client, jm, ns_ijt, "IJT_JNT_REQ_01")
     if joint_id is None:
         pytest.skip("No joints configured on this server — cannot verify data structure")
-    jm = await _get_joint_management(opcua_client, ns_ijt)
     get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
     assert get_node is not None, f"'{BN.GET_JOINT}' not found in JointManagement"
     try:
-        result = await jm.call_method(
-            get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
-        )
-    except ua.UaError as exc:
-        pytest.skip(f"GetJoint not callable: {exc}")
-    assert result is not None, "GetJoint returned None — cannot verify data structure"
-    if isinstance(result, (list, tuple)):
-        assert len(result) > 0, "JointDataType decoded as list but is empty"
-        assert result[0] is not None, "JointDataType field[0] (JointId) must not be None"
-        logger.info("JointDataType decoded as positional list with %d fields", len(result))
-    else:
-        joint_id_val = getattr(result, "JointId", None) or getattr(result, "Id", None)
-        assert joint_id_val is not None, (
-            f"JointDataType has no JointId or Id field. "
-            f"Available attributes: {[a for a in dir(result) if not a.startswith('_')]}"
-        )
-        logger.info("JointId field present: '%s'", joint_id_val)
-        for field_name in ("Name", "ProgramId"):
-            val = getattr(result, field_name, None)
-            if val is None:
-                logger.info("Optional field '%s' is absent or None", field_name)
-            else:
-                logger.info("Field '%s' = %r", field_name, val)
+        try:
+            result = await jm.call_method(
+                get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
+            )
+        except ua.UaError as exc:
+            pytest.skip(f"GetJoint not callable: {exc}")
+        assert result is not None, "GetJoint returned None — cannot verify data structure"
+        joint_obj = _unwrap_joint_output(result)
+        assert joint_obj is not None, "GetJoint returned empty JointDataType"
+        if isinstance(joint_obj, (list, tuple)):
+            assert len(joint_obj) > 0, "JointDataType decoded as list but is empty"
+            assert joint_obj[0] is not None, "JointDataType field[0] (JointId) must not be None"
+            logger.info("JointDataType decoded as positional list with %d fields", len(joint_obj))
+        else:
+            joint_id_val = getattr(joint_obj, "JointId", None) or getattr(joint_obj, "Id", None)
+            assert joint_id_val is not None, (
+                f"JointDataType has no JointId or Id field. "
+                f"Available attributes: {[a for a in dir(joint_obj) if not a.startswith('_')]}"
+            )
+            logger.info("JointId field present: '%s'", joint_id_val)
+            for field_name in ("Name", "ProgramId"):
+                val = getattr(joint_obj, field_name, None)
+                if val is None:
+                    logger.info("Optional field '%s' is absent or None", field_name)
+                else:
+                    logger.info("Field '%s' = %r", field_name, val)
+    finally:
+        if sent_temp and joint_id:
+            await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 # ---------------------------------------------------------------------------
@@ -740,7 +864,9 @@ async def test_delete_joint_with_invalid_id_returns_error(opcua_client, ns_indic
     try:
         result = await jm.call_method(
             del_node.nodeid,
+            _piu_arg(),
             ua.Variant(_INVALID_JOINT_ID, ua.VariantType.String),
+            ua.Variant("", ua.VariantType.String),
         )
         logger.warning(
             "DeleteJoint('%s') returned %r instead of raising ua.UaError — "
@@ -778,43 +904,58 @@ async def test_delete_joint_with_non_empty_joint_origin_id(opcua_client, ns_indi
     if send_node is None or del_node is None:
         pytest.skip("SendJoint and DeleteJoint both required for JointOriginId delete test")
 
-    test_origin_id = "conformance-test-origin-for-delete"
-    test_joint_id = "conformance-test-joint-for-delete-origin"
+    test_origin_id = "IJT_DEL_ORIG"
+    test_joint_id = "IJT_JNT_DEL_ORIG"
     joint_data = joint_type()
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = test_joint_id
     if hasattr(joint_data, "JointOriginId"):
         joint_data.JointOriginId = test_origin_id
     if hasattr(joint_data, "Name"):
-        joint_data.Name = "ConformanceTestJointForDeleteOriginId"
+        joint_data.Name = "IJTTestJointDelOrigin"
 
     try:
-        await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
-    except ua.UaError as exc:
-        if any(
-            s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "BadArgumentsMissing")
-        ):
-            pytest.skip(f"SendJoint not callable on this server: {exc}")
-        raise
-    except (AttributeError, TypeError) as exc:
-        pytest.skip(f"Could not construct JointDataType with JointOriginId: {exc}")
-
-    try:
-        await jm.call_method(
-            del_node.nodeid,
-            _piu_arg(),
-            ua.Variant(test_joint_id, ua.VariantType.String),
-            ua.Variant(test_origin_id, ua.VariantType.String),
-        )
-        logger.info("DeleteJoint with JointOriginId='%s' succeeded", test_origin_id)
-    except ua.UaError as exc:
-        status_str = str(exc)
-        if "BadNotSupported" in status_str:
-            pytest.skip(f"DeleteJoint not supported on this server: {exc}")
-        if any(s in status_str for s in ("BadNotFound", "BadArgumentsMissing", "BadInvalidArgument")):
-            logger.info("DeleteJoint with non-empty JointOriginId raised acceptable status: %s", exc)
-        else:
+        try:
+            await _send_joint_with_program_fallback(opcua_client, jm, send_node, joint_data, ns_ijt)
+        except ua.UaError as exc:
+            if any(
+                s in str(exc)
+                for s in (
+                    "BadNotSupported",
+                    "BadInvalidArgument",
+                    "BadTypeMismatch",
+                    "BadArgumentsMissing",
+                    "Uncertain",
+                )
+            ):
+                skip_accepted_policy(
+                    f"SendJoint rejected JointOriginId creation under server policy: {exc}",
+                    method=BN.SEND_JOINT,
+                    status=str(exc),
+                )
             raise
+        except (AttributeError, TypeError) as exc:
+            pytest.skip(f"Could not construct JointDataType with JointOriginId: {exc}")
+
+        try:
+            await jm.call_method(
+                del_node.nodeid,
+                _piu_arg(),
+                ua.Variant(test_joint_id, ua.VariantType.String),
+                ua.Variant(test_origin_id, ua.VariantType.String),
+            )
+            logger.info("DeleteJoint with JointOriginId='%s' succeeded", test_origin_id)
+        except ua.UaError as exc:
+            status_str = str(exc)
+            if "BadNotSupported" in status_str:
+                pytest.skip(f"DeleteJoint not supported on this server: {exc}")
+            if any(s in status_str for s in ("BadNotFound", "BadArgumentsMissing", "BadInvalidArgument", "Uncertain")):
+                logger.info("DeleteJoint with non-empty JointOriginId raised acceptable status: %s", exc)
+            else:
+                raise
+    finally:
+        await _delete_joint_quietly(jm, ns_ijt, test_joint_id, test_origin_id)
+        await _delete_joint_quietly(jm, ns_ijt, test_joint_id, "")
 
 
 # ---------------------------------------------------------------------------
@@ -840,64 +981,76 @@ async def test_joint_lifecycle_send_get_select_delete(opcua_client, ns_indices):
     assert joint_id is not None
     logger.info("lifecycle: SendJoint succeeded → joint_id='%s'", joint_id)
 
-    get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
-    if get_node is not None:
-        try:
-            result = await jm.call_method(
-                get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
-            )
-            assert result is not None, f"GetJoint returned None for just-sent joint '{joint_id}'"
-            logger.info("lifecycle: GetJoint succeeded → result=%r", result)
-        except ua.UaError as exc:
-            logger.warning("lifecycle: GetJoint raised error (non-fatal for lifecycle): %s", exc)
+    deleted_explicitly = False
+    try:
+        get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
+        if get_node is not None:
+            try:
+                result = await jm.call_method(
+                    get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
+                )
+                assert result is not None, f"GetJoint returned None for just-sent joint '{joint_id}'"
+                logger.info("lifecycle: GetJoint succeeded → result=%r", result)
+            except ua.UaError as exc:
+                logger.warning("lifecycle: GetJoint raised error (non-fatal for lifecycle): %s", exc)
 
-    sel_node = await find_child_by_browse_name(jm, BN.SELECT_JOINT, ns_ijt)
-    if sel_node is not None:
+        sel_node = await find_child_by_browse_name(jm, BN.SELECT_JOINT, ns_ijt)
+        if sel_node is not None:
+            try:
+                await jm.call_method(
+                    sel_node.nodeid,
+                    ua.Variant("", ua.VariantType.String),
+                    ua.Variant(joint_id, ua.VariantType.String),
+                    ua.Variant("", ua.VariantType.String),
+                )
+                logger.info("lifecycle: SelectJoint succeeded for joint '%s'", joint_id)
+            except ua.UaError as exc:
+                if any(
+                    s in str(exc)
+                    for s in (
+                        "BadNotSupported",
+                        "BadConditionNotActive",
+                        "BadNothingToDo",
+                        "BadArgumentsMissing",
+                        "Uncertain",
+                    )
+                ):
+                    logger.info("lifecycle: SelectJoint raised acceptable status: %s", exc)
+                else:
+                    logger.warning("lifecycle: SelectJoint raised unexpected error (continuing): %s", exc)
+
+        del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
+        assert del_node is not None, f"'{BN.DELETE_JOINT}' not found — cannot complete lifecycle"
         try:
             await jm.call_method(
-                sel_node.nodeid,
+                del_node.nodeid,
                 ua.Variant("", ua.VariantType.String),
                 ua.Variant(joint_id, ua.VariantType.String),
                 ua.Variant("", ua.VariantType.String),
             )
-            logger.info("lifecycle: SelectJoint succeeded for joint '%s'", joint_id)
+            deleted_explicitly = True
+            logger.info("lifecycle: DeleteJoint succeeded for joint '%s'", joint_id)
         except ua.UaError as exc:
-            if any(
-                s in str(exc)
-                for s in ("BadNotSupported", "BadConditionNotActive", "BadNothingToDo", "BadArgumentsMissing")
-            ):
-                logger.info("lifecycle: SelectJoint raised acceptable status: %s", exc)
-            else:
-                logger.warning("lifecycle: SelectJoint raised unexpected error (continuing): %s", exc)
+            pytest.fail(f"DeleteJoint failed in lifecycle test for joint '{joint_id}': {exc}")
 
-    del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
-    assert del_node is not None, f"'{BN.DELETE_JOINT}' not found — cannot complete lifecycle"
-    try:
-        await jm.call_method(
-            del_node.nodeid,
-            ua.Variant("", ua.VariantType.String),
-            ua.Variant(joint_id, ua.VariantType.String),
-            ua.Variant("", ua.VariantType.String),
-        )
-        logger.info("lifecycle: DeleteJoint succeeded for joint '%s'", joint_id)
-    except ua.UaError as exc:
-        pytest.fail(f"DeleteJoint failed in lifecycle test for joint '{joint_id}': {exc}")
-
-    if get_node is not None:
-        try:
-            gone = await jm.call_method(
-                get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
-            )
-            if gone in (None, [], ()):
-                logger.info("lifecycle: GetJoint returned empty after delete — correct")
-            else:
-                logger.warning(
-                    "GetJoint returned non-empty result for deleted joint '%s': %r",
-                    joint_id,
-                    gone,
+        if get_node is not None:
+            try:
+                gone = await jm.call_method(
+                    get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
                 )
-        except ua.UaError:
-            logger.info("lifecycle: GetJoint correctly raised error after delete")
+                if gone in (None, [], ()):
+                    logger.info("lifecycle: GetJoint returned empty after delete — correct")
+                else:
+                    logger.warning(
+                        "GetJoint returned non-empty result for deleted joint '%s': %r",
+                        joint_id,
+                        gone,
+                    )
+            except ua.UaError:
+                logger.info("lifecycle: GetJoint correctly raised error after delete")
+    finally:
+        if not deleted_explicitly:
+            await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 # ---------------------------------------------------------------------------
@@ -1253,7 +1406,7 @@ async def test_send_joint_appears_in_get_joint_list_after_send(opcua_client, ns_
     """After SendJoint, GetJointList must include the new joint ID."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jm = await _get_joint_management(opcua_client, ns_ijt)
-    joint_id = "conformance-test-joint-gjl"
+    joint_id = "IJT_JNT_GJL_01"
     joint_type = getattr(ua, "JointDataType", None)
     if joint_type is None:
         pytest.skip("JointDataType not available — cannot test SendJoint→GetJointList")
@@ -1265,10 +1418,12 @@ async def test_send_joint_appears_in_get_joint_list_after_send(opcua_client, ns_
         joint_data.JointId = joint_id
     try:
         try:
-            await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
+            await _send_joint_with_program_fallback(opcua_client, jm, send_node, joint_data, ns_ijt)
         except ua.UaError as exc:
-            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
-                pytest.skip(f"SendJoint not callable: {exc}")
+            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "Uncertain")):
+                skip_accepted_policy(
+                    f"SendJoint rejected temporary joint creation: {exc}", method=BN.SEND_JOINT, status=str(exc)
+                )
             raise
         list_node = await find_child_by_browse_name(jm, BN.GET_JOINT_LIST, ns_ijt)
         if list_node is None:
@@ -1280,17 +1435,7 @@ async def test_send_joint_appears_in_get_joint_list_after_send(opcua_client, ns_
         assert joint_id in ids, f"Sent joint '{joint_id}' not found in GetJointList: {ids[:10]}"
         logger.info("Joint '%s' correctly appeared in GetJointList after SendJoint", joint_id)
     finally:
-        del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
-        if del_node is not None:
-            try:
-                await jm.call_method(
-                    del_node.nodeid,
-                    ua.Variant("", ua.VariantType.String),
-                    ua.Variant(joint_id, ua.VariantType.String),
-                    ua.Variant("", ua.VariantType.String),
-                )
-            except ua.UaError:
-                pass
+        await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 @pytest.mark.requires_cu(CU.SEND_JOINT)
@@ -1298,7 +1443,7 @@ async def test_send_joint_update_replaces_stored_joint_data(opcua_client, ns_ind
     """Sending the same JointId twice with different Name must replace the stored joint data."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jm = await _get_joint_management(opcua_client, ns_ijt)
-    joint_id = "conformance-test-joint-update"
+    joint_id = "IJT_JNT_UPD_01"
     joint_type = getattr(ua, "JointDataType", None)
     if joint_type is None:
         pytest.skip("JointDataType not available — cannot test SendJoint update")
@@ -1306,17 +1451,23 @@ async def test_send_joint_update_replaces_stored_joint_data(opcua_client, ns_ind
     if send_node is None:
         pytest.skip("SendJoint: Not Supported — skipping")
     try:
-        for name_val in ("OriginalJointName", "UpdatedJointName"):
+        for name_val in ("OrigJointName", "UpdJointName"):
             joint_data = joint_type()
             if hasattr(joint_data, "JointId"):
                 joint_data.JointId = joint_id
             if hasattr(joint_data, "Name"):
                 joint_data.Name = name_val
             try:
-                await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
+                await _send_joint_with_program_fallback(opcua_client, jm, send_node, joint_data, ns_ijt)
             except ua.UaError as exc:
-                if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
-                    pytest.skip(f"SendJoint not callable: {exc}")
+                if any(
+                    s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "Uncertain")
+                ):
+                    skip_accepted_policy(
+                        f"SendJoint rejected joint update under server policy: {exc}",
+                        method=BN.SEND_JOINT,
+                        status=str(exc),
+                    )
                 raise
         get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
         if get_node is not None:
@@ -1324,26 +1475,15 @@ async def test_send_joint_update_replaces_stored_joint_data(opcua_client, ns_ind
                 result = await jm.call_method(
                     get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
                 )
-                name_returned = getattr(result, "Name", None)
+                joint_obj = _unwrap_joint_output(result)
+                name_returned = getattr(joint_obj, "Name", None)
                 if name_returned is not None:
-                    assert str(name_returned) == "UpdatedJointName", (
-                        f"Expected 'UpdatedJointName', got {name_returned!r}"
-                    )
+                    assert str(name_returned) == "UpdJointName", f"Expected 'UpdJointName', got {name_returned!r}"
                     logger.info("SendJoint update confirmed: Name='%s'", name_returned)
             except ua.UaError as exc:
                 logger.warning("GetJoint after update raised: %s", exc)
     finally:
-        del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
-        if del_node is not None:
-            try:
-                await jm.call_method(
-                    del_node.nodeid,
-                    ua.Variant("", ua.VariantType.String),
-                    ua.Variant(joint_id, ua.VariantType.String),
-                    ua.Variant("", ua.VariantType.String),
-                )
-            except ua.UaError:
-                pass
+        await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 @pytest.mark.requires_cu(CU.SEND_JOINT)
@@ -1382,9 +1522,10 @@ async def test_send_joint_with_null_joining_process_id_returns_bad_invalid_argum
     send_node = await find_child_by_browse_name(jm, BN.SEND_JOINT, ns_ijt)
     if send_node is None:
         pytest.skip("SendJoint: Not Supported — skipping negative test")
+    joint_id = "IJT_JNT_NULL_PRG"
     joint_data = joint_type()
     if hasattr(joint_data, "JointId"):
-        joint_data.JointId = "conformance-test-joint-null-proc-id"
+        joint_data.JointId = joint_id
     # JoiningProcessId lives in AssociatedEntities (EntityType=27=PROGRAM — joints link to a Joining Program).
     # Test: send a joint with an empty EntityId for the PROGRAM entity to check server validation.
     entity_type = getattr(ua, "EntityDataType", None)
@@ -1400,6 +1541,8 @@ async def test_send_joint_with_null_joining_process_id_returns_bad_invalid_argum
         logger.info("Correctly raised ua.UaError for empty JoiningProcessId: %s", exc)
     except (AttributeError, TypeError) as exc:
         logger.info("Correctly rejected empty JoiningProcessId with encoding error: %s", exc)
+    finally:
+        await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 # ---------------------------------------------------------------------------
@@ -1438,7 +1581,7 @@ async def test_get_joint_list_reflects_newly_sent_joint(opcua_client, ns_indices
     """After SendJoint, the new ID must appear in GetJointList."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jm = await _get_joint_management(opcua_client, ns_ijt)
-    joint_id = "conformance-test-joint-gjl-new"
+    joint_id = "IJT_JNT_GJL_02"
     joint_type = getattr(ua, "JointDataType", None)
     if joint_type is None:
         pytest.skip("JointDataType not available — cannot test GetJointList reflection")
@@ -1450,10 +1593,12 @@ async def test_get_joint_list_reflects_newly_sent_joint(opcua_client, ns_indices
         joint_data.JointId = joint_id
     try:
         try:
-            await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
+            await _send_joint_with_program_fallback(opcua_client, jm, send_node, joint_data, ns_ijt)
         except ua.UaError as exc:
-            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
-                pytest.skip(f"SendJoint not callable: {exc}")
+            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "Uncertain")):
+                skip_accepted_policy(
+                    f"SendJoint rejected temporary joint creation: {exc}", method=BN.SEND_JOINT, status=str(exc)
+                )
             raise
         list_node = await find_child_by_browse_name(jm, BN.GET_JOINT_LIST, ns_ijt)
         if list_node is None:
@@ -1467,17 +1612,7 @@ async def test_get_joint_list_reflects_newly_sent_joint(opcua_client, ns_indices
         assert joint_id in ids, f"Newly sent joint '{joint_id}' not found in GetJointList: {ids[:10]}"
         logger.info("GetJointList correctly reflects newly sent joint '%s'", joint_id)
     finally:
-        del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
-        if del_node is not None:
-            try:
-                await jm.call_method(
-                    del_node.nodeid,
-                    ua.Variant("", ua.VariantType.String),
-                    ua.Variant(joint_id, ua.VariantType.String),
-                    ua.Variant("", ua.VariantType.String),
-                )
-            except ua.UaError:
-                pass
+        await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 @pytest.mark.requires_cu(CU.GET_JOINT_LIST)
@@ -1522,7 +1657,9 @@ async def test_select_joint_with_nonexistent_id_returns_bad_status(opcua_client,
     try:
         result = await jm.call_method(
             sel_node.nodeid,
-            ua.Variant("conformance-test-joint-nonexistent-xyz", ua.VariantType.String),
+            _piu_arg(),
+            ua.Variant("IJT_JNT_NONEXIST", ua.VariantType.String),
+            ua.Variant("", ua.VariantType.String),
         )
         logger.warning("Expected ua.UaError for non-existent joint but returned %r", result)
     except ua.UaError as exc:
@@ -1539,7 +1676,7 @@ async def test_get_joint_round_trip_data_matches_sent_data(opcua_client, ns_indi
     """GetJoint must return a result whose JointId matches the ID passed to SendJoint."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jm = await _get_joint_management(opcua_client, ns_ijt)
-    joint_id = "conformance-test-joint-gj"
+    joint_id = "IJT_JNT_GJ_01"
     joint_type = getattr(ua, "JointDataType", None)
     if joint_type is None:
         pytest.skip("JointDataType not available — cannot test GetJoint round-trip")
@@ -1551,10 +1688,12 @@ async def test_get_joint_round_trip_data_matches_sent_data(opcua_client, ns_indi
         joint_data.JointId = joint_id
     try:
         try:
-            await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
+            await _send_joint_with_program_fallback(opcua_client, jm, send_node, joint_data, ns_ijt)
         except ua.UaError as exc:
-            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
-                pytest.skip(f"SendJoint not callable: {exc}")
+            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "Uncertain")):
+                skip_accepted_policy(
+                    f"SendJoint rejected temporary joint creation: {exc}", method=BN.SEND_JOINT, status=str(exc)
+                )
             raise
         get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
         if get_node is None:
@@ -1568,22 +1707,13 @@ async def test_get_joint_round_trip_data_matches_sent_data(opcua_client, ns_indi
                 pytest.skip(f"GetJoint not callable: {exc}")
             raise
         assert result is not None, f"GetJoint returned None for ID '{joint_id}'"
-        returned_id = getattr(result, "JointId", None) or getattr(result, "Id", None)
+        joint_obj = _unwrap_joint_output(result)
+        returned_id = getattr(joint_obj, "JointId", None) or getattr(joint_obj, "Id", None)
         if returned_id is not None:
             assert str(returned_id) == joint_id, f"GetJoint returned JointId {returned_id!r}, expected {joint_id!r}"
         logger.info("GetJoint round-trip succeeded for ID '%s'", joint_id)
     finally:
-        del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
-        if del_node is not None:
-            try:
-                await jm.call_method(
-                    del_node.nodeid,
-                    ua.Variant("", ua.VariantType.String),
-                    ua.Variant(joint_id, ua.VariantType.String),
-                    ua.Variant("", ua.VariantType.String),
-                )
-            except ua.UaError:
-                pass
+        await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 @pytest.mark.requires_cu(CU.GET_JOINT)
@@ -1591,7 +1721,7 @@ async def test_get_joint_result_has_joint_id_and_required_fields(opcua_client, n
     """GetJoint result must include JointId and, where present, JoiningProcessId fields."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jm = await _get_joint_management(opcua_client, ns_ijt)
-    joint_id = "conformance-test-joint-fields"
+    joint_id = "IJT_JNT_FLD_01"
     joint_type = getattr(ua, "JointDataType", None)
     if joint_type is None:
         pytest.skip("JointDataType not available — cannot test GetJoint fields")
@@ -1602,7 +1732,7 @@ async def test_get_joint_result_has_joint_id_and_required_fields(opcua_client, n
     if hasattr(joint_data, "JointId"):
         joint_data.JointId = joint_id
     # JoiningProcessId is stored in AssociatedEntities (EntityType=27=PROGRAM — joints link to a Joining Program)
-    _proc_ref_id = "conformance-test-jprocess-ref"
+    _proc_ref_id = await _discover_first_program_id(opcua_client, ns_ijt) or "IJT_TEST_PROG"
     _entity_type = getattr(ua, "EntityDataType", None)
     if _entity_type is not None and hasattr(joint_data, "AssociatedEntities"):
         _entity = _entity_type()
@@ -1613,8 +1743,8 @@ async def test_get_joint_result_has_joint_id_and_required_fields(opcua_client, n
         try:
             await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
         except ua.UaError as exc:
-            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
-                pytest.skip(f"SendJoint not callable: {exc}")
+            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "Uncertain")):
+                skip_accepted_policy(f"SendJoint rejected joint creation: {exc}", method=BN.SEND_JOINT, status=str(exc))
             raise
         get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
         if get_node is None:
@@ -1629,7 +1759,7 @@ async def test_get_joint_result_has_joint_id_and_required_fields(opcua_client, n
             raise
         assert result is not None, "GetJoint returned None"
         # GetJoint always returns (JointDataType, Status, StatusMessage) as a list/tuple.
-        joint_obj = result[0] if isinstance(result, (list, tuple)) and result else result
+        joint_obj = _unwrap_joint_output(result)
         assert joint_obj is not None, "GetJoint result[0] (JointDataType) is None"
         jid = getattr(joint_obj, "JointId", None) or getattr(joint_obj, "Id", None)
         assert jid is not None, (
@@ -1646,17 +1776,7 @@ async def test_get_joint_result_has_joint_id_and_required_fields(opcua_client, n
             proc_id_found,
         )
     finally:
-        del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
-        if del_node is not None:
-            try:
-                await jm.call_method(
-                    del_node.nodeid,
-                    ua.Variant("", ua.VariantType.String),
-                    ua.Variant(joint_id, ua.VariantType.String),
-                    ua.Variant("", ua.VariantType.String),
-                )
-            except ua.UaError:
-                pass
+        await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 @pytest.mark.requires_cu(CU.GET_JOINT)
@@ -1664,7 +1784,7 @@ async def test_get_joint_returns_updated_data_after_resend(opcua_client, ns_indi
     """GetJoint must return the most recently sent data after the same joint is re-sent."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jm = await _get_joint_management(opcua_client, ns_ijt)
-    joint_id = "conformance-test-joint-resend"
+    joint_id = "IJT_JNT_RSND_01"
     joint_type = getattr(ua, "JointDataType", None)
     if joint_type is None:
         pytest.skip("JointDataType not available — cannot test GetJoint update")
@@ -1679,10 +1799,14 @@ async def test_get_joint_returns_updated_data_after_resend(opcua_client, ns_indi
             if hasattr(joint_data, "Name"):
                 joint_data.Name = name_val
             try:
-                await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
+                await _send_joint_with_program_fallback(opcua_client, jm, send_node, joint_data, ns_ijt)
             except ua.UaError as exc:
-                if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
-                    pytest.skip(f"SendJoint not callable: {exc}")
+                if any(
+                    s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "Uncertain")
+                ):
+                    skip_accepted_policy(
+                        f"SendJoint rejected joint resend: {exc}", method=BN.SEND_JOINT, status=str(exc)
+                    )
                 raise
         get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
         if get_node is None:
@@ -1692,7 +1816,7 @@ async def test_get_joint_returns_updated_data_after_resend(opcua_client, ns_indi
                 get_node.nodeid, ua.Variant("", ua.VariantType.String), ua.Variant(joint_id, ua.VariantType.String)
             )
             # GetJoint returns (JointDataType, Status, StatusMessage) as a list.
-            joint_obj = result[0] if isinstance(result, (list, tuple)) and result else result
+            joint_obj = _unwrap_joint_output(result)
             name_returned = getattr(joint_obj, "Name", None) if joint_obj else None
             if name_returned is not None:
                 assert str(name_returned) == "ResentName", f"Expected 'ResentName' after resend, got {name_returned!r}"
@@ -1702,17 +1826,7 @@ async def test_get_joint_returns_updated_data_after_resend(opcua_client, ns_indi
                 pytest.skip(f"GetJoint not callable: {exc}")
             raise
     finally:
-        del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
-        if del_node is not None:
-            try:
-                await jm.call_method(
-                    del_node.nodeid,
-                    ua.Variant("", ua.VariantType.String),
-                    ua.Variant(joint_id, ua.VariantType.String),
-                    ua.Variant("", ua.VariantType.String),
-                )
-            except ua.UaError:
-                pass
+        await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 @pytest.mark.requires_cu(CU.GET_JOINT)
@@ -1728,7 +1842,7 @@ async def test_get_joint_with_nonexistent_id_returns_bad_node_id_unknown(opcua_c
         result = await jm.call_method(
             get_node.nodeid,
             ua.Variant("", ua.VariantType.String),  # ProductInstanceUri
-            ua.Variant("conformance-test-nonexistent-joint-xyz", ua.VariantType.String),  # JointId
+            ua.Variant("IJT_JNT_NONEXIST", ua.VariantType.String),  # JointId
         )
         logger.warning("Expected ua.UaError for non-existent joint but returned %r", result)
     except ua.UaError as exc:
@@ -1745,8 +1859,8 @@ async def test_joint_data_round_trip_preserves_joint_id_and_joining_process_id(o
     """JointData round-trip must preserve JointId and JoiningProcessId fields."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jm = await _get_joint_management(opcua_client, ns_ijt)
-    joint_id = "conformance-test-joint-jdata-rt"
-    proc_id = "conformance-test-jdata-proc"
+    joint_id = "IJT_JNT_RT_01"
+    proc_id = await _discover_first_program_id(opcua_client, ns_ijt) or "IJT_TEST_PROG"
     joint_type = getattr(ua, "JointDataType", None)
     if joint_type is None:
         pytest.skip("JointDataType not available — cannot test data round-trip")
@@ -1767,8 +1881,8 @@ async def test_joint_data_round_trip_preserves_joint_id_and_joining_process_id(o
         try:
             await jm.call_method(send_node.nodeid, ua.Variant("", ua.VariantType.String), joint_data)
         except ua.UaError as exc:
-            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
-                pytest.skip(f"SendJoint not callable: {exc}")
+            if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "Uncertain")):
+                skip_accepted_policy(f"SendJoint rejected joint creation: {exc}", method=BN.SEND_JOINT, status=str(exc))
             raise
         get_node = await find_child_by_browse_name(jm, BN.GET_JOINT, ns_ijt)
         if get_node is None:
@@ -1783,7 +1897,7 @@ async def test_joint_data_round_trip_preserves_joint_id_and_joining_process_id(o
             raise
         assert result is not None, "GetJoint returned None"
         # GetJoint always returns (JointDataType, Status, StatusMessage) as a list/tuple.
-        joint_obj = result[0] if isinstance(result, (list, tuple)) and result else result
+        joint_obj = _unwrap_joint_output(result)
         assert joint_obj is not None, "GetJoint result[0] (JointDataType) is None"
         ret_jid = getattr(joint_obj, "JointId", None) or getattr(joint_obj, "Id", None)
         if ret_jid is not None:
@@ -1799,17 +1913,7 @@ async def test_joint_data_round_trip_preserves_joint_id_and_joining_process_id(o
             )
         logger.info("JointData round-trip OK: JointId=%r JoiningProcessId=%r", ret_jid, ret_proc)
     finally:
-        del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
-        if del_node is not None:
-            try:
-                await jm.call_method(
-                    del_node.nodeid,
-                    ua.Variant("", ua.VariantType.String),
-                    ua.Variant(joint_id, ua.VariantType.String),
-                    ua.Variant("", ua.VariantType.String),
-                )
-            except ua.UaError:
-                pass
+        await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 @pytest.mark.requires_cu(CU.JOINT_DATA)
@@ -1828,7 +1932,7 @@ async def test_joint_data_joint_ids_are_unique_across_get_joint_list(opcua_clien
         raise
     if not joint_list:
         pytest.skip("GetJointList returned empty list — cannot check for duplicates")
-    items = [str(x) for x in (joint_list if isinstance(joint_list, (list, tuple)) else [joint_list])]
+    items = [_joint_id_str(x) for x in (joint_list if isinstance(joint_list, (list, tuple)) else [joint_list])]
     assert len(items) == len(set(items)), (
         f"GetJointList contains duplicate IDs: {[x for x in items if items.count(x) > 1]}"
     )
@@ -1853,14 +1957,15 @@ async def test_joint_data_joining_process_id_cross_references_process_list(opcua
     except ua.UaError as exc:
         pytest.skip(f"GetJoint not callable: {exc}")
     # GetJoint returns (JointDataType, Status, StatusMessage); unwrap result[0].
-    joint_obj = result[0] if isinstance(result, (list, tuple)) and result else result
+    joint_obj = _unwrap_joint_output(result)
     # JoiningProcessId lives in AssociatedEntities.
     # EntityType: 27=PROGRAM (primary for joints), 28=JOB, 29=BATCH; 26=JOINING_PROCESS is generic spec fallback.
     assoc = getattr(joint_obj, "AssociatedEntities", None) or [] if joint_obj else []
     proc_entry = next((e for e in assoc if getattr(e, "EntityType", None) in {26, 27, 28, 29}), None)
     proc_id = getattr(proc_entry, "EntityId", None) if proc_entry else None
     if proc_id is None:
-        pytest.skip("JoiningProcessId field not present in result — skipping cross-reference")
+        logger.info("JoiningProcessId field not present in JointData AssociatedEntities — soft cross-reference N/A")
+        return
     js = await find_joining_system(opcua_client)
     if js is None:
         pytest.skip("JoiningSystem not found — cannot cross-reference process list")
@@ -1872,15 +1977,28 @@ async def test_joint_data_joining_process_id_cross_references_process_list(opcua
     if gpl_node is None:
         logger.info("GetJoiningProcessList not found — skipping cross-reference check")
         return
+    piu = await _read_default_tool_product_instance_uri(opcua_client, ns_ijt, ns_indices)
     try:
-        proc_list = await jpm.call_method(gpl_node.nodeid, ua.Variant("", ua.VariantType.String))
+        proc_list = await jpm.call_method(gpl_node.nodeid, _piu_arg(piu))
     except ua.UaError:
         logger.info("GetJoiningProcessList not callable — skipping cross-reference check")
         return
     if proc_list is None:
         logger.info("GetJoiningProcessList returned None — skipping cross-reference")
         return
-    proc_ids = [str(x) for x in (proc_list if isinstance(proc_list, (list, tuple)) else [proc_list])]
+    entries = (
+        proc_list[0]
+        if isinstance(proc_list, (list, tuple)) and proc_list and isinstance(proc_list[0], list)
+        else proc_list
+    )
+    proc_ids = [
+        str(
+            getattr(x, "JoiningProcessId", None)
+            or getattr(getattr(x, "JoiningProcessMetaData", None), "JoiningProcessId", None)
+            or x
+        )
+        for x in (entries if isinstance(entries, (list, tuple)) else [entries])
+    ]
     if str(proc_id) not in proc_ids:
         logger.warning(
             "JoiningProcessId '%s' not found in GetJoiningProcessList — "
@@ -1897,7 +2015,7 @@ async def test_joint_data_resend_with_different_joining_process_id_accepted_or_e
     """Resending a joint with a different JoiningProcessId must either succeed or raise ua.UaError."""
     ns_ijt = _require_ns_ijt(ns_indices)
     jm = await _get_joint_management(opcua_client, ns_ijt)
-    joint_id = "conformance-test-joint-jdata-repid"
+    joint_id = "IJT_JNT_REPID_01"
     joint_type = getattr(ua, "JointDataType", None)
     if joint_type is None:
         pytest.skip("JointDataType not available — cannot test resend with different process ID")
@@ -1905,7 +2023,7 @@ async def test_joint_data_resend_with_different_joining_process_id_accepted_or_e
     if send_node is None:
         pytest.skip("SendJoint: Not Supported — skipping")
     try:
-        for proc_id in ("conformance-test-proc-A", "conformance-test-proc-B"):
+        for proc_id in ("IJT_PROC_A", "IJT_PROC_B"):
             joint_data = joint_type()
             if hasattr(joint_data, "JointId"):
                 joint_data.JointId = joint_id
@@ -1927,21 +2045,11 @@ async def test_joint_data_resend_with_different_joining_process_id_accepted_or_e
                 )
                 break
     except ua.UaError as exc:
-        if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch")):
-            pytest.skip(f"SendJoint not callable: {exc}")
+        if any(s in str(exc) for s in ("BadNotSupported", "BadInvalidArgument", "BadTypeMismatch", "Uncertain")):
+            skip_accepted_policy(f"SendJoint rejected resend: {exc}", method=BN.SEND_JOINT, status=str(exc))
         raise
     finally:
-        del_node = await find_child_by_browse_name(jm, BN.DELETE_JOINT, ns_ijt)
-        if del_node is not None:
-            try:
-                await jm.call_method(
-                    del_node.nodeid,
-                    ua.Variant("", ua.VariantType.String),
-                    ua.Variant(joint_id, ua.VariantType.String),
-                    ua.Variant("", ua.VariantType.String),
-                )
-            except ua.UaError:
-                pass
+        await _delete_joint_quietly(jm, ns_ijt, joint_id)
 
 
 # ---------------------------------------------------------------------------

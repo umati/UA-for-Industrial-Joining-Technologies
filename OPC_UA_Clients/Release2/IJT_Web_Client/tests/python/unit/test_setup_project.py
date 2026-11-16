@@ -2832,6 +2832,8 @@ class TestMain:
         monkeypatch.setattr(sp, "_warn_if_untested_python", lambda *a: None)
         monkeypatch.setattr(sp, "_remove_stale_venvs", lambda *a: None)
         monkeypatch.setattr(sp, "_cleanup_local_project_artifacts", lambda *a: None)
+        monkeypatch.setattr(sp, "_sync_optional_private_submodules", lambda **kw: None)
+        monkeypatch.setattr(sp, "_run_opcua_startup_precheck", lambda *a, **kw: True)
         monkeypatch.setattr(sp, "_restore_direct_runtime_connectionpoints", lambda: None)
 
     def test_bootstrap_wsl_flag(self, monkeypatch):

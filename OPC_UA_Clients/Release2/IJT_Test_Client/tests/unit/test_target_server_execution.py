@@ -695,6 +695,60 @@ class TestRunPreflightDirect:
 # ---------------------------------------------------------------------------
 
 
+class TestOperatorControlledRunAdmission:
+    @staticmethod
+    def profile():
+        return build_execution_profile(
+            {
+                "schema_version": 1,
+                "target": {"endpoint": "opc.tcp://offline-target:4840"},
+                "selection": {"tool": {"product_instance_uri": "tool"}},
+                "triggers": {"result": {"mode": "start_selected_joining"}},
+                "cu_execution": {
+                    "state_changing_methods": {"allowed_methods": ["SelectJoiningProcess", "StartSelectedJoining"]}
+                },
+            }
+        )
+
+    @pytest.mark.parametrize("problem", ["unfinished", "corrupt", "multiple"])
+    @pytest.mark.parametrize("preflight_only", [True, False])
+    def test_old_records_do_not_block_new_run_or_change_evidence(self, problem, preflight_only, tmp_path, monkeypatch):
+        directory = tmp_path / ".process-state"
+        directory.mkdir()
+        path = directory / "legacy.json"
+        path.write_text(
+            '{"tool_piu":"tool","unfinished":true,"cause":"original timeout","detail":"prior operation 2"}',
+            encoding="utf-8",
+        )
+        if problem == "corrupt":
+            path.write_text("{unreadable", encoding="utf-8")
+        elif problem == "multiple":
+            (directory / "other.json").write_bytes(path.read_bytes())
+        before = {p.name: p.read_bytes() for p in directory.iterdir()}
+        monkeypatch.setenv("IJT_PROCESS_STATE_DIRECTORY", str(directory))
+        network = MagicMock(return_value=ReadinessOutcome(outcome=OUTCOME_PASSED, check_name="endpoint_reachable"))
+        workloads = MagicMock(return_value=(0, {"status": "completed", "qualification": {"outcome": "passed"}}))
+        inventory = MagicMock(return_value={"status": "completed", "server_node_count": 1, "warning_count": 0})
+        monkeypatch.setattr(tse, "check_endpoint_reachable", network)
+        monkeypatch.setattr(tse, "run_live_spec_tests", workloads)
+        monkeypatch.setattr(tse, "_capture_model_inventory", inventory)
+        monkeypatch.setattr(tse, "_add_live_process_selector_checks", lambda *a, **kw: None)
+        output = tmp_path / "report"
+        if preflight_only:
+            assert tse.run_preflight(self.profile(), output) == 0
+            workloads.assert_not_called()
+            inventory.assert_not_called()
+        else:
+            assert tse.run_automated(self.profile(), output, excel_mode="never") == 0
+            workloads.assert_called_once()
+            inventory.assert_called_once()
+        network.assert_called_once()
+        report = json.loads((output / "target-server-cu-report.json").read_text())
+        assert report["preflight"]["all_passed"] is True
+        assert all(check["check_name"] != "retained_process_state" for check in report["preflight"]["checks"])
+        assert before == {p.name: p.read_bytes() for p in directory.iterdir()}
+
+
 class TestRunAutomatedDirect:
     @pytest.mark.parametrize("unreviewed", [[], ["future_cu"]])
     def test_incomplete_run_generates_real_inconclusive_workbook(self, tmp_path, monkeypatch, unreviewed):
@@ -762,6 +816,51 @@ class TestRunAutomatedDirect:
             ),
         )
         assert tse.run_automated(self._reachable_profile(), tmp_path, excel_mode="never") == 1
+
+    def test_blocked_workflow_keeps_successful_independent_tests_incomplete(self, tmp_path, monkeypatch):
+        self._mock_reachable(monkeypatch)
+        report = PreflightReport()
+        report.add(
+            ReadinessOutcome(
+                outcome=OUTCOME_BLOCKED,
+                check_name="live_selector:selection.joining_processes.job",
+                detail="Configured Job is unavailable",
+            )
+        )
+        monkeypatch.setattr(tse, "run_config_preflight", lambda *args, **kwargs: report)
+        monkeypatch.setattr(
+            tse,
+            "run_live_spec_tests",
+            lambda *args, **kwargs: (0, {"status": "completed", "qualification": {"outcome": "passed"}}),
+        )
+        rc = tse.run_automated(self._reachable_profile(), tmp_path, excel_mode="never")
+        payload = json.loads((tmp_path / "target-server-cu-report.json").read_text())
+        assert rc == tse.INCOMPLETE_EXIT_CODE
+        assert payload["assessment"]["execution_health"] == "passed"
+        assert payload["qualification"]["outcome"] == "incomplete"
+        assert payload["qualification"]["blocked_workflows"] == ["live_selector:selection.joining_processes.job"]
+
+    def test_failed_qualification_does_not_overwrite_successful_execution_assessment(self, tmp_path, monkeypatch):
+        self._mock_reachable(monkeypatch)
+        assessment = {
+            "execution_health": "passed",
+            "requirement_qualification": "failed",
+            "scope_completeness": "complete",
+        }
+        monkeypatch.setattr(
+            tse,
+            "run_live_spec_tests",
+            lambda *a, **kw: (
+                1,
+                {"status": "completed", "qualification": {"outcome": "failed"}, "assessment": assessment},
+            ),
+        )
+        assert tse.run_automated(self._reachable_profile(), tmp_path, excel_mode="never") == 1
+        report = json.loads((tmp_path / "target-server-cu-report.json").read_text(encoding="utf-8"))
+        assert report["assessment"] == assessment
+        for extension in ("txt", "md"):
+            summary = (tmp_path / f"target-server-cu-summary.{extension}").read_text(encoding="utf-8")
+            assert "execution_health" in summary or "Execution health" in summary
 
     def _reachable_profile(self, *, trigger_mode: str = "simulate_methods") -> object:
         return build_execution_profile(
@@ -944,6 +1043,41 @@ class TestRunAutomatedDirect:
 
 
 class TestRunLiveSpecTestsDirectExceptions:
+    @pytest.mark.parametrize("timeout", [False, True])
+    def test_raw_execution_status_survives_qualification_failure_but_never_masks_timeout(
+        self, tmp_path, monkeypatch, timeout
+    ):
+        profile = build_execution_profile({"schema_version": 1, "target": {"endpoint": "opc.tcp://offline:4840"}})
+        (tmp_path / "specification_tests").mkdir()
+        (tmp_path / "cu-coverage-report.json").write_text(
+            json.dumps(
+                {
+                    "raw_pytest_exitstatus": 0,
+                    "by_cu": {
+                        "intervention_result": {
+                            "claimed": True,
+                            "compliance": "action_needed",
+                            "passed": 1,
+                            "test_count": 1,
+                            "requirement_outcome": "failed",
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        def subprocess_run(*args, **kwargs):
+            if timeout:
+                raise tse.subprocess.TimeoutExpired(cmd=["pytest"], timeout=10)
+            return MagicMock(returncode=1)
+
+        monkeypatch.setattr(tse.subprocess, "run", subprocess_run)
+        rc, meta = tse.run_live_spec_tests(profile, tmp_path, base_dir=tmp_path)
+        assert rc == 1
+        assert meta["assessment"]["execution_health"] == ("failed" if timeout else "passed")
+        assert meta["assessment"]["requirement_qualification"] == "failed"
+
     def test_corrupt_coverage_cannot_qualify_successful_subprocess(self, tmp_path, monkeypatch):
         profile = build_execution_profile({"schema_version": 1, "target": {"endpoint": "opc.tcp://offline:4840"}})
         (tmp_path / "specification_tests").mkdir()
@@ -1668,6 +1802,7 @@ class TestRunAutomatedExcelReporting:
         assert rc == 0
         assert captured["excel_mode"] == "always"
         assert captured["excel_out"] == "copy.xlsx"
+        assert "Controller Excel report: PASS (wb.xlsx)" in out
         assert "Excel copy:" in out
 
     def test_intentional_policy_skip_does_not_fail_the_run(self, tmp_path, monkeypatch, capsys):
@@ -1684,7 +1819,8 @@ class TestRunAutomatedExcelReporting:
             excel_mode="never",
         )
         assert rc == 0
-        assert "skipped — disabled (--excel=never)" in out
+        assert "Controller Excel report: SKIP (disabled (--excel=never))" in out
+        assert "Controller Excel report: PASS" not in out
 
     def test_on_success_policy_skip_is_benign(self, tmp_path, monkeypatch, capsys):
         """`--excel=on-success` declines the workbook by policy; the excel step
@@ -1702,7 +1838,8 @@ class TestRunAutomatedExcelReporting:
             excel_mode="on-success",
         )
         assert rc == 0
-        assert "skipped — tests failed; skipped (--excel=on-success)" in out
+        assert "Controller Excel report: SKIP (tests failed; skipped (--excel=on-success))" in out
+        assert "Controller Excel report: PASS" not in out
 
     def test_missing_coverage_evidence_fails_the_run(self, tmp_path, monkeypatch, capsys):
         """An otherwise completed spec run with no JUnit/CU artifacts must fail."""
@@ -1746,7 +1883,8 @@ class TestRunAutomatedExcelReporting:
             capsys,
         )
         assert rc == 1
-        assert "generator crashed" in out
+        assert "Controller Excel report: FAIL (generator crashed)" in out
+        assert "Controller Excel report: PASS" not in out
 
 
 # ---------------------------------------------------------------------------

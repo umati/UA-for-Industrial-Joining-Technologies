@@ -960,6 +960,16 @@ def _build_cover(
         ws.row_dimensions[4].height = 42
 
     row = 5
+    assessment = (target_run or {}).get("assessment") or {}
+    for label, key in (
+        ("Execution health", "execution_health"),
+        ("Requirement qualification", "requirement_qualification"),
+        ("Scope completeness", "scope_completeness"),
+    ):
+        if key in assessment:
+            ws.cell(row=row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=row, column=2, value=str(assessment[key]).upper())
+            row += 1
     _apply_header(ws, row, ["Metric", "Value", "Context"], [28, 24, 70])
     if context:
         supported = context["server_supported_count"]

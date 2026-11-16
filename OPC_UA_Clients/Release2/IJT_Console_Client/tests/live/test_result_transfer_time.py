@@ -49,6 +49,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncGenerator
+from urllib.parse import urlparse
 
 import pytest
 import pytest_asyncio
@@ -337,12 +338,21 @@ def _extract_sample(event, received_time: datetime, index: int, skew_ms: float =
     }
 
 
+def _is_loopback_client(client: Client) -> bool:
+    """Return True if the client's server URL targets the local host."""
+    raw_url = str(getattr(client, "server_url", "") or "")
+    host = (urlparse(raw_url).hostname or "").strip().lower()
+    return host in {"localhost", "127.0.0.1", "::1"}
+
+
 async def calibrate_clock_skew(client: Client, num_probes: int = 3) -> float:
     """Measures relative clock drift between this client PC and the OPC UA controller.
 
     Uses multi-sample round-trip time (RTT) probing using Cristian's algorithm.
-    Returns estimated skew in milliseconds.
+    Returns estimated skew in milliseconds (0.0 on loopback endpoints).
     """
+    if _is_loopback_client(client):
+        return 0.0
     best_rtt: float = float("inf")
     best_skew: float = 0.0
 
@@ -495,6 +505,9 @@ def _write_ci_report(
     min_ms: float,
     max_ms: float,
     n: int,
+    *,
+    p90_server_ms: float | None = None,
+    p90_transport_ms: float | None = None,
 ) -> None:
     """Publish timing metrics to JUnit XML for the aggregated System Tests Report.
 
@@ -515,6 +528,10 @@ def _write_ci_report(
     record_property("perf_p90_total_ms", f"{p90_ms:.2f}")
     record_property("perf_min_total_ms", f"{min_ms:.2f}")
     record_property("perf_max_total_ms", f"{max_ms:.2f}")
+    if p90_server_ms is not None:
+        record_property("perf_p90_server_ms", f"{p90_server_ms:.2f}")
+    if p90_transport_ms is not None:
+        record_property("perf_p90_transport_ms", f"{p90_transport_ms:.2f}")
     record_property("perf_threshold_mean_ms", f"{_THRESHOLD_MEAN_MS:.0f}")
     record_property("perf_threshold_p90_ms", f"{_THRESHOLD_P90_MS:.0f}")
 
@@ -610,12 +627,33 @@ async def test_result_transfer_time(
 
     _log_report(samples)
 
-    valid_totals = sorted(s["total_ms"] for s in samples if s["total_ms"] is not None)
+    valid_totals = sorted(
+        s["total_ms"]
+        for s in samples
+        if s["total_ms"] is not None and math.isfinite(s["total_ms"]) and s["total_ms"] >= 0.0
+    )
+    excluded = sum(
+        1 for s in samples if s["total_ms"] is not None and (not math.isfinite(s["total_ms"]) or s["total_ms"] < 0.0)
+    )
+    if excluded:
+        logger.warning("Excluded %d sample(s) with negative or non-finite skew-corrected total_ms.", excluded)
     if not valid_totals:
-        pytest.skip("No valid total_ms from any sample — ProcessingTimes.EndTime absent in all events")
+        pytest.skip("No valid total_ms from any sample — ProcessingTimes.EndTime absent or all samples invalid")
 
     mean_ms = statistics.mean(valid_totals)
     p90_ms = _percentile(valid_totals, 90)
+    valid_server = sorted(
+        s["time_on_server_ms"]
+        for s in samples
+        if s["time_on_server_ms"] is not None
+        and math.isfinite(s["time_on_server_ms"])
+        and s["time_on_server_ms"] >= 0.0
+    )
+    valid_transport = sorted(
+        s["wire_ms"]
+        for s in samples
+        if s["wire_ms"] is not None and math.isfinite(s["wire_ms"]) and s["wire_ms"] >= 0.0
+    )
 
     _write_ci_report(
         record_property,
@@ -624,6 +662,8 @@ async def test_result_transfer_time(
         valid_totals[0],
         valid_totals[-1],
         len(valid_totals),
+        p90_server_ms=_percentile(valid_server, 90) if valid_server else None,
+        p90_transport_ms=_percentile(valid_transport, 90) if valid_transport else None,
     )
 
     assert mean_ms < _THRESHOLD_MEAN_MS, (

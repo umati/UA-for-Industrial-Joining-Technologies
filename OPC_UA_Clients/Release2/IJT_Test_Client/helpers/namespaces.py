@@ -24,6 +24,60 @@ Import pattern (all test modules):
 from __future__ import annotations
 
 from enum import Enum
+from types import MappingProxyType
+
+ENTITY_TYPE_VALUES = MappingProxyType(
+    {
+        name: value
+        for value, name in enumerate(
+            (
+                "UNDEFINED",
+                "OTHER",
+                "ASSET",
+                "CONTROLLER",
+                "TOOL",
+                "SERVO",
+                "MEMORY_DEVICE",
+                "SENSOR",
+                "CABLE",
+                "BATTERY",
+                "POWER_SUPPLY",
+                "FEEDER",
+                "ACCESSORY",
+                "SUB_COMPONENT",
+                "SOFTWARE",
+                "RESULT",
+                "EVENT",
+                "ERROR",
+                "SYSTEM",
+                "LOG",
+                "VEHICLE",
+                "PRODUCT",
+                "PART",
+                "JOINT",
+                "MODEL",
+                "ORDER",
+                "JOINING_PROCESS",
+                "PROGRAM",
+                "JOB",
+                "BATCH",
+                "RECIPE",
+                "TASK",
+                "PROCESS",
+                "CONFIGURATION",
+                "SOCKET",
+                "CHANNEL",
+                "STATION",
+                "PRODUCTION_LINE",
+                "LOCATION",
+                "USER",
+                "PARENT",
+                "VIRTUAL_STATION",
+                "JOINT_COMPONENT",
+            )
+        )
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Namespace URIs (order irrelevant — indices are resolved at runtime)

@@ -163,6 +163,7 @@ async def test_simulated_event_catalog_has_expected_shape():
     assert len(grouped) == len(set(grouped))
 
 
+@pytest.mark.simulation
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD, CU.EVENT_CONDITION_CLASSES)
 @pytest.mark.parametrize("use_case,event_types", SimulateEventType.USE_CASES.items())
 async def test_all_simulated_event_use_cases_raise_joining_system_events(
@@ -194,6 +195,7 @@ async def test_all_simulated_event_use_cases_raise_joining_system_events(
             assert_joining_system_event_valid(event, context=f"event_catalog:{use_case}:{label}")
 
 
+@pytest.mark.simulation
 @pytest.mark.requires_cu(CU.EVENT_PAYLOAD, CU.EVENT_CONDITION_CLASSES)
 @pytest.mark.parametrize("use_case,event_types", SimulateEventType.USE_CASES.items())
 async def test_all_simulated_event_use_cases_raise_joining_system_conditions(

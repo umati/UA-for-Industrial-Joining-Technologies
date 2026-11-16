@@ -125,7 +125,8 @@ def test_local_guidance_check_accepts_labelled_notes_and_refuses_duplicates(tmp_
 @pytest.mark.parametrize("newline", ["\n", "\r\n"])
 def test_local_layout_matches_generated_spacing_and_counter_list_style(newline):
     source = render_manifest_yaml("remote_start_multi_operation")
-    altered = source.replace("\n\n", "\n").replace("    -\n", "")
+    prefix, counters = source.split("  counter_effects:\n", 1)
+    altered = (prefix + "  counter_effects:\n" + counters.replace("    -\n", "", 1)).replace("\n\n", "\n")
     altered = altered.replace(
         "      method: IncrementJoiningProcessCounter",
         "    - method: IncrementJoiningProcessCounter",
@@ -178,7 +179,9 @@ def test_guidance_refresh_consolidates_known_legacy_cu_text_without_repeated_pol
     refreshed = generator.format_local_manifest(old_source)
     assert yaml.safe_load(refreshed) == yaml.safe_load(source)
     assert not generator.local_guidance_errors(refreshed)
-    assert "When omitted: use the parent profile/map policy." not in refreshed
+    assert old not in refreshed
+    assert "    # Support for abort joining process.\n    abort_joining_process:" in refreshed
+    assert "\n    # When omitted: use the parent profile/map policy." not in refreshed
 
 
 def test_guidance_check_handles_marked_comments_and_detects_missing_fields():

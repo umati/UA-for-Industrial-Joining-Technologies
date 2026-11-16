@@ -263,6 +263,37 @@ async def test_missing_triggered_result_does_not_report_missing_sequence_number(
         await _trigger_single_and_get_latest(object(), trigger, {NS_MACH_RESULT: 2})
 
 
+@pytest.mark.parametrize("latest_id", ["single", "parent", "external"])
+async def test_latest_result_accepts_owned_parent_or_child_but_not_unrelated_result(monkeypatch, latest_id):
+    from helpers.cu_coverage_report import WorkflowEvidenceUnavailable
+    from helpers.namespaces import NS_MACH_RESULT
+    from helpers.result_collector import ResultProgression
+
+    child = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId="single"))
+    parent = SimpleNamespace(
+        ResultMetaData=SimpleNamespace(ResultId="parent"),
+        References=[SimpleNamespace(ResultId="single")],
+    )
+    unrelated = SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId="external"))
+    progression = ResultProgression(classification=4, final_result=parent, all_results=(child, parent, unrelated))
+    trigger = SimpleNamespace(
+        owns_result_subscription=True,
+        trigger_single=AsyncMock(return_value=SimpleNamespace(triggered=True, process_progression=progression)),
+    )
+    monkeypatch.setattr("specification_tests.test_result_access._get_result_management", AsyncMock())
+    monkeypatch.setattr(
+        "specification_tests.test_result_access._call_get_latest_result",
+        AsyncMock(return_value=("handle", SimpleNamespace(ResultMetaData=SimpleNamespace(ResultId=latest_id)))),
+    )
+    if latest_id == "external":
+        with pytest.raises(WorkflowEvidenceUnavailable, match="owned fresh process"):
+            await _trigger_single_and_get_latest(object(), trigger, {NS_MACH_RESULT: 2})
+    else:
+        _, handle, result = await _trigger_single_and_get_latest(object(), trigger, {NS_MACH_RESULT: 2})
+        assert handle == "handle"
+        assert result.ResultMetaData.ResultId == latest_id
+
+
 class TestExtractSequenceNumber:
     def test_extract_none_returns_none(self):
         assert _extract_sequence_number(None) is None
@@ -431,6 +462,41 @@ class TestSingleResultAndCallRequestResults:
         buffer.datachange_notification(None, fresh, None)
         update = await buffer.collect_result(timeout_s=0.1)
         assert update.value is fresh
+
+    async def test_resolve_anchor_result_for_range_uses_get_latest_without_trigger(self, monkeypatch):
+        import specification_tests.test_result_access as tra
+        from helpers.namespaces import NS_MACH_RESULT
+
+        stored = SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=157478))
+        glr_node = SimpleNamespace(nodeid=ua.NodeId(99, 2))
+        rm = MagicMock()
+        rm.call_method = AsyncMock(return_value=[b"handle", stored])
+        trigger_mock = AsyncMock()
+        monkeypatch.setattr(tra, "find_child_by_browse_name", AsyncMock(return_value=glr_node))
+        monkeypatch.setattr(tra, "_trigger_single_and_get_latest", trigger_mock)
+
+        anchor = await tra._resolve_anchor_result_for_range(MagicMock(), rm, MagicMock(), {NS_MACH_RESULT: 2})
+        assert anchor is stored
+        trigger_mock.assert_not_awaited()
+        args = _get_request_results_args(anchor, RequestResultsConfig(from_sequence_number=1, to_sequence_number=10))
+        assert args[0].Value == 157469
+        assert args[1].Value == 157478
+
+    async def test_resolve_anchor_result_for_range_falls_back_to_trigger_when_empty(self, monkeypatch):
+        import specification_tests.test_result_access as tra
+        from helpers.namespaces import NS_MACH_RESULT
+
+        triggered = SimpleNamespace(ResultMetaData=SimpleNamespace(SequenceNumber=1))
+        glr_node = SimpleNamespace(nodeid=ua.NodeId(99, 2))
+        rm = MagicMock()
+        rm.call_method = AsyncMock(side_effect=ua.UaError("BadNothingToDo"))
+        trigger_mock = AsyncMock(return_value=(rm, None, triggered))
+        monkeypatch.setattr(tra, "find_child_by_browse_name", AsyncMock(return_value=glr_node))
+        monkeypatch.setattr(tra, "_trigger_single_and_get_latest", trigger_mock)
+
+        anchor = await tra._resolve_anchor_result_for_range(MagicMock(), rm, MagicMock(), {NS_MACH_RESULT: 2})
+        assert anchor is triggered
+        trigger_mock.assert_awaited_once()
 
     async def test_call_request_results_success_first_attempt(self):
         rm_node = MagicMock()

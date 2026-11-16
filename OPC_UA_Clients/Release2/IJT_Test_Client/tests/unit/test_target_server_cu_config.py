@@ -53,6 +53,100 @@ def test_expected_results_accepts_intermediate_classifications():
     assert profile.workflow_execution.expected_results.referenced_child_completion_policy == "terminal_required"
 
 
+@pytest.mark.parametrize(
+    "tool",
+    [
+        {"policy": "first_ready"},
+        {"policy": "exact_match"},
+        {"policy": "first_ready", "product_instance_uri": "station"},
+        {"policy": "exact_match", "product_instance_uri": "station"},
+    ],
+)
+def test_virtual_station_binding_requires_distinct_configured_tool(tool):
+    with pytest.raises(TargetServerConfigError):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "selection": {"tool": {**tool, "virtual_station_product_instance_uri": "station"}},
+            }
+        )
+
+
+@pytest.mark.parametrize("policy", ["first_ready", "first_available", "discover_unique", "exact_match"])
+def test_virtual_station_binding_round_trips(policy):
+    profile = build_execution_profile(
+        {
+            "schema_version": 1,
+            "selection": {
+                "tool": {
+                    "policy": policy,
+                    "product_instance_uri": "tool",
+                    "virtual_station_product_instance_uri": "station",
+                }
+            },
+        }
+    )
+    assert profile.selection.tool.virtual_station_product_instance_uri == "station"
+
+
+@pytest.mark.parametrize("value", ["true", 1, None, True])
+def test_counter_qualification_rejects_invalid_flag_or_missing_result_source(value):
+    with pytest.raises(TargetServerConfigError):
+        build_execution_profile(
+            {
+                "schema_version": 1,
+                "cu_execution": {
+                    "counter_effects": [
+                        {"method": "IncrementJoiningProcessCounter", "joining_process_id": "job", "verify_delta": value}
+                    ]
+                },
+            }
+        )
+
+
+def test_entity_expectations_are_opt_in_and_typed():
+    assert build_default_profile().workflow_execution.expected_results.associated_entities == ()
+    profile = build_execution_profile(
+        {
+            "schema_version": 1,
+            "workflow_execution": {
+                "expected_results": {
+                    "associated_entities": [
+                        {"classification": "single", "required": ["TOOL"], "optional": ["MEMORY_DEVICE"]},
+                        {"classification": "intervention", "context": "counter_intervention", "optional": ["TOOL"]},
+                    ]
+                }
+            },
+        }
+    )
+    rules = profile.workflow_execution.expected_results.associated_entities
+    assert rules[0].required == ("TOOL",)
+    assert rules[0].optional == ("MEMORY_DEVICE",)
+    assert rules[0].context == "any"
+    assert rules[1].context == "counter_intervention"
+
+
+@pytest.mark.parametrize(
+    "rules",
+    [
+        "not-a-list",
+        ["not-a-rule"],
+        [{"classification": "unknown"}],
+        [{"classification": "single", "context": "unknown"}],
+        [{"classification": "single", "required": ["TOOOL"]}],
+        [{"classification": "single", "required": ["TOOL", "TOOL"]}],
+        [{"classification": "single", "required": ["TOOL"], "optional": ["TOOL"]}],
+        [{"classification": "single", "ignore_all": True}],
+        [{"classification": "single"}, {"classification": "single"}],
+    ],
+)
+def test_invalid_entity_expectations_fail_configuration(rules):
+    with pytest.raises(TargetServerConfigError):
+        build_execution_profile(
+            {"schema_version": 1, "workflow_execution": {"expected_results": {"associated_entities": rules}}}
+        )
+
+
 def test_expected_results_accepts_partial_referenced_children_policy():
     profile = build_execution_profile(
         {
@@ -182,6 +276,12 @@ def test_adaptive_workflow_contracts_are_typed():
     assert profile.cu_execution.counter_effects[0].expected_result_classification == "batch"
     assert profile.cu_execution.counter_effects[0].match_by == "joining_process_id"
     assert profile.cu_execution.counter_effects[0].identifier_strategy == "id_only"
+
+
+@pytest.mark.parametrize("preparation", [True, "enabled", []])
+def test_preparation_contract_rejects_nonmapping_values(preparation):
+    with pytest.raises(TargetServerConfigError, match="preparation must be a mapping"):
+        build_execution_profile({"schema_version": 1, "workflow_execution": {"preparation": preparation}})
 
 
 def test_all_compatible_is_not_valid_for_tool_selection():
@@ -615,6 +715,20 @@ class TestFullValidProfile:
         for invalid in (0, 2, 5, -1):
             raw["workflow_execution"]["expected_results"]["expected_terminal_result_state"] = invalid
             with pytest.raises(TargetServerConfigError, match="expected_terminal_result_state must be one of"):
+                build_execution_profile(raw)
+
+    def test_expected_abort_result_states_defaults_and_validates(self):
+        raw = yaml.safe_load(FULL_VALID)
+        profile = build_execution_profile(raw)
+        assert profile.workflow_execution.expected_results.expected_abort_result_states == (3,)
+
+        raw["workflow_execution"]["expected_results"]["expected_abort_result_states"] = [3, 4]
+        profile_dual = build_execution_profile(raw)
+        assert profile_dual.workflow_execution.expected_results.expected_abort_result_states == (3, 4)
+
+        for invalid in ([], [0], [2], [5], [-1], [True]):
+            raw["workflow_execution"]["expected_results"]["expected_abort_result_states"] = invalid
+            with pytest.raises(TargetServerConfigError, match="expected_abort_result_states"):
                 build_execution_profile(raw)
 
 

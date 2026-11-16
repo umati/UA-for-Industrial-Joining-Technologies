@@ -8,13 +8,14 @@ TC number back to those keys without putting spec sequence numbers in test code.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from openpyxl import load_workbook
 
-from helpers.cu_registry import CU
+from helpers.cu_registry import CU, cu_display_name
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORKBOOK_PATH = (
@@ -131,7 +132,16 @@ def load_workbook_cases(workbook_path: Path | None = None) -> dict[str, tuple[Wo
         cu_sheets = workbook.worksheets[INFRA_SHEET_COUNT:]
         if len(cu_sheets) != len(cu_keys):
             raise ValueError(f"Workbook has {len(cu_sheets)} CU sheets but registry has {len(cu_keys)} CU keys")
-        return {cu_key: _case_rows_for_sheet(ws, cu_key) for cu_key, ws in zip(cu_keys, cu_sheets, strict=True)}
+        normalize = lambda text: "".join(char for char in text.casefold() if char.isalnum())
+        keys_by_name = {normalize(cu_display_name(key)): key for key in cu_keys}
+        cases_by_cu: dict[str, tuple[WorkbookCase, ...]] = {}
+        for ws in cu_sheets:
+            match = re.search(r"CU-\d+:\s*(.+)", str(ws.cell(1, 1).value))
+            key = keys_by_name.get(normalize(match.group(1))) if match else None
+            if key is None or key in cases_by_cu:
+                raise ValueError(f"Unknown or duplicate CU identity in workbook sheet {ws.title!r}")
+            cases_by_cu[key] = _case_rows_for_sheet(ws, key)
+        return cases_by_cu
     finally:
         workbook.close()
 
@@ -141,16 +151,19 @@ def workbook_traceability_report(
     workbook_path: Path | None = None,
     tests_by_cu: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     exact_refs_by_row: Mapping[str, Iterable[str]] | None = None,
+    exact_routes_by_row: Mapping[str, Mapping[str, str | Iterable[str]]] | None = None,
 ) -> dict[str, Any]:
     """Return workbook row traceability data for the CU coverage JSON."""
     source = workbook_path or DEFAULT_WORKBOOK_PATH
     cases_by_cu = load_workbook_cases(source)
     tests_by_cu = tests_by_cu or {}
     exact_refs_by_row = exact_refs_by_row or {}
+    exact_routes_by_row = exact_routes_by_row or {}
 
     by_cu: dict[str, dict[str, Any]] = {}
     total_cases = 0
     exact_case_count = 0
+    results_by_nodeid = {str(test.get("nodeid", "")): test for tests in tests_by_cu.values() for test in tests}
     for cu_key, cases in cases_by_cu.items():
         linked_nodeids = sorted(
             {str(test.get("nodeid", "")) for test in tests_by_cu.get(cu_key, []) if str(test.get("nodeid", "")).strip()}
@@ -160,7 +173,43 @@ def workbook_traceability_report(
             exact_nodeids = sorted(set(str(nodeid) for nodeid in exact_refs_by_row.get(case.ref, [])))
             if exact_nodeids:
                 exact_case_count += 1
-            case_json.append(case.to_json(linked_nodeids, exact_nodeids))
+            entry = case.to_json(linked_nodeids, exact_nodeids)
+            outcomes = []
+            common_outcomes: list[str] = []
+            route_outcomes: dict[str, list[str]] = {}
+            for nodeid in exact_nodeids:
+                result = results_by_nodeid.get(nodeid, {})
+                outcome = str(result.get("outcome", "untested"))
+                outcomes.append(outcome)
+                configured_routes = exact_routes_by_row.get(case.ref, {}).get(nodeid, ())
+                required_routes = (
+                    {configured_routes}
+                    if isinstance(configured_routes, str) and configured_routes
+                    else set(configured_routes)
+                    if not isinstance(configured_routes, str)
+                    else set()
+                )
+                observed_route = str(result.get("evidence_route", ""))
+                if required_routes:
+                    for route in required_routes:
+                        route_outcomes.setdefault(route, []).append(outcome if route == observed_route else "untested")
+                elif observed_route:
+                    route_outcomes.setdefault(observed_route, []).append(outcome)
+                else:
+                    common_outcomes.append(outcome)
+            entry["outcome"] = (
+                "failed"
+                if any(outcome in {"failed", "error"} for outcome in outcomes)
+                else "passed"
+                if all(outcome == "passed" for outcome in common_outcomes)
+                and (
+                    any(all(outcome == "passed" for outcome in group) for group in route_outcomes.values())
+                    if route_outcomes
+                    else bool(common_outcomes)
+                )
+                else "incomplete"
+            )
+            case_json.append(entry)
         total_cases += len(cases)
         by_cu[cu_key] = {
             "sheet": cases[0].sheet if cases else "",
