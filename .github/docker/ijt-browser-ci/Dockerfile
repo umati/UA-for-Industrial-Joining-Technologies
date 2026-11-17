@@ -124,7 +124,7 @@ RUN mkdir -p /opt/ijt-browser-ci/home \
 #    Versions come from the Web Client uv.lock (exact pins) at image build
 #    time, exported on demand during image build.
 # ---------------------------------------------------------------------------
-COPY --from=ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.9@sha256:d3b601f0c7b118bc1753febf7c41cc80981df678445e0254284eecf84db79a7d /uv /uvx /bin/
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/pyproject.toml /tmp/pyproject.toml
 COPY OPC_UA_Clients/Release2/IJT_Web_Client/uv.lock /tmp/uv.lock
 RUN cd /tmp && uv export --frozen -o /tmp/requirements.txt \
