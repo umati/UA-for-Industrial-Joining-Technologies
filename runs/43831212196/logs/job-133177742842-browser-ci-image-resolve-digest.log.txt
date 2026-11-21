@@ -1,0 +1,157 @@
+﻿2026-11-16T08:29:13.1643852Z Current runner version: '2.338.2'
+2026-11-16T08:29:13.1659785Z ##[group]Runner Image Provisioner
+2026-11-16T08:29:13.1660421Z Hosted Compute Agent
+2026-11-16T08:29:13.1660892Z Version: 20261103.629
+2026-11-16T08:29:13.1661341Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-16T08:29:13.1661870Z Build Date: 2026-11-03T17:26:59Z
+2026-11-16T08:29:13.1662368Z Worker ID: {20b51db1-972c-441e-9f3b-5f56d11e1aaa}
+2026-11-16T08:29:13.1662859Z Region: us-west-2
+2026-11-16T08:29:13.1663479Z Cloud: AWS
+2026-11-16T08:29:13.1663887Z ##[endgroup]
+2026-11-16T08:29:13.1665113Z ##[group]Operating System
+2026-11-16T08:29:13.1665578Z Ubuntu
+2026-11-16T08:29:13.1665935Z 26.04.1
+2026-11-16T08:29:13.1666346Z LTS
+2026-11-16T08:29:13.1666717Z ##[endgroup]
+2026-11-16T08:29:13.1667077Z ##[group]Runner Image
+2026-11-16T08:29:13.1667554Z Image: ubuntu-26.04
+2026-11-16T08:29:13.1667945Z Version: 20261111.82.6
+2026-11-16T08:29:13.1668832Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261111.82/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-16T08:29:13.1669859Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261111.82
+2026-11-16T08:29:13.1670588Z ##[endgroup]
+2026-11-16T08:29:13.1671399Z ##[group]GITHUB_TOKEN Permissions
+2026-11-16T08:29:13.1672983Z Contents: read
+2026-11-16T08:29:13.1673606Z Metadata: read
+2026-11-16T08:29:13.1674101Z Packages: read
+2026-11-16T08:29:13.1674484Z ##[endgroup]
+2026-11-16T08:29:13.1675967Z Secret source: Actions
+2026-11-16T08:29:13.1676641Z Cache mode: write
+2026-11-16T08:29:13.1677236Z Prepare workflow directory
+2026-11-16T08:29:13.1933143Z Prepare all required actions
+2026-11-16T08:29:13.1968499Z Getting action download info
+2026-11-16T08:29:13.5458847Z Download action repository 'docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550' (SHA:8aa5831fb8d48d8f76594c7ddde61ae58019f550)
+2026-11-16T08:29:16.3880013Z Complete job name: Browser CI image - resolve digest
+2026-11-16T08:29:16.4473417Z ##[group]Run docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550
+2026-11-16T08:29:16.4474480Z with:
+2026-11-16T08:29:16.4474890Z   registry: ghcr.io
+2026-11-16T08:29:16.4475325Z   username: mohitkumaragarwal
+2026-11-16T08:29:16.4478686Z   password: ***
+2026-11-16T08:29:16.4479105Z   logout: true
+2026-11-16T08:29:16.4479615Z env:
+2026-11-16T08:29:16.4480040Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-16T08:29:16.4480545Z ##[endgroup]
+2026-11-16T08:29:21.4580580Z Logging into ghcr.io...
+2026-11-16T08:29:23.5334449Z Login Succeeded!
+2026-11-16T08:29:23.5498704Z ##[group]Run set -euo pipefail
+2026-11-16T08:29:23.5499198Z set -euo pipefail
+2026-11-16T08:29:23.5499530Z case "$PLAN" in
+2026-11-16T08:29:23.5499875Z   pin|cached) DIGEST="$CANDIDATE_DIGEST" ;;
+2026-11-16T08:29:23.5500236Z   build)      DIGEST="$BUILD_DIGEST" ;;
+2026-11-16T08:29:23.5500619Z   *) echo "::error::invalid plan value: ${PLAN}" >&2; exit 1 ;;
+2026-11-16T08:29:23.5500975Z esac
+2026-11-16T08:29:23.5501323Z if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+2026-11-16T08:29:23.5501802Z   echo "::error::resolved digest is not sha256:<64hex>: ${DIGEST} (plan=${PLAN})" >&2
+2026-11-16T08:29:23.5502212Z   exit 1
+2026-11-16T08:29:23.5502469Z fi
+2026-11-16T08:29:23.5502721Z REF="${IMG}@${DIGEST}"
+2026-11-16T08:29:23.5502996Z 
+2026-11-16T08:29:23.5503569Z # SINGLE runtime trust check. inputs_fingerprint baked into the
+2026-11-16T08:29:23.5504106Z # image at build time must equal the planner's fingerprint over the
+2026-11-16T08:29:23.5504581Z # current source tree. Same-fingerprint cache hits are accepted
+2026-11-16T08:29:23.5505025Z # regardless of which GITHUB_SHA produced the image; build_sha is
+2026-11-16T08:29:23.5505567Z # provenance only and intentionally NOT checked here.
+2026-11-16T08:29:23.5505927Z docker pull "$REF"
+2026-11-16T08:29:23.5506251Z actual_fp="$(docker run --rm --network=none "$REF" \
+2026-11-16T08:29:23.5507012Z   python -c "import json; print(json.load(open('/opt/ijt-browser-ci/metadata.json')).get('inputs_fingerprint',''))")"
+2026-11-16T08:29:23.5507567Z if [[ "$actual_fp" != "$CURRENT_FINGERPRINT" ]]; then
+2026-11-16T08:29:23.5508049Z   echo "::error::Image metadata inputs_fingerprint does not match the planner's fingerprint." >&2
+2026-11-16T08:29:23.5508594Z   echo "::error::  expected (planner): ${CURRENT_FINGERPRINT}" >&2
+2026-11-16T08:29:23.5508981Z   echo "::error::  actual   (image):   ${actual_fp}" >&2
+2026-11-16T08:29:23.5509368Z   echo "::error::  image:              ${REF}" >&2
+2026-11-16T08:29:23.5509740Z   echo "::error::  plan:               ${PLAN}" >&2
+2026-11-16T08:29:23.5510072Z   exit 1
+2026-11-16T08:29:23.5510327Z fi
+2026-11-16T08:29:23.5510603Z echo "image_ref=${REF}" >> "$GITHUB_OUTPUT"
+2026-11-16T08:29:23.5511018Z echo "inputs_fingerprint=${CURRENT_FINGERPRINT}" >> "$GITHUB_OUTPUT"
+2026-11-16T08:29:23.5511496Z echo "Resolved IJT_BROWSER_CI_IMAGE=${REF} (plan=${PLAN})"
+2026-11-16T08:29:23.5533573Z shell: /usr/bin/bash -e {0}
+2026-11-16T08:29:23.5533896Z env:
+2026-11-16T08:29:23.5534279Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-16T08:29:23.5534590Z   PLAN: cached
+2026-11-16T08:29:23.5534954Z   IMG: ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci
+2026-11-16T08:29:23.5535504Z   CANDIDATE_DIGEST: sha256:d4623bb188fdc8b858d225ba55c9e54b6764ab41005f322e1b77d05a3da7cbd7
+2026-11-16T08:29:23.5535950Z   BUILD_DIGEST: 
+2026-11-16T08:29:23.5536344Z   CURRENT_FINGERPRINT: 1fa8e9d5a89972d296f49a99b148df564e17723afd2896353193f2aad9f78dc8
+2026-11-16T08:29:23.5536747Z ##[endgroup]
+2026-11-16T08:29:24.1779555Z ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:d4623bb188fdc8b858d225ba55c9e54b6764ab41005f322e1b77d05a3da7cbd7: Pulling from umati/ua-for-industrial-joining-technologies/ijt-browser-ci
+2026-11-16T08:29:24.6997002Z 2ee0a9696372: Pulling fs layer
+2026-11-16T08:29:24.6997955Z 96eeebd223c3: Pulling fs layer
+2026-11-16T08:29:24.6998606Z b068561f8c63: Pulling fs layer
+2026-11-16T08:29:24.6999056Z 3b3a554d6789: Pulling fs layer
+2026-11-16T08:29:24.6999574Z 8d62d0e76dad: Pulling fs layer
+2026-11-16T08:29:24.6999986Z 74e5c1ce6216: Pulling fs layer
+2026-11-16T08:29:24.7000378Z a1e09a94f626: Pulling fs layer
+2026-11-16T08:29:24.7001327Z 4f4fb700ef54: Pulling fs layer
+2026-11-16T08:29:24.7002064Z b557f6817a33: Pulling fs layer
+2026-11-16T08:29:24.7002541Z a648269bdf07: Pulling fs layer
+2026-11-16T08:29:24.7002968Z ce594a2af7a8: Pulling fs layer
+2026-11-16T08:29:24.7003563Z c2a1d9884e9d: Pulling fs layer
+2026-11-16T08:29:24.7003970Z 1c23b55fe0a4: Pulling fs layer
+2026-11-16T08:29:24.7004258Z 9cfc02f07018: Pulling fs layer
+2026-11-16T08:29:24.7004575Z 23ec81c21df9: Pulling fs layer
+2026-11-16T08:29:24.7004898Z 4b6cdccba2b2: Pulling fs layer
+2026-11-16T08:29:24.7005211Z f80a3327ff85: Pulling fs layer
+2026-11-16T08:29:24.7730409Z 44136fa355b3: Already exists
+2026-11-16T08:29:24.7732450Z 4f4fb700ef54: Already exists
+2026-11-16T08:29:24.9721332Z 9bb7f7c526ee: Download complete
+2026-11-16T08:29:24.9726970Z 23ec81c21df9: Download complete
+2026-11-16T08:29:24.9728253Z 8d62d0e76dad: Download complete
+2026-11-16T08:29:24.9741736Z b557f6817a33: Download complete
+2026-11-16T08:29:24.9742919Z f80a3327ff85: Download complete
+2026-11-16T08:29:24.9754229Z 4b6cdccba2b2: Download complete
+2026-11-16T08:29:25.0740213Z 74e5c1ce6216: Download complete
+2026-11-16T08:29:25.0756603Z 96eeebd223c3: Download complete
+2026-11-16T08:29:25.0774231Z b068561f8c63: Download complete
+2026-11-16T08:29:25.0807975Z ce594a2af7a8: Download complete
+2026-11-16T08:29:25.1721847Z 3b3a554d6789: Download complete
+2026-11-16T08:29:25.2744491Z 05e1f61bb870: Download complete
+2026-11-16T08:29:25.3725618Z a1e09a94f626: Download complete
+2026-11-16T08:29:25.7721924Z 2ee0a9696372: Download complete
+2026-11-16T08:29:28.0739412Z c2a1d9884e9d: Download complete
+2026-11-16T08:29:29.7722582Z 9cfc02f07018: Download complete
+2026-11-16T08:29:29.8856026Z c2a1d9884e9d: Pull complete
+2026-11-16T08:29:30.0821203Z 3b3a554d6789: Pull complete
+2026-11-16T08:29:30.1783723Z 74e5c1ce6216: Pull complete
+2026-11-16T08:29:30.6818136Z 2ee0a9696372: Pull complete
+2026-11-16T08:29:30.7744616Z 8d62d0e76dad: Pull complete
+2026-11-16T08:29:30.7791133Z 96eeebd223c3: Pull complete
+2026-11-16T08:29:30.7801903Z b068561f8c63: Pull complete
+2026-11-16T08:29:30.9735789Z b557f6817a33: Pull complete
+2026-11-16T08:29:30.9764606Z f80a3327ff85: Pull complete
+2026-11-16T08:29:30.9786951Z a1e09a94f626: Pull complete
+2026-11-16T08:29:33.0755367Z 4b6cdccba2b2: Pull complete
+2026-11-16T08:29:33.0769999Z ce594a2af7a8: Pull complete
+2026-11-16T08:29:33.0780992Z 9cfc02f07018: Pull complete
+2026-11-16T08:29:40.1725795Z 1c23b55fe0a4: Download complete
+2026-11-16T08:29:40.3722683Z a648269bdf07: Download complete
+2026-11-16T08:29:44.6738818Z 1c23b55fe0a4: Pull complete
+2026-11-16T08:29:48.1726928Z 23ec81c21df9: Pull complete
+2026-11-16T08:29:48.1742069Z a648269bdf07: Pull complete
+2026-11-16T08:29:48.3538969Z 4f4fb700ef54: Pull complete
+2026-11-16T08:29:48.3539431Z Digest: sha256:d4623bb188fdc8b858d225ba55c9e54b6764ab41005f322e1b77d05a3da7cbd7
+2026-11-16T08:29:48.3540398Z Status: Downloaded newer image for ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:d4623bb188fdc8b858d225ba55c9e54b6764ab41005f322e1b77d05a3da7cbd7
+2026-11-16T08:29:48.4004220Z ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:d4623bb188fdc8b858d225ba55c9e54b6764ab41005f322e1b77d05a3da7cbd7
+2026-11-16T08:29:55.2224418Z Resolved IJT_BROWSER_CI_IMAGE=ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:d4623bb188fdc8b858d225ba55c9e54b6764ab41005f322e1b77d05a3da7cbd7 (plan=cached)
+2026-11-16T08:29:55.2307268Z Post job cleanup.
+2026-11-16T08:29:55.3822191Z ##[group]Logout from ghcr.io
+2026-11-16T08:29:55.3865155Z [command]/usr/bin/docker logout ghcr.io
+2026-11-16T08:29:55.3960577Z Removing login credentials for ghcr.io
+2026-11-16T08:29:55.3983472Z ##[endgroup]
+2026-11-16T08:29:55.3984003Z ##[group]Post cache
+2026-11-16T08:29:55.3984213Z State not set
+2026-11-16T08:29:55.3984577Z ##[endgroup]
+2026-11-16T08:29:55.4114361Z Evaluate and set job outputs
+2026-11-16T08:29:55.4120603Z Set output 'image_ref'
+2026-11-16T08:29:55.4121865Z Set output 'plan'
+2026-11-16T08:29:55.4122410Z Set output 'inputs_fingerprint'
+2026-11-16T08:29:55.4122838Z Cleaning up orphan processes

@@ -1,0 +1,202 @@
+﻿2026-11-18T12:24:04.5885804Z Current runner version: '2.338.2'
+2026-11-18T12:24:04.5923305Z ##[group]Runner Image Provisioner
+2026-11-18T12:24:04.5924573Z Hosted Compute Agent
+2026-11-18T12:24:04.5925523Z Version: 20261103.629
+2026-11-18T12:24:04.5926567Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-18T12:24:04.5927812Z Build Date: 2026-11-03T17:26:59Z
+2026-11-18T12:24:04.5929071Z Worker ID: {32f8b1ce-76ed-4371-b7ea-f0522e3f2f6b}
+2026-11-18T12:24:04.5930341Z Region: eastus
+2026-11-18T12:24:04.5931312Z Cloud: Azure
+2026-11-18T12:24:04.5932261Z ##[endgroup]
+2026-11-18T12:24:04.5934823Z ##[group]Operating System
+2026-11-18T12:24:04.5936049Z Microsoft Windows Server 2025
+2026-11-18T12:24:04.5937812Z 10.0.26100
+2026-11-18T12:24:04.5938736Z Datacenter
+2026-11-18T12:24:04.5939655Z ##[endgroup]
+2026-11-18T12:24:04.5940584Z ##[group]Runner Image
+2026-11-18T12:24:04.5941455Z Image: windows-2025-vs2026
+2026-11-18T12:24:04.5942183Z Version: 20261103.298.1
+2026-11-18T12:24:04.5944102Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261103.298/images/windows/Windows2025-VS2026-Readme.md
+2026-11-18T12:24:04.5945779Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261103.298
+2026-11-18T12:24:04.5946716Z ##[endgroup]
+2026-11-18T12:24:04.5947801Z ##[group]GITHUB_TOKEN Permissions
+2026-11-18T12:24:04.5950225Z Contents: read
+2026-11-18T12:24:04.5950861Z Metadata: read
+2026-11-18T12:24:04.5951366Z ##[endgroup]
+2026-11-18T12:24:04.5953568Z Secret source: Actions
+2026-11-18T12:24:04.5954534Z Cache mode: write
+2026-11-18T12:24:04.5955201Z Prepare workflow directory
+2026-11-18T12:24:04.6394213Z Prepare all required actions
+2026-11-18T12:24:04.6443534Z Getting action download info
+2026-11-18T12:24:04.8276353Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-18T12:24:04.9625736Z Download action repository 'actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73' (SHA:0f4a354dd5547a28c70b7853dbd95d5b67886e73)
+2026-11-18T12:24:05.2429817Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-18T12:24:05.4776677Z Complete job name: C# Client - Unit Tests
+2026-11-18T12:24:05.6348785Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-18T12:24:05.6350115Z with:
+2026-11-18T12:24:05.6350587Z   persist-credentials: false
+2026-11-18T12:24:05.6351247Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-18T12:24:05.6355460Z   token: ***
+2026-11-18T12:24:05.6355907Z   ssh-strict: true
+2026-11-18T12:24:05.6356364Z   ssh-user: git
+2026-11-18T12:24:05.6356789Z   clean: true
+2026-11-18T12:24:05.6357307Z   sparse-checkout-cone-mode: true
+2026-11-18T12:24:05.6357843Z   fetch-depth: 1
+2026-11-18T12:24:05.6358284Z   fetch-tags: false
+2026-11-18T12:24:05.6358752Z   show-progress: true
+2026-11-18T12:24:05.6359639Z   lfs: false
+2026-11-18T12:24:05.6360370Z   submodules: false
+2026-11-18T12:24:05.6360848Z   set-safe-directory: true
+2026-11-18T12:24:05.6361376Z   allow-unsafe-pr-checkout: false
+2026-11-18T12:24:05.6362207Z env:
+2026-11-18T12:24:05.6362665Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-18T12:24:05.6363288Z ##[endgroup]
+2026-11-18T12:24:05.7965773Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-18T12:24:05.7968178Z ##[group]Getting Git version info
+2026-11-18T12:24:05.7969703Z Working directory is 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-18T12:24:05.8976113Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-18T12:24:06.2154034Z git version 2.56.0.windows.4
+2026-11-18T12:24:06.2211881Z ##[endgroup]
+2026-11-18T12:24:06.2229305Z Temporarily overriding HOME='D:\a\_temp\2a73b086-9349-46a1-be52-1ba705e5e89b' before making global git config changes
+2026-11-18T12:24:06.2232039Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-18T12:24:06.2242113Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-18T12:24:06.2898926Z Deleting the contents of 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-18T12:24:06.2903413Z ##[group]Determining repository object format
+2026-11-18T12:24:06.2905069Z ##[endgroup]
+2026-11-18T12:24:06.2906651Z ##[group]Initializing the repository
+2026-11-18T12:24:06.2915763Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-18T12:24:06.3762278Z Initialized empty Git repository in D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-18T12:24:06.3820606Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-18T12:24:06.4856802Z ##[endgroup]
+2026-11-18T12:24:06.4859003Z ##[group]Disabling automatic garbage collection
+2026-11-18T12:24:06.4866075Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-18T12:24:06.5299750Z ##[endgroup]
+2026-11-18T12:24:06.5301762Z ##[group]Setting up auth
+2026-11-18T12:24:06.5303557Z Removing SSH command configuration
+2026-11-18T12:24:06.5314392Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-18T12:24:06.5728215Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-18T12:24:08.0548961Z Removing HTTP extra header
+2026-11-18T12:24:08.0563638Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-18T12:24:08.0988739Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-18T12:24:08.6670119Z Removing includeIf entries pointing to credentials config files
+2026-11-18T12:24:08.6682478Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-18T12:24:08.7091417Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-18T12:24:09.2786239Z [command]"C:\Program Files\Git\bin\git.exe" config --file D:\a\_temp\git-credentials-a603487e-15cf-4a6b-a2ed-1d176e045da4.config http.https://github.com/.extraheader "AUTHORIZATION: basic [REDACTED_AUTH]"
+2026-11-18T12:24:09.3168885Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D:\a\_temp\git-credentials-a603487e-15cf-4a6b-a2ed-1d176e045da4.config
+2026-11-18T12:24:09.3550948Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D:\a\_temp\git-credentials-a603487e-15cf-4a6b-a2ed-1d176e045da4.config
+2026-11-18T12:24:09.3989218Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-a603487e-15cf-4a6b-a2ed-1d176e045da4.config
+2026-11-18T12:24:09.4400550Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-a603487e-15cf-4a6b-a2ed-1d176e045da4.config
+2026-11-18T12:24:09.4801122Z ##[endgroup]
+2026-11-18T12:24:09.4801819Z ##[group]Fetching the repository
+2026-11-18T12:24:09.4813781Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +f470958575273f33d135db50fe0476202979b5ea:refs/remotes/origin/main
+2026-11-18T12:24:10.6554867Z ##[error]The operation was canceled.
+2026-11-18T12:24:10.8436939Z ##[group]Run # Coverlet writes to test-results/<GUID>/coverage.cobertura.xml — copy to canonical path.
+2026-11-18T12:24:10.8438397Z # Coverlet writes to test-results/<GUID>/coverage.cobertura.xml — copy to canonical path.
+2026-11-18T12:24:10.8439692Z $covXml = Get-ChildItem test-results -Recurse -Filter "coverage.cobertura.xml" | Select-Object -First 1
+2026-11-18T12:24:10.8440593Z if ($covXml) {
+2026-11-18T12:24:10.8441197Z   Copy-Item $covXml.FullName test-results\coverage\cobertura.xml -Force
+2026-11-18T12:24:10.8442022Z   [xml]$cov = Get-Content test-results\coverage\cobertura.xml
+2026-11-18T12:24:10.8442763Z   $pct = [math]::Round([double]$cov.coverage.'line-rate' * 100, 1)
+2026-11-18T12:24:10.8443423Z   Write-Host "C# line coverage: $pct%"
+2026-11-18T12:24:10.8444040Z   "pct=$pct" | Out-File $Env:GITHUB_OUTPUT -Append
+2026-11-18T12:24:10.8444561Z } else {
+2026-11-18T12:24:10.8445319Z   Write-Host "Coverage XML not generated (tests may have failed or --collect flag not picked up)"
+2026-11-18T12:24:10.8446232Z   "pct=" | Out-File $Env:GITHUB_OUTPUT -Append
+2026-11-18T12:24:10.8446721Z }
+2026-11-18T12:24:10.9183108Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-18T12:24:10.9183776Z env:
+2026-11-18T12:24:10.9184157Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-18T12:24:10.9184612Z ##[endgroup]
+2026-11-18T12:24:10.9392621Z ##[error]An error occurred trying to start process 'C:\Program Files\PowerShell\7\pwsh.EXE' with working directory 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients/Release2/IJT_CSharp_Client'. The directory name is invalid.
+2026-11-18T12:24:11.1302871Z ##[group]Run New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-18T12:24:11.1303547Z New-Item -ItemType Directory -Force -Path test-results | Out-Null
+2026-11-18T12:24:11.1303967Z $trx   = "test-results\tests.trx"
+2026-11-18T12:24:11.1304264Z $junit = "test-results\tests.xml"
+2026-11-18T12:24:11.1304544Z if (Test-Path $trx) {
+2026-11-18T12:24:11.1304794Z   [xml]$x = Get-Content $trx
+2026-11-18T12:24:11.1305178Z   $ns = @{ t = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010" }
+2026-11-18T12:24:11.1305831Z   $results = Select-Xml -Xml $x -XPath "//t:UnitTestResult" -Namespace $ns | Select-Object -ExpandProperty Node
+2026-11-18T12:24:11.1306448Z   $passed  = ($results | Where-Object { $_.outcome -eq "Passed"  }).Count
+2026-11-18T12:24:11.1306918Z   $failed  = ($results | Where-Object { $_.outcome -eq "Failed"  }).Count
+2026-11-18T12:24:11.1307448Z   $skipped = ($results | Where-Object { $_.outcome -eq "NotExecuted" }).Count
+2026-11-18T12:24:11.1307851Z   $total   = $results.Count
+2026-11-18T12:24:11.1308160Z   $xml  = '<?xml version="1.0" encoding="UTF-8"?>' + "`n"
+2026-11-18T12:24:11.1308609Z   $xml += "<testsuites tests=`"$total`" failures=`"$failed`" skipped=`"$skipped`">`n"
+2026-11-18T12:24:11.1309268Z   $xml += "  <testsuite name=`"IJT_CSharp_Client.Tests.Unit`" tests=`"$total`" failures=`"$failed`" skipped=`"$skipped`">`n"
+2026-11-18T12:24:11.1309793Z   foreach ($r in $results) {
+2026-11-18T12:24:11.1310153Z     $name = [System.Security.SecurityElement]::Escape($r.testName)
+2026-11-18T12:24:11.1310509Z     $outcome = $r.outcome
+2026-11-18T12:24:11.1310756Z     if ($outcome -eq "Passed") {
+2026-11-18T12:24:11.1311081Z       $xml += "    <testcase name=`"$name`" classname=`"IJT`" />`n"
+2026-11-18T12:24:11.1311447Z     } elseif ($outcome -eq "NotExecuted") {
+2026-11-18T12:24:11.1312008Z       $msgRaw = ([string]$r.Output.ErrorInfo.Message).Trim()
+2026-11-18T12:24:11.1312490Z       if ([string]::IsNullOrWhiteSpace($msgRaw)) { $msgRaw = "Test skipped by xUnit" }
+2026-11-18T12:24:11.1312990Z       $msg = [System.Security.SecurityElement]::Escape($msgRaw)
+2026-11-18T12:24:11.1313548Z       $xml += "    <testcase name=`"$name`" classname=`"IJT`"><skipped message=`"$msg`">$msg</skipped></testcase>`n"
+2026-11-18T12:24:11.1314014Z     } else {
+2026-11-18T12:24:11.1314369Z       $msg = [System.Security.SecurityElement]::Escape($r.Output.ErrorInfo.Message)
+2026-11-18T12:24:11.1314938Z       $xml += "    <testcase name=`"$name`" classname=`"IJT`"><failure>$msg</failure></testcase>`n"
+2026-11-18T12:24:11.1315580Z     }
+2026-11-18T12:24:11.1315749Z   }
+2026-11-18T12:24:11.1315960Z   $xml += "  </testsuite>`n</testsuites>"
+2026-11-18T12:24:11.1316267Z   $xml | Out-File $junit -Encoding UTF8
+2026-11-18T12:24:11.1316719Z   Write-Host "Converted TRX → JUnit: $total tests, $failed failures, $skipped skipped"
+2026-11-18T12:24:11.1317225Z } else {
+2026-11-18T12:24:11.1317536Z   Write-Host "No TRX file found — creating empty JUnit"
+2026-11-18T12:24:11.1318262Z   '<?xml version="1.0"?><testsuites tests="0" failures="0"><testsuite name="IJT_CSharp_Client.Tests.Unit" tests="0"/></testsuites>' | Out-File $junit -Encoding UTF8
+2026-11-18T12:24:11.1318897Z }
+2026-11-18T12:24:11.1403805Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-18T12:24:11.1404168Z env:
+2026-11-18T12:24:11.1404374Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-18T12:24:11.1404642Z ##[endgroup]
+2026-11-18T12:24:11.1514119Z ##[error]An error occurred trying to start process 'C:\Program Files\PowerShell\7\pwsh.EXE' with working directory 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients/Release2/IJT_CSharp_Client'. The directory name is invalid.
+2026-11-18T12:24:11.4008925Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-18T12:24:11.4009419Z with:
+2026-11-18T12:24:11.4009609Z   name: results-csharp-unit
+2026-11-18T12:24:11.4009931Z   path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/
+2026-11-18T12:24:11.4010259Z   retention-days: 14
+2026-11-18T12:24:11.4010464Z   if-no-files-found: warn
+2026-11-18T12:24:11.4010673Z   compression-level: 6
+2026-11-18T12:24:11.4010873Z   overwrite: false
+2026-11-18T12:24:11.4011068Z   include-hidden-files: false
+2026-11-18T12:24:11.4011285Z   archive: true
+2026-11-18T12:24:11.4011455Z env:
+2026-11-18T12:24:11.4011634Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-18T12:24:11.4011889Z ##[endgroup]
+2026-11-18T12:24:11.9049728Z ##[warning]No files were found with the provided path: OPC_UA_Clients/Release2/IJT_CSharp_Client/test-results/. No artifacts will be uploaded.
+2026-11-18T12:24:12.1104104Z Post job cleanup.
+2026-11-18T12:24:12.6055235Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-18T12:24:12.6513194Z git version 2.56.0.windows.4
+2026-11-18T12:24:12.6590811Z Temporarily overriding HOME='D:\a\_temp\db26d688-521a-4f0a-9e0e-0d36195bfec7' before making global git config changes
+2026-11-18T12:24:12.6592087Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-18T12:24:12.6619886Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-18T12:24:12.7002484Z Removing SSH command configuration
+2026-11-18T12:24:12.7013398Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-18T12:24:12.7417088Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-18T12:24:13.3421524Z Removing HTTP extra header
+2026-11-18T12:24:13.3433564Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-18T12:24:13.3859161Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-18T12:24:13.9826647Z Removing includeIf entries pointing to credentials config files
+2026-11-18T12:24:13.9838590Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-18T12:24:14.0268714Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-18T12:24:14.0271385Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-18T12:24:14.0272900Z includeif.gitdir:/github/workspace/.git.path
+2026-11-18T12:24:14.0273509Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-18T12:24:14.0325560Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-18T12:24:14.0691250Z D:\a\_temp\git-credentials-a603487e-15cf-4a6b-a2ed-1d176e045da4.config
+2026-11-18T12:24:14.0744028Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D\:\\a\\_temp\\git\-credentials\-a603487e\-15cf\-4a6b\-a2ed\-1d176e045da4\.config
+2026-11-18T12:24:14.1155180Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-18T12:24:14.1516272Z D:\a\_temp\git-credentials-a603487e-15cf-4a6b-a2ed-1d176e045da4.config
+2026-11-18T12:24:14.1565106Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D\:\\a\\_temp\\git\-credentials\-a603487e\-15cf\-4a6b\-a2ed\-1d176e045da4\.config
+2026-11-18T12:24:14.1981377Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-18T12:24:14.2331358Z /github/runner_temp/git-credentials-a603487e-15cf-4a6b-a2ed-1d176e045da4.config
+2026-11-18T12:24:14.2378358Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-a603487e\-15cf\-4a6b\-a2ed\-1d176e045da4\.config
+2026-11-18T12:24:14.2780147Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-18T12:24:14.3126297Z /github/runner_temp/git-credentials-a603487e-15cf-4a6b-a2ed-1d176e045da4.config
+2026-11-18T12:24:14.3172294Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-a603487e\-15cf\-4a6b\-a2ed\-1d176e045da4\.config
+2026-11-18T12:24:14.3576319Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-18T12:24:14.9675801Z Removing credentials config 'D:\a\_temp\git-credentials-a603487e-15cf-4a6b-a2ed-1d176e045da4.config'
+2026-11-18T12:24:15.0036196Z Evaluate and set job outputs
+2026-11-18T12:24:15.0045306Z Set output 'build_result'
+2026-11-18T12:24:15.0047335Z Set output 'format_result'
+2026-11-18T12:24:15.0048348Z Cleaning up orphan processes

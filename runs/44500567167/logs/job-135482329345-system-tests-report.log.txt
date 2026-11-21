@@ -1,0 +1,436 @@
+﻿2026-11-19T10:00:16.1435619Z Current runner version: '2.338.2'
+2026-11-19T10:00:16.1462041Z ##[group]Runner Image Provisioner
+2026-11-19T10:00:16.1463125Z Hosted Compute Agent
+2026-11-19T10:00:16.1463728Z Version: 20261103.629
+2026-11-19T10:00:16.1464428Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-19T10:00:16.1465216Z Build Date: 2026-11-03T17:26:59Z
+2026-11-19T10:00:16.1465952Z Worker ID: {25e59f9d-0ca8-42dc-89a7-5d01579801a7}
+2026-11-19T10:00:16.1466725Z Region: westus
+2026-11-19T10:00:16.1467285Z Cloud: Azure
+2026-11-19T10:00:16.1467824Z ##[endgroup]
+2026-11-19T10:00:16.1469491Z ##[group]Operating System
+2026-11-19T10:00:16.1470219Z Ubuntu
+2026-11-19T10:00:16.1470829Z 26.04.1
+2026-11-19T10:00:16.1471350Z LTS
+2026-11-19T10:00:16.1472109Z ##[endgroup]
+2026-11-19T10:00:16.1472775Z ##[group]Runner Image
+2026-11-19T10:00:16.1473436Z Image: ubuntu-26.04
+2026-11-19T10:00:16.1474057Z Version: 20261111.196.1
+2026-11-19T10:00:16.1475351Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261111.196/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-19T10:00:16.1477006Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261111.196
+2026-11-19T10:00:16.1478044Z ##[endgroup]
+2026-11-19T10:00:16.1479328Z ##[group]GITHUB_TOKEN Permissions
+2026-11-19T10:00:16.1481269Z Actions: read
+2026-11-19T10:00:16.1482194Z Contents: read
+2026-11-19T10:00:16.1482853Z Metadata: read
+2026-11-19T10:00:16.1483437Z ##[endgroup]
+2026-11-19T10:00:16.1485702Z Secret source: Actions
+2026-11-19T10:00:16.1486765Z Cache mode: write
+2026-11-19T10:00:16.1487576Z Prepare workflow directory
+2026-11-19T10:00:16.1957453Z Prepare all required actions
+2026-11-19T10:00:16.2007618Z Getting action download info
+2026-11-19T10:00:16.5833296Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-19T10:00:16.7123468Z Download action repository 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-19T10:00:16.7720610Z Download action repository 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333' (SHA:9000827ccba6bdab643e8b6fd33ac0654aef8333)
+2026-11-19T10:00:17.1919226Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-19T10:00:17.3524733Z Complete job name: 📋 System Tests Report
+2026-11-19T10:00:17.4453014Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-19T10:00:17.4454153Z with:
+2026-11-19T10:00:17.4454606Z   persist-credentials: false
+2026-11-19T10:00:17.4455255Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-19T10:00:17.4459429Z   token: ***
+2026-11-19T10:00:17.4459857Z   ssh-strict: true
+2026-11-19T10:00:17.4460284Z   ssh-user: git
+2026-11-19T10:00:17.4460728Z   clean: true
+2026-11-19T10:00:17.4461164Z   sparse-checkout-cone-mode: true
+2026-11-19T10:00:17.4461686Z   fetch-depth: 1
+2026-11-19T10:00:17.4462261Z   fetch-tags: false
+2026-11-19T10:00:17.4462737Z   show-progress: true
+2026-11-19T10:00:17.4463186Z   lfs: false
+2026-11-19T10:00:17.4463583Z   submodules: false
+2026-11-19T10:00:17.4464031Z   set-safe-directory: true
+2026-11-19T10:00:17.4464545Z   allow-unsafe-pr-checkout: false
+2026-11-19T10:00:17.4465305Z env:
+2026-11-19T10:00:17.4465748Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-19T10:00:17.4466343Z ##[endgroup]
+2026-11-19T10:00:17.7178851Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-19T10:00:17.7182402Z ##[group]Getting Git version info
+2026-11-19T10:00:17.7184651Z Working directory is '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-19T10:00:17.7187614Z [command]/usr/bin/git version
+2026-11-19T10:00:17.7198099Z git version 2.56.1
+2026-11-19T10:00:17.7226174Z ##[endgroup]
+2026-11-19T10:00:17.7239465Z Temporarily overriding HOME='/home/runner/work/_temp/9ee93cd1-3baf-4159-9dea-03a0cb7ce543' before making global git config changes
+2026-11-19T10:00:17.7243699Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-19T10:00:17.7247494Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-19T10:00:17.7318666Z Deleting the contents of '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-19T10:00:17.7321666Z ##[group]Determining repository object format
+2026-11-19T10:00:17.7323825Z ##[endgroup]
+2026-11-19T10:00:17.7325113Z ##[group]Initializing the repository
+2026-11-19T10:00:17.7331250Z [command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-19T10:00:17.7456416Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-19T10:00:17.7458002Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-19T10:00:17.7459165Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-19T10:00:17.7460304Z hint: call:
+2026-11-19T10:00:17.7461445Z hint:
+2026-11-19T10:00:17.7463130Z hint: 	git config --global init.defaultBranch <name>
+2026-11-19T10:00:17.7464725Z hint:
+2026-11-19T10:00:17.7465958Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-19T10:00:17.7468250Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-19T10:00:17.7470433Z hint:
+2026-11-19T10:00:17.7471682Z hint: 	git branch -m <name>
+2026-11-19T10:00:17.7473033Z hint:
+2026-11-19T10:00:17.7474394Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-19T10:00:17.7479913Z Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-19T10:00:17.7486479Z [command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-19T10:00:17.7548177Z ##[endgroup]
+2026-11-19T10:00:17.7550386Z ##[group]Disabling automatic garbage collection
+2026-11-19T10:00:17.7551608Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-19T10:00:17.7603211Z ##[endgroup]
+2026-11-19T10:00:17.7605815Z ##[group]Setting up auth
+2026-11-19T10:00:17.7607587Z Removing SSH command configuration
+2026-11-19T10:00:17.7610389Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-19T10:00:17.7654533Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-19T10:00:17.8109294Z Removing HTTP extra header
+2026-11-19T10:00:17.8115244Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-19T10:00:17.8152438Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-19T10:00:17.8433801Z Removing includeIf entries pointing to credentials config files
+2026-11-19T10:00:17.8438694Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-19T10:00:17.8477074Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-19T10:00:17.8768228Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-82ff0b4e-ca04-4b72-9338-60539503d3c1.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+2026-11-19T10:00:17.8809826Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-82ff0b4e-ca04-4b72-9338-60539503d3c1.config
+2026-11-19T10:00:17.8844802Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-82ff0b4e-ca04-4b72-9338-60539503d3c1.config
+2026-11-19T10:00:17.8882131Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-82ff0b4e-ca04-4b72-9338-60539503d3c1.config
+2026-11-19T10:00:17.8917114Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-82ff0b4e-ca04-4b72-9338-60539503d3c1.config
+2026-11-19T10:00:17.8948359Z ##[endgroup]
+2026-11-19T10:00:17.8949263Z ##[group]Fetching the repository
+2026-11-19T10:00:17.8955138Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +e761521756925d3a1fa24de5eabf651d29a96a2c:refs/remotes/origin/main
+2026-11-19T10:00:20.9843819Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-19T10:00:20.9845943Z  * [new ref]         e761521756925d3a1fa24de5eabf651d29a96a2c -> origin/main
+2026-11-19T10:00:20.9855185Z [command]/usr/bin/git branch --list --remote origin/main
+2026-11-19T10:00:20.9885492Z   origin/main
+2026-11-19T10:00:20.9894918Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-11-19T10:00:20.9922438Z e761521756925d3a1fa24de5eabf651d29a96a2c
+2026-11-19T10:00:20.9926941Z ##[endgroup]
+2026-11-19T10:00:20.9927713Z ##[group]Determining the checkout info
+2026-11-19T10:00:20.9932436Z ##[endgroup]
+2026-11-19T10:00:20.9933508Z [command]/usr/bin/git sparse-checkout disable
+2026-11-19T10:00:20.9993785Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-19T10:00:21.0031540Z ##[group]Checking out the ref
+2026-11-19T10:00:21.0036687Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-19T10:00:21.2532828Z Switched to a new branch 'main'
+2026-11-19T10:00:21.2538143Z branch 'main' set up to track 'origin/main'.
+2026-11-19T10:00:21.2567234Z ##[endgroup]
+2026-11-19T10:00:21.2627980Z [command]/usr/bin/git log -1 --format=%H
+2026-11-19T10:00:21.2661324Z e761521756925d3a1fa24de5eabf651d29a96a2c
+2026-11-19T10:00:21.2674838Z ##[group]Removing auth
+2026-11-19T10:00:21.2675351Z Removing SSH command configuration
+2026-11-19T10:00:21.2681457Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-19T10:00:21.2755148Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-19T10:00:21.3043499Z Removing HTTP extra header
+2026-11-19T10:00:21.3047847Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-19T10:00:21.3084051Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-19T10:00:21.3380956Z Removing includeIf entries pointing to credentials config files
+2026-11-19T10:00:21.3390783Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-19T10:00:21.3420679Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-19T10:00:21.3423532Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-19T10:00:21.3425236Z includeif.gitdir:/github/workspace/.git.path
+2026-11-19T10:00:21.3426298Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-19T10:00:21.3432804Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-19T10:00:21.3460343Z /home/runner/work/_temp/git-credentials-82ff0b4e-ca04-4b72-9338-60539503d3c1.config
+2026-11-19T10:00:21.3471637Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-82ff0b4e\-ca04\-4b72\-9338\-60539503d3c1\.config
+2026-11-19T10:00:21.3514950Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-19T10:00:21.3542816Z /home/runner/work/_temp/git-credentials-82ff0b4e-ca04-4b72-9338-60539503d3c1.config
+2026-11-19T10:00:21.3552073Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-82ff0b4e\-ca04\-4b72\-9338\-60539503d3c1\.config
+2026-11-19T10:00:21.3594421Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-19T10:00:21.3629644Z /github/runner_temp/git-credentials-82ff0b4e-ca04-4b72-9338-60539503d3c1.config
+2026-11-19T10:00:21.3639124Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-82ff0b4e\-ca04\-4b72\-9338\-60539503d3c1\.config
+2026-11-19T10:00:21.3677989Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-19T10:00:21.3705367Z /github/runner_temp/git-credentials-82ff0b4e-ca04-4b72-9338-60539503d3c1.config
+2026-11-19T10:00:21.3715208Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-82ff0b4e\-ca04\-4b72\-9338\-60539503d3c1\.config
+2026-11-19T10:00:21.3755407Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-19T10:00:21.4069951Z Removing credentials config '/home/runner/work/_temp/git-credentials-82ff0b4e-ca04-4b72-9338-60539503d3c1.config'
+2026-11-19T10:00:21.4091578Z ##[endgroup]
+2026-11-19T10:00:21.4376356Z ##[group]Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+2026-11-19T10:00:21.4376792Z with:
+2026-11-19T10:00:21.4377017Z   python-version-file: .python-version
+2026-11-19T10:00:21.4377308Z   check-latest: false
+2026-11-19T10:00:21.4379894Z   token: ***
+2026-11-19T10:00:21.4380222Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-11-19T10:00:21.4380614Z   update-environment: true
+2026-11-19T10:00:21.4380856Z   allow-prereleases: false
+2026-11-19T10:00:21.4381082Z   freethreaded: false
+2026-11-19T10:00:21.4381295Z env:
+2026-11-19T10:00:21.4381500Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-19T10:00:21.4382097Z ##[endgroup]
+2026-11-19T10:00:21.5607486Z Resolved .python-version as 3.14
+2026-11-19T10:00:21.5608851Z ##[group]Installed versions
+2026-11-19T10:00:21.5719339Z Successfully set up CPython (3.14.10)
+2026-11-19T10:00:21.5720386Z ##[endgroup]
+2026-11-19T10:00:21.5839376Z ##[group]Run python3 -m pip install --quiet --upgrade pip
+2026-11-19T10:00:21.5839949Z python3 -m pip install --quiet --upgrade pip
+2026-11-19T10:00:21.5840395Z python3 -m pip install --quiet -r reporting/requirements.txt
+2026-11-19T10:00:21.6082525Z shell: /usr/bin/bash -e {0}
+2026-11-19T10:00:21.6082860Z env:
+2026-11-19T10:00:21.6083128Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-19T10:00:21.6083506Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:21.6083991Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-19T10:00:21.6084443Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:21.6084827Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:21.6085217Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:21.6085602Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-19T10:00:21.6086361Z ##[endgroup]
+2026-11-19T10:00:27.7714225Z ##[group]Run actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+2026-11-19T10:00:27.7714694Z with:
+2026-11-19T10:00:27.7714904Z   path: all-results/
+2026-11-19T10:00:27.7715130Z   merge-multiple: false
+2026-11-19T10:00:27.7715434Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-19T10:00:27.7715776Z   run-id: 44500567167
+2026-11-19T10:00:27.7715998Z   skip-decompress: false
+2026-11-19T10:00:27.7716228Z   digest-mismatch: error
+2026-11-19T10:00:27.7716444Z env:
+2026-11-19T10:00:27.7716653Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-19T10:00:27.7717004Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:27.7717433Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-19T10:00:27.7717851Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:27.7718236Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:27.7718668Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:27.7719063Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-19T10:00:27.7719387Z ##[endgroup]
+2026-11-19T10:00:28.2543279Z Found 19 artifact(s)
+2026-11-19T10:00:28.2544607Z No input name, artifact-ids or pattern filtered specified, downloading all artifacts
+2026-11-19T10:00:28.2545660Z An extra directory with the artifact name will be created for each download
+2026-11-19T10:00:28.2546469Z Preparing to download the following artifacts:
+2026-11-19T10:00:28.2548018Z - umati~UA-for-Industrial-Joining-Technologies~YP4VDS.dockerbuild (ID: 14517855349, Size: 37344, Expected Digest: sha256:ebe6f14b4d5ae3868c6b541c82fcf5d58bd49a16a517bccb9ca9f08e4cb891db)
+2026-11-19T10:00:28.2550369Z - results-live-webclient-web-client-e2e-regression (ID: 14517671293, Size: 16640, Expected Digest: sha256:213a946124611b13c1ba5f933e4e51b40d8a7be2155c42b5f97b345b3299778a)
+2026-11-19T10:00:28.2553125Z - results-csharp-client-opcua-security-csharp-client-opcua-security-windows (ID: 14517621320, Size: 26527, Expected Digest: sha256:d597b4e6c395926709b5d46de58743c2923f40d4cd575577d6eb7d678232ada4)
+2026-11-19T10:00:28.2555523Z - results-csharp-live (ID: 14517591773, Size: 81205, Expected Digest: sha256:1e039fc2f6eea94fee9204b4f5f44bc04368d3d13e3c292e215e8cdfc906813e)
+2026-11-19T10:00:28.2557535Z - results-webclient-docker (ID: 14517481280, Size: 40044, Expected Digest: sha256:ee5d76fab2ca9b7ed8c2fb9fb8d9b5cdb6d106bf4458d4550e688d8bf2380781)
+2026-11-19T10:00:28.2560043Z - results-console-client-opcua-security-console-client-opcua-security-windows (ID: 14517377790, Size: 1047, Expected Digest: sha256:7982f8475363f0d712b8ddfef7bd7d42edea8734f6f6af794c0237fdaf3a0775)
+2026-11-19T10:00:28.2562900Z - results-live-webclient-web-client-live-opcua-direct (ID: 14517311615, Size: 7266, Expected Digest: sha256:b5323e4e142be2c1e30c24677ef6dad8168d35faf57463053fc365765bfb4972)
+2026-11-19T10:00:28.2565486Z - results-live-webclient-web-client-e2e-features-shard-2of2 (ID: 14517127926, Size: 163562, Expected Digest: sha256:48208b546949ce5f4a97bc701f512325d280756346cf159816aac2df9f984d2d)
+2026-11-19T10:00:28.2568052Z - results-live-webclient-web-client-live-websocket-connection (ID: 14516992077, Size: 5434, Expected Digest: sha256:d66cc0ffc9ea7af61a022684d852fdbc120cdb9c54004377ec229ea3b34b5c41)
+2026-11-19T10:00:28.2570198Z - results-console-client-opcua-security-console-client-opcua-security-linux (ID: 14516987063, Size: 1006, Expected Digest: sha256:f5631fe802aa632b776a1096297ba309dd074f39a6881c9b22c4b743c6b3293d)
+2026-11-19T10:00:28.2571591Z - results-live-webclient-web-client-live-websocket-api (ID: 14516868070, Size: 9998, Expected Digest: sha256:d7bbd239d419692bd7bf51e16ed88c3be49ccc19c9ba47428e83c3bd4272d0a9)
+2026-11-19T10:00:28.2576340Z - results-testclient (ID: 14516658329, Size: 149862, Expected Digest: sha256:a16c5b5d5109226d83f6ee93b859b43a74e766aa90bc05cb09c0cf0bbc669280)
+2026-11-19T10:00:28.2578724Z - results-live-performance (ID: 14516592879, Size: 1245, Expected Digest: sha256:90e01f05335243b5045e112cd20248776f18c5866e69d4e791119002636ffcdc)
+2026-11-19T10:00:28.2581241Z - umati~UA-for-Industrial-Joining-Technologies~NJRJM4.dockerbuild (ID: 14516584264, Size: 37573, Expected Digest: sha256:9d1e70af95a278d296187043a3f7e60d0a69412c7a4bd449832eebb5bbc09277)
+2026-11-19T10:00:28.2583707Z - results-server-smoke-docker (ID: 14516564103, Size: 386, Expected Digest: sha256:96937b73a4afbd4cd0d79238b03aa4bbe5043d33ac7923c37c55a9e6de63d3eb)
+2026-11-19T10:00:28.2586076Z - results-csharp-client-opcua-security-csharp-client-opcua-security-linux (ID: 14516534477, Size: 24870, Expected Digest: sha256:17e2015a16c6e0444138eb71a55e19a4a3ede64fd90433326187fd3bd119e737)
+2026-11-19T10:00:28.2588702Z - results-live-webclient-web-client-e2e-smoke (ID: 14516278704, Size: 908, Expected Digest: sha256:361825941eed3faa1af9ab3331a07f5ad7b367d00688ef24e6f2e45b3717f5f9)
+2026-11-19T10:00:28.2590794Z - results-live-console (ID: 14516263697, Size: 1443, Expected Digest: sha256:8353d169cf81dfab203f85c6fd9c4c4c9ba15684f9176f661a07180505648cfc)
+2026-11-19T10:00:28.2593199Z - results-live-webclient-web-client-e2e-features-shard-1of2 (ID: 14516204399, Size: 117023, Expected Digest: sha256:6c77558269c52a12597907afa9320cd86fa183010ef6f5e6d81ef7159e4f194a)
+2026-11-19T10:00:28.8116620Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-d9a1b14f-781c-54ed-b7fa-86eb0620f396/artifacts/f588d873e8b516f3c842ac788bd1f2f2be6a9be9e284968c612cac04324ff3d6.zip
+2026-11-19T10:00:28.8120172Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-csharp-live
+2026-11-19T10:00:28.8179598Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-fbe27f68-3907-5c9b-9935-012f56d44c96/artifacts/69c73934c77c68a0b26c2ae5d37b84c82f96705b2c7a4b46d2c52136cad3bc72.zip
+2026-11-19T10:00:28.8181709Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-console-client-opcua-security-console-client-opcua-security-linux
+2026-11-19T10:00:28.8206799Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-9e85fc62-2a08-5731-a3d7-f8c0f7b1649f/artifacts/2fb8035a69fd8d53a716430fc2b93b040e2767be0cf2a8c351993f9b57f3968c
+2026-11-19T10:00:28.8208631Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/umati~UA-for-Industrial-Joining-Technologies~NJRJM4.dockerbuild
+2026-11-19T10:00:28.8240685Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-500f7257-7cae-5d34-af44-18b3974735e6/artifacts/90c42f4b825d24fc339f1184b486e7bb159878fb5d81ad08393bffccc1428116.zip
+2026-11-19T10:00:28.8242888Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-live-webclient-web-client-live-websocket-connection
+2026-11-19T10:00:28.8265805Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-86c0bc8a-116c-50aa-b38c-69e675d083a3/artifacts/5c26c3027b40d7905a27b06993732685fe77067d9f86d6c9132c931b0b9d8c2e.zip
+2026-11-19T10:00:28.8267637Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-live-webclient-web-client-live-opcua-direct
+2026-11-19T10:00:28.8297301Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-8ec86135-edd6-54b0-8003-100617ec732b/artifacts/63ce036c06eb0d3acfb387e7fa4d36da705f18b99c11f54380af4f8e526296c2.zip
+2026-11-19T10:00:28.8299593Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-csharp-client-opcua-security-csharp-client-opcua-security-windows
+2026-11-19T10:00:28.8345123Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-9e81c58c-378a-55ac-8f6b-30045a47ac6a/artifacts/2d32172f8a5ce1af42493a091668957968db7a4fc90c3102b52cc6981e350627.zip
+2026-11-19T10:00:28.8347221Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-live-webclient-web-client-e2e-regression
+2026-11-19T10:00:28.8358290Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-b3d43a3a-6285-5a58-90c6-899a31caf0b2/artifacts/4f3872f15718941eb0532b54294588fdde6f13ac916d68d6e5bd70e993035bf2.zip
+2026-11-19T10:00:28.8360307Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-live-webclient-web-client-e2e-features-shard-1of2
+2026-11-19T10:00:28.8375585Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-fbe27f68-3907-5c9b-9935-012f56d44c96/artifacts/550e0afc4fe8a194cbef875c8dab40a4808ec6b7333fb6be379a2de479fa70fc
+2026-11-19T10:00:28.8377909Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/umati~UA-for-Industrial-Joining-Technologies~YP4VDS.dockerbuild
+2026-11-19T10:00:28.8398035Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-5dbd2540-0a60-59dd-9ab7-f8713d78283f/artifacts/a5d985c4de44262dc9da185eeea75b72f1606304e03c96e7c811d4ffce19f6e7.zip
+2026-11-19T10:00:28.8434395Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-live-webclient-web-client-e2e-features-shard-2of2
+2026-11-19T10:00:28.8438893Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-0d4daafa-d454-5e3c-8c84-cfbacd86e591/artifacts/220da95b2379bf8336dba2b3727ce66f4198d5c53f1555c56f99fb3577a9f222.zip
+2026-11-19T10:00:28.8440628Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-webclient-docker
+2026-11-19T10:00:28.8445959Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-34b7dc71-a62b-558f-b09c-f49eb01302a3/artifacts/6a82f2378d00c549e25ea42e9f5948ef6bdb6b771fa32cb562d3e70adcf6bd32.zip
+2026-11-19T10:00:28.8448253Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-testclient
+2026-11-19T10:00:28.8452707Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-5b1dbf74-7034-5041-9da6-26ca31eb20bb/artifacts/295e942f15cd197ed1a0d867931fda6ebedea38d5341c3970906bda0b18c0f2f.zip
+2026-11-19T10:00:28.8454611Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-live-console
+2026-11-19T10:00:28.8493736Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-3b1720a4-cf53-5b6b-aba8-0d9dbfb71b8f/artifacts/b213c4917d2ab60b21e98a38de69d584fdfc1b654ceb3d36ca26cbbfde523087.zip
+2026-11-19T10:00:28.8497461Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-live-webclient-web-client-e2e-smoke
+2026-11-19T10:00:28.8518168Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-9860b5a9-27af-58f5-949c-82f3c80537c6/artifacts/584acf02f2d9c8f519d16c7128d0e975a89ac82e9f00ec29dd8b0563380a825e.zip
+2026-11-19T10:00:28.8521468Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-live-performance
+2026-11-19T10:00:28.8527912Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-9f376204-52ae-527f-9c55-537470f5d63e/artifacts/0b847c6101a4407f4a15199047372ebf00714eae43b6a05c4355f24d20829cea.zip
+2026-11-19T10:00:28.8531623Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-console-client-opcua-security-console-client-opcua-security-windows
+2026-11-19T10:00:28.8577053Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-9e85fc62-2a08-5731-a3d7-f8c0f7b1649f/artifacts/0f374b382b7d0a456c18707af58a9bade1e9874e7d2488315e92ca725fa2d144.zip
+2026-11-19T10:00:28.8580792Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-csharp-client-opcua-security-csharp-client-opcua-security-linux
+2026-11-19T10:00:28.8587641Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-99ea0ee2-d69d-5605-b90b-0b3d5314b4ef/artifacts/d04ababf836723337af9ab4eca6a5a669e079f3754e990364959eb11b45cffe0.zip
+2026-11-19T10:00:28.8590996Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-server-smoke-docker
+2026-11-19T10:00:28.8597928Z Redirecting to blob download url: https://productionresultssa6.blob.core.windows.net/actions-results/4246062a-3c1b-8e31-a763-8a9c89bfed13/workflow-job-run-c58b649d-c47c-5ed9-8ec1-15410568c7e6/artifacts/45fad6c363ca696e7c3cd3fc31fa61f44b1728c8328a4d55a9702450cb53b997.zip
+2026-11-19T10:00:28.8601467Z Starting download of artifact to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/results-live-webclient-web-client-live-websocket-api
+2026-11-19T10:00:29.0799412Z (node:2586) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-19T10:00:29.0801221Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-19T10:00:29.0834876Z Downloading raw file (non-zip) to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/umati~UA-for-Industrial-Joining-Technologies~NJRJM4.dockerbuild/umati~UA-for-Industrial-Joining-Technologies~NJRJM4.dockerbuild
+2026-11-19T10:00:29.1065052Z Downloading raw file (non-zip) to: /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/all-results/umati~UA-for-Industrial-Joining-Technologies~YP4VDS.dockerbuild/umati~UA-for-Industrial-Joining-Technologies~YP4VDS.dockerbuild
+2026-11-19T10:00:29.1128334Z SHA256 digest of downloaded artifact is d66cc0ffc9ea7af61a022684d852fdbc120cdb9c54004377ec229ea3b34b5c41
+2026-11-19T10:00:29.1129056Z Artifact download completed successfully.
+2026-11-19T10:00:29.1130569Z SHA256 digest of downloaded artifact is f5631fe802aa632b776a1096297ba309dd074f39a6881c9b22c4b743c6b3293d
+2026-11-19T10:00:29.1131251Z Artifact download completed successfully.
+2026-11-19T10:00:29.1195543Z SHA256 digest of downloaded artifact is b5323e4e142be2c1e30c24677ef6dad8168d35faf57463053fc365765bfb4972
+2026-11-19T10:00:29.1196491Z Artifact download completed successfully.
+2026-11-19T10:00:29.1223792Z SHA256 digest of downloaded artifact is 8353d169cf81dfab203f85c6fd9c4c4c9ba15684f9176f661a07180505648cfc
+2026-11-19T10:00:29.1224670Z Artifact download completed successfully.
+2026-11-19T10:00:29.1251934Z SHA256 digest of downloaded artifact is 90e01f05335243b5045e112cd20248776f18c5866e69d4e791119002636ffcdc
+2026-11-19T10:00:29.1253081Z Artifact download completed successfully.
+2026-11-19T10:00:29.1265221Z SHA256 digest of downloaded artifact is 361825941eed3faa1af9ab3331a07f5ad7b367d00688ef24e6f2e45b3717f5f9
+2026-11-19T10:00:29.1266368Z Artifact download completed successfully.
+2026-11-19T10:00:29.1278974Z SHA256 digest of downloaded artifact is 96937b73a4afbd4cd0d79238b03aa4bbe5043d33ac7923c37c55a9e6de63d3eb
+2026-11-19T10:00:29.1280257Z Artifact download completed successfully.
+2026-11-19T10:00:29.1291370Z SHA256 digest of downloaded artifact is 7982f8475363f0d712b8ddfef7bd7d42edea8734f6f6af794c0237fdaf3a0775
+2026-11-19T10:00:29.1292562Z Artifact download completed successfully.
+2026-11-19T10:00:29.1294942Z SHA256 digest of downloaded artifact is 213a946124611b13c1ba5f933e4e51b40d8a7be2155c42b5f97b345b3299778a
+2026-11-19T10:00:29.1296231Z Artifact download completed successfully.
+2026-11-19T10:00:29.1339517Z SHA256 digest of downloaded artifact is d7bbd239d419692bd7bf51e16ed88c3be49ccc19c9ba47428e83c3bd4272d0a9
+2026-11-19T10:00:29.1340224Z Artifact download completed successfully.
+2026-11-19T10:00:29.1391570Z SHA256 digest of downloaded artifact is 9d1e70af95a278d296187043a3f7e60d0a69412c7a4bd449832eebb5bbc09277
+2026-11-19T10:00:29.1393217Z Artifact download completed successfully.
+2026-11-19T10:00:29.1459096Z SHA256 digest of downloaded artifact is d597b4e6c395926709b5d46de58743c2923f40d4cd575577d6eb7d678232ada4
+2026-11-19T10:00:29.1460012Z Artifact download completed successfully.
+2026-11-19T10:00:29.1669573Z SHA256 digest of downloaded artifact is ebe6f14b4d5ae3868c6b541c82fcf5d58bd49a16a517bccb9ca9f08e4cb891db
+2026-11-19T10:00:29.1670925Z Artifact download completed successfully.
+2026-11-19T10:00:29.1770443Z SHA256 digest of downloaded artifact is ee5d76fab2ca9b7ed8c2fb9fb8d9b5cdb6d106bf4458d4550e688d8bf2380781
+2026-11-19T10:00:29.1771307Z Artifact download completed successfully.
+2026-11-19T10:00:29.1803310Z SHA256 digest of downloaded artifact is 17e2015a16c6e0444138eb71a55e19a4a3ede64fd90433326187fd3bd119e737
+2026-11-19T10:00:29.1804167Z Artifact download completed successfully.
+2026-11-19T10:00:29.1962453Z SHA256 digest of downloaded artifact is 1e039fc2f6eea94fee9204b4f5f44bc04368d3d13e3c292e215e8cdfc906813e
+2026-11-19T10:00:29.1963184Z Artifact download completed successfully.
+2026-11-19T10:00:29.2204514Z SHA256 digest of downloaded artifact is 6c77558269c52a12597907afa9320cd86fa183010ef6f5e6d81ef7159e4f194a
+2026-11-19T10:00:29.2205323Z Artifact download completed successfully.
+2026-11-19T10:00:29.2726128Z SHA256 digest of downloaded artifact is a16c5b5d5109226d83f6ee93b859b43a74e766aa90bc05cb09c0cf0bbc669280
+2026-11-19T10:00:29.2727011Z Artifact download completed successfully.
+2026-11-19T10:00:29.2910620Z SHA256 digest of downloaded artifact is 48208b546949ce5f4a97bc701f512325d280756346cf159816aac2df9f984d2d
+2026-11-19T10:00:29.2911440Z Artifact download completed successfully.
+2026-11-19T10:00:29.2912256Z Total of 19 artifact(s) downloaded
+2026-11-19T10:00:29.2916553Z Download artifact has finished successfully
+2026-11-19T10:00:29.3116923Z ##[group]Run python3 reporting/system_tests_run_summary.py
+2026-11-19T10:00:29.3117544Z python3 reporting/system_tests_run_summary.py
+2026-11-19T10:00:29.3170243Z shell: /usr/bin/bash -e {0}
+2026-11-19T10:00:29.3170635Z env:
+2026-11-19T10:00:29.3171161Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-19T10:00:29.3171661Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:29.3172444Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-19T10:00:29.3173023Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:29.3173557Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:29.3174084Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:29.3174640Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-19T10:00:29.3175092Z   SD_RESULT: success
+2026-11-19T10:00:29.3175411Z   WD_RESULT: success
+2026-11-19T10:00:29.3175781Z   TC_RESULT: success
+2026-11-19T10:00:29.3176092Z   WC_RESULT: success
+2026-11-19T10:00:29.3176397Z   WB_RESULT: success
+2026-11-19T10:00:29.3176707Z   CON_RESULT: success
+2026-11-19T10:00:29.3177024Z   CS_RESULT: success
+2026-11-19T10:00:29.3177349Z   CS_OPCUA_SECURITY_RESULT: success
+2026-11-19T10:00:29.3177748Z   CONSOLE_OPCUA_SECURITY_RESULT: success
+2026-11-19T10:00:29.3178152Z   BROWSER_IMAGE_PLAN: cached
+2026-11-19T10:00:29.3178996Z   BROWSER_IMAGE_REF: ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci@sha256:f9dd4e2324bb23670c80d6a8dfc4dd2815da72f78c98ca3994b219a29f316699
+2026-11-19T10:00:29.3180071Z   BROWSER_IMAGE_INPUTS_FINGERPRINT: abb5c704bac0b419c2ac41a44b6f601557d275cb0006da250f1790fef0568e5e
+2026-11-19T10:00:29.3180733Z   GH_SHA: e761521756925d3a1fa24de5eabf651d29a96a2c
+2026-11-19T10:00:29.3181149Z   GH_BRANCH: main
+2026-11-19T10:00:29.3181477Z   GH_RUN_NUMBER: 1121
+2026-11-19T10:00:29.3182192Z   GH_RUN_URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/44500567167
+2026-11-19T10:00:29.3182919Z   GH_REPOSITORY: umati/UA-for-Industrial-Joining-Technologies
+2026-11-19T10:00:29.3183391Z   GH_RUN_ID: 44500567167
+2026-11-19T10:00:29.3183746Z   GH_API_URL: https://api.github.com
+2026-11-19T10:00:29.3186642Z   GH_TOKEN: ***
+2026-11-19T10:00:29.3187009Z   REPORT_JOB_NAME: 📋 System Tests Report
+2026-11-19T10:00:29.3187468Z   SUMMARY_MARKDOWN_OUT: timing-results/summary.md
+2026-11-19T10:00:29.3187891Z ##[endgroup]
+2026-11-19T10:00:30.5169883Z Summary written.
+2026-11-19T10:00:30.5508073Z ##[group]Run python3 scripts/reporting/collect_timing.py
+2026-11-19T10:00:30.5508652Z python3 scripts/reporting/collect_timing.py
+2026-11-19T10:00:30.5560162Z shell: /usr/bin/bash -e {0}
+2026-11-19T10:00:30.5560551Z env:
+2026-11-19T10:00:30.5560884Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-19T10:00:30.5561393Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:30.5562102Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-19T10:00:30.5562664Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:30.5563183Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:30.5563701Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:30.5564245Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-19T10:00:30.5564891Z   TIMING_WORKFLOW_NAME: System Tests — Live OPC UA, Browser, Docker, Specification Testing
+2026-11-19T10:00:30.5565535Z   TIMING_OUTPUT_DIR: timing-results
+2026-11-19T10:00:30.5566024Z   GH_REPOSITORY: umati/UA-for-Industrial-Joining-Technologies
+2026-11-19T10:00:30.5566487Z   GH_RUN_ID: 44500567167
+2026-11-19T10:00:30.5566831Z   GH_RUN_NUMBER: 1121
+2026-11-19T10:00:30.5567198Z   GH_SHA: e761521756925d3a1fa24de5eabf651d29a96a2c
+2026-11-19T10:00:30.5567612Z   GH_BRANCH: main
+2026-11-19T10:00:30.5568188Z   GH_RUN_URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/44500567167
+2026-11-19T10:00:30.5568834Z   GH_API_URL: https://api.github.com
+2026-11-19T10:00:30.5571872Z   GH_TOKEN: ***
+2026-11-19T10:00:30.5572239Z   REPORT_JOB_NAME: 📋 System Tests Report
+2026-11-19T10:00:30.5572638Z ##[endgroup]
+2026-11-19T10:00:31.5834868Z timing aggregate: timing-results/timing-aggregate.json
+2026-11-19T10:00:31.5836357Z timing per-job dir: timing-results/jobs
+2026-11-19T10:00:31.5993614Z ##[group]Run if [ ! -s timing-results/summary.md ]; then
+2026-11-19T10:00:31.5994222Z if [ ! -s timing-results/summary.md ]; then
+2026-11-19T10:00:31.5995134Z   echo "::error::timing-results/summary.md is missing. The summary step must set SUMMARY_MARKDOWN_OUT; GITHUB_STEP_SUMMARY is per-step and cannot be copied later."
+2026-11-19T10:00:31.5995973Z   exit 1
+2026-11-19T10:00:31.5996302Z fi
+2026-11-19T10:00:31.5996765Z if [ "$GH_EVENT_NAME" != "pull_request" ] && [ "$GH_BRANCH" = "main" ]; then
+2026-11-19T10:00:31.5997286Z   {
+2026-11-19T10:00:31.5997597Z     echo ""
+2026-11-19T10:00:31.5997928Z     echo "---"
+2026-11-19T10:00:31.5999304Z     echo "Reports (no sign-in): [Runs](https://umati.github.io/UA-for-Industrial-Joining-Technologies/) · [CI](https://umati.github.io/UA-for-Industrial-Joining-Technologies/latest/ci/) · [System Tests](https://umati.github.io/UA-for-Industrial-Joining-Technologies/runs/${GH_RUN_ID}/)"
+2026-11-19T10:00:31.6000787Z   } | tee -a timing-results/summary.md >> "$GITHUB_STEP_SUMMARY"
+2026-11-19T10:00:31.6001305Z fi
+2026-11-19T10:00:31.6053522Z shell: /usr/bin/bash -e {0}
+2026-11-19T10:00:31.6053922Z env:
+2026-11-19T10:00:31.6054266Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-19T10:00:31.6054774Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:31.6055371Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-19T10:00:31.6055937Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:31.6056451Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:31.6056963Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:31.6057487Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-19T10:00:31.6057936Z   GH_BRANCH: main
+2026-11-19T10:00:31.6058281Z   GH_EVENT_NAME: schedule
+2026-11-19T10:00:31.6058635Z   GH_RUN_ID: 44500567167
+2026-11-19T10:00:31.6058980Z ##[endgroup]
+2026-11-19T10:00:31.6253441Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-19T10:00:31.6254041Z with:
+2026-11-19T10:00:31.6254368Z   name: timing-system-tests
+2026-11-19T10:00:31.6254740Z   path: timing-results/
+2026-11-19T10:00:31.6255085Z   retention-days: 14
+2026-11-19T10:00:31.6255409Z   if-no-files-found: warn
+2026-11-19T10:00:31.6255760Z   compression-level: 6
+2026-11-19T10:00:31.6256087Z   overwrite: false
+2026-11-19T10:00:31.6256429Z   include-hidden-files: false
+2026-11-19T10:00:31.6256795Z   archive: true
+2026-11-19T10:00:31.6257106Z env:
+2026-11-19T10:00:31.6257420Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-19T10:00:31.6257916Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:31.6258495Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-19T10:00:31.6259095Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:31.6259651Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:31.6260175Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-19T10:00:31.6260694Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-19T10:00:31.6261140Z ##[endgroup]
+2026-11-19T10:00:31.7859387Z With the provided path, there will be 24 files uploaded
+2026-11-19T10:00:31.7867413Z Artifact name is valid!
+2026-11-19T10:00:31.7868230Z Root directory input is valid!
+2026-11-19T10:00:32.1838898Z Uploading artifact: timing-system-tests.zip
+2026-11-19T10:00:32.1882659Z Beginning upload of artifact content to blob storage
+2026-11-19T10:00:32.5755543Z Uploaded bytes 41685
+2026-11-19T10:00:32.6486935Z Finished uploading artifact content to blob storage!
+2026-11-19T10:00:32.6488205Z SHA256 digest of uploaded artifact is 4b22a37520a925a1fff21d479598285ff95fac72a5902a6a3d7a1bf23187aaca
+2026-11-19T10:00:32.6489480Z Finalizing artifact upload
+2026-11-19T10:00:33.2302920Z Artifact timing-system-tests successfully finalized. Artifact ID 14518050445
+2026-11-19T10:00:33.2304580Z Artifact timing-system-tests has been successfully uploaded! Final size is 41685 bytes. Artifact ID is 14518050445
+2026-11-19T10:00:33.2308676Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/44500567167/artifacts/14518050445
+2026-11-19T10:00:33.2502022Z Post job cleanup.
+2026-11-19T10:00:33.3913358Z Post job cleanup.
+2026-11-19T10:00:33.4856245Z [command]/usr/bin/git version
+2026-11-19T10:00:33.4907264Z git version 2.56.1
+2026-11-19T10:00:33.4951362Z Temporarily overriding HOME='/home/runner/work/_temp/95a52280-3e52-491a-9e72-0333db74a950' before making global git config changes
+2026-11-19T10:00:33.4953112Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-19T10:00:33.4957864Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-19T10:00:33.4996899Z Removing SSH command configuration
+2026-11-19T10:00:33.5005107Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-19T10:00:33.5069980Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-19T10:00:33.5389128Z Removing HTTP extra header
+2026-11-19T10:00:33.5395627Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-19T10:00:33.5447909Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-19T10:00:33.5860209Z Removing includeIf entries pointing to credentials config files
+2026-11-19T10:00:33.5882230Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-19T10:00:33.5915743Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-19T10:00:33.6379210Z Cleaning up orphan processes
