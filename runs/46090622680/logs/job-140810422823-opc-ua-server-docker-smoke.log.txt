@@ -1,0 +1,385 @@
+﻿2026-11-28T00:57:33.7701247Z Current runner version: '2.338.2'
+2026-11-28T00:57:33.7723670Z ##[group]Runner Image Provisioner
+2026-11-28T00:57:33.7724361Z Hosted Compute Agent
+2026-11-28T00:57:33.7724897Z Version: 20261111.635
+2026-11-28T00:57:33.7725420Z Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+2026-11-28T00:57:33.7726021Z Build Date: 2026-11-11T01:49:01Z
+2026-11-28T00:57:33.7726659Z Worker ID: {53a54558-3443-4050-8646-1adace72ba14}
+2026-11-28T00:57:33.7727217Z Region: eastus2
+2026-11-28T00:57:33.7727701Z Cloud: Azure
+2026-11-28T00:57:33.7728171Z ##[endgroup]
+2026-11-28T00:57:33.7729373Z ##[group]Operating System
+2026-11-28T00:57:33.7729950Z Ubuntu
+2026-11-28T00:57:33.7730381Z 26.04.1
+2026-11-28T00:57:33.7730849Z LTS
+2026-11-28T00:57:33.7731284Z ##[endgroup]
+2026-11-28T00:57:33.7731765Z ##[group]Runner Image
+2026-11-28T00:57:33.7732323Z Image: ubuntu-26.04
+2026-11-28T00:57:33.7733023Z Version: 20261122.9.1
+2026-11-28T00:57:33.7734063Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261122.9/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-28T00:57:33.7735258Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261122.9
+2026-11-28T00:57:33.7736078Z ##[endgroup]
+2026-11-28T00:57:33.7736948Z ##[group]GITHUB_TOKEN Permissions
+2026-11-28T00:57:33.7738734Z Contents: read
+2026-11-28T00:57:33.7739409Z Metadata: read
+2026-11-28T00:57:33.7740123Z ##[endgroup]
+2026-11-28T00:57:33.7742270Z Secret source: Actions
+2026-11-28T00:57:33.7743530Z Cache mode: write
+2026-11-28T00:57:33.7744352Z Prepare workflow directory
+2026-11-28T00:57:33.8171676Z Prepare all required actions
+2026-11-28T00:57:33.8211404Z Getting action download info
+2026-11-28T00:57:34.0409855Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-28T00:57:34.1326867Z Download action repository 'docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550' (SHA:8aa5831fb8d48d8f76594c7ddde61ae58019f550)
+2026-11-28T00:57:34.3593324Z Download action repository 'docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069' (SHA:f87e5991a6d7451dcb8d9637bfbc97413f497069)
+2026-11-28T00:57:34.5280660Z Download action repository 'docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc' (SHA:c3c9e263c25d99ce0380d002d59b67737d91b0dc)
+2026-11-28T00:57:34.7607915Z Download action repository 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-28T00:57:34.8078713Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-28T00:57:35.0355338Z Complete job name: OPC UA Server - Docker Smoke
+2026-11-28T00:57:35.1206596Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-28T00:57:35.1207451Z with:
+2026-11-28T00:57:35.1207849Z   persist-credentials: false
+2026-11-28T00:57:35.1208378Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-28T00:57:35.1211468Z   token: ***
+2026-11-28T00:57:35.1211883Z   ssh-strict: true
+2026-11-28T00:57:35.1212274Z   ssh-user: git
+2026-11-28T00:57:35.1212901Z   clean: true
+2026-11-28T00:57:35.1213344Z   sparse-checkout-cone-mode: true
+2026-11-28T00:57:35.1213805Z   fetch-depth: 1
+2026-11-28T00:57:35.1214182Z   fetch-tags: false
+2026-11-28T00:57:35.1214588Z   show-progress: true
+2026-11-28T00:57:35.1214988Z   lfs: false
+2026-11-28T00:57:35.1215350Z   submodules: false
+2026-11-28T00:57:35.1215735Z   set-safe-directory: true
+2026-11-28T00:57:35.1216165Z   allow-unsafe-pr-checkout: false
+2026-11-28T00:57:35.1216802Z env:
+2026-11-28T00:57:35.1217190Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T00:57:35.1217709Z   DOCKERHUB_USERNAME: 
+2026-11-28T00:57:35.1218115Z   DOCKER_BUILD_SUMMARY: false
+2026-11-28T00:57:35.1218562Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-28T00:57:35.1219010Z ##[endgroup]
+2026-11-28T00:57:35.4494070Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-28T00:57:35.4498242Z ##[group]Getting Git version info
+2026-11-28T00:57:35.4501572Z Working directory is '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-28T00:57:35.4506337Z [command]/usr/bin/git version
+2026-11-28T00:57:35.4508030Z git version 2.56.1
+2026-11-28T00:57:35.4521044Z ##[endgroup]
+2026-11-28T00:57:35.4531928Z Temporarily overriding HOME='/home/runner/work/_temp/8c0a0932-edbc-40e2-aa0c-0690aad104ee' before making global git config changes
+2026-11-28T00:57:35.4536246Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-28T00:57:35.4540953Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-28T00:57:35.4608614Z Deleting the contents of '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-28T00:57:35.4617152Z ##[group]Determining repository object format
+2026-11-28T00:57:35.4620680Z ##[endgroup]
+2026-11-28T00:57:35.4623786Z ##[group]Initializing the repository
+2026-11-28T00:57:35.4628627Z [command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-28T00:57:35.4723106Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-28T00:57:35.4727162Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-28T00:57:35.4730981Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-28T00:57:35.4734458Z hint: call:
+2026-11-28T00:57:35.4736628Z hint:
+2026-11-28T00:57:35.4739009Z hint: 	git config --global init.defaultBranch <name>
+2026-11-28T00:57:35.4741694Z hint:
+2026-11-28T00:57:35.4744136Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-28T00:57:35.4747815Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-28T00:57:35.4751020Z hint:
+2026-11-28T00:57:35.4753213Z hint: 	git branch -m <name>
+2026-11-28T00:57:35.4755509Z hint:
+2026-11-28T00:57:35.4758206Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-28T00:57:35.4764152Z Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-28T00:57:35.4773109Z [command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-28T00:57:35.4796846Z ##[endgroup]
+2026-11-28T00:57:35.4799746Z ##[group]Disabling automatic garbage collection
+2026-11-28T00:57:35.4802296Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-28T00:57:35.4839010Z ##[endgroup]
+2026-11-28T00:57:35.4841773Z ##[group]Setting up auth
+2026-11-28T00:57:35.4843808Z Removing SSH command configuration
+2026-11-28T00:57:35.4846158Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-28T00:57:35.4878529Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-28T00:57:35.5306808Z Removing HTTP extra header
+2026-11-28T00:57:35.5312128Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-28T00:57:35.5343026Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-28T00:57:35.5571819Z Removing includeIf entries pointing to credentials config files
+2026-11-28T00:57:35.5576607Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-28T00:57:35.5607412Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-28T00:57:35.5846555Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-1f4dd0d9-bba0-413b-8de0-1b46de59880e.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+2026-11-28T00:57:35.5883086Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-1f4dd0d9-bba0-413b-8de0-1b46de59880e.config
+2026-11-28T00:57:35.5911915Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-1f4dd0d9-bba0-413b-8de0-1b46de59880e.config
+2026-11-28T00:57:35.5943137Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-1f4dd0d9-bba0-413b-8de0-1b46de59880e.config
+2026-11-28T00:57:35.5972086Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-1f4dd0d9-bba0-413b-8de0-1b46de59880e.config
+2026-11-28T00:57:35.5998948Z ##[endgroup]
+2026-11-28T00:57:35.6001800Z ##[group]Fetching the repository
+2026-11-28T00:57:35.6007579Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +c057b7427cdfe6f9c98729e102b3dc620dda5444:refs/remotes/origin/main
+2026-11-28T00:57:36.4103635Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-28T00:57:36.4107254Z  * [new ref]         c057b7427cdfe6f9c98729e102b3dc620dda5444 -> origin/main
+2026-11-28T00:57:36.4113277Z [command]/usr/bin/git branch --list --remote origin/main
+2026-11-28T00:57:36.4139860Z   origin/main
+2026-11-28T00:57:36.4160373Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-11-28T00:57:36.4175213Z c057b7427cdfe6f9c98729e102b3dc620dda5444
+2026-11-28T00:57:36.4198981Z ##[endgroup]
+2026-11-28T00:57:36.4202196Z ##[group]Determining the checkout info
+2026-11-28T00:57:36.4205824Z ##[endgroup]
+2026-11-28T00:57:36.4208479Z [command]/usr/bin/git sparse-checkout disable
+2026-11-28T00:57:36.4251618Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-28T00:57:36.4281871Z ##[group]Checking out the ref
+2026-11-28T00:57:36.4285688Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-28T00:57:36.6353611Z Switched to a new branch 'main'
+2026-11-28T00:57:36.6357298Z branch 'main' set up to track 'origin/main'.
+2026-11-28T00:57:36.6374523Z ##[endgroup]
+2026-11-28T00:57:36.6427176Z [command]/usr/bin/git log -1 --format=%H
+2026-11-28T00:57:36.6456108Z c057b7427cdfe6f9c98729e102b3dc620dda5444
+2026-11-28T00:57:36.6466276Z ##[group]Removing auth
+2026-11-28T00:57:36.6467220Z Removing SSH command configuration
+2026-11-28T00:57:36.6471091Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-28T00:57:36.6503233Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-28T00:57:36.6748893Z Removing HTTP extra header
+2026-11-28T00:57:36.6751406Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-28T00:57:36.6779589Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-28T00:57:36.7015431Z Removing includeIf entries pointing to credentials config files
+2026-11-28T00:57:36.7024716Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-28T00:57:36.7049244Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-28T00:57:36.7050608Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-28T00:57:36.7051920Z includeif.gitdir:/github/workspace/.git.path
+2026-11-28T00:57:36.7052276Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-28T00:57:36.7057772Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-28T00:57:36.7081618Z /home/runner/work/_temp/git-credentials-1f4dd0d9-bba0-413b-8de0-1b46de59880e.config
+2026-11-28T00:57:36.7090509Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-1f4dd0d9\-bba0\-413b\-8de0\-1b46de59880e\.config
+2026-11-28T00:57:36.7122408Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-28T00:57:36.7143888Z /home/runner/work/_temp/git-credentials-1f4dd0d9-bba0-413b-8de0-1b46de59880e.config
+2026-11-28T00:57:36.7152986Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-1f4dd0d9\-bba0\-413b\-8de0\-1b46de59880e\.config
+2026-11-28T00:57:36.7182957Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-28T00:57:36.7203752Z /github/runner_temp/git-credentials-1f4dd0d9-bba0-413b-8de0-1b46de59880e.config
+2026-11-28T00:57:36.7210684Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-1f4dd0d9\-bba0\-413b\-8de0\-1b46de59880e\.config
+2026-11-28T00:57:36.7247460Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-28T00:57:36.7267920Z /github/runner_temp/git-credentials-1f4dd0d9-bba0-413b-8de0-1b46de59880e.config
+2026-11-28T00:57:36.7275383Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-1f4dd0d9\-bba0\-413b\-8de0\-1b46de59880e\.config
+2026-11-28T00:57:36.7306075Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-28T00:57:36.7539366Z Removing credentials config '/home/runner/work/_temp/git-credentials-1f4dd0d9-bba0-413b-8de0-1b46de59880e.config'
+2026-11-28T00:57:36.7550582Z ##[endgroup]
+2026-11-28T00:57:36.7731316Z ##[group]Run python3 "$GITHUB_WORKSPACE/scripts/ensure_hadolint.py" --link /usr/local/bin/hadolint
+2026-11-28T00:57:36.7732013Z python3 "$GITHUB_WORKSPACE/scripts/ensure_hadolint.py" --link /usr/local/bin/hadolint
+2026-11-28T00:57:36.7764690Z shell: /usr/bin/bash -e {0}
+2026-11-28T00:57:36.7764965Z env:
+2026-11-28T00:57:36.7765202Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T00:57:36.7765519Z   DOCKERHUB_USERNAME: 
+2026-11-28T00:57:36.7765757Z   DOCKER_BUILD_SUMMARY: false
+2026-11-28T00:57:36.7766012Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-28T00:57:36.7766266Z ##[endgroup]
+2026-11-28T00:57:36.9855698Z /usr/local/bin/hadolint
+2026-11-28T00:57:37.0609282Z ##[group]Run hadolint --config .hadolint.yaml OPC_UA_Servers/Release2/Dockerfile
+2026-11-28T00:57:37.0609852Z hadolint --config .hadolint.yaml OPC_UA_Servers/Release2/Dockerfile
+2026-11-28T00:57:37.0610225Z echo "Dockerfile lint OK"
+2026-11-28T00:57:37.0640007Z shell: /usr/bin/bash -e {0}
+2026-11-28T00:57:37.0640266Z env:
+2026-11-28T00:57:37.0640499Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T00:57:37.0640791Z   DOCKERHUB_USERNAME: 
+2026-11-28T00:57:37.0641024Z   DOCKER_BUILD_SUMMARY: false
+2026-11-28T00:57:37.0641288Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-28T00:57:37.0641545Z ##[endgroup]
+2026-11-28T00:57:37.1271369Z Dockerfile lint OK
+2026-11-28T00:57:37.1358486Z ##[group]Run docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+2026-11-28T00:57:37.1359026Z with:
+2026-11-28T00:57:37.1359248Z   driver: docker-container
+2026-11-28T00:57:37.1359485Z   use: true
+2026-11-28T00:57:37.1359698Z   keep-state: false
+2026-11-28T00:57:37.1359920Z   cache-binary: true
+2026-11-28T00:57:37.1360140Z   cleanup: true
+2026-11-28T00:57:37.1360347Z env:
+2026-11-28T00:57:37.1360563Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T00:57:37.1360836Z   DOCKERHUB_USERNAME: 
+2026-11-28T00:57:37.1361065Z   DOCKER_BUILD_SUMMARY: false
+2026-11-28T00:57:37.1361334Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-28T00:57:37.1361583Z ##[endgroup]
+2026-11-28T00:57:37.2935319Z ##[group]Docker info
+2026-11-28T00:57:37.2957271Z [command]/usr/bin/docker version
+2026-11-28T00:57:37.4360757Z Client: Docker Engine - Community
+2026-11-28T00:57:37.4361137Z  Version:           29.4.2
+2026-11-28T00:57:37.4361353Z  API version:       1.54
+2026-11-28T00:57:37.4361662Z  Go version:        go1.26.2
+2026-11-28T00:57:37.4361948Z  Git commit:        055a478
+2026-11-28T00:57:37.4362463Z  Built:             Fri May  1 10:24:04 2026
+2026-11-28T00:57:37.4362918Z  OS/Arch:           linux/amd64
+2026-11-28T00:57:37.4363122Z  Context:           default
+2026-11-28T00:57:37.4363238Z 
+2026-11-28T00:57:37.4363335Z Server: Docker Engine - Community
+2026-11-28T00:57:37.4363625Z  Engine:
+2026-11-28T00:57:37.4363785Z   Version:          29.4.2
+2026-11-28T00:57:37.4363995Z   API version:      1.54 (minimum version 1.40)
+2026-11-28T00:57:37.4364416Z   Go version:       go1.26.2
+2026-11-28T00:57:37.4364613Z   Git commit:       d329809
+2026-11-28T00:57:37.4365118Z   Built:            Fri May  1 10:24:04 2026
+2026-11-28T00:57:37.4365572Z   OS/Arch:          linux/amd64
+2026-11-28T00:57:37.4365905Z   Experimental:     false
+2026-11-28T00:57:37.4366229Z  containerd:
+2026-11-28T00:57:37.4366526Z   Version:          v2.4.2
+2026-11-28T00:57:37.4366974Z   GitCommit:        b7a25261e029d68978bbf290df0a62fc819b3c51
+2026-11-28T00:57:37.4367361Z  runc:
+2026-11-28T00:57:37.4367660Z   Version:          1.5.3
+2026-11-28T00:57:37.4368009Z   GitCommit:        v1.5.3-0-g46365c62
+2026-11-28T00:57:37.4368476Z  docker-init:
+2026-11-28T00:57:37.4368817Z   Version:          0.19.0
+2026-11-28T00:57:37.4369198Z   GitCommit:        de40ad0
+2026-11-28T00:57:37.4402476Z [command]/usr/bin/docker info
+2026-11-28T00:57:38.7769839Z Client: Docker Engine - Community
+2026-11-28T00:57:38.7770710Z  Version:    29.4.2
+2026-11-28T00:57:38.7771180Z  Context:    default
+2026-11-28T00:57:38.7771463Z  Debug Mode: false
+2026-11-28T00:57:38.7771697Z  Plugins:
+2026-11-28T00:57:38.7771959Z   buildx: Docker Buildx (Docker Inc.)
+2026-11-28T00:57:38.7772290Z     Version:  v0.39.1
+2026-11-28T00:57:38.7772752Z     Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+2026-11-28T00:57:38.7773174Z   compose: Docker Compose (Docker Inc.)
+2026-11-28T00:57:38.7773513Z     Version:  v5.1.3
+2026-11-28T00:57:38.7773860Z     Path:     /usr/libexec/docker/cli-plugins/docker-compose
+2026-11-28T00:57:38.7774143Z 
+2026-11-28T00:57:38.7774256Z Server:
+2026-11-28T00:57:38.7774488Z  Containers: 0
+2026-11-28T00:57:38.7774726Z   Running: 0
+2026-11-28T00:57:38.7774978Z   Paused: 0
+2026-11-28T00:57:38.7775212Z   Stopped: 0
+2026-11-28T00:57:38.7775442Z  Images: 6
+2026-11-28T00:57:38.7775687Z  Server Version: 29.4.2
+2026-11-28T00:57:38.7775966Z  Storage Driver: overlayfs
+2026-11-28T00:57:38.7776322Z   driver-type: io.containerd.snapshotter.v1
+2026-11-28T00:57:38.7776725Z  Logging Driver: json-file
+2026-11-28T00:57:38.7777007Z  Cgroup Driver: systemd
+2026-11-28T00:57:38.7777272Z  Cgroup Version: 2
+2026-11-28T00:57:38.7777511Z  Plugins:
+2026-11-28T00:57:38.7777735Z   Volume: local
+2026-11-28T00:57:38.7778018Z   Network: bridge host ipvlan macvlan null overlay
+2026-11-28T00:57:38.7778588Z   Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+2026-11-28T00:57:38.7779142Z  CDI spec directories:
+2026-11-28T00:57:38.7779390Z   /etc/cdi
+2026-11-28T00:57:38.7780024Z   /var/run/cdi
+2026-11-28T00:57:38.7780273Z  Swarm: inactive
+2026-11-28T00:57:38.7780666Z  Runtimes: io.containerd.runc.v2 runc
+2026-11-28T00:57:38.7780933Z  Default Runtime: runc
+2026-11-28T00:57:38.7781208Z  Init Binary: docker-init
+2026-11-28T00:57:38.7781480Z  containerd version: b7a25261e029d68978bbf290df0a62fc819b3c51
+2026-11-28T00:57:38.7781755Z  runc version: v1.5.3-0-g46365c62
+2026-11-28T00:57:38.7782069Z  init version: de40ad0
+2026-11-28T00:57:38.7782248Z  Security Options:
+2026-11-28T00:57:38.7782416Z   apparmor
+2026-11-28T00:57:38.7782746Z   seccomp
+2026-11-28T00:57:38.7782936Z    Profile: builtin
+2026-11-28T00:57:38.7783105Z   cgroupns
+2026-11-28T00:57:38.7783305Z  Kernel Version: 7.0.0-1020-azure
+2026-11-28T00:57:38.7783589Z  Operating System: Ubuntu 26.04.1 LTS
+2026-11-28T00:57:38.7783794Z  OSType: linux
+2026-11-28T00:57:38.7784036Z  Architecture: x86_64
+2026-11-28T00:57:38.7784231Z  CPUs: 4
+2026-11-28T00:57:38.7784387Z  Total Memory: 15.61GiB
+2026-11-28T00:57:38.7784662Z  Name: runnervm3lb7s
+2026-11-28T00:57:38.7784856Z  ID: a6d3115e-9d26-40a8-b55a-6b18da56de28
+2026-11-28T00:57:38.7785092Z  Docker Root Dir: /var/lib/docker
+2026-11-28T00:57:38.7785362Z  Debug Mode: false
+2026-11-28T00:57:38.7785536Z  Username: githubactions
+2026-11-28T00:57:38.7785765Z  Experimental: false
+2026-11-28T00:57:38.7786000Z  Insecure Registries:
+2026-11-28T00:57:38.7790335Z   ::1/128
+2026-11-28T00:57:38.7790513Z   127.0.0.0/8
+2026-11-28T00:57:38.7790715Z  Live Restore Enabled: false
+2026-11-28T00:57:38.7790946Z  Firewall Backend: iptables
+2026-11-28T00:57:38.7791075Z 
+2026-11-28T00:57:38.7791402Z ##[endgroup]
+2026-11-28T00:57:38.8550753Z ##[group]Buildx version
+2026-11-28T00:57:38.8570613Z [command]/usr/bin/docker buildx version
+2026-11-28T00:57:38.9160564Z github.com/docker/buildx v0.39.1 334b63fe2bb0f0e89a8fd067704a0d113f57ec25
+2026-11-28T00:57:38.9197126Z ##[endgroup]
+2026-11-28T00:57:38.9355191Z ##[group]Inspecting default docker context
+2026-11-28T00:57:38.9505580Z [
+2026-11-28T00:57:38.9506075Z   {
+2026-11-28T00:57:38.9506373Z     "Name": "default",
+2026-11-28T00:57:38.9506637Z     "Metadata": {},
+2026-11-28T00:57:38.9506836Z     "Endpoints": {
+2026-11-28T00:57:38.9507009Z       "docker": {
+2026-11-28T00:57:38.9507215Z         "Host": "unix:///var/run/docker.sock",
+2026-11-28T00:57:38.9507468Z         "SkipTLSVerify": false
+2026-11-28T00:57:38.9507663Z       }
+2026-11-28T00:57:38.9507978Z     },
+2026-11-28T00:57:38.9508202Z     "TLSMaterial": {},
+2026-11-28T00:57:38.9508453Z     "Storage": {
+2026-11-28T00:57:38.9508709Z       "MetadataPath": "<IN MEMORY>",
+2026-11-28T00:57:38.9508991Z       "TLSPath": "<IN MEMORY>"
+2026-11-28T00:57:38.9509266Z     }
+2026-11-28T00:57:38.9509577Z   }
+2026-11-28T00:57:38.9509785Z ]
+2026-11-28T00:57:38.9510415Z ##[endgroup]
+2026-11-28T00:57:39.0090126Z ##[group]Pulling BuildKit image(s)
+2026-11-28T00:57:39.0115175Z [command]/usr/bin/docker pull moby/buildkit:buildx-stable-1
+2026-11-28T00:57:39.2993460Z buildx-stable-1: Pulling from moby/buildkit
+2026-11-28T00:57:39.4381413Z 7ecbe013a2a5: Pulling fs layer
+2026-11-28T00:57:39.4381831Z b00df0a8296e: Pulling fs layer
+2026-11-28T00:57:39.4382160Z 861e3ecba141: Pulling fs layer
+2026-11-28T00:57:39.4382459Z 881fc932939e: Pulling fs layer
+2026-11-28T00:57:39.4382887Z 68eab75b32f8: Pulling fs layer
+2026-11-28T00:57:39.4383157Z f38beb44996e: Pulling fs layer
+2026-11-28T00:57:39.4383424Z 48124e8335c1: Pulling fs layer
+2026-11-28T00:57:39.5279058Z 7ecbe013a2a5: Download complete
+2026-11-28T00:57:39.5282793Z b00df0a8296e: Download complete
+2026-11-28T00:57:39.5286189Z 861e3ecba141: Download complete
+2026-11-28T00:57:39.5293889Z 68eab75b32f8: Download complete
+2026-11-28T00:57:39.6416871Z 881fc932939e: Download complete
+2026-11-28T00:57:39.6417421Z 34a6d5dab7a2: Download complete
+2026-11-28T00:57:39.6418080Z 44136fa355b3: Already exists
+2026-11-28T00:57:39.7446523Z ##[error]The operation was canceled.
+2026-11-28T00:57:39.9425901Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-28T00:57:39.9426412Z with:
+2026-11-28T00:57:39.9426690Z   name: results-server-smoke-docker
+2026-11-28T00:57:39.9427118Z   path: test-results/smoke.xml
+2026-11-28T00:57:39.9427483Z   retention-days: 14
+2026-11-28T00:57:39.9427700Z   if-no-files-found: warn
+2026-11-28T00:57:39.9427892Z   compression-level: 6
+2026-11-28T00:57:39.9428144Z   overwrite: false
+2026-11-28T00:57:39.9428415Z   include-hidden-files: false
+2026-11-28T00:57:39.9428643Z   archive: true
+2026-11-28T00:57:39.9428800Z env:
+2026-11-28T00:57:39.9428974Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T00:57:39.9429203Z   DOCKERHUB_USERNAME: 
+2026-11-28T00:57:39.9429384Z   DOCKER_BUILD_SUMMARY: false
+2026-11-28T00:57:39.9429683Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-28T00:57:39.9429996Z ##[endgroup]
+2026-11-28T00:57:40.0706660Z ##[warning]No files were found with the provided path: test-results/smoke.xml. No artifacts will be uploaded.
+2026-11-28T00:57:40.0784664Z ##[group]Run docker logs opcua-server --tail 60 || true
+2026-11-28T00:57:40.0785011Z docker logs opcua-server --tail 60 || true
+2026-11-28T00:57:40.0813170Z shell: /usr/bin/bash -e {0}
+2026-11-28T00:57:40.0813386Z env:
+2026-11-28T00:57:40.0813577Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T00:57:40.0813819Z   DOCKERHUB_USERNAME: 
+2026-11-28T00:57:40.0814011Z   DOCKER_BUILD_SUMMARY: false
+2026-11-28T00:57:40.0814251Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-28T00:57:40.0814467Z ##[endgroup]
+2026-11-28T00:57:40.0989023Z Error response from daemon: No such container: opcua-server
+2026-11-28T00:57:40.1105693Z ##[group]Run docker rm -f opcua-server || true
+2026-11-28T00:57:40.1106034Z docker rm -f opcua-server || true
+2026-11-28T00:57:40.1135299Z shell: /usr/bin/bash -e {0}
+2026-11-28T00:57:40.1135516Z env:
+2026-11-28T00:57:40.1135703Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T00:57:40.1135941Z   DOCKERHUB_USERNAME: 
+2026-11-28T00:57:40.1136126Z   DOCKER_BUILD_SUMMARY: false
+2026-11-28T00:57:40.1136329Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-28T00:57:40.1136537Z ##[endgroup]
+2026-11-28T00:57:40.1311330Z Error response from daemon: No such container: opcua-server
+2026-11-28T00:57:40.1399372Z Post job cleanup.
+2026-11-28T00:57:40.2877239Z ##[group]Removing builder
+2026-11-28T00:57:40.3714389Z builder-05c34d1a-7065-4a76-a659-3fa1dac7e9df does not exist
+2026-11-28T00:57:40.3715064Z ##[endgroup]
+2026-11-28T00:57:40.3715510Z ##[group]Cleaning up certificates
+2026-11-28T00:57:40.3715992Z ##[endgroup]
+2026-11-28T00:57:40.3716434Z ##[group]Post cache
+2026-11-28T00:57:40.3751290Z State not set
+2026-11-28T00:57:40.3751807Z ##[endgroup]
+2026-11-28T00:57:40.3939514Z Post job cleanup.
+2026-11-28T00:57:40.4691614Z [command]/usr/bin/git version
+2026-11-28T00:57:40.4728818Z git version 2.56.1
+2026-11-28T00:57:40.4756849Z Temporarily overriding HOME='/home/runner/work/_temp/677ed913-db6f-4a61-8887-4159a55651a4' before making global git config changes
+2026-11-28T00:57:40.4758005Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-28T00:57:40.4761799Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-28T00:57:40.5251852Z Removing SSH command configuration
+2026-11-28T00:57:40.5260187Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-28T00:57:40.5300109Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-28T00:57:40.5555934Z Removing HTTP extra header
+2026-11-28T00:57:40.5560237Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-28T00:57:40.5590759Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-28T00:57:40.5826368Z Removing includeIf entries pointing to credentials config files
+2026-11-28T00:57:40.5831956Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-28T00:57:40.5861900Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-28T00:57:40.6274437Z Cleaning up orphan processes

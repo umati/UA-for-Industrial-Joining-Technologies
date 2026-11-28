@@ -1,0 +1,215 @@
+﻿2026-11-24T08:27:39.2198167Z Current runner version: '2.338.2'
+2026-11-24T08:27:39.2224085Z ##[group]Runner Image Provisioner
+2026-11-24T08:27:39.2225077Z Hosted Compute Agent
+2026-11-24T08:27:39.2225687Z Version: 20261111.635
+2026-11-24T08:27:39.2226413Z Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+2026-11-24T08:27:39.2227177Z Build Date: 2026-11-11T01:49:01Z
+2026-11-24T08:27:39.2227880Z Worker ID: {c01c2128-5006-4db9-b45d-a5223e08482d}
+2026-11-24T08:27:39.2228688Z Region: westus
+2026-11-24T08:27:39.2229249Z Cloud: Azure
+2026-11-24T08:27:39.2230096Z ##[endgroup]
+2026-11-24T08:27:39.2231596Z ##[group]Operating System
+2026-11-24T08:27:39.2232300Z Ubuntu
+2026-11-24T08:27:39.2232928Z 26.04.1
+2026-11-24T08:27:39.2233461Z LTS
+2026-11-24T08:27:39.2234013Z ##[endgroup]
+2026-11-24T08:27:39.2234723Z ##[group]Runner Image
+2026-11-24T08:27:39.2235345Z Image: ubuntu-26.04
+2026-11-24T08:27:39.2236010Z Version: 20261116.202.1
+2026-11-24T08:27:39.2237246Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261116.202/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-24T08:27:39.2238901Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261116.202
+2026-11-24T08:27:39.2240240Z ##[endgroup]
+2026-11-24T08:27:39.2241480Z ##[group]GITHUB_TOKEN Permissions
+2026-11-24T08:27:39.2243809Z Contents: read
+2026-11-24T08:27:39.2244537Z Metadata: read
+2026-11-24T08:27:39.2245126Z ##[endgroup]
+2026-11-24T08:27:39.2247561Z Secret source: Actions
+2026-11-24T08:27:39.2248633Z Cache mode: write
+2026-11-24T08:27:39.2249403Z Prepare workflow directory
+2026-11-24T08:27:39.2688741Z Prepare all required actions
+2026-11-24T08:27:39.2740071Z Getting action download info
+2026-11-24T08:27:39.6215431Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-24T08:27:39.7353100Z Download action repository 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1' (SHA:949feb2413d6458794dcd2491c4babbbce0c15c1)
+2026-11-24T08:27:39.8008254Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-24T08:27:39.9615707Z Complete job name: Node Client
+2026-11-24T08:27:40.0527935Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-24T08:27:40.0529040Z with:
+2026-11-24T08:27:40.0529500Z   persist-credentials: false
+2026-11-24T08:27:40.0530394Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-24T08:27:40.0534235Z   token: ***
+2026-11-24T08:27:40.0534691Z   ssh-strict: true
+2026-11-24T08:27:40.0535139Z   ssh-user: git
+2026-11-24T08:27:40.0535586Z   clean: true
+2026-11-24T08:27:40.0536052Z   sparse-checkout-cone-mode: true
+2026-11-24T08:27:40.0536595Z   fetch-depth: 1
+2026-11-24T08:27:40.0537038Z   fetch-tags: false
+2026-11-24T08:27:40.0537504Z   show-progress: true
+2026-11-24T08:27:40.0537968Z   lfs: false
+2026-11-24T08:27:40.0538399Z   submodules: false
+2026-11-24T08:27:40.0538861Z   set-safe-directory: true
+2026-11-24T08:27:40.0539416Z   allow-unsafe-pr-checkout: false
+2026-11-24T08:27:40.0540338Z env:
+2026-11-24T08:27:40.0540816Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-24T08:27:40.0541426Z ##[endgroup]
+2026-11-24T08:27:40.3603205Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-24T08:27:40.3606564Z ##[group]Getting Git version info
+2026-11-24T08:27:40.3609096Z Working directory is '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-24T08:27:40.3611567Z [command]/usr/bin/git version
+2026-11-24T08:27:40.3613445Z git version 2.56.1
+2026-11-24T08:27:40.3671967Z ##[endgroup]
+2026-11-24T08:27:40.3683711Z Temporarily overriding HOME='/home/runner/work/_temp/e5560f4d-057e-411c-aef3-cc159f2a23e5' before making global git config changes
+2026-11-24T08:27:40.3685328Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-24T08:27:40.3691918Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-24T08:27:40.3757779Z Deleting the contents of '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-24T08:27:40.3762837Z ##[group]Determining repository object format
+2026-11-24T08:27:40.3764642Z ##[endgroup]
+2026-11-24T08:27:40.3765510Z ##[group]Initializing the repository
+2026-11-24T08:27:40.3769560Z [command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-24T08:27:40.3962931Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-24T08:27:40.3964996Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-24T08:27:40.3966844Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-24T08:27:40.3968227Z hint: call:
+2026-11-24T08:27:40.3968974Z hint:
+2026-11-24T08:27:40.3970182Z hint: 	git config --global init.defaultBranch <name>
+2026-11-24T08:27:40.3971535Z hint:
+2026-11-24T08:27:40.3972651Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-24T08:27:40.3974376Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-24T08:27:40.3975880Z hint:
+2026-11-24T08:27:40.3976709Z hint: 	git branch -m <name>
+2026-11-24T08:27:40.3977582Z hint:
+2026-11-24T08:27:40.3978757Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-24T08:27:40.3981944Z Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-24T08:27:40.4001540Z [command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-24T08:27:40.4058522Z ##[endgroup]
+2026-11-24T08:27:40.4061624Z ##[group]Disabling automatic garbage collection
+2026-11-24T08:27:40.4063169Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-24T08:27:40.4102289Z ##[endgroup]
+2026-11-24T08:27:40.4103920Z ##[group]Setting up auth
+2026-11-24T08:27:40.4107944Z Removing SSH command configuration
+2026-11-24T08:27:40.4110034Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-24T08:27:40.4146221Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-24T08:27:40.4641881Z Removing HTTP extra header
+2026-11-24T08:27:40.4648412Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-24T08:27:40.4685696Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-24T08:27:40.4967173Z Removing includeIf entries pointing to credentials config files
+2026-11-24T08:27:40.4968880Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-24T08:27:40.5009200Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-24T08:27:40.5303164Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-80dce9a3-37fc-4ce7-8253-b970a9e1ecb4.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+2026-11-24T08:27:40.5346932Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-80dce9a3-37fc-4ce7-8253-b970a9e1ecb4.config
+2026-11-24T08:27:40.5379258Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-80dce9a3-37fc-4ce7-8253-b970a9e1ecb4.config
+2026-11-24T08:27:40.5416131Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-80dce9a3-37fc-4ce7-8253-b970a9e1ecb4.config
+2026-11-24T08:27:40.5451139Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-80dce9a3-37fc-4ce7-8253-b970a9e1ecb4.config
+2026-11-24T08:27:40.5481915Z ##[endgroup]
+2026-11-24T08:27:40.5482783Z ##[group]Fetching the repository
+2026-11-24T08:27:40.5488961Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +7b7720cd01745e81962d84c58b3a78ee7585d8ba:refs/remotes/origin/main
+2026-11-24T08:27:42.5083198Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-24T08:27:42.5085598Z  * [new ref]         7b7720cd01745e81962d84c58b3a78ee7585d8ba -> origin/main
+2026-11-24T08:27:42.5093278Z [command]/usr/bin/git branch --list --remote origin/main
+2026-11-24T08:27:42.5121747Z   origin/main
+2026-11-24T08:27:42.5131882Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-11-24T08:27:42.5157690Z 7b7720cd01745e81962d84c58b3a78ee7585d8ba
+2026-11-24T08:27:42.5164755Z ##[endgroup]
+2026-11-24T08:27:42.5166990Z ##[group]Determining the checkout info
+2026-11-24T08:27:42.5170162Z ##[endgroup]
+2026-11-24T08:27:42.5172032Z [command]/usr/bin/git sparse-checkout disable
+2026-11-24T08:27:42.5295393Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-24T08:27:42.5333906Z ##[group]Checking out the ref
+2026-11-24T08:27:42.5349252Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-24T08:27:42.7860999Z Switched to a new branch 'main'
+2026-11-24T08:27:42.7866280Z branch 'main' set up to track 'origin/main'.
+2026-11-24T08:27:42.7887066Z ##[endgroup]
+2026-11-24T08:27:42.7947932Z [command]/usr/bin/git log -1 --format=%H
+2026-11-24T08:27:42.7980226Z 7b7720cd01745e81962d84c58b3a78ee7585d8ba
+2026-11-24T08:27:42.7992910Z ##[group]Removing auth
+2026-11-24T08:27:42.7993487Z Removing SSH command configuration
+2026-11-24T08:27:42.7998613Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-24T08:27:42.8038883Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-24T08:27:42.8325746Z Removing HTTP extra header
+2026-11-24T08:27:42.8329570Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-24T08:27:42.8362856Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-24T08:27:42.8638963Z Removing includeIf entries pointing to credentials config files
+2026-11-24T08:27:42.8646236Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-24T08:27:42.8671921Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-24T08:27:42.8673891Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-24T08:27:42.8675296Z includeif.gitdir:/github/workspace/.git.path
+2026-11-24T08:27:42.8676116Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-24T08:27:42.8682369Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-24T08:27:42.8707188Z /home/runner/work/_temp/git-credentials-80dce9a3-37fc-4ce7-8253-b970a9e1ecb4.config
+2026-11-24T08:27:42.8718451Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-80dce9a3\-37fc\-4ce7\-8253\-b970a9e1ecb4\.config
+2026-11-24T08:27:42.8759766Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-24T08:27:42.8782993Z /home/runner/work/_temp/git-credentials-80dce9a3-37fc-4ce7-8253-b970a9e1ecb4.config
+2026-11-24T08:27:42.8791467Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-80dce9a3\-37fc\-4ce7\-8253\-b970a9e1ecb4\.config
+2026-11-24T08:27:42.8828903Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-24T08:27:42.8854607Z /github/runner_temp/git-credentials-80dce9a3-37fc-4ce7-8253-b970a9e1ecb4.config
+2026-11-24T08:27:42.8862531Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-80dce9a3\-37fc\-4ce7\-8253\-b970a9e1ecb4\.config
+2026-11-24T08:27:42.8896070Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-24T08:27:42.8920484Z /github/runner_temp/git-credentials-80dce9a3-37fc-4ce7-8253-b970a9e1ecb4.config
+2026-11-24T08:27:42.8929143Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-80dce9a3\-37fc\-4ce7\-8253\-b970a9e1ecb4\.config
+2026-11-24T08:27:42.9048272Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-24T08:27:42.9247089Z Removing credentials config '/home/runner/work/_temp/git-credentials-80dce9a3-37fc-4ce7-8253-b970a9e1ecb4.config'
+2026-11-24T08:27:42.9257208Z ##[endgroup]
+2026-11-24T08:27:42.9517906Z ##[group]Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+2026-11-24T08:27:42.9518365Z with:
+2026-11-24T08:27:42.9518578Z   node-version-file: .nvmrc
+2026-11-24T08:27:42.9518822Z   check-latest: true
+2026-11-24T08:27:42.9521348Z   token: ***
+2026-11-24T08:27:42.9521584Z   package-manager-cache: true
+2026-11-24T08:27:42.9521832Z env:
+2026-11-24T08:27:42.9522045Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-24T08:27:42.9522325Z ##[endgroup]
+2026-11-24T08:27:43.0804948Z Node version file is not TOML file
+2026-11-24T08:27:43.0807240Z Resolved .nvmrc as 24
+2026-11-24T08:27:43.0812264Z Attempt to resolve the latest version from manifest...
+2026-11-24T08:27:43.7550019Z Resolved as '24.22.3'
+2026-11-24T08:27:43.7557766Z Found in cache @ /opt/hostedtoolcache/node/24.22.3/x64
+2026-11-24T08:27:43.8205496Z ##[group]Environment details
+2026-11-24T08:27:44.3173649Z node: v24.22.3
+2026-11-24T08:27:44.3173948Z npm: 11.19.1
+2026-11-24T08:27:44.3174169Z yarn: 1.22.22
+2026-11-24T08:27:44.3175318Z ##[endgroup]
+2026-11-24T08:27:44.3382348Z ##[group]Run npm ci
+2026-11-24T08:27:44.3382679Z npm ci
+2026-11-24T08:27:44.3478444Z shell: /usr/bin/bash -e {0}
+2026-11-24T08:27:44.3478716Z env:
+2026-11-24T08:27:44.3478940Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-24T08:27:44.3479223Z ##[endgroup]
+2026-11-24T08:27:50.6917616Z 
+2026-11-24T08:27:50.6926994Z added 398 packages, and audited 399 packages in 6s
+2026-11-24T08:27:50.6927381Z 
+2026-11-24T08:27:50.6927621Z 89 packages are looking for funding
+2026-11-24T08:27:50.6927983Z   run `npm fund` for details
+2026-11-24T08:27:50.6930911Z 
+2026-11-24T08:27:50.6931219Z found 0 vulnerabilities
+2026-11-24T08:27:50.7718906Z ##[error]The operation was canceled.
+2026-11-24T08:27:50.7820896Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-24T08:27:50.7821343Z with:
+2026-11-24T08:27:50.7821557Z   name: results-node-client
+2026-11-24T08:27:50.7821875Z   path: OPC_UA_Clients/Release1/IJT_Node_Client/test-results/
+2026-11-24T08:27:50.7822214Z   retention-days: 14
+2026-11-24T08:27:50.7822432Z   if-no-files-found: warn
+2026-11-24T08:27:50.7822859Z   compression-level: 6
+2026-11-24T08:27:50.7823069Z   overwrite: false
+2026-11-24T08:27:50.7823284Z   include-hidden-files: false
+2026-11-24T08:27:50.7823515Z   archive: true
+2026-11-24T08:27:50.7823699Z env:
+2026-11-24T08:27:50.7823900Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-24T08:27:50.7824173Z ##[endgroup]
+2026-11-24T08:27:50.9441632Z ##[warning]No files were found with the provided path: OPC_UA_Clients/Release1/IJT_Node_Client/test-results/. No artifacts will be uploaded.
+2026-11-24T08:27:50.9743031Z Post job cleanup.
+2026-11-24T08:27:51.0676188Z [command]/usr/bin/git version
+2026-11-24T08:27:51.0723102Z git version 2.56.1
+2026-11-24T08:27:51.0762206Z Temporarily overriding HOME='/home/runner/work/_temp/8e81f470-10b0-4dcf-8af9-101fd438d7d7' before making global git config changes
+2026-11-24T08:27:51.0763676Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-24T08:27:51.0768515Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-24T08:27:51.0805802Z Removing SSH command configuration
+2026-11-24T08:27:51.0813530Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-24T08:27:51.0855587Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-24T08:27:51.1185030Z Removing HTTP extra header
+2026-11-24T08:27:51.1199257Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-24T08:27:51.1232015Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-24T08:27:51.1545886Z Removing includeIf entries pointing to credentials config files
+2026-11-24T08:27:51.1554461Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-24T08:27:51.1593510Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-24T08:27:51.2081305Z Evaluate and set job outputs
+2026-11-24T08:27:51.2086870Z Set output 'eslint_result'
+2026-11-24T08:27:51.2088836Z Cleaning up orphan processes

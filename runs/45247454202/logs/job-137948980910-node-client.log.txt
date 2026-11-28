@@ -1,0 +1,1197 @@
+﻿2026-11-23T19:19:47.0128847Z Current runner version: '2.338.2'
+2026-11-23T19:19:47.0148534Z ##[group]Runner Image Provisioner
+2026-11-23T19:19:47.0149300Z Hosted Compute Agent
+2026-11-23T19:19:47.0149730Z Version: 20261111.635
+2026-11-23T19:19:47.0150177Z Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+2026-11-23T19:19:47.0150705Z Build Date: 2026-11-11T01:49:01Z
+2026-11-23T19:19:47.0151196Z Worker ID: {5d672872-07b2-40c5-b001-ab9d13c4e39e}
+2026-11-23T19:19:47.0152012Z Region: us-west-2
+2026-11-23T19:19:47.0152405Z Cloud: AWS
+2026-11-23T19:19:47.0152771Z ##[endgroup]
+2026-11-23T19:19:47.0153764Z ##[group]Operating System
+2026-11-23T19:19:47.0154265Z Ubuntu
+2026-11-23T19:19:47.0154666Z 26.04.1
+2026-11-23T19:19:47.0155015Z LTS
+2026-11-23T19:19:47.0155361Z ##[endgroup]
+2026-11-23T19:19:47.0155762Z ##[group]Runner Image
+2026-11-23T19:19:47.0156208Z Image: ubuntu-26.04
+2026-11-23T19:19:47.0156599Z Version: 20261116.88.1
+2026-11-23T19:19:47.0157518Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261116.88/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-23T19:19:47.0158598Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261116.88
+2026-11-23T19:19:47.0159283Z ##[endgroup]
+2026-11-23T19:19:47.0160089Z ##[group]GITHUB_TOKEN Permissions
+2026-11-23T19:19:47.0162166Z Contents: read
+2026-11-23T19:19:47.0162618Z Metadata: read
+2026-11-23T19:19:47.0163048Z ##[endgroup]
+2026-11-23T19:19:47.0164838Z Secret source: Actions
+2026-11-23T19:19:47.0165533Z Cache mode: write
+2026-11-23T19:19:47.0166025Z Prepare workflow directory
+2026-11-23T19:19:47.0451196Z Prepare all required actions
+2026-11-23T19:19:47.0488988Z Getting action download info
+2026-11-23T19:19:47.4645392Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-23T19:19:48.7432139Z Download action repository 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1' (SHA:949feb2413d6458794dcd2491c4babbbce0c15c1)
+2026-11-23T19:19:48.9006899Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-23T19:19:49.1623301Z Complete job name: Node Client
+2026-11-23T19:19:49.2234809Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-23T19:19:49.2235353Z with:
+2026-11-23T19:19:49.2235667Z   persist-credentials: false
+2026-11-23T19:19:49.2236018Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-23T19:19:49.2238189Z   token: ***
+2026-11-23T19:19:49.2238487Z   ssh-strict: true
+2026-11-23T19:19:49.2238743Z   ssh-user: git
+2026-11-23T19:19:49.2238998Z   clean: true
+2026-11-23T19:19:49.2239282Z   sparse-checkout-cone-mode: true
+2026-11-23T19:19:49.2239576Z   fetch-depth: 1
+2026-11-23T19:19:49.2239900Z   fetch-tags: false
+2026-11-23T19:19:49.2240190Z   show-progress: true
+2026-11-23T19:19:49.2240456Z   lfs: false
+2026-11-23T19:19:49.2240708Z   submodules: false
+2026-11-23T19:19:49.2240964Z   set-safe-directory: true
+2026-11-23T19:19:49.2241307Z   allow-unsafe-pr-checkout: false
+2026-11-23T19:19:49.2242053Z env:
+2026-11-23T19:19:49.2242306Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-23T19:19:49.2242716Z ##[endgroup]
+2026-11-23T19:19:52.5543233Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-23T19:19:52.5544820Z ##[group]Getting Git version info
+2026-11-23T19:19:52.5545408Z Working directory is '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-23T19:19:52.5546193Z [command]/usr/bin/git version
+2026-11-23T19:19:52.5546479Z git version 2.56.1
+2026-11-23T19:19:52.5550363Z ##[endgroup]
+2026-11-23T19:19:52.5556923Z Temporarily overriding HOME='/home/runner/work/_temp/f9d58e38-de1a-4fe4-86a9-cc67194ba422' before making global git config changes
+2026-11-23T19:19:52.5557909Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-23T19:19:52.5560191Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-23T19:19:52.6035166Z Deleting the contents of '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-23T19:19:52.6037860Z ##[group]Determining repository object format
+2026-11-23T19:19:52.6039088Z ##[endgroup]
+2026-11-23T19:19:52.6040186Z ##[group]Initializing the repository
+2026-11-23T19:19:52.6041913Z [command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-23T19:19:52.6484181Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-23T19:19:52.6485082Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-23T19:19:52.6485581Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-23T19:19:52.6485933Z hint: call:
+2026-11-23T19:19:52.6486224Z hint:
+2026-11-23T19:19:52.6486598Z hint: 	git config --global init.defaultBranch <name>
+2026-11-23T19:19:52.6486996Z hint:
+2026-11-23T19:19:52.6487319Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-23T19:19:52.6487770Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-23T19:19:52.6488186Z hint:
+2026-11-23T19:19:52.6488437Z hint: 	git branch -m <name>
+2026-11-23T19:19:52.6488716Z hint:
+2026-11-23T19:19:52.6489083Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-23T19:19:52.6499835Z Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-23T19:19:52.6508934Z [command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-23T19:19:52.6563445Z ##[endgroup]
+2026-11-23T19:19:52.6564157Z ##[group]Disabling automatic garbage collection
+2026-11-23T19:19:52.6566301Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-23T19:19:52.6589492Z ##[endgroup]
+2026-11-23T19:19:52.6590159Z ##[group]Setting up auth
+2026-11-23T19:19:52.6590529Z Removing SSH command configuration
+2026-11-23T19:19:52.6594867Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-23T19:19:52.6617296Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-23T19:19:52.8731749Z Removing HTTP extra header
+2026-11-23T19:19:52.8735563Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-23T19:19:52.8759101Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-23T19:19:52.8938245Z Removing includeIf entries pointing to credentials config files
+2026-11-23T19:19:52.8942366Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-23T19:19:52.8972234Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-23T19:19:52.9155275Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-903349e8-95d7-46ee-b8b7-1f192fc55741.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+2026-11-23T19:19:52.9181803Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-903349e8-95d7-46ee-b8b7-1f192fc55741.config
+2026-11-23T19:19:52.9203208Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-903349e8-95d7-46ee-b8b7-1f192fc55741.config
+2026-11-23T19:19:52.9227260Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-903349e8-95d7-46ee-b8b7-1f192fc55741.config
+2026-11-23T19:19:52.9248552Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-903349e8-95d7-46ee-b8b7-1f192fc55741.config
+2026-11-23T19:19:52.9268523Z ##[endgroup]
+2026-11-23T19:19:52.9269182Z ##[group]Fetching the repository
+2026-11-23T19:19:52.9274167Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +35ef5fb3bba77933842863319c63f342657d8491:refs/remotes/origin/main
+2026-11-23T19:19:55.1199541Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-23T19:19:55.1200362Z  * [new ref]         35ef5fb3bba77933842863319c63f342657d8491 -> origin/main
+2026-11-23T19:19:55.1215381Z [command]/usr/bin/git branch --list --remote origin/main
+2026-11-23T19:19:55.1230802Z   origin/main
+2026-11-23T19:19:55.1236782Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-11-23T19:19:55.1254313Z 35ef5fb3bba77933842863319c63f342657d8491
+2026-11-23T19:19:55.1256065Z ##[endgroup]
+2026-11-23T19:19:55.1256655Z ##[group]Determining the checkout info
+2026-11-23T19:19:55.1259830Z ##[endgroup]
+2026-11-23T19:19:55.1260329Z [command]/usr/bin/git sparse-checkout disable
+2026-11-23T19:19:55.1304139Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-23T19:19:55.1324660Z ##[group]Checking out the ref
+2026-11-23T19:19:55.1327688Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-23T19:19:55.3448487Z Switched to a new branch 'main'
+2026-11-23T19:19:55.3453115Z branch 'main' set up to track 'origin/main'.
+2026-11-23T19:19:55.3464060Z ##[endgroup]
+2026-11-23T19:19:55.3532558Z [command]/usr/bin/git log -1 --format=%H
+2026-11-23T19:19:55.3533026Z 35ef5fb3bba77933842863319c63f342657d8491
+2026-11-23T19:19:55.3551187Z ##[group]Removing auth
+2026-11-23T19:19:55.3572285Z Removing SSH command configuration
+2026-11-23T19:19:55.3572999Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-23T19:19:55.3574898Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-23T19:19:55.3756802Z Removing HTTP extra header
+2026-11-23T19:19:55.3762693Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-23T19:19:55.3780589Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-23T19:19:55.3961209Z Removing includeIf entries pointing to credentials config files
+2026-11-23T19:19:55.3963513Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-23T19:19:55.3982185Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-23T19:19:55.3983474Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-23T19:19:55.3984428Z includeif.gitdir:/github/workspace/.git.path
+2026-11-23T19:19:55.3985076Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-23T19:19:55.3988089Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-23T19:19:55.4004029Z /home/runner/work/_temp/git-credentials-903349e8-95d7-46ee-b8b7-1f192fc55741.config
+2026-11-23T19:19:55.4011802Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-903349e8\-95d7\-46ee\-b8b7\-1f192fc55741\.config
+2026-11-23T19:19:55.4034094Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-23T19:19:55.4051024Z /home/runner/work/_temp/git-credentials-903349e8-95d7-46ee-b8b7-1f192fc55741.config
+2026-11-23T19:19:55.4056580Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-903349e8\-95d7\-46ee\-b8b7\-1f192fc55741\.config
+2026-11-23T19:19:55.4086350Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-23T19:19:55.4101370Z /github/runner_temp/git-credentials-903349e8-95d7-46ee-b8b7-1f192fc55741.config
+2026-11-23T19:19:55.4127568Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-903349e8\-95d7\-46ee\-b8b7\-1f192fc55741\.config
+2026-11-23T19:19:55.4129970Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-23T19:19:55.4145692Z /github/runner_temp/git-credentials-903349e8-95d7-46ee-b8b7-1f192fc55741.config
+2026-11-23T19:19:55.4152086Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-903349e8\-95d7\-46ee\-b8b7\-1f192fc55741\.config
+2026-11-23T19:19:55.4174992Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-23T19:19:55.4349438Z Removing credentials config '/home/runner/work/_temp/git-credentials-903349e8-95d7-46ee-b8b7-1f192fc55741.config'
+2026-11-23T19:19:55.4356521Z ##[endgroup]
+2026-11-23T19:19:55.4544081Z ##[group]Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+2026-11-23T19:19:55.4544456Z with:
+2026-11-23T19:19:55.4544709Z   node-version-file: .nvmrc
+2026-11-23T19:19:55.4544963Z   check-latest: true
+2026-11-23T19:19:55.4546941Z   token: ***
+2026-11-23T19:19:55.4547175Z   package-manager-cache: true
+2026-11-23T19:19:55.4547426Z env:
+2026-11-23T19:19:55.4547679Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-23T19:19:55.4547946Z ##[endgroup]
+2026-11-23T19:19:55.5502966Z Node version file is not TOML file
+2026-11-23T19:19:55.5504142Z Resolved .nvmrc as 24
+2026-11-23T19:19:55.5507090Z Attempt to resolve the latest version from manifest...
+2026-11-23T19:19:56.2076583Z Resolved as '24.22.3'
+2026-11-23T19:19:56.2963093Z Found in cache @ /opt/hostedtoolcache/node/24.22.3/x64
+2026-11-23T19:19:57.8454166Z ##[group]Environment details
+2026-11-23T19:20:00.6552552Z node: v24.22.3
+2026-11-23T19:20:00.6552941Z npm: 11.19.1
+2026-11-23T19:20:00.6553353Z yarn: 1.22.22
+2026-11-23T19:20:00.6554221Z ##[endgroup]
+2026-11-23T19:20:00.6686714Z ##[group]Run npm ci
+2026-11-23T19:20:00.6687044Z npm ci
+2026-11-23T19:20:00.7077103Z shell: /usr/bin/bash -e {0}
+2026-11-23T19:20:00.7077525Z env:
+2026-11-23T19:20:00.7077826Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-23T19:20:00.7078100Z ##[endgroup]
+2026-11-23T19:20:04.9872097Z 
+2026-11-23T19:20:04.9879005Z added 398 packages, and audited 399 packages in 4s
+2026-11-23T19:20:04.9879345Z 
+2026-11-23T19:20:04.9879844Z 89 packages are looking for funding
+2026-11-23T19:20:04.9880246Z   run `npm fund` for details
+2026-11-23T19:20:04.9882909Z 
+2026-11-23T19:20:04.9883091Z found 0 vulnerabilities
+2026-11-23T19:20:05.0155286Z ##[group]Run mkdir -p test-results
+2026-11-23T19:20:05.0155618Z mkdir -p test-results
+2026-11-23T19:20:05.0174569Z shell: /usr/bin/bash -e {0}
+2026-11-23T19:20:05.0174893Z env:
+2026-11-23T19:20:05.0175140Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-23T19:20:05.0175405Z ##[endgroup]
+2026-11-23T19:20:05.0266741Z ##[group]Run npx vitest run --coverage --reporter=verbose --reporter=junit --outputFile.junit=test-results/vitest.xml
+2026-11-23T19:20:05.0267511Z npx vitest run --coverage --reporter=verbose --reporter=junit --outputFile.junit=test-results/vitest.xml
+2026-11-23T19:20:05.0282601Z shell: /usr/bin/bash -e {0}
+2026-11-23T19:20:05.0282955Z env:
+2026-11-23T19:20:05.0283195Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-23T19:20:05.0283483Z ##[endgroup]
+2026-11-23T19:20:05.5078045Z 
+2026-11-23T19:20:05.5081291Z  RUN  v5.1.1 /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release1/IJT_Node_Client
+2026-11-23T19:20:05.5082361Z       Coverage enabled with v8
+2026-11-23T19:20:05.5082534Z 
+2026-11-23T19:20:06.1545818Z  ✓ tests/js/unit/model-data-types.test.mjs > IJTBaseModel > stores primitive string values directly 2ms
+2026-11-23T19:20:06.1547205Z  ✓ tests/js/unit/model-data-types.test.mjs > IJTBaseModel > stores primitive number values directly 0ms
+2026-11-23T19:20:06.1548582Z  ✓ tests/js/unit/model-data-types.test.mjs > IJTBaseModel > stores primitive boolean values directly 0ms
+2026-11-23T19:20:06.1549641Z  ✓ tests/js/unit/model-data-types.test.mjs > IJTBaseModel > stores original parameters in debugValues 0ms
+2026-11-23T19:20:06.1550800Z  ✓ tests/js/unit/model-data-types.test.mjs > IJTBaseModel > processes array fields by calling factory on each element 1ms
+2026-11-23T19:20:06.1552152Z  ✓ tests/js/unit/model-data-types.test.mjs > IJTBaseModel > processes object fields through factory 0ms
+2026-11-23T19:20:06.1553288Z  ✓ tests/js/unit/model-data-types.test.mjs > IJTBaseModel > applies castMapping for known type names in arrays 1ms
+2026-11-23T19:20:06.1554382Z  ✓ tests/js/unit/model-data-types.test.mjs > ErrorInformationDataType > constructs from simple parameters 0ms
+2026-11-23T19:20:06.1555468Z  ✓ tests/js/unit/model-data-types.test.mjs > ErrorInformationDataType > is an instance of IJTBaseModel 0ms
+2026-11-23T19:20:06.1556499Z  ✓ tests/js/unit/model-data-types.test.mjs > ErrorInformationDataType > stores debugValues 0ms
+2026-11-23T19:20:06.1557751Z  ✓ tests/js/unit/model-data-types.test.mjs > StepResultDataType > constructs and stores stepResultId 0ms
+2026-11-23T19:20:06.1558977Z  ✓ tests/js/unit/model-data-types.test.mjs > StepResultDataType > getIdentifier() returns stepResultId 0ms
+2026-11-23T19:20:06.1560193Z  ✓ tests/js/unit/model-data-types.test.mjs > StepResultDataType > processes stepResultValues array when provided 0ms
+2026-11-23T19:20:06.1561913Z  ✓ tests/js/unit/model-data-types.test.mjs > StepTraceDataType > constructs and stores stepTraceId 0ms
+2026-11-23T19:20:06.1563107Z  ✓ tests/js/unit/model-data-types.test.mjs > StepTraceDataType > getIdentifier() returns stepTraceId 0ms
+2026-11-23T19:20:06.1564301Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningTraceDataType > constructs and stores traceId 0ms
+2026-11-23T19:20:06.1565436Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningTraceDataType > getIdentifier() returns traceId 0ms
+2026-11-23T19:20:06.1566930Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningTraceDataType > getStepTrace() returns the matching step by stepTraceId 0ms
+2026-11-23T19:20:06.1568472Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningTraceDataType > getStepTrace() returns the second step when first does not match 0ms
+2026-11-23T19:20:06.1569921Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningTraceDataType > getStepTrace() throws when stepTraceId not found 1ms
+2026-11-23T19:20:06.1572270Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningTraceDataType > createConnections() links trace step to result step 0ms
+2026-11-23T19:20:06.1573836Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningTraceDataType > createConnections() returns early when matching result step not found 0ms
+2026-11-23T19:20:06.1575418Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningTraceDataType > createConnections() throws when stepTraces property is missing 0ms
+2026-11-23T19:20:06.1576845Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningResultDataType > constructs and stores resultId 0ms
+2026-11-23T19:20:06.1578363Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningResultDataType > connects trace steps to their corresponding result steps during construction 0ms
+2026-11-23T19:20:06.1579925Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningResultDataType > getStep() returns the matching step by stepResultId 0ms
+2026-11-23T19:20:06.1581379Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningResultDataType > getStep() returns the second step when first does not match 0ms
+2026-11-23T19:20:06.1583435Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningResultDataType > getStep() returns undefined when step not found in non-empty list 0ms
+2026-11-23T19:20:06.1584895Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningResultDataType > getStep() throws when stepResults is empty array 0ms
+2026-11-23T19:20:06.1586275Z  ✓ tests/js/unit/model-data-types.test.mjs > TighteningResultDataType > getStep() throws when stepResults field is not present 0ms
+2026-11-23T19:20:06.1587841Z  ✓ tests/js/unit/model-data-types.test.mjs > ResultDataModel > constructs with resultId and basic fields 0ms
+2026-11-23T19:20:06.1589053Z  ✓ tests/js/unit/model-data-types.test.mjs > ResultDataModel > is an instance of IJTBaseModel 0ms
+2026-11-23T19:20:06.1590424Z  ✓ tests/js/unit/model-data-types.test.mjs > ResultDataModel > applies processingTimes castMapping to create ProcessingTimesDataType 0ms
+2026-11-23T19:20:06.1592001Z  ✓ tests/js/unit/model-data-types.test.mjs > ResultDataModel > processes tags array as TagDataType instances 0ms
+2026-11-23T19:20:06.1593429Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromNode() > returns DefaultNode for TighteningSystemType 0ms
+2026-11-23T19:20:06.1594820Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromNode() > returns DefaultNode for ResultManagementType 0ms
+2026-11-23T19:20:06.1596279Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromNode() > sets node.model property after creating model 0ms
+2026-11-23T19:20:06.1597981Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromNode() > returns DefaultNode for unknown typeDefinition 0ms
+2026-11-23T19:20:06.1599320Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromNode() > DefaultNode stores node.value when truthy 0ms
+2026-11-23T19:20:06.1600931Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromNode() > DefaultNode preserves falsey-but-valid OPC UA values (0, false, empty string) 0ms
+2026-11-23T19:20:06.1602836Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromNode() > DefaultNode omits value when node.value is null or undefined 0ms
+2026-11-23T19:20:06.1604351Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromNode() > returns ResultDataModel for ns=4;i=2001 typeDefinition 0ms
+2026-11-23T19:20:06.1606047Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromNode() > returns ResultDataModel for ns=1;i=2001 typeDefinition 0ms
+2026-11-23T19:20:06.1607631Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromEvent() — additional branches > handles ResultManagementType event type 0ms
+2026-11-23T19:20:06.1609334Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromEvent() — additional branches > handles ns=X;i=1007 event with Result.value → ResultDataModel 0ms
+2026-11-23T19:20:06.1611151Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromEvent() — additional branches > falls back to DefaultNode for ns=X;i=1007 without Result.value 0ms
+2026-11-23T19:20:06.1613175Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromEvent() — additional branches > eventTypeIdOf handles EventType.value as object with toString 0ms
+2026-11-23T19:20:06.1614889Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.createModelFromEvent() — additional branches > eventTypeIdOf returns empty string for missing EventType 0ms
+2026-11-23T19:20:06.1616571Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.factory() — additional branches > returns plain object when no castMapping and no locale/key fields 0ms
+2026-11-23T19:20:06.1618750Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.factory() — additional branches > castMapping match is case-insensitive for parameter name 0ms
+2026-11-23T19:20:06.1620311Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.factory() — additional branches > returns content as-is when castMapping name not in modelRegistry 0ms
+2026-11-23T19:20:06.1622105Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.factory() — additional branches > extracts value from ExtensionObject and routes to locale handling 0ms
+2026-11-23T19:20:06.1623698Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.factory() — additional branches > key with empty value stores empty string in LocalizationModel 0ms
+2026-11-23T19:20:06.1625233Z  ✓ tests/js/unit/model-data-types.test.mjs > ModelManager.factory() — additional branches > returns content unchanged for empty object with no special fields 0ms
+2026-11-23T19:20:06.2202246Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > accepts a well-formed opc.tcp URL with port 2ms
+2026-11-23T19:20:06.2204241Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > accepts hostname with port 0ms
+2026-11-23T19:20:06.2205473Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > accepts URL with path segment 0ms
+2026-11-23T19:20:06.2206357Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > rejects null 0ms
+2026-11-23T19:20:06.2207275Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > rejects undefined 0ms
+2026-11-23T19:20:06.2208183Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > rejects empty string 0ms
+2026-11-23T19:20:06.2209096Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > rejects non-opc.tcp scheme (http) 0ms
+2026-11-23T19:20:06.2210046Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > rejects path traversal suffix attempt 0ms
+2026-11-23T19:20:06.2210998Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > rejects URL with spaces 0ms
+2026-11-23T19:20:06.2212139Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > rejects number input 0ms
+2026-11-23T19:20:06.2213073Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > rejects URL with javascript: injection 0ms
+2026-11-23T19:20:06.2214264Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > isValidEndpointUrl (SSRF guard) > ENDPOINT_URL_PATTERN is a RegExp 0ms
+2026-11-23T19:20:06.2215298Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — constructor > stores attributeIds and io 1ms
+2026-11-23T19:20:06.2216440Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > registers a connection handler 1ms
+2026-11-23T19:20:06.2217560Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > forwards status messages through the socket transport 0ms
+2026-11-23T19:20:06.2218702Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > read handler — missing endpoint silently returns 1ms
+2026-11-23T19:20:06.2219836Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > browse handler — missing endpoint silently returns 0ms
+2026-11-23T19:20:06.2221007Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > methodcall handler — missing endpoint silently returns 0ms
+2026-11-23T19:20:06.2222884Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > pathtoid handler — missing endpoint silently returns 0ms
+2026-11-23T19:20:06.2224874Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > subscribe event handler — missing endpoint silently returns 0ms
+2026-11-23T19:20:06.2226756Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > terminate connection — invalid URL is rejected 0ms
+2026-11-23T19:20:06.2228850Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > terminate connection — missing endpoint silently returns 0ms
+2026-11-23T19:20:06.2230792Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > disconnect from — invalid URL is rejected 0ms
+2026-11-23T19:20:06.2233070Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > disconnect from — missing endpoint silently returns 0ms
+2026-11-23T19:20:06.2234780Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > get connectionpoints — emits connection points data 10ms
+2026-11-23T19:20:06.2236643Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > set connectionpoints — does not throw 0ms
+2026-11-23T19:20:06.2238765Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > reports connection-point file read and write failures without throwing 11ms
+2026-11-23T19:20:06.2240643Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — setupSocketIO() socket handlers > connect to — invalid URL is rejected 0ms
+2026-11-23T19:20:06.2246146Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > connect to valid URL creates Connection in connecting state 1ms
+2026-11-23T19:20:06.2248146Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > isActive returns false when connectionState is idle 0ms
+2026-11-23T19:20:06.2250061Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > connect to duplicate URL is skipped when connection is active 0ms
+2026-11-23T19:20:06.2252128Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > setupClient itself ignores a duplicate active connection request 0ms
+2026-11-23T19:20:06.2253765Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > setupClient async error path emits error message and sets state to error 51ms
+2026-11-23T19:20:06.2756415Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > setupClient async success path emits connection lifecycle events 21ms
+2026-11-23T19:20:06.2758691Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > logs OPC UA connection backoff notifications 1ms
+2026-11-23T19:20:06.2760732Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > closeConnection with only client (no session/subscription) completes cleanly 1ms
+2026-11-23T19:20:06.2762850Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > closeConnection idempotent — second call does not re-execute cleanup 0ms
+2026-11-23T19:20:06.2764200Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > terminate connection with existing connection removes it from list 0ms
+2026-11-23T19:20:06.2765695Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — constructor, isActive, setupClient > disconnect from with existing connection nullifies the entry 0ms
+2026-11-23T19:20:06.2766916Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — dispatch to real connection methods > read dispatches to connection.read() 1ms
+2026-11-23T19:20:06.2768070Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — dispatch to real connection methods > browse dispatches to connection.browse() 0ms
+2026-11-23T19:20:06.2769206Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — dispatch to real connection methods > methodcall dispatches to connection.methodCall() 0ms
+2026-11-23T19:20:06.2770368Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — dispatch to real connection methods > pathtoid dispatches to connection.translateBrowsePath() 0ms
+2026-11-23T19:20:06.2771827Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — dispatch to real connection methods > subscribe event with truthy msg dispatches to connection.eventSubscription() 0ms
+2026-11-23T19:20:06.2773239Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > NodeOPCUAInterface — dispatch to real connection methods > subscribe event with empty msg does not dispatch 0ms
+2026-11-23T19:20:06.2774331Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > read emits readresult and promotes ResultContent when present 2ms
+2026-11-23T19:20:06.2775467Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > read defaults to DisplayName and emits error on read failure 6ms
+2026-11-23T19:20:06.2776513Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > translateBrowsePath emits target NodeId for Good status 2ms
+2026-11-23T19:20:06.2777595Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > translateBrowsePath returns quietly for non-Good status 1ms
+2026-11-23T19:20:06.2778718Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > translateBrowsePath emits error message on exception 1ms
+2026-11-23T19:20:06.2779706Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > browse emits browseresult from callback 2ms
+2026-11-23T19:20:06.2780765Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > browse emits error message on thrown exception 2ms
+2026-11-23T19:20:06.2781889Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > methodCall emits callresult for callback success 2ms
+2026-11-23T19:20:06.2782944Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > methodCall callback error does not emit callresult 2ms
+2026-11-23T19:20:06.2784020Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > methodCall emits error message when argument coercion fails 2ms
+2026-11-23T19:20:06.2785137Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > closeConnection terminates monitors, subscription, session, and client 1ms
+2026-11-23T19:20:06.2786327Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > closeConnection reports cleanup errors and still closes 1ms
+2026-11-23T19:20:06.2787535Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > closeConnection reports an event-monitor enumeration failure and still closes 1ms
+2026-11-23T19:20:06.2788736Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > eventSubscription creates monitored item and emits promoted event payload 3ms
+2026-11-23T19:20:06.2789879Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > eventSubscription ignores changed events after disconnect 2ms
+2026-11-23T19:20:06.2790969Z  ✓ tests/js/unit/node-opcua-interface.test.mjs > Connection — OPC UA method wrappers > eventSubscription emits error message when promotion fails 2ms
+2026-11-23T19:20:06.7027058Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace — construction > registers namespaces and datatypes mandatory handlers 3ms
+2026-11-23T19:20:06.7029428Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace — construction > subscribes to session state on construction 0ms
+2026-11-23T19:20:06.7032756Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace — construction > initialises with empty nodeMapping and null objectFolder 0ms
+2026-11-23T19:20:06.7034459Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.reset() > clears nodeMapping when called 0ms
+2026-11-23T19:20:06.7036276Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.handleNamespaces() > populates namespace index properties from array 0ms
+2026-11-23T19:20:06.7037988Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.handleNamespaces() > sets -1 for namespace not in the array 0ms
+2026-11-23T19:20:06.7039670Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.addressSpaceCheck() > returns falsy when no status entries 0ms
+2026-11-23T19:20:06.7041358Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.addressSpaceCheck() > returns falsy when only namespaces set 0ms
+2026-11-23T19:20:06.7043448Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.addressSpaceCheck() > returns falsy when namespaces + datatypes but no tighteningsystem 0ms
+2026-11-23T19:20:06.7045353Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.addressSpaceCheck() > returns truthy when all three status entries present 0ms
+2026-11-23T19:20:06.7047084Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.addressSpaceSetup() > pushes status string into status array 1ms
+2026-11-23T19:20:06.7048839Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.addressSpaceSetup() > resolves queued promises when all three statuses complete 1ms
+2026-11-23T19:20:06.7050619Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.addressSpaceSetup() > does not resolve until all three statuses are present 0ms
+2026-11-23T19:20:06.7052671Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.addressSpacePromise() > resolves immediately when address space already set up 0ms
+2026-11-23T19:20:06.7054957Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.addressSpacePromise() > queues promise when not yet set up (listOfTSPromises grows) 0ms
+2026-11-23T19:20:06.7057039Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.addressSpacePromise() > queues multiple promises independently 0ms
+2026-11-23T19:20:06.7058744Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.subscribeToNewNode() > stores callback in newNodeSubscription array 0ms
+2026-11-23T19:20:06.7060394Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.subscribeToNewNode() > multiple callbacks are all stored 0ms
+2026-11-23T19:20:06.7062453Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.findOrLoadNode() — cache miss path > calls browsePromise and readPromise when node not cached 1ms
+2026-11-23T19:20:06.7064406Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.findOrLoadNode() — cache miss path > caches newly loaded node so second call does not re-browse 0ms
+2026-11-23T19:20:06.7066429Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.findOrLoadNode() — cache miss path > notifies newNodeSubscription callbacks when a new node is created 0ms
+2026-11-23T19:20:06.7068329Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.findOrLoadNode() — cache miss path > reads Value attribute for VariableNode (nodeclass 2) 0ms
+2026-11-23T19:20:06.7070111Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.relationsToNodes() > returns empty array for empty relations list 0ms
+2026-11-23T19:20:06.7072012Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.relationsToNodes() > resolves each relation to a cached node 0ms
+2026-11-23T19:20:06.7073608Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.read() > returns node from socketHandler.readPromise on success 0ms
+2026-11-23T19:20:06.7075279Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.read() > returns null and does not throw when readPromise rejects 1ms
+2026-11-23T19:20:06.7076950Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace — session state trigger > does not call initiate() when session triggers false 0ms
+2026-11-23T19:20:06.7078669Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace — session state trigger > calls initiate() when session triggers true 0ms
+2026-11-23T19:20:06.7080405Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.initiate() > loads the object folder, finds a tightening system, and triggers setup 2ms
+2026-11-23T19:20:06.7082759Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.initiate() > logs and does not throw when the object folder has no tightening system 2ms
+2026-11-23T19:20:06.7084600Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace.findNodeFromPathPromise() > resolves the node at the translated browse path 0ms
+2026-11-23T19:20:06.7086464Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace — namespaces handler via registerMandatory > handleNamespaces is called when namespaces message arrives 0ms
+2026-11-23T19:20:06.7088736Z  ✓ tests/js/unit/address-space-class.test.mjs > AddressSpace — namespaces handler via registerMandatory > dataTypeEnumeration is set when datatypes message arrives 0ms
+2026-11-23T19:20:06.8670691Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > constructor > title is "Assets" (inherited from BasicScreen) 6ms
+2026-11-23T19:20:06.8673197Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > constructor > stores the assetManager 1ms
+2026-11-23T19:20:06.8674711Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > constructor > creates a container div with class draw-asset-box 1ms
+2026-11-23T19:20:06.8676266Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > constructor > appends the container to backGround 0ms
+2026-11-23T19:20:06.8677988Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > initiate() > calls setupAndLoadAllAssets on the assetManager 1ms
+2026-11-23T19:20:06.8679469Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > initiate() > calls draw() with the resolved asset object 2ms
+2026-11-23T19:20:06.8680913Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > draw() > does nothing when Controllers is empty 1ms
+2026-11-23T19:20:06.8682700Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > draw() > calls createController for each controller 20ms
+2026-11-23T19:20:06.8684388Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > draw() > passes controller index and total count to createController 1ms
+2026-11-23T19:20:06.8686300Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > draw() > calls createTool when a tool nodeId matches a controller association 2ms
+2026-11-23T19:20:06.8687986Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > draw() > does not call createTool when tool nodeId does not match any association 1ms
+2026-11-23T19:20:06.8689748Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > draw() > calls addExternal when an external nodeId matches a controller association 2ms
+2026-11-23T19:20:06.8691698Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > draw() > calls addInternal when an internal nodeId matches a controller association 1ms
+2026-11-23T19:20:06.8693540Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > draw() > recursively calls createTool for tools associated with a tool 1ms
+2026-11-23T19:20:06.8695060Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > draw() > handles all external categories (Feeders, Cables, Accessories) 3ms
+2026-11-23T19:20:06.8696774Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > draw() > handles all internal categories (MemoryDevices, SubComponents, Batteries, Sensors) 3ms
+2026-11-23T19:20:06.8698469Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createController() > appends a mainbox div to container 1ms
+2026-11-23T19:20:06.8699920Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createController() > mainbox has class asset-area 1ms
+2026-11-23T19:20:06.8702090Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createController() > initialises assetGraphicData on the node when absent 1ms
+2026-11-23T19:20:06.8703792Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createController() > sets tools property on assetGraphicData 1ms
+2026-11-23T19:20:06.8705417Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createController() > sets correct top % based on controller index 1ms
+2026-11-23T19:20:06.8707084Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createController() > does not reinitialise assetGraphicData when already defined 1ms
+2026-11-23T19:20:06.8708792Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createController() > returns the asset div from createAssetContainer 1ms
+2026-11-23T19:20:06.8710374Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addInternal() > delegates to addHorizontal with assetGraphicData.internals 1ms
+2026-11-23T19:20:06.8712252Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addExternal() > delegates to addHorizontal with assetGraphicData.externals 0ms
+2026-11-23T19:20:06.8713903Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createTool() > delegates to addVertical with assetGraphicData.tools 1ms
+2026-11-23T19:20:06.8715553Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createAssetContainer() > appends two children to the container 0ms
+2026-11-23T19:20:06.8717146Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createAssetContainer() > first child (asset) has class asset-area 0ms
+2026-11-23T19:20:06.8718722Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createAssetContainer() > asset div innerText is the node displayName 1ms
+2026-11-23T19:20:06.8720325Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createAssetContainer() > initialises assetGraphicData when null 1ms
+2026-11-23T19:20:06.8722359Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createAssetContainer() > sets assetGraphicData.internals and assetGraphicData.externals 0ms
+2026-11-23T19:20:06.8724056Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > createAssetContainer() > returns the asset div 0ms
+2026-11-23T19:20:06.8725599Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addHorizontal() > appends a child with class asset-box to the container 0ms
+2026-11-23T19:20:06.8727110Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addHorizontal() > sets innerText to node displayName 1ms
+2026-11-23T19:20:06.8728647Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addHorizontal() > pushes the box into container.assetInternals 1ms
+2026-11-23T19:20:06.8729950Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addHorizontal() > returns the created mainbox 0ms
+2026-11-23T19:20:06.8731775Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addHorizontal() > recalculates widths when a second item is added 1ms
+2026-11-23T19:20:06.8733486Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addVertical() > appends a child with class asset-box to the container 1ms
+2026-11-23T19:20:06.8735046Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addVertical() > pushes the box into container.assetInternals 1ms
+2026-11-23T19:20:06.8736615Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addVertical() > calls createAssetContainer on the new box 1ms
+2026-11-23T19:20:06.8737898Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addVertical() > returns the created mainbox 1ms
+2026-11-23T19:20:06.8739708Z  ✓ tests/js/unit/views/asset-graphics.test.mjs > AssetGraphics > addVertical() > recalculates heights when a second item is added 1ms
+2026-11-23T19:20:07.3515986Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > createNewTrace with step data > physicalQuantity=2 (torque): sets step.torque 15ms
+2026-11-23T19:20:07.3518145Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > createNewTrace with step data > physicalQuantity=3 (angle): sets step.angle 2ms
+2026-11-23T19:20:07.3520139Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > createNewTrace with step data > physicalQuantity=1 (time): sets step.time 2ms
+2026-11-23T19:20:07.3522380Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > createNewTrace with step data > physicalQuantity=11 (current): no-op, no error 3ms
+2026-11-23T19:20:07.3524424Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > createNewTrace with step data > unknown physicalQuantity throws 2ms
+2026-11-23T19:20:07.3526410Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > createNewTrace with step data > auto-generates time from samplingInterval when time is not present 2ms
+2026-11-23T19:20:07.3528241Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > createNewTrace with step data > adds the step to the trace steps array 2ms
+2026-11-23T19:20:07.3530102Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > createNewTrace with step data > time is not auto-generated when physicalQuantity=1 is present 1ms
+2026-11-23T19:20:07.3532460Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > selectTrace with steps > addStepInGUI is called for each step (button appears in stepDiv) 6ms
+2026-11-23T19:20:07.3534533Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > selectTrace with steps > direct selectTrace with a mock trace having steps covers inner loop 1ms
+2026-11-23T19:20:07.3536397Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > selectTrace with steps > selectTrace calls trace.select() 1ms
+2026-11-23T19:20:07.3538516Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > selectTrace with steps > selectTrace deselectes existing trace before selecting new one 2ms
+2026-11-23T19:20:07.3540390Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > selectStep > sets selectedStep to the matching step 2ms
+2026-11-23T19:20:07.3542362Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > selectStep > calls select() on the matching step 1ms
+2026-11-23T19:20:07.3544059Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > selectStep > calls deselect() on non-matching steps 2ms
+2026-11-23T19:20:07.3545704Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > selectStep > sets selectedStep null when no step matches 2ms
+2026-11-23T19:20:07.3547342Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > selectStep > calls chartManager.update() for each step 1ms
+2026-11-23T19:20:07.3548962Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > selectStep > calls deHighLight on selectedTrace 1ms
+2026-11-23T19:20:07.3550518Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > applyToAll > throws when trace.steps is empty 1ms
+2026-11-23T19:20:07.3552239Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > align > align(trace, null) sets displayOffset to 0 for all traces 1ms
+2026-11-23T19:20:07.3553734Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > align > align with specific step sets displayOffset to findExtremes.min (angle) 1ms
+2026-11-23T19:20:07.3555516Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > align > align with specific step uses time when xDimensionName is "time" 7ms
+2026-11-23T19:20:07.3557030Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > align > align calls trace.highLight() 1ms
+2026-11-23T19:20:07.3558400Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > align > align calls refreshAllData() 1ms
+2026-11-23T19:20:07.3559766Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > align > align calls chartManager.update() 1ms
+2026-11-23T19:20:07.3561104Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > zoom > zoom(trace, null) shows ALL steps 1ms
+2026-11-23T19:20:07.3563100Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > zoom > zoom with specific step shows matching step and hides others 1ms
+2026-11-23T19:20:07.3564732Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > zoom > zoom calls trace.highLight() 1ms
+2026-11-23T19:20:07.3566513Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > zoom > zoom calls chartManager.update() 1ms
+2026-11-23T19:20:07.3568252Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > deleteSelected with remaining traces > selects the last remaining trace after deleting the current one 1ms
+2026-11-23T19:20:07.3570292Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > deleteSelected with remaining traces > calls select() on the newly selected trace 1ms
+2026-11-23T19:20:07.3572416Z  ✓ tests/js/unit/views/trace-graphics-advanced.test.mjs > TraceGraphics — advanced coverage > deleteSelected with remaining traces > removes the deleted trace from allTraces 2ms
+2026-11-23T19:20:07.4342204Z  ✓ tests/js/unit/views/step.test.mjs > Step > stores step name from stepResultId.link.name 2ms
+2026-11-23T19:20:07.4352128Z  ✓ tests/js/unit/views/step.test.mjs > Step > stores stepId from stepResultId 0ms
+2026-11-23T19:20:07.4353222Z  ✓ tests/js/unit/views/step.test.mjs > Step > starts with color = "" 0ms
+2026-11-23T19:20:07.4354332Z  ✓ tests/js/unit/views/step.test.mjs > Step > starts with hidden = false 0ms
+2026-11-23T19:20:07.4355572Z  ✓ tests/js/unit/views/step.test.mjs > Step > stores values array from stepResultId.link.stepResultValues 0ms
+2026-11-23T19:20:07.4356838Z  ✓ tests/js/unit/views/step.test.mjs > Step > displayOffset delegates to owner.displayOffset 0ms
+2026-11-23T19:20:07.4358130Z  ✓ tests/js/unit/views/step.test.mjs > Step > xDimensionName delegates to owner.owner.xDimensionName 0ms
+2026-11-23T19:20:07.4359471Z  ✓ tests/js/unit/views/step.test.mjs > Step > yDimensionName delegates to owner.owner.yDimensionName 0ms
+2026-11-23T19:20:07.4360802Z  ✓ tests/js/unit/views/step.test.mjs > Step > absoluteFunction delegates to owner.owner.absoluteFunction 0ms
+2026-11-23T19:20:07.4362390Z  ✓ tests/js/unit/views/step.test.mjs > Step > chartManager delegates to owner.chartManager 0ms
+2026-11-23T19:20:07.4363316Z  ✓ tests/js/unit/views/step.test.mjs > Step > showValuesSelected delegates to owner.showValuesSelected 0ms
+2026-11-23T19:20:07.4364299Z  ✓ tests/js/unit/views/step.test.mjs > Step > calculateData — angle vs torque (default) > populates dataset.data with {x,y} pairs 0ms
+2026-11-23T19:20:07.4365366Z  ✓ tests/js/unit/views/step.test.mjs > Step > calculateData — angle vs torque (default) > x values come from angle (offset by displayOffset) 0ms
+2026-11-23T19:20:07.4366491Z  ✓ tests/js/unit/views/step.test.mjs > Step > calculateData — angle vs torque (default) > y values come from torque passed through absoluteFunction 0ms
+2026-11-23T19:20:07.4367523Z  ✓ tests/js/unit/views/step.test.mjs > Step > calculateData — angle vs torque (default) > sets last.x and last.y to the final point 0ms
+2026-11-23T19:20:07.4368598Z  ✓ tests/js/unit/views/step.test.mjs > Step > calculateData — angle vs torque (default) > copies data to highLightDataset.data when it exists 0ms
+2026-11-23T19:20:07.4369978Z  ✓ tests/js/unit/views/step.test.mjs > Step > calculateData — angle vs torque (default) > throws when x and y arrays have different lengths 1ms
+2026-11-23T19:20:07.4371050Z  ✓ tests/js/unit/views/step.test.mjs > Step > calculateData — time dimension > adds startTimeOffset to time values when xDimension is time 0ms
+2026-11-23T19:20:07.4372690Z  ✓ tests/js/unit/views/step.test.mjs > Step > highLight > creates highLightDataset on first call 1ms
+2026-11-23T19:20:07.4373671Z  ✓ tests/js/unit/views/step.test.mjs > Step > highLight > reuses existing highLightDataset on second call 0ms
+2026-11-23T19:20:07.4374544Z  ✓ tests/js/unit/views/step.test.mjs > Step > highLight > highLightDataset shows when not hidden 0ms
+2026-11-23T19:20:07.4375390Z  ✓ tests/js/unit/views/step.test.mjs > Step > highLight > highLightDataset hides when step is hidden 0ms
+2026-11-23T19:20:07.4376294Z  ✓ tests/js/unit/views/step.test.mjs > Step > highLight > sets points on the highLightDataset 1ms
+2026-11-23T19:20:07.4377160Z  ✓ tests/js/unit/views/step.test.mjs > Step > deHighLight > hides existing highLightDataset 1ms
+2026-11-23T19:20:07.4378176Z  ✓ tests/js/unit/views/step.test.mjs > Step > deHighLight > does nothing when highLightDataset is absent 0ms
+2026-11-23T19:20:07.4379035Z  ✓ tests/js/unit/views/step.test.mjs > Step > select > calls dataset.select() 1ms
+2026-11-23T19:20:07.4379781Z  ✓ tests/js/unit/views/step.test.mjs > Step > deselect > calls dataset.deselect() 0ms
+2026-11-23T19:20:07.4380595Z  ✓ tests/js/unit/views/step.test.mjs > Step > hideStepTrace > sets hidden = true 0ms
+2026-11-23T19:20:07.4381871Z  ✓ tests/js/unit/views/step.test.mjs > Step > hideStepTrace > hides the dataset 0ms
+2026-11-23T19:20:07.4382821Z  ✓ tests/js/unit/views/step.test.mjs > Step > showStepTrace > sets hidden = false 0ms
+2026-11-23T19:20:07.4383577Z  ✓ tests/js/unit/views/step.test.mjs > Step > showStepTrace > shows the dataset 0ms
+2026-11-23T19:20:07.4384401Z  ✓ tests/js/unit/views/step.test.mjs > Step > createHighlightDataset > returns undefined when step is hidden 0ms
+2026-11-23T19:20:07.4385412Z  ✓ tests/js/unit/views/step.test.mjs > Step > createHighlightDataset > creates and returns a dataset when not hidden 0ms
+2026-11-23T19:20:07.4386372Z  ✓ tests/js/unit/views/step.test.mjs > Step > delete > calls chartManager.filterOut for each dataset in datasetMapping 0ms
+2026-11-23T19:20:07.4387277Z  ✓ tests/js/unit/views/step.test.mjs > Step > delete > does not throw when datasetMapping is empty 0ms
+2026-11-23T19:20:07.4388195Z  ✓ tests/js/unit/views/step.test.mjs > Step > interpretPoint > handles PHYS_TORQUE (2) — y is set from value 0ms
+2026-11-23T19:20:07.4389107Z  ✓ tests/js/unit/views/step.test.mjs > Step > interpretPoint > handles PHYS_ANGLE (3) — x is set from value 0ms
+2026-11-23T19:20:07.4390328Z  ✓ tests/js/unit/views/step.test.mjs > Step > interpretPoint > handles PHYS_TIME (1) — includes startTimeOffset 0ms
+2026-11-23T19:20:07.4391713Z  ✓ tests/js/unit/views/step.test.mjs > Step > interpretPoint > handles PHYS_CURRENT (11) — no crash 1ms
+2026-11-23T19:20:07.4392644Z  ✓ tests/js/unit/views/step.test.mjs > Step > interpretPoint > throws for unknown physicalQuantity 0ms
+2026-11-23T19:20:07.4393518Z  ✓ tests/js/unit/views/step.test.mjs > Step > interpretPoint > returns limits array 0ms
+2026-11-23T19:20:07.4394379Z  ✓ tests/js/unit/views/step.test.mjs > Step > interpretPoint > falls back to the last trace x coordinate for y-only values 0ms
+2026-11-23T19:20:07.4395357Z  ✓ tests/js/unit/views/step.test.mjs > Step > interpretPoint > uses a y fallback for x-only values 0ms
+2026-11-23T19:20:07.4396221Z  ✓ tests/js/unit/views/step.test.mjs > Step > interpretPoint > omits zero y limit spans instead of emitting NaN points 0ms
+2026-11-23T19:20:07.4397168Z  ✓ tests/js/unit/views/step.test.mjs > Step > interpretPoint > omits zero x limit spans instead of emitting NaN points 0ms
+2026-11-23T19:20:07.9472604Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > title is "Traces" 9ms
+2026-11-23T19:20:07.9473777Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > xDimensionName is the first dimension 1ms
+2026-11-23T19:20:07.9474906Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > yDimensionName is the second dimension 1ms
+2026-11-23T19:20:07.9476289Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > allTraces starts empty 2ms
+2026-11-23T19:20:07.9477650Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > selectedTrace starts null 1ms
+2026-11-23T19:20:07.9479057Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > subscribes to "subscription" on connectionManager 2ms
+2026-11-23T19:20:07.9480646Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > activate > calls resultManager.subscribe 1ms
+2026-11-23T19:20:07.9482527Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > activate > result subscription callback creates a trace from the result 2ms
+2026-11-23T19:20:07.9483976Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > activate > subscription fires true triggers activate 1ms
+2026-11-23T19:20:07.9485065Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > initiate() is a no-op 1ms
+2026-11-23T19:20:07.9486189Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > setAbsolutes > makes absoluteFunction return Math.abs 1ms
+2026-11-23T19:20:07.9487769Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > removeAbsolutes > makes absoluteFunction return identity 1ms
+2026-11-23T19:20:07.9488945Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > convertDimension > returns "x" for xDimensionName 1ms
+2026-11-23T19:20:07.9490130Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > convertDimension > returns "y" for yDimensionName 1ms
+2026-11-23T19:20:07.9491688Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > convertDimension > throws for unknown dimension 1ms
+2026-11-23T19:20:07.9492966Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > findExtremes > returns min/max from step.angle when xDimensionName is angle 1ms
+2026-11-23T19:20:07.9494538Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > findExtremes > returns min/max from step.time when xDimensionName is time 1ms
+2026-11-23T19:20:07.9496008Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > showPoints > sets showValuesSelected=true when "yes" 1ms
+2026-11-23T19:20:07.9497182Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > showPoints > sets showValuesSelected=false when not "yes" 1ms
+2026-11-23T19:20:07.9498344Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > showLimits > sets showLimitSelected=true when "yes" 1ms
+2026-11-23T19:20:07.9499484Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > showLimits > sets showLimitSelected=false when not "yes" 1ms
+2026-11-23T19:20:07.9500775Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > registered UI selection callbacks > trace selection callback selects the matching trace and clears selectedStep 1ms
+2026-11-23T19:20:07.9502476Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > registered UI selection callbacks > step selection callback selects and zooms the selected step 1ms
+2026-11-23T19:20:07.9503561Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > decideTraceType > "toa" sets xDimensionName to "angle" 1ms
+2026-11-23T19:20:07.9504569Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > decideTraceType > "tot" sets xDimensionName to "time" 1ms
+2026-11-23T19:20:07.9505594Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > decideTraceType > unknown type throws 1ms
+2026-11-23T19:20:07.9506542Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > deselectTrace > returns early when no selectedTrace 1ms
+2026-11-23T19:20:07.9507643Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > deselectTrace > clears selectedTrace and calls chartManager.update 1ms
+2026-11-23T19:20:07.9508662Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > deleteSelected > throws when no trace is selected 1ms
+2026-11-23T19:20:07.9509808Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > deleteSelected > removes selected trace from allTraces 1ms
+2026-11-23T19:20:07.9511250Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > deleteSelected > calls chartManager.update when no traces remain 1ms
+2026-11-23T19:20:07.9512907Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > findTrace > finds a trace by resultId 1ms
+2026-11-23T19:20:07.9514364Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > findTrace > returns undefined when not found 1ms
+2026-11-23T19:20:07.9515955Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > createNewTrace > ignores models without a trace 1ms
+2026-11-23T19:20:07.9517349Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > createNewTrace > ignores models where resultContent is absent 7ms
+2026-11-23T19:20:07.9518601Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > createNewTrace > adds a trace entry for a valid model with empty stepTraces 2ms
+2026-11-23T19:20:07.9519689Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > createNewTrace > sets the selectedTrace to the newly created trace 1ms
+2026-11-23T19:20:07.9520814Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > createNewTrace > increments identityCounter for each trace 1ms
+2026-11-23T19:20:07.9522321Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > refreshAllData > does nothing when allTraces is empty 1ms
+2026-11-23T19:20:07.9523790Z  ✓ tests/js/unit/views/trace-graphics.test.mjs > TraceGraphics > refreshAllData > calls refreshTraceData on every trace 1ms
+2026-11-23T19:20:07.9957436Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager > constructor stores addressSpace 3ms
+2026-11-23T19:20:07.9959170Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager > getMethodNames() returns empty array before setup 1ms
+2026-11-23T19:20:07.9960777Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager > getMethod() returns undefined for unknown method 0ms
+2026-11-23T19:20:07.9962791Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager > getMethod() returns method data when set 0ms
+2026-11-23T19:20:07.9964176Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager > call() invokes addressSpace.methodCall with correct args 2ms
+2026-11-23T19:20:07.9965600Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager > call() catches and logs errors from methodCall rejection 2ms
+2026-11-23T19:20:07.9967174Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager — getMethodNames and getMethod with data > getMethodNames() returns all keys when methodObject is populated 1ms
+2026-11-23T19:20:07.9968876Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager — getMethodNames and getMethod with data > getMethod() returns correct method data for each name 0ms
+2026-11-23T19:20:07.9970581Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.call() — type handling > call() converts type i=1 (string) without parseInt 1ms
+2026-11-23T19:20:07.9972445Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.call() — type handling > call() converts type i=7 (integer) with parseInt 0ms
+2026-11-23T19:20:07.9974168Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.call() — type handling > call() passes raw value for unrecognised types (e.g. i=12 String) 0ms
+2026-11-23T19:20:07.9975884Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.call() — type handling > call() sends empty inputArguments when inputs is empty array 0ms
+2026-11-23T19:20:07.9977568Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.call() — type handling > setupMethod() filters null argContent correctly 1ms
+2026-11-23T19:20:07.9979501Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.call() — type handling > call() sends multiple arguments in correct order 0ms
+2026-11-23T19:20:07.9981165Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.setupMethodsInFolders() > rejects when addressSpacePromise rejects 1ms
+2026-11-23T19:20:07.9983251Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.setupMethodsInFolders() > resolves with empty methodObject when addressSpace has no method nodes 1ms
+2026-11-23T19:20:07.9985100Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.addressFolder() and folderPromise() > addressFolder with empty path calls folderPromise on tighteningSystemNode 0ms
+2026-11-23T19:20:07.9987007Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.addressFolder() and folderPromise() > addressFolder with non-empty path calls findNodeFromPathPromise 0ms
+2026-11-23T19:20:07.9988652Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.addressFolder() and folderPromise() > folderPromise with nodeclass=4 child calls setupMethod 1ms
+2026-11-23T19:20:07.9990510Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.setupMethod() > setupMethod resolves with methodNode and empty arguments when no input args data 0ms
+2026-11-23T19:20:07.9992470Z  ✓ tests/js/unit/method-manager.test.mjs > MethodManager.setupMethod() > setupMethod resolves with argument that has typeName when dataType in enumeration 0ms
+2026-11-23T19:20:08.4990334Z  ✓ tests/js/unit/node-factory.test.mjs > NodeFactory > creates ObjectNode for nodeclass 1 2ms
+2026-11-23T19:20:08.4991970Z  ✓ tests/js/unit/node-factory.test.mjs > NodeFactory > creates VariableNode for nodeclass 2 0ms
+2026-11-23T19:20:08.4993229Z  ✓ tests/js/unit/node-factory.test.mjs > NodeFactory > creates MethodNode for nodeclass 4 0ms
+2026-11-23T19:20:08.4994497Z  ✓ tests/js/unit/node-factory.test.mjs > NodeFactory > falls back to ObjectNode for unknown nodeclass 0ms
+2026-11-23T19:20:08.4995762Z  ✓ tests/js/unit/node-factory.test.mjs > NodeFactory > sets aname on ObjectNode when displayname is present 0ms
+2026-11-23T19:20:08.4997214Z  ✓ tests/js/unit/node-factory.test.mjs > NodeFactory > sets aname on VariableNode when displayname is present 0ms
+2026-11-23T19:20:08.4998764Z  ✓ tests/js/unit/node-factory.test.mjs > NodeFactory > sets aname on MethodNode when displayname is present 0ms
+2026-11-23T19:20:08.5000141Z  ✓ tests/js/unit/node-factory.test.mjs > NodeFactory > does not set aname when displayname is absent 0ms
+2026-11-23T19:20:08.5001920Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=0 → "error" 0ms
+2026-11-23T19:20:08.5003483Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=61 → "relation" 0ms
+2026-11-23T19:20:08.5005048Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=40 → "hasTypeDefinition" 0ms
+2026-11-23T19:20:08.5006530Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=46 → "hasProperty" 0ms
+2026-11-23T19:20:08.5008382Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=35 → "organizes" 0ms
+2026-11-23T19:20:08.5009957Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=41 → "generatesEvents" 0ms
+2026-11-23T19:20:08.5012036Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=45 → "hasSubtype" 0ms
+2026-11-23T19:20:08.5013734Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=47 → "component" 0ms
+2026-11-23T19:20:08.5015139Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=48 → "hasNotifier" 0ms
+2026-11-23T19:20:08.5016812Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=17603 → "hasInterface" 0ms
+2026-11-23T19:20:08.5018346Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=17604 → "hasAddin" 0ms
+2026-11-23T19:20:08.5019855Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > maps referenceTypeId ns=0;i=24137 → "association" 0ms
+2026-11-23T19:20:08.5021343Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > throws for an unmapped referenceTypeId 1ms
+2026-11-23T19:20:08.5023182Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — constructor relation mapping > throws for a referenceTypeId with no i= segment 0ms
+2026-11-23T19:20:08.5024490Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode getters > nodeId returns data.nodeid 0ms
+2026-11-23T19:20:08.5025684Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode getters > nodeClass returns data.nodeclass object 1ms
+2026-11-23T19:20:08.5027013Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode getters > browseName returns displayname text 0ms
+2026-11-23T19:20:08.5028292Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode getters > displayName returns displayname text 0ms
+2026-11-23T19:20:08.5029591Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getRelation() > returns the relation matching nodeId 0ms
+2026-11-23T19:20:08.5031171Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getRelation() > returns undefined when nodeId does not match 0ms
+2026-11-23T19:20:08.5032807Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getNamedRelation() > returns relation with matching browseName.name 0ms
+2026-11-23T19:20:08.5034404Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getNamedRelation() > returns undefined for non-existent browseName 0ms
+2026-11-23T19:20:08.5035930Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getRelations(type) > returns all relations of the given referenceTypeName 1ms
+2026-11-23T19:20:08.5037394Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getRelations(type) > returns empty array when type not present 0ms
+2026-11-23T19:20:08.5038754Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getChildRelations(type) > returns forward relations of the given type 0ms
+2026-11-23T19:20:08.5040162Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getChildRelations(type) > returns ALL forward relations when type is omitted 0ms
+2026-11-23T19:20:08.5042069Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getParentRelations() > returns only backward (isForward=false) relations 0ms
+2026-11-23T19:20:08.5043598Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getParentRelations() > returns empty array when no parent relations exist 0ms
+2026-11-23T19:20:08.5045420Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getTypeDefinitionRelations(typeDefinition) > matches relations where typeDefinition ends with the given i= value 0ms
+2026-11-23T19:20:08.5047150Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getTypeDefinitionRelations(typeDefinition) > returns empty array when i= value does not match 0ms
+2026-11-23T19:20:08.5048962Z  ✓ tests/js/unit/node-factory.test.mjs > PartialNode — getTypeDefinitionRelations(typeDefinition) > handles multiple relations and returns only matching ones 0ms
+2026-11-23T19:20:08.5335751Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > title is "Address Space" 5ms
+2026-11-23T19:20:08.5343557Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > stores addressSpace 1ms
+2026-11-23T19:20:08.5345232Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > subscribes to "session" on connectionManager 1ms
+2026-11-23T19:20:08.5347068Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > calls initiateNodeTree when session fires true 2ms
+2026-11-23T19:20:08.5348757Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > does not call initiateNodeTree when session fires false 1ms
+2026-11-23T19:20:08.5350374Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > initiateNodeTree > calls addressSpace.reset() 1ms
+2026-11-23T19:20:08.5352239Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > initiateNodeTree > registers "browseresult" mandatory handler 1ms
+2026-11-23T19:20:08.5354368Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > initiateNodeTree > registers "readresult" mandatory handler 1ms
+2026-11-23T19:20:08.5356103Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > initiateNodeTree > calls findOrLoadNode with root ns=0;i=84 1ms
+2026-11-23T19:20:08.5357787Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createGUINode > returns a div 22ms
+2026-11-23T19:20:08.5359368Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createGUINode > uses controlArea as default context 1ms
+2026-11-23T19:20:08.5360983Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createGUINode > uses the supplied context 1ms
+2026-11-23T19:20:08.5362953Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createGUINode > creates a browse button with the node name 2ms
+2026-11-23T19:20:08.5364294Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createGUINode > uses "undefined" when node has no browseName 1ms
+2026-11-23T19:20:08.5365413Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createGUINode > assigns nodeId to the area 1ms
+2026-11-23T19:20:08.5366432Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createGUINode > stores browse button on the node 1ms
+2026-11-23T19:20:08.5367516Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createGUINode > does not create a second button when browseButton already set 1ms
+2026-11-23T19:20:08.5368643Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createGUINode > replaces an existing child with the same nodeId 2ms
+2026-11-23T19:20:08.5369704Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createRelation > returns a browse button 1ms
+2026-11-23T19:20:08.5370728Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createRelation > button text is relation.browseName.name 1ms
+2026-11-23T19:20:08.5372251Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createRelation > clicking the button calls the callback 1ms
+2026-11-23T19:20:08.5373924Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > createRelation > sets button color from nodeClassColor map 2ms
+2026-11-23T19:20:08.5375462Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > cleanse > removes all children beyond the first 1ms
+2026-11-23T19:20:08.5376955Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > cleanse > does nothing when area has 0 or 1 children 1ms
+2026-11-23T19:20:08.5378364Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > cleanse > handles empty area without throwing 1ms
+2026-11-23T19:20:08.5380029Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > toggleNodeContent > calls cleanse when buttonArea has multiple children (collapse) 1ms
+2026-11-23T19:20:08.5382241Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > toggleNodeContent > creates relations when buttonArea has only 1 child (expand) 1ms
+2026-11-23T19:20:08.5383956Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > toggleNodeContent > skips hasTypeDefinition relations 1ms
+2026-11-23T19:20:08.5385568Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > convertRelationToNode > calls findOrLoadNode for Object nodeClass 1ms
+2026-11-23T19:20:08.5387189Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > convertRelationToNode > calls findOrLoadNode for Variable nodeClass 0ms
+2026-11-23T19:20:08.5388924Z  ✓ tests/js/unit/views/address-space-graphics.test.mjs > AddressSpaceGraphics > convertRelationToNode > does not call findOrLoadNode for Method nodeClass 0ms
+2026-11-23T19:20:08.9970540Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > stores result 2ms
+2026-11-23T19:20:08.9971870Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > stores resultId from result.resultId 0ms
+2026-11-23T19:20:08.9973148Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > sets displayName from creationTime substring (HH:MM) 0ms
+2026-11-23T19:20:08.9974331Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > starts with empty steps array 1ms
+2026-11-23T19:20:08.9975560Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > starts with selected = false 0ms
+2026-11-23T19:20:08.9976805Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > starts with displayOffset = 0 0ms
+2026-11-23T19:20:08.9978089Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > chartManager getter delegates to owner.chartManager 0ms
+2026-11-23T19:20:08.9979333Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > showValuesSelected getter delegates to owner 0ms
+2026-11-23T19:20:08.9980504Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > showLimitSelected getter delegates to owner 0ms
+2026-11-23T19:20:08.9981974Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > addStep appends a step to the steps array 0ms
+2026-11-23T19:20:08.9983379Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > generateTrace > calls createDataset on the chartManager for each step 1ms
+2026-11-23T19:20:08.9984773Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > generateTrace > assigns the dataset to the step 0ms
+2026-11-23T19:20:08.9986205Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > generateTrace > calls step.calculateData, createPoints, calculatePoints 1ms
+2026-11-23T19:20:08.9987545Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > select > sets selected = true 0ms
+2026-11-23T19:20:08.9988811Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > select > calls highLight on each step 0ms
+2026-11-23T19:20:08.9990741Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > deselect > sets selected = false 0ms
+2026-11-23T19:20:08.9992350Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > deselect > calls deHighLight on each step 0ms
+2026-11-23T19:20:08.9993706Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > deselect > calls deselect on each step 0ms
+2026-11-23T19:20:08.9995075Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > highLight > calls highLight on each step 0ms
+2026-11-23T19:20:08.9996406Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > highLight > calls deHighLight first (via deHighLight) 1ms
+2026-11-23T19:20:08.9997825Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > deHighLight > calls deHighLight on all steps 0ms
+2026-11-23T19:20:08.9999179Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > delete > calls delete on all steps 0ms
+2026-11-23T19:20:09.0000689Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > refreshTraceData > calls calculateData and calculatePoints on all steps 0ms
+2026-11-23T19:20:09.0002543Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > findStepByStepId > returns "all" when id === "all" 0ms
+2026-11-23T19:20:09.0004025Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > findStepByStepId > finds a step by stepId.value 0ms
+2026-11-23T19:20:09.0006043Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > findStepByStepId > returns undefined when not found 0ms
+2026-11-23T19:20:09.0007530Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > findStepByProgramStepId > returns "all" when id === "all" 0ms
+2026-11-23T19:20:09.0009056Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > findStepByProgramStepId > finds a step by stepId.link.programStepId 0ms
+2026-11-23T19:20:09.0010556Z  ✓ tests/js/unit/views/single-trace-data.test.mjs > SingleTraceData > findStepByProgramStepId > returns undefined when not found 0ms
+2026-11-23T19:20:09.0751940Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > title is "Methods" 6ms
+2026-11-23T19:20:09.0753657Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > subscribes to "tighteningsystem" on the connection manager 1ms
+2026-11-23T19:20:09.0757149Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > calls activate when tighteningsystem fires true 1ms
+2026-11-23T19:20:09.0758172Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > does not call activate when tighteningsystem fires false 1ms
+2026-11-23T19:20:09.0759059Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > initiate() is a no-op 1ms
+2026-11-23T19:20:09.0760020Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > activate > calls methodManager.setupMethodsInFolders with [""] 1ms
+2026-11-23T19:20:09.0761313Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > activate > calls getMethodNames after setup resolves 0ms
+2026-11-23T19:20:09.0762905Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodArea > creates a Call button inside the area 6ms
+2026-11-23T19:20:09.0764003Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodArea > clicking Call button invokes methodManager.call 1ms
+2026-11-23T19:20:09.0765007Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodArea > creates an area with method-border class 2ms
+2026-11-23T19:20:09.0766016Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > returns a value-getter function for Byte type 8ms
+2026-11-23T19:20:09.0767070Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > returns a value-getter function for Int32 type 1ms
+2026-11-23T19:20:09.0768121Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > returns a value-getter function for UInt32 type 1ms
+2026-11-23T19:20:09.0769271Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > sets default numeric value to 2 for simulate method names (Byte) 1ms
+2026-11-23T19:20:09.0770378Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > sets default numeric value to 0 for non-simulate methods (Byte) 1ms
+2026-11-23T19:20:09.0771612Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > returns a value-getter function for String type 1ms
+2026-11-23T19:20:09.0772764Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > Boolean type returns a getter that returns false by default 1ms
+2026-11-23T19:20:09.0773910Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > Boolean getter returns true after checkbox is clicked to checked 2ms
+2026-11-23T19:20:09.0775127Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > Boolean getter returns false after checkbox is clicked to unchecked 1ms
+2026-11-23T19:20:09.0776312Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > default case: returns a getter with type from arg.dataType 1ms
+2026-11-23T19:20:09.0777452Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > default case: title uses IDENTIFIER when typeName is absent 2ms
+2026-11-23T19:20:09.0778543Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > default case: title uses typeName when present 1ms
+2026-11-23T19:20:09.0779889Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > simulate method: SimulateSingleResult matches regex 1ms
+2026-11-23T19:20:09.0781324Z  ✓ tests/js/unit/views/method-graphics.test.mjs > MethodGraphics > createMethodInput > simulate method: SimulateJobResult matches regex 1ms
+2026-11-23T19:20:09.5735246Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > constructor > stores identityString (default) 4ms
+2026-11-23T19:20:09.5739098Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > constructor > stores custom identityString 1ms
+2026-11-23T19:20:09.5740702Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > constructor > creates tab-generator-base inside container 4ms
+2026-11-23T19:20:09.5742864Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > constructor > creates tab-select selector inside the base 1ms
+2026-11-23T19:20:09.5744352Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > constructor > creates tab-content div inside the base 0ms
+2026-11-23T19:20:09.5745751Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > constructor > containerList starts empty 1ms
+2026-11-23T19:20:09.5747179Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > generateTab > adds the tab to containerList 21ms
+2026-11-23T19:20:09.5748524Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > generateTab > auto-selects the first tab (calls initiate) 1ms
+2026-11-23T19:20:09.5749938Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > generateTab > does not auto-select subsequent tabs 1ms
+2026-11-23T19:20:09.5751667Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > generateTab > creates a button in the selector for each tab 1ms
+2026-11-23T19:20:09.5753124Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > generateTab > button value matches the content title 1ms
+2026-11-23T19:20:09.5754822Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > generateTab > clicking a non-first tab calls its initiate 2ms
+2026-11-23T19:20:09.5756352Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > generateTab > clicking a tab puts its backGround into contentDiv 1ms
+2026-11-23T19:20:09.5757852Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > generateTab > selector.resetButtons resets all button styles 2ms
+2026-11-23T19:20:09.5759231Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > setSelectorBackground > adds the given class to the selector 0ms
+2026-11-23T19:20:09.5760957Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > close > closes the tab matching point.name and removes it from containerList 1ms
+2026-11-23T19:20:09.5762824Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > close > does not close tabs that do not match point.name 1ms
+2026-11-23T19:20:09.5764267Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > close > closes all tabs when no point argument is given 1ms
+2026-11-23T19:20:09.5765796Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > close > removes the button from the selector on close 1ms
+2026-11-23T19:20:09.5767175Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > close > works when content has no close() method 1ms
+2026-11-23T19:20:09.5768890Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > displayError > appends an error-tab div to the container 2ms
+2026-11-23T19:20:09.5770479Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > displayError > includes the context name in the error div 1ms
+2026-11-23T19:20:09.5772260Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > displayError > displays a string error directly 1ms
+2026-11-23T19:20:09.5773788Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > displayError > JSON-stringifies an object error 1ms
+2026-11-23T19:20:09.5775242Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > displayError > removes the error div after 15 seconds 1ms
+2026-11-23T19:20:09.5776921Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > displayError > handles missing error field (empty object = isEmpty) 0ms
+2026-11-23T19:20:09.5778544Z  ✓ tests/js/unit/views/tab-generator.test.mjs > TabGenerator > displayError > instanceof String error is treated as a string 0ms
+2026-11-23T19:20:09.6785916Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > title is "+" 20ms
+2026-11-23T19:20:09.6823943Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > emits "get connectionpoints" on construction 2ms
+2026-11-23T19:20:09.6848210Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > listens to "connection points" socket event 1ms
+2026-11-23T19:20:09.6863475Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > creates a rows container div 2ms
+2026-11-23T19:20:09.6864938Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > has Add-new-server and Save buttons in backGround 4ms
+2026-11-23T19:20:09.6866459Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > Add-new-server button appends an editable placeholder row 7ms
+2026-11-23T19:20:09.6867875Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > clearDisplay empties the connection rows 4ms
+2026-11-23T19:20:09.6869349Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > connectionPoints > clears rows before adding new ones 1ms
+2026-11-23T19:20:09.6870839Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > connectionPoints > adds a row for each connection point 2ms
+2026-11-23T19:20:09.6872768Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > populates rows when "connection points" socket event fires 2ms
+2026-11-23T19:20:09.6874311Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > makeConnectionPointRow > appends a row to this.rows 1ms
+2026-11-23T19:20:09.6875837Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > makeConnectionPointRow > row contains the name input with correct value 4ms
+2026-11-23T19:20:09.6877474Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > makeConnectionPointRow > auto-connects when autoconnect is true 1ms
+2026-11-23T19:20:09.6879366Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > makeConnectionPointRow > does not auto-connect when autoconnect is false 1ms
+2026-11-23T19:20:09.6881161Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > makeConnectionPointRow > delete button removes its row from rows 3ms
+2026-11-23T19:20:09.6883006Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > makeConnectionPointRow > checkbox triggers connect on check 3ms
+2026-11-23T19:20:09.6884693Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > makeConnectionPointRow > checkbox triggers disconnect on uncheck 1ms
+2026-11-23T19:20:09.6886157Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > makeServerRow > returns a div with class server-row 3ms
+2026-11-23T19:20:09.6887654Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > makeServerRow > contains the name in a server-name div 2ms
+2026-11-23T19:20:09.6889410Z  ✓ tests/js/unit/views/server-graphics.test.mjs > ServerGraphics > Save button > emits "set connectionpoints" with serialized data 2ms
+2026-11-23T19:20:10.2084011Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > title is "Events" 5ms
+2026-11-23T19:20:10.2093233Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > stores eventManager 1ms
+2026-11-23T19:20:10.2094774Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > stores modelManager 1ms
+2026-11-23T19:20:10.2096088Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > calls eventManager.listenEvent once during construction 1ms
+2026-11-23T19:20:10.2097549Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > listenEvent is registered with "EventGraphics auto-listen" label 1ms
+2026-11-23T19:20:10.2098897Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > the listenEvent filter always returns true 1ms
+2026-11-23T19:20:10.2100281Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > the listenEvent callback renders the received event 2ms
+2026-11-23T19:20:10.2102001Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > initiate() is a no-op 1ms
+2026-11-23T19:20:10.2103652Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — missing EventType > shows a fallback li when event has no EventType 1ms
+2026-11-23T19:20:10.2105248Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — missing EventType > shows fallback li when event is null 1ms
+2026-11-23T19:20:10.2106837Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — normal event (non ResultReady) > appends a header li to messages 1ms
+2026-11-23T19:20:10.2108349Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — normal event (non ResultReady) > header includes the SourceName 1ms
+2026-11-23T19:20:10.2110241Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — normal event (non ResultReady) > header includes the EventType value 1ms
+2026-11-23T19:20:10.2112123Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — normal event (non ResultReady) > uses string EventType.value directly 1ms
+2026-11-23T19:20:10.2113939Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — normal event (non ResultReady) > calls .toString() when EventType.value is not a string 1ms
+2026-11-23T19:20:10.2117450Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — normal event (non ResultReady) > includes the EventType section even when value is empty string 1ms
+2026-11-23T19:20:10.2119262Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — normal event (non ResultReady) > does not crash when SourceName is absent 1ms
+2026-11-23T19:20:10.2121152Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — normal event (non ResultReady) > uses EVENT as the header base when SourceName is absent 1ms
+2026-11-23T19:20:10.2123152Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — ResultReady event (ns=X;i=1007) > calls modelManager.createModelFromEvent 14ms
+2026-11-23T19:20:10.2124853Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — ResultReady event (ns=X;i=1007) > appends a header li to messages 1ms
+2026-11-23T19:20:10.2126497Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — ResultReady event (ns=X;i=1007) > does not crash when Result.value is absent 1ms
+2026-11-23T19:20:10.2128125Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — supportDataTypePrinting > handles Null dataType 1ms
+2026-11-23T19:20:10.2129740Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — supportDataTypePrinting > handles ByteString dataType with data array 1ms
+2026-11-23T19:20:10.2131659Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — supportDataTypePrinting > handles LocalizedText dataType with text array 1ms
+2026-11-23T19:20:10.2133422Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — supportDataTypePrinting > handles default dataType with a simple value 1ms
+2026-11-23T19:20:10.2135057Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — supportDataTypePrinting > handles default dataType with an array value 1ms
+2026-11-23T19:20:10.2136755Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — supportDataTypePrinting > marks ConditionClassName with text-header class 2ms
+2026-11-23T19:20:10.2138451Z  ✓ tests/js/unit/views/event-graphics.test.mjs > EventGraphics > eventToHTML — supportDataTypePrinting > renders non-object field values with = sign 1ms
+2026-11-23T19:20:10.3014334Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > DefaultNode leaf (string value) > returns a li with the name=value text 4ms
+2026-11-23T19:20:10.3024773Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > DefaultNode leaf (string value) > handles localizedText value (value.text property) 0ms
+2026-11-23T19:20:10.3026658Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > DefaultNode leaf (string value) > returns a simple li when value is a plain number 0ms
+2026-11-23T19:20:10.3028574Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > returns a combined li containing shortVersion and longVersionOuter 18ms
+2026-11-23T19:20:10.3030351Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > exposes expandLong() which shows the long version 2ms
+2026-11-23T19:20:10.3032264Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > click on longVersionOuter toggles back to short 2ms
+2026-11-23T19:20:10.3033900Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > click on shortVersion expands to long 1ms
+2026-11-23T19:20:10.3035511Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > renders a named header from model.name 1ms
+2026-11-23T19:20:10.3036973Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > uses model.displayName.text when available 1ms
+2026-11-23T19:20:10.3038548Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > falls back to model.browseName.name when displayName absent 1ms
+2026-11-23T19:20:10.3040120Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > renders simple key-value string pairs 1ms
+2026-11-23T19:20:10.3041877Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > skips falsy values 1ms
+2026-11-23T19:20:10.3043423Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > skips key === "parent" 1ms
+2026-11-23T19:20:10.3044797Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > skips key === "debugValues" 1ms
+2026-11-23T19:20:10.3046299Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > renders array values with a count indicator 1ms
+2026-11-23T19:20:10.3047882Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > handles parentName by adding chevron to shortVersion 1ms
+2026-11-23T19:20:10.3049439Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > renders relations block 2ms
+2026-11-23T19:20:10.3051014Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > handles a linkedValue object (type === "linkedValue") 1ms
+2026-11-23T19:20:10.3052731Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > recursively handles nested objects 1ms
+2026-11-23T19:20:10.3054230Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > handles array of objects by recursing into each 1ms
+2026-11-23T19:20:10.3055783Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.toHTML > generic object model > handles array of primitives 1ms
+2026-11-23T19:20:10.3057244Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.display > appends a li to messageArea for a plain value 2ms
+2026-11-23T19:20:10.3058566Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.display > appends an element to messageArea for an object model 1ms
+2026-11-23T19:20:10.3059869Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.display > uses default name "Response" when no name provided 0ms
+2026-11-23T19:20:10.3061215Z  ✓ tests/js/unit/views/model-to-html.test.mjs > ModelToHTML.display > calls expandLong() on the generated element 1ms
+2026-11-23T19:20:10.7818884Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > hideValue() > hides valueDataset 3ms
+2026-11-23T19:20:10.7820759Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > hideValue() > hides limitsDataset 0ms
+2026-11-23T19:20:10.7823202Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > hideValue() > hides targetDataset 0ms
+2026-11-23T19:20:10.7825020Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > hideValues() > iterates values and hides each one 0ms
+2026-11-23T19:20:10.7827176Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > showStepTrace() with a populated values array > calls displayValuesAccordingToSettings for each value 1ms
+2026-11-23T19:20:10.7829516Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > showStepTrace() with a populated values array > shows valueDataset when showValuesSelected is true 1ms
+2026-11-23T19:20:10.7831800Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > displayValuesAccordingToSettings() > hides everything when showValue=false 1ms
+2026-11-23T19:20:10.7834156Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > displayValuesAccordingToSettings() > shows valueDataset when showValue=true, hides limits when showLimits=false 0ms
+2026-11-23T19:20:10.7836377Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > displayValuesAccordingToSettings() > shows all datasets when showValue=true and showLimits=true 0ms
+2026-11-23T19:20:10.7838622Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > calculatePoints() > hides the dataset when showValuesSelected=false 1ms
+2026-11-23T19:20:10.7840735Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > calculatePoints() > shows the value when showValuesSelected=true and physicalQuantity matches 0ms
+2026-11-23T19:20:10.7843589Z  ✓ tests/js/unit/views/step-branch-coverage.test.mjs > Step — branch coverage: methods with non-empty values > calculatePoints() > hides when angle dimension filters out PHYS_TIME value 0ms
+2026-11-23T19:20:10.8669098Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createPoints(color) > iterates values and calls createDatasets for each — angle xDim 4ms
+2026-11-23T19:20:10.8693713Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createPoints(color) > works with PHYS_ANGLE (physicalQuantity=3) value 1ms
+2026-11-23T19:20:10.8723038Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createPoints(color) > works with PHYS_TIME (physicalQuantity=1) value 1ms
+2026-11-23T19:20:10.8725353Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createPoints(color) > stores datasetMapping entry per value 1ms
+2026-11-23T19:20:10.8727481Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createPoints(color) > creates datasets for multiple values 1ms
+2026-11-23T19:20:10.8729770Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createDatasets(name, points, color) > returns an object with value, limits, target datasets 1ms
+2026-11-23T19:20:10.8732317Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createDatasets(name, points, color) > calls chartManager.createDataset for value, limits, and target 2ms
+2026-11-23T19:20:10.8734612Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createDatasets(name, points, color) > calls setPoints on each dataset 2ms
+2026-11-23T19:20:10.8736939Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createDatasets(name, points, color) > calls setBackgroundColor and setBorderColor on each dataset 1ms
+2026-11-23T19:20:10.8739171Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createDatasets(name, points, color) > calls show() on each created dataset 1ms
+2026-11-23T19:20:10.8741510Z  ✓ tests/js/unit/views/step-createpoints.test.mjs > Step — createPoints and createDatasets coverage > createDatasets(name, points, color) > works when limits array is empty 3ms
+2026-11-23T19:20:11.4453899Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > creates a canvas element and stores it as this.canvas 8ms
+2026-11-23T19:20:11.4461683Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > canvas has id="my-chart" 1ms
+2026-11-23T19:20:11.4507732Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > creates traceDiv for trace buttons 1ms
+2026-11-23T19:20:11.4563192Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > creates stepDiv for step buttons 1ms
+2026-11-23T19:20:11.4583327Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > creates a traceTypeSelect with options 2ms
+2026-11-23T19:20:11.4613031Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > traceTypeSelect has toa and tot options 2ms
+2026-11-23T19:20:11.4633196Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > creates absoluteSelect 1ms
+2026-11-23T19:20:11.4653114Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > creates valueShower 1ms
+2026-11-23T19:20:11.4682561Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > creates limitShower 1ms
+2026-11-23T19:20:11.4684076Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > creates deleteButton 1ms
+2026-11-23T19:20:11.4685485Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > generateHTML > creates alignButton 1ms
+2026-11-23T19:20:11.4687120Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > color helpers > getRandomColor returns an hsl string 1ms
+2026-11-23T19:20:11.4688715Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > color helpers > getRandomColor produces different colors on successive calls 1ms
+2026-11-23T19:20:11.4690271Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > color helpers > resetColor resets hue to 0 1ms
+2026-11-23T19:20:11.4692030Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > color helpers > getRandomColor calls resetColor when lightness drops below 0 2ms
+2026-11-23T19:20:11.4693665Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > updateTracesInGUI > clears existing trace buttons 4ms
+2026-11-23T19:20:11.4695189Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > updateTracesInGUI > creates a button for each trace 7ms
+2026-11-23T19:20:11.4696847Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > updateTracesInGUI > assigns resultId to each button 1ms
+2026-11-23T19:20:11.4698598Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > selectTrace > adds my-button-selected to the matching button 2ms
+2026-11-23T19:20:11.4700560Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > selectTrace > removes my-button-selected from non-matching buttons 1ms
+2026-11-23T19:20:11.4702636Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > clearSteps > clears stepDiv and adds an "All" button 2ms
+2026-11-23T19:20:11.4704326Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > addStepInGUI > appends a button to stepDiv 1ms
+2026-11-23T19:20:11.4705950Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > addStepInGUI > button has the step name as text 1ms
+2026-11-23T19:20:11.4707733Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > addStepInGUI > button carries the stepId value 1ms
+2026-11-23T19:20:11.4709656Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > selectStep > marks the matching step button as selected 1ms
+2026-11-23T19:20:11.4711361Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > selectStep > unmarks non-matching step buttons 1ms
+2026-11-23T19:20:11.4713575Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > setTraceSelectEventListener > stores the handler on the instance 1ms
+2026-11-23T19:20:11.4715363Z  ✓ tests/js/unit/views/trace-interface.test.mjs > TraceInterface > setStepSelectEventListener > stores the handler on the instance 1ms
+2026-11-23T19:20:11.5060613Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager > registers "subscribed event" mandatory handler on construction 4ms
+2026-11-23T19:20:11.5062719Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager > listenEvent() adds a callback entry 1ms
+2026-11-23T19:20:11.5064312Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager > receivedEvent() calls callback when filter returns true 1ms
+2026-11-23T19:20:11.5065885Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager > receivedEvent() does not call callback when filter returns false 0ms
+2026-11-23T19:20:11.5067814Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager > multiple callbacks are all invoked 0ms
+2026-11-23T19:20:11.5069101Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager > reset() clears all callbacks 0ms
+2026-11-23T19:20:11.5070484Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager > subscribeEvent() triggers ensureServerSubscription 0ms
+2026-11-23T19:20:11.5072315Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager > ensureServerSubscription() only subscribes once (serverSubscriptionActive flag) 0ms
+2026-11-23T19:20:11.5074025Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager > receivedEvent() passes msg.result as payload when present 1ms
+2026-11-23T19:20:11.5075763Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — simpleSubscribeEvent > simpleSubscribeEvent() includes default fields plus extra fields 1ms
+2026-11-23T19:20:11.5077727Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — simpleSubscribeEvent > simpleSubscribeEvent() adds callback to callbacks list when filter is provided 0ms
+2026-11-23T19:20:11.5079601Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — subscribeEvent > subscribeEvent() with null filter still triggers ensureServerSubscription 0ms
+2026-11-23T19:20:11.5081592Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — subscribeEvent > subscribeEvent() with null filter does NOT add a callback entry 0ms
+2026-11-23T19:20:11.5083380Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — subscribeEvent > subscribeEvent() with filter adds a callback entry 0ms
+2026-11-23T19:20:11.5085134Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — subscription state changes > subscription = true triggers ensureServerSubscription 1ms
+2026-11-23T19:20:11.5086937Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — subscription state changes > subscription = false sets serverSubscriptionActive to false 0ms
+2026-11-23T19:20:11.5088906Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — event socket integration > receives socket event and calls matching callback 1ms
+2026-11-23T19:20:11.5090629Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — event socket integration > handles event without SourceName gracefully 1ms
+2026-11-23T19:20:11.5092680Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — event socket integration > receivedEvent() uses msg directly when msg.result is absent 0ms
+2026-11-23T19:20:11.5094544Z  ✓ tests/js/unit/event-manager.test.mjs > EventManager — event socket integration > ensureServerSubscription() uses defaultFields when fields argument is undefined 0ms
+2026-11-23T19:20:12.1245093Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > createMethodAreas loop body (line 44) > calls createMethodArea once per method name 9ms
+2026-11-23T19:20:12.1247346Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > createMethodAreas loop body (line 44) > calls createMethodArea for each of multiple method names 1ms
+2026-11-23T19:20:12.1249524Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > createMethodArea arguments loop body (lines 62-65) > iterates one argument descriptor without throwing 15ms
+2026-11-23T19:20:12.1251825Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > createMethodArea arguments loop body (lines 62-65) > creates an input for each argument 2ms
+2026-11-23T19:20:12.1253974Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > createMethodArea arguments loop body (lines 62-65) > handles String-typed argument in the loop 1ms
+2026-11-23T19:20:12.1255878Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > createMethodArea arguments loop body (lines 62-65) > handles Boolean-typed argument in the loop 1ms
+2026-11-23T19:20:12.1257937Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > createMethodArea arguments loop body (lines 62-65) > handles Int32-typed argument in the loop 1ms
+2026-11-23T19:20:12.1259989Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > Call button onclick — values.push (line 71) > clicking Call button with one argument collects the value 3ms
+2026-11-23T19:20:12.1262957Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > Call button onclick — values.push (line 71) > clicking Call with String arg collects string value 2ms
+2026-11-23T19:20:12.1265138Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > createMethodInput String type getter (line 110) > returns a function for String type 1ms
+2026-11-23T19:20:12.1267273Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > createMethodInput String type getter (line 110) > calling the returned getter returns an object with value and type 1ms
+2026-11-23T19:20:12.1269718Z  ✓ tests/js/unit/views/method-graphics-extra.test.mjs > MethodGraphics — extra coverage > createMethodInput String type getter (line 110) > getter returns type equal to arg.dataType 1ms
+2026-11-23T19:20:12.1343955Z  ✓ tests/js/unit/views/address-space-graphics-extra.test.mjs > AddressSpaceGraphics — extra callback coverage > browseresult callback (lines 35-37) > fires without throwing when given a valid message 7ms
+2026-11-23T19:20:12.1346485Z  ✓ tests/js/unit/views/address-space-graphics-extra.test.mjs > AddressSpaceGraphics — extra callback coverage > browseresult callback (lines 35-37) > fires without throwing when browseresult value is null 1ms
+2026-11-23T19:20:12.1349836Z  ✓ tests/js/unit/views/address-space-graphics-extra.test.mjs > AddressSpaceGraphics — extra callback coverage > browseresult callback (lines 35-37) > fires without throwing when browseresult is a string 1ms
+2026-11-23T19:20:12.1352336Z  ✓ tests/js/unit/views/address-space-graphics-extra.test.mjs > AddressSpaceGraphics — extra callback coverage > readresult callback (lines 41-46) > fires without throwing for short nodeid (<=30 chars) 1ms
+2026-11-23T19:20:12.1354464Z  ✓ tests/js/unit/views/address-space-graphics-extra.test.mjs > AddressSpaceGraphics — extra callback coverage > readresult callback (lines 41-46) > fires without throwing for long nodeid (>30 chars) — triggers substring path 1ms
+2026-11-23T19:20:12.1356620Z  ✓ tests/js/unit/views/address-space-graphics-extra.test.mjs > AddressSpaceGraphics — extra callback coverage > readresult callback (lines 41-46) > shortens long nodeid to at most 30 chars 1ms
+2026-11-23T19:20:12.1359068Z  ✓ tests/js/unit/views/address-space-graphics-extra.test.mjs > AddressSpaceGraphics — extra callback coverage > initiateNodeTree then() callback (lines 51-53) > resolves findOrLoadNode and executes the then() callback body 22ms
+2026-11-23T19:20:12.1361827Z  ✓ tests/js/unit/views/address-space-graphics-extra.test.mjs > AddressSpaceGraphics — extra callback coverage > initiateNodeTree then() callback (lines 51-53) > clicking the first child button covers convertRelationToNode default then() (lines 192-193) 2ms
+2026-11-23T19:20:12.1371633Z  ✓ tests/js/unit/views/address-space-graphics-extra.test.mjs > AddressSpaceGraphics — extra callback coverage > initiateNodeTree socket handler registration > registers browseresult handler 1ms
+2026-11-23T19:20:12.1375059Z  ✓ tests/js/unit/views/address-space-graphics-extra.test.mjs > AddressSpaceGraphics — extra callback coverage > initiateNodeTree socket handler registration > registers readresult handler 1ms
+2026-11-23T19:20:12.7003801Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager > initializes with empty results dict 3ms
+2026-11-23T19:20:12.7007384Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager > addResult() stores result keyed by resultId 0ms
+2026-11-23T19:20:12.7008838Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager > addResult() notifies subscribers 1ms
+2026-11-23T19:20:12.7010319Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager > subscribe() stores callback in subscribers array 1ms
+2026-11-23T19:20:12.7012126Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager > multiple subscribers all receive addResult notification 0ms
+2026-11-23T19:20:12.7013655Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager > activate() is called when subscription event fires 1ms
+2026-11-23T19:20:12.7015350Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager > activate() registers a listenEvent handler 0ms
+2026-11-23T19:20:12.7017187Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager — addResult and subscribe edge cases > addResult() stores multiple results with different resultIds 1ms
+2026-11-23T19:20:12.7019163Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager — addResult and subscribe edge cases > addResult() overwrites existing result with same resultId 0ms
+2026-11-23T19:20:12.7020962Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager — addResult and subscribe edge cases > addResult() calls all subscribers in order 0ms
+2026-11-23T19:20:12.7022913Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager — addResult and subscribe edge cases > subscribe() with no results still adds the callback 0ms
+2026-11-23T19:20:12.7024714Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager — addResult and subscribe edge cases > subscription = false does not activate 0ms
+2026-11-23T19:20:12.7026656Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager — addResult and subscribe edge cases > subscription = true multiple times only registers listenEvent once per activation 0ms
+2026-11-23T19:20:12.7028659Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager — activate() filter and callback logic > activate() filter accepts events with Result.value 1ms
+2026-11-23T19:20:12.7030459Z  ✓ tests/js/unit/result-manager.test.mjs > ResultManager — activate() filter and callback logic > activate() callback creates model and calls addResult 0ms
+2026-11-23T19:20:12.7089405Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > stores the title 4ms
+2026-11-23T19:20:12.7090913Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > creates a backGround div with class basescreen 1ms
+2026-11-23T19:20:12.7092523Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > initiate() is a no-op 1ms
+2026-11-23T19:20:12.7093844Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > activate() is a no-op 0ms
+2026-11-23T19:20:12.7095330Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createButton > creates a BUTTON element 2ms
+2026-11-23T19:20:12.7096864Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createButton > sets the button textContent 0ms
+2026-11-23T19:20:12.7098378Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createButton > adds the my-button class 0ms
+2026-11-23T19:20:12.7100046Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createButton > appends the button to area when area is provided 1ms
+2026-11-23T19:20:12.7101807Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createButton > does not append when area is null 0ms
+2026-11-23T19:20:12.7103538Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createButton > calls the callback with the button when clicked 1ms
+2026-11-23T19:20:12.7105314Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createButton > uses the current btn.callback so it can be replaced after creation 1ms
+2026-11-23T19:20:12.7107016Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createLabel > creates a LABEL element 1ms
+2026-11-23T19:20:12.7108600Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createLabel > sets textContent 0ms
+2026-11-23T19:20:12.7110029Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createLabel > adds label-style class 0ms
+2026-11-23T19:20:12.7111616Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createInput > creates an INPUT element 11ms
+2026-11-23T19:20:12.7113159Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createInput > sets the value 1ms
+2026-11-23T19:20:12.7114616Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createInput > defaults to 90% width 1ms
+2026-11-23T19:20:12.7116079Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createInput > uses the supplied width 1ms
+2026-11-23T19:20:12.7117561Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createInput > adds input-style class 0ms
+2026-11-23T19:20:12.7119026Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createInput > sets spellcheck to false 1ms
+2026-11-23T19:20:12.7120475Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createInput > sets the onchange handler 0ms
+2026-11-23T19:20:12.7122224Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createInput > appends to area when area is provided 0ms
+2026-11-23T19:20:12.7123621Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createInput > does not append when area is null 0ms
+2026-11-23T19:20:12.7124902Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createCheckbox > creates an INPUT of type checkbox 1ms
+2026-11-23T19:20:12.7126170Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createCheckbox > sets initial checked to true 0ms
+2026-11-23T19:20:12.7127369Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createCheckbox > sets initial checked to false 0ms
+2026-11-23T19:20:12.7128656Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createCheckbox > calls onchange with the new checked value on click 0ms
+2026-11-23T19:20:12.7130008Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > createCheckbox > reports false when unchecked on click 0ms
+2026-11-23T19:20:12.7131171Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > makeNamedArea > returns a DIV 0ms
+2026-11-23T19:20:12.7132544Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > makeNamedArea > adds the supplied style class 0ms
+2026-11-23T19:20:12.7133776Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > makeNamedArea > adds scrollable-info-area class 0ms
+2026-11-23T19:20:12.7135093Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > makeNamedArea > contains a header div with the correct text 1ms
+2026-11-23T19:20:12.7138588Z  ✓ tests/js/unit/views/basic-screen.test.mjs > BasicScreen > makeNamedArea > contains a content area with tight-ul class 0ms
+2026-11-23T19:20:13.3372246Z  ✓ tests/js/unit/views/trace-event-coverage.test.mjs > TraceGraphics — setupEventListeners branch coverage > valueShower click calls showPoints with the selected option value 10ms
+2026-11-23T19:20:13.3374483Z  ✓ tests/js/unit/views/trace-event-coverage.test.mjs > TraceGraphics — setupEventListeners branch coverage > limitShower click calls showLimits with the selected option value 1ms
+2026-11-23T19:20:13.3376084Z  ✓ tests/js/unit/views/trace-event-coverage.test.mjs > TraceGraphics — setupEventListeners branch coverage > deleteButton click calls deleteSelected 1ms
+2026-11-23T19:20:13.3377509Z  ✓ tests/js/unit/views/trace-event-coverage.test.mjs > TraceGraphics — setupEventListeners branch coverage > alignButton click calls align 1ms
+2026-11-23T19:20:13.3379107Z  ✓ tests/js/unit/views/trace-event-coverage.test.mjs > TraceGraphics — setupEventListeners branch coverage > absoluteSelect click with "absolute" option calls setAbsolutes 2ms
+2026-11-23T19:20:13.3380686Z  ✓ tests/js/unit/views/trace-event-coverage.test.mjs > TraceGraphics — setupEventListeners branch coverage > absoluteSelect click with "normal" option calls removeAbsolutes 1ms
+2026-11-23T19:20:13.3382633Z  ✓ tests/js/unit/views/trace-event-coverage.test.mjs > TraceGraphics — setupEventListeners branch coverage > traceTypeSelect click calls decideTraceType with selected value 1ms
+2026-11-23T19:20:13.3384460Z  ✓ tests/js/unit/views/trace-event-coverage.test.mjs > TraceGraphics — setupEventListeners branch coverage > clicked() calls selectTrace when resultId differs from selectedTrace 2ms
+2026-11-23T19:20:13.3386171Z  ✓ tests/js/unit/views/trace-event-coverage.test.mjs > TraceGraphics — setupEventListeners branch coverage > clicked() calls selectStep when resultId matches selectedTrace 2ms
+2026-11-23T19:20:13.3657476Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > constructor stores socketHandler 2ms
+2026-11-23T19:20:13.3658774Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > constructor stores addressSpace 0ms
+2026-11-23T19:20:13.3659837Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > constructor initializes counter to 0 0ms
+2026-11-23T19:20:13.3661067Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > getAssetFolder() uses pathtoidPromise 1ms
+2026-11-23T19:20:13.3662759Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > loadAllAssetsSupport() resolves with [] when node has no component relations 0ms
+2026-11-23T19:20:13.3664344Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > loadAllAssetsSupport() resolves (not hang) when Promise.all succeeds with empty list 0ms
+2026-11-23T19:20:13.3665935Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > loadAllAssetsSupport() — node with hasAddin matching machinery type is included 0ms
+2026-11-23T19:20:13.3667495Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > loadAllAssetsSupport() — node with hasAddin NOT matching machinery type recurses 0ms
+2026-11-23T19:20:13.3669181Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > loadAllAssetsSupport() resolves [] when relationsToNodes rejects 5ms
+2026-11-23T19:20:13.3670703Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > loadAllAssetsSupport() resolves [] when recursive child loading rejects 2ms
+2026-11-23T19:20:13.3672518Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > setupAndLoadAllAssets() — returns empty object when assets folder has no children 0ms
+2026-11-23T19:20:13.3674056Z  ✓ tests/js/unit/asset-manager.test.mjs > AssetManager > setupAndLoadAllAssets() — builds returnObject from nodeList 1ms
+2026-11-23T19:20:13.8369638Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > constructor > stores the title 4ms
+2026-11-23T19:20:13.8371175Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > constructor > initialises endpointUrl to empty string 0ms
+2026-11-23T19:20:13.8373133Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > constructor > creates a backGround div (inherited from BasicScreen) 0ms
+2026-11-23T19:20:13.8374617Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > activate() > is a no-op and does not throw 1ms
+2026-11-23T19:20:13.8376036Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > close() > calls connectionManager.close() 1ms
+2026-11-23T19:20:13.8377236Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > instantiate() > sets endpointUrl on the instance 2ms
+2026-11-23T19:20:13.8378723Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > instantiate() > sets the socket on the instance 1ms
+2026-11-23T19:20:13.8380304Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > instantiate() > writes endpointUrl into backGround.textContent 1ms
+2026-11-23T19:20:13.8381950Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > instantiate() > creates a connectionManager 1ms
+2026-11-23T19:20:13.8383493Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > instantiate() > registers the "error message" socket handler 1ms
+2026-11-23T19:20:13.8385235Z  ✓ tests/js/unit/views/endpoint-graphics.test.mjs > EndpointGraphics > instantiate() > error message handler calls ijtLog.info and tabGenerator.displayError 1ms
+2026-11-23T19:20:13.8677065Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > stores context (canvas) 3ms
+2026-11-23T19:20:13.8677899Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > stores traceManager 0ms
+2026-11-23T19:20:13.8678727Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > creates a myChart instance 0ms
+2026-11-23T19:20:13.8679551Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > myChart.data.datasets starts as an array 0ms
+2026-11-23T19:20:13.8680480Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > createDataset > returns a Dataset instance 0ms
+2026-11-23T19:20:13.8681925Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > createDataset > pushes the dataset into myChart.data.datasets 0ms
+2026-11-23T19:20:13.8682910Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > createDataset > dataset has the supplied label 0ms
+2026-11-23T19:20:13.8683924Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > update > calls myChart.update() 1ms
+2026-11-23T19:20:13.8684897Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > filterOut > removes listed datasets from myChart.data.datasets 1ms
+2026-11-23T19:20:13.8685822Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > filterOut > leaves the list unchanged if no match 0ms
+2026-11-23T19:20:13.8686776Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > putInFront > moves datasets to the end of the datasets array 0ms
+2026-11-23T19:20:13.8687800Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > canvas onclick > calls traceManager.clicked when a point is found 2ms
+2026-11-23T19:20:13.8688746Z  ✓ tests/js/unit/views/chart-handler.test.mjs > ChartManager > canvas onclick > does nothing when no points hit 0ms
+2026-11-23T19:20:14.3224172Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > ErrorInformationDataType > constructs without throwing 2ms
+2026-11-23T19:20:14.3230632Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > ErrorInformationDataType > extends IJTBaseModel 0ms
+2026-11-23T19:20:14.3232062Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > ErrorInformationDataType > stores errorId property 0ms
+2026-11-23T19:20:14.3233378Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > ProcessingTimesDataType > constructs without throwing 0ms
+2026-11-23T19:20:14.3235246Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > ProcessingTimesDataType > extends IJTBaseModel 0ms
+2026-11-23T19:20:14.3236413Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > ProcessingTimesDataType > stores startTime property 0ms
+2026-11-23T19:20:14.3237527Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > ResultValueDataType > constructs without throwing 0ms
+2026-11-23T19:20:14.3238606Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > ResultValueDataType > extends IJTBaseModel 0ms
+2026-11-23T19:20:14.3239541Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > ResultValueDataType > stores name and value 0ms
+2026-11-23T19:20:14.3240664Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > StepResultDataType > constructs without throwing 0ms
+2026-11-23T19:20:14.3241826Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > StepResultDataType > extends IJTBaseModel 0ms
+2026-11-23T19:20:14.3243036Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > StepResultDataType > getIdentifier() returns stepResultId 0ms
+2026-11-23T19:20:14.3244135Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TighteningResultDataType > constructs with empty data without throwing 0ms
+2026-11-23T19:20:14.3245451Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TighteningResultDataType > extends IJTBaseModel 0ms
+2026-11-23T19:20:14.3246514Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TighteningResultDataType > stores overallStatus 0ms
+2026-11-23T19:20:14.3247622Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TighteningTraceDataType > constructs without throwing 0ms
+2026-11-23T19:20:14.3248598Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TighteningTraceDataType > extends IJTBaseModel 0ms
+2026-11-23T19:20:14.3249674Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TighteningTraceDataType > getIdentifier() returns traceId 0ms
+2026-11-23T19:20:14.3250685Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > StepTraceDataType > constructs without throwing 0ms
+2026-11-23T19:20:14.3251886Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > StepTraceDataType > getIdentifier() returns stepTraceId 0ms
+2026-11-23T19:20:14.3252919Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TraceContentDataType > constructs without throwing 0ms
+2026-11-23T19:20:14.3254027Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TraceValueDataType > constructs without throwing 0ms
+2026-11-23T19:20:14.3255090Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TagDataType > constructs without throwing 0ms
+2026-11-23T19:20:14.3256518Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TagDataType > extends IJTBaseModel 0ms
+2026-11-23T19:20:14.3257905Z  ✓ tests/js/unit/data-types.test.mjs > Data Type Models > TagDataType > stores location property 0ms
+2026-11-23T19:20:14.3549912Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > registers mandatory commands on construction 4ms
+2026-11-23T19:20:14.3569208Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > connect() emits "connect to" with endpoint 1ms
+2026-11-23T19:20:14.3570268Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > close() emits "terminate connection" 0ms
+2026-11-23T19:20:14.3571291Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > methodCall() emits "methodcall" with correct positional args 0ms
+2026-11-23T19:20:14.3572719Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > browsePromise() emits "browse" with nodeId 0ms
+2026-11-23T19:20:14.3573796Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > readPromise() emits "read" with nodeId and attribute 0ms
+2026-11-23T19:20:14.3574777Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > pathtoidPromise() emits "pathtoid" with nodeId and path 0ms
+2026-11-23T19:20:14.3575827Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > methodCall() returns a promise that resolves on matching callresult 0ms
+2026-11-23T19:20:14.3576785Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > uniqueId increments with each call 0ms
+2026-11-23T19:20:14.3577749Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > callMapping entry is deleted (not null) after promise resolves 0ms
+2026-11-23T19:20:14.3578785Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > failMapping entry is deleted after promise resolves 0ms
+2026-11-23T19:20:14.3579766Z  ✓ tests/js/unit/socket-handler.test.mjs > SocketHandler > subscribeEvent() emits "subscribe event" 0ms
+2026-11-23T19:20:14.8398806Z  ✓ tests/js/unit/address-space.test.mjs > NodeFactory > creates ObjectNode for nodeclass 1 2ms
+2026-11-23T19:20:14.8399781Z  ✓ tests/js/unit/address-space.test.mjs > NodeFactory > creates VariableNode for nodeclass 2 0ms
+2026-11-23T19:20:14.8400789Z  ✓ tests/js/unit/address-space.test.mjs > NodeFactory > creates MethodNode for nodeclass 4 0ms
+2026-11-23T19:20:14.8402026Z  ✓ tests/js/unit/address-space.test.mjs > NodeFactory > falls back to ObjectNode for unknown nodeclass 0ms
+2026-11-23T19:20:14.8403219Z  ✓ tests/js/unit/address-space.test.mjs > NodeFactory > node.browseName returns display text 0ms
+2026-11-23T19:20:14.8404126Z  ✓ tests/js/unit/address-space.test.mjs > NodeFactory > getChildRelations() returns only forward relations 0ms
+2026-11-23T19:20:14.8405070Z  ✓ tests/js/unit/address-space.test.mjs > NodeFactory > getParentRelations() returns only backward relations 0ms
+2026-11-23T19:20:14.8406174Z  ✓ tests/js/unit/address-space.test.mjs > NodeFactory > throws on unmapped referenceTypeId 1ms
+2026-11-23T19:20:14.8410618Z  ✓ tests/js/unit/address-space.test.mjs > AddressSpace > imports cleanly 1ms
+2026-11-23T19:20:14.8411797Z  ✓ tests/js/unit/address-space.test.mjs > AddressSpace > methodCall delegates directly to socketHandler.methodCall 2ms
+2026-11-23T19:20:14.8413058Z  ✓ tests/js/unit/address-space.test.mjs > AddressSpace > findOrLoadNode returns cached node synchronously without socket calls 1ms
+2026-11-23T19:20:14.8426272Z  ✓ tests/js/unit/views/connection-graphics.test.mjs > ConnectionGraphics > title is "Connection" 8ms
+2026-11-23T19:20:14.8427413Z  ✓ tests/js/unit/views/connection-graphics.test.mjs > ConnectionGraphics > stores connectionManager 1ms
+2026-11-23T19:20:14.8428536Z  ✓ tests/js/unit/views/connection-graphics.test.mjs > ConnectionGraphics > subscribes to connection, session, subscription, and tighteningsystem 2ms
+2026-11-23T19:20:14.8429743Z  ✓ tests/js/unit/views/connection-graphics.test.mjs > ConnectionGraphics > creates status labels in the controlArea 7ms
+2026-11-23T19:20:14.8430879Z  ✓ tests/js/unit/views/connection-graphics.test.mjs > ConnectionGraphics > status label updates > changes label to ESTABLISHED when trigger fires true 3ms
+2026-11-23T19:20:14.8432215Z  ✓ tests/js/unit/views/connection-graphics.test.mjs > ConnectionGraphics > status label updates > changes label to LOST when trigger fires false 2ms
+2026-11-23T19:20:14.8433324Z  ✓ tests/js/unit/views/connection-graphics.test.mjs > ConnectionGraphics > status label updates > adds on-color class when established 2ms
+2026-11-23T19:20:14.8434325Z  ✓ tests/js/unit/views/connection-graphics.test.mjs > ConnectionGraphics > status label updates > adds off-color class when lost 2ms
+2026-11-23T19:20:14.8435415Z  ✓ tests/js/unit/views/connection-graphics.test.mjs > ConnectionGraphics > status label updates > calls messageDisplay when connection becomes established 2ms
+2026-11-23T19:20:14.8436549Z  ✓ tests/js/unit/views/connection-graphics.test.mjs > ConnectionGraphics > status label updates > calls messageDisplay when connection is lost 1ms
+2026-11-23T19:20:15.3335001Z  ✓ tests/js/unit/socket-handler-branch.test.mjs > SocketHandler — branch coverage > constructExtensionObjectPromise() emits "constructextension" 2ms
+2026-11-23T19:20:15.3336909Z  ✓ tests/js/unit/socket-handler-branch.test.mjs > SocketHandler — branch coverage > constructExtensionObjectPromise() returns a Promise 0ms
+2026-11-23T19:20:15.3338613Z  ✓ tests/js/unit/socket-handler-branch.test.mjs > SocketHandler — branch coverage > constructExtensionObjectPromise() resolves when callresult arrives 0ms
+2026-11-23T19:20:15.3340410Z  ✓ tests/js/unit/socket-handler-branch.test.mjs > SocketHandler — branch coverage > applyAll returns the nodeResult from a callback that returns a value 0ms
+2026-11-23T19:20:15.3342352Z  ✓ tests/js/unit/socket-handler-branch.test.mjs > SocketHandler — branch coverage > ignores socket message when endpointurl does not match this handler 0ms
+2026-11-23T19:20:15.3344121Z  ✓ tests/js/unit/socket-handler-branch.test.mjs > SocketHandler — branch coverage > handles msg.callid that has no matching callback (no throw) 1ms
+2026-11-23T19:20:15.3345749Z  ✓ tests/js/unit/socket-handler-branch.test.mjs > SocketHandler — branch coverage > registerMandatory with a second callback for the same event 0ms
+2026-11-23T19:20:15.3373730Z  ✓ tests/js/unit/repo-hygiene.test.mjs > repo-hygiene > package.json exists and has correct name field 3ms
+2026-11-23T19:20:15.3383281Z  ✓ tests/js/unit/repo-hygiene.test.mjs > repo-hygiene > package.json has test script defined 0ms
+2026-11-23T19:20:15.3384463Z  ✓ tests/js/unit/repo-hygiene.test.mjs > repo-hygiene > package.json has test:unit:js script 1ms
+2026-11-23T19:20:15.3385700Z  ✓ tests/js/unit/repo-hygiene.test.mjs > repo-hygiene > README.md exists and is non-empty 0ms
+2026-11-23T19:20:15.3386727Z  ✓ tests/js/unit/repo-hygiene.test.mjs > repo-hygiene > eslint.config.js exists 1ms
+2026-11-23T19:20:15.3388013Z  ✓ tests/js/unit/repo-hygiene.test.mjs > repo-hygiene > vitest.config.mjs exists 0ms
+2026-11-23T19:20:15.3389127Z  ✓ tests/js/unit/repo-hygiene.test.mjs > repo-hygiene > package.json has no local path dependencies 1ms
+2026-11-23T19:20:15.3390347Z  ✓ tests/js/unit/repo-hygiene.test.mjs > repo-hygiene > package.json type is "module" 0ms
+2026-11-23T19:20:15.3392000Z  ✓ tests/js/unit/repo-hygiene.test.mjs > security — no innerHTML with variable data > connection-graphics.mjs uses textContent not innerHTML for ESTABLISHED/LOST labels 0ms
+2026-11-23T19:20:15.3393631Z  ✓ tests/js/unit/repo-hygiene.test.mjs > security — promise error handling > address-space.mjs initiate() propagates errors with .catch() 0ms
+2026-11-23T19:20:15.3395216Z  ✓ tests/js/unit/repo-hygiene.test.mjs > security — promise error handling > method-manager.mjs promise chains have .catch(reject) error propagation 0ms
+2026-11-23T19:20:15.8219682Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > methodCall → emits "methodcall" as first arg 3ms
+2026-11-23T19:20:15.8225055Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > methodCall → arg[1] is endpointUrl 0ms
+2026-11-23T19:20:15.8226651Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > methodCall → arg[2] is numeric uniqueId 0ms
+2026-11-23T19:20:15.8228399Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > methodCall → arg[3] is objectNode 0ms
+2026-11-23T19:20:15.8230160Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > methodCall → arg[4] is methodNode 0ms
+2026-11-23T19:20:15.8232193Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > methodCall → arg[5] is inputArguments array 0ms
+2026-11-23T19:20:15.8234366Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > browsePromise → emits "browse" as command 0ms
+2026-11-23T19:20:15.8245122Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > browsePromise → arg[3] is nodeId 0ms
+2026-11-23T19:20:15.8247015Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > readPromise → emits "read" as command 0ms
+2026-11-23T19:20:15.8248552Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > readPromise → arg[3] is nodeId 0ms
+2026-11-23T19:20:15.8250046Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > readPromise → arg[4] is attribute name 0ms
+2026-11-23T19:20:15.8252061Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > pathtoidPromise → emits "pathtoid" as command 0ms
+2026-11-23T19:20:15.8253866Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > pathtoidPromise → arg[3] is nodeId, arg[4] is path 0ms
+2026-11-23T19:20:15.8255719Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > connect() → emits "connect to" 0ms
+2026-11-23T19:20:15.8257389Z  ✓ tests/js/unit/wire-format-contracts.test.mjs > Wire format contracts — SocketHandler emit signatures > subscribeEvent → emits "subscribe event" 0ms
+2026-11-23T19:20:15.8258786Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > is exported as a singleton object 2ms
+2026-11-23T19:20:15.8261367Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > has error, warn, info, debug methods 0ms
+2026-11-23T19:20:15.8262822Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > has setLevel method 0ms
+2026-11-23T19:20:15.8263853Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > info is called at default level 1ms
+2026-11-23T19:20:15.8264981Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > debug is suppressed at info level 0ms
+2026-11-23T19:20:15.8266105Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > debug is called at debug level 0ms
+2026-11-23T19:20:15.8267267Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > setLevel("error") suppresses info, warn, debug 0ms
+2026-11-23T19:20:15.8268420Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > error is always called at error level 0ms
+2026-11-23T19:20:15.8269475Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > same singleton is imported twice 0ms
+2026-11-23T19:20:15.8270562Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > warn is called when level allows it 1ms
+2026-11-23T19:20:15.8271934Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > setLevel accepts a numeric level value 0ms
+2026-11-23T19:20:15.8273111Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijtLog > setLevel falls back to info for unknown string level 0ms
+2026-11-23T19:20:15.8274564Z  ✓ tests/js/unit/ijt-logger.test.mjs > ijt-support barrel — ijtLog smoke test > ijtLog is exported from ijt-support.mjs 0ms
+2026-11-23T19:20:16.3180814Z  ✓ tests/js/unit/support-models.test.mjs > KeyValuePair > is exported as a class 1ms
+2026-11-23T19:20:16.3182171Z  ✓ tests/js/unit/support-models.test.mjs > KeyValuePair > extends IJTBaseModel 0ms
+2026-11-23T19:20:16.3183438Z  ✓ tests/js/unit/support-models.test.mjs > KeyValuePair > has key and value properties after construction 0ms
+2026-11-23T19:20:16.3184828Z  ✓ tests/js/unit/support-models.test.mjs > KeyValuePair — toHTML() > toHTML() returns a container element 2ms
+2026-11-23T19:20:16.3185984Z  ✓ tests/js/unit/support-models.test.mjs > KeyValuePair — toHTML() > toHTML() sets textContent with key and value 0ms
+2026-11-23T19:20:16.3187194Z  ✓ tests/js/unit/support-models.test.mjs > KeyValuePair — toHTML() > toHTML() attaches expandLong no-op override 1ms
+2026-11-23T19:20:16.3188040Z  ✓ tests/js/unit/support-models.test.mjs > LocalizationModel > extends IJTBaseModel 0ms
+2026-11-23T19:20:16.3189112Z  ✓ tests/js/unit/support-models.test.mjs > LocalizationModel > has text property after construction 0ms
+2026-11-23T19:20:16.3190321Z  ✓ tests/js/unit/support-models.test.mjs > IJTBaseModel > copies scalar properties from parameters 0ms
+2026-11-23T19:20:16.3191708Z  ✓ tests/js/unit/support-models.test.mjs > IJTBaseModel > stores debugValues reference 0ms
+2026-11-23T19:20:16.3192703Z  ✓ tests/js/unit/support-models.test.mjs > IJTBaseModel > maps array properties by calling factory for each element 1ms
+2026-11-23T19:20:16.3280452Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > inherits the title from BasicScreen 4ms
+2026-11-23T19:20:16.3282217Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > backGround contains a columns div 5ms
+2026-11-23T19:20:16.3283580Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > controlArea is a named area with left-half class 0ms
+2026-11-23T19:20:16.3284800Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > messageArea is a named area with right-half class 0ms
+2026-11-23T19:20:16.3285864Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > creates a messages div with id="messages" 0ms
+2026-11-23T19:20:16.3286884Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > messages div is inside messageArea 0ms
+2026-11-23T19:20:16.3287980Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > messageDisplay > appends a list item to messages 2ms
+2026-11-23T19:20:16.3289100Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > messageDisplay > sets the li textContent to the message 1ms
+2026-11-23T19:20:16.3290207Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > messageDisplay > appends multiple messages in order 1ms
+2026-11-23T19:20:16.3291335Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > createArea > returns a div with class method-div 1ms
+2026-11-23T19:20:16.3292923Z  ✓ tests/js/unit/views/control-message-split-screen.test.mjs > ControlMessageSplitScreen > createArea > appends the area inside controlArea 1ms
+2026-11-23T19:20:16.8134937Z  ✓ tests/js/unit/import-paths.test.mjs > import-paths: file and directory naming > all .mjs files under javascripts/ have kebab-case names 3ms
+2026-11-23T19:20:16.8139870Z  ✓ tests/js/unit/import-paths.test.mjs > import-paths: file and directory naming > all directories under javascripts/ have kebab-case names 1ms
+2026-11-23T19:20:16.8142299Z  ✓ tests/js/unit/import-paths.test.mjs > import-paths: file and directory naming > no import path in .mjs files contains uppercase directory names (AddressSpace, Models, etc.) 4ms
+2026-11-23T19:20:16.8144165Z  ✓ tests/js/unit/import-paths.test.mjs > import-paths: file and directory naming > index.html script tags use ./javascripts/ (lowercase) 0ms
+2026-11-23T19:20:16.8145493Z  ✓ tests/js/unit/model-manager.test.mjs > ModelManager > factory() > returns primitive values as-is 2ms
+2026-11-23T19:20:16.8147042Z  ✓ tests/js/unit/model-manager.test.mjs > ModelManager > factory() > returns array as-is (arrays are handled by caller) 0ms
+2026-11-23T19:20:16.8148527Z  ✓ tests/js/unit/model-manager.test.mjs > ModelManager > factory() > returns LocalizationModel for content with locale field 0ms
+2026-11-23T19:20:16.8150058Z  ✓ tests/js/unit/model-manager.test.mjs > ModelManager > factory() > returns LocalizationModel for content with key field 0ms
+2026-11-23T19:20:16.8151764Z  ✓ tests/js/unit/model-manager.test.mjs > ModelManager > factory() > extracts value from ExtensionObject wrapper 0ms
+2026-11-23T19:20:16.8153200Z  ✓ tests/js/unit/model-manager.test.mjs > ModelManager > factory() > uses castMapping to pick correct model class 0ms
+2026-11-23T19:20:16.8154769Z  ✓ tests/js/unit/model-manager.test.mjs > ModelManager > createModelFromRead() > returns null if values has no resultId 0ms
+2026-11-23T19:20:16.8156353Z  ✓ tests/js/unit/model-manager.test.mjs > ModelManager > createModelFromEvent() > returns DefaultNode for TighteningSystemType event 0ms
+2026-11-23T19:20:16.8158004Z  ✓ tests/js/unit/model-manager.test.mjs > ModelManager > createModelFromEvent() > returns DefaultNode for unknown event type 0ms
+2026-11-23T19:20:17.3202683Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > sets label from constructor 2ms
+2026-11-23T19:20:17.3203595Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > defaults radius to 0 0ms
+2026-11-23T19:20:17.3204320Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > defaults borderWidth to 1 0ms
+2026-11-23T19:20:17.3205145Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > show() sets hidden to false 0ms
+2026-11-23T19:20:17.3205886Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > hide() sets hidden to true 0ms
+2026-11-23T19:20:17.3207049Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > setBackgroundColor() stores the color 0ms
+2026-11-23T19:20:17.3207788Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > setRadius() stores the radius 0ms
+2026-11-23T19:20:17.3208544Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > setBorderColor() stores the color 0ms
+2026-11-23T19:20:17.3209310Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > setBorderWidth() stores the width 0ms
+2026-11-23T19:20:17.3210064Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > setPoints() assigns the data array 0ms
+2026-11-23T19:20:17.3210839Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > setResultId() stores the id 0ms
+2026-11-23T19:20:17.3211729Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > setStepId() stores the id 0ms
+2026-11-23T19:20:17.3212797Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > select() sets borderWidth to 2 0ms
+2026-11-23T19:20:17.3213932Z  ✓ tests/js/unit/views/dataset.test.mjs > Dataset > deselect() resets borderWidth to 1 0ms
+2026-11-23T19:20:17.3347175Z  ✓ tests/js/unit/connection-manager.test.mjs > ConnectionManager > creates a socketHandler on construction 4ms
+2026-11-23T19:20:17.3349205Z  ✓ tests/js/unit/connection-manager.test.mjs > ConnectionManager > calls connect() on socketHandler during construction 1ms
+2026-11-23T19:20:17.3350858Z  ✓ tests/js/unit/connection-manager.test.mjs > ConnectionManager > triggers "attemptconnection" during construction 0ms
+2026-11-23T19:20:17.3352668Z  ✓ tests/js/unit/connection-manager.test.mjs > ConnectionManager > subscribe() stores callback for a state 0ms
+2026-11-23T19:20:17.3354157Z  ✓ tests/js/unit/connection-manager.test.mjs > ConnectionManager > subscribe() calls callback immediately if state is already set 0ms
+2026-11-23T19:20:17.3356108Z  ✓ tests/js/unit/connection-manager.test.mjs > ConnectionManager > trigger() sets state and calls matching callbacks 0ms
+2026-11-23T19:20:17.3357628Z  ✓ tests/js/unit/connection-manager.test.mjs > ConnectionManager > trigger() does not call callback if state unchanged 0ms
+2026-11-23T19:20:17.3359083Z  ✓ tests/js/unit/connection-manager.test.mjs > ConnectionManager > close() emits "terminate connection" 0ms
+2026-11-23T19:20:17.7825699Z  ✓ tests/js/unit/connection-manager-callbacks.test.mjs > ConnectionManager event handlers > triggers connection state on "connection established" 3ms
+2026-11-23T19:20:17.7827020Z  ✓ tests/js/unit/connection-manager-callbacks.test.mjs > ConnectionManager event handlers > triggers session state on "session established" 0ms
+2026-11-23T19:20:17.7828266Z  ✓ tests/js/unit/connection-manager-callbacks.test.mjs > ConnectionManager event handlers > triggers subscription state on "subscription created" 0ms
+2026-11-23T19:20:17.7829412Z  ✓ tests/js/unit/connection-manager-callbacks.test.mjs > ConnectionManager event handlers > resets session state on "session closed" 0ms
+2026-11-23T19:20:17.9084766Z 
+2026-11-23T19:20:17.9089240Z  Test Files  43 passed (43)
+2026-11-23T19:20:17.9093669Z       Tests  902 passed (902)
+2026-11-23T19:20:17.9094313Z    Start at  19:20:05
+2026-11-23T19:20:17.9096489Z    Duration  12.39s (environment 82%, worker 6%, tests 6%, import 3%, transform 3%)
+2026-11-23T19:20:17.9099857Z 
+2026-11-23T19:20:17.9100660Z Environment  jsdom was created 43 times · 15.76s total, 82% of tracked time
+2026-11-23T19:20:17.9101834Z              create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+2026-11-23T19:20:17.9102774Z              learn more: https://vitest.dev/guide/improving-performance#test-environments
+2026-11-23T19:20:17.9103142Z 
+2026-11-23T19:20:17.9780666Z JUNIT report written to /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/OPC_UA_Clients/Release1/IJT_Node_Client/test-results/vitest.xml
+2026-11-23T19:20:17.9791322Z  % Coverage report from v8
+2026-11-23T19:20:17.9810864Z 
+2026-11-23T19:20:17.9811843Z =============================== Coverage summary ===============================
+2026-11-23T19:20:17.9812533Z Statements   : 99.13% ( 1942/1959 )
+2026-11-23T19:20:17.9812939Z Branches     : 93.78% ( 528/563 )
+2026-11-23T19:20:17.9813384Z Functions    : 98.63% ( 432/438 )
+2026-11-23T19:20:17.9813735Z Lines        : 99.37% ( 1913/1925 )
+2026-11-23T19:20:17.9814166Z ================================================================================
+2026-11-23T19:20:18.0214039Z ##[group]Run npx eslint javascripts/ --format json --output-file test-results/eslint.json
+2026-11-23T19:20:18.0214615Z npx eslint javascripts/ --format json --output-file test-results/eslint.json
+2026-11-23T19:20:18.0233544Z shell: /usr/bin/bash -e {0}
+2026-11-23T19:20:18.0233805Z env:
+2026-11-23T19:20:18.0234207Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-23T19:20:18.0234481Z ##[endgroup]
+2026-11-23T19:20:18.8732155Z ##[group]Run audit_rc=1
+2026-11-23T19:20:18.8732520Z audit_rc=1
+2026-11-23T19:20:18.8732778Z for attempt in 1 2 3; do
+2026-11-23T19:20:18.8733142Z   if npm audit --omit=dev --package-lock-only --audit-level=high --json \
+2026-11-23T19:20:18.8733544Z     --fetch-timeout=10000 --fetch-retries=1 \
+2026-11-23T19:20:18.8733940Z     > test-results/npm-audit.json 2> test-results/npm-audit.stderr.log; then
+2026-11-23T19:20:18.8734306Z     exit 0
+2026-11-23T19:20:18.8734537Z   else
+2026-11-23T19:20:18.8734786Z     audit_rc=$?
+2026-11-23T19:20:18.8735023Z   fi
+2026-11-23T19:20:18.8735365Z   audit_output="$(cat test-results/npm-audit.json test-results/npm-audit.stderr.log)"
+2026-11-23T19:20:18.8735764Z   if ! grep -Eqi \
+2026-11-23T19:20:18.8736433Z     'ECONNRESET|ETIMEDOUT|ENOTFOUND|ERR_SOCKET|fetch failed|network timeout at|audit endpoint returned an error|service unavailable|request to https://registry\.npmjs\.org' \
+2026-11-23T19:20:18.8737043Z     <<< "$audit_output"; then
+2026-11-23T19:20:18.8737338Z     cat test-results/npm-audit.stderr.log >&2
+2026-11-23T19:20:18.8737617Z     exit "$audit_rc"
+2026-11-23T19:20:18.8737900Z   fi
+2026-11-23T19:20:18.8738157Z   if [ "$attempt" -lt 3 ]; then
+2026-11-23T19:20:18.8738577Z     echo "::warning::npm audit advisory endpoint unavailable (attempt $attempt/3); retrying in 5s"
+2026-11-23T19:20:18.8738970Z     sleep 5
+2026-11-23T19:20:18.8739181Z   fi
+2026-11-23T19:20:18.8739428Z done
+2026-11-23T19:20:18.8739821Z echo "::warning::npm audit advisory endpoint remained unavailable; dependency findings could not be refreshed"
+2026-11-23T19:20:18.8740247Z exit 0
+2026-11-23T19:20:18.8759088Z shell: /usr/bin/bash -e {0}
+2026-11-23T19:20:18.8759414Z env:
+2026-11-23T19:20:18.8759693Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-23T19:20:18.8760007Z ##[endgroup]
+2026-11-23T19:20:19.1929453Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-23T19:20:19.1929869Z with:
+2026-11-23T19:20:19.1930114Z   name: results-node-client
+2026-11-23T19:20:19.1930425Z   path: OPC_UA_Clients/Release1/IJT_Node_Client/test-results/
+2026-11-23T19:20:19.1931586Z   retention-days: 14
+2026-11-23T19:20:19.1931967Z   if-no-files-found: warn
+2026-11-23T19:20:19.1932225Z   compression-level: 6
+2026-11-23T19:20:19.1932562Z   overwrite: false
+2026-11-23T19:20:19.1932800Z   include-hidden-files: false
+2026-11-23T19:20:19.1933052Z   archive: true
+2026-11-23T19:20:19.1933290Z env:
+2026-11-23T19:20:19.1933518Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-23T19:20:19.1933791Z ##[endgroup]
+2026-11-23T19:20:19.3071754Z With the provided path, there will be 5 files uploaded
+2026-11-23T19:20:19.3076078Z Artifact name is valid!
+2026-11-23T19:20:19.3076420Z Root directory input is valid!
+2026-11-23T19:20:19.9112427Z Uploading artifact: results-node-client.zip
+2026-11-23T19:20:19.9140340Z Beginning upload of artifact content to blob storage
+2026-11-23T19:20:20.5692028Z Uploaded bytes 40263
+2026-11-23T19:20:20.6578696Z Finished uploading artifact content to blob storage!
+2026-11-23T19:20:20.6579741Z SHA256 digest of uploaded artifact is 81297c6d417c18773518272ae43c8daafab8cd78b0e4c09b3ea3afb1b94d5d7c
+2026-11-23T19:20:20.6580285Z Finalizing artifact upload
+2026-11-23T19:20:21.2057592Z Artifact results-node-client successfully finalized. Artifact ID 14854328261
+2026-11-23T19:20:21.2058454Z Artifact results-node-client has been successfully uploaded! Final size is 40263 bytes. Artifact ID is 14854328261
+2026-11-23T19:20:21.2061190Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/45247454202/artifacts/14854328261
+2026-11-23T19:20:21.2341356Z Post job cleanup.
+2026-11-23T19:20:21.3323329Z Post job cleanup.
+2026-11-23T19:20:21.4006364Z [command]/usr/bin/git version
+2026-11-23T19:20:21.4050434Z git version 2.56.1
+2026-11-23T19:20:21.4074092Z Temporarily overriding HOME='/home/runner/work/_temp/4f89c1af-7c85-4f9c-801d-e16059d9394b' before making global git config changes
+2026-11-23T19:20:21.4075249Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-23T19:20:21.4077538Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-23T19:20:21.4103315Z Removing SSH command configuration
+2026-11-23T19:20:21.4107885Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-23T19:20:21.4133803Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-23T19:20:21.4410712Z Removing HTTP extra header
+2026-11-23T19:20:21.4415933Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-23T19:20:21.4453018Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-23T19:20:21.4695841Z Removing includeIf entries pointing to credentials config files
+2026-11-23T19:20:21.4711277Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-23T19:20:21.4745321Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-23T19:20:21.5028484Z Evaluate and set job outputs
+2026-11-23T19:20:21.5033650Z Set output 'eslint_result'
+2026-11-23T19:20:21.5035186Z Cleaning up orphan processes

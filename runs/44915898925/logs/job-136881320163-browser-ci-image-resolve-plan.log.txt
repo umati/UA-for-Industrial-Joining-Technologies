@@ -1,0 +1,284 @@
+﻿2026-11-21T14:49:20.4285441Z Current runner version: '2.338.2'
+2026-11-21T14:49:20.4304013Z ##[group]Runner Image Provisioner
+2026-11-21T14:49:20.4304648Z Hosted Compute Agent
+2026-11-21T14:49:20.4305122Z Version: 20261111.635
+2026-11-21T14:49:20.4305589Z Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+2026-11-21T14:49:20.4306132Z Build Date: 2026-11-11T01:49:01Z
+2026-11-21T14:49:20.4306652Z Worker ID: {5980ea79-2ee7-4a3d-9843-5dcbc1c070aa}
+2026-11-21T14:49:20.4307210Z Region: us-west-2
+2026-11-21T14:49:20.4307857Z Cloud: AWS
+2026-11-21T14:49:20.4308249Z ##[endgroup]
+2026-11-21T14:49:20.4309141Z ##[group]Operating System
+2026-11-21T14:49:20.4309576Z Ubuntu
+2026-11-21T14:49:20.4309944Z 26.04.1
+2026-11-21T14:49:20.4310318Z LTS
+2026-11-21T14:49:20.4310707Z ##[endgroup]
+2026-11-21T14:49:20.4311375Z ##[group]Runner Image
+2026-11-21T14:49:20.4311850Z Image: ubuntu-26.04
+2026-11-21T14:49:20.4312253Z Version: 20261116.88.1
+2026-11-21T14:49:20.4313188Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261116.88/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-21T14:49:20.4314267Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261116.88
+2026-11-21T14:49:20.4314966Z ##[endgroup]
+2026-11-21T14:49:20.4315831Z ##[group]GITHUB_TOKEN Permissions
+2026-11-21T14:49:20.4317476Z Contents: read
+2026-11-21T14:49:20.4317889Z Metadata: read
+2026-11-21T14:49:20.4318274Z Packages: read
+2026-11-21T14:49:20.4318683Z ##[endgroup]
+2026-11-21T14:49:20.4320326Z Secret source: Actions
+2026-11-21T14:49:20.4321234Z Cache mode: write
+2026-11-21T14:49:20.4321766Z Prepare workflow directory
+2026-11-21T14:49:20.4587875Z Prepare all required actions
+2026-11-21T14:49:20.4624860Z Getting action download info
+2026-11-21T14:49:20.7812760Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-21T14:49:21.8976921Z Download action repository 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-21T14:49:22.0342520Z Download action repository 'docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550' (SHA:8aa5831fb8d48d8f76594c7ddde61ae58019f550)
+2026-11-21T14:49:22.5745321Z Complete job name: Browser CI image - resolve plan
+2026-11-21T14:49:22.6322898Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-21T14:49:22.6323450Z with:
+2026-11-21T14:49:22.6323813Z   persist-credentials: false
+2026-11-21T14:49:22.6324177Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-21T14:49:22.6326468Z   token: ***
+2026-11-21T14:49:22.6326784Z   ssh-strict: true
+2026-11-21T14:49:22.6327044Z   ssh-user: git
+2026-11-21T14:49:22.6327329Z   clean: true
+2026-11-21T14:49:22.6327605Z   sparse-checkout-cone-mode: true
+2026-11-21T14:49:22.6327913Z   fetch-depth: 1
+2026-11-21T14:49:22.6328207Z   fetch-tags: false
+2026-11-21T14:49:22.6328481Z   show-progress: true
+2026-11-21T14:49:22.6328766Z   lfs: false
+2026-11-21T14:49:22.6329013Z   submodules: false
+2026-11-21T14:49:22.6329303Z   set-safe-directory: true
+2026-11-21T14:49:22.6329674Z   allow-unsafe-pr-checkout: false
+2026-11-21T14:49:22.6330068Z env:
+2026-11-21T14:49:22.6330351Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-21T14:49:22.6330741Z ##[endgroup]
+2026-11-21T14:49:25.6643307Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-21T14:49:25.6644740Z ##[group]Getting Git version info
+2026-11-21T14:49:25.6645305Z Working directory is '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-21T14:49:25.6646233Z [command]/usr/bin/git version
+2026-11-21T14:49:25.6676276Z git version 2.56.1
+2026-11-21T14:49:25.6688189Z ##[endgroup]
+2026-11-21T14:49:25.6694944Z Temporarily overriding HOME='/home/runner/work/_temp/ed13ea14-56e2-43ce-a2e4-d745f41a7db0' before making global git config changes
+2026-11-21T14:49:25.6696085Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-21T14:49:25.6698739Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-21T14:49:25.7083054Z Deleting the contents of '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-21T14:49:25.7084925Z ##[group]Determining repository object format
+2026-11-21T14:49:25.7085799Z ##[endgroup]
+2026-11-21T14:49:25.7088666Z ##[group]Initializing the repository
+2026-11-21T14:49:25.7089501Z [command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-21T14:49:25.7876315Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-21T14:49:25.7877056Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-21T14:49:25.7877744Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-21T14:49:25.7878427Z hint: call:
+2026-11-21T14:49:25.7878743Z hint:
+2026-11-21T14:49:25.7879165Z hint: 	git config --global init.defaultBranch <name>
+2026-11-21T14:49:25.7879494Z hint:
+2026-11-21T14:49:25.7879890Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-21T14:49:25.7880383Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-21T14:49:25.7880780Z hint:
+2026-11-21T14:49:25.7881235Z hint: 	git branch -m <name>
+2026-11-21T14:49:25.7881522Z hint:
+2026-11-21T14:49:25.7881898Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-21T14:49:25.7900082Z Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-21T14:49:25.7911234Z [command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-21T14:49:25.7976778Z ##[endgroup]
+2026-11-21T14:49:25.7977458Z ##[group]Disabling automatic garbage collection
+2026-11-21T14:49:25.7978966Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-21T14:49:25.8003583Z ##[endgroup]
+2026-11-21T14:49:25.8004201Z ##[group]Setting up auth
+2026-11-21T14:49:25.8004734Z Removing SSH command configuration
+2026-11-21T14:49:25.8008998Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-21T14:49:25.8032775Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-21T14:49:26.1321386Z Removing HTTP extra header
+2026-11-21T14:49:26.1325511Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-21T14:49:26.1351686Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-21T14:49:26.1525770Z Removing includeIf entries pointing to credentials config files
+2026-11-21T14:49:26.1536270Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-21T14:49:26.1560426Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-21T14:49:26.1740502Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-db382bb4-fcce-4304-be7d-c9a6c85f1187.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+2026-11-21T14:49:26.1767781Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-db382bb4-fcce-4304-be7d-c9a6c85f1187.config
+2026-11-21T14:49:26.1794389Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-db382bb4-fcce-4304-be7d-c9a6c85f1187.config
+2026-11-21T14:49:26.1822141Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-db382bb4-fcce-4304-be7d-c9a6c85f1187.config
+2026-11-21T14:49:26.1852510Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-db382bb4-fcce-4304-be7d-c9a6c85f1187.config
+2026-11-21T14:49:26.1863148Z ##[endgroup]
+2026-11-21T14:49:26.1863672Z ##[group]Fetching the repository
+2026-11-21T14:49:26.1868247Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +7de08295ba264116b6584da276cbd629033ad5d7:refs/remotes/origin/main
+2026-11-21T14:49:28.0062197Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-21T14:49:28.0062859Z  * [new ref]         7de08295ba264116b6584da276cbd629033ad5d7 -> origin/main
+2026-11-21T14:49:28.0069552Z [command]/usr/bin/git branch --list --remote origin/main
+2026-11-21T14:49:28.0090215Z   origin/main
+2026-11-21T14:49:28.0098241Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-11-21T14:49:28.0114464Z 7de08295ba264116b6584da276cbd629033ad5d7
+2026-11-21T14:49:28.0116633Z ##[endgroup]
+2026-11-21T14:49:28.0117033Z ##[group]Determining the checkout info
+2026-11-21T14:49:28.0117508Z ##[endgroup]
+2026-11-21T14:49:28.0121758Z [command]/usr/bin/git sparse-checkout disable
+2026-11-21T14:49:28.0173515Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-21T14:49:28.0194042Z ##[group]Checking out the ref
+2026-11-21T14:49:28.0196978Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-21T14:49:28.2333827Z Switched to a new branch 'main'
+2026-11-21T14:49:28.2343878Z branch 'main' set up to track 'origin/main'.
+2026-11-21T14:49:28.2355517Z ##[endgroup]
+2026-11-21T14:49:28.2403840Z [command]/usr/bin/git log -1 --format=%H
+2026-11-21T14:49:28.2424725Z 7de08295ba264116b6584da276cbd629033ad5d7
+2026-11-21T14:49:28.2432120Z ##[group]Removing auth
+2026-11-21T14:49:28.2432617Z Removing SSH command configuration
+2026-11-21T14:49:28.2434306Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-21T14:49:28.2456625Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-21T14:49:28.2647539Z Removing HTTP extra header
+2026-11-21T14:49:28.2651846Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-21T14:49:28.2670090Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-21T14:49:28.2845725Z Removing includeIf entries pointing to credentials config files
+2026-11-21T14:49:28.2848202Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-21T14:49:28.2868991Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-21T14:49:28.2870240Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-21T14:49:28.2871171Z includeif.gitdir:/github/workspace/.git.path
+2026-11-21T14:49:28.2871582Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-21T14:49:28.2874927Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-21T14:49:28.2891824Z /home/runner/work/_temp/git-credentials-db382bb4-fcce-4304-be7d-c9a6c85f1187.config
+2026-11-21T14:49:28.2898738Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-db382bb4\-fcce\-4304\-be7d\-c9a6c85f1187\.config
+2026-11-21T14:49:28.2924486Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-21T14:49:28.2939933Z /home/runner/work/_temp/git-credentials-db382bb4-fcce-4304-be7d-c9a6c85f1187.config
+2026-11-21T14:49:28.2946386Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-db382bb4\-fcce\-4304\-be7d\-c9a6c85f1187\.config
+2026-11-21T14:49:28.2968919Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-21T14:49:28.3021443Z /github/runner_temp/git-credentials-db382bb4-fcce-4304-be7d-c9a6c85f1187.config
+2026-11-21T14:49:28.3047083Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-db382bb4\-fcce\-4304\-be7d\-c9a6c85f1187\.config
+2026-11-21T14:49:28.3069190Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-21T14:49:28.3084074Z /github/runner_temp/git-credentials-db382bb4-fcce-4304-be7d-c9a6c85f1187.config
+2026-11-21T14:49:28.3089533Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-db382bb4\-fcce\-4304\-be7d\-c9a6c85f1187\.config
+2026-11-21T14:49:28.3114252Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-21T14:49:28.3289074Z Removing credentials config '/home/runner/work/_temp/git-credentials-db382bb4-fcce-4304-be7d-c9a6c85f1187.config'
+2026-11-21T14:49:28.3295699Z ##[endgroup]
+2026-11-21T14:49:28.3489093Z ##[group]Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+2026-11-21T14:49:28.3489484Z with:
+2026-11-21T14:49:28.3489705Z   python-version-file: .python-version
+2026-11-21T14:49:28.3490015Z   check-latest: false
+2026-11-21T14:49:28.3492231Z   token: ***
+2026-11-21T14:49:28.3492593Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-11-21T14:49:28.3492954Z   update-environment: true
+2026-11-21T14:49:28.3493191Z   allow-prereleases: false
+2026-11-21T14:49:28.3493467Z   freethreaded: false
+2026-11-21T14:49:28.3493677Z env:
+2026-11-21T14:49:28.3493899Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-21T14:49:28.3494164Z ##[endgroup]
+2026-11-21T14:49:28.4340056Z Resolved .python-version as 3.14
+2026-11-21T14:49:28.4340729Z ##[group]Installed versions
+2026-11-21T14:49:28.8215157Z Successfully set up CPython (3.14.10)
+2026-11-21T14:49:28.8216011Z ##[endgroup]
+2026-11-21T14:49:28.8355622Z ##[group]Run docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550
+2026-11-21T14:49:28.8356153Z with:
+2026-11-21T14:49:28.8356474Z   registry: ghcr.io
+2026-11-21T14:49:28.8356802Z   username: mohitkumaragarwal
+2026-11-21T14:49:28.8360377Z   password: ***
+2026-11-21T14:49:28.8360706Z   logout: true
+2026-11-21T14:49:28.8361405Z env:
+2026-11-21T14:49:28.8361729Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-21T14:49:28.8362169Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-21T14:49:28.8362685Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-21T14:49:28.8363232Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-21T14:49:28.8363736Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-21T14:49:28.8364835Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-21T14:49:28.8365327Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-21T14:49:28.8365916Z ##[endgroup]
+2026-11-21T14:49:29.0649797Z Logging into ghcr.io...
+2026-11-21T14:49:30.1610982Z Login Succeeded!
+2026-11-21T14:49:30.1712748Z ##[group]Run set -euo pipefail
+2026-11-21T14:49:30.1713262Z set -euo pipefail
+2026-11-21T14:49:30.1713476Z IMG="$(jq -r .image "$PIN_PATH")"
+2026-11-21T14:49:30.1713717Z PIN_DIGEST="$(jq -r .digest "$PIN_PATH")"
+2026-11-21T14:49:30.1714013Z PIN_FP="$(jq -r '.inputs_fingerprint // empty' "$PIN_PATH")"
+2026-11-21T14:49:30.1714401Z CUR_FP="$(python .github/scripts/compute_browser_image_fingerprint.py --format value)"
+2026-11-21T14:49:30.1714714Z 
+2026-11-21T14:49:30.1714908Z if ! [[ "$PIN_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+2026-11-21T14:49:30.1715273Z   echo "::error file=${PIN_PATH}::digest must match ^sha256:[0-9a-f]{64}\$, got: ${PIN_DIGEST}" >&2
+2026-11-21T14:49:30.1715600Z   exit 1
+2026-11-21T14:49:30.1715753Z fi
+2026-11-21T14:49:30.1715924Z if ! [[ "$CUR_FP" =~ ^[0-9a-f]{64}$ ]]; then
+2026-11-21T14:49:30.1716316Z   echo "::error::computed inputs_fingerprint is not 64 lowercase hex chars: ${CUR_FP}" >&2
+2026-11-21T14:49:30.1716628Z   exit 1
+2026-11-21T14:49:30.1716776Z fi
+2026-11-21T14:49:30.1716916Z 
+2026-11-21T14:49:30.1717094Z echo "image_name=${IMG}" >> "$GITHUB_OUTPUT"
+2026-11-21T14:49:30.1717364Z echo "current_fingerprint=${CUR_FP}" >> "$GITHUB_OUTPUT"
+2026-11-21T14:49:30.1717602Z 
+2026-11-21T14:49:30.1717824Z # Plan 1: reviewed pin is current. Use it. This is the common path
+2026-11-21T14:49:30.1718142Z # for PRs that do NOT touch Browser CI image inputs.
+2026-11-21T14:49:30.1718400Z if [[ "$PIN_FP" == "$CUR_FP" ]]; then
+2026-11-21T14:49:30.1718627Z   echo "plan=pin" >> "$GITHUB_OUTPUT"
+2026-11-21T14:49:30.1718891Z   echo "candidate_digest=${PIN_DIGEST}" >> "$GITHUB_OUTPUT"
+2026-11-21T14:49:30.1719223Z   echo "Plan: pin (image-pin.json matches current inputs_fingerprint)"
+2026-11-21T14:49:30.1719501Z   exit 0
+2026-11-21T14:49:30.1719654Z fi
+2026-11-21T14:49:30.1719801Z 
+2026-11-21T14:49:30.1720022Z # Plan 2: GHCR has a fingerprint-keyed image from a prior build of
+2026-11-21T14:49:30.1720424Z # the same inputs. Reuse it. Cache identity is fingerprint, not SHA;
+2026-11-21T14:49:30.1720758Z # the digest emitted from this path may have been built from a
+2026-11-21T14:49:30.1721746Z # different GITHUB_SHA, which is fine - the runtime trust check in
+2026-11-21T14:49:30.1722080Z # resolve-browser-image verifies fingerprint equality.
+2026-11-21T14:49:30.1722363Z cache_tag="${IMG}:fingerprint-${CUR_FP}"
+2026-11-21T14:49:30.1722810Z if cached_digest="$(docker buildx imagetools inspect "$cache_tag" --format '{{json .Manifest.Digest}}' 2>/dev/null | tr -d '"')" \
+2026-11-21T14:49:30.1723257Z    && [[ "$cached_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+2026-11-21T14:49:30.1723518Z   echo "plan=cached" >> "$GITHUB_OUTPUT"
+2026-11-21T14:49:30.1723797Z   echo "candidate_digest=${cached_digest}" >> "$GITHUB_OUTPUT"
+2026-11-21T14:49:30.1724119Z   echo "Plan: cached (resolved ${cache_tag} -> ${cached_digest})"
+2026-11-21T14:49:30.1724379Z   exit 0
+2026-11-21T14:49:30.1724528Z fi
+2026-11-21T14:49:30.1724670Z 
+2026-11-21T14:49:30.1724870Z # Plan 3: cold build. Fork PRs cannot publish to GHCR (no
+2026-11-21T14:49:30.1725188Z # packages: write on the calling job for forks), so fail fast here
+2026-11-21T14:49:30.1725533Z # with a maintainer-facing diagnostic instead of starting a build
+2026-11-21T14:49:30.1725826Z # job that would crash at the push step.
+2026-11-21T14:49:30.1726175Z if [[ "$EVENT_NAME" == "pull_request" && -n "$PR_HEAD_REPO" && "$PR_HEAD_REPO" != "$GH_REPO" ]]; then
+2026-11-21T14:49:30.1726861Z   echo "::error file=${PIN_PATH}::Untrusted fork PR changed Browser CI image inputs and no fingerprint cache match was found." >&2
+2026-11-21T14:49:30.1727375Z   echo "::error::  current inputs_fingerprint: ${CUR_FP}" >&2
+2026-11-21T14:49:30.1727880Z   echo "::error::  action: a maintainer must re-run the PR from a same-repo branch, or refresh image-pin.json on main to pre-build the matching image." >&2
+2026-11-21T14:49:30.1728330Z   exit 1
+2026-11-21T14:49:30.1728478Z fi
+2026-11-21T14:49:30.1728618Z 
+2026-11-21T14:49:30.1728783Z echo "plan=build" >> "$GITHUB_OUTPUT"
+2026-11-21T14:49:30.1729095Z echo "Plan: build (no pin match, no cache hit; reusable workflow will publish)"
+2026-11-21T14:49:30.2478659Z shell: /usr/bin/bash -e {0}
+2026-11-21T14:49:30.2478908Z env:
+2026-11-21T14:49:30.2479096Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-21T14:49:30.2479383Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-21T14:49:30.2479738Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-21T14:49:30.2480071Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-21T14:49:30.2480360Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-21T14:49:30.2480644Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-21T14:49:30.2481130Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-21T14:49:30.2481435Z   PIN_PATH: .github/docker/ijt-browser-ci/image-pin.json
+2026-11-21T14:49:30.2481671Z   EVENT_NAME: push
+2026-11-21T14:49:30.2481843Z   PR_HEAD_REPO: 
+2026-11-21T14:49:30.2482047Z   GH_REPO: umati/UA-for-Industrial-Joining-Technologies
+2026-11-21T14:49:30.2482283Z ##[endgroup]
+2026-11-21T14:49:33.8268820Z Plan: cached (resolved ghcr.io/umati/ua-for-industrial-joining-technologies/ijt-browser-ci:fingerprint-bbae70b6b6987cd27c1c7a4b26a9e2f6f2128ca2c7f9a8b1bedab0e6828c1b0f -> sha256:93c81f6703af7e7e67079536038ad5344c346201eb81cbf789d12465b7f96ef9)
+2026-11-21T14:49:33.8343071Z Post job cleanup.
+2026-11-21T14:49:33.9926044Z ##[group]Logout from ghcr.io
+2026-11-21T14:49:33.9953701Z [command]/usr/bin/docker logout ghcr.io
+2026-11-21T14:49:34.0077238Z Removing login credentials for ghcr.io
+2026-11-21T14:49:34.0099638Z ##[endgroup]
+2026-11-21T14:49:34.0100294Z ##[group]Post cache
+2026-11-21T14:49:34.0100626Z State not set
+2026-11-21T14:49:34.0101306Z ##[endgroup]
+2026-11-21T14:49:34.0218331Z Post job cleanup.
+2026-11-21T14:49:34.1327527Z Post job cleanup.
+2026-11-21T14:49:34.2008709Z [command]/usr/bin/git version
+2026-11-21T14:49:34.2040220Z git version 2.56.1
+2026-11-21T14:49:34.2067527Z Temporarily overriding HOME='/home/runner/work/_temp/ae3a7480-d414-4756-9da2-d69d15f7ddd0' before making global git config changes
+2026-11-21T14:49:34.2068218Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-21T14:49:34.2072313Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-21T14:49:34.2098360Z Removing SSH command configuration
+2026-11-21T14:49:34.2103701Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-21T14:49:34.2129584Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-21T14:49:34.2319361Z Removing HTTP extra header
+2026-11-21T14:49:34.2323387Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-21T14:49:34.2345425Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-21T14:49:34.2545003Z Removing includeIf entries pointing to credentials config files
+2026-11-21T14:49:34.2551939Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-21T14:49:34.2583143Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-21T14:49:34.2881740Z Evaluate and set job outputs
+2026-11-21T14:49:34.2887186Z Set output 'plan'
+2026-11-21T14:49:34.2888746Z Set output 'image_name'
+2026-11-21T14:49:34.2889288Z Set output 'candidate_digest'
+2026-11-21T14:49:34.2889628Z Set output 'current_fingerprint'
+2026-11-21T14:49:34.2890156Z Cleaning up orphan processes

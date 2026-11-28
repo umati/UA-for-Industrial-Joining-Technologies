@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>OPC UA IJT — Public CI &amp; System Tests Observability Portal</title>
+  <style>
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --panel-alt: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --pass: #238636;
+  --fail: #da3633;
+  --warn: #9e6a03;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f8fa;
+    --panel: #ffffff;
+    --panel-alt: #f3f4f6;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #57606a;
+    --accent: #0969da;
+    --pass: #1a7f37;
+    --fail: #cf222e;
+    --warn: #9a6700;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.container { max-width: 1380px; margin: 0 auto; padding: 20px 24px 48px; }
+.topbar {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.topbar-title { font-weight: 600; font-size: 1.05rem; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); text-decoration: none; }
+.btn-primary { background: var(--pass); color: #fff; border-color: transparent; }
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.badge-pass {
+  background: rgba(35, 134, 54, 0.2);
+  color: #3fb950;
+  border: 1px solid var(--pass);
+}
+.badge-fail {
+  background: rgba(218, 54, 51, 0.2);
+  color: #f85149;
+  border: 1px solid var(--fail);
+}
+.badge-warn {
+  background: rgba(158, 106, 3, 0.2);
+  color: #d29922;
+  border: 1px solid var(--warn);
+}
+.badge-neutral {
+  background: var(--panel-alt);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 16px;
+}
+.tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.92rem;
+}
+.tab-btn.active {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--border);
+}
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+th { background: var(--panel-alt); font-weight: 600; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--panel-alt);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+pre.code-block, pre.log-pre {
+  background: #010409;
+  color: #e6edf3;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 8px 0;
+}
+.logs-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .logs-layout { grid-template-columns: 1fr; }
+}
+.job-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.job-item.active { border-color: var(--accent); font-weight: 600; }
+.step-details {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: var(--panel);
+}
+.step-details summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.alert {
+  padding: 10px 14px;
+  border-left: 4px solid var(--accent);
+  background: var(--panel-alt);
+  border-radius: 4px;
+  margin: 10px 0;
+}
+.meta-row {
+  color: var(--muted);
+  font-size: 0.88rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">
+      🔬 umati / UA-for-Industrial-Joining-Technologies — Public CI &amp; System Tests Portal
+    </div>
+    <div class="btn-row">
+      <a class="btn" href="https://github.com/umati/UA-for-Industrial-Joining-Technologies" target="_blank" rel="noopener">
+        📦 GitHub Repository
+      </a>
+      <a class="btn" href="https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions" target="_blank" rel="noopener">
+        ⚙️ GitHub Actions
+      </a>
+    </div>
+  </header>
+  <main class="container">
+    <div class="grid-2">
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.1rem;">CI</h2><span class="badge badge-pass">✅ Passed</span></div><div class="meta-row" style="margin:10px 0 14px;"><span><strong>Latest Run:</strong> #1438</span><span><strong>Commit:</strong> <code>9d6fb02f</code></span><span><strong>UTC:</strong> <code>2026-11-28 08:51:55 UTC</code></span></div><div class="btn-row"><a class="btn" href="latest/ci/index.html">Open</a></div></div><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.1rem;">System Tests</h2><span class="badge badge-pass">✅ Passed</span></div><div class="meta-row" style="margin:10px 0 14px;"><span><strong>Latest Run:</strong> #1158</span><span><strong>Commit:</strong> <code>9d6fb02f</code></span><span><strong>UTC:</strong> <code>2026-11-28 09:53:45 UTC</code></span></div><div class="btn-row"><a class="btn" href="latest/integration/index.html">Open</a></div></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+        <h2 style="margin:0;font-size:1.15rem;">
+          🗂️ Recent <code>main</code> Branch Runs (Zero Sign-In Required)
+        </h2>
+        <div class="btn-row">
+          <button type="button" class="btn" onclick="filterRuns('all')">
+            All (50)
+          </button>
+          <button type="button" class="btn" onclick="filterRuns('ci')">
+            CI Only
+          </button>
+          <button type="button" class="btn" onclick="filterRuns('integration')">
+            System Tests Only
+          </button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="runs-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Run</th>
+              <th>Workflow</th>
+              <th>Branch</th>
+              <th>Commit</th>
+              <th>Published (UTC)</th>
+              <th>Direct Public Links</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/46132105696/index.html"><strong>#1158</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>9d6fb02f</code></td><td><code>2026-11-28 09:53:45 UTC</code></td><td><a href="runs/46132105696/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/46127382767/index.html"><strong>#1157</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>9d6fb02f</code></td><td><code>2026-11-28 08:52:45 UTC</code></td><td><a href="runs/46127382767/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/46127382799/index.html"><strong>#1438</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>9d6fb02f</code></td><td><code>2026-11-28 08:51:55 UTC</code></td><td><a href="runs/46127382799/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/46127365722/index.html"><strong>#1437</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>eeea2ef7</code></td><td><code>2026-11-28 08:47:24 UTC</code></td><td><a href="runs/46127365722/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/46090647318/index.html"><strong>#1155</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>de9ab8aa</code></td><td><code>2026-11-28 01:17:37 UTC</code></td><td><a href="runs/46090647318/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/46090647396/index.html"><strong>#1434</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>de9ab8aa</code></td><td><code>2026-11-28 01:05:20 UTC</code></td><td><a href="runs/46090647396/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/46090622680/index.html"><strong>#1154</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>c057b742</code></td><td><code>2026-11-28 00:58:48 UTC</code></td><td><a href="runs/46090622680/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/46090598298/index.html"><strong>#1432</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>52763a80</code></td><td><code>2026-11-28 00:58:02 UTC</code></td><td><a href="runs/46090598298/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45982759155/index.html"><strong>#1152</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>b7b4a6b2</code></td><td><code>2026-11-27 10:37:21 UTC</code></td><td><a href="runs/45982759155/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45801602341/index.html"><strong>#1150</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>b7b4a6b2</code></td><td><code>2026-11-26 10:34:27 UTC</code></td><td><a href="runs/45801602341/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45711570062/index.html"><strong>#1149</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>b7b4a6b2</code></td><td><code>2026-11-25 22:29:48 UTC</code></td><td><a href="runs/45711570062/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45711568830/index.html"><strong>#1427</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>b7b4a6b2</code></td><td><code>2026-11-25 22:20:56 UTC</code></td><td><a href="runs/45711568830/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/45711040850/index.html"><strong>#1426</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>ebaf6642</code></td><td><code>2026-11-25 22:16:17 UTC</code></td><td><a href="runs/45711040850/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/45711040932/index.html"><strong>#1148</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>ebaf6642</code></td><td><code>2026-11-25 22:15:38 UTC</code></td><td><a href="runs/45711040932/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45599121643/index.html"><strong>#1146</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>c99f7999</code></td><td><code>2026-11-25 10:59:07 UTC</code></td><td><a href="runs/45599121643/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45498029597/index.html"><strong>#1144</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>c99f7999</code></td><td><code>2026-11-24 22:14:34 UTC</code></td><td><a href="runs/45498029597/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45498029767/index.html"><strong>#1423</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>c99f7999</code></td><td><code>2026-11-24 22:13:24 UTC</code></td><td><a href="runs/45498029767/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45389262550/index.html"><strong>#1142</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>f896c1c4</code></td><td><code>2026-11-24 12:06:24 UTC</code></td><td><a href="runs/45389262550/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45356315481/index.html"><strong>#1141</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>f896c1c4</code></td><td><code>2026-11-24 08:47:08 UTC</code></td><td><a href="runs/45356315481/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45356315387/index.html"><strong>#1421</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>f896c1c4</code></td><td><code>2026-11-24 08:33:32 UTC</code></td><td><a href="runs/45356315387/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/45356279256/index.html"><strong>#1140</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>7b7720cd</code></td><td><code>2026-11-24 08:28:58 UTC</code></td><td><a href="runs/45356279256/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/45356279330/index.html"><strong>#1420</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>7b7720cd</code></td><td><code>2026-11-24 08:28:24 UTC</code></td><td><a href="runs/45356279330/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45247454202/index.html"><strong>#1417</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>35ef5fb3</code></td><td><code>2026-11-23 19:24:25 UTC</code></td><td><a href="runs/45247454202/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/45247380336/index.html"><strong>#1416</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>34a2fffc</code></td><td><code>2026-11-23 19:19:06 UTC</code></td><td><a href="runs/45247380336/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45154854387/index.html"><strong>#1137</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>e8e294d2</code></td><td><code>2026-11-23 10:24:43 UTC</code></td><td><a href="runs/45154854387/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45140139919/index.html"><strong>#1413</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>e8e294d2</code></td><td><code>2026-11-23 08:43:20 UTC</code></td><td><a href="runs/45140139919/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45139608071/index.html"><strong>#1136</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>6f537572</code></td><td><code>2026-11-23 08:40:28 UTC</code></td><td><a href="runs/45139608071/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/45139608146/index.html"><strong>#1412</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>6f537572</code></td><td><code>2026-11-23 08:38:25 UTC</code></td><td><a href="runs/45139608146/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45138413663/index.html"><strong>#1410</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>ecce11b0</code></td><td><code>2026-11-23 08:34:24 UTC</code></td><td><a href="runs/45138413663/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45138413923/index.html"><strong>#1135</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>ecce11b0</code></td><td><code>2026-11-23 08:33:39 UTC</code></td><td><a href="runs/45138413923/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/45138379437/index.html"><strong>#1409</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>fa1bbba1</code></td><td><code>2026-11-23 08:26:41 UTC</code></td><td><a href="runs/45138379437/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/45138379402/index.html"><strong>#1134</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>fa1bbba1</code></td><td><code>2026-11-23 08:25:35 UTC</code></td><td><a href="runs/45138379402/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/45007187097/index.html"><strong>#1129</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>7de08295</code></td><td><code>2026-11-22 09:28:02 UTC</code></td><td><a href="runs/45007187097/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44915898925/index.html"><strong>#1128</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>7de08295</code></td><td><code>2026-11-21 14:55:40 UTC</code></td><td><a href="runs/44915898925/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44915898919/index.html"><strong>#1404</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>7de08295</code></td><td><code>2026-11-21 14:53:46 UTC</code></td><td><a href="runs/44915898919/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44888505917/index.html"><strong>#1127</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>197fecad</code></td><td><code>2026-11-21 09:19:00 UTC</code></td><td><a href="runs/44888505917/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44723995920/index.html"><strong>#1124</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>197fecad</code></td><td><code>2026-11-20 11:08:52 UTC</code></td><td><a href="runs/44723995920/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44723995870/index.html"><strong>#1401</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>197fecad</code></td><td><code>2026-11-20 11:07:09 UTC</code></td><td><a href="runs/44723995870/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44712750302/index.html"><strong>#1122</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>85c4b276</code></td><td><code>2026-11-20 09:47:10 UTC</code></td><td><a href="runs/44712750302/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44704358821/index.html"><strong>#1399</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>85c4b276</code></td><td><code>2026-11-20 08:43:38 UTC</code></td><td><a href="runs/44704358821/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44500567167/index.html"><strong>#1121</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>e7615217</code></td><td><code>2026-11-19 10:00:51 UTC</code></td><td><a href="runs/44500567167/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44493866859/index.html"><strong>#1397</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>e7615217</code></td><td><code>2026-11-19 09:14:25 UTC</code></td><td><a href="runs/44493866859/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44303564144/index.html"><strong>#1395</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>a6d313b1</code></td><td><code>2026-11-18 12:34:25 UTC</code></td><td><a href="runs/44303564144/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44303564243/index.html"><strong>#1120</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>a6d313b1</code></td><td><code>2026-11-18 12:30:30 UTC</code></td><td><a href="runs/44303564243/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-warn">⚠️ Cancelled</span></td><td><a href="runs/44303528038/index.html"><strong>#1394</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>f4709585</code></td><td><code>2026-11-18 12:24:53 UTC</code></td><td><a href="runs/44303528038/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44278726283/index.html"><strong>#1118</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>499bba25</code></td><td><code>2026-11-18 09:50:57 UTC</code></td><td><a href="runs/44278726283/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44074623646/index.html"><strong>#1117</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>499bba25</code></td><td><code>2026-11-17 11:37:08 UTC</code></td><td><a href="runs/44074623646/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44074623495/index.html"><strong>#1390</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>499bba25</code></td><td><code>2026-11-17 11:34:58 UTC</code></td><td><a href="runs/44074623495/index.html">Open</a></td></tr><tr data-workflow="integration"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/44062565382/index.html"><strong>#1115</strong></a></td><td>System Tests — Live OPC UA, Browser, Docker, Specification Testing</td><td><code>main</code></td><td><code>c7cb2896</code></td><td><code>2026-11-17 10:18:31 UTC</code></td><td><a href="runs/44062565382/index.html">Open</a></td></tr><tr data-workflow="ci"><td><span class="badge badge-pass">✅ Passed</span></td><td><a href="runs/43980475639/index.html"><strong>#1388</strong></a></td><td>CI — Unit, Static, and Smoke Gates</td><td><code>main</code></td><td><code>c7cb2896</code></td><td><code>2026-11-16 23:39:57 UTC</code></td><td><a href="runs/43980475639/index.html">Open</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+  <script>
+    function filterRuns(slug) {
+      document.querySelectorAll('#runs-table tbody tr[data-workflow]').forEach(row => {
+        const matches = (slug === 'all' || row.getAttribute('data-workflow') === slug);
+        row.style.display = matches ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

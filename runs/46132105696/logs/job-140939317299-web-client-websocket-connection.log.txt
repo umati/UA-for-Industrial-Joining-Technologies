@@ -1,0 +1,1546 @@
+﻿2026-11-28T09:47:29.8509900Z Current runner version: '2.338.2'
+2026-11-28T09:47:29.8739784Z ##[group]Runner Image Provisioner
+2026-11-28T09:47:29.8740471Z Hosted Compute Agent
+2026-11-28T09:47:29.8740914Z Version: 20261111.635
+2026-11-28T09:47:29.8741387Z Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+2026-11-28T09:47:29.8741930Z Build Date: 2026-11-11T01:49:01Z
+2026-11-28T09:47:29.8742480Z Worker ID: {0c42e17e-08f8-4282-a614-9aabea7c9343}
+2026-11-28T09:47:29.8743015Z Region: eastus2
+2026-11-28T09:47:29.8743416Z Cloud: Azure
+2026-11-28T09:47:29.8743827Z ##[endgroup]
+2026-11-28T09:47:29.8744823Z ##[group]Operating System
+2026-11-28T09:47:29.8745314Z Microsoft Windows Server 2025
+2026-11-28T09:47:29.8745768Z 10.0.26100
+2026-11-28T09:47:29.8746143Z Datacenter
+2026-11-28T09:47:29.8746551Z ##[endgroup]
+2026-11-28T09:47:29.8746957Z ##[group]Runner Image
+2026-11-28T09:47:29.8747434Z Image: windows-2025-vs2026
+2026-11-28T09:47:29.8747882Z Version: 20261123.321.1
+2026-11-28T09:47:29.8749043Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261123.321/images/windows/Windows2025-VS2026-Readme.md
+2026-11-28T09:47:29.8750286Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261123.321
+2026-11-28T09:47:29.8751032Z ##[endgroup]
+2026-11-28T09:47:29.8751855Z ##[group]GITHUB_TOKEN Permissions
+2026-11-28T09:47:29.8754056Z Contents: read
+2026-11-28T09:47:29.8754498Z Metadata: read
+2026-11-28T09:47:29.8754895Z ##[endgroup]
+2026-11-28T09:47:29.8756694Z Secret source: Actions
+2026-11-28T09:47:29.8757366Z Cache mode: write
+2026-11-28T09:47:29.8757908Z Prepare workflow directory
+2026-11-28T09:47:29.9556389Z Prepare all required actions
+2026-11-28T09:47:29.9629768Z Getting action download info
+2026-11-28T09:47:30.1560315Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-28T09:47:30.3073016Z Download action repository 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-28T09:47:30.4869148Z Download action repository 'umati/UA-for-Industrial-Joining-Technologies@9d6fb02f611676a56f108fdc478466ef73bbe2d9' (SHA:9d6fb02f611676a56f108fdc478466ef73bbe2d9)
+2026-11-28T09:47:33.4133798Z Download action repository 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1' (SHA:949feb2413d6458794dcd2491c4babbbce0c15c1)
+2026-11-28T09:47:33.5861494Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-28T09:47:33.8852852Z Complete job name: Web Client - WebSocket Connection
+2026-11-28T09:47:34.2405483Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-28T09:47:34.2406673Z with:
+2026-11-28T09:47:34.2407023Z   persist-credentials: false
+2026-11-28T09:47:34.2407536Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-28T09:47:34.2410222Z   token: ***
+2026-11-28T09:47:34.2410533Z   ssh-strict: true
+2026-11-28T09:47:34.2410896Z   ssh-user: git
+2026-11-28T09:47:34.2411207Z   clean: true
+2026-11-28T09:47:34.2411549Z   sparse-checkout-cone-mode: true
+2026-11-28T09:47:34.2411959Z   fetch-depth: 1
+2026-11-28T09:47:34.2412289Z   fetch-tags: false
+2026-11-28T09:47:34.2412632Z   show-progress: true
+2026-11-28T09:47:34.2412977Z   lfs: false
+2026-11-28T09:47:34.2413205Z   submodules: false
+2026-11-28T09:47:34.2413422Z   set-safe-directory: true
+2026-11-28T09:47:34.2413687Z   allow-unsafe-pr-checkout: false
+2026-11-28T09:47:34.2414154Z env:
+2026-11-28T09:47:34.2414375Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T09:47:34.2414683Z ##[endgroup]
+2026-11-28T09:47:34.3893156Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-28T09:47:34.3894495Z ##[group]Getting Git version info
+2026-11-28T09:47:34.3895047Z Working directory is 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-28T09:47:34.4680734Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-28T09:47:34.8798281Z git version 2.56.1.windows.1
+2026-11-28T09:47:34.8841778Z ##[endgroup]
+2026-11-28T09:47:34.8854648Z Temporarily overriding HOME='D:\a\_temp\f5cb09a5-c7e8-455b-b461-2bb1cd5d4550' before making global git config changes
+2026-11-28T09:47:34.8855403Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-28T09:47:34.8862590Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-28T09:47:34.9655699Z Deleting the contents of 'D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies'
+2026-11-28T09:47:34.9659431Z ##[group]Determining repository object format
+2026-11-28T09:47:34.9661082Z ##[endgroup]
+2026-11-28T09:47:34.9661451Z ##[group]Initializing the repository
+2026-11-28T09:47:34.9669007Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-28T09:47:35.0732652Z Initialized empty Git repository in D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-28T09:47:35.0776509Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-28T09:47:35.1483702Z ##[endgroup]
+2026-11-28T09:47:35.1484300Z ##[group]Disabling automatic garbage collection
+2026-11-28T09:47:35.1491533Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-28T09:47:35.1805084Z ##[endgroup]
+2026-11-28T09:47:35.1805748Z ##[group]Setting up auth
+2026-11-28T09:47:35.1806247Z Removing SSH command configuration
+2026-11-28T09:47:35.1815872Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-28T09:47:35.2147052Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-28T09:47:36.6605131Z Removing HTTP extra header
+2026-11-28T09:47:36.6613445Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-28T09:47:36.6915158Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-28T09:47:37.1329812Z Removing includeIf entries pointing to credentials config files
+2026-11-28T09:47:37.1337162Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-28T09:47:37.1646179Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-28T09:47:37.6093832Z [command]"C:\Program Files\Git\bin\git.exe" config --file D:\a\_temp\git-credentials-ea212e96-4791-4347-bde5-5de581bd2cfc.config http.https://github.com/.extraheader "AUTHORIZATION: basic [REDACTED_AUTH]"
+2026-11-28T09:47:37.6401461Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D:\a\_temp\git-credentials-ea212e96-4791-4347-bde5-5de581bd2cfc.config
+2026-11-28T09:47:37.6698395Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D:\a\_temp\git-credentials-ea212e96-4791-4347-bde5-5de581bd2cfc.config
+2026-11-28T09:47:37.7028018Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-ea212e96-4791-4347-bde5-5de581bd2cfc.config
+2026-11-28T09:47:37.7338079Z [command]"C:\Program Files\Git\bin\git.exe" config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-ea212e96-4791-4347-bde5-5de581bd2cfc.config
+2026-11-28T09:47:37.7646763Z ##[endgroup]
+2026-11-28T09:47:37.7647214Z ##[group]Fetching the repository
+2026-11-28T09:47:37.7657233Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +9d6fb02f611676a56f108fdc478466ef73bbe2d9:refs/remotes/origin/main
+2026-11-28T09:47:39.8580209Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-28T09:47:39.8581676Z  * [new ref]         9d6fb02f611676a56f108fdc478466ef73bbe2d9 -> origin/main
+2026-11-28T09:47:39.8625690Z [command]"C:\Program Files\Git\bin\git.exe" branch --list --remote origin/main
+2026-11-28T09:47:39.8982785Z   origin/main
+2026-11-28T09:47:39.9027061Z [command]"C:\Program Files\Git\bin\git.exe" rev-parse refs/remotes/origin/main
+2026-11-28T09:47:39.9330568Z 9d6fb02f611676a56f108fdc478466ef73bbe2d9
+2026-11-28T09:47:39.9359708Z ##[endgroup]
+2026-11-28T09:47:39.9360033Z ##[group]Determining the checkout info
+2026-11-28T09:47:39.9361085Z ##[endgroup]
+2026-11-28T09:47:39.9368694Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-28T09:47:39.9768111Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-28T09:47:40.0067162Z ##[group]Checking out the ref
+2026-11-28T09:47:40.0075090Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B main refs/remotes/origin/main
+2026-11-28T09:47:40.4402065Z Switched to a new branch 'main'
+2026-11-28T09:47:40.4454815Z branch 'main' set up to track 'origin/main'.
+2026-11-28T09:47:40.4531541Z ##[endgroup]
+2026-11-28T09:47:40.4938151Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-28T09:47:40.5215869Z 9d6fb02f611676a56f108fdc478466ef73bbe2d9
+2026-11-28T09:47:40.5250625Z ##[group]Removing auth
+2026-11-28T09:47:40.5250922Z Removing SSH command configuration
+2026-11-28T09:47:40.5257853Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-28T09:47:40.5561192Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-28T09:47:41.0249970Z Removing HTTP extra header
+2026-11-28T09:47:41.0257874Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-28T09:47:41.0574555Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-28T09:47:41.5174069Z Removing includeIf entries pointing to credentials config files
+2026-11-28T09:47:41.5181452Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-28T09:47:41.5463269Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-28T09:47:41.5464561Z includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-28T09:47:41.5465299Z includeif.gitdir:/github/workspace/.git.path
+2026-11-28T09:47:41.5465694Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-28T09:47:41.5504152Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-28T09:47:41.5784538Z D:\a\_temp\git-credentials-ea212e96-4791-4347-bde5-5de581bd2cfc.config
+2026-11-28T09:47:41.5824511Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path D\:\\a\\_temp\\git\-credentials\-ea212e96\-4791\-4347\-bde5\-5de581bd2cfc\.config
+2026-11-28T09:47:41.6151884Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-28T09:47:41.6429008Z D:\a\_temp\git-credentials-ea212e96-4791-4347-bde5-5de581bd2cfc.config
+2026-11-28T09:47:41.6470857Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:D:/a/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path D\:\\a\\_temp\\git\-credentials\-ea212e96\-4791\-4347\-bde5\-5de581bd2cfc\.config
+2026-11-28T09:47:41.6798041Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-28T09:47:41.7084772Z /github/runner_temp/git-credentials-ea212e96-4791-4347-bde5-5de581bd2cfc.config
+2026-11-28T09:47:41.7126000Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-ea212e96\-4791\-4347\-bde5\-5de581bd2cfc\.config
+2026-11-28T09:47:41.7449183Z [command]"C:\Program Files\Git\bin\git.exe" config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-28T09:47:41.7722192Z /github/runner_temp/git-credentials-ea212e96-4791-4347-bde5-5de581bd2cfc.config
+2026-11-28T09:47:41.7761472Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-ea212e96\-4791\-4347\-bde5\-5de581bd2cfc\.config
+2026-11-28T09:47:41.8077115Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-28T09:47:42.2762025Z Removing credentials config 'D:\a\_temp\git-credentials-ea212e96-4791-4347-bde5-5de581bd2cfc.config'
+2026-11-28T09:47:42.2771045Z ##[endgroup]
+2026-11-28T09:47:42.3127879Z ##[group]Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+2026-11-28T09:47:42.3128243Z with:
+2026-11-28T09:47:42.3128435Z   python-version-file: .python-version
+2026-11-28T09:47:42.3128648Z   check-latest: false
+2026-11-28T09:47:42.3130694Z   token: ***
+2026-11-28T09:47:42.3130950Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-11-28T09:47:42.3131258Z   update-environment: true
+2026-11-28T09:47:42.3131451Z   allow-prereleases: false
+2026-11-28T09:47:42.3131614Z   freethreaded: false
+2026-11-28T09:47:42.3131779Z env:
+2026-11-28T09:47:42.3131941Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T09:47:42.3132147Z ##[endgroup]
+2026-11-28T09:47:42.4326717Z Resolved .python-version as 3.14
+2026-11-28T09:47:42.4327731Z ##[group]Installed versions
+2026-11-28T09:47:42.4477051Z Successfully set up CPython (3.14.10)
+2026-11-28T09:47:42.4477810Z ##[endgroup]
+2026-11-28T09:47:42.4779485Z ##[group]Run umati/UA-for-Industrial-Joining-Technologies/.github/actions/setup-uv-pypi@9d6fb02f611676a56f108fdc478466ef73bbe2d9
+2026-11-28T09:47:42.4780010Z env:
+2026-11-28T09:47:42.4780186Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T09:47:42.4780467Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:42.4780830Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-28T09:47:42.4781174Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:42.4781491Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:42.4781796Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:42.4782040Z ##[endgroup]
+2026-11-28T09:47:42.4828533Z ##[start-action display=Install pinned uv from PyPI;id=__self.__run]
+2026-11-28T09:47:42.4950870Z ##[group]Run set -euo pipefail
+2026-11-28T09:47:42.4951159Z set -euo pipefail
+2026-11-28T09:47:42.4951825Z pin_file="${GITHUB_WORKSPACE}/.uv-version"
+2026-11-28T09:47:42.4952108Z if [[ ! -f "${pin_file}" ]]; then
+2026-11-28T09:47:42.4952325Z   echo "Missing ${pin_file}" >&2
+2026-11-28T09:47:42.4952521Z   exit 1
+2026-11-28T09:47:42.4952664Z fi
+2026-11-28T09:47:42.4952842Z version="$(tr -d '[:space:]' < "${pin_file}")"
+2026-11-28T09:47:42.4953158Z if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9._+-]*)?$ ]]; then
+2026-11-28T09:47:42.4953494Z   echo "Invalid .uv-version contents: '${version}'" >&2
+2026-11-28T09:47:42.4953889Z   exit 1
+2026-11-28T09:47:42.4954030Z fi
+2026-11-28T09:47:42.4954305Z python -m pip install --disable-pip-version-check --no-input "uv==${version}"
+2026-11-28T09:47:42.4954672Z installed="$(uv --version | awk '{print $2}')"
+2026-11-28T09:47:42.4954927Z if [[ "${installed}" != "${version}" ]]; then
+2026-11-28T09:47:42.4955201Z   echo "Expected uv ${version}, got ${installed}" >&2
+2026-11-28T09:47:42.4955440Z   exit 1
+2026-11-28T09:47:42.4955576Z fi
+2026-11-28T09:47:42.4955757Z echo "Installed uv ${installed} from PyPI"
+2026-11-28T09:47:42.5008275Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-28T09:47:42.5008613Z env:
+2026-11-28T09:47:42.5008786Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T09:47:42.5009072Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:42.5009421Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-28T09:47:42.5009768Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:42.5010088Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:42.5010397Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:42.5010645Z ##[endgroup]
+2026-11-28T09:47:47.4689399Z Collecting uv==0.13.10
+2026-11-28T09:47:47.7882560Z   Downloading uv-0.13.10-py3-none-win_amd64.whl.metadata (11 kB)
+2026-11-28T09:47:47.8138607Z Downloading uv-0.13.10-py3-none-win_amd64.whl (15.7 MB)
+2026-11-28T09:47:48.1617586Z    ---------------------------------------- 15.7/15.7 MB 48.7 MB/s  0:00:00
+2026-11-28T09:47:48.4367908Z Installing collected packages: uv
+2026-11-28T09:47:48.5964109Z Successfully installed uv-0.13.10
+2026-11-28T09:47:49.0826122Z Installed uv 0.13.10 from PyPI
+2026-11-28T09:47:49.0871065Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=6604]
+2026-11-28T09:47:49.1034192Z ##[group]Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+2026-11-28T09:47:49.1034538Z with:
+2026-11-28T09:47:49.1034693Z   node-version-file: .nvmrc
+2026-11-28T09:47:49.1034873Z   check-latest: true
+2026-11-28T09:47:49.1036903Z   token: ***
+2026-11-28T09:47:49.1037073Z   package-manager-cache: true
+2026-11-28T09:47:49.1037255Z env:
+2026-11-28T09:47:49.1037427Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T09:47:49.1037702Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:49.1038061Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-28T09:47:49.1038411Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:49.1038722Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:49.1039026Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:49.1039268Z ##[endgroup]
+2026-11-28T09:47:49.2389358Z Node version file is not TOML file
+2026-11-28T09:47:49.2390763Z Resolved .nvmrc as 24
+2026-11-28T09:47:49.2394748Z Attempt to resolve the latest version from manifest...
+2026-11-28T09:47:49.7290412Z Resolved as '24.22.3'
+2026-11-28T09:47:49.7494783Z Found in cache @ C:\hostedtoolcache\windows\node\24.22.3\x64
+2026-11-28T09:47:50.5367859Z ##[group]Environment details
+2026-11-28T09:47:55.5221470Z node: v24.22.3
+2026-11-28T09:47:55.5222519Z npm: 11.19.1
+2026-11-28T09:47:55.5222680Z yarn: 1.22.22
+2026-11-28T09:47:55.5223072Z ##[endgroup]
+2026-11-28T09:47:55.5507111Z ##[group]Run python run_all_tests.py --suite "web-client-live-websocket-connection" --verbose
+2026-11-28T09:47:55.5507712Z python run_all_tests.py --suite "web-client-live-websocket-connection" --verbose
+2026-11-28T09:47:55.6073545Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-28T09:47:55.6073842Z env:
+2026-11-28T09:47:55.6074020Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T09:47:55.6074297Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:55.6074973Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-28T09:47:55.6075417Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:55.6075750Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:55.6076063Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:47:55.6076327Z ##[endgroup]
+2026-11-28T09:47:56.0812938Z 
+2026-11-28T09:47:56.0819856Z ╔════════════════════════════════════════════════════════════════╗
+2026-11-28T09:47:56.0820629Z ║  IJT Repository Test Runner                                    ║
+2026-11-28T09:47:56.0821268Z ╚════════════════════════════════════════════════════════════════╝
+2026-11-28T09:47:56.0821730Z 09:47:56 [INFO    ] Python    : 3.14.10
+2026-11-28T09:47:56.1295184Z 09:47:56 [INFO    ] Platform  : Windows-2025Server-10.0.26100-SP0
+2026-11-28T09:47:56.1296184Z 09:47:56 [INFO    ] Repo root : D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-28T09:47:56.1296699Z 09:47:56 [INFO    ] CI        : True
+2026-11-28T09:47:56.1297088Z 09:47:56 [INFO    ] Private modules: auto
+2026-11-28T09:47:56.1297357Z 09:47:56 [INFO    ] Timeout   : 600s per suite
+2026-11-28T09:47:59.4468264Z 09:47:59 [INFO    ] Running single suite: web-client-live-websocket-connection
+2026-11-28T09:49:50.1517713Z ▶ webclient runner (python-lifecycle)  [cwd=D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Web_Client]
+2026-11-28T09:49:50.1519603Z ──────────────────────────────────────────────────────────────────────────────
+2026-11-28T09:49:50.1520183Z # This file was autogenerated by uv via the following command:
+2026-11-28T09:49:50.1521487Z #    uv export --frozen --group dev --no-emit-project -o D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Web_Client\tmp\locked-dev-requirements.txt
+2026-11-28T09:49:50.1522534Z aiofiles==25.1.0 \
+2026-11-28T09:49:50.1523015Z     --hash=sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2 \
+2026-11-28T09:49:50.1523691Z     --hash=sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695
+2026-11-28T09:49:50.1524162Z     # via ijt-web-client
+2026-11-28T09:49:50.1524449Z aiosqlite==0.22.1 \
+2026-11-28T09:49:50.1524921Z     --hash=sha256:043e0bd78d32888c0a9ca90fc788b38796843360c855a7262a532813133a0650 \
+2026-11-28T09:49:50.1525660Z     --hash=sha256:21c002eb13823fad740196c5a2e9d8e62f6243bd9e7e4a1f87fb5e44ecb4fceb
+2026-11-28T09:49:50.1526187Z     # via asyncua
+2026-11-28T09:49:50.1526433Z anyio==4.16.0 \
+2026-11-28T09:49:50.1526922Z     --hash=sha256:59bb03251907983d1603d27c3087ddb1e93299ea2163adcdba37899a4fb12ffb \
+2026-11-28T09:49:50.1527612Z     --hash=sha256:c66ae634e0b8228396b801741beb3294326d4b6102f7bba4041c0dfb58c29026
+2026-11-28T09:49:50.1528105Z     # via asyncua
+2026-11-28T09:49:50.1528366Z ast-serialize==0.13.1 \
+2026-11-28T09:49:50.1528837Z     --hash=sha256:02686b281ec9b8e9614f6f0db27e12e4cac515f336c5d05b678bc9eb73ff2af5 \
+2026-11-28T09:49:50.1529501Z     --hash=sha256:032b09d86c785c3984e975378b7861f2a68ac44e22ba7b07b93a536b2524eeb8 \
+2026-11-28T09:49:50.1530491Z     --hash=sha256:0d764913374ba21df8cd618045b371ed104ce55c6276de7c59e554a4f5ba26fd \
+2026-11-28T09:49:50.1531595Z     --hash=sha256:121e1d08d58b75c15491cc3003609cbad71ac2b0016043c36d30a6b2032b6605 \
+2026-11-28T09:49:50.1534252Z     --hash=sha256:1b158f1c9e3a0d386913924c57995d6df78224868a4d0f215bdd41587c97b34a \
+2026-11-28T09:49:50.1535126Z     --hash=sha256:2015fd0165e463aac3b1aadc6a1fa1e5820c14ca950821f4fe02f8a3f6a388d6 \
+2026-11-28T09:49:50.1536107Z     --hash=sha256:23d768369b89d551077dc173da6892fad00443338417523b6732f4e8ba4a7ed5 \
+2026-11-28T09:49:50.1536834Z     --hash=sha256:2876444a5f87a7c76f371af3c07c2fda563a08bc8af52568df812e8aba4bf568 \
+2026-11-28T09:49:50.1537581Z     --hash=sha256:29422d7bcd9e7f39411571c36cec45ce8a7a9b3ad4b2e7aa64497c15a9e397f6 \
+2026-11-28T09:49:50.1538362Z     --hash=sha256:2bad302ae2427454ef9dab71bd5c3ad67188860c39d36daee38f72031edb39c4 \
+2026-11-28T09:49:50.1539108Z     --hash=sha256:2f9a9ce8b0994f757b941f7f7fe384a6666b4162b941ebc5c248081baea18e47 \
+2026-11-28T09:49:50.1539818Z     --hash=sha256:30cf89b6a6844542d116c758725d13de5b97b9410a51ee577715f761270d0c1c \
+2026-11-28T09:49:50.1540516Z     --hash=sha256:3e129d44b0cffbea24a7f40117ce49e30993c3d119e584d4817ebd6f87246456 \
+2026-11-28T09:49:50.1541257Z     --hash=sha256:401cc84e8888d4d76f2c8d296fa006ed1a5ff993b6aff90dd777c03973efd025 \
+2026-11-28T09:49:50.1542007Z     --hash=sha256:43e8ddd63e80fc280c2f790157386f27f9b9f6ccb9c4f8e803b863cbfb085769 \
+2026-11-28T09:49:50.1542732Z     --hash=sha256:48f11d96c9ec71119612f8e79a8c55c12f2b136716d68347433c561d27a25f43 \
+2026-11-28T09:49:50.1543462Z     --hash=sha256:4bcf1d5f4eefecaa325a34ecf079b2741189e7d0821523f92cb343a389a67489 \
+2026-11-28T09:49:50.1544211Z     --hash=sha256:4e385b17d5bde892a6184003a9aff3518387908b73f8f5ea539313c07c8c0ede \
+2026-11-28T09:49:50.1544966Z     --hash=sha256:4f98da562e5901d69c7dd30885594c5438f859edf354e9ac7517d188fb026c3a \
+2026-11-28T09:49:50.1545711Z     --hash=sha256:523d45bab16ddaf1399c04c4fe81bbf180f81e33c2f7bcbe76be56b0f7311ab4 \
+2026-11-28T09:49:50.1546525Z     --hash=sha256:5d99910e6b9a9b9360bcca2ae99aee36cc912ce058df2a57d1c33099b6cb2593 \
+2026-11-28T09:49:50.1547283Z     --hash=sha256:5db12d843d931b9d1f1519ce66b9cbfe72d8563b75c1204d255322254d1964dd \
+2026-11-28T09:49:50.1548370Z     --hash=sha256:638333fb8ae72c62753f9e794fda20290883ddc65b0d85e26e08f8bb227567ad \
+2026-11-28T09:49:50.1549136Z     --hash=sha256:68f8829d114dab6c9db4a8bbb8d0e342958faee1b5e15a29022678df639960f8 \
+2026-11-28T09:49:50.1549889Z     --hash=sha256:6eb0be64c9b8f1ed26637eef345abe75ea90351c92c85a8aec7838b3af971011 \
+2026-11-28T09:49:50.1550741Z     --hash=sha256:6ffb0f548a7dc126067fdfb7b2325ab5dfcdeecc29faf5e0f0461c96d6ebfa3d \
+2026-11-28T09:49:50.1551512Z     --hash=sha256:732aaae9e498c973fc63fd7f308009b57c4afa6ff59d0b674d894e57d0bca01a \
+2026-11-28T09:49:50.1552293Z     --hash=sha256:75d7750fe98f6f35a96c43aba8d98a2e623e22c778a0c17ab9ede92eb10f5d82 \
+2026-11-28T09:49:50.1553067Z     --hash=sha256:77a6201b69ce42e919f2fd9a559138d5410b5d8afff7c3a6b1f500b0481ff7d8 \
+2026-11-28T09:49:50.1553837Z     --hash=sha256:7a5c38bdb93669c596f94fb7204dd6ebe4fadb19058ac9a2faf2948c2a175f96 \
+2026-11-28T09:49:50.1554643Z     --hash=sha256:7f2427bddfca208e84de700044fadf9aef2769a70bae740a1bdabb89ee9e1117 \
+2026-11-28T09:49:50.1555459Z     --hash=sha256:7f3e8a3eff69af640db985360fef35073fb46956dfc3e5c614cf00920d2746dd \
+2026-11-28T09:49:50.1574186Z     --hash=sha256:847cad4c22953823f5e76d0b126c6f9da670cfa45b1df41b9324e22189d77611 \
+2026-11-28T09:49:50.1574988Z     --hash=sha256:87427913c325adc811e81e7c9a757b061f47ef1e29114ac479aa0953a2687a98 \
+2026-11-28T09:49:50.1575777Z     --hash=sha256:885a62ec6481ce58ab24c6357360d7a82023b62dd7e5e7ceccf59e9662a3272b \
+2026-11-28T09:49:50.1576544Z     --hash=sha256:8899c038b1c15ae8b98e379057fb3ef398ceb0b21d1737a8156dd5a0923b7e51 \
+2026-11-28T09:49:50.1577308Z     --hash=sha256:88df960e67184a71874e5b2ee014f87d1254a0dbc1f903c7bd7b1ab7733ecaef \
+2026-11-28T09:49:50.1578066Z     --hash=sha256:8c8ebd419811c435812d242fb2a173e57dfede198c9ac9a0a584666ebc9b9331 \
+2026-11-28T09:49:50.1578827Z     --hash=sha256:9221e09496fb942901993c1812ee87950cc0ecbb514c7c0f1f5fa6d78f701ed8 \
+2026-11-28T09:49:50.1580770Z     --hash=sha256:929eda0c419e622ab49df3a4c45f81c57dcc10874bbad55d0470a4a03324dac3 \
+2026-11-28T09:49:50.1581614Z     --hash=sha256:9f99786e0d62082a5b121b3437f3167562133711df22128de1e9886f57f0b226 \
+2026-11-28T09:49:50.1582379Z     --hash=sha256:a01b515b25a03184eff4acef25b981ae007916379682e908fc8785b342a0bf3e \
+2026-11-28T09:49:50.1583121Z     --hash=sha256:a789cbe14d0a0e9ec9b32a456e5abc81ad8799479c3cfd88a29e3442262aebe6 \
+2026-11-28T09:49:50.1584114Z     --hash=sha256:a8ab2c2585b2e22e48cd4aff2136fce4eab4ced569b85f150ef9a5a5d6f34d49 \
+2026-11-28T09:49:50.1584907Z     --hash=sha256:aca07de3ca8e3d9f2b716c3c31f4f384fe4bd2d03e09912417cff7a3e08036f7 \
+2026-11-28T09:49:50.1585676Z     --hash=sha256:acf4e9f055d75058ab01536da330648746f2f82b7697a85230547f2d5ebe895c \
+2026-11-28T09:49:50.1586428Z     --hash=sha256:ad88921f95b92bc144d9ad059a0e16f8c1ae69f5239f2d3c6536fd2774f73dfe \
+2026-11-28T09:49:50.1587197Z     --hash=sha256:bf53a3ba1cbe45399fc1e4ccd684b8f2a11cca450f89706b79122f478534c6f5 \
+2026-11-28T09:49:50.1588072Z     --hash=sha256:c652d9f5d52d8b81eff3ff2c95c9dd0f281de45f6ad5d3fa95527550c396454a \
+2026-11-28T09:49:50.1589161Z     --hash=sha256:ca9acc67f796aa2554fa3037dccc022a4b08b38b2ad153edfac9c9bb7cb1f3c6 \
+2026-11-28T09:49:50.1589945Z     --hash=sha256:cc34c670747d85d4232834665e247009413eaebe47c69eaf60a5c439aaecaed9 \
+2026-11-28T09:49:50.1590692Z     --hash=sha256:d9c1a920b2aa0c1e016bed7721689717034ca0dba64ac3a3ff243b003d4e8dd8 \
+2026-11-28T09:49:50.1591463Z     --hash=sha256:ddf7cbc9c8abf70102c4a088efe154bb86bfb825b0a10e556d2b15972cf99bd7 \
+2026-11-28T09:49:50.1592256Z     --hash=sha256:e14c4de98f965647a74e6eaf37e20207124e45451ccd36e84a6f6ebab45e0372 \
+2026-11-28T09:49:50.1593199Z     --hash=sha256:eb41e1906502ac80d24ff343f45008552a3f5b5158607959fe6a07dbfc6eb037 \
+2026-11-28T09:49:50.1593956Z     --hash=sha256:f8b17e2921e56621bcb46792bd3e0b82ca3b85de78d5936e7b8174ba1758b0aa \
+2026-11-28T09:49:50.1594710Z     --hash=sha256:fb8021f4dc3296de18737e3b8b34994411da725374d74a0b9eb32a738f2a23d0
+2026-11-28T09:49:50.1595238Z     # via mypy
+2026-11-28T09:49:50.1595490Z asyncua==2.1.0 \
+2026-11-28T09:49:50.1596004Z     --hash=sha256:81d0c66b93b2ffdf97f672572d1ac975cc0b86a62b4c4e67034485dc0a2a2994 \
+2026-11-28T09:49:50.1596834Z     --hash=sha256:d741f5e21f189ac0a45b8dda13539c2d49d8d992b9b62d2758efe1bfd3d1454c
+2026-11-28T09:49:50.1597359Z     # via ijt-web-client
+2026-11-28T09:49:50.1597631Z bandit==1.9.4 \
+2026-11-28T09:49:50.1598152Z     --hash=sha256:b589e5de2afe70bd4d53fa0c1da6199f4085af666fde00e8a034f152a52cd628 \
+2026-11-28T09:49:50.1598933Z     --hash=sha256:f89ffa663767f5a0585ea075f01020207e966a9c0f2b9ef56a57c7963a3f6f8e
+2026-11-28T09:49:50.1599472Z boolean-py==5.0 \
+2026-11-28T09:49:50.1599966Z     --hash=sha256:60cbc4bad079753721d32649545505362c754e121570ada4658b852a3a318d95 \
+2026-11-28T09:49:50.1600717Z     --hash=sha256:ef28a70bd43115208441b53a045d1549e2f0ec6e3d08a9d142cbc41c1938e8d9
+2026-11-28T09:49:50.1601279Z     # via license-expression
+2026-11-28T09:49:50.1601602Z cachecontrol==0.15.0 \
+2026-11-28T09:49:50.1602120Z     --hash=sha256:10b7ab4387355ad9361d5b89bc0f6758e48099017be173241c4e0f20d9e1dad2 \
+2026-11-28T09:49:50.1602869Z     --hash=sha256:52157b539eb64d85c8c793660e86cf05cf95fad7b98c8ef6846e4a0ddffdb193
+2026-11-28T09:49:50.1603384Z     # via pip-audit
+2026-11-28T09:49:50.1603677Z certifi==2026.11.20 \
+2026-11-28T09:49:50.1604194Z     --hash=sha256:7422df25243767b9877031a2248cb14d09ddac9beee846f4cef3d5c9191d488f \
+2026-11-28T09:49:50.1604950Z     --hash=sha256:af1cb240a8133f105aa52684a3a3258339d7f2fd0bd4e2812698ff5cf5588c4e
+2026-11-28T09:49:50.1605488Z     # via requests
+2026-11-28T09:49:50.1605890Z cffi==2.1.1 ; platform_python_implementation != 'PyPy' \
+2026-11-28T09:49:50.1606542Z     --hash=sha256:06c72bb76605a4b0cd0aad6930b69d4baf7dd5d806cfc409b824191099700e66 \
+2026-11-28T09:49:50.1607339Z     --hash=sha256:0beceaabe56af686895136a2de78db54ecd8e4046b236b8fd6d6cb61389e9bf2 \
+2026-11-28T09:49:50.1608627Z     --hash=sha256:1a18a57b58cfb21fc28d72e876acf10eaed67a1ed96226f92af4df681d571c4c \
+2026-11-28T09:49:50.1609610Z     --hash=sha256:246fa40ce8645a614ff682e0b70f37134e460eaf93a775e0cbe3cca585a67a80 \
+2026-11-28T09:49:50.1610382Z     --hash=sha256:25792eac27877609e7bb06d42ff88278a6624fff2ba9bbb523c09616b117e80f \
+2026-11-28T09:49:50.1611182Z     --hash=sha256:27350daa11d4f10c540e6e89dada4c54feb7256ad03e9a4dc075ebad7ba360d1 \
+2026-11-28T09:49:50.1611960Z     --hash=sha256:28907ab9bfb6aa13184cfc17c6b8e1023c5ab6fd7076d8c20a35e59fe04f8f29 \
+2026-11-28T09:49:50.1612719Z     --hash=sha256:2ae64be792b8966f2c69538199728b290e34726562896df1e5dc8ffd8d8188e8 \
+2026-11-28T09:49:50.1613475Z     --hash=sha256:3222ba5d678f80a030e6afbcc33dc1ae5cb45facabb61cee2c7016b8432fde48 \
+2026-11-28T09:49:50.1614230Z     --hash=sha256:363e05fa78e15116c3c32c210ee36884fd6b9afa6d440e47112c3bd511d64cb6 \
+2026-11-28T09:49:50.1614989Z     --hash=sha256:42a494cee34437f05546455144f2b5d9ac09b1face62bcfce597d2e521066688 \
+2026-11-28T09:49:50.1615748Z     --hash=sha256:456a61fa52d579ebf9df2e9552ead5129855dbaff6c1e5a9b1bc408809bdc062 \
+2026-11-28T09:49:50.1616520Z     --hash=sha256:471cee653ae88de62096552e6d24ccb4a5adb8c8c9f10b5054d0122c15bf2779 \
+2026-11-28T09:49:50.1617284Z     --hash=sha256:49cbc70e6542d4ccccb936558d1064a8012541e78f821f955cff24e357776c94 \
+2026-11-28T09:49:50.1618026Z     --hash=sha256:4be96343e422f2dfcd12ab5c9f5aebe03f82f737c6bffeca6830b3875cb44aab \
+2026-11-28T09:49:50.1618847Z     --hash=sha256:4f42141fc14250de6dde5ee7ea4432be017252d91f19c5ad043c084cea629cac \
+2026-11-28T09:49:50.1619591Z     --hash=sha256:507a24c282e0f42f8ed737cf048572cbf580468da5555764a8331735e9c736b6 \
+2026-11-28T09:49:50.1620331Z     --hash=sha256:51b31d1c98274844cfd7838ce00bfc27c7423a4dc00fc0772fc3331c2cc90676 \
+2026-11-28T09:49:50.1621112Z     --hash=sha256:58acb8ab8e295e6c5ea12f888cbb13cf21511ef2a3303a23f4325c29d17fe5c1 \
+2026-11-28T09:49:50.1621888Z     --hash=sha256:5c58fe613dc5e5336357eff555824a314d8e43282600435c8d1cb6a7a2fedd13 \
+2026-11-28T09:49:50.1622663Z     --hash=sha256:5e7cecbaadb83884793e05828cee59b210b24583b9c7425d0ba6a754fe22eb4e \
+2026-11-28T09:49:50.1623435Z     --hash=sha256:616f097f2fe415bc92a247f02e11f634e1f9e9a83d327e3c915c15089c87869e \
+2026-11-28T09:49:50.1624186Z     --hash=sha256:64faea20f4e2613363a1a9b9c7dd73058f3ecd00133a511e72ad7c511658f527 \
+2026-11-28T09:49:50.1624976Z     --hash=sha256:661c298b4821edebead0c91edd2b00374d67ad7c5a1f7a91d4442633b79d6a72 \
+2026-11-28T09:49:50.1625759Z     --hash=sha256:770de9db11e84213beec501cfcaa013b019820ca881e03344dea5844f7876d94 \
+2026-11-28T09:49:50.1626526Z     --hash=sha256:7750c6449dff7864bb9bb27ddfb0267756189201a3afc911d82b3caacd70dfc3 \
+2026-11-28T09:49:50.1627302Z     --hash=sha256:7da0c5eff80f0197f3b3d1232ec5a682a9325f4ae9016a78f5f5ca35f9ced1f5 \
+2026-11-28T09:49:50.1628084Z     --hash=sha256:7dbb61fe3a7699468030f71bbe5f8a0e326a151daa91beb11a6fc1f980c55e1c \
+2026-11-28T09:49:50.1629124Z     --hash=sha256:8ef53b2de9bcb9197d31854256575d59dbac0cba72ac627bb291ef5eceb74be4 \
+2026-11-28T09:49:50.1629905Z     --hash=sha256:937c0052c05a31ca1daf18de3158eed4dbfcb9cc107adbea227728d647be701e \
+2026-11-28T09:49:50.1630679Z     --hash=sha256:a4f00aa42f75d6e4595e8866e748cc1705adc0cddfeb2ca86d0d03993d63ba03 \
+2026-11-28T09:49:50.1631437Z     --hash=sha256:a730a083190634c65cca36ba5f489531576ebd79bcd5c8e172130f6453127231 \
+2026-11-28T09:49:50.1632086Z     --hash=sha256:ab36d55f9ed2d067327667c2fea18dda018eb628dd6347aa01dda6cf1f5d3836 \
+2026-11-28T09:49:50.1632820Z     --hash=sha256:ad2c86c495b899d862ea0f4b42891b8713a3bd45dd4105c7fd51c2a72f39f3a5 \
+2026-11-28T09:49:50.1633571Z     --hash=sha256:aeae0e330c9f6acd681f647d46cefd30c29f93e3392882e792e82080c9691399 \
+2026-11-28T09:49:50.1634268Z     --hash=sha256:b0431303acaea1089ad4b3e9ce4e6518193def1118d4073ca848635ee4ea2e96 \
+2026-11-28T09:49:50.1634978Z     --hash=sha256:c26608d2222fb1e94487e4a387d85f13eb55d5ed725cb25a0c589ac4ee60e7bc \
+2026-11-28T09:49:50.1635666Z     --hash=sha256:cc572dace3f60ef98d7b12ff411d20f5362feb31a0439eab0085bbfd349982d7 \
+2026-11-28T09:49:50.1637374Z     --hash=sha256:d18e5ac0f2f03f4f518d3e23db0f0cad7faa1da8620e9c09461d443bbf6e6692 \
+2026-11-28T09:49:50.1638272Z     --hash=sha256:d28630f5854ab07ab1fd4aba756de52326c82e6be15d414b12793f1975048b54 \
+2026-11-28T09:49:50.1639041Z     --hash=sha256:d9c275eaacd24aa73f94ffd6de08fc3f932424d8b6c376f4bed7cde376fe7bc3 \
+2026-11-28T09:49:50.1639809Z     --hash=sha256:da0e573f9f97159390c89d9f1a9e41908b66d408cc5b58d08cf3847d844c531b \
+2026-11-28T09:49:50.1640573Z     --hash=sha256:dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be \
+2026-11-28T09:49:50.1641330Z     --hash=sha256:dddad92b554513a31f272570678ba307fb9f618f05e3d4a5eacafff9eae03e1d \
+2026-11-28T09:49:50.1642106Z     --hash=sha256:df423d40ee8654634421812bc3b196da3f9bd7d32929da813f8394c4348a5358 \
+2026-11-28T09:49:50.1642871Z     --hash=sha256:e2d65b31f36619cda3999b78b2aa9632e76b78448e7a56fc4240824200e7c4fc \
+2026-11-28T09:49:50.1643649Z     --hash=sha256:e6e8cff14d6fb0be70a09c0bdc58096f501952d04624ebf867e0e56da2df8960 \
+2026-11-28T09:49:50.1644415Z     --hash=sha256:f24fb43132a4c6b4cb4eb029492919b2db645be6808d738f244fd146c03c32cb \
+2026-11-28T09:49:50.1645135Z     --hash=sha256:fb92203a88b3d3053034db775110081c49d28be6551923805e039924093761e4
+2026-11-28T09:49:50.1645648Z     # via cryptography
+2026-11-28T09:49:50.1645925Z cfgv==3.5.0 \
+2026-11-28T09:49:50.1646413Z     --hash=sha256:a8dc6b26ad22ff227d2634a65cb388215ce6cc96bbcc5cfde7641ae87e8dacc0 \
+2026-11-28T09:49:50.1647180Z     --hash=sha256:d5b1034354820651caa73ede66a6294d6e95c1b00acc5e9b098e917404669132
+2026-11-28T09:49:50.1647687Z     # via pre-commit
+2026-11-28T09:49:50.1647978Z charset-normalizer==3.5.3 \
+2026-11-28T09:49:50.1648525Z     --hash=sha256:02b1abf64742b2d0782172cd2542616e462c201c829c23aff833390babe2967f \
+2026-11-28T09:49:50.1649595Z     --hash=sha256:06d07272f70d9880fba32d4876e966ae4dc9961134bc989066a0901509dfd8cf \
+2026-11-28T09:49:50.1650359Z     --hash=sha256:085a5d1f49eaf96596d79494fcab18d9a32db6e345da15d6debfc90110b20679 \
+2026-11-28T09:49:50.1651150Z     --hash=sha256:0c0fe07631dce6dae788a59c20ed927adc6feeb2d9ed440747eb367d89822a45 \
+2026-11-28T09:49:50.1651925Z     --hash=sha256:0ca25f1b1167e9fb94d93d3708df0b631de241bf8440947b0cb9f8c4cb66fed0 \
+2026-11-28T09:49:50.1652677Z     --hash=sha256:106b9d0438e2ff0a0e8ebd869273fcb3640af28323bba8651c714c57efb38e51 \
+2026-11-28T09:49:50.1653444Z     --hash=sha256:11ad35a0b856ad8bbd0c9e900c069461a4661694714aa17b6e6e2e8621e1c373 \
+2026-11-28T09:49:50.1654236Z     --hash=sha256:1714ff1ba001da5241a585fbd17a7742a61ad34efb4be8404aca5679f51e53ea \
+2026-11-28T09:49:50.1655005Z     --hash=sha256:1a34385837db59d5de814c9f1e0f4157b571f9ce0eabdaeace410aa93bf5df62 \
+2026-11-28T09:49:50.1655784Z     --hash=sha256:249bf0b6f43985c33c83adbbab0ca71246ec24c82d960fa00c4ddb2cfed25db9 \
+2026-11-28T09:49:50.1656560Z     --hash=sha256:26c6ad87bb79628954b52f8f7b9e18ab5cd9667546712ded9689fb7677e630d6 \
+2026-11-28T09:49:50.1657321Z     --hash=sha256:28ba8e6361e0f319641707484994096ceb77e05c29eaad2919756218c0c89001 \
+2026-11-28T09:49:50.1658064Z     --hash=sha256:2978c799237eb66619d8951d2ab7efd317414cb6682160e05614ce1c8b5c905f \
+2026-11-28T09:49:50.1658819Z     --hash=sha256:29ac44f5878142128ffe4fa7e041ddc4cc5fafe43983245b9a141908c40b515d \
+2026-11-28T09:49:50.1659554Z     --hash=sha256:2e7fbd98443f28a5ed8004f0b058edcc4720a3d344adf007c0b7f1adbff2f59f \
+2026-11-28T09:49:50.1660342Z     --hash=sha256:323d5cf6df3ea724afcc3bfb07c73be06d2e8200a8b6b37979a300ae1e7836d0 \
+2026-11-28T09:49:50.1661146Z     --hash=sha256:390ef7c7e018c0abb8c0ec2d28ee137567ff50c3706facf6d115cac832ac993b \
+2026-11-28T09:49:50.1661925Z     --hash=sha256:39e019884c8f857393df954d35f42bf99c5ab85af226fe74d1410188c6fec31f \
+2026-11-28T09:49:50.1662664Z     --hash=sha256:3e8da696ef1935a019c10ec16555a062183ddf6d5901e296edeca4b2a8f84e1d \
+2026-11-28T09:49:50.1663429Z     --hash=sha256:45aa4ccf5a6caba138dd0f8bf36fa3e26654585d534881b62ce5e4fea2487772 \
+2026-11-28T09:49:50.1664225Z     --hash=sha256:4831fb33e98e92140fa17d4d673a9f49f9c0ddd056115b722858793e4b86b0c5 \
+2026-11-28T09:49:50.1666189Z     --hash=sha256:48f7c7f537246bb3af2b3139f44716a30b21e78c2fd1cff0f3e392fbd55d8044 \
+2026-11-28T09:49:50.1666997Z     --hash=sha256:4ff5e27478681ef1b13b036baaf9beaf9b4c6990e903c752ad3b8764692c6d6c \
+2026-11-28T09:49:50.1667786Z     --hash=sha256:581d6e7df9b58d34147e21efde42a480b5087fe54f31e42550c26321566ba1e4 \
+2026-11-28T09:49:50.1668551Z     --hash=sha256:5f86753952f7de3abc7ce871f8239ce4e0d32a91c84d22f3a667e669907c3897 \
+2026-11-28T09:49:50.1669600Z     --hash=sha256:6118055f4ad0d94e016eadbb86caed9caf2c9033631ed70964ba631c1336984f \
+2026-11-28T09:49:50.1670389Z     --hash=sha256:61e32fdbf56f4cd25a1efa451c8b5fe886fc5e00143ccaacafdf21f301fad059 \
+2026-11-28T09:49:50.1671165Z     --hash=sha256:6423accb6ecd1456bf824bbac98ba919398523a69ee5f1680dd1da88769de866 \
+2026-11-28T09:49:50.1671903Z     --hash=sha256:643724071b01cc0369026e259850791212cc187c6031d0e930abcd253f128e0c \
+2026-11-28T09:49:50.1672662Z     --hash=sha256:6651fecdac146ecfa52700e02a5fa3b3677bddf5fced4983b43e904244de3f6a \
+2026-11-28T09:49:50.1673445Z     --hash=sha256:67bb767a8de7a2b1164c74fdbe5cdc32b9c15d7142efd9a6dc77ff63da94e846 \
+2026-11-28T09:49:50.1674214Z     --hash=sha256:6bfbbb9414dd0f5b81c259deb7e50b4b44e65e05879eee482351bdabed49d7f4 \
+2026-11-28T09:49:50.1674984Z     --hash=sha256:6c80b4e83e2fbddd25fe27804cdfc45ef71bb387522caa575af42118d72dc970 \
+2026-11-28T09:49:50.1675831Z     --hash=sha256:6c8abe7d59bbc891e5080b8b142c36db93154f840c4baf7c83ad6273a1a15397 \
+2026-11-28T09:49:50.1676626Z     --hash=sha256:7a7e5bb8974842ad747d4a2b9fb928f84c3cdbe2c2fd7e405197fc1a1badaeaa \
+2026-11-28T09:49:50.1677376Z     --hash=sha256:7c313b46730b4a68bb31450973467313b2c496fefa42ae316b86c186cba74613 \
+2026-11-28T09:49:50.1678134Z     --hash=sha256:7fdd11094a0b07bce306b359fa7311c71d93466d967b3b345f2e9f03d8b2c959 \
+2026-11-28T09:49:50.1678898Z     --hash=sha256:81132eaffa984f0a399233df4cd383caad18e8cadc6c24c568cf9324732a9768 \
+2026-11-28T09:49:50.1679654Z     --hash=sha256:8231365b03b702b516aad35c9515694177ac31c9dc6240326f07308a4c45c708 \
+2026-11-28T09:49:50.1680393Z     --hash=sha256:826d82356907350f345cf0aa744d43a69ac7948bd60f460f997cde86928beadf \
+2026-11-28T09:49:50.1681124Z     --hash=sha256:84356c7b7ddf090e3e4692cb99fc820e6189b5f6662ca7e8589f41095cc8efca \
+2026-11-28T09:49:50.1681860Z     --hash=sha256:87d5a237d6531c654e7b9b319be9ba7e368665c466e02a03cfd4d3d77730782e \
+2026-11-28T09:49:50.1682643Z     --hash=sha256:87f7d6c595465a25d33fa3d5215a571a98c4cad00ead3ad18ebfb62adb3d3e6e \
+2026-11-28T09:49:50.1683474Z     --hash=sha256:8c4dfcd3269f13dff7f29f9c332d54a4a21f17be818b49e769e111befd4d39e6 \
+2026-11-28T09:49:50.1684234Z     --hash=sha256:94b595e64bc2927f679774de50df340b7828dc1c07c99149ba7c2d0828dd8bf3 \
+2026-11-28T09:49:50.1684977Z     --hash=sha256:94c9d5d91c16554f6397b823d9e47181ba100d830ab16b5d720adc229e17b2e2 \
+2026-11-28T09:49:50.1685667Z     --hash=sha256:96e268b0cbda016ac519513294fcd17032264085b600abaac58b93049477e132 \
+2026-11-28T09:49:50.1686326Z     --hash=sha256:9a6b95b1737f9b5942c35676c52db0c302d60fa806efde3fc2d9f54247ecf4be \
+2026-11-28T09:49:50.1686990Z     --hash=sha256:9c1bd8321a840729a6b2620774cf4000fafe66c54cac9064972a10c4f607794b \
+2026-11-28T09:49:50.1687657Z     --hash=sha256:9eba4613d45b49196af04a5cbadfc5e9379ba94aac85184b72cb1107ad31af0d \
+2026-11-28T09:49:50.1688311Z     --hash=sha256:a094178c51530c9ebd1775e72d160af0eac4be244fb06ff1b6f182128c71903c \
+2026-11-28T09:49:50.1688954Z     --hash=sha256:a09ca76391f6e17b12d55c1068b4b5f8f6c9b44b432d936075372fa12782292d \
+2026-11-28T09:49:50.1689931Z     --hash=sha256:a250888753faa289e2997962fbb17c4960cbdb58575533ca6fceee68c224bdff \
+2026-11-28T09:49:50.1690575Z     --hash=sha256:a312fedd182357f2c22f066d17dcd7413b6a205ee3d063d36950e94e3019d3de \
+2026-11-28T09:49:50.1691233Z     --hash=sha256:a3f4044dd5d2f7b958be6b9903cb432e6a0fd944d673707ca5cab68137d0592c \
+2026-11-28T09:49:50.1691905Z     --hash=sha256:a5a7e0326566759f9a7bc44f4b9a179cc40a297e09e759b0bc7c848c06347527 \
+2026-11-28T09:49:50.1692772Z     --hash=sha256:a8f92cc9080bff47555c79b88e7fb8655438ce3bcf29c5f01ed2ed5efdf174a4 \
+2026-11-28T09:49:50.1693573Z     --hash=sha256:aa9390d89822dd06f9920ae3038819cb121643a72f4753b2eee1a79b2f1215f8 \
+2026-11-28T09:49:50.1694259Z     --hash=sha256:acaa0e100f39287dc5d13de96e33ba0786f1cdfb5b4ca28918913ab0eec3af72 \
+2026-11-28T09:49:50.1694973Z     --hash=sha256:ad1becd776f5a41a4d91cb9ee51778f4fd687ef15e4919779e00a33c6cff6948 \
+2026-11-28T09:49:50.1695688Z     --hash=sha256:b66a0e045cf859d7418f26a554509b65f21ebb6d90a95152460781939e8264f4 \
+2026-11-28T09:49:50.1696406Z     --hash=sha256:b8fc4fe56992b089d6177021fe6db641321bb2bc2fc7a1abf815c29a80ca2137 \
+2026-11-28T09:49:50.1697099Z     --hash=sha256:ba26e4d073a4f7f2594676f2ff20ab80a7f03332b81c3f9964e9e53bf2305329 \
+2026-11-28T09:49:50.1697762Z     --hash=sha256:c08e06fc69750827d7ccebba63ebc97a85e479cd5c9dbdb80f5e08a77b774fdb \
+2026-11-28T09:49:50.1698402Z     --hash=sha256:c39a4fe28a16e8fa667c55c154f62c6c3cd9ca2491cca9f16330dd7360d05b76 \
+2026-11-28T09:49:50.1699074Z     --hash=sha256:c43d9737c3b85ccd16b1862b1e7aa5c4bf30a6033068403713c0a2bba5bda979 \
+2026-11-28T09:49:50.1699784Z     --hash=sha256:cbd09b22b340f846671e79e8d832167fac60c1884be4c71fd667211486a3b58e \
+2026-11-28T09:49:50.1700468Z     --hash=sha256:d1b7a3fe4cf679eb3870b91b86b8ce12cacd5cf4d74bc114864a5cd65319ddac \
+2026-11-28T09:49:50.1701132Z     --hash=sha256:d313494077f849d8199f36166947785da1eeb36335fda15fde2e8f801ef271b6 \
+2026-11-28T09:49:50.1701819Z     --hash=sha256:d4e7ecaa25f0dae672ac783c2e5aa9054a62e011749d64ff47b887af360a3e82 \
+2026-11-28T09:49:50.1702491Z     --hash=sha256:d8f85e019c9f08ec134648a378ddd3f6f073c1e4b5ce9bdacd9a9e7b60749cd2 \
+2026-11-28T09:49:50.1703151Z     --hash=sha256:d93403a13c8f6f2d027185d90ab695e81d95e3ebd000f0078e201a1c3159d4d1 \
+2026-11-28T09:49:50.1703829Z     --hash=sha256:da606e3015dbd4b9a31c0468898a0c4c998846197ddfda78308821dc8c9e9be3 \
+2026-11-28T09:49:50.1704484Z     --hash=sha256:ddea089587432e3df6771a4a405ef249cc9727f7becb1de3f00ab571b2432002 \
+2026-11-28T09:49:50.1705168Z     --hash=sha256:dfbde696fb427301ec40cd82b8eec0b528e44c6af8239f33ede2b2552d9a085a \
+2026-11-28T09:49:50.1705848Z     --hash=sha256:e282983b8def5ada758fa1f18bf9060bb8ce6cdd73be32f62a2de59820d3286d \
+2026-11-28T09:49:50.1706510Z     --hash=sha256:e34f591669498a03cd70993b0a79b9f0ef40c4e6f8232466bac33c42f0c15742 \
+2026-11-28T09:49:50.1707492Z     --hash=sha256:e405cce4170de1fe520d9a92de9d7ececc23dfcf6888c62ab608a21be50838eb \
+2026-11-28T09:49:50.1708177Z     --hash=sha256:e4a0f2adf29a69dd8fe58e42bb191f3c87067b05fcc63279983e8c9ce5092abd \
+2026-11-28T09:49:50.1708866Z     --hash=sha256:e4f85c34f9be32ec5568a0668fb8bc029d3e729285fb8fccc38695e185379a9b \
+2026-11-28T09:49:50.1709536Z     --hash=sha256:e86a27ab632d2e888c22b79263864eaff8b7dea9e87328a9bb0ea04eff24786f \
+2026-11-28T09:49:50.1710221Z     --hash=sha256:ea880ae1a692ae694c11bca7be74864614ff1a58bdfff4605f36d1956b4b1588 \
+2026-11-28T09:49:50.1710906Z     --hash=sha256:ee9de080e8d6221bbe4ba2667367b1cee0f47a53f60ffc5e431b698cd2f2b214 \
+2026-11-28T09:49:50.1711598Z     --hash=sha256:ef8b925f2b331a1f17d6fb32625e09fd571cf41844f578379f934dab0067cf0d \
+2026-11-28T09:49:50.1712292Z     --hash=sha256:f160f03e15bd1e3c35db9bfc20c42ff83155d37f9b0c79806cb10051ca725f13 \
+2026-11-28T09:49:50.1712977Z     --hash=sha256:f7fb9a3275f1a1528e542a0f5a3d2c89fcaf68e797fc5c6530434cbd92a852c4 \
+2026-11-28T09:49:50.1713686Z     --hash=sha256:fcb17f1d40c38912a2cdb56ea47aadac3527cd0b06fe24f3a0c4896febbea063
+2026-11-28T09:49:50.1714162Z     # via requests
+2026-11-28T09:49:50.1714455Z colorama==0.4.6 ; sys_platform == 'win32' \
+2026-11-28T09:49:50.1714988Z     --hash=sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44 \
+2026-11-28T09:49:50.1715645Z     --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
+2026-11-28T09:49:50.1716087Z     # via
+2026-11-28T09:49:50.1716277Z     #   bandit
+2026-11-28T09:49:50.1716484Z     #   pytest
+2026-11-28T09:49:50.1716694Z coverage==7.17.4 \
+2026-11-28T09:49:50.1717312Z     --hash=sha256:061aa359141894f87a5571ea45d17a1069aae88f342e4ae186e245430ffa62dd \
+2026-11-28T09:49:50.1718070Z     --hash=sha256:0c5ce163d256640aeaa7049a9be0a026e1405f931052b00cf474641155090288 \
+2026-11-28T09:49:50.1718806Z     --hash=sha256:0f9547c30aeef70904ede391f4cb43d2ddd0a0d2d8fb4a96c75cc422f64afaac \
+2026-11-28T09:49:50.1719492Z     --hash=sha256:130313b9a3d1b503795c71e9b7443d94aa0b5bfdf592418faa3653f7faa8fd9b \
+2026-11-28T09:49:50.1720160Z     --hash=sha256:139bc6276ffcd09f7b78842a0abc64d3fc345b4760ed43a9cce3f80ade932018 \
+2026-11-28T09:49:50.1720828Z     --hash=sha256:190d47507166d16b3c588312fb837aaa7df6f3858787935553e475222e1aaa97 \
+2026-11-28T09:49:50.1721468Z     --hash=sha256:1abf6cb6c33de847b69cc76f77051fbdd82dae1304d6fec208549aa0df6ba200 \
+2026-11-28T09:49:50.1722133Z     --hash=sha256:20d3666ce784cd6dc05489c8ddc3acb60992d0c5e4c6895590c8c4ad686d393c \
+2026-11-28T09:49:50.1722785Z     --hash=sha256:213ae674d282a76563784e9279e5273365858a42ad74ad7c6c5fb9d302e9c668 \
+2026-11-28T09:49:50.1723444Z     --hash=sha256:23d432dcc82301f6b1314cff60240deed33d3d754dad40360b1b120d22da134d \
+2026-11-28T09:49:50.1724106Z     --hash=sha256:25ed180a4fb75b487509a4568acead1de41aefab8bedb06ac1ed5c14223fef97 \
+2026-11-28T09:49:50.1724733Z     --hash=sha256:26b16d3c57670d93a9f8ca6182325f51a10acdd79b96446950e179c7e14806c9 \
+2026-11-28T09:49:50.1725385Z     --hash=sha256:277a095161b40c8b173779134f3957860afadcc1544b35c4a5f7862a22165948 \
+2026-11-28T09:49:50.1725998Z     --hash=sha256:2cb7b4d75742dd55521ebe51d34e6108d74d36c5a5e04ab098b9f842564f6185 \
+2026-11-28T09:49:50.1726625Z     --hash=sha256:36632c8156201cf253c9af6d69fc8c04b5ef0124cce7ae6bf989af22ed8373fe \
+2026-11-28T09:49:50.1727549Z     --hash=sha256:3de487ce00a787ff38bcb5cb6e3a2a5e0b290e1d1d11641fdf268ca9044eb860 \
+2026-11-28T09:49:50.1728017Z     --hash=sha256:41b5f9ca1cec1dccfb4266022118bd587faf10774cb7223b5fd4b88e74cc90ce \
+2026-11-28T09:49:50.1728471Z     --hash=sha256:4be54daddba880b49872d5032d8a652cc0d5167ef812522cd37d643ffabad6b8 \
+2026-11-28T09:49:50.1728935Z     --hash=sha256:4cb2740fc626b8b1746d450a7d6647efee5fe1f717842cf030381c0244ff926b \
+2026-11-28T09:49:50.1729391Z     --hash=sha256:545dbbd06ecbd2294f074e1196bfe8414e60dff18c012bb1869581e9f7b518a8 \
+2026-11-28T09:49:50.1729838Z     --hash=sha256:56c3ecc382d84aa17d8bf75d2921bdb74b65283259a9b0b207fc920fedd46352 \
+2026-11-28T09:49:50.1730283Z     --hash=sha256:5917eaed4ae45da815e480a03540c2039bbf36ff48ba762d6395887c97bc4f9f \
+2026-11-28T09:49:50.1730728Z     --hash=sha256:59f38f9eaec5626b26f7eae1ccbe31b81c335fd50d90add59b5fb66460b5de30 \
+2026-11-28T09:49:50.1731170Z     --hash=sha256:5f706d22666950f8aa51bbba843ba58855bf69eaa108882d6ab3289d8dc67e83 \
+2026-11-28T09:49:50.1731604Z     --hash=sha256:5f95725a39d7d0947099874e158a4153480291dcabe474e1d6e79f64befe3fdd \
+2026-11-28T09:49:50.1732043Z     --hash=sha256:60d56aa6ff74d6bfe0fbac3e5f30b25b59fa8c05dbe72b37cf5798c0b197a3ac \
+2026-11-28T09:49:50.1732501Z     --hash=sha256:64e0bc7be78a889223d710cbbbddb9f73c629c0c715808a3ea61af5c12b8bae5 \
+2026-11-28T09:49:50.1732943Z     --hash=sha256:6ffe168378624d51787df97cccde58453210d5e3061fd7f926d16c35d5e33eb2 \
+2026-11-28T09:49:50.1733378Z     --hash=sha256:7720afcf240957c785051e5ebee44b46ffb594938e2072c9f880487f7ea43023 \
+2026-11-28T09:49:50.1733816Z     --hash=sha256:7fb7a1e6ec64d9e87bc344555eb221875e162c62615e23dfbfc5bad66cded8dc \
+2026-11-28T09:49:50.1734272Z     --hash=sha256:804915e71518ad2006c79a9ada50c60f141a004d493ebeb3fcfc6bf8b7ea7ec2 \
+2026-11-28T09:49:50.1734707Z     --hash=sha256:88088b4978d493454c6a6a48c4d0249c020371f0f0ec63aa1bea2228bb2cd919 \
+2026-11-28T09:49:50.1735139Z     --hash=sha256:8b2bb2ab2a124e8464e255d4e637c054365cdc419d973dccf4f4555f1a596bae \
+2026-11-28T09:49:50.1735578Z     --hash=sha256:8bc88aefc1022f18814b7b21366d5480b8d218384b79d07c9de0216d12ad8b47 \
+2026-11-28T09:49:50.1736013Z     --hash=sha256:8c94a57d153ffcac3a51756aa9b622b918935745933b4914097e97c4fbe2c18b \
+2026-11-28T09:49:50.1736464Z     --hash=sha256:8ec3c9bd52e6ee5ab9c1f5b2663bd3541327f670465f52e21fa5d93fea97e20a \
+2026-11-28T09:49:50.1737050Z     --hash=sha256:91993237a770a9f04e696d77ae0339e1fe6a4cc2018e07e3ca032a6e6f040bbe \
+2026-11-28T09:49:50.1737595Z     --hash=sha256:93b150ee437bdcceeed0646f912d5c26f21ec99c3cc3d2717ae74f3488e30251 \
+2026-11-28T09:49:50.1738052Z     --hash=sha256:95a28464c9a65609c3522d21e3dec2428aaa000bfb4e746684044722ba4bcc89 \
+2026-11-28T09:49:50.1738501Z     --hash=sha256:99e41e2c90da68ea451c6b1ceac2b8b571aaa11eab25390ee6f6f374d3d84387 \
+2026-11-28T09:49:50.1738954Z     --hash=sha256:9b443dbfc8ba7bed47a27be96986e407bfdc269d29bd45b5c885192c99f9e37e \
+2026-11-28T09:49:50.1739405Z     --hash=sha256:a0e2e478b3a3bb2da24cbee4a50b4946ae63eec8617da064e9c2c904b60ee2d7 \
+2026-11-28T09:49:50.1739844Z     --hash=sha256:a2977d0a150c855c460a2c5086c4a160b5b0a42474ec55c9050679a2cd80989a \
+2026-11-28T09:49:50.1740272Z     --hash=sha256:a485eb4032dc8c595d771087506044b6fdf8a905d833a9f10fc6910aa4eabfb6 \
+2026-11-28T09:49:50.1740717Z     --hash=sha256:a51c345704ac578736c1a7ea636e83be82752240811decc5e53c03e138b5a3e1 \
+2026-11-28T09:49:50.1741157Z     --hash=sha256:a5d52b6384e0f26d1fa44192bf14af5ee09f3f162cbe5d72691f17530463bd7d \
+2026-11-28T09:49:50.1741601Z     --hash=sha256:a85240086a2b2698cecfdfdbabbb763f806dd819e2131673c77ab4113b6203e5 \
+2026-11-28T09:49:50.1742042Z     --hash=sha256:ab91648a15fe5ab82771f8bea4010e9e78868fd7ab072afabc36760e5ef85dd9 \
+2026-11-28T09:49:50.1742499Z     --hash=sha256:acf01793b1b1fb48116cf9fcc2b291099d00f1401e481dbec19fbe764b51618a \
+2026-11-28T09:49:50.1742940Z     --hash=sha256:afda936c4b8275475106783a099b216956caf7ba7a546aa9e438ad3bad9e7947 \
+2026-11-28T09:49:50.1743383Z     --hash=sha256:bd8756e4053ff53955fa8dd94e8d5eca499fb7f1ba21eb71b6b70847e5f846d4 \
+2026-11-28T09:49:50.1743832Z     --hash=sha256:bf1628a3e7e8bd1be37f7af91cdf19381d198f01a5ceaa3d2c6a25c4bd215dd6 \
+2026-11-28T09:49:50.1744278Z     --hash=sha256:c07948d36bffa179c4ec3e41364c4b9c391541d92dcc0bc9272e8a66bc6a563a \
+2026-11-28T09:49:50.1744726Z     --hash=sha256:c2e95837db6552875bab31ae6ba1caf279461801c77b2d85b801284aca30b301 \
+2026-11-28T09:49:50.1745167Z     --hash=sha256:c50715260ac94dc9083d2434aa213791a709acb235a43e1c3dd695edbfdf4d0c \
+2026-11-28T09:49:50.1745598Z     --hash=sha256:c58053555bd51e5819133cd13f7492dff1a26ed8137c478cf7decb38d0a94b55 \
+2026-11-28T09:49:50.1746032Z     --hash=sha256:c93d510d7d16a13b66e50e41b63ceef877f61c1b02834fb18c624970ffea0c44 \
+2026-11-28T09:49:50.1746474Z     --hash=sha256:d122cc899e91720a19003a7b0ab3c6937993518d136659d4185baefca0a8423f \
+2026-11-28T09:49:50.1746919Z     --hash=sha256:d1d744ba0008562ed1d1c9cc22fabf6c36eefe204491bef1f0569066fc2bf591 \
+2026-11-28T09:49:50.1747663Z     --hash=sha256:d6a0948f99a7db9a612a0d82ccac7cea13ca5083782c4dd52f0bc5c00bca0e12 \
+2026-11-28T09:49:50.1748119Z     --hash=sha256:dd0c8d9efcccb0b1d50767f42f4f46ed4640dfefc192157df901ce046bd763c2 \
+2026-11-28T09:49:50.1748569Z     --hash=sha256:deaf390d99d61685d290a2ecc916a3801e4b7b0acf2daeccd9539f8f4afe7410 \
+2026-11-28T09:49:50.1749017Z     --hash=sha256:e2a7786b1531a1295001a88c0a194488353577e1b8e9b2a0fe4555eb8bc34102 \
+2026-11-28T09:49:50.1749460Z     --hash=sha256:e7d27f42b74efed52f49a0e688c191c07757208e89d2f0c9efcb69b2a255cbb4 \
+2026-11-28T09:49:50.1749903Z     --hash=sha256:e8e5b52a60f7d30066f2a80f983f4acef871a487eb634dbd5c399663ebd0a00c \
+2026-11-28T09:49:50.1750353Z     --hash=sha256:eca0b6cd7d4e69d41f63cb3a5d4a8e437c469e93db5d330aa8378d7c44c7ac14 \
+2026-11-28T09:49:50.1750801Z     --hash=sha256:ed2a212081b6960c9e6df63d4b56800606984f256ce4d514bf3e7cd44fbfe496 \
+2026-11-28T09:49:50.1751236Z     --hash=sha256:f18308e805bb72ad54c0f59553072fa62242ecac4b7bab5894433be273a6fb99 \
+2026-11-28T09:49:50.1751672Z     --hash=sha256:f4a24adfff26121274362da90f88402fd335629f39cfe4066a58ba4cab075583 \
+2026-11-28T09:49:50.1752116Z     --hash=sha256:fce18eccf5dd137290341d64bbfdb8002db2c76f6c69f3e38fc1391dbb6b975d
+2026-11-28T09:49:50.1752434Z     # via pytest-cov
+2026-11-28T09:49:50.1752630Z cryptography==50.0.2 \
+2026-11-28T09:49:50.1752933Z     --hash=sha256:0ddc924c04591c2811ca024d62ecad4f7f6f08af8939c211438f48a16bd23602 \
+2026-11-28T09:49:50.1754278Z     --hash=sha256:0ec5f09541743261e66e291b4a0cbf0fb2997aeaab6d9e9c740b9dba1b58d1c2 \
+2026-11-28T09:49:50.1754742Z     --hash=sha256:0ecbc5652bdb6fc9eaf89a7d196e20941adfe812f43bc4ca05d9150496821047 \
+2026-11-28T09:49:50.1755172Z     --hash=sha256:1981f1db4630889b9ef7803fadef12b056f428cb6b85c27ba57b774793b6093c \
+2026-11-28T09:49:50.1755602Z     --hash=sha256:241449bf940a5d27309bd317e6f9a2af6932113818bb2b8f5c59ddc7ef16da18 \
+2026-11-28T09:49:50.1756040Z     --hash=sha256:25784ce8b9621c90c643efb9e1e2162ab3b0224cae446ad5e70e7fcb1ce18b51 \
+2026-11-28T09:49:50.1756472Z     --hash=sha256:4061c0079120205fb760c58acab6443e217307dcf05e3702cf970e0689972856 \
+2026-11-28T09:49:50.1756906Z     --hash=sha256:4a20ce1e5cb4284a86692fdcba7cb8754185c6b2e5c56fcef3751cf451d3cdc2 \
+2026-11-28T09:49:50.1757362Z     --hash=sha256:4e81d95e5bafc2d6e34e4bed780e53e4d5b9a2f928573428aa4d35fbec1eb0de \
+2026-11-28T09:49:50.1757807Z     --hash=sha256:58a0c478eeca76fe5e07993c5a0703def34a6dc6a0cda4f5564639b33112ffe7 \
+2026-11-28T09:49:50.1758260Z     --hash=sha256:58ddb5a8e3179d12f19e4ea34d2d32e9d63a4baa142c875c1eb59f41b7243acd \
+2026-11-28T09:49:50.1758703Z     --hash=sha256:630ebfea3bf689d075f82316324ff7433dc447fe6bc1bfc76524b74b4a9567d2 \
+2026-11-28T09:49:50.1759157Z     --hash=sha256:6f8700550aa1474a91e5dc07049c46f98b423b5b1ddd0483e0b51362eeeaf5be \
+2026-11-28T09:49:50.1759590Z     --hash=sha256:78198641e5be9521beea5aa782bb551a58068d10e6eb04c9c680c1b69f2e7d45 \
+2026-11-28T09:49:50.1760023Z     --hash=sha256:79def8d059362e7831389ed3be0ecdf58a89386e1271e35dd9f5af84e81bffd0 \
+2026-11-28T09:49:50.1760457Z     --hash=sha256:7a8701d6b584d76e909e3d305b7d126b41439876a5aaf76cddc67fc230eafa2e \
+2026-11-28T09:49:50.1760897Z     --hash=sha256:7afa5a6602a9f29af1f3a2965f831bae7c9d5d597b7cbb716d41ab3b7d89879c \
+2026-11-28T09:49:50.1761347Z     --hash=sha256:7b46165bb56eb4704e2eaaf86f3c940d19154535d9b0ca7d6d590b04060e00d5 \
+2026-11-28T09:49:50.1761780Z     --hash=sha256:828d49b0ff5a0e3975865571c5d91dbbdd0d38d8289b249a163e9425413a5e05 \
+2026-11-28T09:49:50.1762210Z     --hash=sha256:84f964e537f916e2cc85199e5a88742e964939b575ac8598b3f9d6cc416cdaf1 \
+2026-11-28T09:49:50.1762639Z     --hash=sha256:85d0d9a31b9098e98534226d5686b47264b95e62ce459dc2e62fdfc809f9fe93 \
+2026-11-28T09:49:50.1763084Z     --hash=sha256:87e9ce85beb6b328ba370cc6e6aea483c92617b4c95b1d33a49297eb662bfb04 \
+2026-11-28T09:49:50.1763526Z     --hash=sha256:8c71ba2cd31fc93748c38e1b613200ff1c2665cbfd5341fe3a61cfde35a1430e \
+2026-11-28T09:49:50.1763964Z     --hash=sha256:94e5e9f108ee10471288214d3d233fbfbb492840a8457eb85178d643ddeb32c7 \
+2026-11-28T09:49:50.1764401Z     --hash=sha256:9c8402a82ea0dc4ceeab793db05f0fafa8ca139ca34fcde5df0f596103c74107 \
+2026-11-28T09:49:50.1764868Z     --hash=sha256:9dab55f57c74c3cad24c323bacbbd04be4705ba6eb0d92e920b1fc4837ed5079 \
+2026-11-28T09:49:50.1765316Z     --hash=sha256:a582ab2ae1d34f67112cadc86702774c9ea4374df6bca6afe672817203c99134 \
+2026-11-28T09:49:50.1765757Z     --hash=sha256:a6557e5f38e065ca9fbdaf7cfc7435ecb1d113aa81a022d1b51921ee7432e227 \
+2026-11-28T09:49:50.1766209Z     --hash=sha256:a9f7355e6fab51f6c369b86fb7571cffa05edee2c2121e0380a37fb9ac1cd5c1 \
+2026-11-28T09:49:50.1766645Z     --hash=sha256:ab50ee449bf968271e820086f10a33d101dd060370abc10bcd22279be2656539 \
+2026-11-28T09:49:50.1767094Z     --hash=sha256:ac9ed99d81760c62fe89d5f0815cdfa1ba9a35141cf30f1c2d044f04b4803d2e \
+2026-11-28T09:49:50.1767834Z     --hash=sha256:b13478603dcd0a2479ff8e87e2c19a7d525734686fe3c49542472293a204212d \
+2026-11-28T09:49:50.1768288Z     --hash=sha256:c423ab384a46c4dff7217b2ea5ba2e11cffdeab6441acd04cf65a369caf0366c \
+2026-11-28T09:49:50.1768738Z     --hash=sha256:c5e67125c7dca78d199ec4e116aa93dbb83494808ecbb8211a2cb09b1bf41dbd \
+2026-11-28T09:49:50.1769195Z     --hash=sha256:c71be1cbfa5cd9a41ee452acf1eccd82b2c05950358b106ec8ceb83411d1a020 \
+2026-11-28T09:49:50.1769655Z     --hash=sha256:cbc8738fd8526d80f35cb3a40d41f41a2e7030bb3b18b09a6778ef63d291c2fd \
+2026-11-28T09:49:50.1770221Z     --hash=sha256:ce47f66801c20ec6c6632453bb5960fe38939e9306970b48b3a5a26de7745d94 \
+2026-11-28T09:49:50.1771201Z     --hash=sha256:d370b8d1dfcdf7130178137f6fbee6140774a1acc6cacefc4b42643ec11d0a3a \
+2026-11-28T09:49:50.1771656Z     --hash=sha256:d38cdff612d06fa6a32840d5e1b1f7a27cee4a349aa9085d94a67789d6bfd408 \
+2026-11-28T09:49:50.1772109Z     --hash=sha256:d8947001be83df1394050758ce0e745dd74fb134eef0a4b5124208dfc3a68c37 \
+2026-11-28T09:49:50.1772553Z     --hash=sha256:deb9fde5c60e437ee4821bc9bc39ff31b42135c27e1dc61ef0a629389c1de62e \
+2026-11-28T09:49:50.1772997Z     --hash=sha256:dfe9763530994147d9af1def057a5b9658b00e8f8fe8743d144d1e0911c2e454 \
+2026-11-28T09:49:50.1773435Z     --hash=sha256:e105ab60406787da31fccc883fc0f733af1efd78f0136a4599692c4083a73d0c \
+2026-11-28T09:49:50.1773884Z     --hash=sha256:e275096ea1e60cc595cda2836fd4a6c725d1125108b868be17f53684d164e2cc \
+2026-11-28T09:49:50.1774321Z     --hash=sha256:edc3342adf8f697fc5f59c887a304356f147b397809440ed64e2fa6af2f50f37 \
+2026-11-28T09:49:50.1774762Z     --hash=sha256:ee247f5c245c9a2fe7c8e2214e295918838e44e00a45a6718451e4004219e767 \
+2026-11-28T09:49:50.1775195Z     --hash=sha256:f21e8a22c8605750c7af886bab299a363721264061b4ac0a30efb73cfd58efc5 \
+2026-11-28T09:49:50.1775632Z     --hash=sha256:f265528741e048bce55c3463ed721fb0aa45a5888d8add8cfeccb3035451bbdc \
+2026-11-28T09:49:50.1776075Z     --hash=sha256:f2f9bd7f90c64fe89253f0a2c05e3c4856072660429ce8831b4235bf29403a67 \
+2026-11-28T09:49:50.1776501Z     --hash=sha256:f785f6161f202ab04d8ca194158968798e480ca058943907972da5f12e2881e8 \
+2026-11-28T09:49:50.1776928Z     --hash=sha256:f9f6143a8c75945eb960d9eb98905a441394abfa24afaae239d514ffb2586480 \
+2026-11-28T09:49:50.1777366Z     --hash=sha256:fa8f5efb344d6908a1ce62f4a24e2e5780f825d6f53f5f50ec5ffacac72936cb \
+2026-11-28T09:49:50.1777820Z     --hash=sha256:fdd28f912fccfec1846a94e2e1e8f9b0012f557f0c46fe4f3eb0d7a87afcf90b
+2026-11-28T09:49:50.1778136Z     # via asyncua
+2026-11-28T09:49:50.1778339Z cyclonedx-python-lib==11.12.0 \
+2026-11-28T09:49:50.1778689Z     --hash=sha256:0e807521a921a5c3cb8ce1153f8a61d29eedfe76a46aac2796b7c6b573391a54 \
+2026-11-28T09:49:50.1779147Z     --hash=sha256:16767c4039de90c04e9f03348f8f0ed4b8ff842eaa7eefcad3a95685f970dacf
+2026-11-28T09:49:50.1779467Z     # via pip-audit
+2026-11-28T09:49:50.1779648Z defusedxml==0.7.1 \
+2026-11-28T09:49:50.1779955Z     --hash=sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69 \
+2026-11-28T09:49:50.1780398Z     --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
+2026-11-28T09:49:50.1780711Z     # via py-serializable
+2026-11-28T09:49:50.1780909Z detect-secrets==1.5.0 \
+2026-11-28T09:49:50.1781229Z     --hash=sha256:6bb46dcc553c10df51475641bb30fd69d25645cc12339e46c824c1e0c388898a \
+2026-11-28T09:49:50.1781665Z     --hash=sha256:e24e7b9b5a35048c313e983f76c4bd09dad89f045ff059e354f9943bf45aa060
+2026-11-28T09:49:50.1781969Z distlib==0.4.4 \
+2026-11-28T09:49:50.1782270Z     --hash=sha256:ca4175b4ac7f71223cc30ed7248c45d2b38c2439d8ee6e498ab67ed63cf3508d \
+2026-11-28T09:49:50.1782693Z     --hash=sha256:cf09d55b1e85a89576b036aeb71550bfd68320f3f21761ca329eadadad918638
+2026-11-28T09:49:50.1782989Z     # via virtualenv
+2026-11-28T09:49:50.1783159Z filelock==4.3.0 \
+2026-11-28T09:49:50.1783442Z     --hash=sha256:143407310acf479e82d88068e3b9a6486f45fb410c0ed8729fe7359eaabeb6f1 \
+2026-11-28T09:49:50.1783878Z     --hash=sha256:f933f39f7e01249a4a49b9abab30edc6d4b874624c3de5dd0b0d137aa8adb979
+2026-11-28T09:49:50.1784180Z     # via
+2026-11-28T09:49:50.1784324Z     #   cachecontrol
+2026-11-28T09:49:50.1784491Z     #   python-discovery
+2026-11-28T09:49:50.1784671Z     #   virtualenv
+2026-11-28T09:49:50.1784843Z identify==2.6.20 \
+2026-11-28T09:49:50.1785150Z     --hash=sha256:6a16b69b93187244e0548cbfd25b3e4a6f9a7a2ad784625c3bec2b8d27b81aaa \
+2026-11-28T09:49:50.1785604Z     --hash=sha256:ad729860a923858d26917c2f4fb0a1d83d27a75b1e090c06440c573f048f3285
+2026-11-28T09:49:50.1785914Z     # via pre-commit
+2026-11-28T09:49:50.1786086Z idna==3.20 \
+2026-11-28T09:49:50.1786485Z     --hash=sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44 \
+2026-11-28T09:49:50.1787247Z     --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+2026-11-28T09:49:50.1787839Z     # via
+2026-11-28T09:49:50.1787983Z     #   anyio
+2026-11-28T09:49:50.1788131Z     #   requests
+2026-11-28T09:49:50.1788290Z iniconfig==2.3.1 \
+2026-11-28T09:49:50.1788605Z     --hash=sha256:67f4b9c50da0dedf52af349e7749a80a9057a5031199791b906c3bb3ae878960 \
+2026-11-28T09:49:50.1789069Z     --hash=sha256:9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7
+2026-11-28T09:49:50.1789374Z     # via pytest
+2026-11-28T09:49:50.1789633Z librt==0.17.0 ; platform_python_implementation != 'PyPy' \
+2026-11-28T09:49:50.1790019Z     --hash=sha256:002d5eecaa87785f768d8149827a433829c81b94739925b7d56212a791dc912f \
+2026-11-28T09:49:50.1790443Z     --hash=sha256:00bca40134bec8887a05a46188c160994414231fa5fce63a9695e0fe6120ab8e \
+2026-11-28T09:49:50.1790899Z     --hash=sha256:012f8d82d1c6c7d682f607fa2d550fbbd8331b3c4788fe5b49d44a9040dc2b15 \
+2026-11-28T09:49:50.1791335Z     --hash=sha256:09b3638d04e8089256615b776b40d3977566ee27c1d2d3e8ef7856c406410063 \
+2026-11-28T09:49:50.1791772Z     --hash=sha256:0be9d2b660ffab171b493feb27b140af2f1c4f80489445d4133e74edf6747a63 \
+2026-11-28T09:49:50.1792217Z     --hash=sha256:1399d86dbd5f78d2b733042cff1f8ff3a0ac8741a1bfd3e02130f085e16fd54b \
+2026-11-28T09:49:50.1792658Z     --hash=sha256:1f1857c8681cf16c8311bb9d452ed68799182097f4fcbe2b7875fe6d27a5c27e \
+2026-11-28T09:49:50.1793095Z     --hash=sha256:271f9a8d2964c596b1d0e09b4f1507cc3b379d2fcbf3c6bd2eb23a051518a4a4 \
+2026-11-28T09:49:50.1793526Z     --hash=sha256:28c174fc28a859189c6c4d370029a8d33e24f0147839c8ee35110d111b0b6fc1 \
+2026-11-28T09:49:50.1793956Z     --hash=sha256:2929dc060fc953767259176b8ebef6fa8f51e19c6ed3e832a9e36bdecc4f9cb6 \
+2026-11-28T09:49:50.1794393Z     --hash=sha256:332df03f953b993fd8dea47dd05145062508b64374cc038ac0dd52c90c5fe0c4 \
+2026-11-28T09:49:50.1794833Z     --hash=sha256:3cd446a0a7e76e3cab490aa9a79de132207e16c6383b36009ec068e6d6fb073b \
+2026-11-28T09:49:50.1795264Z     --hash=sha256:42a03a994c352193eea319779a11b7e96962de59c19189f5fd902515cef57401 \
+2026-11-28T09:49:50.1795695Z     --hash=sha256:4ae97bb49097ecdbc974f9ca4574ab2ce5827a0e5c362887dcb5a423c1024a6c \
+2026-11-28T09:49:50.1796128Z     --hash=sha256:5340d002860f153b47a9998e9c1108284ad482eafb9491a44d0b2a96a2f335a1 \
+2026-11-28T09:49:50.1796557Z     --hash=sha256:55dd44d86797a521a7369f3d357d19b0431ec43fda486b5e5f878f24b0962e20 \
+2026-11-28T09:49:50.1796981Z     --hash=sha256:58073565b076ba6748108e824b98347f6afd53fb0fd1576bc323bcee933ffb13 \
+2026-11-28T09:49:50.1797392Z     --hash=sha256:5cd58b2dc6e3fa97bf311213d2b29876b5f167490084cad3bc6856f908d10927 \
+2026-11-28T09:49:50.1797806Z     --hash=sha256:61172ef474485badc8e0f703f4e5f35f11d08d805cd44fb2b0571131dc790787 \
+2026-11-28T09:49:50.1798218Z     --hash=sha256:64b64f6401386e45b328bc9f65660d80d0a6b817ba3573b88ed1b824c15544c6 \
+2026-11-28T09:49:50.1798651Z     --hash=sha256:681d59c924342fb1478c13b64c34c081051e1a8916fb6d3fa47ab06db79fe2a6 \
+2026-11-28T09:49:50.1799076Z     --hash=sha256:7731c41237794cc28470ad6f2465f347e4e0e98510cc845eed220af945bc8df4 \
+2026-11-28T09:49:50.1799482Z     --hash=sha256:810c55c2248af580c248114e3a8529677bb27fed541fdebbdad4e37339915f08 \
+2026-11-28T09:49:50.1799893Z     --hash=sha256:850005c2d225a3b36ec69280cc7887f3a4145fb953fd3009bb92f2d33b48993c \
+2026-11-28T09:49:50.1800333Z     --hash=sha256:87c5ed7bcdd937dd001d034e42de355818419a50c1d98f8f241a7cb8615c7dcd \
+2026-11-28T09:49:50.1800771Z     --hash=sha256:8d22e0daedfd28e4e0001766ee50aa294718bbe7e1903ee30ca75d6ff42dd151 \
+2026-11-28T09:49:50.1801204Z     --hash=sha256:93934824a44651145c7fa9a60a3dfc861242d21a4ebacb84e482d0daad190379 \
+2026-11-28T09:49:50.1801629Z     --hash=sha256:973d47787539e6d2c2586ef5d7e0b4ad1033d5d2ce4f21d4e2237dd010cf24f5 \
+2026-11-28T09:49:50.1802056Z     --hash=sha256:9c67ede964192c970426aa09d6a7ccfb6a5e41b75462309d93547c6a11e15b10 \
+2026-11-28T09:49:50.1803012Z     --hash=sha256:9f30860d852b4cf3eb206913f80191e16c3a69beb2558b686545e41408555063 \
+2026-11-28T09:49:50.1803633Z     --hash=sha256:a0f0300eb17f9abc6f3e2834316e29e79b870b07aebf0c169c3ce981e1797a4a \
+2026-11-28T09:49:50.1804069Z     --hash=sha256:a78889bdd2ee392dccb11709c5ac1a7875aa6bc4bf46e7f329d5e39b7c2ddca5 \
+2026-11-28T09:49:50.1804496Z     --hash=sha256:a91a9bf401629d570614308a04625d9b66fb6e6edda57b90551b5d62e0d69fa9 \
+2026-11-28T09:49:50.1804933Z     --hash=sha256:b00337cf863338beb677f1ee84eb5d1e7c2b9e6ff3e1737951731bde24d95997 \
+2026-11-28T09:49:50.1805371Z     --hash=sha256:b1936d4823e26b7a3abda2ce86fc59536d5bb60e7988e625ac0134cc4eca30cf \
+2026-11-28T09:49:50.1805798Z     --hash=sha256:b3132402abc0063823c91012bb74ae02787c8f77086e659f9b41655d3ef18b71 \
+2026-11-28T09:49:50.1806225Z     --hash=sha256:b41ad191fc8bdc9661949850a568e3e234a2731f84985fcbe1bfceab749601dc \
+2026-11-28T09:49:50.1806662Z     --hash=sha256:b88cc48007dae6f2efff4636cbf4cc59eca733aa39472d757f95c694a3a7bfcb \
+2026-11-28T09:49:50.1807113Z     --hash=sha256:bdc73adb6376765fa8955ba936ed297277c814395eac82e862c621ff3b354602 \
+2026-11-28T09:49:50.1807554Z     --hash=sha256:c0eb72866ecb97fc6501cba9fccee4fe510aef61a61c79a1a0112659e0e330ea \
+2026-11-28T09:49:50.1808284Z     --hash=sha256:c32d5577eafc07909517991d376051e5c9c325caac4f29bab850826847bfd821 \
+2026-11-28T09:49:50.1808791Z     --hash=sha256:c4369eb665fd320d301c0a5f3bdd47b9d85f0646f88b749da983c751edb36bd5 \
+2026-11-28T09:49:50.1809232Z     --hash=sha256:cde2f4b096780c848d0ac92b02965552fe14479400ac074b9c7764b202a4c2fa \
+2026-11-28T09:49:50.1809658Z     --hash=sha256:d32a83e07306f4dad53a264671b55380e418f51d4420da85273725492189f95c \
+2026-11-28T09:49:50.1810086Z     --hash=sha256:d6266bdb78cce8eacd8375306c11370098ebf0f8c22e43564d5628695d81ab46 \
+2026-11-28T09:49:50.1810518Z     --hash=sha256:d7ba54178e46264de221455ca84e26680debc5ccdb3d11cf8fc64b83e0a91854 \
+2026-11-28T09:49:50.1810960Z     --hash=sha256:d7d471616391c6c857bbddc7101fe3ee5ae361c37b3f29f33b5bf3bcc6331389 \
+2026-11-28T09:49:50.1811404Z     --hash=sha256:de25809ee1136e41fcd54dc27c76061ca67ccb7c19686bcccd2f43f4ba100037 \
+2026-11-28T09:49:50.1811844Z     --hash=sha256:de7dd4d3ec15cf15299cd30839773f58d6dc109a057cb2c797bb11fba478721b \
+2026-11-28T09:49:50.1812263Z     --hash=sha256:dfbee84c9e0bf961781e45201e1ad110dc4e85d9ad3bad266193300d61f842ef \
+2026-11-28T09:49:50.1812704Z     --hash=sha256:e263e8959899b3dd8422cf8fed10eedc67379c47054f3806d286325efb5f77f8 \
+2026-11-28T09:49:50.1813143Z     --hash=sha256:e3e96d0df8fbc2f79e99924dcda82885b452a1a48fc62ba0cd01d795ac82f800 \
+2026-11-28T09:49:50.1813588Z     --hash=sha256:e5906d5e9d4245e14add09a9dd81c7af19ab9c68efb7cd8d60f10ec0ab74b035 \
+2026-11-28T09:49:50.1814031Z     --hash=sha256:e5e8ad032847f27e5f3efe13bdca75b22eb707a1b0c77472f3c7f1bb66ecd063 \
+2026-11-28T09:49:50.1814466Z     --hash=sha256:e70f1366f7bb9771865aa8c22da92e36a42343b78a9ced1c379b066b2b46eca3 \
+2026-11-28T09:49:50.1814903Z     --hash=sha256:eaf8627ff98a1f0d6699c54d51c7c858188a14fe4c23690f3d7a26875c35d469 \
+2026-11-28T09:49:50.1815336Z     --hash=sha256:ebc0c9c29b9dd33b6581548f1d5a1385cf0d89e221a7a16014b65548dc16cfb7 \
+2026-11-28T09:49:50.1815766Z     --hash=sha256:ef229a17f0bded688e0679989b73974e977ceced5f6b35392e0df0613e93d722 \
+2026-11-28T09:49:50.1816197Z     --hash=sha256:f7a8ca568ba0d443971eea77442d50ace854f53d0248e690bba45e942102888d \
+2026-11-28T09:49:50.1816642Z     --hash=sha256:f8aca5ed80f46c407f8f65844cf9002d97ff4e242c08566f7fc3c9b03a6441a5 \
+2026-11-28T09:49:50.1817084Z     --hash=sha256:f91778229e88cfa7824bec109313c1ffe5c8e050318b4ec50db76af773d7ac51 \
+2026-11-28T09:49:50.1817520Z     --hash=sha256:fc93f5a5ce10be674b0707dec0e33fc5f0beb14a5077d103179f3518fcb48a9a \
+2026-11-28T09:49:50.1817955Z     --hash=sha256:fd18d1f708f78577556a7d76505048b9e3ad6ff61b8d9c91616a5a3f1e6c770b
+2026-11-28T09:49:50.1818286Z     # via mypy
+2026-11-28T09:49:50.1818464Z license-expression==30.4.4 \
+2026-11-28T09:49:50.1818792Z     --hash=sha256:421788fdcadb41f049d2dc934ce666626265aeccefddd25e162a26f23bcbf8a4 \
+2026-11-28T09:49:50.1819871Z     --hash=sha256:73448f0aacd8d0808895bdc4b2c8e01a8d67646e4188f887375398c761f340fd
+2026-11-28T09:49:50.1820205Z     # via cyclonedx-python-lib
+2026-11-28T09:49:50.1820388Z lxml==6.1.3 \
+2026-11-28T09:49:50.1820686Z     --hash=sha256:0bf5a3e397df2ec4258eb5eea4c1ac6cf013ca1abd04a176903bff20a70021fe \
+2026-11-28T09:49:50.1821150Z     --hash=sha256:13d22c0d57355366b393936acf6b98a5e0edeadddd3fccbc6a846c50a76b8741 \
+2026-11-28T09:49:50.1821582Z     --hash=sha256:1a635e837b50a1819bebfedaac5916498ea024120969da8790500148fb0a894d \
+2026-11-28T09:49:50.1822018Z     --hash=sha256:1b7c37339d7e75cab9a123a04248e243cefefb302ad6db566ea0c77cbcde421e \
+2026-11-28T09:49:50.1822461Z     --hash=sha256:1beb0f9909b26cee938df9ba56b15252a84429b1fc30ce6fca161390b9789a70 \
+2026-11-28T09:49:50.1822907Z     --hash=sha256:209c3ccbfe35a04ac6d24f0611f9d1cbf8025d49991b14acd935236234d6c156 \
+2026-11-28T09:49:50.1823337Z     --hash=sha256:2221e88679d1351e9a40aaee54bc65679b9795bbd0160bc3d5e36b163344eb75 \
+2026-11-28T09:49:50.1823771Z     --hash=sha256:25f4118c438f96bb466e83108506d03d5c31b1bd2387e83e5b070bda6ded9c37 \
+2026-11-28T09:49:50.1824203Z     --hash=sha256:28a23fefdb345b2d4d0ff2860571b5ff9a89a28b6a120f720e8fb0324d346626 \
+2026-11-28T09:49:50.1824636Z     --hash=sha256:290f66b97ede0e552e1cb44a0fd8a74f9753ee635b50830a0b122fb72788d015 \
+2026-11-28T09:49:50.1825088Z     --hash=sha256:2bec13085dc8ef48a3fe62f7dfcacfeda2c785cdf19cc8eeda2bb9ed081da165 \
+2026-11-28T09:49:50.1825534Z     --hash=sha256:2cae5d5c90a62d9139c512a0cb1aad1d182b022b5740daea2617eb5bf7fc658e \
+2026-11-28T09:49:50.1825959Z     --hash=sha256:2e01125896585139453cab8cb235893644d8815d7509520da95ae3ee8d1c1f79 \
+2026-11-28T09:49:50.1826376Z     --hash=sha256:2e62c569ec7531b679b184cbfe335c501c1d13c4b363560013019962eb630e6d \
+2026-11-28T09:49:50.1826867Z     --hash=sha256:2f5b2a2b9811b853b39bfa41367c6d78747b8e3e80e07fc5a24aae295c1a4d7d \
+2026-11-28T09:49:50.1827972Z     --hash=sha256:32a409be3190b088f960ac92bfedfbef2f86c49ff940765e1548177592d20026 \
+2026-11-28T09:49:50.1828500Z     --hash=sha256:33cadd956b667997e4de1635fce9541f2e8ede2038fcde8cf55aa14d571d1bad \
+2026-11-28T09:49:50.1828955Z     --hash=sha256:3a27ac6c780c8b8a1cd231b58407634cafc1c4cc28cd6c7141362df0f36351e7 \
+2026-11-28T09:49:50.1829394Z     --hash=sha256:40983eabefd13da003e68170928c7acc011f0d095eefce5871a3c71c9385fb9a \
+2026-11-28T09:49:50.1829847Z     --hash=sha256:45222d94ddd511536f3b2f7d9deae3b2339b4ce0f075f1ca25703b07cad9dd21 \
+2026-11-28T09:49:50.1830290Z     --hash=sha256:4f4db7c7e954d289d71878938348b3d91b904a3e8210a11939359fb758a58e7d \
+2026-11-28T09:49:50.1830712Z     --hash=sha256:53258656846f5c48996b882fb4b135885e088a3ad3d96b4bc0530f95124d1f69 \
+2026-11-28T09:49:50.1831135Z     --hash=sha256:545ccc14fb05485f48b4439ec35beb16d5b5280eb6c81c658bd4707a2a119414 \
+2026-11-28T09:49:50.1831574Z     --hash=sha256:5a143e6207579de8baeded4eaac9134413200359f1969d636f0bfb98ee8c3c8f \
+2026-11-28T09:49:50.1832016Z     --hash=sha256:5a721a98c649855963811b59b55755b30566e7f7fc40bdc9803d66dee9f811cf \
+2026-11-28T09:49:50.1832461Z     --hash=sha256:66299564c046bc7e0cc5de5106601eae907e9fa5904cd68a323380a8502f7861 \
+2026-11-28T09:49:50.1832909Z     --hash=sha256:69cafd61aea04ebb3502c93c2aaa568b12931ca0802231e0b5de76bf8b6e74bd \
+2026-11-28T09:49:50.1833354Z     --hash=sha256:6a406d0b3cb207b0fa460ed4dc93e866f44f105da0169361cb18ff998a44c7f0 \
+2026-11-28T09:49:50.1833796Z     --hash=sha256:6cd11e7550d89e551a87dcec30f04b1fca32e86b68708aa01a4daa455d8605e5 \
+2026-11-28T09:49:50.1834254Z     --hash=sha256:6ea2f13dce778ca072ccee598bca46a092ce192e8fd907b6c1f0e52c800529a0 \
+2026-11-28T09:49:50.1834695Z     --hash=sha256:73fc05988ed20809450474ba760a87c8ad4e455fc09783c02195e56ec634b41a \
+2026-11-28T09:49:50.1835120Z     --hash=sha256:7d0f5976aa2701996f759b30172925829867547bb073af0ae67d1307a0f0262c \
+2026-11-28T09:49:50.1835556Z     --hash=sha256:83e3a51e7933db700a0da0db31849db3a24022d9970da9bb73001e1d0326fd92 \
+2026-11-28T09:49:50.1835991Z     --hash=sha256:88e719b9437f148f7e1465df845c758dd1598618cbea3a2fd1e61a715542f2b2 \
+2026-11-28T09:49:50.1836757Z     --hash=sha256:8a330c0ee5fa318c7b5cbbaad882baeca3f570357e7eb25ab34bf31008150758 \
+2026-11-28T09:49:50.1837203Z     --hash=sha256:8db38ff3fb7aee7d6a82ae4da2eef1178656fe1216841fbd24870062a9d60473 \
+2026-11-28T09:49:50.1837631Z     --hash=sha256:90f709b9accab6b2e4d14f5c8718203877a0486bcb3afd74d8b539ecd1e961d4 \
+2026-11-28T09:49:50.1838053Z     --hash=sha256:93476b6514b373fc6ca67d26c442784f7807c86f00635bfe79f935c3eab2af17 \
+2026-11-28T09:49:50.1838480Z     --hash=sha256:9bde9ae026a55b9a192078dfa6e27dd0ca4a050171ab6272e92f97b757dfdf48 \
+2026-11-28T09:49:50.1838919Z     --hash=sha256:9efe56a68179f3adc4de41861c9358931db03837c48dd5e1c78077b84dd07f3a \
+2026-11-28T09:49:50.1839355Z     --hash=sha256:a1932d7ce78a561367512c594fe66eac2b2ec9b9264cfd9b5f950622f4a116e2 \
+2026-11-28T09:49:50.1839790Z     --hash=sha256:a1cec0f99b9b914d39176347a93b7610dc09324491aee1cbc57cd291a41a1d55 \
+2026-11-28T09:49:50.1840230Z     --hash=sha256:a7eb78ba28b187e1e9203a55c60fcf70df2d22cb205fe6d51b9383d6097419f0 \
+2026-11-28T09:49:50.1840679Z     --hash=sha256:aa633613ff907ea91b9b0489a1f0da1b8725d8c6ccec6b77e8a1c9c235044bb0 \
+2026-11-28T09:49:50.1841118Z     --hash=sha256:ace1d2c83b2bd24db5940600541140e87a325e119cb32d5fa9ad720d7e76648e \
+2026-11-28T09:49:50.1841568Z     --hash=sha256:b49638355ea3bebba70da783ccbc630fd72afa16bc46c54474bfa1f9a915bbc6 \
+2026-11-28T09:49:50.1842010Z     --hash=sha256:b4fc6b03b9d9d90557274f571ab30e7fbbfc527955536935d96f98b6817a86e4 \
+2026-11-28T09:49:50.1842452Z     --hash=sha256:c581b1d68b3845fb86c6b2983e755b29bf001461c59fa411d2c26a911b6559a9 \
+2026-11-28T09:49:50.1842894Z     --hash=sha256:c59e4265608da6a041f54646ecc0c9ecdbb19aaf14c4c684bb6c2114998cc415 \
+2026-11-28T09:49:50.1843332Z     --hash=sha256:c5e7ce578aa8a80910a72a8ca0bbea3baae10100827249001999726a788456d8 \
+2026-11-28T09:49:50.1843769Z     --hash=sha256:c6c0c13128a32eb04a51357e56a094e13aa8e6d3d1884de2e9ae923f6915e1a8 \
+2026-11-28T09:49:50.1844204Z     --hash=sha256:c9389b3784b56c58d933b5e0aecdf28f901b073ff385358d8a7d40907f6e14b2 \
+2026-11-28T09:49:50.1844655Z     --hash=sha256:ca0ec532ad2f5ba1e5ec120ac157769c57f01855b3d8bf37213f5d88abd9ba0a \
+2026-11-28T09:49:50.1845097Z     --hash=sha256:cad7617727a96d189bd6f979d0fadf765198c7934e85f4edaba9bf3ad919a300 \
+2026-11-28T09:49:50.1845548Z     --hash=sha256:cae82b5ca24b0c2beedb269f6e2a96f466acd926879ab00ae19f1a65cbf9ffb0 \
+2026-11-28T09:49:50.1845994Z     --hash=sha256:cfb398886a7eb4c719161c3efcff2a1248febc53a4d8e5072d2d8a87fed84ac9 \
+2026-11-28T09:49:50.1846446Z     --hash=sha256:d0c5c362bc94f1929dc7e96e715bbe7bd17037f802e6d8f0d1545df9133c0559 \
+2026-11-28T09:49:50.1846876Z     --hash=sha256:d97c5227621af74b111882a290b10f371780a38eef9d9e730408fba2259b52fb \
+2026-11-28T09:49:50.1847312Z     --hash=sha256:da707f14ea3c35ee463d50acd596d6488e4b2b4ae7cf77a5bf93f55c023d63e8 \
+2026-11-28T09:49:50.1847755Z     --hash=sha256:dc205732d593118cf701d986f40e9de7801bb2e371cb189ddbda9b7348f4d97e \
+2026-11-28T09:49:50.1848571Z     --hash=sha256:dc3a44689eea43eab836e5c98a8ab015dc2419987d1ea6eafc7c590cdff86bed \
+2026-11-28T09:49:50.1849047Z     --hash=sha256:e8b17e23df3e827a69d25af70990ca2420e92668aaffaeeb3cd2351d7916a023 \
+2026-11-28T09:49:50.1849485Z     --hash=sha256:e99e09ab7741f1281e2677f4c0058c7f5267d182530b09c87e4f6aa26adf3887 \
+2026-11-28T09:49:50.1849919Z     --hash=sha256:ea6b1e9105b4b24a34c722432d9fb578f9ed83af21fa1abda639011e0f22bbb6 \
+2026-11-28T09:49:50.1850366Z     --hash=sha256:ebd054ad1737a68fb7c5c073d405cef2b88bb824e294de3b4a4e995b47f0e376 \
+2026-11-28T09:49:50.1850823Z     --hash=sha256:f6b9d2aad499c769ee8287609ab0e6de99d8bcea99c6e6c2e64945259fd52fb2 \
+2026-11-28T09:49:50.1851268Z     --hash=sha256:fad67b12ffe0f71e02b4932b04883cbc76a9072bbd30731409d3523cf058b011
+2026-11-28T09:49:50.1851603Z markdown-it-py==4.3.0 \
+2026-11-28T09:49:50.1851914Z     --hash=sha256:7aa1511a46c39138de78d9eba92ce47e63124d8003fc98b3a351909e04239efa \
+2026-11-28T09:49:50.1852355Z     --hash=sha256:91a58fa5b72c71a40cf7177250fd767480d7a2bb3ac426ccfb76fb90305fdaaa
+2026-11-28T09:49:50.1852783Z     # via rich
+2026-11-28T09:49:50.1852997Z mdurl==0.1.2 \
+2026-11-28T09:49:50.1853287Z     --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8 \
+2026-11-28T09:49:50.1853730Z     --hash=sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba
+2026-11-28T09:49:50.1854048Z     # via markdown-it-py
+2026-11-28T09:49:50.1854232Z msgpack==1.2.4 \
+2026-11-28T09:49:50.1854537Z     --hash=sha256:0221748c30ace75fde0dec8c470abe65fb5374cd4f37adb9db6aca7a3c362c0a \
+2026-11-28T09:49:50.1854984Z     --hash=sha256:06a0657a4110d563255006b7cb7147432f67827144e429c2cdb1c967548d1817 \
+2026-11-28T09:49:50.1855407Z     --hash=sha256:0a1fd6c31952155b7cd01061288c70303e6554ae855244dfb38a897fd94f8749 \
+2026-11-28T09:49:50.1855839Z     --hash=sha256:0bef691e2a95119cc6bf3ded29325dbd89c4b6f8ff233070431948ed70902421 \
+2026-11-28T09:49:50.1856291Z     --hash=sha256:2444a4e04f924630d059ae6eae8f91fdfcd28ed9fd17b21bacf4e74550a091f7 \
+2026-11-28T09:49:50.1856731Z     --hash=sha256:287e52c2ebaa94f8eca045628374859f51584e77bc07086e6835a9bb2204c774 \
+2026-11-28T09:49:50.1857247Z     --hash=sha256:2b597bb01aff61d65e305c2cf2589c93c86609929d42d575bfc359f3c54ea8e1 \
+2026-11-28T09:49:50.1858373Z     --hash=sha256:34051de19ae532ba47fcab5b0abd08c25c7a64ff763ad819f18764d45f3c2c81 \
+2026-11-28T09:49:50.1858853Z     --hash=sha256:40e91bf8325f492e8eb3c3aa6de06b20593c225336bb52b585c913d7c1da025b \
+2026-11-28T09:49:50.1859293Z     --hash=sha256:42e0a7dc26df739149478585d4264338b4d330f24b3e3b57d5aa89e48866e8ab \
+2026-11-28T09:49:50.1859725Z     --hash=sha256:45506bfb902cde24a0d33fb0581f58497ddb2682686dd1f6aa07e7b769df7ca4 \
+2026-11-28T09:49:50.1860166Z     --hash=sha256:475c44e12f2a5de766a8448783f149c9b33f3f49b88953c6cd739a77d93c732c \
+2026-11-28T09:49:50.1860599Z     --hash=sha256:55e6106d2d085af42b2de72efeb38ed255241a24b32295ca889707c1d679c442 \
+2026-11-28T09:49:50.1861056Z     --hash=sha256:59887281c3c163a7afff7dffaaad2f78cd2b513b7e1a7843f1ee8e7cd6a94231 \
+2026-11-28T09:49:50.1861508Z     --hash=sha256:5d65b791ce4283e02b6267742ad540899155e1b32887b9cbdda47f38f5a076b5 \
+2026-11-28T09:49:50.1861944Z     --hash=sha256:5e4c67dbac05dce90a3fa1d845137617383c415e6b319062baac9734540706ae \
+2026-11-28T09:49:50.1862384Z     --hash=sha256:67310606cf2528a6dc3ece1298dcd5cc6c57add148b16d22c5111138aa84820c \
+2026-11-28T09:49:50.1862832Z     --hash=sha256:6ad2f0808099d4281208ff2c756efa958a55a7c8eb21fe1c7052b95c584f02f1 \
+2026-11-28T09:49:50.1863270Z     --hash=sha256:727a65b35db9f5ef516fc0229c4b05cab983092b1ae274a8a769b2d517fb0499 \
+2026-11-28T09:49:50.1863710Z     --hash=sha256:765584b93ed6f0b561f0c56e9735f24945c0682f857c9b3ee3b4caad9c32f66a \
+2026-11-28T09:49:50.1864150Z     --hash=sha256:781e856db4f2cb398e4992e2a74305295d3ebf694eec26fa0f4bc766eb9fa0a0 \
+2026-11-28T09:49:50.1864595Z     --hash=sha256:80f5d4fda1ba373d95933f98e6c1d18247feffac839fda3930bdd85e6561bb5f \
+2026-11-28T09:49:50.1865041Z     --hash=sha256:895e9369185df4a874768849405c30cba7990caceb3fcb1692ebe62bb050f55e \
+2026-11-28T09:49:50.1865469Z     --hash=sha256:8e680367090a58c966052d61418cc943111863538fd82471d61fca5271d911e1 \
+2026-11-28T09:49:50.1866198Z     --hash=sha256:996dfc4774c240c8e6adf1166ae102141cfbed33c8856fde821bd6c0bd35ee41 \
+2026-11-28T09:49:50.1866651Z     --hash=sha256:9f46e70c8d22e96856967ab9d80c51dcf5bc63133e4da2d66fab64c0d4119b82 \
+2026-11-28T09:49:50.1867097Z     --hash=sha256:a6c9926f8871b261622fe6b599db72c69be5bca8fdc0976886f9a531a301dee9 \
+2026-11-28T09:49:50.1867540Z     --hash=sha256:ad5bc540cbc34db236f8535721a9a872d12a9d88d1322470f1fc7c5e9dadfdb2 \
+2026-11-28T09:49:50.1867989Z     --hash=sha256:b1f08ec826417e3c8dc3edadb50f38debba033af6cb849229f0eac72f80f2342 \
+2026-11-28T09:49:50.1868436Z     --hash=sha256:b9270b63409e70c8c6deb5faedc81fc27c6bd0196b38084a8773f68286abf034 \
+2026-11-28T09:49:50.1868878Z     --hash=sha256:c50bac325dbf1a9c80e10da6dbd1100d7082f6b12e153084501e18e86cd3a037 \
+2026-11-28T09:49:50.1869332Z     --hash=sha256:c5917972ce1bf5f85f761031e00dab6fe0ad9f880cb3d2d43ed74b330c850400 \
+2026-11-28T09:49:50.1870027Z     --hash=sha256:c97f5f17407e1761f23f1944be33cbf1d5ce67017db32544dcd5e16e0b1b4a3b \
+2026-11-28T09:49:50.1870492Z     --hash=sha256:ce76e7a7c11459157887a8dadf07c107ff74eca98cf914f0de6ee7ab4b47104d \
+2026-11-28T09:49:50.1870943Z     --hash=sha256:cfa86432bf329d6b976f5a00ad4c9064fd51736e4967a52526750236345cc2da \
+2026-11-28T09:49:50.1871394Z     --hash=sha256:cfc1cc237792f9a5664002b66acb961027d4184528ec9d10e0e42330f7972383 \
+2026-11-28T09:49:50.1871842Z     --hash=sha256:dc9dc681958e69f46b9f37def3e7fd6cc5dcfaa5943fb00bfe9c223a1a1052f6 \
+2026-11-28T09:49:50.1872278Z     --hash=sha256:e283cf563166c21762131b88e3870ee2ec57757b08a8736929757b5a67541061 \
+2026-11-28T09:49:50.1872706Z     --hash=sha256:e38d854f1c60e94f46d998765201126338bde3fe1b029be0d849094bcbef72c2 \
+2026-11-28T09:49:50.1873142Z     --hash=sha256:e5f67f0286f2ba2c6dbb4998404ed880112ca204ceda729cf239879cd89d3acf \
+2026-11-28T09:49:50.1873596Z     --hash=sha256:e78c66cf97ac5675037f705ca433ad98ac9177f9523e7fdbb34e486ae29044c8 \
+2026-11-28T09:49:50.1874453Z     --hash=sha256:e7ae8cf6012372cecb43016132d1b87ccc2ebb8ae5ab5078687399e82423386a \
+2026-11-28T09:49:50.1874947Z     --hash=sha256:e8ba23c838739fe929e868095171e71f2f38d6ce0fcf5840b576fb82648e58e6 \
+2026-11-28T09:49:50.1875545Z     --hash=sha256:efa1357fb0c7201e833de28638be371ee127476f7ccff9e7a94211b0afc33ddf \
+2026-11-28T09:49:50.1875985Z     --hash=sha256:f3f19fe5decd348b35b003ae5f32d3fa90877413a0183da676f748a3a7ab9270 \
+2026-11-28T09:49:50.1876412Z     --hash=sha256:f60de6ae13d4d2a12a483f15c5e47cb6fa2731aa32d92fb31178e2017d6574a8 \
+2026-11-28T09:49:50.1876860Z     --hash=sha256:fb9ddbf23b8c6e89752af399fcf4daed60055e239cda44c6acfaa76d19331e8c
+2026-11-28T09:49:50.1877181Z     # via cachecontrol
+2026-11-28T09:49:50.1877349Z mypy==2.4.1 \
+2026-11-28T09:49:50.1877645Z     --hash=sha256:01b7718552d017f88d1151f3cc9d6556d778a90bd58060a2c3d87d070f9099fb \
+2026-11-28T09:49:50.1878078Z     --hash=sha256:080cf64a60b90a73435542feecf4171904cc5710658165b40c6869115d4aa100 \
+2026-11-28T09:49:50.1878519Z     --hash=sha256:0c5bf267645351887b72903fd2f5fbddcf85234e0e6c4ad94e2fcfb4f0c3f971 \
+2026-11-28T09:49:50.1878965Z     --hash=sha256:0e95ad0bec03ced9a73b42514208abd24c789e67f0e1eba476e276dd7a2dea3a \
+2026-11-28T09:49:50.1879402Z     --hash=sha256:1784648d6ec8c2b5465e3f26241b845a0b3cb4e56c993c64abe16989e7698999 \
+2026-11-28T09:49:50.1879843Z     --hash=sha256:2875280687e64740e6ddcef43bd4c5852ad45ff34549740f6aea3f0373870b93 \
+2026-11-28T09:49:50.1880276Z     --hash=sha256:3467b1d13000812ab85dc2a3834b9379ec77798ca1bcabe434e23fb21fead692 \
+2026-11-28T09:49:50.1880718Z     --hash=sha256:51f742d4154824837ca6e92aa81f00eec222700a3c337bd258e5562a3880d75a \
+2026-11-28T09:49:50.1881145Z     --hash=sha256:63b590965691e540a335fa74dadf31a7069142f6b72e234689bbd244edf55623 \
+2026-11-28T09:49:50.1881583Z     --hash=sha256:63c6ff0e7ea546943001a91639c9f0c64b60d239268fa5d29e4a6c87f82c2373 \
+2026-11-28T09:49:50.1881993Z     --hash=sha256:70196470ac300f444a302a738541101893c2c57804078b33690286a7899149e9 \
+2026-11-28T09:49:50.1882415Z     --hash=sha256:727890a32f1858c09549eb55a8b234fe990d460450b28f03e8213ef925f1247c \
+2026-11-28T09:49:50.1882842Z     --hash=sha256:9d7dafd56179d296651df9e1844b91c9517c379398f017a2a435d077a28943c1 \
+2026-11-28T09:49:50.1883283Z     --hash=sha256:a2d4a51db92059eecc2c33b2a5194b28585ebfd917292c015fe87a77dbff6cd2 \
+2026-11-28T09:49:50.1883739Z     --hash=sha256:a5b5da107dc2c93fb0a22f7a45dbaea5dc131afc7056b5468d78e819f9a138e6 \
+2026-11-28T09:49:50.1884186Z     --hash=sha256:beb254fec368c4e7f7f82a5f310c6470b893ec88a90b66426da971c6826b0453 \
+2026-11-28T09:49:50.1884622Z     --hash=sha256:c3a4d0c47053cc90035dd3a2c321112b593ad42935d0cbfd747288e1564fa8ca \
+2026-11-28T09:49:50.1885168Z     --hash=sha256:c45485061ba08f700acc12cfc8b177e6997e6bc353605babfc0abb081e079456 \
+2026-11-28T09:49:50.1885620Z     --hash=sha256:c6c7210e40dd423af7d65cbe428b5906d11dc60659337bdae4e5fdf02ce32ed7 \
+2026-11-28T09:49:50.1886380Z     --hash=sha256:d6e081b466e88d4343adffe11aff0f02df34b5b9070b4b700053a0b7294c0be1 \
+2026-11-28T09:49:50.1887052Z     --hash=sha256:d923cec43316f0e6736b8298fd00abeaaf348a091c20e7296b3aebceecb63eca \
+2026-11-28T09:49:50.1887492Z     --hash=sha256:db599d03e7d60d15f2e0a11665c18bc52a88699fcab990fdf8cecd5be8ac801c \
+2026-11-28T09:49:50.1887923Z     --hash=sha256:de95648e0a6d46fa9929b956ed2c87c5dc9933d4d59945e6390e9d753c74e7c1 \
+2026-11-28T09:49:50.1888364Z     --hash=sha256:ea0714d2bccaf6d010c970e1d3ba2c9c2add79d2030aad2ef03167d788948276 \
+2026-11-28T09:49:50.1888811Z     --hash=sha256:ec416d5d2ae689e681f5727e328723f18d8b5dc8c903a146b7851dc5727aad8a \
+2026-11-28T09:49:50.1889242Z     --hash=sha256:ef8d5be90032261197ac388d945d8ff4f476c95880798a1911760af64ddfe71f \
+2026-11-28T09:49:50.1889678Z     --hash=sha256:f44dd4c5ab22df21206dd926c98381ebdbf5bfd696df37dd38ded2d23143fcb6 \
+2026-11-28T09:49:50.1890126Z     --hash=sha256:f9118a3f50de264b614861bb11814833a742138ac3c8e2e49a860b6977fb2704
+2026-11-28T09:49:50.1890449Z mypy-extensions==1.2.0 \
+2026-11-28T09:49:50.1890757Z     --hash=sha256:993e7a20aa5671eb41a7132cf555af30062da99729601601b9a8382b11cae768 \
+2026-11-28T09:49:50.1891189Z     --hash=sha256:c6e275a07f1c2fc096b62940452d0eaa3f3af7de45d704787866240a7c6d5a51
+2026-11-28T09:49:50.1891483Z     # via
+2026-11-28T09:49:50.1891630Z     #   librt
+2026-11-28T09:49:50.1891778Z     #   mypy
+2026-11-28T09:49:50.1891934Z nodeenv==1.12.0 \
+2026-11-28T09:49:50.1892235Z     --hash=sha256:4ea7f88339310afebc3253f2c7a91b94bacf97d73a36a5c108962abdfaca501e \
+2026-11-28T09:49:50.1892678Z     --hash=sha256:80644d65c10cc2be12e3e4b54b3367ff288c7ad24ae75c2dcc65454fc7449d4d
+2026-11-28T09:49:50.1892980Z     # via
+2026-11-28T09:49:50.1893135Z     #   pre-commit
+2026-11-28T09:49:50.1893284Z     #   pyright
+2026-11-28T09:49:50.1893458Z packageurl-python==0.17.6 \
+2026-11-28T09:49:50.1893824Z     --hash=sha256:1252ce3a102372ca6f86eb968e16f9014c4ba511c5c37d95a7f023e2ca6e5c25 \
+2026-11-28T09:49:50.1894340Z     --hash=sha256:31a85c2717bc41dd818f3c62908685ff9eebcb68588213745b14a6ee9e7df7c9
+2026-11-28T09:49:50.1894690Z     # via cyclonedx-python-lib
+2026-11-28T09:49:50.1894890Z packaging==26.3 \
+2026-11-28T09:49:50.1895189Z     --hash=sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79 \
+2026-11-28T09:49:50.1895803Z     --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+2026-11-28T09:49:50.1896249Z     # via
+2026-11-28T09:49:50.1896427Z     #   ijt-web-client
+2026-11-28T09:49:50.1896664Z     #   pip-audit
+2026-11-28T09:49:50.1896896Z     #   pip-requirements-parser
+2026-11-28T09:49:50.1897142Z     #   pytest
+2026-11-28T09:49:50.1897329Z     #   virtualenv
+2026-11-28T09:49:50.1897533Z pathspec==1.1.1 \
+2026-11-28T09:49:50.1897932Z     --hash=sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a \
+2026-11-28T09:49:50.1898372Z     --hash=sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189
+2026-11-28T09:49:50.1898800Z     # via
+2026-11-28T09:49:50.1898989Z     #   mypy
+2026-11-28T09:49:50.1899323Z     #   yamllint
+2026-11-28T09:49:50.1899630Z pillow==13.0.0 \
+2026-11-28T09:49:50.1900118Z     --hash=sha256:04a63720f79e22fd54d897c233a68314c50ca0603360f54ce2bd5db8f0f43782 \
+2026-11-28T09:49:50.1900860Z     --hash=sha256:05cd2cd39055d0b9650060e4513ef4a9a0aea870083950bd046a0d6490f93a22 \
+2026-11-28T09:49:50.1901578Z     --hash=sha256:06903aac074d00c988e77a1fc435286dc498506d4ca8d6f69df9babddf4ecc15 \
+2026-11-28T09:49:50.1902441Z     --hash=sha256:0d1a9cf7bc6917538b20f8d06b9ab2147e542f68849e96fc58eb66bdf6acc692 \
+2026-11-28T09:49:50.1903197Z     --hash=sha256:149a1c323ba366f90b48e6f1a6db6582eb50512df374588de56fc909abc0f0f3 \
+2026-11-28T09:49:50.1903935Z     --hash=sha256:1c774b9c0ba0d0b356f71530677b39028878a2cae5a93e0a13779cfd17120f88 \
+2026-11-28T09:49:50.1904706Z     --hash=sha256:20722cd5375533ad754053363a80b8fb30c79d37930a6f7228030e237ce3bd5d \
+2026-11-28T09:49:50.1905440Z     --hash=sha256:20822140c9a2ba9c5e42df342b0a892ab2e102fc0e3db967a133bb9ce3f898bb \
+2026-11-28T09:49:50.1906752Z     --hash=sha256:21c32061a5512dc13f87cc7303e120e4d77c2f70df89a35af0e3ce246e5ac57f \
+2026-11-28T09:49:50.1907671Z     --hash=sha256:2310e2adfc13c6d457d7d0f2ffdd5c56a74a317650cf765887df8d515a647ac0 \
+2026-11-28T09:49:50.1908404Z     --hash=sha256:2e31c4e68cffd7b1f116127626813b82fcba19edf6b940a7b0c266d6484d0055 \
+2026-11-28T09:49:50.1909176Z     --hash=sha256:44629d4498c9cb6b2051806155f22141df0d8a929c56134b166655232dfb2f8c \
+2026-11-28T09:49:50.1909891Z     --hash=sha256:49c12af515073e9bf511e4ef736743bf70d531a643668722279314b937742ba4 \
+2026-11-28T09:49:50.1910640Z     --hash=sha256:4a25756244bdcce3b50580baadf320fa48297f0eeb8e114ba64139a40d4d0fc8 \
+2026-11-28T09:49:50.1911356Z     --hash=sha256:4f8db54177035a2b5f717f94475b74907e12a96dc74f6d487f3966b0a4694071 \
+2026-11-28T09:49:50.1912190Z     --hash=sha256:51ebb529fc5e8abdd55302f6c3f8943037348ec2384329a3e55677f69ae2fdfc \
+2026-11-28T09:49:50.1912972Z     --hash=sha256:5933fcea5a5ba64c686f55c886a115cbfd92f2900460784a1e79909fdbafd7b6 \
+2026-11-28T09:49:50.1913833Z     --hash=sha256:5bdb38ba220b61b4ec31dd1046dea6b016d3c6850a23f43ed8b58332b2fc668e \
+2026-11-28T09:49:50.1914653Z     --hash=sha256:67871a13cf47275201553b536c025da777f997fa562a19eb798af4ad4b97c18f \
+2026-11-28T09:49:50.1915375Z     --hash=sha256:6bce6a29c3898191f4c9998e4d4e8f69790caeabde46e54da4bc235ce5bde683 \
+2026-11-28T09:49:50.1935725Z     --hash=sha256:7b999816b5850a35ada08443e6e03945f1f6488144a83afe2d37b240a552aafa \
+2026-11-28T09:49:50.1936649Z     --hash=sha256:7d5e097eabd5d4915c27ac9f6e9325bb1e01a7c94d7348b5c4451d3fc30e8521 \
+2026-11-28T09:49:50.1937432Z     --hash=sha256:7f6299e494e46253d40c34653cac369412f44ca53b5f85d848d3f95b1ed0546c \
+2026-11-28T09:49:50.1938187Z     --hash=sha256:816752a5ef76a80484c8c441c85593b7ea9304f6231fc5776ad1fbff7e773058 \
+2026-11-28T09:49:50.1938968Z     --hash=sha256:8e459b613cf31f8980f584387b4fe47bf08e076e288d61aa8eba1f7fd4ddbb81 \
+2026-11-28T09:49:50.1939714Z     --hash=sha256:8f36aa77f74b14a2103622b196402c71330e4e7cf4122ee45c854e9a01e0eecf \
+2026-11-28T09:49:50.1940491Z     --hash=sha256:9a635068d9793c7f0d929f39f18b58f1bd86c236e8e7b64167b86af9232ebca0 \
+2026-11-28T09:49:50.1941234Z     --hash=sha256:a6aaa7871aebca081eb5c45f83e845bbd9712ae99fa9286dbfdcee835e63f4b4 \
+2026-11-28T09:49:50.1942009Z     --hash=sha256:aa694c49787040943570d61c9b8fc01271bd2a2cfdd55f0d896f8aecdce1a981 \
+2026-11-28T09:49:50.1942765Z     --hash=sha256:adb3c2124c68e480f4632d06cb7caa3b48a51678475f483b4edb1c6dee29ea43 \
+2026-11-28T09:49:50.1943520Z     --hash=sha256:bf97ba1b5542050e9b0c74e632323b6d8136cc99d64e193abebee22fe6013c76 \
+2026-11-28T09:49:50.1944265Z     --hash=sha256:c50c80e3591e5cf9a8dfa6007d4f10732f02e32263850999286e56ccd650cfb2 \
+2026-11-28T09:49:50.1945030Z     --hash=sha256:c6fd031333dedcad7ce3e03d244093f43504f209e86925ebdb2b868fa4037630 \
+2026-11-28T09:49:50.1945810Z     --hash=sha256:c87a04e7f152ee4db5dbe15f0bfa3fe628a1aeedbe66b81c43b87f52c813f9ac \
+2026-11-28T09:49:50.1946875Z     --hash=sha256:cdcd1ba258178f7356d74170c9a81ba4eab6a5d55748bc402a5a2a6fe6be3510 \
+2026-11-28T09:49:50.1947652Z     --hash=sha256:d4737f50d23ddd11d6685faacbb9252887dde0bc7997127757247983d74399d6 \
+2026-11-28T09:49:50.1948420Z     --hash=sha256:d9b0a2bee3f3e03e9f29057aedb807dbf1e1d96ee1b9d0f422d9db6c8583271d \
+2026-11-28T09:49:50.1949175Z     --hash=sha256:e892354a424b1e82a78ba16785822bdd40de06f19446a3d4a28047df1a4f8932 \
+2026-11-28T09:49:50.1949940Z     --hash=sha256:e8ca8f69b7c77fa96dad99f8638c1fc4f1c0bed4acaa1baf7a3c31bdb80a0ab1 \
+2026-11-28T09:49:50.1950720Z     --hash=sha256:e91c2b1cbeae768c98752e67e717e283d68dae45717b41f2d91eaee648e37b7d \
+2026-11-28T09:49:50.1951462Z     --hash=sha256:f7cbb7a64e7ec664775195e4f81923bc8a93d9451b963f844e59118f63147a7a \
+2026-11-28T09:49:50.1952448Z     --hash=sha256:f9bd7d260d986f3553518c5d723544346fa48031f8aef3265d786aeb59845bc0 \
+2026-11-28T09:49:50.1957159Z     --hash=sha256:ffea6b2986a797c84b6d1d27d4f43e0b83c73fc16281a930891cd237cf0d08fe
+2026-11-28T09:49:50.1957709Z pip==26.3 \
+2026-11-28T09:49:50.1958489Z     --hash=sha256:6c36ae7da8695be67e3cd9f7d87919667ced53f57ce2ede75d89b5912ed2bc4c \
+2026-11-28T09:49:50.1959426Z     --hash=sha256:f3b60b20ffaadd4415ed7957212a38ac63fa4c5fa375bd0f4a797777940fad13
+2026-11-28T09:49:50.1959950Z     # via pip-api
+2026-11-28T09:49:50.1960193Z pip-api==0.0.35 \
+2026-11-28T09:49:50.1960688Z     --hash=sha256:14dea05d7b3b68f4c7582213e3ae8932bbba8e1f754bf06b95263d5fa6ab4363 \
+2026-11-28T09:49:50.1961393Z     --hash=sha256:66990d0da25378555cbb538db79384bab92d4617c6350dfd7a2126ba2a3a9894
+2026-11-28T09:49:50.1961878Z     # via pip-audit
+2026-11-28T09:49:50.1962126Z pip-audit==2.10.1 \
+2026-11-28T09:49:50.1962594Z     --hash=sha256:1eb4565d19ebe5d48996f4b770b4d2b32887e12cb12cfa637f1a064011b55ffc \
+2026-11-28T09:49:50.1963330Z     --hash=sha256:99ef3f600a317c1945f1e89e227ef26e1c2d618429b8bd3fa6f4f7c440c4611a
+2026-11-28T09:49:50.1963897Z pip-requirements-parser==32.0.1 \
+2026-11-28T09:49:50.1964439Z     --hash=sha256:4659bc2a667783e7a15d190f6fccf8b2486685b6dba4c19c3876314769c57526 \
+2026-11-28T09:49:50.1965181Z     --hash=sha256:b4fa3a7a0be38243123cf9d1f3518da10c51bdb165a2b2985566247f9155a7d3
+2026-11-28T09:49:50.1965662Z     # via pip-audit
+2026-11-28T09:49:50.1965896Z platformdirs==4.14.8 \
+2026-11-28T09:49:50.1966369Z     --hash=sha256:1e34af590de4d978631b751eb2202f2fee4497537a17c1720b12fcf57b331392 \
+2026-11-28T09:49:50.1967398Z     --hash=sha256:96893d686e84e9e6f358a9ea41a8de544df66dbf2ba6cda250e7dc73acf85b9b
+2026-11-28T09:49:50.1967891Z     # via
+2026-11-28T09:49:50.1968094Z     #   pip-audit
+2026-11-28T09:49:50.1968321Z     #   virtualenv
+2026-11-28T09:49:50.1968545Z pluggy==1.7.0 \
+2026-11-28T09:49:50.1969003Z     --hash=sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec \
+2026-11-28T09:49:50.1969727Z     --hash=sha256:d1eaa46ebb595891b860ab086b4d09c8588af65ebd4361b8e8f4bb8920b90ba8
+2026-11-28T09:49:50.1970194Z     # via
+2026-11-28T09:49:50.1970399Z     #   pytest
+2026-11-28T09:49:50.1970632Z     #   pytest-cov
+2026-11-28T09:49:50.1970893Z pre-commit==4.7.0 \
+2026-11-28T09:49:50.1971388Z     --hash=sha256:1f3deee12b914c8fa184bd2b5953391c2e4f36763e403d4a23dc9983fa7c6e86 \
+2026-11-28T09:49:50.1972103Z     --hash=sha256:2e229038ad3656081b70c27913157e4b636ef306f643f024a8a8e3f0f7b2f877
+2026-11-28T09:49:50.1972542Z py-serializable==2.2.0 \
+2026-11-28T09:49:50.1972971Z     --hash=sha256:2cce775abc5aac12115f9ff572a145c7276d04a770090334bd4e51ed9c782415 \
+2026-11-28T09:49:50.1973592Z     --hash=sha256:8e4fa02e8de819c0488ccdb69c2d3109274adcf224c02357fd8729cb12727aab
+2026-11-28T09:49:50.1974053Z     # via cyclonedx-python-lib
+2026-11-28T09:49:50.1974619Z pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy' \
+2026-11-28T09:49:50.1975320Z     --hash=sha256:a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e \
+2026-11-28T09:49:50.1976027Z     --hash=sha256:f03387877eab82ce01bbdfd0ba7252ee55a90b1c708d5129e2ce915475cf1db6
+2026-11-28T09:49:50.1976496Z     # via cffi
+2026-11-28T09:49:50.1976728Z pyfakefs==6.3.2 \
+2026-11-28T09:49:50.1977147Z     --hash=sha256:20b9889981459dde1fe1548b0e6c298a72c373951f9bd81a3c397ddda8591c55 \
+2026-11-28T09:49:50.1977820Z     --hash=sha256:7c67bdf4c11b42903c7cb6c74fa63432485afc697ad6f89ecce6fb0a4e4f24ed
+2026-11-28T09:49:50.1978282Z pygments==2.21.0 \
+2026-11-28T09:49:50.1978668Z     --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9 \
+2026-11-28T09:49:50.1979318Z     --hash=sha256:610ca751c9bc2492b38eb9a38a7fbc93edbbb2d7182edaf34e66ae493dee5c8c
+2026-11-28T09:49:50.1979762Z     # via
+2026-11-28T09:49:50.1979961Z     #   pytest
+2026-11-28T09:49:50.1980154Z     #   rich
+2026-11-28T09:49:50.1980354Z pyparsing==3.3.3 \
+2026-11-28T09:49:50.1980758Z     --hash=sha256:928ae7e20211f3b6f3915a72f06a0cfd29ab9d24279dd6346b6b1a7146397d36 \
+2026-11-28T09:49:50.1981428Z     --hash=sha256:ece8c00a69cf01b45d0b1dedabb469c90d8caf996d4fda40f147627a122849a4
+2026-11-28T09:49:50.1981945Z     # via pip-requirements-parser
+2026-11-28T09:49:50.1982511Z pypdf==7.1.1 \
+2026-11-28T09:49:50.1982957Z     --hash=sha256:04c5680d4b4cfa04ab505b09393fc949860c34a4dad6565284d11a2f5c3ce8b1 \
+2026-11-28T09:49:50.1983838Z     --hash=sha256:2eff4e2fc5fb22a6d6711e6f1166cdc9ab5765d90cd0d77dfea3f4aa91a27b1d
+2026-11-28T09:49:50.1984341Z pyright==1.1.414 \
+2026-11-28T09:49:50.1984850Z     --hash=sha256:2a6b4b3298c9eec174c5ed83bd338de6eee82df2992f3e1930e6199d381be36f \
+2026-11-28T09:49:50.1985562Z     --hash=sha256:523c0a97c60da6333234955c277730c9cf4f5bd6d5399e7b7d2b0fc5d3599524
+2026-11-28T09:49:50.1986005Z pytest==9.2.0 \
+2026-11-28T09:49:50.1986426Z     --hash=sha256:07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588 \
+2026-11-28T09:49:50.1987405Z     --hash=sha256:97c4f3b1f3c7414aa36465e09b8220f1d03627993bd51b1282e193753c80557b
+2026-11-28T09:49:50.1987849Z     # via
+2026-11-28T09:49:50.1988073Z     #   pytest-asyncio
+2026-11-28T09:49:50.1988304Z     #   pytest-cov
+2026-11-28T09:49:50.1988524Z     #   pytest-timeout
+2026-11-28T09:49:50.1988789Z pytest-asyncio==1.5.0 \
+2026-11-28T09:49:50.1989236Z     --hash=sha256:557f255ee03cc84f84a8d5f438bc9c6e0f714bf86970ae743c7ecb5a38d7e07d \
+2026-11-28T09:49:50.1989885Z     --hash=sha256:92c8fa83ca419fd0d4bd6a34df6520dae435841d3733c319343249492adf37f7
+2026-11-28T09:49:50.1990378Z pytest-cov==7.1.0 \
+2026-11-28T09:49:50.1990828Z     --hash=sha256:30674f2b5f6351aa09702a9c8c364f6a01c27aae0c1366ae8016160d1efc56b2 \
+2026-11-28T09:49:50.1991506Z     --hash=sha256:a0461110b7865f9a271aa1b51e516c9a95de9d696734a2f71e3e78f46e1d4678
+2026-11-28T09:49:50.1992005Z pytest-timeout==2.4.0 \
+2026-11-28T09:49:50.1992473Z     --hash=sha256:7e68e90b01f9eff71332b25001f85c75495fc4e3a836701876183c4bcfd0540a \
+2026-11-28T09:49:50.1993228Z     --hash=sha256:c42667e5cdadb151aeb5b26d114aff6bdf5a907f176a007a30b940d3d865b5c2
+2026-11-28T09:49:50.1993770Z python-dateutil==4.0.0 \
+2026-11-28T09:49:50.1994277Z     --hash=sha256:a5e246f79eb80475e691bf93862cead98decd8a498cf53ba0516fcdc0f50dc1c \
+2026-11-28T09:49:50.1994966Z     --hash=sha256:d7295ff14fdc0f92f662100bfb6c551d160ca090f2939f1ec5b9794265c03f06
+2026-11-28T09:49:50.1995422Z     # via asyncua
+2026-11-28T09:49:50.1995682Z python-discovery==1.9.6 \
+2026-11-28T09:49:50.1996155Z     --hash=sha256:383aa67858d73a9585a843a37a4383c6be98e4d86a981a031328e393a6eb2632 \
+2026-11-28T09:49:50.1996841Z     --hash=sha256:93b10b90363d4151964cdeee2ec6601f3041b17fc2b253a1c3da7d6e7ddd8337
+2026-11-28T09:49:50.1997301Z     # via virtualenv
+2026-11-28T09:49:50.1997548Z python-dotenv==1.2.4 \
+2026-11-28T09:49:50.1998029Z     --hash=sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc \
+2026-11-28T09:49:50.1998762Z     --hash=sha256:f0d53e69935a851c0dcc78f3ab7aaccd8cabef0b92382b576b824212902873c0
+2026-11-28T09:49:50.1999227Z     # via ijt-web-client
+2026-11-28T09:49:50.1999507Z python-multipart==0.0.34 \
+2026-11-28T09:49:50.1999985Z     --hash=sha256:b998ae90ca6e1e363261ce2e0e230281b8af53867b757970abd69ee9edcd843a \
+2026-11-28T09:49:50.2000717Z     --hash=sha256:ebacd224bd686eee2f9aa1066a657affe07435a185834e05e5235e2e59173e91
+2026-11-28T09:49:50.2001175Z pytz==2026.6 \
+2026-11-28T09:49:50.2001619Z     --hash=sha256:3b0fc2727707663d6e517936f444fd8a8b240f1fc32f4bf7ee03274245945284 \
+2026-11-28T09:49:50.2002330Z     --hash=sha256:7fed3fee8fd6bd4a2b7b75a8d56021d0624127bf69bd5691f115db929ac570b3
+2026-11-28T09:49:50.2002805Z     # via
+2026-11-28T09:49:50.2003003Z     #   asyncua
+2026-11-28T09:49:50.2003231Z     #   ijt-web-client
+2026-11-28T09:49:50.2003465Z pyyaml==6.0.4 \
+2026-11-28T09:49:50.2003906Z     --hash=sha256:070c22b6f490d6cc30912be9fb9ab1af9c752769b39b53616f6510c3f038ee6a \
+2026-11-28T09:49:50.2004563Z     --hash=sha256:12a155bc41509d71a2eb73e2191d9e400c1345ea99ac3d9946c31f40a4c840f8 \
+2026-11-28T09:49:50.2005270Z     --hash=sha256:132c3c7c37a8e6f334921b05cfea5d26e241d792dcbb4db0462129d25ca53b43 \
+2026-11-28T09:49:50.2006001Z     --hash=sha256:15c52bb238a15bb4fd7e6342a5ac71d594507667c7fe0e5a5abbc0f6875d1e91 \
+2026-11-28T09:49:50.2006710Z     --hash=sha256:18ea9bda247857fc0de05181675dc116b54c1b04ca3db71de5d2108c882823b7 \
+2026-11-28T09:49:50.2008213Z     --hash=sha256:1d2f08c122727c86f8303bb1dd45159ca1de1f2d68798e671ec46974e321008e \
+2026-11-28T09:49:50.2008942Z     --hash=sha256:1db4d51d3c2c9545dd44c614febc4594240754f74b30d8e501415b118347f0d1 \
+2026-11-28T09:49:50.2009689Z     --hash=sha256:2018fda285d1289527a389e1b4ace1e2d3af410930f949136b55ecb0747744d1 \
+2026-11-28T09:49:50.2010412Z     --hash=sha256:2c11be5ab4d9f603a598b5ce93a2064ae38087bdf1b384c5397170054cda4e36 \
+2026-11-28T09:49:50.2011098Z     --hash=sha256:33506a2620f0e7c49858f09cb44e99f144878d03af3d9c10aa136e9a1d103bcd \
+2026-11-28T09:49:50.2011770Z     --hash=sha256:3c7129bcee5c88c1450802cc6a95b690ee7c51bfcc7a9b60bbd9549a7a4fcbe6 \
+2026-11-28T09:49:50.2012450Z     --hash=sha256:4a2a8f27d24d4cdc05aa11df5f4c08e13f30d9e6674809b6a5ddcfcba49a653a \
+2026-11-28T09:49:50.2013107Z     --hash=sha256:4a329472db6c8858ebd94f2214a54c8bff8f035a6cc7af1ab39cc1b33a5f0e56 \
+2026-11-28T09:49:50.2013710Z     --hash=sha256:573debb9fe3075423d4f823795a678580e597218c25baef178d532b124a25a25 \
+2026-11-28T09:49:50.2014355Z     --hash=sha256:609e8efaffa5662da16b7d53eef76fc4eedbbe56fce5829b67ba808a6e35d399 \
+2026-11-28T09:49:50.2015039Z     --hash=sha256:62c5b5669b05dabf991a705f3a3601f57b65e95121a1d3e3a4ae4446c8632865 \
+2026-11-28T09:49:50.2015711Z     --hash=sha256:67da066ca12eb60114ea87f2ecbcca622fff0c205c743cc900437127564fabf6 \
+2026-11-28T09:49:50.2016415Z     --hash=sha256:6ac167ebebc0c387290406a337b9b5c8c343fa5f7928d5941e45a94b8ba3aa39 \
+2026-11-28T09:49:50.2017117Z     --hash=sha256:7335809813ec838d9cd334b1744cda33deb141c9ef23a9c0df371c37980d3851 \
+2026-11-28T09:49:50.2017834Z     --hash=sha256:8708f6ab9c2581ffa05f66dae3206bb0385949650537d7295fc7ab0d6454dd70 \
+2026-11-28T09:49:50.2018615Z     --hash=sha256:872d2a592289061c1b987e335b3568a2616b474be02bd0608d8f551a385441cd \
+2026-11-28T09:49:50.2019331Z     --hash=sha256:8e0cd755ce5e9009fd95f9c553e5942478feb8f7dffa19435641fcdc3c20e8ca \
+2026-11-28T09:49:50.2020049Z     --hash=sha256:914b19e17814315fbcca52031bf79b68237f3d87a948c584a667b18b468e4df7 \
+2026-11-28T09:49:50.2020773Z     --hash=sha256:93da48af92c84c4236578e330a514ca324362c0bb62894d8d2343363ed57ff03 \
+2026-11-28T09:49:50.2021459Z     --hash=sha256:a266cf55ee5cf63c1803432a61c6386e750e0012ca49d12d26ccb0ffd80b343a \
+2026-11-28T09:49:50.2022187Z     --hash=sha256:a3cc63af3d639d1609143711837b926183418260aae89ed95193c07b25b99d33 \
+2026-11-28T09:49:50.2022922Z     --hash=sha256:a65339c24f2fb8d4419e06ceec1bda98bdcff727b3b533a81d5af6bb2dd34520 \
+2026-11-28T09:49:50.2023669Z     --hash=sha256:ab874ebcc5c12c31c859a9e9fe159d688df1f7a099818ef8a35906264a8f5d6b \
+2026-11-28T09:49:50.2024421Z     --hash=sha256:b525488d5addf5d59ff4610cd8b1deab9dc97fe0fb3fb74533d7f65e9792bd92 \
+2026-11-28T09:49:50.2025571Z     --hash=sha256:c57e40928738c4a202852759f9e1ee2c7063429a9469ee1ac15651bbf7d69963 \
+2026-11-28T09:49:50.2026325Z     --hash=sha256:c604dc2613c417130479cdd6e55c2faa691b6365aa82b3dafddfcecc2eaf1ac7 \
+2026-11-28T09:49:50.2027105Z     --hash=sha256:c680622f85979f2ff59b4ae44c1ecb5566b2f0f0ffe5d0dc8b4bb6a0e916dabb \
+2026-11-28T09:49:50.2027882Z     --hash=sha256:d276f23e2371deb5ee68dd252cc9c2402b806b54d8d2cc7efbb6c34c3a78d886 \
+2026-11-28T09:49:50.2028653Z     --hash=sha256:e24bf71af8a432d7808fabff134d38dfe16d3cbb41f2873bb4b1e42422de0a1a \
+2026-11-28T09:49:50.2029411Z     --hash=sha256:e956541cc7a3fff2bb5b17aeb6c5bb42c86c8e6dafb5ebdd41a05e72e702076b \
+2026-11-28T09:49:50.2030174Z     --hash=sha256:ed9b957abb12f6ffcd92d5db32fa3ffd4e4a8423d80ddd51b4efa63b42f6a76b \
+2026-11-28T09:49:50.2030954Z     --hash=sha256:f1a4a85b419f5cb6470dd4be5f766bc59532f11b9c22c076b58a0348f05dca5f
+2026-11-28T09:49:50.2031458Z     # via
+2026-11-28T09:49:50.2031675Z     #   bandit
+2026-11-28T09:49:50.2031907Z     #   detect-secrets
+2026-11-28T09:49:50.2032139Z     #   pre-commit
+2026-11-28T09:49:50.2032385Z     #   yamllint
+2026-11-28T09:49:50.2032636Z requests==2.34.2 \
+2026-11-28T09:49:50.2033130Z     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
+2026-11-28T09:49:50.2034316Z     --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
+2026-11-28T09:49:50.2034832Z     # via
+2026-11-28T09:49:50.2035063Z     #   cachecontrol
+2026-11-28T09:49:50.2035325Z     #   detect-secrets
+2026-11-28T09:49:50.2035580Z     #   pip-audit
+2026-11-28T09:49:50.2035815Z rich==15.0.0 \
+2026-11-28T09:49:50.2036309Z     --hash=sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb \
+2026-11-28T09:49:50.2037082Z     --hash=sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36
+2026-11-28T09:49:50.2037609Z     # via
+2026-11-28T09:49:50.2037820Z     #   bandit
+2026-11-28T09:49:50.2038036Z     #   pip-audit
+2026-11-28T09:49:50.2038274Z ruff==0.17.6 \
+2026-11-28T09:49:50.2038737Z     --hash=sha256:0692088e6b33455572fb18465e891b443f196e98dc1986825685c77ff6f4c5ac \
+2026-11-28T09:49:50.2039468Z     --hash=sha256:084d9c8f5ec718e7eba007dba339e7cb4f7571d2f267558ae080bf428fb6a69b \
+2026-11-28T09:49:50.2040232Z     --hash=sha256:1939b3d701c7b6981b7cf93473de5bf88b129b9ba84efaed5154cc517c44634d \
+2026-11-28T09:49:50.2040995Z     --hash=sha256:1a0bea6aa1216e0ec4cd35d3dbccec0d772a7c2aad28ec9c6e82571dff2c20b0 \
+2026-11-28T09:49:50.2041747Z     --hash=sha256:2b04276561331300325040bdca21460770029ec574d4c479099e39e8ad1ed43c \
+2026-11-28T09:49:50.2042477Z     --hash=sha256:3db61f5015600543a581b07fa7f6f64afa0eeedefe16034cadd88c4074087582 \
+2026-11-28T09:49:50.2043192Z     --hash=sha256:435241c61af5909a022f76219d3d1bf24730dc1bf0acabb5ddf4b569ab3cbb30 \
+2026-11-28T09:49:50.2043954Z     --hash=sha256:6a12c50a33936dc00db2be21ba25fb168a8b95c55eda2a3ac85005af69885e4b \
+2026-11-28T09:49:50.2044706Z     --hash=sha256:9cd2fd9923e9806b8b6b67a3469e2258e84bd4d21e45d5a1a690afdfb9c8e57d \
+2026-11-28T09:49:50.2045808Z     --hash=sha256:9d44ef2140402043fd6f689ef541858b80883a8b0a02e38539ef0614ebe57d0c \
+2026-11-28T09:49:50.2046560Z     --hash=sha256:9fbddc08577592e283c265d865e0182de6e33db185494db7b06290d989d888e5 \
+2026-11-28T09:49:50.2047303Z     --hash=sha256:aa3b08254a732acba246891089a152c47c5733dc36b8ecb76ce8602f8326e5e4 \
+2026-11-28T09:49:50.2048040Z     --hash=sha256:b5aba93b3db4b70c5697e4fee6e0d5b9c8452a9a3a03679611cadc25915a2173 \
+2026-11-28T09:49:50.2048783Z     --hash=sha256:c2f4af6670b7a0501904e881bb3f1f24bd0d964dec1eedbd85f0eb73786e1128 \
+2026-11-28T09:49:50.2049528Z     --hash=sha256:d006bbb2945edb17b0ce6a0c1b5f5a8d81ba11dbac294a0a925effa22ce34feb \
+2026-11-28T09:49:50.2050259Z     --hash=sha256:d8b14e1473dc86ab9069cf7a2ba5041dc012f59110201844ed04cfddf07055a0 \
+2026-11-28T09:49:50.2051021Z     --hash=sha256:fb589e032806bb942e4fb526f30b80a1a64112147ed9f1d38cc3de2e255b6f45 \
+2026-11-28T09:49:50.2051760Z     --hash=sha256:fd661702202a89c00a4c9d0339008805fa5876bfa1c57e165495c2e62230dfbf
+2026-11-28T09:49:50.2052255Z sortedcontainers==2.4.0 \
+2026-11-28T09:49:50.2052742Z     --hash=sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88 \
+2026-11-28T09:49:50.2053508Z     --hash=sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0
+2026-11-28T09:49:50.2053994Z     # via
+2026-11-28T09:49:50.2054200Z     #   asyncua
+2026-11-28T09:49:50.2054442Z     #   cyclonedx-python-lib
+2026-11-28T09:49:50.2054737Z stevedore==5.10.0 \
+2026-11-28T09:49:50.2055219Z     --hash=sha256:47c48dc09e75933106c1bba0a7690eef3b5acecdb807df6d47cc40b2532fa927 \
+2026-11-28T09:49:50.2055987Z     --hash=sha256:6005f32c09dc3159802a61c04862770e439e32db22f6da78ba56e8a735466882
+2026-11-28T09:49:50.2056467Z     # via bandit
+2026-11-28T09:49:50.2056699Z tomli==2.5.0 \
+2026-11-28T09:49:50.2057191Z     --hash=sha256:0dc598040da8d42cf20f0be588ed7004f46db12a0ac6c32e03a59dccedaaadcd \
+2026-11-28T09:49:50.2057959Z     --hash=sha256:19b0dd8749f4ea2f112c5fcfb3c5248390c899d7e2e173f1d91abee1fa0ff391 \
+2026-11-28T09:49:50.2058727Z     --hash=sha256:20aa36de8f2cf87237143bc1fa1aae8d6612c09118f4da21c6a684db5dd1f6f9 \
+2026-11-28T09:49:50.2059485Z     --hash=sha256:22185fad8a1e622f064e78008018a0dd3323550dcb479cb7a1d296888d74024f \
+2026-11-28T09:49:50.2060600Z     --hash=sha256:2419c2a189551987b59d80e63ec355671283336f41c6b9b89462df679c7d0c57 \
+2026-11-28T09:49:50.2061325Z     --hash=sha256:264507556cd8b8c8e7c6ee037cdf443a463f03f4c958e57195e3d369711b8ff6 \
+2026-11-28T09:49:50.2062070Z     --hash=sha256:32a7b79ac57a2e83670ce329ccf675798bc5a2094783a63676866b70503f2e2b \
+2026-11-28T09:49:50.2062802Z     --hash=sha256:3f89d10c1ff6a38d992c27fc8a4816af71a909e08a40ec66934240b1e74347c3 \
+2026-11-28T09:49:50.2063534Z     --hash=sha256:49096930c8d886c9bbdab62d2d0d17ce823ddeea522309a190b36245d5b49e01 \
+2026-11-28T09:49:50.2064293Z     --hash=sha256:521345fd1f19d45b8df87657aaa38b6f2ca3800059fadf428e7ebf479a383646 \
+2026-11-28T09:49:50.2065042Z     --hash=sha256:57b1c3b01fab802e2899bc3d168dca320e14165e2fd9fd584760fb4ca5826859 \
+2026-11-28T09:49:50.2066109Z     --hash=sha256:62fc1bc8eb03e3a9cadfca713d65614ed8e09d974a283295ffe3a831976b4dc5 \
+2026-11-28T09:49:50.2066861Z     --hash=sha256:6664b7ae7af7294256c53960a6103077f4914cec8ff98479c352f622c6f6b2f0 \
+2026-11-28T09:49:50.2067599Z     --hash=sha256:667e521b37a6c5ccaa044202c235b530f90177ffe2cd4a64ecc213c7dd535feb \
+2026-11-28T09:49:50.2068356Z     --hash=sha256:6e95c7614e705bfe2b04b27aa124adec59752d15813df37e2156747cab3a006b \
+2026-11-28T09:49:50.2069107Z     --hash=sha256:6f041843c4d3a37245c0c056fd955b186bf8b1fb85690cbe40b81230891dc34b \
+2026-11-28T09:49:50.2069854Z     --hash=sha256:752e8b1aa6a4367ef8bf6a1a1e005540f7ed055ba36d7193796812ca5404eb52 \
+2026-11-28T09:49:50.2070637Z     --hash=sha256:75dbcde8751b0a960aa3de173aa5e894d590755c6d7758b7e774c06f1dc3cbdd \
+2026-11-28T09:49:50.2071426Z     --hash=sha256:7ac2027d37c3afbdf4bdd377f2676f6f1d2122a5be1f1137b49dced590b37e75 \
+2026-11-28T09:49:50.2072195Z     --hash=sha256:8ff3a2ca028c7eee0c777f9a092038d0a594a9fa04e215f929a22c329e2cb142 \
+2026-11-28T09:49:50.2072962Z     --hash=sha256:91294a9fb94a75542f6e46e4a2ae709bd8d9b51134098cae5cf3bea5478b6d03 \
+2026-11-28T09:49:50.2073709Z     --hash=sha256:984012f71908165449a951de2050d52f276bfe3aa5d5f570f63ddad814370374 \
+2026-11-28T09:49:50.2074473Z     --hash=sha256:9b03d7dc168353b4132965bde20feceabaa470e570c6f59660dfae59b1f9eeb3 \
+2026-11-28T09:49:50.2075239Z     --hash=sha256:9dbb18c1cfb2f6517942fc9314437f66aa06d94436ffb1f06102ef3572f35276 \
+2026-11-28T09:49:50.2075991Z     --hash=sha256:a525685c2f97da40762b8695eb7aa0af4c8344ca1905c73e4e29cb04d34607dc \
+2026-11-28T09:49:50.2076732Z     --hash=sha256:b69564772b5c8f22ea5f498dff08cfa825045b4d4c4400529000bdf818aa3b2a \
+2026-11-28T09:49:50.2077483Z     --hash=sha256:b8ade5023067f99fe72b88accd30d0ea05a158e9e32a11f124e731ea9695313f \
+2026-11-28T09:49:50.2078260Z     --hash=sha256:c414be4ed9d3cac80c42e348fa5a956117d1a48227f48026e31f59cb4a7671eb \
+2026-11-28T09:49:50.2079016Z     --hash=sha256:c47300f9bf791808f77d82747691c4bb09cb14bdf3060cca99b42cdc4361d5a7 \
+2026-11-28T09:49:50.2079777Z     --hash=sha256:d2ba24db8a9376921b5e87b4762b9adb0f3f1deaea68f2b8b0bb2c11efb9c3e7 \
+2026-11-28T09:49:50.2080543Z     --hash=sha256:d3182ee2d887e507bd67319a0a61105d1dd33facc111329559a233b772c1a105 \
+2026-11-28T09:49:50.2081307Z     --hash=sha256:d747252933c8a65ef6bd8da0fbb7ce28a90eb6119d8cd00772cd528aa07b68d5 \
+2026-11-28T09:49:50.2082072Z     --hash=sha256:e12bbcd32897272fb05929110362ae9ff4c1b9bb26bd9e971e71dcd3275b4c3d \
+2026-11-28T09:49:50.2082827Z     --hash=sha256:e9e15b4a6c7dd6b85b5fbab29488a73f1f70de516942308daa266bf0e0aeb0d4 \
+2026-11-28T09:49:50.2083564Z     --hash=sha256:f15e3e0b835a6d68b10c86bf80a3149780498d6911c93c3ffd1861d19f9200f1 \
+2026-11-28T09:49:50.2084319Z     --hash=sha256:f3fcbc57b1791fa6cbe5d8434179d51de12be1a4811469529f47f6e7487a2571 \
+2026-11-28T09:49:50.2085095Z     --hash=sha256:f4b653094e18f9031102d3a1da5c729c8f222d85225b18037dac621695e46e1a \
+2026-11-28T09:49:50.2086290Z     --hash=sha256:f79203b3965b4000e91808aaa7c040206093f2b8bf86f455982f2274c9ccf442
+2026-11-28T09:49:50.2086806Z     # via pip-audit
+2026-11-28T09:49:50.2087063Z tomli-w==1.2.0 \
+2026-11-28T09:49:50.2087551Z     --hash=sha256:188306098d013b691fcadc011abd66727d3c414c571bb01b1a174ba8c983cf90 \
+2026-11-28T09:49:50.2088674Z     --hash=sha256:2dd14fac5a47c27be9cd4c976af5a12d87fb1f0b4512f81d69cce3b35ae25021
+2026-11-28T09:49:50.2089192Z     # via pip-audit
+2026-11-28T09:49:50.2089494Z types-pytz==2026.6.0.20261122 \
+2026-11-28T09:49:50.2090018Z     --hash=sha256:44f1e8a1b4f29669a13c8c5a4b93d6920cd43879889bd5a7c65181218e5ab171 \
+2026-11-28T09:49:50.2090767Z     --hash=sha256:863e808dbabce6050733a89315d506f7cc4eca2f1e95dd4fa2a83c3f9416aa4c
+2026-11-28T09:49:50.2091339Z types-pyyaml==6.0.12.20261122 \
+2026-11-28T09:49:50.2091883Z     --hash=sha256:689fbbe883b60471166dede9dba6ac0dbdbcf0ea98062d7ec195430f5bbdb009 \
+2026-11-28T09:49:50.2092647Z     --hash=sha256:7fa577c893a1db255cbb02320884ffcb97b7a219fe515bec6c5f15d5d3af41ed
+2026-11-28T09:49:50.2093195Z typing-extensions==4.16.0 \
+2026-11-28T09:49:50.2093740Z     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8 \
+2026-11-28T09:49:50.2094514Z     --hash=sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5
+2026-11-28T09:49:50.2095030Z     # via
+2026-11-28T09:49:50.2095249Z     #   anyio
+2026-11-28T09:49:50.2095474Z     #   asyncua
+2026-11-28T09:49:50.2095701Z     #   mypy
+2026-11-28T09:49:50.2095922Z     #   pyright
+2026-11-28T09:49:50.2096164Z tzdata==2026.6 \
+2026-11-28T09:49:50.2096666Z     --hash=sha256:0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec \
+2026-11-28T09:49:50.2097435Z     --hash=sha256:85d2cd9c09f81f0bb29db27759fc83af4f1e620efb814f8c5bf8b4cc4feece6d
+2026-11-28T09:49:50.2097960Z     # via python-dateutil
+2026-11-28T09:49:50.2098242Z urllib3==2.8.0 \
+2026-11-28T09:49:50.2098732Z     --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
+2026-11-28T09:49:50.2099502Z     --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
+2026-11-28T09:49:50.2100022Z     # via requests
+2026-11-28T09:49:50.2100286Z virtualenv==21.15.12 \
+2026-11-28T09:49:50.2100795Z     --hash=sha256:a3976f886eb6019fcb1d137b223d160adaeff524ab0ad785c729a43c31cc158c \
+2026-11-28T09:49:50.2101570Z     --hash=sha256:bbbf764388a18dee8c3532c77af7a29680cd8121911d6dcb3484335d76547323
+2026-11-28T09:49:50.2102097Z     # via pre-commit
+2026-11-28T09:49:50.2102361Z websockets==17.4 \
+2026-11-28T09:49:50.2102854Z     --hash=sha256:00ad98e4bb0df7a6711c645eec16d5a9fdf99f0692bd4f5b6cb85a68677ba8df \
+2026-11-28T09:49:50.2103627Z     --hash=sha256:023dc13bdc42a55e152acc81c39c90ec6cc4159ed17d23c6d73460fa2a73ab16 \
+2026-11-28T09:49:50.2104398Z     --hash=sha256:03ddf4eb76ced8725dcbb000ff60b0fb8d7330ed011f6dc725a1925c5fe02051 \
+2026-11-28T09:49:50.2105155Z     --hash=sha256:043945a43873c7c11a3f75238d475c95f902e967de329eb8763704546cfaa6b6 \
+2026-11-28T09:49:50.2106148Z     --hash=sha256:09d3939b70df0c8ad2da145ebd50978bccaee1d565e838b0e7921a34d38571eb \
+2026-11-28T09:49:50.2106883Z     --hash=sha256:0a57b99f2e28922b5a2434317580fd23fdf118caff4c5b752f5452836426205a \
+2026-11-28T09:49:50.2107709Z     --hash=sha256:0c22a9c6b2349204f56123dd0ca7779e989d68e336d0dc02ad823485d44925de \
+2026-11-28T09:49:50.2108473Z     --hash=sha256:0dcce83837328e6795225ead920d3aa8d867cc9d6922aa558b0e9111599fdbb9 \
+2026-11-28T09:49:50.2109233Z     --hash=sha256:16550e24ac22c27e0a728100d8de196b5f054bab6748ef9f0b168fb8b3c32e35 \
+2026-11-28T09:49:50.2109991Z     --hash=sha256:18d3710becc612ec6f0229425bd6495133dfcbf30f7b6569585acc8ed2f1b452 \
+2026-11-28T09:49:50.2110752Z     --hash=sha256:1962f3bfde085af18878f1bb1aafb300c9a6ac33da886d0b0d97e33c9ce7a222 \
+2026-11-28T09:49:50.2111498Z     --hash=sha256:29b615c2d5dd883f89c107a782681b73a7aa8b2bd894130310e45eb09b143913 \
+2026-11-28T09:49:50.2112260Z     --hash=sha256:2b23dacf7a8a88afe92f77bcdbf4cf043a84692bac2f2da02f4011c687e19b48 \
+2026-11-28T09:49:50.2113054Z     --hash=sha256:2fd562372d4afaf18d1c7f1c68e39bd32818bb16d5f57f778a4a4ed88eedcaae \
+2026-11-28T09:49:50.2113807Z     --hash=sha256:332b88022d0acd47c44158bcd43f47f14eaddcd979247f242b1a33291c45cdd1 \
+2026-11-28T09:49:50.2114736Z     --hash=sha256:3acc45494c08a4d27375a2c28474537f68910219f42624a08011221b04623d04 \
+2026-11-28T09:49:50.2115595Z     --hash=sha256:3b78b39377630a70aa2198e5f03be416e690364a046b1d8af80a9263733083d0 \
+2026-11-28T09:49:50.2116339Z     --hash=sha256:3d27153a0413696767b98b5d96173a2a7e27cbfca02000a6069cea7b977765a7 \
+2026-11-28T09:49:50.2117095Z     --hash=sha256:42d7a6e818214336cf7af9a3aae5c6923f94f09fa07ac5aab98268ba2a98a6d5 \
+2026-11-28T09:49:50.2117851Z     --hash=sha256:4441d655a53185ef1b01b1d42ad9b3a96b905110a9219043e3fdaec855ba3b6e \
+2026-11-28T09:49:50.2118673Z     --hash=sha256:48c83103f82fce36191a9e3a8a80731d4340e2da544eae8c5aaaf6a45280e7d0 \
+2026-11-28T09:49:50.2119433Z     --hash=sha256:4b79ea31cf277c72d2307c6cb8bd32a2c151959e80a2f24fa85df620c5f2860c \
+2026-11-28T09:49:50.2120184Z     --hash=sha256:506623128d7a55b726a5a46e4c9a8eae4c9dd0f04ff60b041fe7df85b9d034fe \
+2026-11-28T09:49:50.2120947Z     --hash=sha256:5cec3e7fbc911ff4fcf43b24aaf1b96906381ad36030f42897def3ff4b78729e \
+2026-11-28T09:49:50.2121724Z     --hash=sha256:5da7f7f1ecf866186f195f7ecc374c915e1838496b86f2f3b41da27c798a25c3 \
+2026-11-28T09:49:50.2122513Z     --hash=sha256:5ec906bb21b35e66cfdcc2ea0133f249f52b7d89e3e45ec8d2bd2d84a0255d7d \
+2026-11-28T09:49:50.2123267Z     --hash=sha256:6531540aa63e6864cb0615a3a5da70ae03191334507852a5385320bb7916df3f \
+2026-11-28T09:49:50.2123998Z     --hash=sha256:6597a1f7413189b4bc58437babcdf39b79da416e5c477ae98323a88ecc108188 \
+2026-11-28T09:49:50.2124733Z     --hash=sha256:6afc32a7a1a40b071070419537df3559d26907086556769683fa97b7b6e90fd5 \
+2026-11-28T09:49:50.2125484Z     --hash=sha256:6b061ea7ca94966af7cd7a87cb189ff15972c103244611a2b1e8408c04f1dbe6 \
+2026-11-28T09:49:50.2126507Z     --hash=sha256:6cf4c002268da5c11cae9083aec71ac943bce9d95e0f83c8bf9a95a3ce421fbb \
+2026-11-28T09:49:50.2127280Z     --hash=sha256:6e6558efbb256b532c9f06a21ba42bcac729718e365c505819f181f25e5c0eca \
+2026-11-28T09:49:50.2128043Z     --hash=sha256:6fd8cac4907fec8302726d49e6969acfffaf720bc39b1cee23f473b81f4dce01 \
+2026-11-28T09:49:50.2128816Z     --hash=sha256:70293c25d79d1f084fdd665894481547575e429d2a75e8d72caec2f6b6b07af8 \
+2026-11-28T09:49:50.2129561Z     --hash=sha256:71f76bb8e59be847330b8a8d3753f85397677e128f9f9692c215f8cf721cefc7 \
+2026-11-28T09:49:50.2130312Z     --hash=sha256:725be1aff55f1c873a79cea0f612df9dff21a9d2c2e05783665b824b8aa7c24e \
+2026-11-28T09:49:50.2131075Z     --hash=sha256:72d0a731eccf482d5661c6711abfcd5921f3dbfbbb0789061e1918ef4bc89c70 \
+2026-11-28T09:49:50.2131826Z     --hash=sha256:769e4f7b090e10cae4c082e3e39b9458ec2444505df84953c16c0468b16539c4 \
+2026-11-28T09:49:50.2132590Z     --hash=sha256:7849a096d6fdba3f2bdf849eb89f2d233a24400c92faa3efb25fa8dc615b706c \
+2026-11-28T09:49:50.2133370Z     --hash=sha256:7b4ee34acefa9ba1333f02b817982f1e4127f6f9b975017a707c4e738d7f9fb9 \
+2026-11-28T09:49:50.2134150Z     --hash=sha256:8588edf317fbe4f16a949bc5a6ccdd22b6e6fd5b4745d128bc40bccf31024ce5 \
+2026-11-28T09:49:50.2134917Z     --hash=sha256:8b45d40f07081b377f0b837ddbfba4a9ab4a89a7b569d3c095436564e767a27b \
+2026-11-28T09:49:50.2135670Z     --hash=sha256:8c51ac7b31578a7275650f580aac985940985b6d2e57247ac6d5e07f2c936cd6 \
+2026-11-28T09:49:50.2136440Z     --hash=sha256:8d148b4b295224d3a19e7bd9f02ebe7344de254b3b2c4d0628ce42ade0bca119 \
+2026-11-28T09:49:50.2137200Z     --hash=sha256:8f32a6cb0b101170abc2d8053af1473a2a29ef2a06d7130994ee8455a50f5dbf \
+2026-11-28T09:49:50.2137957Z     --hash=sha256:8fd30d217a4275107667fe1d4f601e2d50c797d0727148cfbb384536d65f04d3 \
+2026-11-28T09:49:50.2138721Z     --hash=sha256:927d602fb8fb595a69e6b1ae998a6ec19851d0fb9391759456e6425090996647 \
+2026-11-28T09:49:50.2139478Z     --hash=sha256:94622cf24e80d03054ceb69a06a86c950e12fe993ed06b933f7895232cacbc3e \
+2026-11-28T09:49:50.2140230Z     --hash=sha256:9a4e95d56994a45ac76541853796720436ffe462957d0b1b89e87ff3d3b1627e \
+2026-11-28T09:49:50.2140967Z     --hash=sha256:9ff89e36451a19775e7556d95ebfa4a0b24b84cc87565d6b5d0ec8ea82bf3f2c \
+2026-11-28T09:49:50.2141713Z     --hash=sha256:a0457561e8a87a6a3b509e21c35084d7d207ced262139de3f738e9676a476bbd \
+2026-11-28T09:49:50.2142626Z     --hash=sha256:a703f23ca15a51251fc94f1774683f5aa511588a7ad6bbb83960cdb2a4dcd978 \
+2026-11-28T09:49:50.2143518Z     --hash=sha256:a9b0026538719f7a532998d84640ab2e91ca1a051ce4b8d924fdcb607307e921 \
+2026-11-28T09:49:50.2144283Z     --hash=sha256:ab9e4bd60796866c578e3afa0a17c98636887827a39c2e238a61989c18fd8e7b \
+2026-11-28T09:49:50.2145074Z     --hash=sha256:adc30e5d064c9e33049e825408fa4e952f4e8a0cf4c329dc2ded72e1bb5bae08 \
+2026-11-28T09:49:50.2146058Z     --hash=sha256:b6c7f91520c29420639925fd1cecceac9ca07366b50c09ea24eac1cd116b4866 \
+2026-11-28T09:49:50.2146816Z     --hash=sha256:b7ea61af293a153f2d67430038cf0efc10140caa623f2bdf5a9f5a457ff20f57 \
+2026-11-28T09:49:50.2147602Z     --hash=sha256:bbb6bed49f083e2ec8ae0bb21c00c7c5171ab8e08a8b008c61a43fc6c944fdac \
+2026-11-28T09:49:50.2148370Z     --hash=sha256:bc581579885728bb54ef15000295c20e6a64a200b1b73d5cfca71879a3eb3e1f \
+2026-11-28T09:49:50.2149128Z     --hash=sha256:bfc86dff091104eec770c29ea1831dbe191968a70aa2d8ae8eda3240d863970a \
+2026-11-28T09:49:50.2149904Z     --hash=sha256:c00f0c45851a2c61efffd03dde8fb4d594026b5cc18196c94e15460f1225f2ed \
+2026-11-28T09:49:50.2150690Z     --hash=sha256:c2db7b9e2d726f7e051bedb67abcf460b84b11437b2f9fdacda7e6931dace85b \
+2026-11-28T09:49:50.2151465Z     --hash=sha256:c568e72f5425a74616daeb824afe28da460cbeea036432f41c6af5380b83300d \
+2026-11-28T09:49:50.2152214Z     --hash=sha256:c5e970d3996c597186c9dbb6e77a8048737a834ac03cb13186a54999e0e1c31e \
+2026-11-28T09:49:50.2152957Z     --hash=sha256:c6bd2c9781915592b209160d0f017d4c7c82ad53075e6b0c24d2a89299e7f9e9 \
+2026-11-28T09:49:50.2153695Z     --hash=sha256:c7a56140fcbf4662cb263754a754c651a16fe2196cae1fd232d18f89acd30c83 \
+2026-11-28T09:49:50.2154475Z     --hash=sha256:c8052c3058c402d53602583da5ddcf1a15a63ab1efe0222f47c7be59944e6463 \
+2026-11-28T09:49:50.2155237Z     --hash=sha256:c9f8fdb7bbefc4907c2bb3593f810f2b67a2d5329e1d38724a1aa3d763cf63eb \
+2026-11-28T09:49:50.2156005Z     --hash=sha256:cbdf4b42f4514422051889424fd03bc269be8c5d751bf39ec29ad761590bd10d \
+2026-11-28T09:49:50.2156785Z     --hash=sha256:cc0cd4065a65ac98f3e2742ee9f314da9d224db49b07dc17d3a20cef0d79658d \
+2026-11-28T09:49:50.2157129Z     --hash=sha256:d0f943b53bb1d7389d72a5380078670e5fcc34a1328142148b72d20fd82031c7 \
+2026-11-28T09:49:50.2157475Z     --hash=sha256:d48795c7d64ca1c42e3d61fcc6478cb15a19b6ad3f9c882bc8d8dee49d4a420f \
+2026-11-28T09:49:50.2157820Z     --hash=sha256:e0feb03a338f8f5e819ae23a73aabb7b46fd3b73f15f7df782dd12d99e2b02ad \
+2026-11-28T09:49:50.2158163Z     --hash=sha256:e30550965c78223439815dbdf40c93eb8931dfbf12427110dcfcaeebef76feb6 \
+2026-11-28T09:49:50.2158514Z     --hash=sha256:e6d2a185ec4ff0478089305abd833da3a9fda8803eb77325b89ebeae5585a3b7 \
+2026-11-28T09:49:50.2158856Z     --hash=sha256:ed7fe197b8bb66eef4f62c052e33752d456d2fdda74805469d4bd954950ab339 \
+2026-11-28T09:49:50.2159220Z     --hash=sha256:ee6c4e0085bff5f6621bf9c53452584dcb91ebd993ce841e1f4061ac12b6b556 \
+2026-11-28T09:49:50.2159573Z     --hash=sha256:ef03fb4b3685df0ed9dc6a074a090f030345cad2c23c61818da3e08e693a9caa \
+2026-11-28T09:49:50.2159916Z     --hash=sha256:f0494d3d97502e270282cc6a1f8648cd7335b4fe8d5c452006e5b7f9d62b8892 \
+2026-11-28T09:49:50.2160251Z     --hash=sha256:f42671900e0b602d05a074c52fd3d757c2f8e5c4f73f771794dae1aa4aea5f0e \
+2026-11-28T09:49:50.2160601Z     --hash=sha256:f5f06f59e19aa0770aaf651ce91c196fa620b35aed49a7e6c36e7335f3f83db7 \
+2026-11-28T09:49:50.2160944Z     --hash=sha256:fcac44d917672ad6257ad64b80b5168306f168a78cab5c0612e4c699caed18cf
+2026-11-28T09:49:50.2161058Z     # via ijt-web-client
+2026-11-28T09:49:50.2161183Z yamllint==1.38.0 \
+2026-11-28T09:49:50.2161516Z     --hash=sha256:09e5f29531daab93366bb061e76019d5e91691ef0a40328f04c927387d1d364d \
+2026-11-28T09:49:50.2161856Z     --hash=sha256:fc394a5b3be980a4062607b8fdddc0843f4fa394152b6da21722f5d59013c220
+2026-11-28T09:49:50.2162128Z ============================= test session starts =============================
+2026-11-28T09:49:50.2162140Z 
+2026-11-28T09:49:50.2162309Z collecting ... collected 4 items
+2026-11-28T09:49:50.2162472Z 
+2026-11-28T09:49:50.2162480Z 
+2026-11-28T09:49:50.2162487Z 
+2026-11-28T09:49:50.2163276Z tests/python/live/test_opcua_live.py::TestWebSocketLifecycle::test_abrupt_disconnect_backend_recovers PASSED [ 25%]
+2026-11-28T09:49:50.2163287Z 
+2026-11-28T09:49:50.2163914Z tests/python/live/test_opcua_live.py::TestWebSocketLifecycle::test_invalid_json_returns_structured_error PASSED [ 50%]
+2026-11-28T09:49:50.2163925Z 
+2026-11-28T09:49:50.2164577Z tests/python/live/test_opcua_live.py::TestWebSocketLifecycle::test_multiple_sequential_connections_all_succeed PASSED [ 75%]
+2026-11-28T09:49:50.2164586Z 
+2026-11-28T09:49:50.2165204Z tests/python/live/test_opcua_live.py::TestWebSocketLifecycle::test_two_concurrent_sessions_are_independent PASSED [100%]
+2026-11-28T09:49:50.2165212Z 
+2026-11-28T09:49:50.2165219Z 
+2026-11-28T09:49:50.2165226Z 
+2026-11-28T09:49:50.2166347Z - generated xml file: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Web_Client\test-results\python-lifecycle\python-lifecycle.xml -
+2026-11-28T09:49:50.2166360Z 
+2026-11-28T09:49:50.2166636Z ============================= 4 passed in 59.43s ==============================
+2026-11-28T09:49:50.2166646Z 
+2026-11-28T09:49:50.2166652Z 
+2026-11-28T09:49:50.2166658Z 
+2026-11-28T09:49:50.2166869Z =================================================================
+2026-11-28T09:49:50.2166878Z 
+2026-11-28T09:49:50.2167387Z   IJT Web Client — Cross-Platform Test Runner
+2026-11-28T09:49:50.2167397Z 
+2026-11-28T09:49:50.2167609Z =================================================================
+2026-11-28T09:49:50.2167618Z 
+2026-11-28T09:49:50.2167912Z   [INFO] Python  : C:\hostedtoolcache\windows\Python\3.14.10\x64\python.exe
+2026-11-28T09:49:50.2167921Z 
+2026-11-28T09:49:50.2168588Z   [INFO] Root    : D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\OPC_UA_Clients\Release2\IJT_Web_Client
+2026-11-28T09:49:50.2168609Z 
+2026-11-28T09:49:50.2168744Z   [INFO] OS      : win32 / AMD64
+2026-11-28T09:49:50.2168753Z 
+2026-11-28T09:49:50.2169056Z   [INFO] OPC UA  : not reachable (opc.tcp://localhost:40467)
+2026-11-28T09:49:50.2169066Z 
+2026-11-28T09:49:50.2169257Z   [INFO] WS      : not reachable (ws://localhost:8003)
+2026-11-28T09:49:50.2169275Z 
+2026-11-28T09:49:50.2169410Z   [INFO] Docker  : not available
+2026-11-28T09:49:50.2169419Z 
+2026-11-28T09:49:50.2169426Z 
+2026-11-28T09:49:50.2169432Z 
+2026-11-28T09:49:50.2169644Z =================================================================
+2026-11-28T09:49:50.2169652Z 
+2026-11-28T09:49:50.2169848Z   STAGE 1  Install / verify Python test dependencies
+2026-11-28T09:49:50.2169857Z 
+2026-11-28T09:49:50.2170046Z =================================================================
+2026-11-28T09:49:50.2170054Z 
+2026-11-28T09:49:50.2170071Z 
+2026-11-28T09:49:50.2170078Z 
+2026-11-28T09:49:50.2170251Z CMD: pip self-upgrade (uv.lock governed)
+2026-11-28T09:49:50.2170263Z 
+2026-11-28T09:49:50.2170268Z 
+2026-11-28T09:49:50.2170273Z 
+2026-11-28T09:49:50.2170431Z CMD: uv export locked dev requirements
+2026-11-28T09:49:50.2170443Z 
+2026-11-28T09:49:50.2170450Z 
+2026-11-28T09:49:50.2170457Z 
+2026-11-28T09:49:50.2170682Z CMD: uv pip install locked requirements from uv.lock
+2026-11-28T09:49:50.2170691Z 
+2026-11-28T09:49:50.2170698Z 
+2026-11-28T09:49:50.2170704Z 
+2026-11-28T09:49:50.2170847Z CMD: python dependency probe
+2026-11-28T09:49:50.2170856Z 
+2026-11-28T09:49:50.2171755Z   [INFO] [server] Launching simulator on port 40467 (attempt 1/2, copied to D:\a\_temp\ijt-sim\40467)
+2026-11-28T09:49:50.2171780Z 
+2026-11-28T09:49:50.2171914Z   [INFO] Waiting up to 30s for port 40467 ...
+2026-11-28T09:49:50.2171923Z 
+2026-11-28T09:49:50.2172027Z   [PASS] OPC UA server ready on :40467
+2026-11-28T09:49:50.2172034Z 
+2026-11-28T09:49:50.2172194Z   [INFO] Starting WebSocket backend for Playwright E2E on :8003
+2026-11-28T09:49:50.2172201Z 
+2026-11-28T09:49:50.2172295Z   [PASS] WebSocket backend ready on :8003
+2026-11-28T09:49:50.2173361Z 
+2026-11-28T09:49:50.2173366Z 
+2026-11-28T09:49:50.2173370Z 
+2026-11-28T09:49:50.2173615Z =================================================================
+2026-11-28T09:49:50.2173623Z 
+2026-11-28T09:49:50.2173738Z   STAGE 4c  Python WebSocket lifecycle tests
+2026-11-28T09:49:50.2173744Z 
+2026-11-28T09:49:50.2173861Z =================================================================
+2026-11-28T09:49:50.2173874Z 
+2026-11-28T09:49:50.2173879Z 
+2026-11-28T09:49:50.2173883Z 
+2026-11-28T09:49:50.2173974Z CMD: pytest python-lifecycle
+2026-11-28T09:49:50.2173980Z 
+2026-11-28T09:49:50.2173984Z 
+2026-11-28T09:49:50.2173988Z 
+2026-11-28T09:49:50.2174112Z =================================================================
+2026-11-28T09:49:50.2174118Z 
+2026-11-28T09:49:50.2174188Z   TEST SUMMARY
+2026-11-28T09:49:50.2174195Z 
+2026-11-28T09:49:50.2174316Z =================================================================
+2026-11-28T09:49:50.2174334Z 
+2026-11-28T09:49:50.2174473Z   [PASS]  pip-install                         exit=0  24.9s
+2026-11-28T09:49:50.2174479Z 
+2026-11-28T09:49:50.2174613Z   [PASS]  python-lifecycle                    exit=0  61.3s
+2026-11-28T09:49:50.2174618Z 
+2026-11-28T09:49:50.2174622Z 
+2026-11-28T09:49:50.2174626Z 
+2026-11-28T09:49:50.2174697Z   Total time: 110.5s
+2026-11-28T09:49:50.2174703Z 
+2026-11-28T09:49:50.2174707Z 
+2026-11-28T09:49:50.2174711Z 
+2026-11-28T09:49:50.2174782Z   ALL TESTS PASSED
+2026-11-28T09:49:50.2174788Z 
+2026-11-28T09:49:50.2174906Z =================================================================
+2026-11-28T09:49:50.2174912Z 
+2026-11-28T09:49:50.2174916Z 
+2026-11-28T09:49:50.2174920Z 
+2026-11-28T09:49:50.2174923Z 
+2026-11-28T09:49:50.2174989Z [stderr]
+2026-11-28T09:49:50.2175241Z Using Python 3.14.10 environment at: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:49:50.2175331Z Resolved 75 packages in 584ms
+2026-11-28T09:49:50.2175424Z Downloading pyright (5.9MiB)
+2026-11-28T09:49:50.2175535Z Downloading cryptography (3.6MiB)
+2026-11-28T09:49:50.2175617Z Downloading pillow (6.9MiB)
+2026-11-28T09:49:50.2175702Z Downloading ruff (9.9MiB)
+2026-11-28T09:49:50.2175789Z Downloading pygments (1.2MiB)
+2026-11-28T09:49:50.2175890Z Downloading ast-serialize (1.1MiB)
+2026-11-28T09:49:50.2175967Z Downloading lxml (3.9MiB)
+2026-11-28T09:49:50.2176056Z Downloading virtualenv (5.5MiB)
+2026-11-28T09:49:50.2176139Z Downloading mypy (11.0MiB)
+2026-11-28T09:49:50.2176218Z  Downloaded ast-serialize
+2026-11-28T09:49:50.2176284Z  Downloaded virtualenv
+2026-11-28T09:49:50.2176353Z  Downloaded ruff
+2026-11-28T09:49:50.2176423Z  Downloaded pillow
+2026-11-28T09:49:50.2176486Z  Downloaded pygments
+2026-11-28T09:49:50.2176560Z  Downloaded cryptography
+2026-11-28T09:49:50.2176617Z  Downloaded lxml
+2026-11-28T09:49:50.2176686Z  Downloaded mypy
+2026-11-28T09:49:50.2176753Z  Downloaded pyright
+2026-11-28T09:49:50.2176852Z Prepared 74 packages in 14.39s
+2026-11-28T09:49:50.2176951Z Installed 74 packages in 8.50s
+2026-11-28T09:49:50.2177022Z  + aiofiles==25.1.0
+2026-11-28T09:49:50.2177084Z  + aiosqlite==0.22.1
+2026-11-28T09:49:50.2177151Z  + anyio==4.16.0
+2026-11-28T09:49:50.2177222Z  + ast-serialize==0.13.1
+2026-11-28T09:49:50.2177284Z  + asyncua==2.1.0
+2026-11-28T09:49:50.2177347Z  + bandit==1.9.4
+2026-11-28T09:49:50.2177410Z  + boolean-py==5.0
+2026-11-28T09:49:50.2177485Z  + cachecontrol==0.15.0
+2026-11-28T09:49:50.2177553Z  + certifi==2026.11.20
+2026-11-28T09:49:50.2177610Z  + cffi==2.1.1
+2026-11-28T09:49:50.2177676Z  + cfgv==3.5.0
+2026-11-28T09:49:50.2177756Z  + charset-normalizer==3.5.3
+2026-11-28T09:49:50.2177819Z  + colorama==0.4.6
+2026-11-28T09:49:50.2177886Z  + coverage==7.17.4
+2026-11-28T09:49:50.2177951Z  + cryptography==50.0.2
+2026-11-28T09:49:50.2178046Z  + cyclonedx-python-lib==11.12.0
+2026-11-28T09:49:50.2178112Z  + defusedxml==0.7.1
+2026-11-28T09:49:50.2178179Z  + detect-secrets==1.5.0
+2026-11-28T09:49:50.2178243Z  + distlib==0.4.4
+2026-11-28T09:49:50.2178388Z  + filelock==4.3.0
+2026-11-28T09:49:50.2178448Z  + identify==2.6.20
+2026-11-28T09:49:50.2178513Z  + idna==3.20
+2026-11-28T09:49:50.2178647Z  + iniconfig==2.3.1
+2026-11-28T09:49:50.2178707Z  + librt==0.17.0
+2026-11-28T09:49:50.2178783Z  + license-expression==30.4.4
+2026-11-28T09:49:50.2178837Z  + lxml==6.1.3
+2026-11-28T09:49:50.2178912Z  + markdown-it-py==4.3.0
+2026-11-28T09:49:50.2178976Z  + mdurl==0.1.2
+2026-11-28T09:49:50.2179035Z  + msgpack==1.2.4
+2026-11-28T09:49:50.2179097Z  + mypy==2.4.1
+2026-11-28T09:49:50.2179167Z  + mypy-extensions==1.2.0
+2026-11-28T09:49:50.2179227Z  + nodeenv==1.12.0
+2026-11-28T09:49:50.2179309Z  + packageurl-python==0.17.6
+2026-11-28T09:49:50.2179376Z  + packaging==26.3
+2026-11-28T09:49:50.2179441Z  + pathspec==1.1.1
+2026-11-28T09:49:50.2179513Z  + pillow==13.0.0
+2026-11-28T09:49:50.2179574Z  + pip-api==0.0.35
+2026-11-28T09:49:50.2179642Z  + pip-audit==2.10.1
+2026-11-28T09:49:50.2179740Z  + pip-requirements-parser==32.0.1
+2026-11-28T09:49:50.2179808Z  + platformdirs==4.14.8
+2026-11-28T09:49:50.2179876Z  + pluggy==1.7.0
+2026-11-28T09:49:50.2179946Z  + pre-commit==4.7.0
+2026-11-28T09:49:50.2180017Z  + py-serializable==2.2.0
+2026-11-28T09:49:50.2180086Z  + pycparser==3.12
+2026-11-28T09:49:50.2180150Z  + pyfakefs==6.3.2
+2026-11-28T09:49:50.2180211Z  + pygments==2.21.0
+2026-11-28T09:49:50.2180280Z  + pyparsing==3.3.3
+2026-11-28T09:49:50.2180338Z  + pypdf==7.1.1
+2026-11-28T09:49:50.2180405Z  + pyright==1.1.414
+2026-11-28T09:49:50.2180469Z  + pytest==9.2.0
+2026-11-28T09:49:50.2180536Z  + pytest-asyncio==1.5.0
+2026-11-28T09:49:50.2180604Z  + pytest-cov==7.1.0
+2026-11-28T09:49:50.2180673Z  + pytest-timeout==2.4.0
+2026-11-28T09:49:50.2180744Z  + python-dateutil==4.0.0
+2026-11-28T09:49:50.2181050Z  + python-discovery==1.9.6
+2026-11-28T09:49:50.2181119Z  + python-dotenv==1.2.4
+2026-11-28T09:49:50.2181193Z  + python-multipart==0.0.34
+2026-11-28T09:49:50.2181259Z  + pytz==2026.6
+2026-11-28T09:49:50.2181318Z  + pyyaml==6.0.4
+2026-11-28T09:49:50.2181390Z  + requests==2.34.2
+2026-11-28T09:49:50.2181453Z  + rich==15.0.0
+2026-11-28T09:49:50.2181511Z  + ruff==0.17.6
+2026-11-28T09:49:50.2181586Z  + sortedcontainers==2.4.0
+2026-11-28T09:49:50.2181652Z  + stevedore==5.10.0
+2026-11-28T09:49:50.2181707Z  + tomli==2.5.0
+2026-11-28T09:49:50.2181773Z  + tomli-w==1.2.0
+2026-11-28T09:49:50.2181853Z  + types-pytz==2026.6.0.20261122
+2026-11-28T09:49:50.2181936Z  + types-pyyaml==6.0.12.20261122
+2026-11-28T09:49:50.2182010Z  + typing-extensions==4.16.0
+2026-11-28T09:49:50.2182067Z  + tzdata==2026.6
+2026-11-28T09:49:50.2182133Z  + urllib3==2.8.0
+2026-11-28T09:49:50.2182199Z  + virtualenv==21.15.12
+2026-11-28T09:49:50.2182260Z  + websockets==17.4
+2026-11-28T09:49:50.2182326Z  + yamllint==1.38.0
+2026-11-28T09:49:50.2182670Z   ✔ web-client-live-websocket-connection (110.7s)
+2026-11-28T09:49:50.2183354Z 09:49:50 [INFO    ] Timing JSON: D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies\test-results\timing\timing-aggregate.json
+2026-11-28T09:49:50.3017729Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-28T09:49:50.3017837Z with:
+2026-11-28T09:49:50.3018029Z   name: results-live-webclient-web-client-live-websocket-connection
+2026-11-28T09:49:50.3018151Z   path: OPC_UA_Clients/Release2/IJT_Web_Client/test-results/
+2026-11-28T09:49:50.3018221Z   retention-days: 14
+2026-11-28T09:49:50.3018293Z   if-no-files-found: warn
+2026-11-28T09:49:50.3018357Z   compression-level: 6
+2026-11-28T09:49:50.3018420Z   overwrite: false
+2026-11-28T09:49:50.3018487Z   include-hidden-files: false
+2026-11-28T09:49:50.3018546Z   archive: true
+2026-11-28T09:49:50.3018595Z env:
+2026-11-28T09:49:50.3018688Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-28T09:49:50.3018824Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:49:50.3018987Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.14.10\x64/lib/pkgconfig
+2026-11-28T09:49:50.3019139Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:49:50.3019462Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:49:50.3019580Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.14.10\x64
+2026-11-28T09:49:50.3019635Z ##[endgroup]
+2026-11-28T09:49:50.4575280Z With the provided path, there will be 7 files uploaded
+2026-11-28T09:49:50.4579948Z Artifact name is valid!
+2026-11-28T09:49:50.4581098Z Root directory input is valid!
+2026-11-28T09:49:50.6567833Z Uploading artifact: results-live-webclient-web-client-live-websocket-connection.zip
+2026-11-28T09:49:50.6604240Z Beginning upload of artifact content to blob storage
+2026-11-28T09:49:50.7322748Z Uploaded bytes 5424
+2026-11-28T09:49:50.7444376Z Finished uploading artifact content to blob storage!
+2026-11-28T09:49:50.7445145Z SHA256 digest of uploaded artifact is 16e50496b94bf9f9704e85ea7010b7b4a54f92958632a1c254df44df7761649e
+2026-11-28T09:49:50.7446228Z Finalizing artifact upload
+2026-11-28T09:49:51.0762566Z Artifact results-live-webclient-web-client-live-websocket-connection successfully finalized. Artifact ID 15257622773
+2026-11-28T09:49:51.0763635Z Artifact results-live-webclient-web-client-live-websocket-connection has been successfully uploaded! Final size is 5424 bytes. Artifact ID is 15257622773
+2026-11-28T09:49:51.0772606Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/46132105696/artifacts/15257622773
+2026-11-28T09:49:51.1121557Z Post job cleanup.
+2026-11-28T09:49:51.2633015Z Post job cleanup.
+2026-11-28T09:49:51.4246816Z Post job cleanup.
+2026-11-28T09:49:51.5727292Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-28T09:49:51.6055125Z git version 2.56.1.windows.1
+2026-11-28T09:49:51.6118876Z Temporarily overriding HOME='D:\a\_temp\f796afcd-b525-4c53-acc3-2f9dc80832e2' before making global git config changes
+2026-11-28T09:49:51.6119636Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-28T09:49:51.6128691Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\UA-for-Industrial-Joining-Technologies\UA-for-Industrial-Joining-Technologies
+2026-11-28T09:49:51.6504638Z Removing SSH command configuration
+2026-11-28T09:49:51.6515579Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-28T09:49:51.6860773Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-28T09:49:52.2386302Z Removing HTTP extra header
+2026-11-28T09:49:52.2395597Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-28T09:49:52.2743806Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-28T09:49:52.8010293Z Removing includeIf entries pointing to credentials config files
+2026-11-28T09:49:52.8020936Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-28T09:49:52.8369114Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-28T09:49:53.3767731Z Cleaning up orphan processes

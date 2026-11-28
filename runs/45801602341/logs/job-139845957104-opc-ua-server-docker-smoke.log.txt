@@ -1,0 +1,1324 @@
+﻿2026-11-26T10:28:15.3407622Z Current runner version: '2.338.2'
+2026-11-26T10:28:15.3444312Z ##[group]Runner Image Provisioner
+2026-11-26T10:28:15.3445843Z Hosted Compute Agent
+2026-11-26T10:28:15.3446846Z Version: 20261111.635
+2026-11-26T10:28:15.3448061Z Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+2026-11-26T10:28:15.3449360Z Build Date: 2026-11-11T01:49:01Z
+2026-11-26T10:28:15.3450642Z Worker ID: {908a5168-e9b0-423c-a873-4f3fd0ed3678}
+2026-11-26T10:28:15.3451906Z Region: eastus
+2026-11-26T10:28:15.3453212Z Cloud: Azure
+2026-11-26T10:28:15.3454196Z ##[endgroup]
+2026-11-26T10:28:15.3456664Z ##[group]Operating System
+2026-11-26T10:28:15.3457834Z Ubuntu
+2026-11-26T10:28:15.3458832Z 26.04.1
+2026-11-26T10:28:15.3459797Z LTS
+2026-11-26T10:28:15.3460689Z ##[endgroup]
+2026-11-26T10:28:15.3461718Z ##[group]Runner Image
+2026-11-26T10:28:15.3462975Z Image: ubuntu-26.04
+2026-11-26T10:28:15.3463979Z Version: 20261116.202.1
+2026-11-26T10:28:15.3466246Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261116.202/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-26T10:28:15.3469135Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261116.202
+2026-11-26T10:28:15.3470961Z ##[endgroup]
+2026-11-26T10:28:15.3473280Z ##[group]GITHUB_TOKEN Permissions
+2026-11-26T10:28:15.3476271Z Contents: read
+2026-11-26T10:28:15.3477397Z Metadata: read
+2026-11-26T10:28:15.3478371Z ##[endgroup]
+2026-11-26T10:28:15.3481414Z Secret source: Actions
+2026-11-26T10:28:15.3483249Z Cache mode: write
+2026-11-26T10:28:15.3484577Z Prepare workflow directory
+2026-11-26T10:28:15.4241284Z Prepare all required actions
+2026-11-26T10:28:15.4304037Z Getting action download info
+2026-11-26T10:28:15.6117865Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-26T10:28:15.7133110Z Download action repository 'docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550' (SHA:8aa5831fb8d48d8f76594c7ddde61ae58019f550)
+2026-11-26T10:28:15.8864430Z Download action repository 'docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069' (SHA:f87e5991a6d7451dcb8d9637bfbc97413f497069)
+2026-11-26T10:28:16.0498118Z Download action repository 'docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc' (SHA:c3c9e263c25d99ce0380d002d59b67737d91b0dc)
+2026-11-26T10:28:16.2289629Z Download action repository 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-26T10:28:16.2871815Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-26T10:28:16.4955295Z Complete job name: OPC UA Server - Docker Smoke
+2026-11-26T10:28:16.6076944Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-26T10:28:16.6078686Z with:
+2026-11-26T10:28:16.6079515Z   persist-credentials: false
+2026-11-26T10:28:16.6080679Z   repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-26T10:28:16.6090323Z   token: ***
+2026-11-26T10:28:16.6091103Z   ssh-strict: true
+2026-11-26T10:28:16.6091908Z   ssh-user: git
+2026-11-26T10:28:16.6092803Z   clean: true
+2026-11-26T10:28:16.6093618Z   sparse-checkout-cone-mode: true
+2026-11-26T10:28:16.6094590Z   fetch-depth: 1
+2026-11-26T10:28:16.6095388Z   fetch-tags: false
+2026-11-26T10:28:16.6096205Z   show-progress: true
+2026-11-26T10:28:16.6097027Z   lfs: false
+2026-11-26T10:28:16.6097778Z   submodules: false
+2026-11-26T10:28:16.6098605Z   set-safe-directory: true
+2026-11-26T10:28:16.6099530Z   allow-unsafe-pr-checkout: false
+2026-11-26T10:28:16.6100733Z env:
+2026-11-26T10:28:16.6101532Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:16.6102746Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:16.6103634Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:16.6104587Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:16.6105540Z ##[endgroup]
+2026-11-26T10:28:16.8786096Z Syncing repository: umati/UA-for-Industrial-Joining-Technologies
+2026-11-26T10:28:16.8788818Z ##[group]Getting Git version info
+2026-11-26T10:28:16.8790998Z Working directory is '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-26T10:28:16.8794087Z [command]/usr/bin/git version
+2026-11-26T10:28:16.8797503Z git version 2.56.1
+2026-11-26T10:28:16.8822466Z ##[endgroup]
+2026-11-26T10:28:16.8845352Z Temporarily overriding HOME='/home/runner/work/_temp/77603f73-7391-40f8-a540-5b86b2599191' before making global git config changes
+2026-11-26T10:28:16.8849897Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-26T10:28:16.8855302Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-26T10:28:16.8906876Z Deleting the contents of '/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies'
+2026-11-26T10:28:16.8912938Z ##[group]Determining repository object format
+2026-11-26T10:28:16.8915231Z ##[endgroup]
+2026-11-26T10:28:16.8916920Z ##[group]Initializing the repository
+2026-11-26T10:28:16.8920874Z [command]/usr/bin/git init /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-26T10:28:16.9036813Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-26T10:28:16.9039556Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-26T10:28:16.9041959Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-26T10:28:16.9043778Z hint: call:
+2026-11-26T10:28:16.9044795Z hint:
+2026-11-26T10:28:16.9045940Z hint: 	git config --global init.defaultBranch <name>
+2026-11-26T10:28:16.9047395Z hint:
+2026-11-26T10:28:16.9048737Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-26T10:28:16.9051295Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-26T10:28:16.9053683Z hint:
+2026-11-26T10:28:16.9054868Z hint: 	git branch -m <name>
+2026-11-26T10:28:16.9056503Z hint:
+2026-11-26T10:28:16.9058456Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-26T10:28:16.9063150Z Initialized empty Git repository in /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/
+2026-11-26T10:28:16.9073178Z [command]/usr/bin/git remote add origin https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-26T10:28:16.9130967Z ##[endgroup]
+2026-11-26T10:28:16.9133014Z ##[group]Disabling automatic garbage collection
+2026-11-26T10:28:16.9134863Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-26T10:28:16.9173784Z ##[endgroup]
+2026-11-26T10:28:16.9175924Z ##[group]Setting up auth
+2026-11-26T10:28:16.9177212Z Removing SSH command configuration
+2026-11-26T10:28:16.9180120Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-26T10:28:16.9220537Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-26T10:28:16.9674624Z Removing HTTP extra header
+2026-11-26T10:28:16.9676779Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-26T10:28:16.9717167Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-26T10:28:16.9983259Z Removing includeIf entries pointing to credentials config files
+2026-11-26T10:28:16.9988749Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-26T10:28:17.0030743Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-26T10:28:17.0304112Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-9c814877-99ad-4a0c-ac82-a9c6e2bf511f.config http.https://github.com/.extraheader AUTHORIZATION: basic [REDACTED_AUTH]
+2026-11-26T10:28:17.0344449Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path /home/runner/work/_temp/git-credentials-9c814877-99ad-4a0c-ac82-a9c6e2bf511f.config
+2026-11-26T10:28:17.0379593Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-9c814877-99ad-4a0c-ac82-a9c6e2bf511f.config
+2026-11-26T10:28:17.0415017Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-9c814877-99ad-4a0c-ac82-a9c6e2bf511f.config
+2026-11-26T10:28:17.0446976Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-9c814877-99ad-4a0c-ac82-a9c6e2bf511f.config
+2026-11-26T10:28:17.0477468Z ##[endgroup]
+2026-11-26T10:28:17.0478444Z ##[group]Fetching the repository
+2026-11-26T10:28:17.0486790Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +b7b4a6b2476a7718dcb4e7adfa2d3b72c1ffb2a9:refs/remotes/origin/main
+2026-11-26T10:28:17.7278547Z From https://github.com/umati/UA-for-Industrial-Joining-Technologies
+2026-11-26T10:28:17.7282182Z  * [new ref]         b7b4a6b2476a7718dcb4e7adfa2d3b72c1ffb2a9 -> origin/main
+2026-11-26T10:28:17.7289610Z [command]/usr/bin/git branch --list --remote origin/main
+2026-11-26T10:28:17.7319662Z   origin/main
+2026-11-26T10:28:17.7328413Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-11-26T10:28:17.7354998Z b7b4a6b2476a7718dcb4e7adfa2d3b72c1ffb2a9
+2026-11-26T10:28:17.7361732Z ##[endgroup]
+2026-11-26T10:28:17.7363252Z ##[group]Determining the checkout info
+2026-11-26T10:28:17.7370054Z ##[endgroup]
+2026-11-26T10:28:17.7381264Z [command]/usr/bin/git sparse-checkout disable
+2026-11-26T10:28:17.7433078Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-26T10:28:17.7472289Z ##[group]Checking out the ref
+2026-11-26T10:28:17.7476894Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-26T10:28:17.9938569Z Switched to a new branch 'main'
+2026-11-26T10:28:17.9943359Z branch 'main' set up to track 'origin/main'.
+2026-11-26T10:28:17.9966175Z ##[endgroup]
+2026-11-26T10:28:18.0025245Z [command]/usr/bin/git log -1 --format=%H
+2026-11-26T10:28:18.0056121Z b7b4a6b2476a7718dcb4e7adfa2d3b72c1ffb2a9
+2026-11-26T10:28:18.0068395Z ##[group]Removing auth
+2026-11-26T10:28:18.0069304Z Removing SSH command configuration
+2026-11-26T10:28:18.0074779Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-26T10:28:18.0115348Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-26T10:28:18.0417737Z Removing HTTP extra header
+2026-11-26T10:28:18.0422429Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-26T10:28:18.0462246Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-26T10:28:18.0737343Z Removing includeIf entries pointing to credentials config files
+2026-11-26T10:28:18.0740571Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-26T10:28:18.0773164Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-26T10:28:18.0777022Z includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-26T10:28:18.0779379Z includeif.gitdir:/github/workspace/.git.path
+2026-11-26T10:28:18.0780978Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-26T10:28:18.0784438Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path
+2026-11-26T10:28:18.0813021Z /home/runner/work/_temp/git-credentials-9c814877-99ad-4a0c-ac82-a9c6e2bf511f.config
+2026-11-26T10:28:18.0826274Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-9c814877\-99ad\-4a0c\-ac82\-a9c6e2bf511f\.config
+2026-11-26T10:28:18.0867492Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path
+2026-11-26T10:28:18.0892374Z /home/runner/work/_temp/git-credentials-9c814877-99ad-4a0c-ac82-a9c6e2bf511f.config
+2026-11-26T10:28:18.0906348Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-9c814877\-99ad\-4a0c\-ac82\-a9c6e2bf511f\.config
+2026-11-26T10:28:18.0946558Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-26T10:28:18.0970677Z /github/runner_temp/git-credentials-9c814877-99ad-4a0c-ac82-a9c6e2bf511f.config
+2026-11-26T10:28:18.0980228Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-9c814877\-99ad\-4a0c\-ac82\-a9c6e2bf511f\.config
+2026-11-26T10:28:18.1012955Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-26T10:28:18.1036996Z /github/runner_temp/git-credentials-9c814877-99ad-4a0c-ac82-a9c6e2bf511f.config
+2026-11-26T10:28:18.1046254Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-9c814877\-99ad\-4a0c\-ac82\-a9c6e2bf511f\.config
+2026-11-26T10:28:18.1079488Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-26T10:28:18.1351821Z Removing credentials config '/home/runner/work/_temp/git-credentials-9c814877-99ad-4a0c-ac82-a9c6e2bf511f.config'
+2026-11-26T10:28:18.1359935Z ##[endgroup]
+2026-11-26T10:28:18.1584574Z ##[group]Run python3 "$GITHUB_WORKSPACE/scripts/ensure_hadolint.py" --link /usr/local/bin/hadolint
+2026-11-26T10:28:18.1586405Z python3 "$GITHUB_WORKSPACE/scripts/ensure_hadolint.py" --link /usr/local/bin/hadolint
+2026-11-26T10:28:18.1623544Z shell: /usr/bin/bash -e {0}
+2026-11-26T10:28:18.1624093Z env:
+2026-11-26T10:28:18.1624540Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:18.1625213Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:18.1625713Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:18.1626276Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:18.1626851Z ##[endgroup]
+2026-11-26T10:28:18.3817883Z /usr/local/bin/hadolint
+2026-11-26T10:28:18.4004468Z ##[group]Run hadolint --config .hadolint.yaml OPC_UA_Servers/Release2/Dockerfile
+2026-11-26T10:28:18.4005865Z hadolint --config .hadolint.yaml OPC_UA_Servers/Release2/Dockerfile
+2026-11-26T10:28:18.4006832Z echo "Dockerfile lint OK"
+2026-11-26T10:28:18.4040040Z shell: /usr/bin/bash -e {0}
+2026-11-26T10:28:18.4040613Z env:
+2026-11-26T10:28:18.4041061Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:18.4041704Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:18.4042197Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:18.4042967Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:18.4043530Z ##[endgroup]
+2026-11-26T10:28:18.4843408Z Dockerfile lint OK
+2026-11-26T10:28:18.5004590Z ##[group]Run docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+2026-11-26T10:28:18.5005771Z with:
+2026-11-26T10:28:18.5006168Z   driver: docker-container
+2026-11-26T10:28:18.5006655Z   use: true
+2026-11-26T10:28:18.5007035Z   keep-state: false
+2026-11-26T10:28:18.5007472Z   cache-binary: true
+2026-11-26T10:28:18.5007909Z   cleanup: true
+2026-11-26T10:28:18.5008304Z env:
+2026-11-26T10:28:18.5008723Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:18.5009356Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:18.5009840Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:18.5010396Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:18.5010952Z ##[endgroup]
+2026-11-26T10:28:18.7053435Z ##[group]Docker info
+2026-11-26T10:28:18.7069571Z [command]/usr/bin/docker version
+2026-11-26T10:28:18.8159075Z Client: Docker Engine - Community
+2026-11-26T10:28:18.8159533Z  Version:           29.4.2
+2026-11-26T10:28:18.8162356Z  API version:       1.54
+2026-11-26T10:28:18.8163141Z  Go version:        go1.26.2
+2026-11-26T10:28:18.8163697Z  Git commit:        055a478
+2026-11-26T10:28:18.8164246Z  Built:             Fri May  1 10:24:04 2026
+2026-11-26T10:28:18.8164825Z  OS/Arch:           linux/amd64
+2026-11-26T10:28:18.8165345Z  Context:           default
+2026-11-26T10:28:18.8165645Z 
+2026-11-26T10:28:18.8165890Z Server: Docker Engine - Community
+2026-11-26T10:28:18.8166428Z  Engine:
+2026-11-26T10:28:18.8166851Z   Version:          29.4.2
+2026-11-26T10:28:18.8167349Z   API version:      1.54 (minimum version 1.40)
+2026-11-26T10:28:18.8167785Z   Go version:       go1.26.2
+2026-11-26T10:28:18.8168143Z   Git commit:       d329809
+2026-11-26T10:28:18.8168513Z   Built:            Fri May  1 10:24:04 2026
+2026-11-26T10:28:18.8168902Z   OS/Arch:          linux/amd64
+2026-11-26T10:28:18.8169288Z   Experimental:     false
+2026-11-26T10:28:18.8169624Z  containerd:
+2026-11-26T10:28:18.8169936Z   Version:          v2.4.2
+2026-11-26T10:28:18.8170350Z   GitCommit:        b7a25261e029d68978bbf290df0a62fc819b3c51
+2026-11-26T10:28:18.8170763Z  runc:
+2026-11-26T10:28:18.8171063Z   Version:          1.5.3
+2026-11-26T10:28:18.8171408Z   GitCommit:        v1.5.3-0-g46365c62
+2026-11-26T10:28:18.8171774Z  docker-init:
+2026-11-26T10:28:18.8172089Z   Version:          0.19.0
+2026-11-26T10:28:18.8172423Z   GitCommit:        de40ad0
+2026-11-26T10:28:18.8223669Z [command]/usr/bin/docker info
+2026-11-26T10:28:19.0301712Z Client: Docker Engine - Community
+2026-11-26T10:28:19.0303044Z  Version:    29.4.2
+2026-11-26T10:28:19.0303942Z  Context:    default
+2026-11-26T10:28:19.0304694Z  Debug Mode: false
+2026-11-26T10:28:19.0305144Z  Plugins:
+2026-11-26T10:28:19.0305610Z   buildx: Docker Buildx (Docker Inc.)
+2026-11-26T10:28:19.0306161Z     Version:  v0.39.0
+2026-11-26T10:28:19.0306751Z     Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+2026-11-26T10:28:19.0307458Z   compose: Docker Compose (Docker Inc.)
+2026-11-26T10:28:19.0308006Z     Version:  v5.1.3
+2026-11-26T10:28:19.0308632Z     Path:     /usr/libexec/docker/cli-plugins/docker-compose
+2026-11-26T10:28:19.0309089Z 
+2026-11-26T10:28:19.0309275Z Server:
+2026-11-26T10:28:19.0309677Z  Containers: 0
+2026-11-26T10:28:19.0310099Z   Running: 0
+2026-11-26T10:28:19.0310474Z   Paused: 0
+2026-11-26T10:28:19.0310732Z   Stopped: 0
+2026-11-26T10:28:19.0310987Z  Images: 6
+2026-11-26T10:28:19.0311261Z  Server Version: 29.4.2
+2026-11-26T10:28:19.0311571Z  Storage Driver: overlayfs
+2026-11-26T10:28:19.0311929Z   driver-type: io.containerd.snapshotter.v1
+2026-11-26T10:28:19.0312365Z  Logging Driver: json-file
+2026-11-26T10:28:19.0313026Z  Cgroup Driver: systemd
+2026-11-26T10:28:19.0313581Z  Cgroup Version: 2
+2026-11-26T10:28:19.0314029Z  Plugins:
+2026-11-26T10:28:19.0314472Z   Volume: local
+2026-11-26T10:28:19.0315086Z   Network: bridge host ipvlan macvlan null overlay
+2026-11-26T10:28:19.0315925Z   Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+2026-11-26T10:28:19.0317005Z  CDI spec directories:
+2026-11-26T10:28:19.0317573Z   /etc/cdi
+2026-11-26T10:28:19.0318594Z   /var/run/cdi
+2026-11-26T10:28:19.0319078Z  Swarm: inactive
+2026-11-26T10:28:19.0319763Z  Runtimes: runc io.containerd.runc.v2
+2026-11-26T10:28:19.0320320Z  Default Runtime: runc
+2026-11-26T10:28:19.0320802Z  Init Binary: docker-init
+2026-11-26T10:28:19.0321435Z  containerd version: b7a25261e029d68978bbf290df0a62fc819b3c51
+2026-11-26T10:28:19.0322120Z  runc version: v1.5.3-0-g46365c62
+2026-11-26T10:28:19.0322870Z  init version: de40ad0
+2026-11-26T10:28:19.0323341Z  Security Options:
+2026-11-26T10:28:19.0323815Z   apparmor
+2026-11-26T10:28:19.0324269Z   seccomp
+2026-11-26T10:28:19.0324683Z    Profile: builtin
+2026-11-26T10:28:19.0325116Z   cgroupns
+2026-11-26T10:28:19.0325512Z  Kernel Version: 7.0.0-1020-azure
+2026-11-26T10:28:19.0325854Z  Operating System: Ubuntu 26.04.1 LTS
+2026-11-26T10:28:19.0326318Z  OSType: linux
+2026-11-26T10:28:19.0326589Z  Architecture: x86_64
+2026-11-26T10:28:19.0326853Z  CPUs: 4
+2026-11-26T10:28:19.0327100Z  Total Memory: 15.61GiB
+2026-11-26T10:28:19.0327401Z  Name: runnervm0hi8g
+2026-11-26T10:28:19.0327858Z  ID: 636b573e-1748-48fb-a027-4a5f710f78e2
+2026-11-26T10:28:19.0328476Z  Docker Root Dir: /var/lib/docker
+2026-11-26T10:28:19.0328983Z  Debug Mode: false
+2026-11-26T10:28:19.0329456Z  Username: githubactions
+2026-11-26T10:28:19.0329928Z  Experimental: false
+2026-11-26T10:28:19.0330355Z  Insecure Registries:
+2026-11-26T10:28:19.0335212Z   ::1/128
+2026-11-26T10:28:19.0335668Z   127.0.0.0/8
+2026-11-26T10:28:19.0336127Z  Live Restore Enabled: false
+2026-11-26T10:28:19.0336709Z  Firewall Backend: iptables
+2026-11-26T10:28:19.0337068Z 
+2026-11-26T10:28:19.0337898Z ##[endgroup]
+2026-11-26T10:28:19.1113325Z ##[group]Buildx version
+2026-11-26T10:28:19.1135245Z [command]/usr/bin/docker buildx version
+2026-11-26T10:28:19.1751220Z github.com/docker/buildx v0.39.0 360040a78d6113dc84e5d4dcdf0f438e1be7a41f
+2026-11-26T10:28:19.1789374Z ##[endgroup]
+2026-11-26T10:28:19.2037783Z ##[group]Inspecting default docker context
+2026-11-26T10:28:19.2206304Z [
+2026-11-26T10:28:19.2206682Z   {
+2026-11-26T10:28:19.2207055Z     "Name": "default",
+2026-11-26T10:28:19.2207480Z     "Metadata": {},
+2026-11-26T10:28:19.2207931Z     "Endpoints": {
+2026-11-26T10:28:19.2208308Z       "docker": {
+2026-11-26T10:28:19.2208766Z         "Host": "unix:///var/run/docker.sock",
+2026-11-26T10:28:19.2209395Z         "SkipTLSVerify": false
+2026-11-26T10:28:19.2209870Z       }
+2026-11-26T10:28:19.2210330Z     },
+2026-11-26T10:28:19.2210822Z     "TLSMaterial": {},
+2026-11-26T10:28:19.2211171Z     "Storage": {
+2026-11-26T10:28:19.2211551Z       "MetadataPath": "<IN MEMORY>",
+2026-11-26T10:28:19.2212173Z       "TLSPath": "<IN MEMORY>"
+2026-11-26T10:28:19.2212853Z     }
+2026-11-26T10:28:19.2213316Z   }
+2026-11-26T10:28:19.2213737Z ]
+2026-11-26T10:28:19.2214534Z ##[endgroup]
+2026-11-26T10:28:19.3061714Z ##[group]Pulling BuildKit image(s)
+2026-11-26T10:28:19.3098725Z [command]/usr/bin/docker pull moby/buildkit:buildx-stable-1
+2026-11-26T10:28:19.6159794Z buildx-stable-1: Pulling from moby/buildkit
+2026-11-26T10:28:19.7167114Z 7ecbe013a2a5: Pulling fs layer
+2026-11-26T10:28:19.7168216Z 68eab75b32f8: Pulling fs layer
+2026-11-26T10:28:19.7169609Z f38beb44996e: Pulling fs layer
+2026-11-26T10:28:19.8354202Z 861e3ecba141: Pulling fs layer
+2026-11-26T10:28:19.8354696Z 48124e8335c1: Pulling fs layer
+2026-11-26T10:28:19.8355107Z 881fc932939e: Pulling fs layer
+2026-11-26T10:28:19.8355510Z b00df0a8296e: Pulling fs layer
+2026-11-26T10:28:19.8355921Z b00df0a8296e: Download complete
+2026-11-26T10:28:19.8365056Z 881fc932939e: Download complete
+2026-11-26T10:28:19.8377173Z f38beb44996e: Download complete
+2026-11-26T10:28:19.8382376Z 68eab75b32f8: Download complete
+2026-11-26T10:28:19.8386220Z 861e3ecba141: Download complete
+2026-11-26T10:28:19.8393219Z 7ecbe013a2a5: Download complete
+2026-11-26T10:28:19.9296358Z 44136fa355b3: Already exists
+2026-11-26T10:28:19.9298456Z f67e563b7969: Download complete
+2026-11-26T10:28:19.9313209Z 34a6d5dab7a2: Download complete
+2026-11-26T10:28:19.9323568Z f696aadad5f0: Download complete
+2026-11-26T10:28:20.0300035Z 6c828ac2cd75: Download complete
+2026-11-26T10:28:20.0338022Z 881fc932939e: Pull complete
+2026-11-26T10:28:20.2295762Z 48124e8335c1: Download complete
+2026-11-26T10:28:20.3312238Z b00df0a8296e: Pull complete
+2026-11-26T10:28:20.3321396Z f38beb44996e: Pull complete
+2026-11-26T10:28:20.3353756Z 861e3ecba141: Pull complete
+2026-11-26T10:28:21.0914662Z 68eab75b32f8: Pull complete
+2026-11-26T10:28:21.0929555Z 7ecbe013a2a5: Pull complete
+2026-11-26T10:28:21.0931654Z 48124e8335c1: Pull complete
+2026-11-26T10:28:21.0934317Z Digest: sha256:baf6138eb8c37644800c7c913fba051e840ebb9ba13eaf92d92ef9a1712d0b4c
+2026-11-26T10:28:21.0935342Z Status: Downloaded newer image for moby/buildkit:buildx-stable-1
+2026-11-26T10:28:21.0946475Z docker.io/moby/buildkit:buildx-stable-1
+2026-11-26T10:28:21.0976326Z ##[endgroup]
+2026-11-26T10:28:21.0978053Z ##[group]Creating a new builder instance
+2026-11-26T10:28:21.1884246Z [command]/usr/bin/docker buildx create --name builder-90bf0373-c2e5-4540-90f1-36131fc49d7c --driver docker-container --buildkitd-flags --allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host --use
+2026-11-26T10:28:21.2614183Z builder-90bf0373-c2e5-4540-90f1-36131fc49d7c
+2026-11-26T10:28:21.2663360Z ##[endgroup]
+2026-11-26T10:28:21.2664296Z ##[group]Booting builder
+2026-11-26T10:28:21.2728087Z [command]/usr/bin/docker buildx inspect --bootstrap --builder builder-90bf0373-c2e5-4540-90f1-36131fc49d7c
+2026-11-26T10:28:21.3387431Z #1 [internal] booting buildkit
+2026-11-26T10:28:21.4900291Z #1 pulling image moby/buildkit:buildx-stable-1
+2026-11-26T10:28:21.5643199Z #1 pulling image moby/buildkit:buildx-stable-1 0.2s done
+2026-11-26T10:28:21.7953445Z #1 creating container buildx_buildkit_builder-90bf0373-c2e5-4540-90f1-36131fc49d7c0
+2026-11-26T10:28:22.7161883Z #1 creating container buildx_buildkit_builder-90bf0373-c2e5-4540-90f1-36131fc49d7c0 1.1s done
+2026-11-26T10:28:22.7452909Z #1 DONE 1.4s
+2026-11-26T10:28:22.7753329Z Name:          builder-90bf0373-c2e5-4540-90f1-36131fc49d7c
+2026-11-26T10:28:22.7754275Z Driver:        docker-container
+2026-11-26T10:28:22.7755003Z Last Activity: 2026-11-26 10:28:21 +0000 UTC
+2026-11-26T10:28:22.7755493Z 
+2026-11-26T10:28:22.7755804Z Nodes:
+2026-11-26T10:28:22.7756375Z Name:                  builder-90bf0373-c2e5-4540-90f1-36131fc49d7c0
+2026-11-26T10:28:22.7757117Z Endpoint:              unix:///var/run/docker.sock
+2026-11-26T10:28:22.7757831Z Status:                running
+2026-11-26T10:28:22.7758694Z BuildKit daemon flags: --allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host
+2026-11-26T10:28:22.7759583Z BuildKit version:      v0.35.1
+2026-11-26T10:28:22.7760131Z Platforms:             linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/386
+2026-11-26T10:28:22.7760704Z Labels:
+2026-11-26T10:28:22.7761115Z  org.mobyproject.buildkit.worker.executor:         oci
+2026-11-26T10:28:22.7761633Z  org.mobyproject.buildkit.worker.hostname:         43461ced4d8f
+2026-11-26T10:28:22.7762063Z  org.mobyproject.buildkit.worker.network:          host
+2026-11-26T10:28:22.7762490Z  org.mobyproject.buildkit.worker.oci.process-mode: sandbox
+2026-11-26T10:28:22.7763268Z  org.mobyproject.buildkit.worker.selinux.enabled:  false
+2026-11-26T10:28:22.7763692Z  org.mobyproject.buildkit.worker.snapshotter:      overlayfs
+2026-11-26T10:28:22.7764047Z GC Policy rule#0:
+2026-11-26T10:28:22.7764250Z  All:            false
+2026-11-26T10:28:22.7764587Z  Filters:        type==source.local type==exec.cachemount type==source.git.checkout
+2026-11-26T10:28:22.7764984Z  Keep Duration:  48h0m0s
+2026-11-26T10:28:22.7765211Z  Max Used Space: 488.3MiB
+2026-11-26T10:28:22.7765433Z GC Policy rule#1:
+2026-11-26T10:28:22.7765634Z  All:            false
+2026-11-26T10:28:22.7765847Z  Keep Duration:  1440h0m0s
+2026-11-26T10:28:22.7766072Z  Reserved Space: 9.313GiB
+2026-11-26T10:28:22.7766290Z  Max Used Space: 93.13GiB
+2026-11-26T10:28:22.7766506Z  Min Free Space: 27.01GiB
+2026-11-26T10:28:22.7766722Z GC Policy rule#2:
+2026-11-26T10:28:22.7766913Z  All:            false
+2026-11-26T10:28:22.7767472Z  Reserved Space: 9.313GiB
+2026-11-26T10:28:22.7767866Z  Max Used Space: 93.13GiB
+2026-11-26T10:28:22.7768086Z  Min Free Space: 27.01GiB
+2026-11-26T10:28:22.7768296Z GC Policy rule#3:
+2026-11-26T10:28:22.7768489Z  All:            true
+2026-11-26T10:28:22.7768697Z  Reserved Space: 9.313GiB
+2026-11-26T10:28:22.7768913Z  Max Used Space: 93.13GiB
+2026-11-26T10:28:22.7769130Z  Min Free Space: 27.01GiB
+2026-11-26T10:28:22.7807524Z ##[endgroup]
+2026-11-26T10:28:22.8885181Z ##[group]Inspect builder
+2026-11-26T10:28:22.8928908Z {
+2026-11-26T10:28:22.8929221Z   "nodes": [
+2026-11-26T10:28:22.8929536Z     {
+2026-11-26T10:28:22.8929995Z       "name": "builder-90bf0373-c2e5-4540-90f1-36131fc49d7c0",
+2026-11-26T10:28:22.8930613Z       "endpoint": "unix:///var/run/docker.sock",
+2026-11-26T10:28:22.8931085Z       "status": "running",
+2026-11-26T10:28:22.8932069Z       "buildkitd-flags": "--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host",
+2026-11-26T10:28:22.8933189Z       "buildkit": "v0.35.1",
+2026-11-26T10:28:22.8933755Z       "platforms": "linux/amd64,linux/amd64/v2,linux/amd64/v3,linux/386",
+2026-11-26T10:28:22.8934335Z       "features": {
+2026-11-26T10:28:22.8934850Z         "Automatically load images to the Docker Engine image store": true,
+2026-11-26T10:28:22.8935462Z         "Cache export": true,
+2026-11-26T10:28:22.8935784Z         "Direct push": true,
+2026-11-26T10:28:22.8936048Z         "Docker exporter": true,
+2026-11-26T10:28:22.8936322Z         "Multi-platform build": true,
+2026-11-26T10:28:22.8936607Z         "OCI exporter": true
+2026-11-26T10:28:22.8936854Z       },
+2026-11-26T10:28:22.8937064Z       "labels": {
+2026-11-26T10:28:22.8937365Z         "org.mobyproject.buildkit.worker.executor": "oci",
+2026-11-26T10:28:22.8937840Z         "org.mobyproject.buildkit.worker.hostname": "43461ced4d8f",
+2026-11-26T10:28:22.8938311Z         "org.mobyproject.buildkit.worker.network": "host",
+2026-11-26T10:28:22.8938819Z         "org.mobyproject.buildkit.worker.oci.process-mode": "sandbox",
+2026-11-26T10:28:22.8939359Z         "org.mobyproject.buildkit.worker.selinux.enabled": "false",
+2026-11-26T10:28:22.8939856Z         "org.mobyproject.buildkit.worker.snapshotter": "overlayfs"
+2026-11-26T10:28:22.8940235Z       },
+2026-11-26T10:28:22.8940442Z       "gcPolicy": [
+2026-11-26T10:28:22.8940688Z         {
+2026-11-26T10:28:22.8940913Z           "all": false,
+2026-11-26T10:28:22.8941173Z           "filter": [
+2026-11-26T10:28:22.8941538Z             "type==source.local type==exec.cachemount type==source.git.checkout"
+2026-11-26T10:28:22.8941955Z           ],
+2026-11-26T10:28:22.8942183Z           "keepDuration": "48h0m0s",
+2026-11-26T10:28:22.8942477Z           "maxUsedSpace": "488.3MiB"
+2026-11-26T10:28:22.8943056Z         },
+2026-11-26T10:28:22.8943295Z         {
+2026-11-26T10:28:22.8943521Z           "all": false,
+2026-11-26T10:28:22.8943803Z           "keepDuration": "1440h0m0s",
+2026-11-26T10:28:22.8944128Z           "reservedSpace": "9.313GiB",
+2026-11-26T10:28:22.8944459Z           "maxUsedSpace": "93.13GiB",
+2026-11-26T10:28:22.8944801Z           "minFreeSpace": "27.01GiB"
+2026-11-26T10:28:22.8945098Z         },
+2026-11-26T10:28:22.8945305Z         {
+2026-11-26T10:28:22.8945536Z           "all": false,
+2026-11-26T10:28:22.8945812Z           "reservedSpace": "9.313GiB",
+2026-11-26T10:28:22.8946130Z           "maxUsedSpace": "93.13GiB",
+2026-11-26T10:28:22.8946441Z           "minFreeSpace": "27.01GiB"
+2026-11-26T10:28:22.8946728Z         },
+2026-11-26T10:28:22.8946965Z         {
+2026-11-26T10:28:22.8947166Z           "all": true,
+2026-11-26T10:28:22.8947412Z           "reservedSpace": "9.313GiB",
+2026-11-26T10:28:22.8947683Z           "maxUsedSpace": "93.13GiB",
+2026-11-26T10:28:22.8947965Z           "minFreeSpace": "27.01GiB"
+2026-11-26T10:28:22.8948202Z         }
+2026-11-26T10:28:22.8948377Z       ]
+2026-11-26T10:28:22.8948547Z     }
+2026-11-26T10:28:22.8948746Z   ],
+2026-11-26T10:28:22.8949012Z   "name": "builder-90bf0373-c2e5-4540-90f1-36131fc49d7c",
+2026-11-26T10:28:22.8949728Z   "driver": "docker-container",
+2026-11-26T10:28:22.8950204Z   "lastActivity": "2026-11-26T10:28:21.000Z"
+2026-11-26T10:28:22.8950515Z }
+2026-11-26T10:28:22.8950936Z ##[endgroup]
+2026-11-26T10:28:22.8951301Z ##[group]BuildKit version
+2026-11-26T10:28:22.8951633Z builder-90bf0373-c2e5-4540-90f1-36131fc49d7c0: v0.35.1
+2026-11-26T10:28:22.8952103Z ##[endgroup]
+2026-11-26T10:28:22.9160445Z ##[group]Run docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+2026-11-26T10:28:22.9160879Z with:
+2026-11-26T10:28:22.9161093Z   context: OPC_UA_Servers/Release2
+2026-11-26T10:28:22.9161361Z   tags: opcua-ijt-server:ci
+2026-11-26T10:28:22.9161604Z   load: true
+2026-11-26T10:28:22.9161806Z   cache-from: type=gha
+2026-11-26T10:28:22.9162035Z   cache-to: type=gha,mode=max
+2026-11-26T10:28:22.9162280Z   no-cache: false
+2026-11-26T10:28:22.9162482Z   pull: false
+2026-11-26T10:28:22.9162834Z   push: false
+2026-11-26T10:28:22.9165544Z   github-token: ***
+2026-11-26T10:28:22.9165760Z env:
+2026-11-26T10:28:22.9165972Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:22.9166268Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:22.9166493Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:22.9166737Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:22.9166985Z ##[endgroup]
+2026-11-26T10:28:23.1727446Z ##[group]GitHub Actions runtime token ACs
+2026-11-26T10:28:23.1737201Z refs/heads/main: read/write
+2026-11-26T10:28:23.1738116Z ##[endgroup]
+2026-11-26T10:28:23.1738909Z ##[group]Docker info
+2026-11-26T10:28:23.1810911Z [command]/usr/bin/docker version
+2026-11-26T10:28:23.2117735Z Client: Docker Engine - Community
+2026-11-26T10:28:23.2118794Z  Version:           29.4.2
+2026-11-26T10:28:23.2122901Z  API version:       1.54
+2026-11-26T10:28:23.2123741Z  Go version:        go1.26.2
+2026-11-26T10:28:23.2124681Z  Git commit:        055a478
+2026-11-26T10:28:23.2125708Z  Built:             Fri May  1 10:24:04 2026
+2026-11-26T10:28:23.2126777Z  OS/Arch:           linux/amd64
+2026-11-26T10:28:23.2127685Z  Context:           default
+2026-11-26T10:28:23.2128368Z 
+2026-11-26T10:28:23.2128765Z Server: Docker Engine - Community
+2026-11-26T10:28:23.2129763Z  Engine:
+2026-11-26T10:28:23.2130437Z   Version:          29.4.2
+2026-11-26T10:28:23.2131114Z   API version:      1.54 (minimum version 1.40)
+2026-11-26T10:28:23.2131957Z   Go version:       go1.26.2
+2026-11-26T10:28:23.2132968Z   Git commit:       d329809
+2026-11-26T10:28:23.2133780Z   Built:            Fri May  1 10:24:04 2026
+2026-11-26T10:28:23.2134683Z   OS/Arch:          linux/amd64
+2026-11-26T10:28:23.2135316Z   Experimental:     false
+2026-11-26T10:28:23.2136174Z  containerd:
+2026-11-26T10:28:23.2136802Z   Version:          v2.4.2
+2026-11-26T10:28:23.2137569Z   GitCommit:        b7a25261e029d68978bbf290df0a62fc819b3c51
+2026-11-26T10:28:23.2138656Z  runc:
+2026-11-26T10:28:23.2139237Z   Version:          1.5.3
+2026-11-26T10:28:23.2139892Z   GitCommit:        v1.5.3-0-g46365c62
+2026-11-26T10:28:23.2140588Z  docker-init:
+2026-11-26T10:28:23.2141164Z   Version:          0.19.0
+2026-11-26T10:28:23.2141809Z   GitCommit:        de40ad0
+2026-11-26T10:28:23.2187318Z [command]/usr/bin/docker info
+2026-11-26T10:28:23.2948908Z Client: Docker Engine - Community
+2026-11-26T10:28:23.2956325Z  Version:    29.4.2
+2026-11-26T10:28:23.2957128Z  Context:    default
+2026-11-26T10:28:23.2957832Z  Debug Mode: false
+2026-11-26T10:28:23.2958198Z  Plugins:
+2026-11-26T10:28:23.2958556Z   buildx: Docker Buildx (Docker Inc.)
+2026-11-26T10:28:23.2958987Z     Version:  v0.39.0
+2026-11-26T10:28:23.2959426Z     Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+2026-11-26T10:28:23.2959984Z   compose: Docker Compose (Docker Inc.)
+2026-11-26T10:28:23.2960408Z     Version:  v5.1.3
+2026-11-26T10:28:23.2960839Z     Path:     /usr/libexec/docker/cli-plugins/docker-compose
+2026-11-26T10:28:23.2961221Z 
+2026-11-26T10:28:23.2961346Z Server:
+2026-11-26T10:28:23.2961653Z  Containers: 1
+2026-11-26T10:28:23.2961958Z   Running: 1
+2026-11-26T10:28:23.2962254Z   Paused: 0
+2026-11-26T10:28:23.2962554Z   Stopped: 0
+2026-11-26T10:28:23.2963077Z  Images: 7
+2026-11-26T10:28:23.2963488Z  Server Version: 29.4.2
+2026-11-26T10:28:23.2964278Z  Storage Driver: overlayfs
+2026-11-26T10:28:23.2964786Z   driver-type: io.containerd.snapshotter.v1
+2026-11-26T10:28:23.2965328Z  Logging Driver: json-file
+2026-11-26T10:28:23.2965772Z  Cgroup Driver: systemd
+2026-11-26T10:28:23.2966201Z  Cgroup Version: 2
+2026-11-26T10:28:23.2966960Z  Plugins:
+2026-11-26T10:28:23.2967361Z   Volume: local
+2026-11-26T10:28:23.2967817Z   Network: bridge host ipvlan macvlan null overlay
+2026-11-26T10:28:23.2968531Z   Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+2026-11-26T10:28:23.2969143Z  CDI spec directories:
+2026-11-26T10:28:23.2969530Z   /etc/cdi
+2026-11-26T10:28:23.2969820Z   /var/run/cdi
+2026-11-26T10:28:23.2970133Z  Swarm: inactive
+2026-11-26T10:28:23.2970489Z  Runtimes: io.containerd.runc.v2 runc
+2026-11-26T10:28:23.2970928Z  Default Runtime: runc
+2026-11-26T10:28:23.2971287Z  Init Binary: docker-init
+2026-11-26T10:28:23.2971782Z  containerd version: b7a25261e029d68978bbf290df0a62fc819b3c51
+2026-11-26T10:28:23.2972353Z  runc version: v1.5.3-0-g46365c62
+2026-11-26T10:28:23.2972917Z  init version: de40ad0
+2026-11-26T10:28:23.2973258Z  Security Options:
+2026-11-26T10:28:23.2973583Z   apparmor
+2026-11-26T10:28:23.2973879Z   seccomp
+2026-11-26T10:28:23.2974174Z    Profile: builtin
+2026-11-26T10:28:23.2974501Z   cgroupns
+2026-11-26T10:28:23.2974811Z  Kernel Version: 7.0.0-1020-azure
+2026-11-26T10:28:23.2975229Z  Operating System: Ubuntu 26.04.1 LTS
+2026-11-26T10:28:23.2975641Z  OSType: linux
+2026-11-26T10:28:23.2975958Z  Architecture: x86_64
+2026-11-26T10:28:23.2976286Z  CPUs: 4
+2026-11-26T10:28:23.2976574Z  Total Memory: 15.61GiB
+2026-11-26T10:28:23.2976953Z  Name: runnervm0hi8g
+2026-11-26T10:28:23.2977306Z  ID: 636b573e-1748-48fb-a027-4a5f710f78e2
+2026-11-26T10:28:23.2977736Z  Docker Root Dir: /var/lib/docker
+2026-11-26T10:28:23.2978131Z  Debug Mode: false
+2026-11-26T10:28:23.2978468Z  Username: githubactions
+2026-11-26T10:28:23.2978825Z  Experimental: false
+2026-11-26T10:28:23.2979165Z  Insecure Registries:
+2026-11-26T10:28:23.2979539Z   ::1/128
+2026-11-26T10:28:23.2979815Z   127.0.0.0/8
+2026-11-26T10:28:23.2980133Z  Live Restore Enabled: false
+2026-11-26T10:28:23.2980523Z  Firewall Backend: iptables
+2026-11-26T10:28:23.2980767Z 
+2026-11-26T10:28:23.2986559Z ##[endgroup]
+2026-11-26T10:28:23.2987309Z ##[group]Proxy configuration
+2026-11-26T10:28:23.2987789Z No proxy configuration found
+2026-11-26T10:28:23.2988479Z ##[endgroup]
+2026-11-26T10:28:23.3675064Z ##[group]Buildx version
+2026-11-26T10:28:23.3703622Z [command]/usr/bin/docker buildx version
+2026-11-26T10:28:23.4306270Z github.com/docker/buildx v0.39.0 360040a78d6113dc84e5d4dcdf0f438e1be7a41f
+2026-11-26T10:28:23.4346592Z ##[endgroup]
+2026-11-26T10:28:23.4347124Z ##[group]Builder info
+2026-11-26T10:28:23.5392096Z {
+2026-11-26T10:28:23.5393048Z   "nodes": [
+2026-11-26T10:28:23.5393933Z     {
+2026-11-26T10:28:23.5394777Z       "name": "builder-90bf0373-c2e5-4540-90f1-36131fc49d7c0",
+2026-11-26T10:28:23.5395575Z       "endpoint": "unix:///var/run/docker.sock",
+2026-11-26T10:28:23.5396378Z       "status": "running",
+2026-11-26T10:28:23.5417677Z       "buildkitd-flags": "--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host",
+2026-11-26T10:28:23.5418730Z       "buildkit": "v0.35.1",
+2026-11-26T10:28:23.5419347Z       "platforms": "linux/amd64,linux/amd64/v2,linux/amd64/v3,linux/386",
+2026-11-26T10:28:23.5420016Z       "features": {
+2026-11-26T10:28:23.5420578Z         "Automatically load images to the Docker Engine image store": true,
+2026-11-26T10:28:23.5421237Z         "Cache export": true,
+2026-11-26T10:28:23.5421638Z         "Direct push": true,
+2026-11-26T10:28:23.5422036Z         "Docker exporter": true,
+2026-11-26T10:28:23.5422463Z         "Multi-platform build": true,
+2026-11-26T10:28:23.5423108Z         "OCI exporter": true
+2026-11-26T10:28:23.5423476Z       },
+2026-11-26T10:28:23.5423768Z       "labels": {
+2026-11-26T10:28:23.5424212Z         "org.mobyproject.buildkit.worker.executor": "oci",
+2026-11-26T10:28:23.5425355Z         "org.mobyproject.buildkit.worker.hostname": "43461ced4d8f",
+2026-11-26T10:28:23.5426151Z         "org.mobyproject.buildkit.worker.network": "host",
+2026-11-26T10:28:23.5427025Z         "org.mobyproject.buildkit.worker.oci.process-mode": "sandbox",
+2026-11-26T10:28:23.5428315Z         "org.mobyproject.buildkit.worker.selinux.enabled": "false",
+2026-11-26T10:28:23.5429169Z         "org.mobyproject.buildkit.worker.snapshotter": "overlayfs"
+2026-11-26T10:28:23.5429718Z       },
+2026-11-26T10:28:23.5430011Z       "gcPolicy": [
+2026-11-26T10:28:23.5430343Z         {
+2026-11-26T10:28:23.5430631Z           "all": false,
+2026-11-26T10:28:23.5430946Z           "filter": [
+2026-11-26T10:28:23.5431453Z             "type==source.local type==exec.cachemount type==source.git.checkout"
+2026-11-26T10:28:23.5432033Z           ],
+2026-11-26T10:28:23.5432339Z           "keepDuration": "48h0m0s",
+2026-11-26T10:28:23.5432943Z           "maxUsedSpace": "488.3MiB"
+2026-11-26T10:28:23.5433333Z         },
+2026-11-26T10:28:23.5433619Z         {
+2026-11-26T10:28:23.5433894Z           "all": false,
+2026-11-26T10:28:23.5434243Z           "keepDuration": "1440h0m0s",
+2026-11-26T10:28:23.5434649Z           "reservedSpace": "9.313GiB",
+2026-11-26T10:28:23.5435048Z           "maxUsedSpace": "93.13GiB",
+2026-11-26T10:28:23.5435445Z           "minFreeSpace": "27.01GiB"
+2026-11-26T10:28:23.5435835Z         },
+2026-11-26T10:28:23.5436108Z         {
+2026-11-26T10:28:23.5436394Z           "all": false,
+2026-11-26T10:28:23.5436730Z           "reservedSpace": "9.313GiB",
+2026-11-26T10:28:23.5437131Z           "maxUsedSpace": "93.13GiB",
+2026-11-26T10:28:23.5437531Z           "minFreeSpace": "27.01GiB"
+2026-11-26T10:28:23.5437910Z         },
+2026-11-26T10:28:23.5438191Z         {
+2026-11-26T10:28:23.5438476Z           "all": true,
+2026-11-26T10:28:23.5438821Z           "reservedSpace": "9.313GiB",
+2026-11-26T10:28:23.5439241Z           "maxUsedSpace": "93.13GiB",
+2026-11-26T10:28:23.5439671Z           "minFreeSpace": "27.01GiB"
+2026-11-26T10:28:23.5440056Z         }
+2026-11-26T10:28:23.5440336Z       ]
+2026-11-26T10:28:23.5440607Z     }
+2026-11-26T10:28:23.5440919Z   ],
+2026-11-26T10:28:23.5441312Z   "name": "builder-90bf0373-c2e5-4540-90f1-36131fc49d7c",
+2026-11-26T10:28:23.5441836Z   "driver": "docker-container",
+2026-11-26T10:28:23.5442258Z   "lastActivity": "2026-11-26T10:28:21.000Z"
+2026-11-26T10:28:23.5442862Z }
+2026-11-26T10:28:23.5443601Z ##[endgroup]
+2026-11-26T10:28:23.7234777Z [command]/usr/bin/docker buildx build --cache-from type=gha --cache-to type=gha,mode=max --iidfile /home/runner/work/_temp/docker-actions-toolkit-pXOiwb/build-iidfile-672385fbe6.txt --tag opcua-ijt-server:ci --load --metadata-file /home/runner/work/_temp/docker-actions-toolkit-pXOiwb/build-metadata-687ed44a71.json OPC_UA_Servers/Release2
+2026-11-26T10:28:24.0410827Z #0 building with "builder-90bf0373-c2e5-4540-90f1-36131fc49d7c" instance using docker-container driver
+2026-11-26T10:28:24.0411361Z 
+2026-11-26T10:28:24.0411609Z #1 [internal] load build definition from Dockerfile
+2026-11-26T10:28:24.0412186Z #1 transferring dockerfile: 5.50kB done
+2026-11-26T10:28:24.0412826Z #1 DONE 0.0s
+2026-11-26T10:28:24.0413033Z 
+2026-11-26T10:28:24.0413307Z #2 [auth] library/ubuntu:pull token for registry-1.docker.io
+2026-11-26T10:28:24.0413817Z #2 DONE 0.0s
+2026-11-26T10:28:24.0413957Z 
+2026-11-26T10:28:24.0414140Z #3 [auth] library/busybox:pull token for registry-1.docker.io
+2026-11-26T10:28:24.0414522Z #3 DONE 0.0s
+2026-11-26T10:28:24.0414648Z 
+2026-11-26T10:28:24.0415171Z #4 [internal] load metadata for docker.io/library/busybox:stable-musl@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213
+2026-11-26T10:28:24.1725921Z #4 ...
+2026-11-26T10:28:24.1726395Z 
+2026-11-26T10:28:24.1727714Z #5 [internal] load metadata for docker.io/library/ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
+2026-11-26T10:28:24.1728990Z #5 DONE 0.3s
+2026-11-26T10:28:24.3367982Z 
+2026-11-26T10:28:24.3369669Z #4 [internal] load metadata for docker.io/library/busybox:stable-musl@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213
+2026-11-26T10:28:24.3371521Z #4 DONE 0.3s
+2026-11-26T10:28:24.3371743Z 
+2026-11-26T10:28:24.3371909Z #6 [internal] load .dockerignore
+2026-11-26T10:28:24.3372378Z #6 transferring context: 1.22kB done
+2026-11-26T10:28:24.3373311Z #6 DONE 0.0s
+2026-11-26T10:28:24.3373443Z 
+2026-11-26T10:28:24.3373644Z #7 [internal] load build context
+2026-11-26T10:28:24.3374020Z #7 DONE 0.0s
+2026-11-26T10:28:24.3374173Z 
+2026-11-26T10:28:24.3374888Z #8 [extractor 1/4] FROM docker.io/library/busybox:stable-musl@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213
+2026-11-26T10:28:24.3376129Z #8 resolve docker.io/library/busybox:stable-musl@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213 done
+2026-11-26T10:28:24.3376810Z #8 DONE 0.0s
+2026-11-26T10:28:24.3376936Z 
+2026-11-26T10:28:24.3377506Z #9 [stage-1 1/6] FROM docker.io/library/ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
+2026-11-26T10:28:24.3378714Z #9 resolve docker.io/library/ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db done
+2026-11-26T10:28:24.3379347Z #9 DONE 0.0s
+2026-11-26T10:28:24.3379496Z 
+2026-11-26T10:28:24.3379663Z #10 importing cache manifest from gha:18385403984672284802
+2026-11-26T10:28:24.3380181Z #10 DONE 0.2s
+2026-11-26T10:28:24.4476026Z 
+2026-11-26T10:28:24.4477347Z #8 [extractor 1/4] FROM docker.io/library/busybox:stable-musl@sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213
+2026-11-26T10:28:24.4480159Z #8 sha256:05938142326af7d798d22440b1cd54f4c62495b38d2451accbe5ef3b60da7955 867.91kB / 867.91kB 0.0s done
+2026-11-26T10:28:24.4482076Z #8 extracting sha256:05938142326af7d798d22440b1cd54f4c62495b38d2451accbe5ef3b60da7955 0.1s done
+2026-11-26T10:28:24.4486773Z #8 DONE 0.1s
+2026-11-26T10:28:24.4487104Z 
+2026-11-26T10:28:24.4487767Z #9 [stage-1 1/6] FROM docker.io/library/ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
+2026-11-26T10:28:24.4489717Z #9 sha256:96aae9022e0e1b310a415e7c2ff1b435d853e8eabb2711cc70f4ad4010cc81b7 389B / 389B 0.0s done
+2026-11-26T10:28:24.5569822Z #9 ...
+2026-11-26T10:28:24.5573450Z 
+2026-11-26T10:28:24.5573969Z #11 [extractor 2/4] WORKDIR /tmp
+2026-11-26T10:28:24.5574412Z #11 DONE 0.0s
+2026-11-26T10:28:24.5574645Z 
+2026-11-26T10:28:24.5575148Z #9 [stage-1 1/6] FROM docker.io/library/ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
+2026-11-26T10:28:24.5576052Z #9 sha256:517b871c26eac1b24d47992388bcc20e2afba3643a89e8c4a3921bfa5e1d1d28 42.17MB / 42.17MB 0.1s done
+2026-11-26T10:28:24.5576797Z #9 extracting sha256:517b871c26eac1b24d47992388bcc20e2afba3643a89e8c4a3921bfa5e1d1d28
+2026-11-26T10:28:24.7630029Z #9 ...
+2026-11-26T10:28:24.7630526Z 
+2026-11-26T10:28:24.7631044Z #7 [internal] load build context
+2026-11-26T10:28:24.7631674Z #7 transferring context: 23.28MB 0.2s done
+2026-11-26T10:28:24.7632342Z #7 DONE 0.2s
+2026-11-26T10:28:24.7632857Z 
+2026-11-26T10:28:24.7633200Z #12 [extractor 3/4] COPY OPC_UA_IJT_Server_Simulator_Linux.zip server.zip
+2026-11-26T10:28:24.7633811Z #12 DONE 0.0s
+2026-11-26T10:28:24.9122802Z 
+2026-11-26T10:28:24.9123357Z #13 [extractor 4/4] RUN unzip -q server.zip
+2026-11-26T10:28:25.6072156Z #13 DONE 1.0s
+2026-11-26T10:28:25.6072889Z 
+2026-11-26T10:28:25.6074882Z #9 [stage-1 1/6] FROM docker.io/library/ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
+2026-11-26T10:28:25.8378196Z #9 extracting sha256:517b871c26eac1b24d47992388bcc20e2afba3643a89e8c4a3921bfa5e1d1d28 1.3s done
+2026-11-26T10:28:25.8379237Z #9 DONE 1.5s
+2026-11-26T10:28:25.9612970Z 
+2026-11-26T10:28:25.9617539Z #9 [stage-1 1/6] FROM docker.io/library/ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
+2026-11-26T10:28:25.9618659Z #9 extracting sha256:96aae9022e0e1b310a415e7c2ff1b435d853e8eabb2711cc70f4ad4010cc81b7 done
+2026-11-26T10:28:25.9619576Z #9 DONE 1.5s
+2026-11-26T10:28:25.9619831Z 
+2026-11-26T10:28:25.9620327Z #14 [stage-1 2/6] WORKDIR /app
+2026-11-26T10:28:25.9620773Z #14 DONE 0.0s
+2026-11-26T10:28:25.9620964Z 
+2026-11-26T10:28:25.9621452Z #15 [stage-1 3/6] RUN groupadd -g 10001 opcua &&     useradd -u 10001 -g opcua -d /app -s /bin/false opcua
+2026-11-26T10:28:25.9622427Z #15 DONE 0.1s
+2026-11-26T10:28:26.1502917Z 
+2026-11-26T10:28:26.1503829Z #16 [stage-1 4/6] COPY --chown=10001:10001 --from=extractor /tmp/OPC_UA_IJT_Server_Simulator_Linux/. /app/
+2026-11-26T10:28:26.1504729Z #16 DONE 0.1s
+2026-11-26T10:28:26.1504923Z 
+2026-11-26T10:28:26.1505500Z #17 [stage-1 5/6] RUN chmod +x /app/opcua_ijt_demo_application &&     mkdir -p /app/pki &&     chown -R opcua:opcua /app
+2026-11-26T10:28:26.1506381Z #17 DONE 0.1s
+2026-11-26T10:28:26.3796581Z 
+2026-11-26T10:28:26.3803593Z #18 [stage-1 6/6] RUN printf '%s\n'     '#!/bin/bash'     'set -euo pipefail'     ''     '# Resolve OPCUA_HOSTNAME: explicit env > default route egress > local interface IP > localhost'     'if [ -z "${OPCUA_HOSTNAME:-}" ]; then'     '  if command -v ip >/dev/null 2>&1; then'     '    OPCUA_HOSTNAME=$(ip route get 1.0.0.0 2>/dev/null | awk "{for(i=1;i<=NF;i++) if(\$i==\"src\") print \$(i+1); exit}") || true'     '  fi'     '  if [ -z "$OPCUA_HOSTNAME" ]; then'     '    OPCUA_HOSTNAME=$(hostname -I 2>/dev/null | awk "{print \$1}") || true'     '  fi'     '  OPCUA_HOSTNAME="${OPCUA_HOSTNAME:-localhost}"'     'fi'     'export OPCUA_HOSTNAME'     ''     '# Resolve OPCUA_SERVER_PORT: override serverEndpointTCPPort in server_configuration.json'     'OPCUA_SERVER_PORT="${OPCUA_SERVER_PORT:-40451}"'     'export OPCUA_SERVER_PORT'     'if [ -f server_configuration.json ]; then'     '  sed -i "s/\"serverEndpointTCPPort\": [0-9]*/\"serverEndpointTCPPort\": ${OPCUA_SERVER_PORT}/" server_configuration.json'     'fi'     ''     'echo "[INFO] OPC UA IJT Server Simulator"'     'echo "[INFO] Endpoint : opc.tcp://${OPCUA_HOSTNAME}:${OPCUA_SERVER_PORT}"'     ''     '[ -f opcua_ijt_demo_application ] || { echo "[ERROR] Binary not found in $(pwd)" >&2; exit 1; }'     ''     'exec ./opcua_ijt_demo_application'     > /entrypoint.sh && chmod +x /entrypoint.sh
+2026-11-26T10:28:26.3810560Z #18 DONE 0.1s
+2026-11-26T10:28:26.3810757Z 
+2026-11-26T10:28:26.3810921Z #19 exporting to oci image format
+2026-11-26T10:28:26.3811322Z #19 exporting layers
+2026-11-26T10:28:28.5993518Z #19 exporting layers 2.4s done
+2026-11-26T10:28:28.7563899Z #19 exporting manifest sha256:0044b0b344f1d0fea9eb23cdd2af1b500894f8aee7ed22a5958a48bebce7189c done
+2026-11-26T10:28:28.7570200Z #19 exporting config sha256:84152708d23b4605425562bab04061336e918b425f7c422bc5244c88bc3fe10d done
+2026-11-26T10:28:28.7571389Z #19 sending tarball
+2026-11-26T10:28:30.7616092Z #19 sending tarball 2.0s done
+2026-11-26T10:28:30.7616878Z #19 DONE 4.4s
+2026-11-26T10:28:30.7617347Z 
+2026-11-26T10:28:30.7617595Z #20 importing to docker
+2026-11-26T10:28:30.7617980Z #20 DONE 0.0s
+2026-11-26T10:28:30.7618173Z 
+2026-11-26T10:28:30.7618348Z #21 exporting to GitHub Actions Cache
+2026-11-26T10:28:30.7618805Z #21 preparing build cache for export
+2026-11-26T10:28:33.0040737Z #21 preparing build cache for export 2.4s done
+2026-11-26T10:28:33.0041131Z #21 sending cache export
+2026-11-26T10:28:33.1993634Z #21 writing layer sha256:0c919a61220dd29320e19c7b475a57d1ae77861cf132ea74346c092312b0678d
+2026-11-26T10:28:33.2534362Z #21 writing layer sha256:0c919a61220dd29320e19c7b475a57d1ae77861cf132ea74346c092312b0678d 0.2s done
+2026-11-26T10:28:33.4055491Z #21 writing layer sha256:1f88d1e48c2535699c3bcad3e47d51e1ff3f75a27f89b65ed5ea01d8442d9aad 0.1s done
+2026-11-26T10:28:33.5792384Z #21 writing layer sha256:4739c00d7ae7b07ab8e09367e55c2aa63ed34c7012ff7278f54897e08753ea91
+2026-11-26T10:28:34.4807051Z #21 writing layer sha256:4739c00d7ae7b07ab8e09367e55c2aa63ed34c7012ff7278f54897e08753ea91 1.1s done
+2026-11-26T10:28:34.6428560Z #21 writing layer sha256:4cc635267f9c53733b8d5a56858b6e2c517b217f5ed40b36acbf98ea1b9c8003 0.1s done
+2026-11-26T10:28:34.8473429Z #21 writing layer sha256:58c3ae5cac93fce4764917a2e81e4be9aa006407e4a4d329f7a9b65ec22cef46 0.1s done
+2026-11-26T10:28:35.0167411Z #21 writing layer sha256:96606613c7d0df1aac1569bd86387e94e4fe9babbd0365eb66c744ac38b42d62
+2026-11-26T10:28:36.0874472Z #21 writing layer sha256:96606613c7d0df1aac1569bd86387e94e4fe9babbd0365eb66c744ac38b42d62 1.2s done
+2026-11-26T10:28:36.2863731Z #21 writing layer sha256:a8e0b984fa2eae3f65457d479bdadf94fad75884536884f2338d536bf9281b33
+2026-11-26T10:28:37.4027252Z #21 writing layer sha256:a8e0b984fa2eae3f65457d479bdadf94fad75884536884f2338d536bf9281b33 1.3s done
+2026-11-26T10:28:37.5864012Z #21 sending cache export 4.6s done
+2026-11-26T10:28:37.5864821Z #21 DONE 7.0s
+2026-11-26T10:28:37.6133198Z 
+2026-11-26T10:28:37.6133784Z #22 resolving provenance for metadata file
+2026-11-26T10:28:37.6134122Z #22 DONE 0.0s
+2026-11-26T10:28:37.6273351Z ##[group]ImageID
+2026-11-26T10:28:37.6274065Z sha256:0044b0b344f1d0fea9eb23cdd2af1b500894f8aee7ed22a5958a48bebce7189c
+2026-11-26T10:28:37.6274935Z ##[endgroup]
+2026-11-26T10:28:37.6275585Z ##[group]Digest
+2026-11-26T10:28:37.6276206Z sha256:0044b0b344f1d0fea9eb23cdd2af1b500894f8aee7ed22a5958a48bebce7189c
+2026-11-26T10:28:37.6277113Z ##[endgroup]
+2026-11-26T10:28:37.6277733Z ##[group]Metadata
+2026-11-26T10:28:37.6285570Z ::stop-commands::***
+2026-11-26T10:28:37.6286093Z {
+2026-11-26T10:28:37.6287541Z   "buildx.build.provenance": {
+2026-11-26T10:28:37.6287912Z     "builder": {
+2026-11-26T10:28:37.6288124Z       "id": ""
+2026-11-26T10:28:37.6288318Z     },
+2026-11-26T10:28:37.6288655Z     "buildType": "https://mobyproject.org/buildkit@v1",
+2026-11-26T10:28:37.6288995Z     "materials": [
+2026-11-26T10:28:37.6289200Z       {
+2026-11-26T10:28:37.6289762Z         "uri": "pkg:docker/busybox@stable-musl?digest=sha256:3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213&platform=linux%2Famd64",
+2026-11-26T10:28:37.6290384Z         "digest": {
+2026-11-26T10:28:37.6290723Z           "sha256": "3c6ae8008e2c2eedd141725c30b20d9c36b026eb796688f88205845ef17aa213"
+2026-11-26T10:28:37.6291110Z         }
+2026-11-26T10:28:37.6291509Z       },
+2026-11-26T10:28:37.6291958Z       {
+2026-11-26T10:28:37.6293273Z         "uri": "pkg:docker/ubuntu@26.04?digest=sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db&platform=linux%2Famd64",
+2026-11-26T10:28:37.6294120Z         "digest": {
+2026-11-26T10:28:37.6294835Z           "sha256": "d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db"
+2026-11-26T10:28:37.6295456Z         }
+2026-11-26T10:28:37.6295834Z       }
+2026-11-26T10:28:37.6296278Z     ],
+2026-11-26T10:28:37.6296705Z     "invocation": {
+2026-11-26T10:28:37.6297120Z       "configSource": {
+2026-11-26T10:28:37.6297539Z         "entryPoint": "Dockerfile"
+2026-11-26T10:28:37.6297942Z       },
+2026-11-26T10:28:37.6298250Z       "parameters": {
+2026-11-26T10:28:37.6298623Z         "frontend": "dockerfile.v0",
+2026-11-26T10:28:37.6299035Z         "locals": [
+2026-11-26T10:28:37.6299237Z           {
+2026-11-26T10:28:37.6299429Z             "name": "context"
+2026-11-26T10:28:37.6299651Z           },
+2026-11-26T10:28:37.6299873Z           {
+2026-11-26T10:28:37.6300083Z             "name": "dockerfile"
+2026-11-26T10:28:37.6300313Z           }
+2026-11-26T10:28:37.6300518Z         ],
+2026-11-26T10:28:37.6300697Z         "root": {
+2026-11-26T10:28:37.6300923Z           "configSource": {
+2026-11-26T10:28:37.6301190Z             "path": "Dockerfile"
+2026-11-26T10:28:37.6301447Z           },
+2026-11-26T10:28:37.6301638Z           "request": {
+2026-11-26T10:28:37.6301867Z             "args": {
+2026-11-26T10:28:37.6302160Z               "vcs:localdir:context": "OPC_UA_Servers/Release2",
+2026-11-26T10:28:37.6302579Z               "vcs:localdir:dockerfile": "OPC_UA_Servers/Release2",
+2026-11-26T10:28:37.6303412Z               "vcs:revision": "b7b4a6b2476a7718dcb4e7adfa2d3b72c1ffb2a9",
+2026-11-26T10:28:37.6303940Z               "vcs:source": "https://github.com/umati/UA-for-Industrial-Joining-Technologies"
+2026-11-26T10:28:37.6304384Z             }
+2026-11-26T10:28:37.6304576Z           }
+2026-11-26T10:28:37.6304782Z         },
+2026-11-26T10:28:37.6305278Z         "compatibilityVersion": 30
+2026-11-26T10:28:37.6305557Z       },
+2026-11-26T10:28:37.6305745Z       "environment": {
+2026-11-26T10:28:37.6305997Z         "dockerfileVersion": "1.29.0",
+2026-11-26T10:28:37.6306278Z         "github_actor": "mohitkumaragarwal",
+2026-11-26T10:28:37.6306762Z         "github_actor_id": "56719162",
+2026-11-26T10:28:37.6307066Z         "github_event_name": "schedule",
+2026-11-26T10:28:37.6307337Z         "github_event_payload": {
+2026-11-26T10:28:37.6307583Z           "organization": {
+2026-11-26T10:28:37.6307931Z             "avatar_url": "https://avatars.githubusercontent.com/u/64034877?v=4",
+2026-11-26T10:28:37.6308745Z             "description": "The global initiative for open communication interfaces for the machine building industries and their customers, operated by VDW and VDMA.",
+2026-11-26T10:28:37.6309488Z             "events_url": "https://api.github.com/orgs/umati/events",
+2026-11-26T10:28:37.6309884Z             "hooks_url": "https://api.github.com/orgs/umati/hooks",
+2026-11-26T10:28:37.6310212Z             "id": 64034877,
+2026-11-26T10:28:37.6310501Z             "issues_url": "https://api.github.com/orgs/umati/issues",
+2026-11-26T10:28:37.6310835Z             "login": "umati",
+2026-11-26T10:28:37.6311171Z             "members_url": "https://api.github.com/orgs/umati/members{/member}",
+2026-11-26T10:28:37.6311621Z             "node_id": "MDEyOk9yZ2FuaXphdGlvbjY0MDM0ODc3",
+2026-11-26T10:28:37.6312102Z             "public_members_url": "https://api.github.com/orgs/umati/public_members{/member}",
+2026-11-26T10:28:37.6312837Z             "repos_url": "https://api.github.com/orgs/umati/repos",
+2026-11-26T10:28:37.6313303Z             "url": "https://api.github.com/orgs/umati"
+2026-11-26T10:28:37.6313627Z           },
+2026-11-26T10:28:37.6313844Z           "repository": {
+2026-11-26T10:28:37.6314101Z             "allow_forking": true,
+2026-11-26T10:28:37.6314651Z             "archive_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/{archive_format}{/ref}",
+2026-11-26T10:28:37.6315249Z             "archived": false,
+2026-11-26T10:28:37.6315788Z             "assignees_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/assignees{/user}",
+2026-11-26T10:28:37.6316613Z             "blobs_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/git/blobs{/sha}",
+2026-11-26T10:28:37.6317412Z             "branches_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/branches{/branch}",
+2026-11-26T10:28:37.6318138Z             "clone_url": "https://github.com/umati/UA-for-Industrial-Joining-Technologies.git",
+2026-11-26T10:28:37.6318929Z             "collaborators_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/collaborators{/collaborator}",
+2026-11-26T10:28:37.6319812Z             "comments_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/comments{/number}",
+2026-11-26T10:28:37.6320614Z             "commits_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/commits{/sha}",
+2026-11-26T10:28:37.6321451Z             "compare_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/compare/{base}...{head}",
+2026-11-26T10:28:37.6322292Z             "contents_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/contents/{+path}",
+2026-11-26T10:28:37.6323636Z             "contributors_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/contributors",
+2026-11-26T10:28:37.6324641Z             "created_at": "2022-11-09T21:41:49Z",
+2026-11-26T10:28:37.6324993Z             "custom_properties": {},
+2026-11-26T10:28:37.6325303Z             "default_branch": "main",
+2026-11-26T10:28:37.6325869Z             "deployments_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/deployments",
+2026-11-26T10:28:37.6326975Z             "description": "The purpose of the IJT group is to define data models and data access standards for various joining techniques such as Tightening, Gluing, Riveting, Flow Drill Fastening, etc.",
+2026-11-26T10:28:37.6328009Z             "disabled": false,
+2026-11-26T10:28:37.6328679Z             "downloads_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/downloads",
+2026-11-26T10:28:37.6329450Z             "events_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/events",
+2026-11-26T10:28:37.6329951Z             "fork": false,
+2026-11-26T10:28:37.6330198Z             "forks": 3,
+2026-11-26T10:28:37.6330417Z             "forks_count": 3,
+2026-11-26T10:28:37.6330887Z             "forks_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/forks",
+2026-11-26T10:28:37.6331502Z             "full_name": "umati/UA-for-Industrial-Joining-Technologies",
+2026-11-26T10:28:37.6332196Z             "git_commits_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/git/commits{/sha}",
+2026-11-26T10:28:37.6333225Z             "git_refs_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/git/refs{/sha}",
+2026-11-26T10:28:37.6334017Z             "git_tags_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/git/tags{/sha}",
+2026-11-26T10:28:37.6334695Z             "git_url": "git://github.com/umati/UA-for-Industrial-Joining-Technologies.git",
+2026-11-26T10:28:37.6335146Z             "has_discussions": true,
+2026-11-26T10:28:37.6335435Z             "has_downloads": false,
+2026-11-26T10:28:37.6335713Z             "has_issues": true,
+2026-11-26T10:28:37.6335962Z             "has_pages": true,
+2026-11-26T10:28:37.6336237Z             "has_projects": true,
+2026-11-26T10:28:37.6336499Z             "has_pull_requests": true,
+2026-11-26T10:28:37.6336784Z             "has_wiki": true,
+2026-11-26T10:28:37.6337041Z             "homepage": null,
+2026-11-26T10:28:37.6337519Z             "hooks_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/hooks",
+2026-11-26T10:28:37.6338170Z             "html_url": "https://github.com/umati/UA-for-Industrial-Joining-Technologies",
+2026-11-26T10:28:37.6338607Z             "id": 564042082,
+2026-11-26T10:28:37.6338866Z             "is_template": false,
+2026-11-26T10:28:37.6339464Z             "issue_comment_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/issues/comments{/number}",
+2026-11-26T10:28:37.6340374Z             "issue_events_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/issues/events{/number}",
+2026-11-26T10:28:37.6341208Z             "issues_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/issues{/number}",
+2026-11-26T10:28:37.6341976Z             "keys_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/keys{/key_id}",
+2026-11-26T10:28:37.6342925Z             "labels_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/labels{/name}",
+2026-11-26T10:28:37.6343588Z             "language": "Python",
+2026-11-26T10:28:37.6344111Z             "languages_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/languages",
+2026-11-26T10:28:37.6344657Z             "license": {
+2026-11-26T10:28:37.6344884Z               "key": "other",
+2026-11-26T10:28:37.6345137Z               "name": "Other",
+2026-11-26T10:28:37.6345384Z               "node_id": "MDc6TGljZW5zZTA=",
+2026-11-26T10:28:37.6345689Z               "spdx_id": "NOASSERTION",
+2026-11-26T10:28:37.6345969Z               "url": null
+2026-11-26T10:28:37.6346187Z             },
+2026-11-26T10:28:37.6346644Z             "merges_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/merges",
+2026-11-26T10:28:37.6347447Z             "milestones_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/milestones{/number}",
+2026-11-26T10:28:37.6348016Z             "mirror_url": null,
+2026-11-26T10:28:37.6348508Z             "name": "UA-for-Industrial-Joining-Technologies",
+2026-11-26T10:28:37.6348868Z             "node_id": "R_kgDOIZ6ZYg",
+2026-11-26T10:28:37.6349668Z             "notifications_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/notifications{?since,all,participating}",
+2026-11-26T10:28:37.6350351Z             "open_issues": 4,
+2026-11-26T10:28:37.6350619Z             "open_issues_count": 4,
+2026-11-26T10:28:37.6350863Z             "owner": {
+2026-11-26T10:28:37.6351219Z               "avatar_url": "https://avatars.githubusercontent.com/u/64034877?v=4",
+2026-11-26T10:28:37.6351762Z               "events_url": "https://api.github.com/users/umati/events{/privacy}",
+2026-11-26T10:28:37.6352254Z               "followers_url": "https://api.github.com/users/umati/followers",
+2026-11-26T10:28:37.6353020Z               "following_url": "https://api.github.com/users/umati/following{/other_user}",
+2026-11-26T10:28:37.6353551Z               "gists_url": "https://api.github.com/users/umati/gists{/gist_id}",
+2026-11-26T10:28:37.6353943Z               "gravatar_id": "",
+2026-11-26T10:28:37.6354248Z               "html_url": "https://github.com/umati",
+2026-11-26T10:28:37.6354549Z               "id": 64034877,
+2026-11-26T10:28:37.6354807Z               "login": "umati",
+2026-11-26T10:28:37.6355125Z               "node_id": "MDEyOk9yZ2FuaXphdGlvbjY0MDM0ODc3",
+2026-11-26T10:28:37.6355620Z               "organizations_url": "https://api.github.com/users/umati/orgs",
+2026-11-26T10:28:37.6356135Z               "received_events_url": "https://api.github.com/users/umati/received_events",
+2026-11-26T10:28:37.6356602Z               "repos_url": "https://api.github.com/users/umati/repos",
+2026-11-26T10:28:37.6356948Z               "site_admin": false,
+2026-11-26T10:28:37.6357313Z               "starred_url": "https://api.github.com/users/umati/starred{/owner}{/repo}",
+2026-11-26T10:28:37.6357819Z               "subscriptions_url": "https://api.github.com/users/umati/subscriptions",
+2026-11-26T10:28:37.6358224Z               "type": "Organization",
+2026-11-26T10:28:37.6358548Z               "url": "https://api.github.com/users/umati",
+2026-11-26T10:28:37.6358870Z               "user_view_type": "public"
+2026-11-26T10:28:37.6359145Z             },
+2026-11-26T10:28:37.6359346Z             "private": false,
+2026-11-26T10:28:37.6359606Z             "pull_request_creation_policy": "all",
+2026-11-26T10:28:37.6360123Z             "pulls_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/pulls{/number}",
+2026-11-26T10:28:37.6360667Z             "pushed_at": "2026-11-25T22:30:16Z",
+2026-11-26T10:28:37.6361183Z             "releases_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/releases{/id}",
+2026-11-26T10:28:37.6361873Z             "size": 840119,
+2026-11-26T10:28:37.6362541Z             "ssh_url": "git@github.com:umati/UA-for-Industrial-Joining-Technologies.git",
+2026-11-26T10:28:37.6363247Z             "stargazers_count": 7,
+2026-11-26T10:28:37.6364098Z             "stargazers_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/stargazers",
+2026-11-26T10:28:37.6365552Z             "statuses_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/statuses/{sha}",
+2026-11-26T10:28:37.6366835Z             "subscribers_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/subscribers",
+2026-11-26T10:28:37.6368122Z             "subscription_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/subscription",
+2026-11-26T10:28:37.6369217Z             "svn_url": "https://github.com/umati/UA-for-Industrial-Joining-Technologies",
+2026-11-26T10:28:37.6370212Z             "tags_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/tags",
+2026-11-26T10:28:37.6371328Z             "teams_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/teams",
+2026-11-26T10:28:37.6372111Z             "topics": [],
+2026-11-26T10:28:37.6373284Z             "trees_url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies/git/trees{/sha}",
+2026-11-26T10:28:37.6374145Z             "updated_at": "2026-11-11T14:31:56Z",
+2026-11-26T10:28:37.6375037Z             "url": "https://api.github.com/repos/umati/UA-for-Industrial-Joining-Technologies",
+2026-11-26T10:28:37.6375770Z             "visibility": "public",
+2026-11-26T10:28:37.6376180Z             "watchers": 7,
+2026-11-26T10:28:37.6376542Z             "watchers_count": 7,
+2026-11-26T10:28:37.6376949Z             "web_commit_signoff_required": false
+2026-11-26T10:28:37.6377376Z           },
+2026-11-26T10:28:37.6377674Z           "schedule": "0 2 * * *",
+2026-11-26T10:28:37.6378111Z           "workflow": ".github/workflows/integration.yml"
+2026-11-26T10:28:37.6378584Z         },
+2026-11-26T10:28:37.6378912Z         "github_job": "server-smoke-docker",
+2026-11-26T10:28:37.6379365Z         "github_ref": "refs/heads/main",
+2026-11-26T10:28:37.6379814Z         "github_ref_name": "main",
+2026-11-26T10:28:37.6380228Z         "github_ref_protected": "true",
+2026-11-26T10:28:37.6380668Z         "github_ref_type": "branch",
+2026-11-26T10:28:37.6381279Z         "github_repository": "umati/UA-for-Industrial-Joining-Technologies",
+2026-11-26T10:28:37.6381968Z         "github_repository_id": "564042082",
+2026-11-26T10:28:37.6382400Z         "github_repository_owner": "umati",
+2026-11-26T10:28:37.6383154Z         "github_repository_owner_id": "64034877",
+2026-11-26T10:28:37.6383638Z         "github_run_attempt": "1",
+2026-11-26T10:28:37.6384039Z         "github_run_id": "45801602341",
+2026-11-26T10:28:37.6384451Z         "github_run_number": "1150",
+2026-11-26T10:28:37.6384867Z         "github_runner_arch": "X64",
+2026-11-26T10:28:37.6385328Z         "github_runner_environment": "github-hosted",
+2026-11-26T10:28:37.6385819Z         "github_runner_image_os": "ubuntu26",
+2026-11-26T10:28:37.6386307Z         "github_runner_image_version": "20261116.202.1",
+2026-11-26T10:28:37.6386833Z         "github_runner_name": "GitHub Actions 1000124082",
+2026-11-26T10:28:37.6387343Z         "github_runner_os": "Linux",
+2026-11-26T10:28:37.6388003Z         "github_runner_tracking_id": "github_9ef13eba-dea7-42f2-b6dd-c9a654e0971e",
+2026-11-26T10:28:37.6388585Z         "github_server_url": "https://github.com",
+2026-11-26T10:28:37.6388927Z         "github_triggering_actor": "mohitkumaragarwal",
+2026-11-26T10:28:37.6389655Z         "github_workflow": "System Tests — Live OPC UA, Browser, Docker, Specification Testing",
+2026-11-26T10:28:37.6390398Z         "github_workflow_ref": "umati/UA-for-Industrial-Joining-Technologies/.github/workflows/integration.yml@refs/heads/main",
+2026-11-26T10:28:37.6391065Z         "github_workflow_sha": "b7b4a6b2476a7718dcb4e7adfa2d3b72c1ffb2a9",
+2026-11-26T10:28:37.6391439Z         "platform": "linux/amd64"
+2026-11-26T10:28:37.6391682Z       }
+2026-11-26T10:28:37.6391860Z     }
+2026-11-26T10:28:37.6392038Z   },
+2026-11-26T10:28:37.6392585Z   "buildx.build.ref": "builder-90bf0373-c2e5-4540-90f1-36131fc49d7c/builder-90bf0373-c2e5-4540-90f1-36131fc49d7c0/a67a2rf46cp6dduaror4o1gqh",
+2026-11-26T10:28:37.6394026Z   "containerimage.descriptor": {
+2026-11-26T10:28:37.6394583Z     "mediaType": "application/vnd.oci.image.manifest.v1+json",
+2026-11-26T10:28:37.6395377Z     "digest": "sha256:0044b0b344f1d0fea9eb23cdd2af1b500894f8aee7ed22a5958a48bebce7189c",
+2026-11-26T10:28:37.6396047Z     "size": 1615,
+2026-11-26T10:28:37.6396365Z     "annotations": {
+2026-11-26T10:28:37.6396833Z       "org.opencontainers.image.created": "2026-11-26T10:28:28Z"
+2026-11-26T10:28:37.6397448Z     },
+2026-11-26T10:28:37.6397735Z     "platform": {
+2026-11-26T10:28:37.6398076Z       "architecture": "amd64",
+2026-11-26T10:28:37.6398445Z       "os": "linux"
+2026-11-26T10:28:37.6398771Z     }
+2026-11-26T10:28:37.6399053Z   },
+2026-11-26T10:28:37.6399738Z   "containerimage.digest": "sha256:0044b0b344f1d0fea9eb23cdd2af1b500894f8aee7ed22a5958a48bebce7189c",
+2026-11-26T10:28:37.6400661Z   "image.name": "docker.io/library/opcua-ijt-server:ci"
+2026-11-26T10:28:37.6401420Z }
+2026-11-26T10:28:37.6402157Z ::***::
+2026-11-26T10:28:37.6402889Z ##[endgroup]
+2026-11-26T10:28:37.6403472Z ##[group]Reference
+2026-11-26T10:28:37.6404470Z builder-90bf0373-c2e5-4540-90f1-36131fc49d7c/builder-90bf0373-c2e5-4540-90f1-36131fc49d7c0/a67a2rf46cp6dduaror4o1gqh
+2026-11-26T10:28:37.6405617Z ##[endgroup]
+2026-11-26T10:28:37.6406183Z ##[group]Check build summary support
+2026-11-26T10:28:37.6406612Z Build summary disabled
+2026-11-26T10:28:37.6407175Z ##[endgroup]
+2026-11-26T10:28:37.6469971Z ##[group]Run docker run -d --name opcua-server \
+2026-11-26T10:28:37.6470362Z docker run -d --name opcua-server \
+2026-11-26T10:28:37.6470684Z   -p 40451:40451 opcua-ijt-server:ci
+2026-11-26T10:28:37.6470996Z echo "Container started"
+2026-11-26T10:28:37.6503588Z shell: /usr/bin/bash -e {0}
+2026-11-26T10:28:37.6503845Z env:
+2026-11-26T10:28:37.6504063Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:37.6504361Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:37.6504590Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:37.6504843Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:37.6505108Z ##[endgroup]
+2026-11-26T10:28:37.8865262Z 0091343767a4e620f1c6a945aab5c47b4a2b556027e18f808a2cced07ee9ef61
+2026-11-26T10:28:38.0430446Z Container started
+2026-11-26T10:28:38.0476089Z ##[group]Run # First wait up to 60s for the TCP port to open (binary boot).
+2026-11-26T10:28:38.0476967Z # First wait up to 60s for the TCP port to open (binary boot).
+2026-11-26T10:28:38.0477565Z for i in $(seq 1 12); do
+2026-11-26T10:28:38.0478045Z   if nc -z localhost 40451 2>/dev/null; then
+2026-11-26T10:28:38.0478594Z     echo "Port 40451 open after $((i * 5)) s"
+2026-11-26T10:28:38.0479069Z     break
+2026-11-26T10:28:38.0479402Z   fi
+2026-11-26T10:28:38.0479758Z   echo "Waiting... attempt $i/12"
+2026-11-26T10:28:38.0480210Z   sleep 5
+2026-11-26T10:28:38.0480577Z   if [ "$i" -eq 12 ]; then
+2026-11-26T10:28:38.0481133Z     echo "ERROR: TCP-port timeout — dumping container logs:"
+2026-11-26T10:28:38.0481766Z     docker logs opcua-server --tail 60
+2026-11-26T10:28:38.0482244Z     exit 1
+2026-11-26T10:28:38.0482581Z   fi
+2026-11-26T10:28:38.0483128Z done
+2026-11-26T10:28:38.0483620Z # Then assert real OPC UA HELLO readiness via the shared probe so
+2026-11-26T10:28:38.0484383Z # the smoke job benefits from the same readiness contract as the
+2026-11-26T10:28:38.0485017Z # compose-driven live-test jobs.
+2026-11-26T10:28:38.0485469Z python - <<'PY'
+2026-11-26T10:28:38.0485839Z import sys
+2026-11-26T10:28:38.0486225Z sys.path.insert(0, "scripts")
+2026-11-26T10:28:38.0486773Z from ijt_live_readiness import wait_for_opcua_hello
+2026-11-26T10:28:38.0487470Z result = wait_for_opcua_hello("localhost", 40451, timeout=30.0)
+2026-11-26T10:28:38.0488087Z if not result.ok:
+2026-11-26T10:28:38.0488616Z     print(f"ERROR: OPC UA HELLO probe failed: {result.error}")
+2026-11-26T10:28:38.0489207Z     sys.exit(1)
+2026-11-26T10:28:38.0489854Z print(f"OPC UA HELLO ack in {result.elapsed_seconds}s (attempts={result.attempts})")
+2026-11-26T10:28:38.0490568Z PY
+2026-11-26T10:28:38.0533478Z shell: /usr/bin/bash -e {0}
+2026-11-26T10:28:38.0533877Z env:
+2026-11-26T10:28:38.0534224Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:38.0534691Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:38.0535073Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:38.0535490Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:38.0535908Z ##[endgroup]
+2026-11-26T10:28:38.0677498Z Port 40451 open after 5 s
+2026-11-26T10:28:39.1396697Z OPC UA HELLO ack in 1.013s (attempts=2)
+2026-11-26T10:28:39.1544223Z ##[group]Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+2026-11-26T10:28:39.1544833Z with:
+2026-11-26T10:28:39.1545058Z   python-version-file: .python-version
+2026-11-26T10:28:39.1545339Z   check-latest: false
+2026-11-26T10:28:39.1547998Z   token: ***
+2026-11-26T10:28:39.1548329Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-11-26T10:28:39.1548726Z   update-environment: true
+2026-11-26T10:28:39.1548976Z   allow-prereleases: false
+2026-11-26T10:28:39.1549219Z   freethreaded: false
+2026-11-26T10:28:39.1549433Z env:
+2026-11-26T10:28:39.1549645Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:39.1549924Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:39.1550148Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:39.1550400Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:39.1550654Z ##[endgroup]
+2026-11-26T10:28:39.2705828Z Resolved .python-version as 3.14
+2026-11-26T10:28:39.2707225Z ##[group]Installed versions
+2026-11-26T10:28:39.2815376Z Successfully set up CPython (3.14.10)
+2026-11-26T10:28:39.2815980Z ##[endgroup]
+2026-11-26T10:28:39.2935526Z ##[group]Run python -m pip install --upgrade pip
+2026-11-26T10:28:39.2936045Z python -m pip install --upgrade pip
+2026-11-26T10:28:39.2936594Z pip install -r OPC_UA_Servers/Release2/tests/requirements.txt
+2026-11-26T10:28:39.2984835Z shell: /usr/bin/bash -e {0}
+2026-11-26T10:28:39.2985361Z env:
+2026-11-26T10:28:39.2985686Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:39.2986064Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:39.2986463Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:39.2986821Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:39.2987412Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:39.2988326Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-26T10:28:39.2989498Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:39.2990289Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:39.2991112Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:39.2991672Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-26T10:28:39.2992174Z ##[endgroup]
+2026-11-26T10:28:41.3639582Z Requirement already satisfied: pip in /opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/site-packages (26.3)
+2026-11-26T10:28:41.9911168Z Collecting asyncua==2.1.0 (from -r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-26T10:28:42.0187748Z   Downloading asyncua-2.1.0-py3-none-any.whl.metadata (9.5 kB)
+2026-11-26T10:28:42.1941487Z Collecting cryptography>=50.0.0 (from -r OPC_UA_Servers/Release2/tests/requirements.txt (line 4))
+2026-11-26T10:28:42.1971505Z   Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.4 kB)
+2026-11-26T10:28:42.2109511Z Collecting pyOpenSSL>=26.4.0 (from -r OPC_UA_Servers/Release2/tests/requirements.txt (line 5))
+2026-11-26T10:28:42.2137006Z   Downloading pyopenssl-26.4.0-py3-none-any.whl.metadata (22 kB)
+2026-11-26T10:28:42.2288077Z Collecting idna>=3.15 (from -r OPC_UA_Servers/Release2/tests/requirements.txt (line 6))
+2026-11-26T10:28:42.2317107Z   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+2026-11-26T10:28:42.2434708Z Collecting aiosqlite (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-26T10:28:42.2460977Z   Downloading aiosqlite-0.22.1-py3-none-any.whl.metadata (4.3 kB)
+2026-11-26T10:28:42.2638300Z Collecting anyio (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-26T10:28:42.2668795Z   Downloading anyio-4.16.0-py3-none-any.whl.metadata (4.7 kB)
+2026-11-26T10:28:42.2811415Z Collecting python-dateutil (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-26T10:28:42.2838327Z   Downloading python_dateutil-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+2026-11-26T10:28:42.3173305Z Collecting pytz (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-26T10:28:42.3201239Z   Downloading pytz-2026.6-py2.py3-none-any.whl.metadata (22 kB)
+2026-11-26T10:28:42.3339652Z Collecting sortedcontainers (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-26T10:28:42.3368007Z   Downloading sortedcontainers-2.4.0-py2.py3-none-any.whl.metadata (10 kB)
+2026-11-26T10:28:42.3528734Z Collecting typing-extensions (from asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-26T10:28:42.3557369Z   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+2026-11-26T10:28:42.4494309Z Collecting cffi>=2.0.0 (from cryptography>=50.0.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 4))
+2026-11-26T10:28:42.4525946Z   Downloading cffi-2.1.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+2026-11-26T10:28:42.4674824Z Collecting pycparser (from cffi>=2.0.0->cryptography>=50.0.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 4))
+2026-11-26T10:28:42.4701685Z   Downloading pycparser-3.12-py3-none-any.whl.metadata (9.7 kB)
+2026-11-26T10:28:42.4863935Z Collecting tzdata (from python-dateutil->asyncua==2.1.0->-r OPC_UA_Servers/Release2/tests/requirements.txt (line 3))
+2026-11-26T10:28:42.4891616Z   Downloading tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
+2026-11-26T10:28:42.4971607Z Downloading asyncua-2.1.0-py3-none-any.whl (890 kB)
+2026-11-26T10:28:42.5062126Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 890.6/890.6 kB 144.8 MB/s  0:00:00
+2026-11-26T10:28:42.5092833Z Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl (4.8 MB)
+2026-11-26T10:28:42.5229968Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.8/4.8 MB 379.6 MB/s  0:00:00
+2026-11-26T10:28:42.5260384Z Downloading pyopenssl-26.4.0-py3-none-any.whl (56 kB)
+2026-11-26T10:28:42.5307832Z Downloading idna-3.20-py3-none-any.whl (69 kB)
+2026-11-26T10:28:42.5380189Z Downloading cffi-2.1.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+2026-11-26T10:28:42.5433248Z Downloading aiosqlite-0.22.1-py3-none-any.whl (17 kB)
+2026-11-26T10:28:42.5478018Z Downloading anyio-4.16.0-py3-none-any.whl (134 kB)
+2026-11-26T10:28:42.5527556Z Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+2026-11-26T10:28:42.5574766Z Downloading pycparser-3.12-py3-none-any.whl (62 kB)
+2026-11-26T10:28:42.5620705Z Downloading python_dateutil-4.0.0-py3-none-any.whl (92 kB)
+2026-11-26T10:28:42.5685830Z Downloading pytz-2026.6-py2.py3-none-any.whl (506 kB)
+2026-11-26T10:28:42.5745426Z Downloading sortedcontainers-2.4.0-py2.py3-none-any.whl (29 kB)
+2026-11-26T10:28:42.5798577Z Downloading tzdata-2026.6-py2.py3-none-any.whl (348 kB)
+2026-11-26T10:28:42.6637292Z Installing collected packages: sortedcontainers, pytz, tzdata, typing-extensions, pycparser, idna, aiosqlite, python-dateutil, cffi, anyio, cryptography, pyOpenSSL, asyncua
+2026-11-26T10:28:46.1040892Z 
+2026-11-26T10:28:46.1061525Z Successfully installed aiosqlite-0.22.1 anyio-4.16.0 asyncua-2.1.0 cffi-2.1.1 cryptography-50.0.2 idna-3.20 pyOpenSSL-26.4.0 pycparser-3.12 python-dateutil-4.0.0 pytz-2026.6 sortedcontainers-2.4.0 typing-extensions-4.16.0 tzdata-2026.6
+2026-11-26T10:28:46.1935894Z ##[group]Run mkdir -p test-results
+2026-11-26T10:28:46.1936454Z mkdir -p test-results
+2026-11-26T10:28:46.1937029Z python OPC_UA_Servers/Release2/tests/smoke_test.py \
+2026-11-26T10:28:46.1937662Z   --tcp-timeout 30 \
+2026-11-26T10:28:46.1938150Z   --junitxml test-results/smoke.xml
+2026-11-26T10:28:46.1979766Z shell: /usr/bin/bash -e {0}
+2026-11-26T10:28:46.1980190Z env:
+2026-11-26T10:28:46.1980573Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:46.1981077Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:46.1981492Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:46.1981944Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:46.1982419Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:46.1983195Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-26T10:28:46.1983645Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:46.1984308Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:46.1984700Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:46.1985084Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-26T10:28:46.1985419Z ##[endgroup]
+2026-11-26T10:28:47.1176247Z 
+2026-11-26T10:28:47.1176936Z OPC UA IJT Server — Smoke Tests
+2026-11-26T10:28:47.1177334Z   Endpoint : opc.tcp://localhost:40451
+2026-11-26T10:28:47.1177646Z   Timeout  : 30s
+2026-11-26T10:28:47.1177910Z ------------------------------------------------------------
+2026-11-26T10:28:47.1178277Z   [OK]  TCP port reachable  (port 40451 is open)
+2026-11-26T10:28:47.1178621Z   [OK]  OPC UA session  (OPC UA session established)
+2026-11-26T10:28:47.1179019Z   [OK]  Server CurrentTime  (CurrentTime = 2026-11-26 10:28:47.099202+00:00)
+2026-11-26T10:28:47.1179447Z   [OK]  Namespace array  (9 namespaces, all IJT URIs present)
+2026-11-26T10:28:47.1180064Z   [OK]  TighteningSystem node  (TighteningSystem found (QualifiedName(NamespaceIndex=1, Name='TighteningSystem')))
+2026-11-26T10:28:47.1180659Z   [OK]  Simulations node  (Simulations node has 2 method(s))
+2026-11-26T10:28:47.1181044Z   [OK]  ResultManagement node  (ResultManagement node present)
+2026-11-26T10:28:47.1181428Z   [OK]  AssetManagement node  (AssetManagement node present)
+2026-11-26T10:28:47.1181867Z   [OK]  JoiningProcessManagement node  (JoiningProcessManagement node present)
+2026-11-26T10:28:47.1182330Z   [OK]  JointManagement node  (JointManagement node present)
+2026-11-26T10:28:47.1182914Z ------------------------------------------------------------
+2026-11-26T10:28:47.1183231Z   10/10 passed
+2026-11-26T10:28:47.1183352Z 
+2026-11-26T10:28:47.1760429Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-26T10:28:47.1760861Z with:
+2026-11-26T10:28:47.1761084Z   name: results-server-smoke-docker
+2026-11-26T10:28:47.1761359Z   path: test-results/smoke.xml
+2026-11-26T10:28:47.1761615Z   retention-days: 14
+2026-11-26T10:28:47.1761849Z   if-no-files-found: warn
+2026-11-26T10:28:47.1762082Z   compression-level: 6
+2026-11-26T10:28:47.1762298Z   overwrite: false
+2026-11-26T10:28:47.1762513Z   include-hidden-files: false
+2026-11-26T10:28:47.1763101Z   archive: true
+2026-11-26T10:28:47.1763334Z env:
+2026-11-26T10:28:47.1763546Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:47.1763827Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:47.1764045Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:47.1764292Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:47.1764609Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:47.1765064Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-26T10:28:47.1765505Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:47.1765883Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:47.1766264Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:47.1766654Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-26T10:28:47.1766977Z ##[endgroup]
+2026-11-26T10:28:47.3213053Z With the provided path, there will be 1 file uploaded
+2026-11-26T10:28:47.3219191Z Artifact name is valid!
+2026-11-26T10:28:47.3220137Z Root directory input is valid!
+2026-11-26T10:28:47.5394329Z Uploading artifact: results-server-smoke-docker.zip
+2026-11-26T10:28:47.5435142Z Beginning upload of artifact content to blob storage
+2026-11-26T10:28:47.6209226Z Uploaded bytes 386
+2026-11-26T10:28:47.6358678Z Finished uploading artifact content to blob storage!
+2026-11-26T10:28:47.6360276Z SHA256 digest of uploaded artifact is 2af6b48d84f4f8cdacb5628c2a54c682fb34d068b2025ea234cf8d96a1d3ec00
+2026-11-26T10:28:47.6361269Z Finalizing artifact upload
+2026-11-26T10:28:48.0215391Z Artifact results-server-smoke-docker successfully finalized. Artifact ID 15107496373
+2026-11-26T10:28:48.0216518Z Artifact results-server-smoke-docker has been successfully uploaded! Final size is 386 bytes. Artifact ID is 15107496373
+2026-11-26T10:28:48.0219317Z Artifact download URL: https://github.com/umati/UA-for-Industrial-Joining-Technologies/actions/runs/45801602341/artifacts/15107496373
+2026-11-26T10:28:48.0344547Z ##[group]Run docker logs opcua-server --tail 60 || true
+2026-11-26T10:28:48.0344980Z docker logs opcua-server --tail 60 || true
+2026-11-26T10:28:48.0378081Z shell: /usr/bin/bash -e {0}
+2026-11-26T10:28:48.0378365Z env:
+2026-11-26T10:28:48.0378591Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:48.0378886Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:48.0379129Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:48.0379388Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:48.0379736Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:48.0380189Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-26T10:28:48.0380621Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:48.0381003Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:48.0381409Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:48.0381824Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-26T10:28:48.0382151Z ##[endgroup]
+2026-11-26T10:28:48.0608424Z 2026-11-26 10:28:39.005 - INFO - TCPBinaryMaxMessageChunkSize: 65536
+2026-11-26T10:28:48.0610039Z 2026-11-26 10:28:39.005 - INFO - TCPBinaryMaxChunkCount: 0
+2026-11-26T10:28:48.0611000Z 2026-11-26 10:28:39.005 - INFO - TCPBinaryMaxConnections: 50
+2026-11-26T10:28:48.0611864Z 2026-11-26 10:28:39.006 - INFO - TCPBinaryMaxMessageSize: 4194304
+2026-11-26T10:28:48.0612506Z 2026-11-26 10:28:39.006 - INFO - SecureChannelMinRevisedChannelLifetimeInMs: 3600000
+2026-11-26T10:28:48.0613741Z 2026-11-26 10:28:39.006 - INFO - SecureChannelMaxRevisedChannelLifetimeInMs: 86400000
+2026-11-26T10:28:48.0614579Z 2026-11-26 10:28:39.006 - INFO - SecureChannelMaxChannels: 40
+2026-11-26T10:28:48.0615049Z 2026-11-26 10:28:39.006 - INFO - MinRevisedSessionTimeoutInMs: 60000
+2026-11-26T10:28:48.0615524Z 2026-11-26 10:28:39.006 - INFO - MaxRevisedSessionTimeoutInMs: 600000
+2026-11-26T10:28:48.0615944Z 2026-11-26 10:28:39.006 - INFO - MaxSessions: 20
+2026-11-26T10:28:48.0616325Z 2026-11-26 10:28:39.006 - INFO - MaxSubscriptionsPerSession: 20
+2026-11-26T10:28:48.0616790Z 2026-11-26 10:28:39.006 - INFO - MaxNotificationRetransmissionQueueSize: 1000
+2026-11-26T10:28:48.0617269Z 2026-11-26 10:28:39.006 - INFO - MaxPublishRequestsPerSession: 40
+2026-11-26T10:28:48.0617727Z 2026-11-26 10:28:39.006 - INFO - IsServerObjectOnlyEventNotifierNode: FALSE
+2026-11-26T10:28:48.0618178Z 2026-11-26 10:28:39.006 - INFO - ServerEndpointTCPPort: 40451
+2026-11-26T10:28:48.0618536Z 2026-11-26 10:28:39.006 - INFO - TimeZone ...
+2026-11-26T10:28:48.0618859Z 2026-11-26 10:28:39.006 - INFO - LocalTime - Offset: 0
+2026-11-26T10:28:48.0619269Z 2026-11-26 10:28:39.006 - INFO - LocalTime - DaylightSavingInOffset: FALSE
+2026-11-26T10:28:48.0619698Z 2026-11-26 10:28:39.006 - INFO - BuildInfo ...
+2026-11-26T10:28:48.0620154Z 2026-11-26 10:28:39.006 - INFO - ProductUri: www.atlascopco.com/OPCUA/IJT/Tightening/Server
+2026-11-26T10:28:48.0620681Z 2026-11-26 10:28:39.006 - INFO - ProductName: Tightening System - Simulation
+2026-11-26T10:28:48.0621161Z 2026-11-26 10:28:39.006 - INFO - ManufacturerName: Atlas Copco
+2026-11-26T10:28:48.0621535Z 2026-11-26 10:28:39.006 - INFO - SoftwareVersion: 1.19.0
+2026-11-26T10:28:48.0621871Z 2026-11-26 10:28:39.006 - INFO - BuildNumber: 10
+2026-11-26T10:28:48.0622211Z 2026-11-26 10:28:39.006 - INFO - BuildDate: 134401625180461220
+2026-11-26T10:28:48.0622874Z 2026-11-26 10:28:39.006 - INFO - DiscoveryUrl: opc.tcp://localhost:4840
+2026-11-26T10:28:48.0623331Z 2026-11-26 10:28:39.006 - INFO - PkiDirectoryPath: .
+2026-11-26T10:28:48.0623693Z 2026-11-26 10:28:39.006 - INFO - AutoTrustCertificates: TRUE
+2026-11-26T10:28:48.0624057Z 2026-11-26 10:28:39.006 - INFO - HostName: localhost
+2026-11-26T10:28:48.0624371Z 2026-11-26 10:28:39.006 - INFO - HostNames ...
+2026-11-26T10:28:48.0624950Z 2026-11-26 10:28:39.006 - INFO -   localhost
+2026-11-26T10:28:48.0625258Z 2026-11-26 10:28:39.006 - INFO - IPAddresses ...
+2026-11-26T10:28:48.0625748Z 2026-11-26 10:28:39.006 - INFO -   127.0.0.1
+2026-11-26T10:28:48.0626102Z 2026-11-26 10:28:39.006 - INFO - OPC UA SDK DEBUG LOG IS DISABLED
+2026-11-26T10:28:48.0626524Z 2026-11-26 10:28:39.006 - INFO - **************************************************
+2026-11-26T10:28:48.0627039Z 2026-11-26 10:28:39.006 - INFO - Creating the Nodes for OPC UA Tightening Server Application...
+2026-11-26T10:28:48.0627605Z 2026-11-26 10:28:39.006 - INFO - Initializing Common Asset Nodes with initial asset data...
+2026-11-26T10:28:48.0628143Z 2026-11-26 10:28:39.007 - INFO - Creating Tightening System: TighteningSystem nodes...
+2026-11-26T10:28:48.0628805Z 2026-11-26 10:28:39.007 - INFO - Creating Identification nodes...
+2026-11-26T10:28:48.0629324Z 2026-11-26 10:28:39.007 - INFO - Adding Asset Management...
+2026-11-26T10:28:48.0629738Z 2026-11-26 10:28:39.007 - INFO - Adding Asset Management Folder Nodes...
+2026-11-26T10:28:48.0630192Z 2026-11-26 10:28:39.007 - INFO - Adding Asset Management All Asset Nodes...
+2026-11-26T10:28:48.0630714Z 2026-11-26 10:28:39.007 - INFO - Creating asset nodes and respective properties for each asset...
+2026-11-26T10:28:48.0631296Z 2026-11-26 10:28:39.017 - INFO - Adding references between different asset nodes...
+2026-11-26T10:28:48.0632050Z 2026-11-26 10:28:39.017 - INFO - Completed creation of asset nodes and respective properties for each asset...
+2026-11-26T10:28:48.0633153Z 2026-11-26 10:28:39.017 - INFO - Adding Asset Management Method Nodes...
+2026-11-26T10:28:48.0633833Z 2026-11-26 10:28:39.018 - INFO - Adding Result Management...
+2026-11-26T10:28:48.0634509Z 2026-11-26 10:28:39.018 - INFO - Initialising Result Management Nodes...
+2026-11-26T10:28:48.0634949Z 2026-11-26 10:28:39.018 - INFO - Adding Result Management Nodes...
+2026-11-26T10:28:48.0635369Z 2026-11-26 10:28:39.023 - INFO - Adding Joining Process Management...
+2026-11-26T10:28:48.0635833Z 2026-11-26 10:28:39.023 - INFO - Initialising Joining Process Management Nodes...
+2026-11-26T10:28:48.0636307Z 2026-11-26 10:28:39.023 - INFO - Adding Joining Process Management Nodes...
+2026-11-26T10:28:48.0636730Z 2026-11-26 10:28:39.024 - INFO - Adding Joint Management...
+2026-11-26T10:28:48.0637129Z 2026-11-26 10:28:39.024 - INFO - Initialising Joint Management Nodes...
+2026-11-26T10:28:48.0637538Z 2026-11-26 10:28:39.024 - INFO - Adding Joint Management Nodes...
+2026-11-26T10:28:48.0637964Z 2026-11-26 10:28:39.024 - INFO - GetJoiningProcessList Method Invoked...
+2026-11-26T10:28:48.0638365Z 2026-11-26 10:28:39.024 - INFO - ProductInstanceUri: 
+2026-11-26T10:28:48.0638853Z 2026-11-26 10:28:39.024 - INFO - SimulateJoints: populated 2 joint(s) from JOINING_PROGRAM processes.
+2026-11-26T10:28:48.0639362Z 2026-11-26 10:28:39.024 - INFO - Adding Event Management...
+2026-11-26T10:28:48.0639755Z 2026-11-26 10:28:39.024 - INFO - Initialising Event Management Nodes...
+2026-11-26T10:28:48.0667860Z ##[group]Run docker rm -f opcua-server || true
+2026-11-26T10:28:48.0668262Z docker rm -f opcua-server || true
+2026-11-26T10:28:48.0701028Z shell: /usr/bin/bash -e {0}
+2026-11-26T10:28:48.0701289Z env:
+2026-11-26T10:28:48.0701520Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-11-26T10:28:48.0701811Z   DOCKERHUB_USERNAME: 
+2026-11-26T10:28:48.0702049Z   DOCKER_BUILD_SUMMARY: false
+2026-11-26T10:28:48.0702316Z   DOCKER_BUILD_RECORD_UPLOAD: false
+2026-11-26T10:28:48.0702830Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:48.0703335Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib/pkgconfig
+2026-11-26T10:28:48.0703775Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:48.0704156Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:48.0704548Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.10/x64
+2026-11-26T10:28:48.0704973Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.10/x64/lib
+2026-11-26T10:28:48.0705480Z ##[endgroup]
+2026-11-26T10:28:48.2538957Z opcua-server
+2026-11-26T10:28:48.2641467Z Post job cleanup.
+2026-11-26T10:28:48.3991799Z Post job cleanup.
+2026-11-26T10:28:48.6486670Z ##[group]Removing temp folder /home/runner/work/_temp/docker-actions-toolkit-pXOiwb
+2026-11-26T10:28:48.6493817Z ##[endgroup]
+2026-11-26T10:28:48.6494444Z ##[group]Post cache
+2026-11-26T10:28:48.6495187Z State not set
+2026-11-26T10:28:48.6495818Z ##[endgroup]
+2026-11-26T10:28:48.6676155Z Post job cleanup.
+2026-11-26T10:28:48.8676032Z ##[group]Removing builder
+2026-11-26T10:28:49.0040159Z [command]/usr/bin/docker buildx rm builder-90bf0373-c2e5-4540-90f1-36131fc49d7c
+2026-11-26T10:28:49.5670395Z builder-90bf0373-c2e5-4540-90f1-36131fc49d7c removed
+2026-11-26T10:28:49.5717466Z ##[endgroup]
+2026-11-26T10:28:49.5718771Z ##[group]Cleaning up certificates
+2026-11-26T10:28:49.5720843Z ##[endgroup]
+2026-11-26T10:28:49.5721386Z ##[group]Post cache
+2026-11-26T10:28:49.5723346Z State not set
+2026-11-26T10:28:49.5723927Z ##[endgroup]
+2026-11-26T10:28:49.5928045Z Post job cleanup.
+2026-11-26T10:28:49.6842366Z [command]/usr/bin/git version
+2026-11-26T10:28:49.6891688Z git version 2.56.1
+2026-11-26T10:28:49.6928058Z Temporarily overriding HOME='/home/runner/work/_temp/e9b43432-c573-47ce-94d7-1a55f785af84' before making global git config changes
+2026-11-26T10:28:49.6929590Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-26T10:28:49.6933527Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/UA-for-Industrial-Joining-Technologies/UA-for-Industrial-Joining-Technologies
+2026-11-26T10:28:49.6970355Z Removing SSH command configuration
+2026-11-26T10:28:49.6977246Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-26T10:28:49.7016383Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-26T10:28:49.7377232Z Removing HTTP extra header
+2026-11-26T10:28:49.7387515Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-26T10:28:49.7431390Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-26T10:28:49.7748382Z Removing includeIf entries pointing to credentials config files
+2026-11-26T10:28:49.7755349Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-26T10:28:49.7793470Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-26T10:28:49.8204396Z Cleaning up orphan processes
